@@ -27,6 +27,9 @@ projects/
 test_*.json
 check_api.json
 
+# 参考资料（UI/开源参考仓库，不纳入本项目版本库）
+reference/
+
 # OS
 .DS_Store
 Thumbs.db
