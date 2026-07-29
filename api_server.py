@@ -52,14 +52,15 @@ projects_dir = BASE_DIR / "projects"
 projects_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/projects", StaticFiles(directory=str(projects_dir)), name="projects")
 
-# Agnes 代理（从 config.yaml 读取；Agnes 在 Cloudflare 后，国内需代理。Clash 默认 7890）
+# 全局配置（从 config.yaml 读取；Agnes 在 Cloudflare 后，国内需代理。Clash 默认 7890）
 _AGNES_PROXY = None
+_APP_CFG: dict = {}
 try:
     import yaml as _yaml
-    _cfg = _yaml.safe_load((BASE_DIR / "config" / "config.yaml").read_text(encoding="utf-8"))
-    _AGNES_PROXY = (_cfg.get("agnes") or {}).get("proxy") or None
+    _APP_CFG = _yaml.safe_load((BASE_DIR / "config" / "config.yaml").read_text(encoding="utf-8")) or {}
+    _AGNES_PROXY = (_APP_CFG.get("agnes") or {}).get("proxy") or None
 except Exception as _e:
-    logger.warning(f"读取 agnes proxy 配置失败: {_e}")
+    logger.warning(f"读取配置失败: {_e}")
 
 # 允许跨域
 app.add_middleware(
@@ -96,6 +97,15 @@ async def startup():
     """启动时初始化"""
     global pipeline_controller
     try:
+        # 先初始化限流器与配额单例（用 config 的值），再创建 PipelineController
+        # （其 AgnesClient 会复用这两个进程级单例）
+        from src.core.rate_limiter import RateLimiter
+        from src.core.quota import QuotaLedger
+        _agnes_cfg = _APP_CFG.get("agnes") or {}
+        RateLimiter.get(_agnes_cfg.get("rpm"))
+        QuotaLedger.get_default(BASE_DIR / "cache" / "quota.json",
+                                limits=_APP_CFG.get("quota"))
+
         config_path = os.path.join(os.path.dirname(__file__), "config", "config.yaml")
         pipeline_controller = PipelineController(config_path)
         logger.info("API服务器已启动")
@@ -132,6 +142,18 @@ async def health_check():
     return {
         "status": "ok" if pipeline_controller else "degraded",
         "controller_ready": pipeline_controller is not None,
+    }
+
+
+@app.get("/api/system/limits")
+async def system_limits():
+    """返回限流器各桶状态与每日配额用量（供前端排队面板展示）。
+    阶段 1 新增只读接口，不改任何现有接口。"""
+    from src.core.rate_limiter import RateLimiter
+    from src.core.quota import QuotaLedger
+    return {
+        "limits": RateLimiter.get().snapshot(),
+        "quota": QuotaLedger.get_default().snapshot(),
     }
 
 

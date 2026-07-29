@@ -10,6 +10,29 @@ agnes:
     image: "agnes-image-2.1-flash"
     video: "agnes-video-v2.0"
 
+  # 🔴 限流器分桶 RPM（AGNES_API_FACTS §4.1 免费用户实际 RPM）。一般不用改。
+  # 视频就是 1，别调大——并发提交视频 = 全部 429。
+  rpm:
+    text: 20
+    image_1k: 20
+    image_2k: 10
+    image_3k: 1
+    image_4k: 1
+    video: 1
+
+  # 新档位制（AGNES_API_FACTS §2.3）：本项目一律用 1K 档
+  image:
+    size_tier: "1K"       # 16:9 -> 1312x736
+    ratio: "16:9"
+    timeout: 300
+
+  video:
+    frame_rate: 24
+    polling_interval: 5   # 🔴 从 10 改为 5（官方建议）
+    max_wait: 3600
+
+  # 旧 settings 块保留：character_gen / storyboard_gen 仍读取
+  # （阶段 5 清理时随旧管线一并移除）
   settings:
     image:
       size: "1152x768"
@@ -27,8 +50,26 @@ agnes:
     video:
       num_frames: 121
       frame_rate: 24
-      polling_interval: 10    # 轮询间隔: 10秒
+      polling_interval: 10    # 旧值，保留供旧管线读取；新代码用 agnes.video.polling_interval
       max_polling_retries: 360  # 最大轮询次数: 360次 × 10秒 = 60分钟
+
+# ImageHost：把本地图片变成 Agnes 服务端能访问的公网 URL（阶段 1 抽象，阶段 3 视频管线接入）
+# passthrough = 直通，仅复用 Agnes 原始 URL（默认；修过的图会在此层显式报错）
+image_host:
+  kind: "passthrough"
+  # imgbb:
+  #   api_key: "${IMGBB_API_KEY}"
+  #   expiration: 0          # 0=永不过期
+  # r2:
+  #   account_id / access_key / secret_key / bucket / public_base
+  # tunnel:
+  #   public_base / serve_root
+
+# 每日配额账本（免费用户官方未公布确切数值，给保守默认值）
+quota:
+  video_seconds: 300
+  images: 500
+  text_calls: 2000
 
 mimo:
   base_url: "https://token-plan-cn.xiaomimimo.com/v1/chat/completions"
