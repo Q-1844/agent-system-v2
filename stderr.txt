@@ -1,0 +1,14 @@
+C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\api_server.py:61: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  @app.on_event("startup")
+INFO:     Started server process [19584]
+INFO:     Waiting for application startup.
+2026-06-15 12:52:14,829 - WARNING - 未设置AGNES_API_KEY环境变量
+2026-06-15 12:52:14,831 - WARNING - 未设置MIMO_API_KEY环境变量
+2026-06-15 12:52:14,838 - INFO - API服务器已启动
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)

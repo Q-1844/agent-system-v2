@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>场景库管理</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, 'Segoe UI', sans-serif; background: #111; color: #e5e5e5; padding: 20px; }
+    h1 { font-size: 20px; margin-bottom: 8px; }
+    .subtitle { font-size: 12px; color: #888; margin-bottom: 20px; }
+    .section { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    .section h2 { font-size: 14px; color: #999; margin-bottom: 12px; }
+    label { display: block; font-size: 12px; color: #888; margin-bottom: 4px; margin-top: 10px; }
+    input[type="text"], textarea {
+      width: 100%; background: #0d0d0d; color: #e5e5e5; border: 1px solid #333;
+      border-radius: 6px; padding: 10px; font-size: 13px; font-family: inherit;
+    }
+    input:focus, textarea:focus { outline: none; border-color: #5b9bd5; }
+    textarea { resize: vertical; font-family: 'Consolas', monospace; }
+    .row { display: flex; gap: 12px; }
+    .row > * { flex: 1; }
+    button {
+      padding: 10px 20px; border-radius: 6px; border: none; font-size: 13px;
+      font-weight: 500; cursor: pointer; margin-right: 8px; margin-top: 12px;
+    }
+    .btn-primary { background: #5b9bd5; color: #fff; }
+    .btn-primary:hover { background: #4a8bc9; }
+    .btn-gen { background: #4ade80; color: #111; font-size: 14px; padding: 12px 28px; }
+    .btn-gen:hover { background: #22c55e; }
+    .btn-gen:disabled { background: #333; color: #666; cursor: not-allowed; }
+    .btn-save { background: #f59e0b; color: #111; font-size: 14px; padding: 12px 28px; }
+    .btn-save:hover { background: #d97706; }
+    .btn-save:disabled { background: #333; color: #666; cursor: not-allowed; }
+    .btn-small { padding: 6px 14px; font-size: 12px; }
+    .btn-danger { background: #ef4444; color: #fff; }
+    .btn-danger:hover { background: #dc2626; }
+    .preview-area {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; margin-top: 12px;
+    }
+    .preview-card {
+      background: #0d0d0d; border: 1px solid #333; border-radius: 8px; overflow: hidden;
+    }
+    .preview-card img {
+      width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; background: #0a0a0a;
+    }
+    .preview-card .placeholder {
+      width: 100%; aspect-ratio: 16/9; display: flex; align-items: center;
+      justify-content: center; color: #444; font-size: 14px; flex-direction: column; gap: 8px;
+    }
+    .preview-card .info {
+      padding: 10px; border-top: 1px solid #222;
+    }
+    .preview-card .info .label { color: #5b9bd5; font-weight: 600; font-size: 13px; }
+    .preview-card .info .desc { color: #888; font-size: 11px; margin-top: 4px; }
+    .preview-card .info .tags { margin-top: 6px; }
+    .preview-card .info .tag {
+      display: inline-block; font-size: 10px; background: #222; color: #888;
+      padding: 2px 6px; border-radius: 3px; margin-right: 4px;
+    }
+    .preview-card .actions {
+      padding: 8px 10px; border-top: 1px solid #222; display: flex; gap: 6px;
+    }
+    .log {
+      background: #0d0d0d; border: 1px solid #333; border-radius: 6px; padding: 10px;
+      font-family: 'Consolas', monospace; font-size: 12px; max-height: 200px;
+      overflow-y: auto; margin-top: 8px; white-space: pre-wrap;
+    }
+    .log-ok { color: #4ade80; }
+    .log-err { color: #f87171; }
+    .log-info { color: #60a5fa; }
+    .spinner {
+      display: inline-block; width: 14px; height: 14px; border: 2px solid #555;
+      border-top-color: #5b9bd5; border-radius: 50%; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+    .status-ok { background: #4ade80; }
+    .status-err { background: #f87171; }
+    .status-loading { background: #fbbf24; animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .prompt-hint { font-size: 11px; color: #555; margin-top: 4px; line-height: 1.4; }
+    .tag { display: inline-block; font-size: 10px; background: #222; color: #888; padding: 2px 6px; border-radius: 3px; margin: 2px; cursor: pointer; }
+    .tag:hover { background: #333; color: #aaa; }
+  </style>
+</head>
+<body>
+
+<h1>🏞️ 场景库管理</h1>
+<p class="subtitle">生成和管理场景图片，用于分镜生成时保持场景一致性</p>
+
+<!-- 健康检查 -->
+<div style="margin-bottom:16px;font-size:12px;">
+  <span class="status-dot status-loading" id="healthDot"></span>
+  <span id="healthText">检查服务器...</span>
+</div>
+
+<!-- ========== 场景生成 ========== -->
+<div class="section">
+  <h2>🎨 生成新场景</h2>
+  <div class="row">
+    <div>
+      <label>场景名称</label>
+      <input type="text" id="sceneName" placeholder="如：山顶云海、黑暗城堡...">
+    </div>
+    <div>
+      <label>标签（逗号分隔）</label>
+      <input type="text" id="sceneTags" placeholder="如：室外,山顶,晨光">
+    </div>
+  </div>
+
+  <label>场景描述（英文）</label>
+  <textarea id="sceneDesc" rows="3" placeholder="描述场景的外观...">mountain top overlooking sea of clouds, golden sunrise, panoramic view, anime landscape</textarea>
+
+  <div class="prompt-hint" style="margin-top:8px;">
+    💡 快速填充（场景无人物）:
+    <span class="tag" onclick="fillScene('山顶云海', 'mountain top overlooking sea of clouds, golden sunrise, panoramic view, no humans, empty landscape, anime background', '室外,山顶,晨光')">山顶云海</span>
+    <span class="tag" onclick="fillScene('黑暗云层', 'dark cloudy sky, ominous atmosphere, red glow, dramatic lighting, no humans, empty sky, anime background', '室外,天空,黑暗')">黑暗云层</span>
+    <span class="tag" onclick="fillScene('风暴战场', 'stormy battlefield, lightning flashes, dramatic clouds, no humans, empty battlefield, anime background', '室外,战场,风暴')">风暴战场</span>
+    <span class="tag" onclick="fillScene('宁静村庄', 'peaceful anime village, traditional japanese houses, cherry blossoms, sunny day, no humans, empty village, anime background', '室外,村庄,白天')">宁静村庄</span>
+    <span class="tag" onclick="fillScene('神秘森林', 'mystical forest, glowing mushrooms, moonlight, no humans, empty forest, fantasy anime background', '室外,森林,夜晚')">神秘森林</span>
+    <span class="tag" onclick="fillScene('城堡大厅', 'grand castle hall, stone pillars, torches, medieval fantasy, no humans, empty hall, anime background', '室内,城堡,火光')">城堡大厅</span>
+  </div>
+
+  <div style="margin-top:12px;">
+    <button class="btn-gen" id="btnGen" onclick="generateScene()">🎨 生成场景图</button>
+    <span style="font-size:11px;color:#666;margin-left:12px;">尺寸: 1920x1080 (16:9)</span>
+  </div>
+
+  <!-- 生成预览 -->
+  <div id="genPreview" style="margin-top:12px;display:none;">
+    <label>生成结果:</label>
+    <div class="preview-area" style="grid-template-columns:1fr;max-width:600px;">
+      <div class="preview-card" id="genCard">
+        <div class="placeholder">生成中...</div>
+      </div>
+    </div>
+    <div style="margin-top:8px;">
+      <button class="btn-save" id="btnSave" onclick="saveScene()" disabled>💾 保存到场景库</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== 场景库 ========== -->
+<div class="section">
+  <h2>📚 场景库</h2>
+  <div style="margin-bottom:12px;">
+    <button class="btn-primary btn-small" onclick="loadScenes()">🔄 刷新列表</button>
+  </div>
+
+  <div id="sceneList" class="preview-area">
+    <div style="color:#444;font-size:14px;padding:40px;text-align:center;grid-column:1/-1;">
+      加载中...
+    </div>
+  </div>
+</div>
+
+<!-- ========== 日志 ========== -->
+<div class="section">
+  <h2>📋 日志</h2>
+  <div id="log" class="log">就绪</div>
+</div>
+
+<script>
+const API = window.location.origin;
+let generatedImageBase64 = null; // 临时保存生成的图片
+
+// ========== 工具函数 ==========
+
+function log(msg, type = 'info') {
+  const el = document.getElementById('log');
+  const cls = type === 'ok' ? 'log-ok' : type === 'err' ? 'log-err' : 'log-info';
+  const time = new Date().toLocaleTimeString();
+  el.innerHTML += `<span class="${cls}">[${time}] ${msg}</span>\n`;
+  el.scrollTop = el.scrollHeight;
+}
+
+function fillScene(name, desc, tags) {
+  document.getElementById('sceneName').value = name;
+  document.getElementById('sceneDesc').value = desc;
+  document.getElementById('sceneTags').value = tags;
+}
+
+// ========== 场景生成 ==========
+
+async function generateScene() {
+  const name = document.getElementById('sceneName').value.trim();
+  const desc = document.getElementById('sceneDesc').value.trim();
+
+  if (!name) {
+    log('请输入场景名称', 'err');
+    return;
+  }
+  if (!desc) {
+    log('请输入场景描述', 'err');
+    return;
+  }
+
+  const btn = document.getElementById('btnGen');
+  btn.disabled = true;
+  btn.textContent = '⏳ 生成中...';
+
+  const preview = document.getElementById('genPreview');
+  preview.style.display = 'block';
+  const card = document.getElementById('genCard');
+  card.innerHTML = '<div class="placeholder"><span class="spinner"></span> 生成中...</div>';
+
+  log(`生成场景: ${name}`);
+
+  try {
+    // 使用后端 API 生成场景（后端会下载图片并返回 base64）
+    // 场景图必须无人物，是纯背景/环境
+    const fullPrompt = `${desc}, no humans, no people, no characters, empty scene, pure background, anime landscape, detailed environment, high quality, cinematic lighting, 4k`;
+
+    const r = await fetch(`${API}/api/generate-image-base64`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: fullPrompt,
+        size: '1920x1080',
+      }),
+    });
+
+    const data = await r.json();
+
+    if (data.success && data.image_base64) {
+      log('✅ 场景图生成成功', 'ok');
+
+      generatedImageBase64 = data.image_base64;
+
+      card.innerHTML = `
+        <img src="data:image/png;base64,${data.image_base64}" alt="${name}">
+        <div class="info">
+          <span class="label">${name}</span>
+          <div class="desc">${desc}</div>
+        </div>
+      `;
+
+      document.getElementById('btnSave').disabled = false;
+      log('图片已准备好保存', 'ok');
+    } else {
+      throw new Error(data.detail || '生成失败');
+    }
+  } catch (e) {
+    log(`❌ 生成失败: ${e.message}`, 'err');
+    card.innerHTML = `<div class="placeholder" style="color:#f87171;">生成失败</div>`;
+  }
+
+  btn.disabled = false;
+  btn.textContent = '🎨 生成场景图';
+}
+
+// ========== 场景保存 ==========
+
+async function saveScene() {
+  const name = document.getElementById('sceneName').value.trim();
+  const desc = document.getElementById('sceneDesc').value.trim();
+  const tagsStr = document.getElementById('sceneTags').value.trim();
+
+  if (!name || !desc) {
+    log('请填写场景名称和描述', 'err');
+    return;
+  }
+
+  if (!generatedImageBase64) {
+    log('请先生成场景图', 'err');
+    return;
+  }
+
+  const btn = document.getElementById('btnSave');
+  btn.disabled = true;
+  btn.textContent = '⏳ 保存中...';
+
+  const tags = tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(t => t) : [];
+
+  log(`保存场景: ${name}`);
+
+  try {
+    const r = await fetch(`${API}/api/scene/save`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        description: desc,
+        image_base64: generatedImageBase64,
+        tags,
+      }),
+    });
+
+    const data = await r.json();
+
+    if (data.success) {
+      log(`✅ 场景 "${name}" 已保存`, 'ok');
+      generatedImageBase64 = null;
+      document.getElementById('genPreview').style.display = 'none';
+      loadScenes(); // 刷新列表
+    } else {
+      throw new Error(data.detail || '保存失败');
+    }
+  } catch (e) {
+    log(`❌ 保存失败: ${e.message}`, 'err');
+  }
+
+  btn.disabled = false;
+  btn.textContent = '💾 保存到场景库';
+}
+
+// ========== 场景库 ==========
+
+async function loadScenes() {
+  try {
+    const r = await fetch(`${API}/api/scene/list`);
+    const data = await r.json();
+    renderSceneList(data.scenes || []);
+    log(`已加载 ${data.scenes?.length || 0} 个场景`, 'ok');
+  } catch (e) {
+    log(`加载场景列表失败: ${e.message}`, 'err');
+  }
+}
+
+function renderSceneList(scenes) {
+  const el = document.getElementById('sceneList');
+
+  if (scenes.length === 0) {
+    el.innerHTML = '<div style="color:#444;font-size:14px;padding:40px;text-align:center;grid-column:1/-1;">暂无场景，请先生成</div>';
+    return;
+  }
+
+  el.innerHTML = scenes.map(scene => {
+    const hasImage = scene.has_image;
+    const tagsHtml = (scene.tags || []).map(t => `<span class="tag">${t}</span>`).join('');
+
+    return `
+      <div class="preview-card" id="scene-${scene.id}">
+        <div class="placeholder" id="ph-${scene.id}">
+          ${hasImage ? '<span class="spinner"></span> 加载中...' : '无图片（需要生成）'}
+        </div>
+        <div class="info">
+          <span class="label">${scene.name}</span>
+          <div class="desc">${scene.description?.substring(0, 50)}...</div>
+          <div class="tags">${tagsHtml}</div>
+        </div>
+        <div class="actions">
+          <button class="btn-primary btn-small" onclick="loadForGenerate('${scene.id}')">📝 加载到编辑区</button>
+          <button class="btn-danger btn-small" onclick="deleteScene('${scene.id}')">🗑️ 删除</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // 异步加载有图片的场景
+  scenes.forEach(scene => {
+    if (scene.has_image) {
+      loadSceneImage(scene.id);
+    }
+  });
+}
+
+async function loadSceneImage(sceneId) {
+  try {
+    const r = await fetch(`${API}/api/scene/load/${sceneId}`);
+    const data = await r.json();
+
+    if (data.success && data.scene.image_base64) {
+      const card = document.getElementById(`scene-${sceneId}`);
+      const ph = document.getElementById(`ph-${sceneId}`);
+
+      // 替换占位符为图片
+      ph.innerHTML = `<img src="data:image/png;base64,${data.scene.image_base64}" alt="${data.scene.name}">`;
+      ph.style.display = 'block';
+      ph.className = '';
+    }
+  } catch (e) {
+    console.error(`加载场景 ${sceneId} 图片失败:`, e);
+  }
+}
+
+async function loadForGenerate(sceneId) {
+  try {
+    const r = await fetch(`${API}/api/scene/load/${sceneId}`);
+    const data = await r.json();
+
+    if (data.success) {
+      const scene = data.scene;
+      document.getElementById('sceneName').value = scene.name;
+      document.getElementById('sceneDesc').value = scene.description;
+      document.getElementById('sceneTags').value = (scene.tags || []).join(', ');
+
+      if (scene.image_base64) {
+        generatedImageBase64 = scene.image_base64;
+        document.getElementById('btnSave').disabled = false;
+
+        // 显示预览
+        const preview = document.getElementById('genPreview');
+        preview.style.display = 'block';
+        const card = document.getElementById('genCard');
+        card.innerHTML = `
+          <img src="data:image/png;base64,${scene.image_base64}" alt="${scene.name}">
+          <div class="info">
+            <span class="label">${scene.name}</span>
+            <div class="desc">${scene.description}</div>
+          </div>
+        `;
+      }
+
+      log(`已加载场景: ${scene.name}`, 'ok');
+    }
+  } catch (e) {
+    log(`加载场景失败: ${e.message}`, 'err');
+  }
+}
+
+async function deleteScene(sceneId) {
+  if (!confirm('确定要删除这个场景吗？')) {
+    return;
+  }
+
+  try {
+    const r = await fetch(`${API}/api/scene/${sceneId}`, {
+      method: 'DELETE',
+    });
+
+    const data = await r.json();
+
+    if (data.success) {
+      log('✅ 场景已删除', 'ok');
+      loadScenes(); // 刷新列表
+    } else {
+      throw new Error(data.detail || '删除失败');
+    }
+  } catch (e) {
+    log(`❌ 删除失败: ${e.message}`, 'err');
+  }
+}
+
+// ========== 健康检查 ==========
+
+async function checkHealth() {
+  const dot = document.getElementById('healthDot');
+  const text = document.getElementById('healthText');
+  try {
+    const r = await fetch(`${API}/api/health`, { signal: AbortSignal.timeout(3000) });
+    const d = await r.json();
+    dot.className = 'status-dot status-ok';
+    text.textContent = `服务器已连接 | 控制器: ${d.controller_ready ? '就绪' : '未就绪'}`;
+    return true;
+  } catch (e) {
+    dot.className = 'status-dot status-err';
+    text.textContent = '服务器未连接 — 请启动后端: python api_server.py';
+    return false;
+  }
+}
+
+// ========== 启动 ==========
+
+window.onload = async () => {
+  await checkHealth();
+  await loadScenes();
+  log('场景库管理已加载');
+};
+</script>
+
+</body>
+</html>

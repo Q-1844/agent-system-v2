@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+.python-version
+
+# Node / 前端构建
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.local
+
+# 密钥（不进版本库）
+.env
+
+# 运行时产生的数据
+logs/
+cache/
+projects/
+!projects/.gitkeep
+
+# 测试产物
+test_*.json
+check_api.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 编辑器
+.idea/
+.vscode/
+*.swp
+*.swo

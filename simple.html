@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>动画分镜工作流 - 简易版</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, 'Segoe UI', sans-serif; background: #111; color: #e5e5e5; padding: 20px; }
+    h1 { font-size: 20px; margin-bottom: 12px; }
+    h2 { font-size: 16px; margin: 20px 0 10px; color: #999; }
+    .section { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    textarea { width: 100%; height: 300px; background: #0d0d0d; color: #e5e5e5; border: 1px solid #333; border-radius: 6px; padding: 12px; font-family: 'Consolas', monospace; font-size: 13px; resize: vertical; }
+    textarea:focus { outline: none; border-color: #5b9bd5; }
+    button { padding: 8px 16px; border-radius: 6px; border: none; font-size: 13px; font-weight: 500; cursor: pointer; margin-right: 8px; margin-top: 8px; }
+    .btn-primary { background: #5b9bd5; color: #fff; }
+    .btn-primary:hover { background: #4a8bc9; }
+    .btn-run { background: #4ade80; color: #111; font-size: 14px; padding: 10px 24px; }
+    .btn-run:hover { background: #22c55e; }
+    .btn-secondary { background: #333; color: #e5e5e5; }
+    .btn-secondary:hover { background: #444; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .log { background: #0d0d0d; border: 1px solid #333; border-radius: 6px; padding: 12px; font-family: 'Consolas', monospace; font-size: 12px; max-height: 200px; overflow-y: auto; margin-top: 8px; white-space: pre-wrap; word-break: break-all; }
+    .log-ok { color: #4ade80; }
+    .log-err { color: #f87171; }
+    .log-info { color: #60a5fa; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+    .card { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; overflow: hidden; }
+    .card img { width: 100%; display: block; background: #0d0d0d; min-height: 120px; object-fit: contain; }
+    .card-body { padding: 12px; }
+    .card-body h3 { font-size: 14px; margin-bottom: 4px; }
+    .card-body p { font-size: 12px; color: #999; line-height: 1.4; }
+    .card-footer { padding: 8px 12px; border-top: 1px solid #333; display: flex; gap: 6px; }
+    .card-footer button { padding: 4px 10px; font-size: 11px; margin: 0; }
+    .tag { display: inline-block; font-size: 11px; background: #222; color: #888; padding: 2px 6px; border-radius: 3px; margin-right: 4px; }
+    .score { font-size: 12px; color: #4ade80; font-weight: 600; }
+    .status { display: inline-block; font-size: 11px; padding: 2px 6px; border-radius: 3px; }
+    .status-completed { background: #14532d; color: #4ade80; }
+    .status-pending { background: #1e3a5f; color: #60a5fa; }
+    .status-failed { background: #7f1d1d; color: #f87171; }
+    .char-images { display: flex; gap: 4px; }
+    .char-images .img-slot { flex: 1; aspect-ratio: 1; background: #0d0d0d; border: 1px solid #333; border-radius: 4px; overflow: hidden; position: relative; display: flex; align-items: center; justify-content: center; }
+    .char-images img { width: 100%; height: 100%; object-fit: cover; }
+    .char-images .img-label { position: absolute; bottom: 2px; left: 4px; font-size: 9px; color: #666; }
+    .img-placeholder { color: #444; font-size: 11px; text-align: center; }
+    .tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+    .tab { padding: 6px 12px; background: #222; border: 1px solid #333; border-radius: 4px; font-size: 12px; cursor: pointer; color: #888; }
+    .tab.active { background: #333; color: #e5e5e5; border-color: #555; }
+    .hidden { display: none; }
+    .health-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; font-size: 12px; }
+    .health-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .health-dot.ok { background: #4ade80; }
+    .health-dot.err { background: #f87171; }
+    .health-dot.loading { background: #fbbf24; animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .connection-error { background: #7f1d1d; border: 1px solid #991b1b; border-radius: 8px; padding: 20px; text-align: center; margin: 40px auto; max-width: 500px; }
+    .connection-error h2 { color: #f87171; margin-bottom: 12px; }
+    .connection-error p { color: #fca5a5; font-size: 13px; line-height: 1.6; }
+    .connection-error code { background: #991b1b; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
+    .hint { font-size: 12px; color: #5b9bd5; margin-bottom: 8px; }
+    .workflow-status { padding: 12px; background: #1e3a5f; border: 1px solid #2563eb; border-radius: 6px; margin-top: 12px; }
+    .workflow-status.running { animation: pulse 2s infinite; }
+  </style>
+</head>
+<body>
+
+<h1>🎬 动画分镜工作流</h1>
+
+<!-- 健康状态栏 -->
+<div class="health-bar">
+  <div class="health-dot loading" id="healthDot"></div>
+  <span id="healthText">正在连接服务器...</span>
+</div>
+
+<!-- 连接错误提示 -->
+<div id="connectionError" class="connection-error hidden">
+  <h2>⚠️ 无法连接后端服务器</h2>
+  <p>请确保后端API服务器已启动：</p>
+  <p style="margin-top:8px;"><code>python start_server.py</code></p>
+  <p style="margin-top:4px;">或运行 <code>start.bat</code></p>
+  <p style="margin-top:12px;">服务器地址: <code id="serverAddr"></code></p>
+  <button class="btn-primary" onclick="retryConnection()" style="margin-top:16px;">重新连接</button>
+</div>
+
+<!-- 标签页 -->
+<div class="tabs" id="mainTabs">
+  <div class="tab active" onclick="switchTab('script')">📝 剧本</div>
+  <div class="tab" onclick="switchTab('characters')">👤 角色</div>
+  <div class="tab" onclick="switchTab('storyboard')">🖼️ 分镜</div>
+  <div class="tab" onclick="switchTab('animation')">🎬 动画</div>
+  <div class="tab" onclick="switchTab('audio')">🔊 音频</div>
+</div>
+
+<!-- ========== 剧本页面 ========== -->
+<div id="tab-script" class="tab-content">
+  <div class="section">
+    <h2>📝 剧本编辑</h2>
+    <p class="hint">✏️ 你可以直接编辑下面的剧本，改好后点"🚀 开始生成"</p>
+    <textarea id="scriptInput">project: "我的动画短片"
+style: "anime, soft lighting, cinematic composition"
+size: "1152x768"
+
+characters:
+  - name: "小星"
+    description: "a young girl with silver hair, blue eyes, wearing a white cloak, gentle expression"
+  - name: "暗影"
+    description: "a tall figure in black armor, glowing red eyes, menacing presence"
+
+scenes:
+  - id: 1
+    description: "小星站在山顶，俯瞰云海，晨光洒落"
+    characters: ["小星"]
+    camera: "wide shot, from behind"
+    lighting: "golden sunrise"
+    motion: "hair and cloak flowing in the wind"
+    dialogue: "新的一天开始了。"
+
+  - id: 2
+    description: "暗影从云层中浮现，红眼闪烁"
+    characters: ["暗影"]
+    camera: "low angle, dramatic"
+    lighting: "dark clouds, red glow"
+    motion: "slowly emerging from mist"
+    dialogue: "你逃不掉的。"
+
+  - id: 3
+    description: "两人对峙，风暴骤起"
+    characters: ["小星", "暗影"]
+    camera: "medium shot, side view"
+    lighting: "lightning flashes"
+    motion: "wind intensifying, hair and clothes blowing"
+    dialogue: "我不会屈服！"
+
+  - id: 4
+    description: "小星举起法杖，光芒四射"
+    characters: ["小星"]
+    camera: "close-up, dramatic"
+    lighting: "bright white light"
+    motion: "magic energy gathering"
+
+  - id: 5
+    description: "暗影被光芒击中，开始消散"
+    characters: ["暗影"]
+    camera: "medium shot"
+    lighting: "light vs darkness"
+    motion: "shadow dissolving"
+
+  - id: 6
+    description: "云海恢复平静，阳光普照"
+    characters: []
+    camera: "wide shot, aerial"
+    lighting: "warm golden light"
+    motion: "clouds parting"
+
+  - id: 7
+    description: "小星微笑，转身离开"
+    characters: ["小星"]
+    camera: "medium shot, from front"
+    lighting: "soft backlight"
+    motion: "gentle turn and walk"
+
+  - id: 8
+    description: "远景，小星走向远方的光芒"
+    characters: ["小星"]
+    camera: "wide shot, from behind"
+    lighting: "ethereal glow"
+    motion: "walking into distance"</textarea>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <button class="btn-run" onclick="runWorkflow()" id="btnRun">🚀 开始生成</button>
+      <button class="btn-secondary" onclick="loadExisting()">📥 加载已有数据</button>
+      <span style="font-size:12px;color:#666;">编辑剧本后点"开始生成"，AI会自动：解析剧本 → 生成角色图 → 生成分镜 → 生成动画</span>
+    </div>
+    <div id="workflowStatus" class="hidden workflow-status"></div>
+  </div>
+
+  <div class="section">
+    <h2>📋 运行日志</h2>
+    <div id="log" class="log">等待操作...</div>
+  </div>
+</div>
+
+<!-- ========== 角色页面 ========== -->
+<div id="tab-characters" class="tab-content hidden">
+  <div class="section">
+    <h2>👤 角色列表</h2>
+    <p class="hint">角色参考图由AI自动生成，每个角色3个角度（正面/侧面/全身）</p>
+    <button class="btn-secondary" onclick="loadCharacters()">🔄 刷新</button>
+    <div id="charGrid" class="grid" style="margin-top:12px;"></div>
+  </div>
+</div>
+
+<!-- ========== 分镜页面 ========== -->
+<div id="tab-storyboard" class="tab-content hidden">
+  <div class="section">
+    <h2>🖼️ 分镜画廊</h2>
+    <p class="hint">每个场景的分镜图由AI根据剧本描述自动生成</p>
+    <button class="btn-secondary" onclick="loadScenes()">🔄 刷新</button>
+    <div id="sceneGrid" class="grid" style="margin-top:12px;"></div>
+  </div>
+</div>
+
+<!-- ========== 动画页面 ========== -->
+<div id="tab-animation" class="tab-content hidden">
+  <div class="section">
+    <h2>🎬 过渡动画</h2>
+    <button class="btn-secondary" onclick="loadScenes()">🔄 刷新场景</button>
+    <div id="animGrid" class="grid" style="margin-top:12px;"></div>
+  </div>
+</div>
+
+<!-- ========== 音频页面 ========== -->
+<div id="tab-audio" class="tab-content hidden">
+  <div class="section">
+    <h2>🔊 音频管理</h2>
+    <button class="btn-secondary" onclick="loadScenes()">🔄 刷新</button>
+    <div id="audioList" style="margin-top:12px;"></div>
+  </div>
+</div>
+
+<script>
+const API = window.location.origin;
+let currentProject = '我的动画短片';
+let isConnected = false;
+let isWorkflowRunning = false;
+
+// ========== 工具函数 ==========
+
+function log(msg, type = 'info') {
+  const el = document.getElementById('log');
+  const cls = type === 'ok' ? 'log-ok' : type === 'err' ? 'log-err' : 'log-info';
+  const time = new Date().toLocaleTimeString();
+  el.innerHTML += `<span class="${cls}">[${time}] ${msg}</span>\n`;
+  el.scrollTop = el.scrollHeight;
+}
+
+function imgUrl(path) {
+  if (!path) return '';
+  const n = path.replace(/\\/g, '/');
+  const m = n.match(/projects\/([^/]+)\/output\/([^/]+)\/(.+)$/);
+  if (m) {
+    // 加时间戳防止浏览器缓存旧图
+    return `${API}/api/image/${encodeURIComponent(m[1])}/${m[2]}/${encodeURIComponent(m[3])}?t=${Date.now()}`;
+  }
+  return `${API}/${n}`;
+}
+
+function statusBadge(s) {
+  const cls = s === 'completed' ? 'status-completed' : s === 'failed' ? 'status-failed' : 'status-pending';
+  return `<span class="status ${cls}">${s}</span>`;
+}
+
+async function apiGet(path) {
+  const r = await fetch(`${API}${path}`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return await r.json();
+}
+
+async function apiPost(path, body) {
+  const r = await fetch(`${API}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`);
+  return d;
+}
+
+// ========== 健康检查 ==========
+
+async function checkHealth() {
+  const dot = document.getElementById('healthDot');
+  const text = document.getElementById('healthText');
+  const errDiv = document.getElementById('connectionError');
+
+  try {
+    const r = await fetch(`${API}/api/health`, { signal: AbortSignal.timeout(5000) });
+    const d = await r.json();
+    dot.className = 'health-dot ok';
+    text.textContent = `服务器已连接 | 控制器: ${d.controller_ready ? '就绪' : '未就绪'}`;
+    errDiv.classList.add('hidden');
+    isConnected = true;
+    return true;
+  } catch (e) {
+    dot.className = 'health-dot err';
+    text.textContent = '服务器未连接';
+    document.getElementById('serverAddr').textContent = API;
+    errDiv.classList.remove('hidden');
+    isConnected = false;
+    return false;
+  }
+}
+
+async function retryConnection() {
+  const dot = document.getElementById('healthDot');
+  dot.className = 'health-dot loading';
+  document.getElementById('healthText').textContent = '正在重新连接...';
+  for (let i = 0; i < 3; i++) {
+    if (await checkHealth()) {
+      log('服务器连接成功！', 'ok');
+      autoLoadData();
+      return;
+    }
+    await new Promise(r => setTimeout(r, 1000));
+  }
+  log('无法连接服务器，请检查后端是否启动', 'err');
+}
+
+// ========== 标签页切换 ==========
+
+function switchTab(name) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.remove('hidden');
+  event.target.classList.add('active');
+  if (name === 'characters') loadCharacters();
+  if (name === 'storyboard') loadScenes();
+  if (name === 'animation') loadScenes();
+  if (name === 'audio') loadScenes();
+}
+
+// ========== 自动加载 ==========
+
+async function autoLoadData() {
+  try {
+    log('自动加载已有数据...');
+    await loadCharacters();
+    await loadScenes();
+    log('数据加载完成', 'ok');
+  } catch (e) {
+    log('自动加载部分失败: ' + e.message, 'err');
+  }
+}
+
+// ========== 剧本操作 ==========
+
+async function loadExisting() {
+  try {
+    log('加载已有数据...');
+    await loadCharacters();
+    await loadScenes();
+    log('数据加载完成', 'ok');
+  } catch (e) {
+    log('加载失败: ' + e.message, 'err');
+  }
+}
+
+async function runWorkflow() {
+  const text = document.getElementById('scriptInput').value;
+  const btn = document.getElementById('btnRun');
+  const statusDiv = document.getElementById('workflowStatus');
+
+  try {
+    btn.disabled = true;
+    btn.textContent = '⏳ 运行中...';
+    isWorkflowRunning = true;
+
+    statusDiv.className = 'workflow-status running';
+    statusDiv.textContent = '🚀 工作流启动中...';
+    statusDiv.classList.remove('hidden');
+
+    log('启动工作流...');
+    log('提示: 编辑上方剧本可改变生成内容', 'info');
+
+    const r = await fetch(`${API}/api/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        project_name: currentProject,
+        script_content: text,
+        mode: 'auto',
+      }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail);
+
+    log('工作流已启动: ' + d.task_id, 'ok');
+    statusDiv.textContent = '⏳ 工作流运行中... (剧本解析 → 角色生成 → 分镜生成 → 动画 → 音频)';
+    pollTask(d.task_id);
+
+  } catch (e) {
+    log('启动失败: ' + e.message, 'err');
+    btn.disabled = false;
+    btn.textContent = '🚀 开始生成';
+    isWorkflowRunning = false;
+    statusDiv.className = 'workflow-status';
+    statusDiv.textContent = '❌ 启动失败: ' + e.message;
+  }
+}
+
+async function pollTask(taskId) {
+  const btn = document.getElementById('btnRun');
+  const statusDiv = document.getElementById('workflowStatus');
+
+  const poll = async () => {
+    try {
+      const d = await apiGet(`/api/task/${taskId}`);
+
+      if (d.status === 'running') {
+        statusDiv.textContent = '⏳ 运行中... ' + d.message;
+        setTimeout(poll, 3000);
+      } else if (d.status === 'completed') {
+        log('🎉 工作流完成！', 'ok');
+        statusDiv.className = 'workflow-status';
+        statusDiv.textContent = '✅ 工作流完成！';
+        btn.disabled = false;
+        btn.textContent = '🚀 开始生成';
+        isWorkflowRunning = false;
+        loadExisting();
+      } else if (d.status === 'failed') {
+        log('❌ 工作流失败: ' + d.message, 'err');
+        statusDiv.className = 'workflow-status';
+        statusDiv.textContent = '❌ 失败: ' + d.message;
+        btn.disabled = false;
+        btn.textContent = '🚀 开始生成';
+        isWorkflowRunning = false;
+      }
+    } catch (e) {
+      log('轮询失败: ' + e.message, 'err');
+      setTimeout(poll, 5000);
+    }
+  };
+  await poll();
+}
+
+// ========== 角色加载 ==========
+
+async function loadCharacters() {
+  try {
+    const d = await apiGet(`/api/projects/${encodeURIComponent(currentProject)}/characters`);
+    const grid = document.getElementById('charGrid');
+    if (!d.characters || d.characters.length === 0) {
+      grid.innerHTML = '<p style="color:#666">暂无角色数据，点击"开始生成"创建</p>';
+      return;
+    }
+    grid.innerHTML = d.characters.map(c => {
+      const refs = c.reference_images || {};
+      const refCount = Object.keys(refs).length;
+      const ts = Date.now();
+      return `
+        <div class="card">
+          <div class="char-images">
+            <div class="img-slot">
+              ${refs.front
+                ? `<img src="${imgUrl(refs.front)}&t=${ts}" alt="front" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">`
+                : ''}
+              <span class="img-placeholder" style="display:${refs.front ? 'none' : 'block'}">未生成</span>
+              <span class="img-label">Front</span>
+            </div>
+            <div class="img-slot">
+              ${refs.side
+                ? `<img src="${imgUrl(refs.side)}&t=${ts}" alt="side" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">`
+                : ''}
+              <span class="img-placeholder" style="display:${refs.side ? 'none' : 'block'}">未生成</span>
+              <span class="img-label">Side</span>
+            </div>
+            <div class="img-slot">
+              ${refs.full
+                ? `<img src="${imgUrl(refs.full)}&t=${ts}" alt="full" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">`
+                : ''}
+              <span class="img-placeholder" style="display:${refs.full ? 'none' : 'block'}">未生成</span>
+              <span class="img-label">Full</span>
+            </div>
+          </div>
+          <div class="card-body">
+            <h3>${c.name} <span style="font-size:11px;color:#666;">(${refCount}/3 视角)</span></h3>
+            <p>${c.description}</p>
+            <div style="margin-top:8px;font-size:11px;color:#555;">
+              <div>📐 front: 角色描述 + <code style="background:#222;padding:1px 4px;border-radius:2px;">front view, looking at camera</code></div>
+              <div>📐 side: 角色描述 + <code style="background:#222;padding:1px 4px;border-radius:2px;">side view, profile shot</code></div>
+              <div>📐 full: 角色描述 + <code style="background:#222;padding:1px 4px;border-radius:2px;">three-quarter view, full body</code></div>
+            </div>
+          </div>
+          <div class="card-footer">
+            <button class="btn-secondary" onclick="regenChar('${c.name}')">🔄 重新生成</button>
+          </div>
+        </div>`;
+    }).join('');
+  } catch (e) {
+    log('加载角色失败: ' + e.message, 'err');
+  }
+}
+
+async function regenChar(name) {
+  const btn = event.target;
+  const originalText = btn.textContent;
+
+  try {
+    btn.disabled = true;
+    btn.textContent = '⏳ 生成中...';
+    btn.style.background = '#fbbf24';
+    btn.style.color = '#111';
+
+    log(`开始重新生成角色: ${name}...`);
+    log(`提示: 每个视角独立生成，prompt = 角色描述 + 视角关键词`, 'info');
+
+    const d = await apiPost(`/api/projects/${encodeURIComponent(currentProject)}/characters/${encodeURIComponent(name)}/regenerate`);
+    log(d.message || '正在生成...', 'ok');
+
+    // 轮询等待生成完成
+    let attempts = 0;
+    const checkDone = async () => {
+      attempts++;
+      if (attempts > 60) {
+        log('生成超时，请刷新查看', 'err');
+        btn.disabled = false;
+        btn.textContent = originalText;
+        btn.style.background = '';
+        btn.style.color = '';
+        loadCharacters();
+        return;
+      }
+      try {
+        const data = await apiGet(`/api/projects/${encodeURIComponent(currentProject)}/characters`);
+        const char = (data.characters || []).find(c => c.name === name);
+        if (char && char.reference_images && Object.keys(char.reference_images).length >= 3) {
+          log(`✅ 角色 ${name} 生成完成！`, 'ok');
+          btn.disabled = false;
+          btn.textContent = originalText;
+          btn.style.background = '';
+          btn.style.color = '';
+          loadCharacters();
+          return;
+        }
+        // 更新按钮进度
+        const count = char && char.reference_images ? Object.keys(char.reference_images).length : 0;
+        btn.textContent = `⏳ ${count}/3 视角`;
+      } catch (e) {}
+      setTimeout(checkDone, 5000);
+    };
+    setTimeout(checkDone, 5000);
+
+  } catch (e) {
+    log('重新生成失败: ' + e.message, 'err');
+    btn.disabled = false;
+    btn.textContent = originalText;
+    btn.style.background = '';
+    btn.style.color = '';
+  }
+}
+
+// ========== 场景/分镜加载 ==========
+
+async function loadScenes() {
+  try {
+    const d = await apiGet(`/api/projects/${encodeURIComponent(currentProject)}/scenes`);
+    if (!d.scenes || d.scenes.length === 0) {
+      document.getElementById('sceneGrid').innerHTML = '<p style="color:#666">暂无场景数据，点击"开始生成"创建</p>';
+      document.getElementById('animGrid').innerHTML = '<p style="color:#666">暂无动画数据</p>';
+      document.getElementById('audioList').innerHTML = '<p style="color:#666">暂无音频数据</p>';
+      return;
+    }
+    renderScenes(d.scenes);
+    renderAnimations(d.scenes);
+    renderAudio(d.scenes);
+  } catch (e) {
+    log('加载场景失败: ' + e.message, 'err');
+  }
+}
+
+function renderScenes(scenes) {
+  const grid = document.getElementById('sceneGrid');
+  grid.innerHTML = scenes.map(s => {
+    const hasImg = s.image_path && s.status === 'completed';
+    return `
+    <div class="card">
+      ${hasImg
+        ? `<img src="${imgUrl(s.image_path)}" alt="${s.description}" onerror="this.outerHTML='<div style=\\'height:120px;display:flex;align-items:center;justify-content:center;color:#666;background:#0d0d0d\\'>图片加载失败</div>'">`
+        : `<div style="height:120px;display:flex;align-items:center;justify-content:center;color:#444;background:#0d0d0d">
+            ${s.status === 'completed' ? '图片未生成' : '⏳ 等待生成'}
+           </div>`
+      }
+      <div class="card-body">
+        <h3>场景 ${s.id} ${statusBadge(s.status)}</h3>
+        <p>${s.description}</p>
+        <div style="margin-top:6px">
+          ${(s.characters || []).map(c => `<span class="tag">${c}</span>`).join('')}
+        </div>
+        ${s.score ? `<div class="score" style="margin-top:6px">评分: ${s.score.total}/10</div>` : ''}
+        ${s.dialogue ? `<p style="margin-top:4px;font-style:italic;color:#888">"${s.dialogue}"</p>` : ''}
+      </div>
+      <div class="card-footer">
+        <button class="btn-secondary" onclick="confirmScene(${s.id})">✅ 确认</button>
+        <button class="btn-secondary" onclick="regenScene(${s.id})">🔄 重新生成</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderAnimations(scenes) {
+  const grid = document.getElementById('animGrid');
+  const transitions = [];
+  for (let i = 0; i < scenes.length - 1; i++) {
+    transitions.push({ from: scenes[i], to: scenes[i + 1] });
+  }
+  if (transitions.length === 0) {
+    grid.innerHTML = '<p style="color:#666">至少需要2个场景</p>';
+    return;
+  }
+  grid.innerHTML = transitions.map(t => `
+    <div class="card">
+      <div style="height:80px;display:flex;align-items:center;justify-content:center;background:#0d0d0d;color:#444;font-size:14px">
+        场景 ${t.from.id} → ${t.to.id}
+      </div>
+      <div class="card-body">
+        <h3>过渡动画</h3>
+        <p>${t.from.description} → ${t.to.description}</p>
+      </div>
+      <div class="card-footer">
+        <button class="btn-secondary" onclick="alert('需要先运行工作流生成动画')">🔄 重新生成</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderAudio(scenes) {
+  const list = document.getElementById('audioList');
+  const withDialogue = scenes.filter(s => s.dialogue);
+  if (withDialogue.length === 0) {
+    list.innerHTML = '<p style="color:#666">暂无对话</p>';
+    return;
+  }
+  list.innerHTML = withDialogue.map(s => `
+    <div style="padding:12px;background:#1a1a1a;border:1px solid #333;border-radius:6px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-weight:500">场景 ${s.id}</span>
+        ${s.audio_path
+          ? `<span class="status status-completed">已生成</span>`
+          : `<span class="status status-pending">待生成</span>`
+        }
+      </div>
+      <p style="font-style:italic;color:#888;margin:6px 0">"${s.dialogue}"</p>
+      <div style="display:flex;gap:6px">
+        ${s.audio_path ? `<button class="btn-secondary" onclick="playAudio('${imgUrl(s.audio_path)}')">▶ Play</button>` : ''}
+        <button class="btn-secondary" onclick="regenAudio(${s.id})">🔄 重新生成</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ========== 操作 ==========
+
+async function confirmScene(id) {
+  try {
+    await apiPost(`/api/projects/${encodeURIComponent(currentProject)}/scenes/${id}/confirm`);
+    loadScenes();
+  } catch (e) {
+    log('确认失败: ' + e.message, 'err');
+  }
+}
+
+async function regenScene(id) {
+  try {
+    await apiPost(`/api/projects/${encodeURIComponent(currentProject)}/scenes/${id}/regenerate`);
+    loadScenes();
+  } catch (e) {
+    log('重置失败: ' + e.message, 'err');
+  }
+}
+
+async function regenAudio(id) {
+  try {
+    await apiPost(`/api/projects/${encodeURIComponent(currentProject)}/audio/${id}/regenerate`);
+    loadScenes();
+  } catch (e) {
+    log('重置音频失败: ' + e.message, 'err');
+  }
+}
+
+function playAudio(url) {
+  const audio = new Audio(url);
+  audio.play().catch(e => log('播放失败: ' + e.message, 'err'));
+}
+
+// ========== 启动时执行 ==========
+window.onload = async () => {
+  log('简易版前端已加载');
+  log('后端地址: ' + API);
+  log('提示: 你可以直接编辑剧本，然后点"🚀 开始生成"', 'info');
+
+  const ok = await checkHealth();
+  if (ok) {
+    await autoLoadData();
+  }
+  setInterval(checkHealth, 30000);
+};
+</script>
+
+</body>
+</html>

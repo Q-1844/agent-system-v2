@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>分镜生成测试</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, 'Segoe UI', sans-serif; background: #111; color: #e5e5e5; padding: 20px; }
+    h1 { font-size: 20px; margin-bottom: 8px; }
+    .subtitle { font-size: 12px; color: #888; margin-bottom: 20px; }
+    .section { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    .section h2 { font-size: 14px; color: #999; margin-bottom: 12px; }
+    label { display: block; font-size: 12px; color: #888; margin-bottom: 4px; margin-top: 10px; }
+    input[type="text"], textarea, select {
+      width: 100%; background: #0d0d0d; color: #e5e5e5; border: 1px solid #333;
+      border-radius: 6px; padding: 10px; font-size: 13px; font-family: inherit;
+    }
+    input:focus, textarea:focus, select:focus { outline: none; border-color: #5b9bd5; }
+    textarea { resize: vertical; font-family: 'Consolas', monospace; }
+    .row { display: flex; gap: 12px; }
+    .row > * { flex: 1; }
+    button {
+      padding: 10px 20px; border-radius: 6px; border: none; font-size: 13px;
+      font-weight: 500; cursor: pointer; margin-right: 8px; margin-top: 12px;
+    }
+    .btn-primary { background: #5b9bd5; color: #fff; }
+    .btn-primary:hover { background: #4a8bc9; }
+    .btn-gen { background: #4ade80; color: #111; font-size: 14px; padding: 12px 28px; }
+    .btn-gen:hover { background: #22c55e; }
+    .btn-gen:disabled { background: #333; color: #666; cursor: not-allowed; }
+    .btn-batch { background: #f59e0b; color: #111; font-size: 14px; padding: 12px 28px; }
+    .btn-batch:hover { background: #d97706; }
+    .btn-batch:disabled { background: #333; color: #666; cursor: not-allowed; }
+    .btn-small { padding: 6px 14px; font-size: 12px; }
+    .preview-area {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; margin-top: 12px;
+    }
+    .preview-card {
+      background: #0d0d0d; border: 1px solid #333; border-radius: 8px; overflow: hidden;
+    }
+    .preview-card img {
+      width: 100%; aspect-ratio: 3/2; object-fit: contain; display: block; background: #0a0a0a;
+    }
+    .preview-card .placeholder {
+      width: 100%; aspect-ratio: 3/2; display: flex; align-items: center;
+      justify-content: center; color: #444; font-size: 14px; flex-direction: column; gap: 8px;
+    }
+    .preview-card .info {
+      padding: 8px 10px; font-size: 11px; color: #888; border-top: 1px solid #222;
+    }
+    .preview-card .info .label { color: #5b9bd5; font-weight: 600; }
+    .preview-card .info .desc { color: #aaa; margin-top: 4px; }
+    .log {
+      background: #0d0d0d; border: 1px solid #333; border-radius: 6px; padding: 10px;
+      font-family: 'Consolas', monospace; font-size: 12px; max-height: 200px;
+      overflow-y: auto; margin-top: 8px; white-space: pre-wrap;
+    }
+    .log-ok { color: #4ade80; }
+    .log-err { color: #f87171; }
+    .log-info { color: #60a5fa; }
+    .spinner {
+      display: inline-block; width: 14px; height: 14px; border: 2px solid #555;
+      border-top-color: #5b9bd5; border-radius: 50%; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+    .status-ok { background: #4ade80; }
+    .status-err { background: #f87171; }
+    .status-loading { background: #fbbf24; animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .prompt-hint { font-size: 11px; color: #555; margin-top: 4px; line-height: 1.4; }
+    .tag { display: inline-block; font-size: 10px; background: #222; color: #888; padding: 2px 6px; border-radius: 3px; margin: 2px; cursor: pointer; }
+    .tag:hover { background: #333; color: #aaa; }
+    .scene-item {
+      background: #1a1a1a; border: 1px solid #333; border-radius: 6px; padding: 12px; margin-bottom: 8px;
+    }
+    .scene-item .scene-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .scene-item .scene-id { background: #5b9bd5; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+    .scene-item .scene-delete { background: #ef4444; color: #fff; border: none; padding: 2px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; margin-left: auto; }
+    .scene-item .scene-delete:hover { background: #dc2626; }
+    .char-select { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .char-checkbox { display: flex; align-items: center; gap: 4px; background: #222; padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; }
+    .char-checkbox:hover { background: #333; }
+    .char-checkbox input { margin: 0; }
+    .ref-images { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    .ref-img { width: 60px; height: 60px; object-fit: cover; border-radius: 4px; border: 1px solid #333; }
+    .ref-img-label { font-size: 10px; color: #666; text-align: center; margin-top: 2px; }
+    .scene-select { max-width: 200px; }
+  </style>
+</head>
+<body>
+
+<h1>🎬 分镜生成测试台</h1>
+<p class="subtitle">测试分镜生成功能 - 使用角色参考图 + 场景参考图保持一致性</p>
+
+<!-- 健康检查 -->
+<div style="margin-bottom:16px;font-size:12px;">
+  <span class="status-dot status-loading" id="healthDot"></span>
+  <span id="healthText">检查服务器...</span>
+</div>
+
+<!-- ========== 风格设置 ========== -->
+<div class="section">
+  <h2>🎨 风格设置</h2>
+  <div class="row">
+    <div>
+      <label>画风描述</label>
+      <input type="text" id="styleInput" value="anime, cinematic lighting, high quality" placeholder="画风描述...">
+    </div>
+    <div>
+      <label>图片尺寸</label>
+      <select id="sizeSelect">
+        <option value="1536x1024" selected>1536x1024 (横版，推荐)</option>
+        <option value="1024x1024">1024x1024 (正方形)</option>
+        <option value="1024x1536">1024x1536 (竖版)</option>
+        <option value="1920x1080">1920x1080 (16:9)</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<!-- ========== 角色库 ========== -->
+<div class="section">
+  <h2>👥 角色库</h2>
+  <div id="charList" class="char-select">
+    <span style="color:#666;font-size:12px;">加载中...</span>
+  </div>
+  <div style="margin-top:8px;">
+    <button class="btn-primary btn-small" onclick="loadCharacters()">🔄 刷新角色列表</button>
+    <span style="font-size:11px;color:#666;margin-left:8px;">角色用于保持人物外观一致</span>
+  </div>
+</div>
+
+<!-- ========== 场景库 ========== -->
+<div class="section">
+  <h2>🏞️ 场景库</h2>
+  <div id="sceneLibrary" class="char-select">
+    <span style="color:#666;font-size:12px;">加载中...</span>
+  </div>
+  <div style="margin-top:8px;">
+    <button class="btn-primary btn-small" onclick="loadScenes()">🔄 刷新场景列表</button>
+    <span style="font-size:11px;color:#666;margin-left:8px;">场景用于保持背景风格一致</span>
+  </div>
+</div>
+
+<!-- ========== 分镜脚本 ========== -->
+<div class="section">
+  <h2>📝 分镜脚本</h2>
+  <p style="font-size:11px;color:#666;margin-bottom:12px;">
+    添加场景描述，选择参与的角色和场景背景，然后生成分镜图
+  </p>
+
+  <div id="sceneList">
+    <!-- 场景会动态添加到这里 -->
+  </div>
+
+  <div style="margin-top:12px;">
+    <button class="btn-primary btn-small" onclick="addScene()">+ 添加场景</button>
+    <button class="btn-primary btn-small" onclick="loadSampleScript()">📋 加载示例脚本</button>
+    <button class="btn-primary btn-small" onclick="clearScenes()">🗑️ 清空所有</button>
+  </div>
+</div>
+
+<!-- ========== 生成按钮 ========== -->
+<div class="section">
+  <h2>🚀 生成</h2>
+  <div style="display:flex;gap:12px;flex-wrap:wrap;">
+    <button class="btn-gen" id="btnGenAll" onclick="generateAll()">🚀 生成所有分镜</button>
+  </div>
+  <div class="prompt-hint" style="margin-top:8px;">
+    💡 生成时会同时使用角色参考图（保持角色外观）和场景参考图（保持场景风格）
+  </div>
+</div>
+
+<!-- ========== 预览区 ========== -->
+<div class="section">
+  <h2>🖼️ 生成结果</h2>
+  <div id="previewArea" class="preview-area">
+    <div style="color:#444;font-size:14px;padding:40px;text-align:center;">
+      等待生成...
+    </div>
+  </div>
+</div>
+
+<!-- ========== 日志 ========== -->
+<div class="section">
+  <h2>📋 日志</h2>
+  <div id="log" class="log">就绪</div>
+</div>
+
+<script>
+const API = window.location.origin;
+let sceneCounter = 0;
+let characters = []; // 可用角色列表
+let scenes = []; // 可用场景列表
+
+// ========== 工具函数 ==========
+
+function log(msg, type = 'info') {
+  const el = document.getElementById('log');
+  const cls = type === 'ok' ? 'log-ok' : type === 'err' ? 'log-err' : 'log-info';
+  const time = new Date().toLocaleTimeString();
+  el.innerHTML += `<span class="${cls}">[${time}] ${msg}</span>\n`;
+  el.scrollTop = el.scrollHeight;
+}
+
+function getStyle() { return document.getElementById('styleInput').value.trim(); }
+function getSize() { return document.getElementById('sizeSelect').value; }
+
+// ========== 角色库 ==========
+
+async function loadCharacters() {
+  try {
+    const r = await fetch(`${API}/api/character/list`);
+    const data = await r.json();
+    characters = data.characters || [];
+    renderCharacterList();
+    log(`已加载 ${characters.length} 个角色`, 'ok');
+  } catch (e) {
+    log(`加载角色失败: ${e.message}`, 'err');
+  }
+}
+
+function renderCharacterList() {
+  const el = document.getElementById('charList');
+  if (characters.length === 0) {
+    el.innerHTML = '<span style="color:#666;font-size:12px;">暂无角色，请先在角色管理页面创建</span>';
+    return;
+  }
+
+  el.innerHTML = characters.map(char => {
+    const hasViews = char.has_views?.front?.raw || char.has_views?.side?.raw || char.has_views?.back?.raw;
+    const statusIcon = hasViews ? '✅' : '⚠️';
+    const statusText = hasViews ? '有参考图' : '无参考图';
+    return `
+      <label class="char-checkbox" title="${char.description || ''}">
+        <input type="checkbox" value="${char.name}" data-id="${char.id}" data-has-views="${hasViews}">
+        ${statusIcon} ${char.name} <span style="font-size:10px;color:#666;">(${statusText})</span>
+      </label>
+    `;
+  }).join('');
+
+  // 添加提示
+  const hasNoViews = characters.every(c => !c.has_views?.front?.raw);
+  if (hasNoViews) {
+    el.innerHTML += '<div style="width:100%;margin-top:8px;padding:8px;background:#333;border-radius:4px;font-size:11px;color:#f59e0b;">⚠️ 所有角色都没有参考图！请先在角色管理页面生成三视图并保存。</div>';
+  }
+}
+
+// ========== 场景库 ==========
+
+async function loadScenes() {
+  try {
+    const r = await fetch(`${API}/api/scene/list`);
+    const data = await r.json();
+    scenes = data.scenes || [];
+    renderSceneLibrary();
+    log(`已加载 ${scenes.length} 个场景`, 'ok');
+  } catch (e) {
+    log(`加载场景失败: ${e.message}`, 'err');
+  }
+}
+
+function renderSceneLibrary() {
+  const el = document.getElementById('sceneLibrary');
+  if (scenes.length === 0) {
+    el.innerHTML = '<span style="color:#666;font-size:12px;">暂无场景，请先在场景管理页面创建</span>';
+    return;
+  }
+
+  el.innerHTML = scenes.map(scene => {
+    const hasImage = scene.has_image;
+    const statusIcon = hasImage ? '✅' : '⚠️';
+    const statusText = hasImage ? '有参考图' : '无参考图';
+    const tags = (scene.tags || []).join(', ');
+    return `
+      <label class="char-checkbox" title="${scene.description || ''}">
+        <input type="checkbox" value="${scene.id}" data-name="${scene.name}" data-has-image="${hasImage}">
+        ${statusIcon} ${scene.name} <span style="font-size:10px;color:#666;">(${statusText}${tags ? ', ' + tags : ''})</span>
+      </label>
+    `;
+  }).join('');
+
+  // 添加提示
+  const hasNoImages = scenes.every(s => !s.has_image);
+  if (hasNoImages) {
+    el.innerHTML += '<div style="width:100%;margin-top:8px;padding:8px;background:#333;border-radius:4px;font-size:11px;color:#f59e0b;">⚠️ 所有场景都没有参考图！请先在场景管理页面生成场景图并保存。</div>';
+  }
+}
+
+// ========== 场景管理 ==========
+
+function addScene(description = '', selectedChars = [], selectedScene = '') {
+  sceneCounter++;
+  const sceneId = sceneCounter;
+
+  const el = document.getElementById('sceneList');
+  const sceneDiv = document.createElement('div');
+  sceneDiv.className = 'scene-item';
+  sceneDiv.id = `scene-${sceneId}`;
+
+  // 角色选择
+  const charCheckboxes = characters.map(char => {
+    const checked = selectedChars.includes(char.name) ? 'checked' : '';
+    return `<label class="char-checkbox"><input type="checkbox" value="${char.name}" ${checked}>${char.name}</label>`;
+  }).join('');
+
+  // 场景选择
+  const sceneOptions = scenes.map(scene => {
+    const selected = selectedScene === scene.id ? 'selected' : '';
+    return `<option value="${scene.id}" ${selected}>${scene.name}${scene.has_image ? ' ✅' : ' ⚠️'}</option>`;
+  }).join('');
+
+  sceneDiv.innerHTML = `
+    <div class="scene-header">
+      <span class="scene-id">${sceneId}</span>
+      <input type="text" placeholder="场景描述..." value="${description}" style="flex:1;">
+      <button class="scene-delete" onclick="deleteScene(${sceneId})">删除</button>
+    </div>
+    <div class="row">
+      <div>
+        <label>参与角色（保持角色外观一致）:</label>
+        <div class="char-select">${charCheckboxes || '<span style="color:#666;font-size:11px;">无可用角色</span>'}</div>
+      </div>
+      <div>
+        <label>场景背景（保持场景风格一致）:</label>
+        <select class="scene-select" id="scene-bg-${sceneId}">
+          <option value="">不使用场景参考</option>
+          ${sceneOptions}
+        </select>
+      </div>
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <div>
+        <label>镜头</label>
+        <input type="text" placeholder="如: wide shot, close-up..." class="scene-camera">
+      </div>
+      <div>
+        <label>光照</label>
+        <input type="text" placeholder="如: golden sunset, dark night..." class="scene-lighting">
+      </div>
+    </div>
+    <div id="ref-preview-${sceneId}" class="ref-images"></div>
+    <div style="margin-top:8px;">
+      <button class="btn-primary btn-small" onclick="generateSingle(${sceneId})">🎯 生成此场景</button>
+      <button class="btn-primary btn-small" onclick="previewRefs(${sceneId})">👁️ 预览参考图</button>
+    </div>
+  `;
+
+  el.appendChild(sceneDiv);
+}
+
+function deleteScene(sceneId) {
+  const el = document.getElementById(`scene-${sceneId}`);
+  if (el) el.remove();
+}
+
+function clearScenes() {
+  document.getElementById('sceneList').innerHTML = '';
+  sceneCounter = 0;
+}
+
+function loadSampleScript() {
+  clearScenes();
+
+  // 根据可用场景自动匹配
+  const sceneMap = {
+    '山顶云海': scenes.find(s => s.name.includes('山顶')),
+    '黑暗云层': scenes.find(s => s.name.includes('黑暗') || s.name.includes('云层')),
+    '风暴战场': scenes.find(s => s.name.includes('风暴') || s.name.includes('战场')),
+  };
+
+  // 示例脚本 - 场景描述要和场景库中的描述风格一致
+  const sampleScenes = [
+    {
+      desc: "a young girl with silver hair standing on mountain top, overlooking sea of clouds, golden sunrise, anime scene",
+      chars: ["小星"],
+      scene: sceneMap['山顶云海']?.id || ''
+    },
+    {
+      desc: "a tall figure in black armor emerging from dark clouds, glowing red eyes, ominous atmosphere, anime scene",
+      chars: ["暗影"],
+      scene: sceneMap['黑暗云层']?.id || ''
+    },
+    {
+      desc: "two characters confronting each other, stormy battlefield, lightning flashes, dramatic lighting, anime scene",
+      chars: ["小星", "暗影"],
+      scene: sceneMap['风暴战场']?.id || ''
+    },
+    {
+      desc: "a young girl with silver hair raising a magic staff, bright light emanating, anime scene",
+      chars: ["小星"],
+      scene: ''
+    },
+    {
+      desc: "a tall figure in black armor being hit by light, starting to dissolve, dramatic scene, anime scene",
+      chars: ["暗影"],
+      scene: ''
+    },
+  ];
+
+  sampleScenes.forEach(s => addScene(s.desc, s.chars, s.scene));
+  log('已加载示例脚本', 'ok');
+}
+
+function getSceneData(sceneId) {
+  const el = document.getElementById(`scene-${sceneId}`);
+  if (!el) return null;
+
+  const description = el.querySelector('input[type="text"]').value.trim();
+  if (!description) return null;
+
+  const selectedChars = [];
+  el.querySelectorAll('.char-checkbox input:checked').forEach(cb => {
+    selectedChars.push(cb.value);
+  });
+
+  const camera = el.querySelector('.scene-camera').value.trim();
+  const lighting = el.querySelector('.scene-lighting').value.trim();
+  const sceneBg = el.querySelector('.scene-select').value;
+
+  return {
+    id: sceneId,
+    description,
+    characters: selectedChars,
+    scene_bg: sceneBg || null,
+    camera: camera || undefined,
+    lighting: lighting || undefined,
+  };
+}
+
+function getAllScenes() {
+  const result = [];
+  document.querySelectorAll('.scene-item').forEach(el => {
+    const sceneId = parseInt(el.id.replace('scene-', ''));
+    const data = getSceneData(sceneId);
+    if (data) result.push(data);
+  });
+  return result;
+}
+
+// ========== 预览参考图 ==========
+
+async function previewRefs(sceneId) {
+  const scene = getSceneData(sceneId);
+  if (!scene) {
+    log('场景数据不完整', 'err');
+    return;
+  }
+
+  const previewEl = document.getElementById(`ref-preview-${sceneId}`);
+  previewEl.innerHTML = '';
+
+  // 加载角色参考图
+  for (const charName of scene.characters) {
+    const char = characters.find(c => c.name === charName);
+    if (char && char.has_views?.front?.raw) {
+      try {
+        const r = await fetch(`${API}/api/character/load/${char.id}`);
+        const data = await r.json();
+        if (data.success && data.character.views?.front?.raw) {
+          const img = document.createElement('img');
+          img.src = `data:image/png;base64,${data.character.views.front.raw}`;
+          img.className = 'ref-img';
+          img.title = `角色: ${charName}`;
+          previewEl.appendChild(img);
+
+          const label = document.createElement('div');
+          label.className = 'ref-img-label';
+          label.textContent = charName;
+          label.style.width = '60px';
+          previewEl.appendChild(label);
+        }
+      } catch (e) {
+        log(`加载角色 ${charName} 参考图失败: ${e.message}`, 'err');
+      }
+    }
+  }
+
+  // 加载场景参考图
+  if (scene.scene_bg) {
+    const sceneData = scenes.find(s => s.id === scene.scene_bg);
+    if (sceneData && sceneData.has_image) {
+      try {
+        const r = await fetch(`${API}/api/scene/load/${scene.scene_bg}`);
+        const data = await r.json();
+        if (data.success && data.scene.image_base64) {
+          const img = document.createElement('img');
+          img.src = `data:image/png;base64,${data.scene.image_base64}`;
+          img.className = 'ref-img';
+          img.title = `场景: ${sceneData.name}`;
+          previewEl.appendChild(img);
+
+          const label = document.createElement('div');
+          label.className = 'ref-img-label';
+          label.textContent = sceneData.name;
+          label.style.width = '60px';
+          previewEl.appendChild(label);
+        }
+      } catch (e) {
+        log(`加载场景参考图失败: ${e.message}`, 'err');
+      }
+    }
+  }
+
+  if (previewEl.children.length === 0) {
+    previewEl.innerHTML = '<span style="font-size:11px;color:#666;">无参考图</span>';
+  }
+}
+
+// ========== 生成分镜 ==========
+
+async function generateSingle(sceneId) {
+  const scene = getSceneData(sceneId);
+  if (!scene) {
+    log('场景数据不完整', 'err');
+    return;
+  }
+
+  const btn = document.querySelector(`#scene-${sceneId} .btn-primary`);
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ 生成中...';
+  }
+
+  // 构建参考图
+  let imageRefs = [];
+  let missingRefs = [];
+
+  // 加载角色参考图
+  for (const charName of scene.characters) {
+    const char = characters.find(c => c.name === charName);
+    if (char) {
+      if (char.has_views?.front?.raw) {
+        try {
+          const r = await fetch(`${API}/api/character/load/${char.id}`);
+          const data = await r.json();
+          if (data.success && data.character.views?.front?.raw) {
+            imageRefs.push(data.character.views.front.raw);
+            log(`  ✓ 已加载角色 ${charName} 的参考图`);
+          }
+        } catch (e) {
+          log(`  ✗ 加载角色 ${charName} 参考图失败: ${e.message}`, 'err');
+        }
+      } else {
+        missingRefs.push(charName);
+      }
+    }
+  }
+
+  // 加载场景参考图
+  let sceneRefName = '';
+  if (scene.scene_bg) {
+    const sceneData = scenes.find(s => s.id === scene.scene_bg);
+    if (sceneData && sceneData.has_image) {
+      try {
+        const r = await fetch(`${API}/api/scene/load/${scene.scene_bg}`);
+        const data = await r.json();
+        if (data.success && data.scene.image_base64) {
+          imageRefs.push(data.scene.image_base64);
+          sceneRefName = sceneData.name;
+          log(`  ✓ 已加载场景 ${sceneData.name} 的参考图`);
+        }
+      } catch (e) {
+        log(`  ✗ 加载场景参考图失败: ${e.message}`, 'err');
+      }
+    }
+  }
+
+  if (missingRefs.length > 0) {
+    log(`  ⚠️ 以下角色没有参考图: ${missingRefs.join(', ')}`, 'err');
+  }
+
+  log(`生成场景 ${sceneId}: ${scene.description.substring(0, 30)}...`);
+  if (sceneRefName) {
+    log(`  使用场景参考: ${sceneRefName}`);
+  }
+
+  try {
+    const body = {
+      description: scene.description,
+      characters: scene.characters,
+      camera: scene.camera || '',
+      lighting: scene.lighting || '',
+      style: getStyle(),
+      size: getSize(),
+      image_refs: imageRefs,
+    };
+
+    const r = await fetch(`${API}/api/storyboard/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    const data = await r.json();
+
+    if (data.success) {
+      log(`✅ 场景 ${sceneId} 生成成功`, 'ok');
+      addPreviewCard(sceneId, scene.description, data.image_url, data.prompt, sceneRefName);
+    } else {
+      log(`❌ 场景 ${sceneId} 失败: ${data.detail || '未知错误'}`, 'err');
+    }
+  } catch (e) {
+    log(`❌ 场景 ${sceneId} 失败: ${e.message}`, 'err');
+  }
+
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = '🎯 生成此场景';
+  }
+}
+
+async function generateAll() {
+  const scenes = getAllScenes();
+  if (scenes.length === 0) {
+    log('请先添加场景', 'err');
+    return;
+  }
+
+  const btn = document.getElementById('btnGenAll');
+  btn.disabled = true;
+  btn.textContent = '⏳ 生成中...';
+
+  log(`=== 开始生成 ${scenes.length} 个分镜 ===`);
+
+  // 清空预览区
+  document.getElementById('previewArea').innerHTML = '';
+
+  for (const scene of scenes) {
+    await generateSingle(scene.id);
+  }
+
+  log('=== 分镜生成完成 ===', 'ok');
+  btn.disabled = false;
+  btn.textContent = '🚀 生成所有分镜';
+}
+
+// ========== 预览管理 ==========
+
+function addPreviewCard(sceneId, description, imageUrl, prompt, sceneRefName) {
+  const area = document.getElementById('previewArea');
+
+  // 检查是否已经有这个场景的卡片，如果有则更新
+  const existingCard = document.getElementById(`preview-${sceneId}`);
+  if (existingCard) {
+    existingCard.innerHTML = `
+      <img src="${imageUrl}" alt="场景 ${sceneId}" onerror="this.parentElement.innerHTML='<div class=placeholder>加载失败</div>'">
+      <div class="info">
+        <span class="label">场景 ${sceneId}</span>
+        <div class="desc">${description}</div>
+        ${sceneRefName ? `<div style="margin-top:2px;font-size:10px;color:#4ade80;">🏞️ 场景参考: ${sceneRefName}</div>` : ''}
+        <div style="margin-top:4px;font-size:10px;color:#666;">${prompt.substring(0, 60)}...</div>
+        <div style="margin-top:4px;"><a href="${imageUrl}" target="_blank" style="color:#5b9bd5;font-size:10px;">查看原图</a></div>
+      </div>
+    `;
+    return;
+  }
+
+  // 移除 "等待生成..." 提示（只在第一次添加时）
+  const placeholder = area.querySelector('div[style*="color:#444"]');
+  if (placeholder) {
+    placeholder.remove();
+  }
+
+  const card = document.createElement('div');
+  card.className = 'preview-card';
+  card.id = `preview-${sceneId}`;
+  card.innerHTML = `
+    <img src="${imageUrl}" alt="场景 ${sceneId}" onerror="this.parentElement.innerHTML='<div class=placeholder>加载失败</div>'">
+    <div class="info">
+      <span class="label">场景 ${sceneId}</span>
+      <div class="desc">${description}</div>
+      ${sceneRefName ? `<div style="margin-top:2px;font-size:10px;color:#4ade80;">🏞️ 场景参考: ${sceneRefName}</div>` : ''}
+      <div style="margin-top:4px;font-size:10px;color:#666;">${prompt.substring(0, 60)}...</div>
+      <div style="margin-top:4px;"><a href="${imageUrl}" target="_blank" style="color:#5b9bd5;font-size:10px;">查看原图</a></div>
+    </div>
+  `;
+
+  area.appendChild(card);
+}
+
+// ========== 健康检查 ==========
+
+async function checkHealth() {
+  const dot = document.getElementById('healthDot');
+  const text = document.getElementById('healthText');
+  try {
+    const r = await fetch(`${API}/api/health`, { signal: AbortSignal.timeout(3000) });
+    const d = await r.json();
+    dot.className = 'status-dot status-ok';
+    text.textContent = `服务器已连接 | 控制器: ${d.controller_ready ? '就绪' : '未就绪'}`;
+    return true;
+  } catch (e) {
+    dot.className = 'status-dot status-err';
+    text.textContent = '服务器未连接 — 请启动后端: python api_server.py';
+    return false;
+  }
+}
+
+// ========== 启动 ==========
+
+window.onload = async () => {
+  await checkHealth();
+  await loadCharacters();
+  await loadScenes();
+  log('分镜生成测试台已加载');
+  log('请添加场景或加载示例脚本', 'info');
+};
+</script>
+
+</body>
+</html>

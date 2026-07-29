@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>人物分割方法测试</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #0f0f1a;
+    color: #e0e0e0;
+    min-height: 100vh;
+  }
+
+  .header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    padding: 20px 32px;
+    border-bottom: 1px solid #2a2a4a;
+  }
+
+  .header h1 {
+    font-size: 24px;
+    color: #fff;
+    margin-bottom: 4px;
+  }
+
+  .header p {
+    font-size: 13px;
+    color: #888;
+  }
+
+  .container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+
+  /* 配置区 */
+  .config-section {
+    background: #1a1a2e;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+    border: 1px solid #2a2a4a;
+  }
+
+  .config-row {
+    display: flex;
+    gap: 16px;
+    align-items: end;
+    flex-wrap: wrap;
+  }
+
+  .config-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+    min-width: 200px;
+  }
+
+  .config-field.full-width {
+    flex: 100%;
+    min-width: 100%;
+  }
+
+  .config-field label {
+    font-size: 12px;
+    color: #aaa;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .config-field input, .config-field select, .config-field textarea {
+    background: #0f0f1a;
+    border: 1px solid #3a3a5a;
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: #e0e0e0;
+    font-size: 14px;
+    font-family: inherit;
+    transition: border-color 0.2s;
+  }
+
+  .config-field input:focus, .config-field select:focus, .config-field textarea:focus {
+    outline: none;
+    border-color: #6c63ff;
+  }
+
+  .config-field textarea {
+    resize: vertical;
+    min-height: 60px;
+  }
+
+  .btn {
+    padding: 10px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, #6c63ff, #5a52d5);
+    color: #fff;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: linear-gradient(135deg, #7b73ff, #6c63ff);
+    transform: translateY(-1px);
+  }
+
+  .btn-secondary {
+    background: #2a2a4a;
+    color: #ccc;
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    background: #3a3a5a;
+  }
+
+  .btn-success {
+    background: linear-gradient(135deg, #00c853, #00a844);
+    color: #fff;
+  }
+
+  .btn-danger {
+    background: linear-gradient(135deg, #ff5252, #d32f2f);
+    color: #fff;
+  }
+
+  /* 状态面板 */
+  .status-panel {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+
+  .status-card {
+    background: #1a1a2e;
+    border-radius: 10px;
+    padding: 14px 20px;
+    border: 1px solid #2a2a4a;
+    flex: 1;
+    min-width: 180px;
+  }
+
+  .status-card .label {
+    font-size: 11px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .status-card .value {
+    font-size: 18px;
+    font-weight: 700;
+    margin-top: 4px;
+  }
+
+  .status-card .value.ok { color: #00c853; }
+  .status-card .value.error { color: #ff5252; }
+  .status-card .value.pending { color: #ffd600; }
+
+  /* 测试结果区 */
+  .results-section {
+    margin-top: 24px;
+  }
+
+  .results-section h2 {
+    font-size: 18px;
+    margin-bottom: 16px;
+    color: #fff;
+  }
+
+  .results-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+  }
+
+  .result-card {
+    background: #1a1a2e;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #2a2a4a;
+    transition: border-color 0.2s;
+  }
+
+  .result-card:hover {
+    border-color: #6c63ff;
+  }
+
+  .result-card .card-header {
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #2a2a4a;
+  }
+
+  .result-card .card-header h3 {
+    font-size: 16px;
+    color: #fff;
+  }
+
+  .result-card .card-header .badge {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-weight: 600;
+  }
+
+  .badge-success { background: #1b5e20; color: #69f0ae; }
+  .badge-error { background: #b71c1c; color: #ff8a80; }
+  .badge-pending { background: #4a4a00; color: #ffd600; }
+  .badge-na { background: #333; color: #888; }
+
+  .result-card .card-body {
+    padding: 20px;
+  }
+
+  .result-card .image-container {
+    background: repeating-conic-gradient(#222 0% 25%, #2a2a2a 0% 50%) 50% / 20px 20px;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 280px;
+    position: relative;
+  }
+
+  .result-card .image-container img {
+    max-width: 100%;
+    max-height: 400px;
+    object-fit: contain;
+  }
+
+  .result-card .image-container .placeholder {
+    color: #555;
+    font-size: 14px;
+    text-align: center;
+    padding: 40px;
+  }
+
+  .result-card .metadata {
+    margin-top: 16px;
+    font-size: 12px;
+    color: #888;
+  }
+
+  .result-card .metadata .meta-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    border-bottom: 1px solid #222;
+  }
+
+  .result-card .metadata .meta-row:last-child {
+    border-bottom: none;
+  }
+
+  .result-card .actions {
+    margin-top: 16px;
+    display: flex;
+    gap: 8px;
+  }
+
+  /* 原图对比区 */
+  .comparison-section {
+    margin-top: 32px;
+  }
+
+  .comparison-section h2 {
+    font-size: 18px;
+    margin-bottom: 16px;
+    color: #fff;
+  }
+
+  .comparison-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+  }
+
+  .comparison-item {
+    background: #1a1a2e;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #2a2a4a;
+  }
+
+  .comparison-item .label {
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #aaa;
+    border-bottom: 1px solid #2a2a4a;
+  }
+
+  .comparison-item img {
+    width: 100%;
+    display: block;
+  }
+
+  /* 日志区 */
+  .log-section {
+    margin-top: 32px;
+    background: #0a0a14;
+    border-radius: 10px;
+    padding: 16px;
+    border: 1px solid #2a2a4a;
+    max-height: 300px;
+    overflow-y: auto;
+  }
+
+  .log-section h3 {
+    font-size: 14px;
+    color: #888;
+    margin-bottom: 10px;
+  }
+
+  .log-entry {
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 12px;
+    padding: 3px 0;
+    color: #aaa;
+  }
+
+  .log-entry.info { color: #64b5f6; }
+  .log-entry.success { color: #69f0ae; }
+  .log-entry.error { color: #ff8a80; }
+  .log-entry.warn { color: #ffd600; }
+
+  /* 提示词预览 */
+  .prompt-preview {
+    background: #0f0f1a;
+    border: 1px solid #2a2a4a;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-top: 12px;
+    font-size: 12px;
+    color: #aaa;
+    font-family: monospace;
+    max-height: 100px;
+    overflow-y: auto;
+    word-break: break-all;
+    line-height: 1.6;
+  }
+
+  /* Loading */
+  .spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid #3a3a5a;
+    border-top-color: #6c63ff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 20px auto;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* 全局测试按钮 */
+  .test-all-section {
+    margin-top: 16px;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🎭 人物分割方法测试</h1>
+  <p>生成角色图片 → 分别用三种方法抠图 → 对比效果</p>
+</div>
+
+<div class="container">
+
+  <!-- 配置区 -->
+  <div class="config-section">
+    <div class="config-row">
+      <div class="config-field">
+        <label>Agnes API Key</label>
+        <input type="password" id="apiKey" placeholder="输入你的 AGNES_API_KEY" />
+      </div>
+      <div class="config-field">
+        <label>remove.bg API Key (可选)</label>
+        <input type="password" id="removebgKey" placeholder="REMOVEBG_API_KEY" />
+      </div>
+    </div>
+    <div class="config-row" style="margin-top: 12px;">
+      <div class="config-field">
+        <label>角色预设</label>
+        <select id="presetSelect">
+          <option value="anime_girl">anime_girl - 银发少女</option>
+          <option value="warrior">warrior - 铠甲战士</option>
+          <option value="mage">mage - 紫发法师</option>
+          <option value="custom">自定义...</option>
+        </select>
+      </div>
+      <div class="config-field">
+        <label>视角</label>
+        <select id="viewSelect">
+          <option value="front">正面 (front)</option>
+          <option value="side">侧面 (side)</option>
+          <option value="back">背面 (back)</option>
+        </select>
+      </div>
+      <div class="config-field">
+        <label>图片尺寸</label>
+        <select id="sizeSelect">
+          <option value="1024x1024">1024x1024 (正方形)</option>
+          <option value="1152x768">1152x768 (横版)</option>
+          <option value="768x1152">768x1152 (竖版)</option>
+        </select>
+      </div>
+    </div>
+    <div class="config-row" style="margin-top: 12px;">
+      <div class="config-field full-width" id="customDescField" style="display:none;">
+        <label>自定义角色描述 (英文)</label>
+        <textarea id="customDesc" placeholder="A young anime girl with long silver hair, blue eyes, wearing a white dress..."></textarea>
+      </div>
+    </div>
+    <div style="margin-top: 16px; display: flex; gap: 12px; flex-wrap: wrap;">
+      <button class="btn btn-primary" id="btnGenerate" onclick="generateImage()">
+        🎨 生成角色图片
+      </button>
+      <button class="btn btn-success" id="btnTestAll" onclick="testAllMethods()" disabled>
+        ✂️ 测试全部抠图方法
+      </button>
+      <button class="btn btn-secondary" onclick="clearAll()">
+        🗑️ 清空
+      </button>
+    </div>
+    <!-- 提示词预览 -->
+    <div class="prompt-preview" id="promptPreview" style="display:none;"></div>
+  </div>
+
+  <!-- 状态面板 -->
+  <div class="status-panel" id="statusPanel">
+    <div class="status-card">
+      <div class="label">rembg</div>
+      <div class="value pending" id="statusRembg">检测中...</div>
+    </div>
+    <div class="status-card">
+      <div class="label">transparent-background</div>
+      <div class="value pending" id="statusTransBg">检测中...</div>
+    </div>
+    <div class="status-card">
+      <div class="label">remove.bg</div>
+      <div class="value pending" id="statusRemoveBg">检测中...</div>
+    </div>
+  </div>
+
+  <!-- 原图 -->
+  <div class="comparison-section" id="originalSection" style="display:none;">
+    <h2>📸 生成的原图</h2>
+    <div class="comparison-grid">
+      <div class="comparison-item">
+        <div class="label">原始图片（白底）</div>
+        <img id="originalImage" src="" alt="原图" />
+      </div>
+      <div class="comparison-item">
+        <div class="label">原始图片（棋盘格背景）</div>
+        <div style="background: repeating-conic-gradient(#222 0% 25%, #2a2a2a 0% 50%) 50% / 20px 20px;">
+          <img id="originalImageChecker" src="" alt="原图棋盘格" />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 测试结果 -->
+  <div class="results-section" id="resultsSection" style="display:none;">
+    <h2>✂️ 抠图结果对比</h2>
+    <div class="results-grid" id="resultsGrid">
+      <!-- rembg 结果 -->
+      <div class="result-card" id="cardRembg">
+        <div class="card-header">
+          <h3>方法一: rembg</h3>
+          <span class="badge badge-pending" id="badgeRembg">等待测试</span>
+        </div>
+        <div class="card-body">
+          <div class="image-container" id="imgContainerRembg">
+            <div class="placeholder">点击「测试全部抠图方法」开始</div>
+          </div>
+          <div class="metadata" id="metaRembg"></div>
+          <div class="actions">
+            <button class="btn btn-secondary" onclick="downloadResult('rembg')" id="dlRembg" style="display:none;">
+              💾 下载
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- transparent-background 结果 -->
+      <div class="result-card" id="cardTransBg">
+        <div class="card-header">
+          <h3>方法二: transparent-background</h3>
+          <span class="badge badge-pending" id="badgeTransBg">等待测试</span>
+        </div>
+        <div class="card-body">
+          <div class="image-container" id="imgContainerTransBg">
+            <div class="placeholder">点击「测试全部抠图方法」开始</div>
+          </div>
+          <div class="metadata" id="metaTransBg"></div>
+          <div class="actions">
+            <button class="btn btn-secondary" onclick="downloadResult('transbg')" id="dlTransBg" style="display:none;">
+              💾 下载
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- remove.bg 结果 -->
+      <div class="result-card" id="cardRemoveBg">
+        <div class="card-header">
+          <h3>方法三: remove.bg</h3>
+          <span class="badge badge-pending" id="badgeRemoveBg">等待测试</span>
+        </div>
+        <div class="card-body">
+          <div class="image-container" id="imgContainerRemoveBg">
+            <div class="placeholder">点击「测试全部抠图方法」开始</div>
+          </div>
+          <div class="metadata" id="metaRemoveBg"></div>
+          <div class="actions">
+            <button class="btn btn-secondary" onclick="downloadResult('removebg')" id="dlRemoveBg" style="display:none;">
+              💾 下载
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- 三视图链式生成测试区 -->
+  <!-- ============================================================ -->
+  <div style="margin-top: 40px; padding-top: 32px; border-top: 2px solid #6c63ff;">
+    <h2 style="font-size: 22px; color: #fff; margin-bottom: 8px;">🎭 三视图链式生成（核心功能）</h2>
+    <p style="color: #888; font-size: 13px; margin-bottom: 20px;">
+      流程: 生成正面 → 抠图 → 用正面当参考生成侧面 → 抠图 → 用正面当参考生成背面 → 抠图
+    </p>
+
+    <div style="display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;">
+      <button class="btn btn-primary" id="btn3View" onclick="generate3View()">
+        🎭 一键生成三视图
+      </button>
+      <button class="btn btn-secondary" onclick="clear3View()">
+        🗑️ 清空三视图
+      </button>
+    </div>
+
+    <!-- 步骤进度 -->
+    <div id="steps3View" style="display:none; margin-bottom: 20px;">
+      <div id="stepsContent" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
+    </div>
+
+    <!-- 三视图结果 -->
+    <div id="result3View" style="display:none;">
+      <h3 style="color: #fff; margin-bottom: 16px; font-size: 16px;">原始生成（白底）</h3>
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px;">
+        <div class="comparison-item">
+          <div class="label">正面 - 原始</div>
+          <div style="background: #fff; border-radius: 0 0 10px 10px;">
+            <img id="raw3vFront" src="" alt="正面原始" style="width:100%; display:block;" />
+          </div>
+        </div>
+        <div class="comparison-item">
+          <div class="label">侧面 - 原始（参考正面生成）</div>
+          <div style="background: #fff; border-radius: 0 0 10px 10px;">
+            <img id="raw3vSide" src="" alt="侧面原始" style="width:100%; display:block;" />
+          </div>
+        </div>
+        <div class="comparison-item">
+          <div class="label">背面 - 原始（参考正面生成）</div>
+          <div style="background: #fff; border-radius: 0 0 10px 10px;">
+            <img id="raw3vBack" src="" alt="背面原始" style="width:100%; display:block;" />
+          </div>
+        </div>
+      </div>
+
+      <h3 style="color: #fff; margin-bottom: 16px; font-size: 16px;">抠图结果（透明背景）</h3>
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+        <div class="comparison-item">
+          <div class="label">正面 - 透明</div>
+          <div style="background: repeating-conic-gradient(#222 0% 25%, #2a2a2a 0% 50%) 50% / 20px 20px; border-radius: 0 0 10px 10px;">
+            <img id="seg3vFront" src="" alt="正面透明" style="width:100%; display:block;" />
+          </div>
+        </div>
+        <div class="comparison-item">
+          <div class="label">侧面 - 透明</div>
+          <div style="background: repeating-conic-gradient(#222 0% 25%, #2a2a2a 0% 50%) 50% / 20px 20px; border-radius: 0 0 10px 10px;">
+            <img id="seg3vSide" src="" alt="侧面透明" style="width:100%; display:block;" />
+          </div>
+        </div>
+        <div class="comparison-item">
+          <div class="label">背面 - 透明</div>
+          <div style="background: repeating-conic-gradient(#222 0% 25%, #2a2a2a 0% 50%) 50% / 20px 20px; border-radius: 0 0 10px 10px;">
+            <img id="seg3vBack" src="" alt="背面透明" style="width:100%; display:block;" />
+          </div>
+        </div>
+      </div>
+
+      <!-- 元数据 -->
+      <div id="meta3View" style="margin-top: 16px; font-size: 12px; color: #888;"></div>
+    </div>
+  </div>
+
+  <!-- 日志 -->
+  <div class="log-section" id="logSection">
+    <h3>📋 日志</h3>
+    <div id="logContent"></div>
+  </div>
+
+</div>
+
+<script>
+// ============================================================
+// 全局状态
+// ============================================================
+let currentOriginalBase64 = null;
+let currentResults = {};
+
+// ============================================================
+// 日志
+// ============================================================
+function log(msg, level = 'info') {
+  const el = document.getElementById('logContent');
+  const time = new Date().toLocaleTimeString();
+  const div = document.createElement('div');
+  div.className = `log-entry ${level}`;
+  div.textContent = `[${time}] ${msg}`;
+  el.appendChild(div);
+  el.parentElement.scrollTop = el.parentElement.scrollHeight;
+}
+
+// ============================================================
+// 初始化
+// ============================================================
+async function init() {
+  log('正在检查服务状态...');
+
+  // 检查自定义描述
+  document.getElementById('presetSelect').addEventListener('change', (e) => {
+    document.getElementById('customDescField').style.display =
+      e.target.value === 'custom' ? 'block' : 'none';
+  });
+
+  try {
+    const resp = await fetch('/api/status');
+    const data = await resp.json();
+
+    updateStatus('statusRembg', data.rembg);
+    updateStatus('statusTransBg', data.transparent_bg);
+    updateStatus('statusRemoveBg', data.removebg);
+
+    // 自动填入已配置的 API Key
+    if (data.agnes_key_full) {
+      document.getElementById('apiKey').value = data.agnes_key_full;
+      log('已自动填入 Agnes API Key', 'success');
+    } else {
+      log('⚠️ Agnes API Key 未配置！请编辑 .env 文件填入 AGNES_API_KEY', 'warn');
+    }
+    if (data.removebg_key_full) {
+      document.getElementById('removebgKey').value = data.removebg_key_full;
+      log('已自动填入 remove.bg API Key', 'success');
+    }
+
+    if (!data.rembg) log('rembg 不可用，请运行: pip install rembg', 'warn');
+    if (!data.transparent_bg) log('transparent-background 不可用，请运行: pip install transparent-background', 'warn');
+    if (!data.removebg) log('remove.bg 不可用 (需要设置 REMOVEBG_API_KEY 环境变量)', 'warn');
+
+    const available = [data.rembg && 'rembg', data.transparent_bg && 'transparent-background', data.removebg && 'remove.bg'].filter(Boolean);
+    log(`可用方法: ${available.length > 0 ? available.join(', ') : '无'}`, available.length > 0 ? 'success' : 'error');
+  } catch (e) {
+    log(`服务连接失败: ${e.message}`, 'error');
+    log('请确认已启动: python test_segmentation_server.py', 'error');
+  }
+}
+
+function updateStatus(id, ok) {
+  const el = document.getElementById(id);
+  el.textContent = ok ? '✓ 可用' : '✗ 不可用';
+  el.className = `value ${ok ? 'ok' : 'error'}`;
+}
+
+// ============================================================
+// 生成图片
+// ============================================================
+async function generateImage() {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  if (!apiKey) {
+    log('请输入 Agnes API Key', 'error');
+    return;
+  }
+
+  const preset = document.getElementById('presetSelect').value;
+  const view = document.getElementById('viewSelect').value;
+  const size = document.getElementById('sizeSelect').value;
+  const customDesc = document.getElementById('customDesc').value.trim();
+
+  if (preset === 'custom' && !customDesc) {
+    log('请输入自定义角色描述', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btnGenerate');
+  btn.disabled = true;
+  btn.textContent = '⏳ 生成中...';
+
+  log(`开始生成角色图片: preset=${preset}, view=${view}, size=${size}`);
+
+  try {
+    const resp = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key: apiKey,
+        preset: preset,
+        view: view,
+        size: size,
+        custom_description: preset === 'custom' ? customDesc : null,
+      }),
+    });
+
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      throw new Error(data.detail || '生成失败');
+    }
+
+    if (data.success) {
+      currentOriginalBase64 = data.image_base64;
+
+      // 显示原图
+      const dataUrl = `data:image/png;base64,${data.image_base64}`;
+      document.getElementById('originalImage').src = dataUrl;
+      document.getElementById('originalImageChecker').src = dataUrl;
+      document.getElementById('originalSection').style.display = 'block';
+
+      // 显示提示词
+      const promptEl = document.getElementById('promptPreview');
+      promptEl.textContent = `Prompt: ${data.prompt}`;
+      promptEl.style.display = 'block';
+
+      // 启用测试按钮
+      document.getElementById('btnTestAll').disabled = false;
+
+      log('角色图片生成成功！', 'success');
+    }
+  } catch (e) {
+    log(`生成失败: ${e.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🎨 生成角色图片';
+  }
+}
+
+// ============================================================
+// 测试全部方法
+// ============================================================
+async function testAllMethods() {
+  if (!currentOriginalBase64) {
+    log('请先生成图片', 'error');
+    return;
+  }
+
+  document.getElementById('resultsSection').style.display = 'block';
+  document.getElementById('btnTestAll').disabled = true;
+  document.getElementById('btnTestAll').textContent = '⏳ 测试中...';
+
+  // 重置所有卡片
+  resetCard('Rembg');
+  resetCard('TransBg');
+  resetCard('RemoveBg');
+
+  const removebgKey = document.getElementById('removebgKey').value.trim();
+
+  // 并行测试三个方法
+  const methods = [
+    { key: 'rembg', badge: 'Rembg', container: 'imgContainerRembg', meta: 'metaRembg', dl: 'dlRembg' },
+    { key: 'transparent_bg', badge: 'TransBg', container: 'imgContainerTransBg', meta: 'metaTransBg', dl: 'dlTransBg' },
+    { key: 'removebg', badge: 'RemoveBg', container: 'imgContainerRemoveBg', meta: 'metaRemoveBg', dl: 'dlRemoveBg' },
+  ];
+
+  // 逐个测试（避免同时加载多个大模型导致OOM）
+  for (const m of methods) {
+    await testMethod(m);
+  }
+
+  document.getElementById('btnTestAll').disabled = false;
+  document.getElementById('btnTestAll').textContent = '✂️ 测试全部抠图方法';
+
+  log('=== 全部测试完成 ===', 'success');
+}
+
+async function testMethod(m) {
+  const badgeEl = document.getElementById(`badge${m.badge}`);
+  const containerEl = document.getElementById(m.container);
+  const metaEl = document.getElementById(m.meta);
+  const dlEl = document.getElementById(m.dl);
+
+  badgeEl.className = 'badge badge-pending';
+  badgeEl.textContent = '处理中...';
+  containerEl.innerHTML = '<div class="spinner"></div>';
+
+  log(`开始测试: ${m.key}`);
+
+  try {
+    const resp = await fetch('/api/segment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        image_base64: currentOriginalBase64,
+        method: m.key,
+      }),
+    });
+
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      throw new Error(data.detail || '处理失败');
+    }
+
+    if (data.success) {
+      const dataUrl = `data:image/png;base64,${data.image_base64}`;
+      containerEl.innerHTML = `<img src="${dataUrl}" alt="${m.key} result" />`;
+      badgeEl.className = 'badge badge-success';
+      badgeEl.textContent = '✓ 成功';
+      dlEl.style.display = 'inline-flex';
+
+      // 保存结果
+      currentResults[m.key] = data.image_base64;
+
+      // 显示元数据
+      const meta = data.metadata || {};
+      metaEl.innerHTML = `
+        <div class="meta-row"><span>耗时</span><span>${meta.elapsed_seconds || '?'}s</span></div>
+        <div class="meta-row"><span>输入大小</span><span>${formatBytes(meta.input_size)}</span></div>
+        <div class="meta-row"><span>输出大小</span><span>${formatBytes(meta.output_size)}</span></div>
+        ${meta.model ? `<div class="meta-row"><span>模型</span><span>${meta.model}</span></div>` : ''}
+      `;
+
+      log(`${m.key} 处理成功 (${meta.elapsed_seconds}s)`, 'success');
+    }
+  } catch (e) {
+    badgeEl.className = 'badge badge-error';
+    badgeEl.textContent = '✗ 失败';
+    containerEl.innerHTML = `<div class="placeholder" style="color:#ff5252;">${e.message}</div>`;
+    log(`${m.key} 处理失败: ${e.message}`, 'error');
+  }
+}
+
+function resetCard(badge) {
+  document.getElementById(`badge${badge}`).className = 'badge badge-pending';
+  document.getElementById(`badge${badge}`).textContent = '等待测试';
+}
+
+// ============================================================
+// 下载
+// ============================================================
+function downloadResult(method) {
+  const b64 = currentResults[method];
+  if (!b64) return;
+
+  const link = document.createElement('a');
+  link.href = `data:image/png;base64,${b64}`;
+  link.download = `${method}_result.png`;
+  link.click();
+}
+
+// ============================================================
+// 工具函数
+// ============================================================
+function formatBytes(bytes) {
+  if (!bytes) return '?';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function clearAll() {
+  currentOriginalBase64 = null;
+  currentResults = {};
+  document.getElementById('originalSection').style.display = 'none';
+  document.getElementById('resultsSection').style.display = 'none';
+  document.getElementById('promptPreview').style.display = 'none';
+  document.getElementById('btnTestAll').disabled = true;
+  document.getElementById('logContent').innerHTML = '';
+  log('已清空');
+}
+
+// ============================================================
+// 三视图链式生成
+// ============================================================
+async function generate3View() {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  if (!apiKey) {
+    log('请输入 Agnes API Key', 'error');
+    return;
+  }
+
+  const preset = document.getElementById('presetSelect').value;
+  const size = document.getElementById('sizeSelect').value;
+  const customDesc = document.getElementById('customDesc').value.trim();
+
+  if (preset === 'custom' && !customDesc) {
+    log('请输入自定义角色描述', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btn3View');
+  btn.disabled = true;
+  btn.textContent = '⏳ 生成中（约需1-2分钟）...';
+
+  // 显示步骤区
+  document.getElementById('steps3View').style.display = 'block';
+  document.getElementById('result3View').style.display = 'none';
+
+  // 初始化步骤显示
+  const steps = [
+    '① 生成正面', '② 正面抠图',
+    '③ 生成侧面(参考正面)', '④ 侧面抠图',
+    '⑤ 生成背面(参考正面)', '⑥ 背面抠图'
+  ];
+  const stepsEl = document.getElementById('stepsContent');
+  stepsEl.innerHTML = steps.map((s, i) =>
+    `<div id="step3v_${i}" style="padding:8px 14px; border-radius:8px; background:#2a2a4a; font-size:12px; color:#888;">${s}</div>`
+  ).join('');
+
+  log('=== 开始三视图链式生成 ===');
+
+  try {
+    const resp = await fetch('/api/generate-3view', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key: apiKey,
+        preset: preset,
+        size: size,
+        segment_method: 'rembg',
+        custom_description: preset === 'custom' ? customDesc : null,
+      }),
+    });
+
+    const data = await resp.json();
+
+    // 更新步骤状态
+    if (data.steps) {
+      data.steps.forEach((s, i) => {
+        const el = document.getElementById(`step3v_${i}`);
+        if (!el) return;
+        if (s.status === 'done') {
+          el.style.background = '#1b5e20';
+          el.style.color = '#69f0ae';
+          el.textContent = steps[i] + ' ✓';
+        } else if (s.status === 'failed') {
+          el.style.background = '#b71c1c';
+          el.style.color = '#ff8a80';
+          el.textContent = steps[i] + ' ✗';
+        }
+      });
+    }
+
+    if (!resp.ok) {
+      throw new Error(data.detail || data.error || '生成失败');
+    }
+
+    if (data.success) {
+      // 显示原始图
+      document.getElementById('raw3vFront').src = `data:image/png;base64,${data.raw_views.front}`;
+      document.getElementById('raw3vSide').src = `data:image/png;base64,${data.raw_views.side}`;
+      document.getElementById('raw3vBack').src = `data:image/png;base64,${data.raw_views.back}`;
+
+      // 显示抠图结果
+      document.getElementById('seg3vFront').src = `data:image/png;base64,${data.views.front}`;
+      document.getElementById('seg3vSide').src = `data:image/png;base64,${data.views.side}`;
+      document.getElementById('seg3vBack').src = `data:image/png;base64,${data.views.back}`;
+
+      // 显示元数据
+      const meta = data.metadata || {};
+      document.getElementById('meta3View').innerHTML = `
+        <div style="display:flex; gap:20px; flex-wrap:wrap;">
+          <span>正面抠图: ${meta.front?.elapsed_seconds || '?'}s | ${formatBytes(meta.front?.output_size)}</span>
+          <span>侧面抠图: ${meta.side?.elapsed_seconds || '?'}s | ${formatBytes(meta.side?.output_size)}</span>
+          <span>背面抠图: ${meta.back?.elapsed_seconds || '?'}s | ${formatBytes(meta.back?.output_size)}</span>
+        </div>
+      `;
+
+      document.getElementById('result3View').style.display = 'block';
+      log('=== 三视图生成完成 ===', 'success');
+    } else {
+      // 部分成功
+      if (data.views) {
+        if (data.views.front) document.getElementById('seg3vFront').src = `data:image/png;base64,${data.views.front}`;
+        if (data.views.side) document.getElementById('seg3vSide').src = `data:image/png;base64,${data.views.side}`;
+        if (data.views.back) document.getElementById('seg3vBack').src = `data:image/png;base64,${data.views.back}`;
+        if (data.raw_views?.front) document.getElementById('raw3vFront').src = `data:image/png;base64,${data.raw_views.front}`;
+        if (data.raw_views?.side) document.getElementById('raw3vSide').src = `data:image/png;base64,${data.raw_views.side}`;
+        if (data.raw_views?.back) document.getElementById('raw3vBack').src = `data:image/png;base64,${data.raw_views.back}`;
+        document.getElementById('result3View').style.display = 'block';
+      }
+      throw new Error(data.error || '部分步骤失败');
+    }
+
+  } catch (e) {
+    log(`三视图生成失败: ${e.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🎭 一键生成三视图';
+  }
+}
+
+function clear3View() {
+  document.getElementById('result3View').style.display = 'none';
+  document.getElementById('steps3View').style.display = 'none';
+  log('已清空三视图');
+}
+
+// ============================================================
+// 启动
+// ============================================================
+window.addEventListener('DOMContentLoaded', init);
+</script>
+
+</body>
+</html>

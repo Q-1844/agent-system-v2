@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>设定图方式测试 - 单张图生成三视图</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #0f0f1a;
+    color: #e0e0e0;
+    min-height: 100vh;
+  }
+  .header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    padding: 20px 32px;
+    border-bottom: 1px solid #2a2a4a;
+  }
+  .header h1 { font-size: 24px; color: #fff; margin-bottom: 4px; }
+  .header p { font-size: 13px; color: #888; }
+  .nav-link {
+    display: inline-block; margin-top: 8px; color: #6c63ff;
+    text-decoration: none; font-size: 13px;
+  }
+  .nav-link:hover { text-decoration: underline; }
+  .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+  .config-section {
+    background: #1a1a2e; border-radius: 12px; padding: 24px;
+    margin-bottom: 24px; border: 1px solid #2a2a4a;
+  }
+  .config-row {
+    display: flex; gap: 16px; align-items: end; flex-wrap: wrap;
+  }
+  .config-field {
+    display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 200px;
+  }
+  .config-field label {
+    font-size: 12px; color: #aaa; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .config-field input, .config-field select, .config-field textarea {
+    background: #0f0f1a; border: 1px solid #3a3a5a; border-radius: 8px;
+    padding: 10px 14px; color: #e0e0e0; font-size: 14px; font-family: inherit;
+  }
+  .config-field input:focus, .config-field select:focus { outline: none; border-color: #6c63ff; }
+
+  .btn {
+    padding: 10px 24px; border: none; border-radius: 8px; font-size: 14px;
+    font-weight: 600; cursor: pointer; transition: all 0.2s;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary { background: linear-gradient(135deg, #6c63ff, #5a52d5); color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: linear-gradient(135deg, #7b73ff, #6c63ff); }
+  .btn-secondary { background: #2a2a4a; color: #ccc; }
+  .btn-success { background: linear-gradient(135deg, #00c853, #00a844); color: #fff; }
+
+  .prompt-preview {
+    background: #0f0f1a; border: 1px solid #2a2a4a; border-radius: 8px;
+    padding: 12px 16px; margin-top: 12px; font-size: 12px; color: #aaa;
+    font-family: monospace; max-height: 100px; overflow-y: auto;
+    word-break: break-all; line-height: 1.6; display: none;
+  }
+
+  /* 步骤 */
+  .steps-bar {
+    display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px;
+  }
+  .step-chip {
+    padding: 8px 14px; border-radius: 8px; background: #2a2a4a;
+    font-size: 12px; color: #888;
+  }
+  .step-chip.done { background: #1b5e20; color: #69f0ae; }
+  .step-chip.failed { background: #b71c1c; color: #ff8a80; }
+  .step-chip.active { background: #4a4a00; color: #ffd600; }
+
+  /* 图片区 */
+  .section-title {
+    font-size: 18px; color: #fff; margin-bottom: 16px; margin-top: 24px;
+  }
+  .img-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  .img-card {
+    background: #1a1a2e; border-radius: 10px; overflow: hidden;
+    border: 1px solid #2a2a4a;
+  }
+  .img-card .card-label {
+    padding: 10px 16px; font-size: 13px; font-weight: 600;
+    color: #aaa; border-bottom: 1px solid #2a2a4a;
+  }
+  .img-card .card-img {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 200px;
+  }
+  .img-card .card-img img { max-width: 100%; max-height: 500px; object-fit: contain; }
+  .img-card .card-img.white-bg { background: #fff; }
+  .img-card .card-img.checker-bg {
+    background: repeating-conic-gradient(#222 0% 25%, #2a2a2a 0% 50%) 50% / 20px 20px;
+  }
+  .img-card .card-meta {
+    padding: 8px 16px; font-size: 11px; color: #666;
+    border-top: 1px solid #2a2a4a;
+  }
+
+  .log-section {
+    margin-top: 32px; background: #0a0a14; border-radius: 10px;
+    padding: 16px; border: 1px solid #2a2a4a; max-height: 300px; overflow-y: auto;
+  }
+  .log-section h3 { font-size: 14px; color: #888; margin-bottom: 10px; }
+  .log-entry {
+    font-family: 'Cascadia Code', monospace; font-size: 12px;
+    padding: 3px 0; color: #aaa;
+  }
+  .log-entry.info { color: #64b5f6; }
+  .log-entry.success { color: #69f0ae; }
+  .log-entry.error { color: #ff8a80; }
+  .log-entry.warn { color: #ffd600; }
+
+  .spinner {
+    width: 32px; height: 32px; border: 3px solid #3a3a5a;
+    border-top-color: #6c63ff; border-radius: 50%;
+    animation: spin 0.8s linear infinite; margin: 20px auto;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .hidden { display: none; }
+
+  .flow-diagram {
+    background: #0f0f1a; border: 1px solid #2a2a4a; border-radius: 8px;
+    padding: 16px; margin-bottom: 20px; font-size: 12px; color: #888;
+    font-family: monospace; line-height: 1.8;
+  }
+  .flow-diagram .arrow { color: #6c63ff; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>📐 设定图方式测试 — 单张图生成三视图</h1>
+  <p>在一张图中生成正面/侧面/背面，然后自动裁剪 + 分别抠图</p>
+  <a href="/" class="nav-link">← 返回抠图对比测试</a>
+</div>
+
+<div class="container">
+
+  <!-- 流程说明 -->
+  <div class="flow-diagram">
+    <div>生成一张设定图（正面+侧面+背面水平排列）</div>
+    <div class="arrow">  ↓</div>
+    <div>Pillow 自动三等分裁剪 → 得到三张独立视角图</div>
+    <div class="arrow">  ↓</div>
+    <div>rembg 分别抠图 → 三张透明PNG</div>
+  </div>
+
+  <!-- 配置 -->
+  <div class="config-section">
+    <div class="config-row">
+      <div class="config-field">
+        <label>Agnes API Key</label>
+        <input type="password" id="apiKey" placeholder="自动填入" />
+      </div>
+      <div class="config-field">
+        <label>角色预设</label>
+        <select id="presetSelect">
+          <option value="anime_girl">anime_girl - 银发少女</option>
+          <option value="warrior">warrior - 铠甲战士</option>
+          <option value="mage">mage - 紫发法师</option>
+          <option value="custom">自定义...</option>
+        </select>
+      </div>
+      <div class="config-field">
+        <label>图片尺寸</label>
+        <select id="sizeSelect">
+          <option value="1792x1024">1792x1024 (横版，推荐)</option>
+          <option value="1536x1024">1536x1024</option>
+          <option value="1024x1024">1024x1024 (正方形)</option>
+        </select>
+      </div>
+    </div>
+    <div class="config-field full-width" id="customDescField" style="display:none; margin-top: 12px;">
+      <label>自定义角色描述 (英文)</label>
+      <textarea id="customDesc" rows="2" placeholder="A young anime girl with long silver hair..."></textarea>
+    </div>
+    <div style="margin-top: 16px; display: flex; gap: 12px;">
+      <button class="btn btn-primary" id="btnGenerate" onclick="generateSheet()">
+        📐 生成设定图 + 裁剪 + 抠图
+      </button>
+      <button class="btn btn-secondary" onclick="clearAll()">🗑️ 清空</button>
+    </div>
+    <div class="prompt-preview" id="promptPreview"></div>
+  </div>
+
+  <!-- 步骤进度 -->
+  <div id="stepsSection" class="hidden">
+    <div class="steps-bar" id="stepsBar"></div>
+  </div>
+
+  <!-- 设定图原图 -->
+  <div id="sheetSection" class="hidden">
+    <h2 class="section-title">📄 生成的设定图（原图）</h2>
+    <div class="img-grid" style="grid-template-columns: 1fr;">
+      <div class="img-card">
+        <div class="card-label">完整设定图 — 正面 | 侧面 | 背面</div>
+        <div class="card-img white-bg"><img id="sheetImg" src="" /></div>
+        <div class="card-meta" id="sheetMeta"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 裁剪结果 -->
+  <div id="cropsSection" class="hidden">
+    <h2 class="section-title">✂️ 裁剪后的三个视角（白底）</h2>
+    <div class="img-grid" id="cropsGrid">
+      <div class="img-card">
+        <div class="card-label">正面（裁剪）</div>
+        <div class="card-img white-bg"><img id="cropFront" src="" /></div>
+      </div>
+      <div class="img-card">
+        <div class="card-label">侧面（裁剪）</div>
+        <div class="card-img white-bg"><img id="cropSide" src="" /></div>
+      </div>
+      <div class="img-card">
+        <div class="card-label">背面（裁剪）</div>
+        <div class="card-img white-bg"><img id="cropBack" src="" /></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 抠图结果 -->
+  <div id="segSection" class="hidden">
+    <h2 class="section-title">🎭 抠图结果（透明背景）</h2>
+    <div class="img-grid" id="segGrid">
+      <div class="img-card">
+        <div class="card-label">正面 — 透明</div>
+        <div class="card-img checker-bg"><img id="segFront" src="" /></div>
+        <div class="card-meta" id="segMetaFront"></div>
+      </div>
+      <div class="img-card">
+        <div class="card-label">侧面 — 透明</div>
+        <div class="card-img checker-bg"><img id="segSide" src="" /></div>
+        <div class="card-meta" id="segMetaSide"></div>
+      </div>
+      <div class="img-card">
+        <div class="card-label">背面 — 透明</div>
+        <div class="card-img checker-bg"><img id="segBack" src="" /></div>
+        <div class="card-meta" id="segMetaBack"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 日志 -->
+  <div class="log-section">
+    <h3>📋 日志</h3>
+    <div id="logContent"></div>
+  </div>
+</div>
+
+<script>
+function log(msg, level = 'info') {
+  const el = document.getElementById('logContent');
+  const time = new Date().toLocaleTimeString();
+  const div = document.createElement('div');
+  div.className = `log-entry ${level}`;
+  div.textContent = `[${time}] ${msg}`;
+  el.appendChild(div);
+  el.parentElement.scrollTop = el.parentElement.scrollHeight;
+}
+
+function formatBytes(bytes) {
+  if (!bytes) return '?';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+async function init() {
+  document.getElementById('presetSelect').addEventListener('change', (e) => {
+    document.getElementById('customDescField').style.display =
+      e.target.value === 'custom' ? 'block' : 'none';
+  });
+
+  try {
+    const resp = await fetch('/api/status');
+    const data = await resp.json();
+    if (data.agnes_key_full) {
+      document.getElementById('apiKey').value = data.agnes_key_full;
+      log('已自动填入 Agnes API Key', 'success');
+    } else {
+      log('⚠️ Agnes API Key 未配置', 'warn');
+    }
+    log(`抠图方法: rembg=${data.rembg}, transparent_bg=${data.transparent_bg}`);
+  } catch (e) {
+    log(`服务连接失败: ${e.message}`, 'error');
+  }
+}
+
+const STEPS = ['① 生成设定图', '② 裁剪三视角', '③ 正面抠图', '④ 侧面抠图', '⑤ 背面抠图'];
+
+function updateStep(index, status) {
+  const el = document.getElementById(`step_${index}`);
+  if (!el) return;
+  el.className = `step-chip ${status}`;
+  el.textContent = STEPS[index] + (status === 'done' ? ' ✓' : status === 'failed' ? ' ✗' : '');
+}
+
+async function generateSheet() {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  if (!apiKey) { log('请输入 API Key', 'error'); return; }
+
+  const preset = document.getElementById('presetSelect').value;
+  const size = document.getElementById('sizeSelect').value;
+  const customDesc = document.getElementById('customDesc').value.trim();
+
+  if (preset === 'custom' && !customDesc) { log('请输入角色描述', 'error'); return; }
+
+  const btn = document.getElementById('btnGenerate');
+  btn.disabled = true;
+  btn.textContent = '⏳ 生成中...';
+
+  // 显示步骤
+  document.getElementById('stepsSection').classList.remove('hidden');
+  const stepsBar = document.getElementById('stepsBar');
+  stepsBar.innerHTML = STEPS.map((s, i) =>
+    `<div class="step-chip" id="step_${i}">${s}</div>`
+  ).join('');
+
+  log('=== 开始设定图方式生成 ===');
+
+  // 清空之前的结果
+  ['sheetSection', 'cropsSection', 'segSection'].forEach(id =>
+    document.getElementById(id).classList.add('hidden')
+  );
+
+  try {
+    const resp = await fetch('/api/generate-sheet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key: apiKey,
+        preset: preset,
+        size: size,
+        segment_method: 'rembg',
+        custom_description: preset === 'custom' ? customDesc : null,
+      }),
+    });
+
+    const data = await resp.json();
+
+    // 更新步骤状态
+    if (data.steps) {
+      data.steps.forEach(s => {
+        const idx = s.step - 1;
+        updateStep(idx, s.status);
+      });
+    }
+
+    if (!resp.ok) {
+      throw new Error(data.detail || data.error || '生成失败');
+    }
+
+    // 显示 prompt
+    if (data.prompt) {
+      document.getElementById('promptPreview').textContent = `Prompt: ${data.prompt}`;
+      document.getElementById('promptPreview').style.display = 'block';
+    }
+
+    // 显示设定图原图
+    if (data.sheet_raw) {
+      document.getElementById('sheetImg').src = `data:image/png;base64,${data.sheet_raw}`;
+      document.getElementById('sheetSection').classList.remove('hidden');
+      log('设定图生成成功', 'success');
+    }
+
+    // 显示裁剪结果
+    if (data.crops_raw) {
+      if (data.crops_raw.front) document.getElementById('cropFront').src = `data:image/png;base64,${data.crops_raw.front}`;
+      if (data.crops_raw.side) document.getElementById('cropSide').src = `data:image/png;base64,${data.crops_raw.side}`;
+      if (data.crops_raw.back) document.getElementById('cropBack').src = `data:image/png;base64,${data.crops_raw.back}`;
+      document.getElementById('cropsSection').classList.remove('hidden');
+      log('三个视角裁剪完成', 'success');
+    }
+
+    // 显示抠图结果
+    if (data.views) {
+      let hasSeg = false;
+      if (data.views.front) {
+        document.getElementById('segFront').src = `data:image/png;base64,${data.views.front}`;
+        hasSeg = true;
+      }
+      if (data.views.side) {
+        document.getElementById('segSide').src = `data:image/png;base64,${data.views.side}`;
+        hasSeg = true;
+      }
+      if (data.views.back) {
+        document.getElementById('segBack').src = `data:image/png;base64,${data.views.back}`;
+        hasSeg = true;
+      }
+      if (hasSeg) {
+        document.getElementById('segSection').classList.remove('hidden');
+      }
+
+      // 元数据
+      const meta = data.metadata || {};
+      ['front', 'side', 'back'].forEach(v => {
+        const m = meta[v];
+        if (m && m.elapsed_seconds) {
+          document.getElementById(`segMeta${v.charAt(0).toUpperCase() + v.slice(1)}`).textContent =
+            `耗时: ${m.elapsed_seconds}s | 大小: ${formatBytes(m.output_size)}`;
+        }
+      });
+      log('抠图完成', 'success');
+    }
+
+    if (data.success) {
+      log('=== 全部完成 ===', 'success');
+    } else {
+      log(`部分失败: ${data.error}`, 'error');
+    }
+
+  } catch (e) {
+    log(`失败: ${e.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📐 生成设定图 + 裁剪 + 抠图';
+  }
+}
+
+function clearAll() {
+  ['sheetSection', 'cropsSection', 'segSection', 'stepsSection'].forEach(id =>
+    document.getElementById(id).classList.add('hidden')
+  );
+  document.getElementById('promptPreview').style.display = 'none';
+  document.getElementById('logContent').innerHTML = '';
+  log('已清空');
+}
+
+window.addEventListener('DOMContentLoaded', init);
+</script>
+
+</body>
+</html>

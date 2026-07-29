@@ -1,0 +1,35 @@
+project: "我的动画短片"
+style: "anime, soft lighting, cinematic composition"
+size: "1152x768"
+
+characters:
+  - name: "小星"
+    description: "a young girl with silver hair, blue eyes, wearing a white cloak, gentle expression"
+
+  - name: "暗影"
+    description: "a tall figure in black armor, glowing red eyes, menacing presence"
+
+scenes:
+  - id: 1
+    description: "小星站在山顶，俯瞰云海，晨光洒落"
+    characters: ["小星"]
+    camera: "wide shot, from behind"
+    lighting: "golden sunrise"
+    motion: "hair and cloak flowing in the wind"
+    dialogue: "新的一天开始了。"
+
+  - id: 2
+    description: "暗影从云层中浮现，红眼闪烁"
+    characters: ["暗影"]
+    camera: "low angle, dramatic"
+    lighting: "dark clouds, red glow"
+    motion: "slowly emerging from mist"
+    dialogue: "你逃不掉的。"
+
+  - id: 3
+    description: "两人对峙，风暴骤起"
+    characters: ["小星", "暗影"]
+    camera: "medium shot, side view"
+    lighting: "lightning flashes"
+    motion: "wind intensifying, hair and clothes blowing"
+    dialogue: "我不会屈服！"
