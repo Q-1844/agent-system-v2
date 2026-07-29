@@ -970,7 +970,7 @@ async def system_limits():
 
 ```yaml
 agnes:
-  base_url: "https://apihub.agnes-ai.com"
+  base_url: "https://apihub.agnes-ai.cn"   # 国内入口（2026-07-29 上线，直连无需代理）；国际站 .com 需代理
   api_key: ${AGNES_API_KEY}
   proxy: "http://127.0.0.1:7890"
   models:

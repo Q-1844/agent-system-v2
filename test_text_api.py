@@ -6,7 +6,7 @@ import io
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 API_KEY = "sk-jC7GlV9A7qxcFvPqRPqeowwE6NUaS1U4RXUm3pcQu9TipTDq"
-BASE_URL = "https://apihub.agnes-ai.com"
+BASE_URL = "https://apihub.agnes-ai.cn"
 
 print("Testing Text API with 60s timeout...")
 

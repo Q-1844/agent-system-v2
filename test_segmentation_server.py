@@ -53,7 +53,7 @@ app = FastAPI(title="人物分割测试")
 # ============================================================
 # 配置 - 自动从环境变量读取 API Key
 # ============================================================
-AGNES_BASE_URL = "https://apihub.agnes-ai.com"
+AGNES_BASE_URL = "https://apihub.agnes-ai.cn"
 AGNES_IMAGE_MODEL = "agnes-image-2.1-flash"
 AGNES_API_KEY = os.environ.get("AGNES_API_KEY", "")
 REMOVEBG_API_KEY = os.environ.get("REMOVEBG_API_KEY", "")
