@@ -1,33 +1,40 @@
 """
-Edge TTS 客户端（免费，无需 API Key / 会员）
+Edge TTS 客户端（免费，无需 API Key / 会员 / 代理）。
 基于微软 Edge 浏览器神经网络语音，替代过期的 Mimo TTS。
-接口与 MimoTTSClient 兼容：synthesize(text, voice, speed) -> bytes
-"""
 
-import io
-from typing import Optional
+阶段 2（Audio-First）新增 synthesize_full：返回真实时长 + 词级时间戳（WordBoundary），
+用于反推 num_frames 与生成词级 SRT。旧 synthesize（返回 bytes）保留为垫片，供
+v1 管线（tts_gen）过渡使用，阶段 5 清理。
+"""
+from __future__ import annotations
+import asyncio
+from pathlib import Path
+from typing import List, Dict, Any, Optional
 
 from ..utils.logger import setup_logger
 
 logger = setup_logger("edge_tts_client")
 
-# 常用中文音色
-VOICE_MAP = {
-    "default": "zh-CN-XiaoxiaoNeural",
-    "female": "zh-CN-XiaoxiaoNeural",   # 晓晓（女声，温柔）
-    "male": "zh-CN-YunxiNeural",         # 云希（男声，沉稳）
-    "xiaoyi": "zh-CN-XiaoyiNeural",      # 晓伊（女声，活泼）
-    "yunyang": "zh-CN-YunyangNeural",    # 云扬（男声，新闻）
-    "xiaochen": "zh-CN-XiaochenNeural",  # 晓晨（女声）
+# 音色表（含 v1 旧 key 与 v2 新 key，统一一张表）
+VOICES = {
+    "default":  "zh-CN-XiaoxiaoNeural",   # 晓晓 · 温柔女声
+    "female":   "zh-CN-XiaoxiaoNeural",
+    "male":     "zh-CN-YunxiNeural",       # 云希 · 沉稳男声
+    "female2":  "zh-CN-XiaoyiNeural",      # 晓伊 · 活泼女声
+    "male2":    "zh-CN-YunyangNeural",     # 云扬 · 少年音
+    "xiaoyi":   "zh-CN-XiaoyiNeural",
+    "yunyang":  "zh-CN-YunyangNeural",
+    "xiaochen": "zh-CN-XiaochenNeural",
 }
+# v1 兼容别名
+VOICE_MAP = VOICES
 
 
 class EdgeTTSClient:
-    """Edge TTS 客户端（免费）"""
+    """Edge TTS 客户端（免费）。"""
 
     def __init__(self, config: Optional[dict] = None):
         self.config = config or {}
-        # edge-tts 无需 API Key
         try:
             import edge_tts  # noqa: F401
             self._available = True
@@ -35,40 +42,99 @@ class EdgeTTSClient:
             self._available = False
             logger.error("未安装 edge-tts，请运行: pip install edge-tts")
 
-    async def synthesize(
-        self, text: str, voice: str = "default", speed: float = 1.0
-    ) -> bytes:
-        """
-        语音合成
+    # ---------- 内部：流式合成，同时收词级时间戳 ----------
+    async def _stream(self, text: str, voice_id: str,
+                      rate: str = "+0%", volume: str = "+0%"
+                      ) -> tuple[bytes, List[Dict[str, Any]]]:
+        import edge_tts
+        # edge-tts 7.x：boundary 默认 SentenceBoundary，必须显式传 WordBoundary 才能拿词级
+        comm = edge_tts.Communicate(text, voice_id, rate=rate, volume=volume,
+                                    boundary="WordBoundary")
+        audio = bytearray()
+        words: List[Dict[str, Any]] = []
+        async for chunk in comm.stream():
+            if chunk["type"] == "audio":
+                audio.extend(chunk["data"])
+            elif chunk["type"] == "WordBoundary":
+                # edge-tts 的 offset/duration 单位是 100 纳秒（ticks）
+                words.append({
+                    "text": chunk["text"],
+                    "offset_ms": chunk["offset"] // 10_000,
+                    "duration_ms": chunk["duration"] // 10_000,
+                })
+        if not audio:
+            raise RuntimeError(f"edge-tts 返回空音频，text={text[:40]!r}")
+        return bytes(audio), words
 
-        Args:
-            text: 要合成的文本
-            voice: 音色（default/female/male 或直接传 zh-CN-XiaoxiaoNeural）
-            speed: 语速（1.0 = 正常，1.5 = 1.5倍速）
+    # ---------- 阶段 2 主接口：词级时间戳 + 真实时长 ----------
+    async def synthesize_full(self, text: str, *, voice: str = "default",
+                              rate: str = "+0%", volume: str = "+0%",
+                              out_path: str | Path) -> Dict[str, Any]:
+        """合成语音并返回真实时长 + 词级时间戳。
 
-        Returns:
-            音频数据 (bytes, mp3)
+        返回：{"path": str, "duration_ms": int,
+               "words": [{"text": "你好", "offset_ms": 0, "duration_ms": 320}, ...]}
         """
         if not self._available:
-            raise Exception("edge-tts 未安装，请运行: pip install edge-tts")
+            raise RuntimeError("edge-tts 未安装，请运行: pip install edge-tts")
+        voice_id = VOICES.get(voice, voice)
+        out_path = Path(out_path); out_path.parent.mkdir(parents=True, exist_ok=True)
 
-        import edge_tts
+        audio, words = await self._stream(text, voice_id, rate=rate, volume=volume)
+        out_path.write_bytes(audio)
 
-        # 音色映射
-        v = VOICE_MAP.get(voice, voice) if voice else "zh-CN-XiaoxiaoNeural"
-        # speed 1.0 -> rate "+0%", 1.5 -> "+50%", 0.8 -> "-20%"
+        duration_ms = await self._probe_duration_ms(out_path)
+        # WordBoundary 只覆盖到最后一个词，尾部静音拿不到；ffprobe 失败时用词边界兜底
+        if duration_ms <= 0 and words:
+            last = words[-1]
+            duration_ms = last["offset_ms"] + last["duration_ms"] + 200
+
+        logger.info("TTS 完成 %s: %.2fs, %d 个词边界",
+                    out_path.name, duration_ms / 1000, len(words))
+        return {"path": str(out_path), "duration_ms": duration_ms, "words": words}
+
+    async def _probe_duration_ms(self, path: Path) -> int:
+        """用 ffprobe 拿准确时长。WordBoundary 只覆盖到最后一个词，
+        尾部静音拿不到，所以必须 ffprobe。"""
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "ffprobe", "-v", "error", "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1", str(path),
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            out, _ = await proc.communicate()
+            return int(float(out.decode().strip()) * 1000)
+        except Exception:
+            logger.warning("ffprobe 读取时长失败: %s", path)
+            return 0
+
+    @staticmethod
+    def list_voices() -> List[dict]:
+        return [{"id": k, "voice": v} for k, v in VOICES.items()]
+
+    # ---------- v1 垫片：返回 bytes（无词级时间戳）----------
+    # DEPRECATED-SHIM: remove in phase 5. 新代码请用 synthesize_full。
+    async def synthesize(self, text: str, voice: str = "default",
+                         speed: float = 1.0) -> bytes:
+        """【向后兼容】返回 mp3 bytes，无词级时间戳。tts_gen（v1 管线）在用。"""
+        _shim_warn()
+        if not self._available:
+            raise RuntimeError("edge-tts 未安装，请运行: pip install edge-tts")
+        voice_id = VOICES.get(voice, voice) if voice else "zh-CN-XiaoxiaoNeural"
+        # speed 1.0 -> "+0%", 1.5 -> "+50%", 0.8 -> "-20%"
         rate_pct = int(round((speed - 1.0) * 100))
         rate = f"+{rate_pct}%" if rate_pct >= 0 else f"{rate_pct}%"
+        audio, _ = await self._stream(text, voice_id, rate=rate)
+        logger.info("Edge TTS(v1垫片) 合成成功: %d 字节, voice=%s, rate=%s",
+                    len(audio), voice_id, rate)
+        return audio
 
-        buf = io.BytesIO()
-        communicate = edge_tts.Communicate(text, v, rate=rate)
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                buf.write(chunk["data"])
 
-        audio_bytes = buf.getvalue()
-        if not audio_bytes:
-            raise Exception(f"Edge TTS 合成失败（空音频）: voice={v}, text={text[:30]}")
-
-        logger.info(f"Edge TTS 合成成功: {len(audio_bytes)} 字节, voice={v}, rate={rate}")
-        return audio_bytes
+_shim_warned = False
+def _shim_warn():
+    global _shim_warned
+    if not _shim_warned:
+        _shim_warned = True
+        msg = "EdgeTTSClient.synthesize 是 v1 垫片，将在阶段 5 移除；新代码请用 synthesize_full。"
+        logger.warning(msg)
+        import warnings as _w
+        _w.warn(msg, DeprecationWarning, stacklevel=3)
