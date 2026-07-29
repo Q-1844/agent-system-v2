@@ -1964,6 +1964,294 @@ async def _generate_scene_storyboard_bg(task_id, project_dir, scene, data, contr
 
 # ============ 最终视频合成（ffmpeg）============
 
+# ==================== 阶段 2：配音前置（shot 级）====================
+# 配音在视频之前：TTS 拿真实音频时长 -> plan_shot_timing 反推 num_frames -> 写回。
+# 走 ProjectStore（v2 project.json）+ store.update_shot。不删旧 scene 级接口。
+from typing import Any, List
+import time as _time
+
+
+class ShotAudioRequest(BaseModel):
+    voice: str = "default"
+    rate: str = "+0%"
+    volume: str = "+0%"
+    regenerate: bool = False
+
+
+def _fps_from_config() -> int:
+    try:
+        return int((_APP_CFG.get("agnes") or {}).get("video", {}).get("frame_rate", 24))
+    except Exception:
+        return 24
+
+
+def _audio_out_path(project_dir: Path, shot_id: str) -> Path:
+    return project_dir / "output" / "audio" / f"{shot_id}.mp3"
+
+
+def _apply_audio_to_shot(shot, res, timing, voice, rate):
+    """sync mutator：把 TTS 结果 + 时长反推写回 shot（供 store.update_shot）。"""
+    from src.core.models import ShotStatus
+    if res is None:
+        shot.audio.status = ShotStatus.SKIPPED.value
+    else:
+        shot.audio.local = res["path"]
+        shot.audio.duration_ms = res["duration_ms"]
+        shot.audio.words = res["words"]
+        shot.audio.voice = voice
+        shot.audio.rate = rate
+        shot.audio.status = ShotStatus.DONE.value
+        shot.audio.updated_at = _time.time()
+    # 🔴 视频参数在这一步定死（配音前置的关键）
+    shot.video.num_frames = timing.num_frames
+    shot.video.frame_rate = timing.frame_rate
+
+
+async def _gen_one_audio(tts, project_dir, shot_id, dialogue, voice, rate, volume, fps):
+    """单镜 TTS（并发用），返回 (shot_id, res_or_None, timing, error_or_None)。"""
+    from src.core.timing import plan_shot_timing
+    try:
+        if not dialogue:
+            return (shot_id, None, plan_shot_timing(0, fps), None)
+        out = _audio_out_path(Path(project_dir), shot_id)
+        res = await tts.synthesize_full(dialogue, voice=voice, rate=rate, volume=volume, out_path=out)
+        timing = plan_shot_timing(res["duration_ms"] / 1000, fps)
+        return (shot_id, res, timing, None)
+    except Exception as e:
+        return (shot_id, None, None, str(e))
+
+
+@app.post("/api/project/{project_name}/shot/{shot_id}/audio")
+async def shot_audio(project_name: str, shot_id: str, req: ShotAudioRequest,
+                     background_tasks: BackgroundTasks):
+    """单镜配音（TTS -> 反推 num_frames -> 写回 audio+video 参数）"""
+    try:
+        controller = get_controller()
+        project_dir = controller.project_manager.get_project_dir(project_name)
+        from src.core.store import ProjectStore
+        if ProjectStore(project_dir).load().get_shot(shot_id) is None:
+            raise HTTPException(404, f"镜头 {shot_id} 不存在")
+        task_id = _new_task("audio")
+        background_tasks.add_task(
+            _shot_audio_bg, task_id, str(project_dir), shot_id,
+            req.voice, req.rate, req.volume
+        )
+        return {"task_id": task_id, "shot_id": shot_id}
+    except FileNotFoundError:
+        raise HTTPException(404, "项目不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+async def _shot_audio_bg(task_id, project_dir, shot_id, voice, rate, volume):
+    from src.core.store import ProjectStore
+    from src.api.edge_tts_client import EdgeTTSClient
+    task_store[task_id]["status"] = "running"
+    try:
+        fps = _fps_from_config()
+        store = ProjectStore(Path(project_dir))
+        shot = store.load().get_shot(shot_id)
+        tts = EdgeTTSClient()
+        _sid, res, timing, err = await _gen_one_audio(
+            tts, project_dir, shot_id, shot.dialogue, voice, rate, volume, fps)
+        if err:
+            raise RuntimeError(err)
+        store.update_shot(shot_id,
+                          lambda sh: _apply_audio_to_shot(sh, res, timing, voice, rate))
+        msg = f"镜头 {shot_id} 配音完成"
+        if timing.needs_split:
+            task_store[task_id]["warning"] = {
+                "needs_split": True, "suggested_splits": timing.suggested_splits,
+                "message": f"台词 {timing.audio_seconds:.1f}s 超单镜上限，建议拆为 {timing.suggested_splits} 个镜头"}
+            msg += f"（⚠️ 建议拆为 {timing.suggested_splits} 镜）"
+        task_store[task_id]["status"] = "completed"
+        task_store[task_id]["result"] = {
+            "shot_id": shot_id,
+            "duration_ms": res["duration_ms"] if res else 0,
+            "num_frames": timing.num_frames, "needs_split": timing.needs_split}
+        task_store[task_id]["message"] = msg
+    except Exception as e:
+        task_store[task_id]["status"] = "failed"
+        task_store[task_id]["message"] = f"失败: {e}"
+        logger.error(f"镜头 {shot_id} 配音失败: {e}")
+
+
+class BatchAudioRequest(BaseModel):
+    voice: str = "default"
+    rate: str = "+0%"
+    volume: str = "+0%"
+    scope: Any = "all"      # "all" | "pending" | [shot_id, ...]
+    skip_locked: bool = True
+
+
+@app.post("/api/project/{project_name}/audio/batch")
+async def batch_audio(project_name: str, req: BatchAudioRequest,
+                      background_tasks: BackgroundTasks):
+    """批量配音（edge-tts 不占 Agnes 限流桶，并发 4，顺序写回避免丢失更新）"""
+    try:
+        controller = get_controller()
+        project_dir = controller.project_manager.get_project_dir(project_name)
+        from src.core.store import ProjectStore
+        p = ProjectStore(project_dir).load()
+        shots = p.all_shots()
+        if req.scope == "pending":
+            ids = [s.shot_id for s in shots if s.audio.status != "done"]
+        elif isinstance(req.scope, list):
+            ids = list(req.scope)
+        else:
+            ids = [s.shot_id for s in shots]
+        if req.skip_locked:
+            locked = {s.shot_id for s in shots if s.locked}
+            ids = [i for i in ids if i not in locked]
+        if not ids:
+            return {"task_id": None, "message": "无待配音镜头", "count": 0}
+        task_id = _new_task("audio")
+        background_tasks.add_task(
+            _batch_audio_bg, task_id, str(project_dir), ids, req.voice, req.rate, req.volume
+        )
+        return {"task_id": task_id, "count": len(ids), "shot_ids": ids}
+    except FileNotFoundError:
+        raise HTTPException(404, "项目不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+async def _batch_audio_bg(task_id, project_dir, shot_ids, voice, rate, volume):
+    from src.core.store import ProjectStore
+    from src.api.edge_tts_client import EdgeTTSClient
+    task_store[task_id]["status"] = "running"
+    try:
+        fps = _fps_from_config()
+        store = ProjectStore(Path(project_dir))
+        id2dlg = {s.shot_id: s.dialogue for s in store.load().all_shots()}
+        tts = EdgeTTSClient()
+        sem = asyncio.Semaphore(4)
+
+        async def one(sid):
+            async with sem:
+                return await _gen_one_audio(tts, project_dir, sid, id2dlg.get(sid, ""),
+                                            voice, rate, volume, fps)
+
+        results = await asyncio.gather(*(one(sid) for sid in shot_ids), return_exceptions=True)
+        done = 0
+        for r in results:
+            if isinstance(r, Exception):
+                logger.error(f"批量配音某镜失败: {r}"); continue
+            sid, res, timing, err = r
+            if err:
+                logger.error(f"镜头 {sid} 配音失败: {err}"); continue
+            try:
+                store.update_shot(
+                    sid,
+                    lambda sh, res=res, timing=timing: _apply_audio_to_shot(sh, res, timing, voice, rate))
+                done += 1
+            except Exception as e:
+                logger.error(f"镜头 {sid} 写回失败: {e}")
+            task_store[task_id]["progress"] = {"percent": done / len(shot_ids)}
+        task_store[task_id]["status"] = "completed"
+        task_store[task_id]["result"] = {"done": done, "total": len(shot_ids)}
+        task_store[task_id]["message"] = f"批量配音完成 {done}/{len(shot_ids)}"
+    except Exception as e:
+        task_store[task_id]["status"] = "failed"
+        task_store[task_id]["message"] = f"失败: {e}"
+        logger.error(f"批量配音失败: {e}")
+
+
+class SplitDialogueRequest(BaseModel):
+    mode: str = "auto"
+    segments: Optional[List[str]] = None
+
+
+@app.post("/api/project/{project_name}/shot/{shot_id}/split-dialogue")
+async def split_shot_dialogue(project_name: str, shot_id: str, req: SplitDialogueRequest):
+    """拆超长台词为多个镜头：原 Shot 保留第1段，后续段插入同场次新 Shot，shot_id 顺移。"""
+    try:
+        controller = get_controller()
+        project_dir = controller.project_manager.get_project_dir(project_name)
+        from src.core.store import ProjectStore
+        from src.core.timing import split_dialogue as _split
+        from src.core.models import Shot, ImageAsset, ShotStatus
+        store = ProjectStore(project_dir)
+        p = store.load()
+        shot = p.get_shot(shot_id)
+        if shot is None:
+            raise HTTPException(404, f"镜头 {shot_id} 不存在")
+        if req.segments:
+            segs = [s for s in req.segments if s and s.strip()]
+        else:
+            segs = _split(shot.dialogue or "")
+        if len(segs) <= 1:
+            return {"shot_id": shot_id, "split_into": 1, "message": "无需拆分"}
+        scene = next((sc for sc in p.scenes if sc.scene_id == shot.scene_id), None)
+        k = next((i for i, s in enumerate(scene.shots) if s.shot_id == shot_id), None)
+        shot.dialogue = segs[0]
+        new_shots = []
+        for seg in segs[1:]:
+            new_shots.append(Shot(
+                shot_id=f"{shot.scene_id}_cTMP", scene_id=shot.scene_id, index=0,
+                description=shot.description, prompt_en=shot.prompt_en,
+                negative_prompt=shot.negative_prompt, shot_size=shot.shot_size,
+                camera=shot.camera, lighting=shot.lighting, motion=shot.motion,
+                characters=list(shot.characters), dialogue=seg, link_mode=shot.link_mode,
+                seed=shot.seed, first_frame=ImageAsset(), last_frame=ImageAsset(),
+                status=ShotStatus.PENDING.value,
+            ))
+        scene.shots = scene.shots[:k] + [shot] + new_shots + scene.shots[k + 1:]
+        for i, sh in enumerate(scene.shots):
+            sh.index = i + 1
+            sh.shot_id = f"{scene.scene_id}_c{i + 1:02d}"
+        store.save(p)
+        return {"split_into": len(segs),
+                "shot_ids": [sh.shot_id for sh in scene.shots[k:k + len(segs)]]}
+    except FileNotFoundError:
+        raise HTTPException(404, "项目不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.get("/api/project/{project_name}/timing")
+async def get_project_timing(project_name: str):
+    """时长预览：每镜 audio_seconds/planned_seconds/needs_split + 全片总时长"""
+    try:
+        controller = get_controller()
+        project_dir = controller.project_manager.get_project_dir(project_name)
+        from src.core.store import ProjectStore
+        from src.core.timing import plan_shot_timing
+        p = ProjectStore(project_dir).load()
+        fps = _fps_from_config()
+        out = []
+        total = 0.0
+        for sh in p.all_shots():
+            audio_sec = (sh.audio.duration_ms / 1000) if sh.audio.duration_ms else 0.0
+            if sh.video.num_frames and sh.video.frame_rate:
+                planned = sh.video.num_frames / sh.video.frame_rate
+                needs_split = False
+            else:
+                t = plan_shot_timing(audio_sec, fps)
+                planned = t.planned_seconds
+                needs_split = t.needs_split
+            out.append({"shot_id": sh.shot_id, "scene_id": sh.scene_id,
+                        "audio_seconds": round(audio_sec, 3),
+                        "planned_seconds": round(planned, 3),
+                        "num_frames": sh.video.num_frames,
+                        "needs_split": needs_split,
+                        "dialogue": sh.dialogue[:40]})
+            total += planned
+        return {"shots": out, "total_seconds": round(total, 3), "fps": fps}
+    except FileNotFoundError:
+        raise HTTPException(404, "项目不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
 @app.post("/api/project/{project_name}/compose")
 async def compose_final_video(
     project_name: str, request: Request, background_tasks: BackgroundTasks
@@ -1997,6 +2285,62 @@ async def compose_final_video(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/project/{project_name}/compose-shots")
+async def compose_shots_video(project_name: str, request: Request,
+                              background_tasks: BackgroundTasks):
+    """阶段 2 shot 级合成（concat->整音轨->烧全片SRT，Ken Burns 兜底，无逐镜偏移）"""
+    try:
+        controller = get_controller()
+        project_dir = controller.project_manager.get_project_dir(project_name)
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        width = int(body.get("width", 1280))
+        height = int(body.get("height", 720))
+        fps = int(body.get("fps", 24))
+        burn = bool(body.get("burn_subtitles", True))
+        task_id = _new_task("compose")
+        background_tasks.add_task(
+            _compose_shots_bg, task_id, str(project_dir), width, height, fps, burn
+        )
+        return {"task_id": task_id, "message": "shot 级合成已启动"}
+    except FileNotFoundError:
+        raise HTTPException(404, "项目不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+async def _compose_shots_bg(task_id, project_dir, width, height, fps, burn):
+    from src.core.store import ProjectStore
+    from src.pipeline.video_composer import VideoComposer
+    from src.utils.file_saver import FileSaver
+    task_store[task_id]["status"] = "running"
+    task_store[task_id]["message"] = "合成中..."
+    try:
+        project = ProjectStore(Path(project_dir)).load()
+        composer = VideoComposer(FileSaver(Path(project_dir)))
+
+        def on_progress(msg, pct):
+            task_store[task_id]["message"] = msg
+            if pct is not None:
+                task_store[task_id]["progress"] = {"percent": pct}
+
+        final = composer.compose_shots(project, width=width, height=height,
+                                       fps=fps, burn_subtitles=burn,
+                                       on_progress=on_progress)
+        task_store[task_id]["status"] = "completed"
+        task_store[task_id]["result"] = {"video_path": str(final)}
+        task_store[task_id]["message"] = "合成完成"
+        logger.info(f"shot 级合成完成: {final}")
+    except Exception as e:
+        task_store[task_id]["status"] = "failed"
+        task_store[task_id]["message"] = f"失败: {e}"
+        logger.error(f"shot 级合成失败: {e}")
 
 
 async def _compose_bg(task_id, project_dir, scenes, width, height, fps, scene_duration):

@@ -180,3 +180,179 @@ class VideoComposer:
             logger.warning(f"音频叠加失败: {r.stderr[-400:]}")
             return False
         return True
+
+    # ==================== 阶段 2：shot 级合成（配音前置后的新顺序）====================
+    def compose_shots(self, project, width: int = 1280, height: int = 720,
+                      fps: int = 24, burn_subtitles: bool = True,
+                      on_progress: Optional[Callable[[str, float], None]] = None) -> Path:
+        """concat 视频 -> 整条音轨（每段 apad 补到镜头时长）-> 整体烧录全片 SRT。
+        无 Agnes 视频时用 Ken Burns 兜底。时长用 seconds_returned（服务端回读值）。
+        这套顺序杜绝了旧 adelay 逐段偏移的累积误差。"""
+        def log(msg: str, pct: float = None):
+            logger.info(msg)
+            if on_progress:
+                on_progress(msg, pct)
+
+        from src.core.subtitle import build_global_srt
+
+        shots = [s for s in project.all_shots()
+                 if (s.video.local and Path(str(s.video.local)).exists())
+                 or (s.first_frame.selected
+                     and Path(str(s.first_frame.selected.local or "")).exists())]
+        if not shots:
+            raise Exception("没有可合成的镜头（需分镜图或视频段）")
+        log(f"开始合成（shot 级）：{len(shots)} 个镜头，{width}x{height}@{fps}fps", 0.0)
+
+        # 1. 每镜头生成统一片段 + 收集时间线
+        seg_paths: List[Path] = []
+        timeline = []
+        cursor_ms = 0
+        for i, sh in enumerate(shots):
+            dur = self._shot_duration(sh)
+            seg = self._make_shot_segment(sh, i, width, height, fps, dur)
+            if not seg:
+                log(f"  镜头 {sh.shot_id} 片段生成失败，跳过", None)
+                continue
+            seg_paths.append(seg)
+            timeline.append({"start_ms": cursor_ms, "words": sh.audio.words or [],
+                             "duration": dur, "shot_id": sh.shot_id})
+            cursor_ms += int(dur * 1000)
+            log(f"  镜头 {sh.shot_id} 片段 {dur:.2f}s ({i+1}/{len(shots)})",
+                (i + 1) / len(shots) * 0.6)
+        if not seg_paths:
+            raise Exception("所有镜头片段生成失败")
+        for s in shots:
+            _ = s  # 仅避免未用告警
+
+        # 2. 拼接视频
+        concat_path = self._concat(seg_paths)
+        log("视频拼接完成", 0.7)
+
+        # 3. 整条音轨（每段 apad 补到镜头时长再 concat，天然等于视频长度）
+        narration = self._build_audio_track(shots, timeline)
+        log("音轨拼接完成", 0.82)
+
+        # 4. 全片单条 SRT
+        srt_path = self.output_dir / "subtitles" / "final.srt"
+        srt_path.parent.mkdir(parents=True, exist_ok=True)
+        srt_path.write_text(build_global_srt(timeline), encoding="utf-8")
+        log(f"全片 SRT 已生成: {srt_path}", 0.88)
+
+        # 5. 合成：视频 + 音轨 + 烧 SRT
+        final_path = self.output_dir / "final.mp4"
+        self._mux_shots(concat_path, narration,
+                        srt_path if burn_subtitles else None,
+                        width, height, final_path)
+        if final_path.exists():
+            log(f"最终视频已生成: {final_path}", 1.0)
+        else:
+            raise Exception("最终视频生成失败")
+        return final_path
+
+    def _shot_duration(self, shot) -> float:
+        if shot.video.seconds_returned:
+            return float(shot.video.seconds_returned)
+        if shot.video.num_frames and shot.video.frame_rate:
+            return shot.video.num_frames / shot.video.frame_rate
+        return 3.0   # 静默默认
+
+    def _make_shot_segment(self, shot, idx: int, w: int, h: int, fps: int,
+                           duration: float) -> Optional[Path]:
+        """单镜头片段：优先 Agnes 视频，否则 Ken Burns 兜底（用 first_frame 选中候选）。"""
+        seg = self.cache_dir / f"shot_{idx:03d}.mp4"
+        scale_pad = (f"scale={w}:{h}:force_original_aspect_ratio=decrease,"
+                     f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps={fps}")
+        vp = shot.video.local
+        if vp and Path(str(vp)).exists():
+            cmd = ["ffmpeg", "-y", "-i", str(vp), "-vf", scale_pad,
+                   "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an", str(seg)]
+            r = subprocess.run(cmd, capture_output=True, text=True)
+            if r.returncode == 0 and seg.exists():
+                return seg
+            logger.warning(f"视频段处理失败({shot.shot_id}): {r.stderr[-300:]}")
+        fp = shot.first_frame.selected.local if shot.first_frame.selected else None
+        if fp and Path(str(fp)).exists():
+            frames = max(int(duration * fps), 1)
+            zoompan = f"zoompan=z='min(zoom+0.0015,1.5)':d={frames}:s={w}x{h}:fps={fps}"
+            cmd = ["ffmpeg", "-y", "-loop", "1", "-i", str(fp),
+                   "-vf", f"scale={w*2}:{h*2}:force_original_aspect_ratio=decrease,"
+                          f"pad={w*2}:{h*2}:(ow-iw)/2:(oh-ih)/2:black,{zoompan},"
+                          f"trim=duration={duration},setsar=1",
+                   "-t", str(duration), "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                   "-an", str(seg)]
+            r = subprocess.run(cmd, capture_output=True, text=True)
+            if r.returncode == 0 and seg.exists():
+                return seg
+            logger.warning(f"Ken Burns 失败({shot.shot_id}): {r.stderr[-300:]}")
+        return None
+
+    def _build_audio_track(self, shots, timeline) -> Optional[Path]:
+        """每镜头音频 apad 补到镜头时长再 concat 成整条 narration。
+        无音频用静音。这样音轨长度天然等于视频长度，不靠 adelay、不累积误差。"""
+        seg_audios: List[Path] = []
+        for i, (sh, tl) in enumerate(zip(shots, timeline)):
+            dur = tl["duration"]
+            seg = self.cache_dir / f"aud_{i:03d}.m4a"
+            ap = sh.audio.local if sh.audio.ready else None
+            if ap and Path(str(ap)).exists():
+                cmd = ["ffmpeg", "-y", "-i", str(ap),
+                       "-af", f"apad=whole_dur={dur:.3f},atrim=0:{dur:.3f},asetpts=N/SR/TB",
+                       "-c:a", "aac", "-b:a", "192k", str(seg)]
+            else:
+                cmd = ["ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono",
+                       "-t", f"{dur:.3f}", "-c:a", "aac", "-b:a", "192k", str(seg)]
+            r = subprocess.run(cmd, capture_output=True, text=True)
+            if r.returncode == 0 and seg.exists():
+                seg_audios.append(seg)
+            else:
+                logger.warning(f"音频段 {sh.shot_id} 失败: {r.stderr[-200:]}")
+        if not seg_audios:
+            return None
+        list_file = self.cache_dir / "audio_concat.txt"
+        with open(list_file, "w", encoding="utf-8") as f:
+            for p in seg_audios:
+                f.write(f"file '{p.absolute().as_posix()}'\n")
+        out = self.cache_dir / "narration.m4a"
+        r = subprocess.run(["ffmpeg", "-y", "-f", "concat", "-safe", "0",
+                            "-i", str(list_file), "-c", "copy", str(out)],
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            r = subprocess.run(["ffmpeg", "-y", "-f", "concat", "-safe", "0",
+                                "-i", str(list_file), "-c:a", "aac", "-b:a", "192k", str(out)],
+                               capture_output=True, text=True)
+            if r.returncode != 0:
+                logger.warning(f"音轨拼接失败: {r.stderr[-300:]}")
+                return None
+        return out
+
+    def _mux_shots(self, concat_path: Path, narration, srt_path,
+                   w: int, h: int, final_path: Path):
+        """视频 + 音轨 + 可选 SRT 烧录。SRT 烧录失败则降级（仅音视频）。"""
+        has_audio = narration and Path(str(narration)).exists()
+        has_srt = srt_path and Path(str(srt_path)).exists()
+
+        def run_mux(burn: bool):
+            cmd = ["ffmpeg", "-y", "-i", str(concat_path)]
+            if has_audio:
+                cmd += ["-i", str(narration)]
+            vf = []
+            if burn and has_srt:
+                esc = str(srt_path).replace("\\", "/").replace(":", "\\:")
+                vf.append(f"subtitles='{esc}'")
+            if vf:
+                cmd += ["-vf", ",".join(vf)]
+            cmd += ["-map", "0:v"]
+            if has_audio:
+                cmd += ["-map", "1:a"]
+            cmd += ["-c:v", "libx264", "-pix_fmt", "yuv420p"]
+            if has_audio:
+                cmd += ["-c:a", "aac", "-b:a", "192k"]
+            cmd += ["-shortest", str(final_path)]
+            return subprocess.run(cmd, capture_output=True, text=True)
+
+        r = run_mux(True)
+        if r.returncode != 0 and has_srt:
+            logger.warning(f"含 SRT 烧录失败，降级为仅音视频: {r.stderr[-300:]}")
+            r = run_mux(False)
+        if r.returncode != 0:
+            logger.error(f"合成失败: {r.stderr[-400:]}")
