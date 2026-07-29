@@ -28,6 +28,10 @@ def migrate_v1_to_v2(old: dict) -> dict:
     scenes = []
     for i, old_scene in enumerate(old.get("scenes", []), start=1):
         sid = f"s{i:02d}"
+        # first_frame 用 ImageAsset(candidates+selected_index) 形状（红线12：支持2张点选）
+        _ff_local = old_scene.get("image_path")
+        _ff_url = old_scene.get("image_url")
+        _ff_status = "done" if _ff_local else "pending"
         shot = {
             "shot_id": f"{sid}_c01", "scene_id": sid, "index": 1,
             "description": old_scene.get("description", ""),
@@ -39,9 +43,11 @@ def migrate_v1_to_v2(old: dict) -> dict:
             "dialogue":    old_scene.get("dialogue", ""),
             "link_mode":   "i2v",
             # 旧字段挂到新结构上，一个都不丢
-            "first_frame": {"local": old_scene.get("image_path"),
-                            "url":   old_scene.get("image_url"),
-                            "status": "done" if old_scene.get("image_path") else "pending"},
+            "first_frame": {
+                "candidates": [{"local": _ff_local, "url": _ff_url, "status": _ff_status}] if _ff_local else [],
+                "selected_index": 0,
+                "status": _ff_status,
+            },
             "audio":       {"local": old_scene.get("audio_path"),
                             "status": "done" if old_scene.get("audio_path") else "pending"},
             "video":       {"local": old_scene.get("video_path"),

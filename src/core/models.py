@@ -53,6 +53,76 @@ class Asset:
 
 
 @dataclass
+class ImageAsset:
+    """图片类产物：支持多候选（红线 12：生成 2 张让用户点选，而非 AI 打分）。
+    candidates 为候选 Asset 列表（单张时长度为 1）；selected_index 指向当前选中。
+    旧的单值 Asset 语义由 selected / mark_done(single) 兼容。"""
+    candidates: List[Asset] = field(default_factory=list)
+    selected_index: int = 0
+    status: str = ShotStatus.PENDING.value
+    error: Optional[str] = None
+    updated_at: float = 0.0
+
+    @property
+    def selected(self) -> Optional[Asset]:
+        if not self.candidates:
+            return None
+        i = self.selected_index
+        if not (0 <= i < len(self.candidates)):
+            i = 0
+        return self.candidates[i]
+
+    def add_candidate(self, asset: Asset):
+        self.candidates.append(asset)
+        self.updated_at = time.time()
+
+    def select(self, index: int):
+        if 0 <= index < len(self.candidates):
+            self.selected_index = index
+            self.updated_at = time.time()
+
+    def mark_done(self, local: str, url: Optional[str] = None):
+        """单张快捷：作为唯一候选并选中（兼容旧 Asset.mark_done 语义）。"""
+        self.candidates = [Asset(local=local, url=url, status=ShotStatus.DONE.value)]
+        self.selected_index = 0
+        self.status, self.error = ShotStatus.DONE.value, None
+        self.updated_at = time.time()
+
+    def mark_failed(self, error: str):
+        self.status, self.error = ShotStatus.FAILED.value, str(error)[:500]
+        self.updated_at = time.time()
+
+    @property
+    def ready(self) -> bool:
+        s = self.selected
+        return s is not None and s.status == ShotStatus.DONE.value and bool(s.local)
+
+    @property
+    def url_ready(self) -> bool:
+        """能不能送进视频接口。视频接口只吃公网 URL。"""
+        s = self.selected
+        return s is not None and s.status == ShotStatus.DONE.value and bool(s.url)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "ImageAsset":
+        d = dict(d or {})
+        if "candidates" in d:
+            cands = [Asset(**{k: v for k, v in c.items() if k in Asset.__dataclass_fields__})
+                     for c in (d.get("candidates") or [])]
+            return cls(candidates=cands,
+                       selected_index=d.get("selected_index", 0),
+                       status=d.get("status", ShotStatus.PENDING.value),
+                       error=d.get("error"),
+                       updated_at=d.get("updated_at", 0.0))
+        # 旧形状 {local, url, status, ...}（单值 Asset）-> 单候选
+        a = Asset(**{k: v for k, v in d.items() if k in Asset.__dataclass_fields__})
+        st = d.get("status", ShotStatus.PENDING.value)
+        return cls(candidates=[a] if (a.local or a.url) else [],
+                   selected_index=0, status=st, error=d.get("error"),
+                   updated_at=d.get("updated_at", 0.0))
+
+
+@dataclass
 class AudioAsset(Asset):
     duration_ms: int = 0
     # edge-tts WordBoundary 事件：[{"text":"你好","offset_ms":0,"duration_ms":320}, ...]
@@ -94,8 +164,8 @@ class Shot:
     seed: Optional[int] = None
 
     # ---- 产物 ----
-    first_frame: Asset = field(default_factory=Asset)
-    last_frame: Asset  = field(default_factory=Asset)   # 仅 keyframes 模式需要
+    first_frame: ImageAsset = field(default_factory=ImageAsset)
+    last_frame: ImageAsset  = field(default_factory=ImageAsset)   # 仅 keyframes 模式需要
     audio: AudioAsset  = field(default_factory=AudioAsset)
     subtitle_srt: Optional[str] = None
     video: VideoAsset  = field(default_factory=VideoAsset)
@@ -111,8 +181,8 @@ class Shot:
     @classmethod
     def from_dict(cls, d: dict) -> "Shot":
         d = dict(d)
-        d["first_frame"] = Asset(**d.get("first_frame", {}) or {})
-        d["last_frame"]  = Asset(**d.get("last_frame", {}) or {})
+        d["first_frame"] = ImageAsset.from_dict(d.get("first_frame", {}) or {})
+        d["last_frame"]  = ImageAsset.from_dict(d.get("last_frame", {}) or {})
         d["audio"]       = AudioAsset(**d.get("audio", {}) or {})
         d["video"]       = VideoAsset(**d.get("video", {}) or {})
         known = {f for f in cls.__dataclass_fields__}
