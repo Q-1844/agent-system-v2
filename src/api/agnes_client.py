@@ -51,13 +51,15 @@ def resolve_size(tier: str, ratio: str) -> str:
 # ⚠️ 待本项目 Clash 起来后实测回填 AGNES_API_FACTS.md 确认。
 ABS_MAX_FRAMES = 441
 def max_frames_for(width: int, height: int) -> int:
-    """该分辨率下允许的最大 num_frames。分辨率越高，允许帧数越少。"""
-    pixels = (width or 0) * (height or 0)
-    if pixels > 1280 * 720:
-        return 169    # 1080p 档
-    if pixels > 854 * 480:
-        return 409    # 720p 档
-    return 961        # 480p 档
+    """该分辨率下允许的最大 num_frames。分辨率越高，允许帧数越少。
+    实测（.cn，2026-07-29）：720p 档（含 1312x736、1280x720）接受 441 帧（=全局上限）。
+    1080p / 480p 待实测，暂取参考值（lcy362）169 / 961。"""
+    long_side = max(width or 0, height or 0)
+    if long_side >= 1920:
+        return 169    # 1080p 档（待实测）
+    if long_side >= 854:
+        return 441    # 720p 档（实测，= 全局上限）
+    return 961        # 480p 档（待实测）
 
 def snap_num_frames(target_frames: int,
                     width: int | None = None, height: int | None = None) -> int:
@@ -297,7 +299,12 @@ class AgnesClient:
             if on_progress:
                 await _maybe_await(on_progress(d.get("progress", 0), st, waited))
             if st == "completed":
-                url = d.get("remixed_from_video_id")     # 🔴 这就是 mp4 URL
+                # 🔴 URL 取值 fallback：remixed_from_video_id（remix 任务）→ url → video_url。
+                # 实测 .cn 节点直生成（t2v/i2v）任务 remixed_from_video_id 为 None，URL 在 url 字段。
+                # （FACTS §3.6 原写"remixed_from_video_id 就是 mp4 URL"仅对 remix 任务成立，已勘误。）
+                url = (d.get("remixed_from_video_id")
+                       or d.get("url")
+                       or d.get("video_url"))
                 if not url: raise AgnesError(f"任务完成但没有视频 URL: {d}")
                 return {"url": url,
                         "seconds": float(d.get("seconds") or 0),   # 🔴 回读
@@ -309,12 +316,16 @@ class AgnesClient:
     async def download(self, url: str, dest) -> str:
         from pathlib import Path
         dest = Path(dest); dest.parent.mkdir(parents=True, exist_ok=True)
-        c = await self.client()
-        async with c.stream("GET", url) as r:
-            r.raise_for_status()
-            with open(dest, "wb") as f:
-                async for chunk in r.aiter_bytes(1 << 16):
-                    f.write(chunk)
+        # 资产 URL（platform-outputs.agnes-ai.space）是预签名 URL，
+        # 带 Authorization 头反而 401（实测），用无认证 client 下载。
+        async with httpx.AsyncClient(
+                timeout=httpx.Timeout(connect=30, read=600, write=60, pool=30),
+                follow_redirects=True, proxy=self.proxy) as cli:
+            async with cli.stream("GET", url) as r:
+                r.raise_for_status()
+                with open(dest, "wb") as f:
+                    async for chunk in r.aiter_bytes(1 << 16):
+                        f.write(chunk)
         return str(dest)
 
     # ===================== 向后兼容垫片（旧调用方仍可用） =====================

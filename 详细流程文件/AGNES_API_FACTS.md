@@ -9,15 +9,22 @@
 
 ## 0. 基础信息
 
+> 🟢 **2026-07-29 更新：Agnes 官方上线国内专用节点 `apihub.agnes-ai.cn`。**
+> 中国大陆直连 `.cn` 即可，**无需代理**（DNS 解析到国内 IP 111.7.87.222，TLS 无 reset）。
+> 国际站 `apihub.agnes-ai.com` 在 Cloudflare 后，国内直连会被 SNI 级 TLS reset，需代理才能访问。
+> **`.com` 与 `.cn` 共用同一套 API Key、模型名、请求参数，仅 Endpoint 不同。** 本项目默认用 `.cn`。
+> 实测（2026-07-29）：`.cn` 上 `/v1/models` 200、`/v1/chat/completions` 200、图片生成 200、图片直连下载 200。
+
 | 项 | 值 |
 |---|---|
-| Base URL | `https://apihub.agnes-ai.com` |
+| Base URL（国内，默认） | `https://apihub.agnes-ai.cn` |
+| Base URL（国际，需代理） | `https://apihub.agnes-ai.com` |
 | 认证 | `Authorization: Bearer YOUR_API_KEY` |
 | Content-Type | `application/json` |
 | 文本模型 | `agnes-2.0-flash` |
 | 图片模型 | `agnes-image-2.1-flash`（另有 `agnes-image-2.0-flash`） |
 | 视频模型 | `agnes-video-v2.0` |
-| 价格 | 当前全部 $0（文本 $0/1M token、图片 $0/张、视频 $0/秒） |
+| 价格 | 当前全部 $0（文本 $0/1M token、图片 $0/张、视频 $0/秒）。⚠️ 视频/图片后续调整概率较高，以 platform.agnes-ai.cn 计费页为准 |
 
 **模型名必须走配置文件，不许硬编码在业务代码里。** Agnes 迭代很快，新版本随时可能上线。
 
@@ -105,6 +112,10 @@ OpenAI 兼容。
 ```
 - URL 模式取 `data[0].url`
 - Base64 模式取 `data[0].b64_json`
+
+> 🟢 **实测（2026-07-29，`.cn` 节点）**：返回的图片 URL 实际在 `https://platform-outputs.agnes-ai.space/images/...`
+> （不是上面示例的 `storage.googleapis.com`）。`platform-outputs.agnes-ai.space` 国内可直连下载（实测 200、PNG 魔数正确）。
+> `agnes_client.py` 拿到 `data[0].url` 直接用即可，图床域名差异对调用方透明。
 
 ### 2.6 超时
 
@@ -194,31 +205,30 @@ seconds = num_frames / frame_rate
 ```python
 ABS_MAX_FRAMES = 441
 def max_frames_for(width, height):
-    pixels = width * height
-    if pixels > 1280*720: return 169    # 1080p 档
-    if pixels > 854*480:  return 409    # 720p 档
-    return 961                           # 480p 档
+    long_side = max(width, height)
+    if long_side >= 1920: return 169    # 1080p 档（待实测）
+    if long_side >= 854:  return 441    # 720p 档（实测 = 全局上限）
+    return 961                           # 480p 档（待实测）
 ```
 
-| 分辨率档 | 像素阈值 | num_frames 上限 | 24fps 下时长上限 |
-|---|---|---:|---:|
-| 1080p | > 1280×720 | 169 | ~7.0s |
-| 720p | > 854×480 且 ≤ 1280×720 | 409 | ~17.0s |
-| 480p | ≤ 854×480 | 961 | ~40s |
+| 分辨率档 | 判定（长边） | num_frames 上限 | 24fps 下时长上限 | 实测状态 |
+|---|---|---:|---:|---|
+| 1080p | ≥ 1920 | 169 | ~7.0s | 待实测（参考 lcy362） |
+| 720p | 854 ≤ long_side < 1920（含 1280×720、1312×736） | **441** | ~18.4s | ✅ 2026-07-29 `.cn` 实测 |
+| 480p | < 854 | 961 | ~40s | 待实测（参考 lcy362） |
 
-> ⚠️ **上表分档值参考自 lcy362/agnes-video-generator 实测（来自 Agnes 400 报错），尚未在本项目实测确认。** 待 Clash 起来后用 `create_video` 在 1312×736（本项目默认 1K 16:9，像素 965632 > 1280×720，按上表落 1080p 档=169）实测以下值并回填本表：
-> - 1312×736 的真实 num_frames 上限（按表是 169，但 1312×736 仅略超 1280×720，可能实际归到 720p 档=409，需确认）。
-> - 各档边界的准确像素阈值。
+> 🟢 **实测回填（2026-07-29，`.cn` 节点）**：在 1312×736（本项目默认 1K 16:9，服务端映射为 720p/16:9）提交 `num_frames=441` -> **200 成功**，`seconds=18.4`、`size=1312x736`。即 **720p 档上限 = 441（全局上限）**，参考项目 lcy362 的 720p=409 / 1312x736 落 1080p 档=169 在 `.cn` 节点**不成立**。
+> 1080p / 480p 上限暂未实测（本项目不使用），保留参考值；如需用更高/更低分辨率，先实测再回填。
 >
-> 即便 `max_frames_for` 初值不准，`create_video` 已带 **400 自动降帧重试**（命中 400 且报错含 num_frames 时按 0.7×降到下一个 8n+1 重试，最多 3 次）作为兜底，运行时仍能发现真实上限。
+> `create_video` 仍带 **400 自动降帧重试**（命中 400 且报错含 num_frames 时按 0.7×降到下一个 8n+1 重试，最多 3 次）作为兜底；另：服务端会把请求的 1312×736 等归一化到最近的预设档（如 1280×704），`size` 回读的是归一化后的真实值。
 
 ### 3.5 查询结果（推荐方式）
 
 ```
-GET https://apihub.agnes-ai.com/agnesapi?video_id=<VIDEO_ID>
+GET https://apihub.agnes-ai.cn/agnesapi?video_id=<VIDEO_ID>
 Authorization: Bearer <API_KEY>
 ```
-**官方建议轮询间隔 5 秒。**（项目现在配的 10 秒，改成 5。）
+（国际站把 `.cn` 换成 `.com`，需代理。）**官方建议轮询间隔 5 秒。**（项目现在配的 10 秒，改成 5。）
 
 可选参数 `&model_name=agnes-video-v2.0`。
 
@@ -238,13 +248,17 @@ Authorization: Bearer <API_KEY>
 ```json
 { "id":"task_xxx", "video_id":"video_xxx", "status":"completed", "progress":100,
   "seconds":"10.0", "size":"1280x768",
-  "remixed_from_video_id":"https://storage.googleapis.com/.../video_xxx.mp4",
+  "remixed_from_video_id": null,
+  "url":"https://platform-outputs.agnes-ai.space/videos/.../video_xxx.mp4",
   "error": null }
 ```
 
-**🔴 `remixed_from_video_id` 就是最终 mp4 的 URL**（字段名极具误导性，别当成 ID）。仅在 `status == "completed"` 时可用。
+**🔴 最终 mp4 的 URL 取值要用 fallback 链：`remixed_from_video_id` -> `url` -> `video_url`。**
+> 🟢 **2026-07-29 `.cn` 实测勘误**：原文档（及红线 #4）说"`remixed_from_video_id` 就是 mp4 URL"--在 `.cn` 节点的**直生成任务（t2v/i2v）上不成立**：`remixed_from_video_id` 为 `null`，真正的 mp4 URL 在 `url` 字段（域名 `platform-outputs.agnes-ai.space`）。`remixed_from_video_id` 仅在 remix 类任务才可能是 URL。`agnes_client.poll_video` 已按 fallback 链取值。仅在 `status == "completed"` 时可用。
 
-**🔴 `seconds` 和 `size` 是服务端归一化后的真实值，必须回读入库。** 提交的 `num_frames`/`width`/`height` 可能被改。前端展示的时长一律用回读值，不许用提交值。
+**🔴 `seconds` 和 `size` 是服务端归一化后的真实值，必须回读入库。** 提交的 `num_frames`/`width`/`height` 可能被改（实测：1312×736 被映射为 1280×704）。前端展示的时长一律用回读值，不许用提交值。
+
+**🔴 下载 mp4/图片资产时不要带 `Authorization` 头。** `platform-outputs.agnes-ai.space` 的 URL 是预签名 URL，带 `Authorization: Bearer ...` 反而返回 401（实测）。`agnes_client.download` 用无认证 client 下载；前端/其它下载代码同理。
 
 ### 3.7 状态机
 
@@ -302,12 +316,14 @@ Authorization: Bearer <API_KEY>
 | 轮询间隔 | 10s | **5s** |
 | 图片 size | `1152x768` | **`1K` + `ratio`**，16:9 → 1312x736 |
 | 图生图 image 位置 | 只写 extra_body | **双位置 fallback** |
-| num_frames 校验 | 无 | **8n+1 夹取 + ≤441 校验** |
+| num_frames 校验 | 无 | **8n+1 夹取 + max_frames_for(size) + 400 降帧重试** |
 | seconds/size 回读 | 无（前端写死 '5s'） | **必须回读入库** |
 | 限流器 | 无 | **必须有，视频 1 RPM** |
 | 配额账本 | 无 | **必须有** |
 | 错误重试 | 只处理 429 / timeout | **408/429/500/502/503/504/520/522/524 全部指数退避** |
 | 视频输入图 | 计划用本地路径 | **必须公网 URL，走 ImageHost** |
 | 视频音频 | 判断为静音 | ✅ 正确，参数表无任何音频字段 |
-| `remixed_from_video_id` | 已识别为 URL | ✅ 正确 |
+| `remixed_from_video_id` | 误以为该字段是 mp4 URL | **`.cn` 直生成任务该字段为 null，URL 在 `url` 字段；poll 用 `remixed_from_video_id->url->video_url` fallback（实测勘误）** |
+| 资产下载认证 | - | **下载 mp4/图片资产不带 Authorization 头（预签名 URL，带认证 401）** |
+| Endpoint | `apihub.agnes-ai.com`（国际站，国内需代理） | **`apihub.agnes-ai.cn`（国内直连，2026-07-29 上线，无需代理）** |
 

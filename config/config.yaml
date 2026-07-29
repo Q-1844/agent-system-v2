@@ -1,9 +1,9 @@
 # 动画分镜工作流 - 全局配置
 
 agnes:
-  base_url: "https://apihub.agnes-ai.com"
-  api_key: ${AGNES_API_KEY}  # 从环境变量读取
-  proxy: "http://127.0.0.1:7890"  # Agnes 在 Cloudflare 后，国内需代理（Clash默认端口）；留空 "" 则直连
+  base_url: "https://apihub.agnes-ai.cn"   # 国内入口（2026-07-29 官方上线），国内直连无需代理；国际站 .com 在 Cloudflare 后会被 TLS reset
+  api_key: ${AGNES_API_KEY}  # 从环境变量读取（.com 与 .cn 共用同一 Key）
+  proxy: ""  # 国内入口直连，留空=不走代理。若改回国际站 .com 需配 Clash 代理 http://127.0.0.1:7890
 
   models:
     text: "agnes-2.0-flash"
