@@ -21,6 +21,17 @@ from ..core.quota import QuotaLedger
 
 log = setup_logger("agnes_client")
 
+# ── 垫片（向后兼容）一次性告警 ──
+# 阶段 5 移除垫片前，提醒新代码不要走垫片。每个垫片名仅告警一次（进程级）。
+_shim_warned: set = set()
+def _shim_warn(name: str):
+    if name not in _shim_warned:
+        _shim_warned.add(name)
+        msg = f"垫片 {name} 是向后兼容入口，将在阶段 5 移除；新代码请勿使用（见 DEPRECATED-SHIM 标记）。"
+        log.warning(msg)
+        import warnings as _w
+        _w.warn(msg, DeprecationWarning, stacklevel=3)
+
 RETRYABLE = {408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524}
 
 # AGNES_API_FACTS §2.3
@@ -140,8 +151,11 @@ class AgnesClient:
             if not ok: raise AgnesError(why)
 
         bucket = f"image_{size_tier.lower()}"
-        # 旧调用方传 size=... 时透传（FACTS §2.3：服务端会归一化）；否则用档位
+        # DEPRECATED-SHIM: remove in phase 5. legacy.size 与返回的 data 字段为旧调用方兼容；
+        # 新代码请用 size_tier/ratio 并读 result["url"]。
         legacy_size = legacy.get("size")
+        if legacy_size:
+            _shim_warn("generate_image(size=...)")
         size = legacy_size if legacy_size else resolve_size(size_tier, ratio)
         is_i2i = bool(image_refs)
 
@@ -181,6 +195,7 @@ class AgnesClient:
                 log.info("图生图 image 位置确定为: %s", pos)
             if self.quota: self.quota.consume("images", 1)
             d = r.json()["data"][0]
+            # DEPRECATED-SHIM: data 字段仅供旧调用方 result["data"][0]["url"]，新代码读 result["url"]
             return {"url": d.get("url"), "b64": d.get("b64_json"), "data": [d]}
         raise last_err or AgnesError("图片生成失败")
 
@@ -263,20 +278,25 @@ class AgnesClient:
         return str(dest)
 
     # ===================== 向后兼容垫片（旧调用方仍可用） =====================
+    # DEPRECATED-SHIM: remove in phase 5. 以下 understand_text / generate_video
+    # 及 generate_image 的 legacy size=/data 兼容层均为旧调用方保留；新代码禁止走垫片。
     async def understand_text(self, prompt: str, **kwargs) -> str:
         """【向后兼容】旧名，等价于 chat。evaluator / script_parser 仍在用。"""
+        _shim_warn("understand_text")
         return await self.chat(
             [{"role": "user", "content": prompt}],
             temperature=kwargs.get("temperature", 0.7),
             max_tokens=kwargs.get("max_tokens", 4096),
         )
 
+    # DEPRECATED-SHIM: remove in phase 5. 新代码请用 create_video() + poll_video()。
     async def generate_video(self, prompt: str, image_refs: List[str],
                              mode: str = "keyframes", **kwargs) -> dict:
         """【向后兼容】旧名：提交 + 轮询一步到位，返回旧形状 dict。
         animation_gen 仍在用：result["status" / "remixed_from_video_id" / "seconds"]。
         旧 mode: "keyframes" / "ti2vid"。image_refs 为 URL 列表（旧代码传本地路径，
         阶段 3 会用 ImageHost 修正）。"""
+        _shim_warn("generate_video")
         num_frames = kwargs.get("num_frames", 121)
         frame_rate = kwargs.get("frame_rate", 24)
         new_mode = "keyframes" if mode == "keyframes" else "i2v"
