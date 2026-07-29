@@ -45,11 +45,30 @@ SIZE_TIERS = {
 def resolve_size(tier: str, ratio: str) -> str:
     return SIZE_TIERS.get(tier, SIZE_TIERS["1K"]).get(ratio, "1312x736")
 
-def snap_num_frames(target_frames: int) -> int:
-    """夹到最近的 8n+1，并限制在 [81, 441]。AGNES_API_FACTS §3.4"""
+# AGNES_API_FACTS §3.4：num_frames ≤ 441 且满足 8n+1。
+# 441 是全局绝对上限；按分辨率还有更低的实际上限（视频生成算力随像素数增长）。
+# 下方 max_frames_for 的分档值参考 lcy362/agnes-video-generator 实测（来自 Agnes 400 报错），
+# ⚠️ 待本项目 Clash 起来后实测回填 AGNES_API_FACTS.md 确认。
+ABS_MAX_FRAMES = 441
+def max_frames_for(width: int, height: int) -> int:
+    """该分辨率下允许的最大 num_frames。分辨率越高，允许帧数越少。"""
+    pixels = (width or 0) * (height or 0)
+    if pixels > 1280 * 720:
+        return 169    # 1080p 档
+    if pixels > 854 * 480:
+        return 409    # 720p 档
+    return 961        # 480p 档
+
+def snap_num_frames(target_frames: int,
+                    width: int | None = None, height: int | None = None) -> int:
+    """夹到最近的 8n+1。若给定 size，再夹到 max_frames_for(size) 与 441 的较小者。
+    不给 size 时仅用全局上限 441（向后兼容 snap_num_frames(500)==441 这类断言）。"""
     n = round((target_frames - 1) / 8)
     v = 8 * int(n) + 1
-    return max(81, min(441, v))
+    cap = ABS_MAX_FRAMES
+    if width and height:
+        cap = min(cap, max_frames_for(width, height))
+    return max(81, min(cap, v))
 
 
 class AgnesError(Exception):
@@ -210,7 +229,7 @@ class AgnesClient:
                            negative_prompt: str = "") -> dict:
         """提交视频任务。mode: 't2v' | 'i2v' | 'keyframes' | 'multi'
         返回创建响应（含 video_id / task_id / seconds / size）。"""
-        num_frames = snap_num_frames(num_frames)
+        num_frames = snap_num_frames(num_frames, width, height)
         seconds = num_frames / max(frame_rate, 1)
         if self.quota:
             ok, why = self.quota.can("video_seconds", seconds)
@@ -233,11 +252,32 @@ class AgnesClient:
             body["extra_body"] = {"image": image_urls or []}
         # t2v 不传图
 
-        r = await self._request("POST", "/v1/videos", "video", json=body)
-        data = r.json()
+        # 提交：400 且报错含 num_frames 时自动降帧重试（分辨率越高允许帧数越少，
+        # max_frames_for 的分档值待实测回填，故用 400 兜底发现真实上限）。
+        frame_reductions_left = 3
+        data = None
+        while True:
+            try:
+                r = await self._request("POST", "/v1/videos", "video", json=body)
+            except AgnesError as e:
+                if (e.status == 400 and frame_reductions_left > 0
+                        and "num_frame" in (e.body or "").lower()):
+                    old_nf = body["num_frames"]
+                    new_nf = snap_num_frames(int(old_nf * 0.7), width, height)
+                    if new_nf >= old_nf:        # 已无法再降，直接抛
+                        raise
+                    body["num_frames"] = new_nf
+                    seconds = new_nf / max(frame_rate, 1)
+                    frame_reductions_left -= 1
+                    log.warning("400 num_frames 超限（%d -> %d），降帧重试（剩 %d 次）",
+                                old_nf, new_nf, frame_reductions_left)
+                    continue
+                raise
+            data = r.json()
+            break
         if self.quota: self.quota.consume("video_seconds", seconds)
-        log.info("视频任务已提交 video_id=%s seconds=%s size=%s",
-                 data.get("video_id"), data.get("seconds"), data.get("size"))
+        log.info("视频任务已提交 video_id=%s num_frames=%d seconds=%s size=%s",
+                 data.get("video_id"), body["num_frames"], data.get("seconds"), data.get("size"))
         return data
 
     async def poll_video(self, video_id: str, *,
