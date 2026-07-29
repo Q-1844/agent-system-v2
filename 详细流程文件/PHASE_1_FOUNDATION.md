@@ -925,7 +925,11 @@ class AgnesClient:
             if on_progress:
                 await _maybe_await(on_progress(d.get("progress", 0), st, waited))
             if st == "completed":
-                url = d.get("remixed_from_video_id")     # 🔴 这就是 mp4 URL
+                # 🔴 URL 走 fallback 链：remixed_from_video_id -> url -> video_url
+                # （.cn 直生成任务 remixed_from_video_id 为 null，真正产物地址在 url 字段）
+                url = (d.get("remixed_from_video_id")
+                       or d.get("url")
+                       or d.get("video_url"))
                 if not url: raise AgnesError(f"任务完成但没有视频 URL: {d}")
                 return {"url": url,
                         "seconds": float(d.get("seconds") or 0),   # 🔴 回读
@@ -1024,5 +1028,5 @@ quota:
 - [ ] `generate_image` 文生图 → 拿到 `data[0].url`
 - [ ] `generate_image` 图生图（传一个公网 URL）→ 日志打印出「图生图 image 位置确定为: extra 或 top」
 - [ ] `create_video` t2v 模式 → 拿到 video_id
-- [ ] `poll_video` → 拿到 `remixed_from_video_id`，且 `seconds` 与提交的 `num_frames/frame_rate` 对得上
+- [ ] `poll_video` → 走 fallback 链（`remixed_from_video_id` -> `url` -> `video_url`）拿到视频 URL（`.cn` 直生成任务 `remixed_from_video_id` 为 null，URL 在 `url` 字段），且 `seconds` 与提交的 `num_frames/frame_rate` 对得上
 
