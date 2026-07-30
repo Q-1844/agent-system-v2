@@ -179,6 +179,7 @@ class Shot:
     status: str = ShotStatus.PENDING.value
     locked: bool = False             # 锁定后批量操作跳过
     note: str = ""
+    split_next: Optional[str] = None  # 拆分后继 shot_id（split-dialogue 设；尾帧桥接拷贝给后继首帧）
 
     def to_dict(self) -> dict:
         return asdict(self)

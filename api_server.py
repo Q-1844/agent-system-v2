@@ -2258,6 +2258,9 @@ async def split_shot_dialogue(project_name: str, shot_id: str, req: SplitDialogu
         scene = next((sc for sc in p.scenes if sc.scene_id == shot.scene_id), None)
         k = next((i for i, s in enumerate(scene.shots) if s.shot_id == shot_id), None)
         shot.dialogue = segs[0]
+        # 🔴 拆分即同场景同角色动作延续（PHASE_3_EXECUTION_PLAN §8.1），硬编码 keyframes，
+        #    不走 auto_link_mode 通用启发式。O 与所有新镜头 link_mode=keyframes。
+        shot.link_mode = "keyframes"
         new_shots = []
         for seg in segs[1:]:
             new_shots.append(Shot(
@@ -2265,7 +2268,7 @@ async def split_shot_dialogue(project_name: str, shot_id: str, req: SplitDialogu
                 description=shot.description, prompt_en=shot.prompt_en,
                 negative_prompt=shot.negative_prompt, shot_size=shot.shot_size,
                 camera=shot.camera, lighting=shot.lighting, motion=shot.motion,
-                characters=list(shot.characters), dialogue=seg, link_mode=shot.link_mode,
+                characters=list(shot.characters), dialogue=seg, link_mode="keyframes",
                 seed=shot.seed, first_frame=ImageAsset(), last_frame=ImageAsset(),
                 status=ShotStatus.PENDING.value,
             ))
@@ -2273,9 +2276,21 @@ async def split_shot_dialogue(project_name: str, shot_id: str, req: SplitDialogu
         for i, sh in enumerate(scene.shots):
             sh.index = i + 1
             sh.shot_id = f"{scene.scene_id}_c{i + 1:02d}"
+        # 🔴 split_next 链：seg_i.split_next = seg_{i+1}.shot_id（用重排后的最终 shot_id）
+        split_chain = scene.shots[k:k + len(segs)]   # [O, new1, ..., newN-1]
+        for i in range(len(split_chain) - 1):
+            split_chain[i].split_next = split_chain[i + 1].shot_id
+        split_chain[-1].split_next = None
         store.save(p)
+        # 🔴 O 已有首帧（url_ready）时立即入队 O 的尾帧（生成后桥接拷贝给 O2 首帧，保证 O->O2 无缝）；
+        #    O 还没首帧则不入队（orchestrator 顺序保证 first_frame -> last_frame）。
+        enqueued = None
+        if shot.first_frame.url_ready and job_queue is not None:
+            enqueued = job_queue.submit(project_name, "last_frame", shot.shot_id).job_id
         return {"split_into": len(segs),
-                "shot_ids": [sh.shot_id for sh in scene.shots[k:k + len(segs)]]}
+                "shot_ids": [sh.shot_id for sh in split_chain],
+                "link_mode": "keyframes",
+                "enqueued_last_frame": enqueued}
     except FileNotFoundError:
         raise HTTPException(404, "项目不存在")
     except HTTPException:
