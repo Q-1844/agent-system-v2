@@ -78,6 +78,10 @@
           <span class="page-title">{{ currentRoute?.meta?.title || 'Dashboard' }}</span>
         </div>
         <div class="topbar-right">
+          <button class="btn btn-ghost queue-btn" @click="queueShow = !queueShow">
+            队列
+            <span v-if="runningCount" class="badge">{{ runningCount }}</span>
+          </button>
           <button class="btn btn-ghost" :disabled="exporting" @click="handleExport">
             {{ exporting ? '合成中...' : '导出视频' }}
           </button>
@@ -89,6 +93,8 @@
         <router-view />
       </div>
     </main>
+
+    <QueuePanel v-model:show="queueShow" :project-name="projectName" />
   </div>
 </template>
 
@@ -99,6 +105,9 @@ import { useTheme } from '@/composables/useTheme';
 import { useProjectStore } from '@/store';
 import { apiClient } from '@/api';
 import { useTaskStream } from '@/composables/useTaskStream';
+import { useJobStream } from '@/composables/useJobStream';
+import { useJobStore } from '@/store/jobs';
+import QueuePanel from '@/components/QueuePanel.vue';
 
 const route = useRoute();
 const currentRoute = computed(() => route);
@@ -114,6 +123,12 @@ const store = useProjectStore();
 const projectName = computed(() => store.projectName);
 const { subscribe: subscribeTask } = useTaskStream();
 const exporting = ref(false);
+
+// 阶段 4：全局任务队列 SSE（随 projectName 变化自动重连）
+const jobStore = useJobStore();
+const queueShow = ref(false);
+const runningCount = computed(() => jobStore.queue.running);
+useJobStream(projectName);
 
 async function handleExport() {
   if (exporting.value) return;
@@ -368,6 +383,25 @@ const menuItems = [
   justify-content: center;
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.queue-btn {
+  position: relative;
+}
+.badge {
+  position: absolute;
+  top: -2px;
+  right: -6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: #60a5fa;
+  color: #fff;
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+  font-weight: 600;
 }
 
 .content {
