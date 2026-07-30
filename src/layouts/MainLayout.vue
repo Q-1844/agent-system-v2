@@ -78,6 +78,7 @@
           <span class="page-title">{{ currentRoute?.meta?.title || 'Dashboard' }}</span>
         </div>
         <div class="topbar-right">
+          <button class="btn btn-ghost" @click="orchestrateShow = true">编排</button>
           <button class="btn btn-ghost queue-btn" @click="queueShow = !queueShow">
             队列
             <span v-if="runningCount" class="badge">{{ runningCount }}</span>
@@ -95,6 +96,7 @@
     </main>
 
     <QueuePanel v-model:show="queueShow" :project-name="projectName" />
+    <OrchestrateModal v-model:show="orchestrateShow" />
   </div>
 </template>
 
@@ -108,6 +110,7 @@ import { useTaskStream } from '@/composables/useTaskStream';
 import { useJobStream } from '@/composables/useJobStream';
 import { useJobStore } from '@/store/jobs';
 import QueuePanel from '@/components/QueuePanel.vue';
+import OrchestrateModal from '@/components/OrchestrateModal.vue';
 
 const route = useRoute();
 const currentRoute = computed(() => route);
@@ -127,6 +130,7 @@ const exporting = ref(false);
 // 阶段 4：全局任务队列 SSE（随 projectName 变化自动重连）
 const jobStore = useJobStore();
 const queueShow = ref(false);
+const orchestrateShow = ref(false);
 const runningCount = computed(() => jobStore.queue.running);
 useJobStream(projectName);
 
