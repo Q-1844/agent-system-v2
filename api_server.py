@@ -76,6 +76,19 @@ pipeline_controller = None
 current_task = None
 task_progress = {}
 
+# ============ 阶段 3：全局任务队列 ============
+# JOB_HANDLERS 是可变 dict，各 handler 定义处注册（first_frame/last_frame/audio/video/compose）。
+# startup 时用它在 cache/jobs.json 上构造 JobQueue 并启动 worker（1 视频串行 + 3 轻任务并发）。
+JOB_HANDLERS: dict = {}
+job_queue = None  # JobQueue 单例，startup 中创建
+
+
+def get_job_queue():
+    """安全获取全局队列。未就绪返回 503。"""
+    if job_queue is None:
+        raise HTTPException(503, "任务队列未就绪（服务启动中）")
+    return job_queue
+
 
 class ScriptRequest(BaseModel):
     """剧本请求"""
@@ -116,6 +129,17 @@ async def startup():
     # 初始化默认角色到角色库
     _init_default_characters()
 
+    # 阶段 3：启动全局任务队列 + 崩溃恢复（恢复在后台跑，不阻塞服务就绪）
+    global job_queue
+    try:
+        from src.core.job_queue import JobQueue
+        job_queue = JobQueue(BASE_DIR / "cache" / "jobs.json", JOB_HANDLERS)
+        await job_queue.start()
+        asyncio.create_task(recover_pending_videos())
+        logger.info("全局任务队列已就绪")
+    except Exception as e:
+        logger.error(f"任务队列初始化失败: {e}")
+
 
 def get_controller():
     """安全获取控制器"""
@@ -125,6 +149,51 @@ def get_controller():
             detail="服务未就绪，Pipeline控制器初始化失败。请检查配置文件和API密钥。"
         )
     return pipeline_controller
+
+
+async def recover_pending_videos():
+    """🔴 崩溃恢复（PHASE_3 §3.4）：重启后对 video.status==generating 且有 video_id
+    的镜头先 poll_video 查一次，不盲目重提交（省 60s + 不重扣配额）。
+    已完成 -> 下载入库；仍在跑/失效 -> 标 queued 并入队由 video handler 续轮询。"""
+    try:
+        controller = pipeline_controller
+        if controller is None:
+            return
+        from src.core.store import ProjectStore
+        client = controller.agnes_client
+        for pdir in projects_dir.iterdir():
+            if not pdir.is_dir():
+                continue
+            if not (pdir / "output" / "project.json").exists():
+                continue
+            try:
+                store = ProjectStore(pdir)
+                p = store.load()
+            except Exception:
+                continue
+            for sh in p.all_shots():
+                if sh.video.status != "generating" or not sh.video.video_id:
+                    continue
+                vid = sh.video.video_id
+                logger.info(f"恢复检查: {p.name}/{sh.shot_id} video_id={vid}")
+                try:
+                    res = await client.poll_video(vid, interval=5, max_wait=60)
+                    dest = str(pdir / "output" / "videos" / f"{sh.shot_id}.mp4")
+                    await client.download(res["url"], dest)
+                    store.update_shot(sh.shot_id, lambda s, d=dest, r=res: (
+                        s.video.mark_done(d, r["url"]),
+                        setattr(s.video, "seconds_returned", r["seconds"]),
+                        setattr(s.video, "size_returned", r["size"]),
+                    ))
+                    logger.info(f"恢复完成: {sh.shot_id}")
+                except Exception as e:
+                    logger.warning(f"恢复 {sh.shot_id} 未完成（{e}），重新入队续轮询")
+                    store.update_shot(sh.shot_id,
+                                      lambda s: setattr(s.video, "status", "queued"))
+                    if "video" in JOB_HANDLERS and job_queue is not None:
+                        job_queue.submit(p.name, "video", sh.shot_id)
+    except Exception as e:
+        logger.error(f"recover_pending_videos 失败: {e}")
 
 
 @app.get("/")
