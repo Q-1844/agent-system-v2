@@ -2552,6 +2552,139 @@ async def shot_last_frame(project_name: str, shot_id: str):
         raise HTTPException(500, str(e))
 
 
+# ==================== 阶段 3：镜头视频生成（shot 级，走 JobQueue 串行视频 worker）====================
+from src.api.agnes_client import resolve_size as _resolve_size
+
+
+def _video_preflight(shot, quota, seconds):
+    """视频前置硬校验（缺一不可，不通过就不提交，省 60s）。
+    仅检查「硬失败」；keyframes 尾帧 in-progress 的有界等待在 handler 里做。"""
+    from src.core.models import ShotStatus
+    if shot.locked:
+        return False, "镜头已锁定"
+    if not shot.video.num_frames:
+        return False, "尚未配音，无法确定视频时长（请先配音）"
+    if not shot.first_frame.url_ready:
+        return False, "首帧缺少公网 URL（未选择候选或未生成），请先生成并选择首帧"
+    if shot.link_mode == "keyframes":
+        if shot.last_frame.status == ShotStatus.FAILED.value:
+            return False, "尾帧生成失败，请重新生成尾帧"
+    if quota:
+        ok, why = quota.can("video_seconds", seconds)
+        if not ok:
+            return False, f"配额不足: {why}"
+    return True, ""
+
+
+async def _await_last_frame_url(store, shot_id, emit, timeout=180, interval=5):
+    """有界等待 last_frame.url_ready（keyframes 尾帧可能还在生成）。超时返回 None。"""
+    deadline = _time.time() + timeout
+    while _time.time() < deadline:
+        sh = store.load().get_shot(shot_id)
+        if sh and sh.last_frame.url_ready:
+            return sh.last_frame.selected.url
+        await asyncio.sleep(interval)
+    return None
+
+
+async def _handler_video(job, emit):
+    """镜头视频生成（PHASE_3 §3.4）。
+    preflight -> keyframes 等尾帧 -> 提交立刻落库 video_id -> 轮询 -> 下载 -> 回读秒数/尺寸。
+    🔴 已有 video_id 且 generating 时直接续轮询，不重提交、不重扣配额。"""
+    from src.core.store import ProjectStore
+    from src.core.prompt_builder import build_video_prompt
+    from src.core.models import ShotStatus
+    controller = get_controller()
+    project_dir = controller.project_manager.get_project_dir(job.project)
+    store = ProjectStore(project_dir)
+    project = store.load()
+    shot = project.get_shot(job.shot_id)
+    if shot is None:
+        raise RuntimeError(f"镜头 {job.shot_id} 不存在")
+
+    seconds = shot.video.num_frames / max(shot.video.frame_rate, 1)
+    ok, why = _video_preflight(shot, controller.agnes_client.quota, seconds)
+    if not ok:
+        raise RuntimeError(why)   # 不发起 API 请求
+
+    mode = "keyframes" if shot.link_mode == "keyframes" else "i2v"
+    # keyframes 尾帧 in-progress 有界等待
+    if mode == "keyframes" and not shot.last_frame.url_ready:
+        await emit("wait", f"{shot.shot_id} 等待尾帧就绪", 5)
+        if not await _await_last_frame_url(store, job.shot_id, emit):
+            raise RuntimeError("等待尾帧超时（尾帧尚未生成完成），请重试")
+        shot = store.load().get_shot(job.shot_id)   # 取最新
+
+    prompt = build_video_prompt(shot, mode)
+    w, h = map(int, _resolve_size(project.style.size_tier or "1K",
+                                  project.style.aspect_ratio or "16:9").split("x"))
+
+    # 🔴 恢复：已有 video_id 且 generating -> 续轮询，不重提交
+    if shot.video.video_id and shot.video.status == ShotStatus.GENERATING.value:
+        vid = shot.video.video_id
+        await emit("recover", f"{shot.shot_id} 恢复轮询 video_id={vid}", 10)
+    else:
+        await emit("submit", f"{shot.shot_id} 提交中（视频 1 RPM，可能等约 60s）", 10)
+        kwargs = dict(num_frames=shot.video.num_frames, frame_rate=shot.video.frame_rate,
+                      width=w, height=h, seed=shot.seed, negative_prompt=shot.negative_prompt)
+        if mode == "keyframes":
+            kwargs["image_urls"] = [shot.first_frame.selected.url, shot.last_frame.selected.url]
+        else:
+            kwargs["image_url"] = shot.first_frame.selected.url
+        created = await controller.agnes_client.create_video(prompt, mode=mode, **kwargs)
+        vid = created.get("video_id") or created.get("task_id") or created.get("id")
+        if not vid:
+            raise RuntimeError(f"视频任务创建无 video_id: {created}")
+        # 🔴 提交成功立刻落库 video_id（崩了重启能接着轮询，不重提交、不重扣配额）
+        store.update_shot(job.shot_id, lambda s, v=vid, c=created: (
+            setattr(s.video, "video_id", v),
+            setattr(s.video, "task_id", c.get("task_id")),
+            setattr(s.video, "status", ShotStatus.GENERATING.value),
+            setattr(s.video, "attempts", s.video.attempts + 1),
+        ))
+        await emit("submit", f"{shot.shot_id} 已提交 video_id={vid}", 15)
+
+    # 轮询（5s，走 text 桶不占视频桶）
+    async def on_prog(pct, st, waited):
+        await emit("poll", f"{shot.shot_id} {st} {pct}%（已等 {int(waited)}s）", int(pct))
+    res = await controller.agnes_client.poll_video(vid, interval=5, on_progress=on_prog)
+
+    # 下载
+    dest = project_dir / "output" / "videos" / f"{shot.shot_id}.mp4"
+    await controller.agnes_client.download(res["url"], dest)
+
+    # 🔴 回读入库（seconds/size 是服务端归一化后的真实值，FACTS §3.6）
+    store.update_shot(job.shot_id, lambda s, d=str(dest), r=res: (
+        s.video.mark_done(d, r["url"]),
+        setattr(s.video, "seconds_returned", r["seconds"]),
+        setattr(s.video, "size_returned", r["size"]),
+    ))
+    await emit("done", f"{shot.shot_id} 完成，实际 {res['seconds']}s / {res['size']}", 100)
+
+
+JOB_HANDLERS["video"] = _handler_video
+
+
+@app.post("/api/project/{project_name}/shot/{shot_id}/video")
+async def shot_video(project_name: str, shot_id: str):
+    """生成单镜头视频（入队 video 任务，串行 worker，1 RPM）"""
+    try:
+        controller = get_controller()
+        project_dir = controller.project_manager.get_project_dir(project_name)
+        from src.core.store import ProjectStore
+        if ProjectStore(project_dir).load().get_shot(shot_id) is None:
+            raise HTTPException(404, f"镜头 {shot_id} 不存在")
+        q = get_job_queue()
+        job = q.submit(project_name, "video", shot_id)
+        return {"job_id": job.job_id, "shot_id": shot_id}
+    except FileNotFoundError:
+        raise HTTPException(404, "项目不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
 @app.post("/api/project/{project_name}/compose")
 async def compose_final_video(
     project_name: str, request: Request, background_tasks: BackgroundTasks
