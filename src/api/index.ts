@@ -63,6 +63,119 @@ export interface ProjectOutputs {
   project_report?: string;
 }
 
+// ============ 阶段 3：shot 级管线 ============
+export type JobKind = 'first_frame' | 'last_frame' | 'audio' | 'video' | 'compose';
+export type JobState = 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
+
+export interface QueueStats {
+  video_queued: number;
+  video_eta_s: number;
+  running: number;
+  failed: number;
+}
+
+export interface Job {
+  job_id: string;
+  project: string;
+  kind: JobKind;
+  shot_id: string | null;
+  params: Record<string, any>;
+  state: JobState;
+  progress: number;
+  message: string;
+  error: string | null;
+  created_at: number;
+  started_at: number | null;
+  finished_at: number | null;
+  attempts: number;
+  queue?: QueueStats;
+}
+
+export interface OrchestrateResult {
+  dry_run: boolean;
+  plan: Array<[string, string]>;   // [kind, shot_id]
+  plan_count: number;
+  video_count: number;
+  eta_minutes?: number;
+  video_seconds_needed?: number;
+  job_ids?: string[];
+  queue?: QueueStats;
+}
+
+// v2 shot 产物
+export interface AssetData {
+  local: string | null;
+  url: string | null;
+  status: string;
+  error: string | null;
+  updated_at: number;
+}
+export interface ImageAssetData {
+  candidates: AssetData[];
+  selected_index: number;
+  status: string;
+  error: string | null;
+  updated_at: number;
+}
+export interface VideoAssetData extends AssetData {
+  video_id: string | null;
+  task_id: string | null;
+  num_frames: number;
+  frame_rate: number;
+  seconds_returned: number | null;
+  size_returned: string | null;
+  attempts: number;
+}
+export interface AudioAssetData extends AssetData {
+  duration_ms: number;
+  words: Array<{ text: string; offset_ms: number; duration_ms: number }>;
+  voice: string;
+  rate: string;
+}
+export interface ShotData {
+  shot_id: string;
+  scene_id: string;
+  index: number;
+  description: string;
+  prompt_en: string;
+  negative_prompt: string;
+  shot_size: string;
+  camera: string;
+  lighting: string;
+  motion: string;
+  characters: string[];
+  dialogue: string;
+  link_mode: string;
+  seed: number | null;
+  first_frame: ImageAssetData;
+  last_frame: ImageAssetData;
+  audio: AudioAssetData;
+  subtitle_srt: string | null;
+  video: VideoAssetData;
+  status: string;
+  locked: boolean;
+  note: string;
+  split_next: string | null;
+}
+export interface ProjectShots {
+  name: string;
+  style: Record<string, any>;
+  characters: Array<{ name: string; description_en: string; views: Record<string, AssetData> }>;
+  scenes: Array<{
+    scene_id: string; title: string; location: string; time_of_day: string; summary: string;
+    shots: ShotData[];
+  }>;
+}
+export interface TimingShot {
+  shot_id: string;
+  scene_id: string;
+  audio_seconds: number;
+  planned_seconds: number;
+  num_frames: number;
+  needs_split: boolean;
+  dialogue: string;
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -440,6 +553,91 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify(params),
     });
+  }
+
+  // ============ 阶段 3：shot 级管线 ============
+
+  // 加载 v2 项目结构（scenes/shots 含首帧/尾帧/音频/视频产物）
+  async getProjectShots(projectName: string): Promise<ProjectShots> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/shots`);
+  }
+
+  // 时长预览（每镜 audio/planned/needs_split + 全片总时长）
+  async getTiming(projectName: string): Promise<{ shots: TimingShot[]; total_seconds: number; fps: number }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/timing`);
+  }
+
+  // 首帧候选生成（入队 first_frame 任务）
+  async generateFirstFrame(projectName: string, shotId: string, params: { variants?: number; force?: boolean } = {}): Promise<{ job_id: string; shot_id: string }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/shot/${encodeURIComponent(shotId)}/first-frame`, {
+      method: 'POST', body: JSON.stringify({ variants: params.variants ?? 2, force: params.force ?? false }),
+    });
+  }
+
+  // 选择首帧候选（设 selected_index + status=done -> url_ready=true）
+  async chooseFirstFrame(projectName: string, shotId: string, variant: number): Promise<{ shot_id: string; selected_index: number; url: string }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/shot/${encodeURIComponent(shotId)}/first-frame/choose`, {
+      method: 'POST', body: JSON.stringify({ variant }),
+    });
+  }
+
+  // 尾帧生成（仅 keyframes）
+  async generateLastFrame(projectName: string, shotId: string): Promise<{ job_id: string; shot_id: string }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/shot/${encodeURIComponent(shotId)}/last-frame`, { method: 'POST' });
+  }
+
+  // 镜头视频生成（入队 video 任务，串行 1 RPM）
+  async generateShotVideo(projectName: string, shotId: string): Promise<{ job_id: string; shot_id: string }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/shot/${encodeURIComponent(shotId)}/video`, { method: 'POST' });
+  }
+
+  // 单镜配音（TTS -> 反推 num_frames）
+  async generateShotAudio(projectName: string, shotId: string, params: { voice?: string; rate?: string; volume?: string; regenerate?: boolean } = {}): Promise<{ task_id: string; shot_id: string }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/shot/${encodeURIComponent(shotId)}/audio`, {
+      method: 'POST', body: JSON.stringify(params),
+    });
+  }
+
+  // 拆分超长台词（硬编码 keyframes + split_next 桥接）
+  async splitDialogue(projectName: string, shotId: string, params: { mode?: string; segments?: string[] } = {}): Promise<{ split_into: number; shot_ids: string[]; link_mode?: string; enqueued_last_frame?: string | null }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/shot/${encodeURIComponent(shotId)}/split-dialogue`, {
+      method: 'POST', body: JSON.stringify(params),
+    });
+  }
+
+  // 编排（dry_run 预估 / 执行入队）
+  async orchestrate(projectName: string, params: {
+    stages?: string[]; scope?: string | string[]; skip_locked?: boolean; dry_run?: boolean;
+    voice?: string; rate?: string; volume?: string; width?: number; height?: number; fps?: number; burn_subtitles?: boolean;
+  }): Promise<OrchestrateResult> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/orchestrate`, {
+      method: 'POST', body: JSON.stringify(params),
+    });
+  }
+
+  // shot 级合成（concat->整音轨->烧SRT，Ken Burns 兜底）
+  async composeShots(projectName: string, params: { width?: number; height?: number; fps?: number; burn_subtitles?: boolean } = {}): Promise<{ task_id: string; message: string }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/compose-shots`, {
+      method: 'POST', body: JSON.stringify(params),
+    });
+  }
+
+  // 队列管理
+  async listJobs(projectName: string, state?: string): Promise<{ jobs: Job[]; queue: QueueStats }> {
+    const q = state ? `?state=${encodeURIComponent(state)}` : '';
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/jobs${q}`);
+  }
+  async cancelJob(jobId: string): Promise<{ job_id: string; state: string }> {
+    return this.request(`/api/jobs/${encodeURIComponent(jobId)}/cancel`, { method: 'POST' });
+  }
+  async retryJob(jobId: string): Promise<{ job_id: string; state: string }> {
+    return this.request(`/api/jobs/${encodeURIComponent(jobId)}/retry`, { method: 'POST' });
+  }
+  async retryFailedJobs(projectName: string): Promise<{ retried: string[]; count: number }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/jobs/retry-failed`, { method: 'POST' });
+  }
+  async clearFinishedJobs(projectName: string): Promise<{ cleared: number }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/jobs/finished`, { method: 'DELETE' });
   }
 }
 

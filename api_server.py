@@ -2299,6 +2299,32 @@ async def split_shot_dialogue(project_name: str, shot_id: str, req: SplitDialogu
         raise HTTPException(500, str(e))
 
 
+@app.get("/api/project/{project_name}/shots")
+async def get_project_shots(project_name: str):
+    """返回 v2 项目结构（scenes/shots 含 first_frame/last_frame/audio/video 产物）。
+    供前端 shot 级页面加载。local 路径前端用 media.ts 转 URL；url 是 Agnes 公网 URL。"""
+    try:
+        controller = get_controller()
+        project_dir = controller.project_manager.get_project_dir(project_name)
+        from src.core.store import ProjectStore
+        p = ProjectStore(project_dir).load()
+        from dataclasses import asdict
+        return {
+            "name": p.name,
+            "style": asdict(p.style),
+            "characters": [{"name": c.name, "description_en": c.description_en,
+                            "views": {k: asdict(v) for k, v in c.views.items()}}
+                           for c in p.characters],
+            "scenes": [s.to_dict() for s in p.scenes],
+        }
+    except FileNotFoundError:
+        raise HTTPException(404, "项目不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
 @app.get("/api/project/{project_name}/timing")
 async def get_project_timing(project_name: str):
     """时长预览：每镜 audio_seconds/planned_seconds/needs_split + 全片总时长"""
