@@ -13,6 +13,13 @@ from ..utils.logger import setup_logger
 logger = setup_logger("video_composer")
 
 
+def escape_ffmpeg_path(path: str) -> str:
+    """Windows 下 ffmpeg subtitles filter 对路径挑剔：反斜杠转正斜杠、盘符冒号转义成 \\:。
+    实测（2026-07-30）本机构建需「引号 + \\: 转义」并用，单独任一都会失败。
+    返回值调用方需再用单引号包裹（见 _mux_shots）。"""
+    return path.replace("\\", "/").replace(":", "\\:")
+
+
 class VideoComposer:
     """最终视频合成器（ffmpeg subprocess）"""
 
@@ -76,7 +83,7 @@ class VideoComposer:
             logger.warning("音频叠加失败，降级为纯视频")
             cmd = ["ffmpeg", "-y", "-i", str(concat_path),
                    "-c:v", "libx264", "-pix_fmt", "yuv420p", str(final_path)]
-            subprocess.run(cmd, capture_output=True, text=True)
+            subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
 
         if final_path.exists():
             log(f"最终视频已生成: {final_path}", 1.0)
@@ -97,7 +104,7 @@ class VideoComposer:
         if video_path and Path(str(video_path)).exists():
             cmd = ["ffmpeg", "-y", "-i", str(video_path), "-vf", scale_pad,
                    "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an", str(seg)]
-            r = subprocess.run(cmd, capture_output=True, text=True)
+            r = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
             if r.returncode == 0 and seg.exists():
                 return seg
             logger.warning(f"视频段处理失败({scene.get('id')}): {r.stderr[-300:]}")
@@ -114,7 +121,7 @@ class VideoComposer:
                           f"trim=duration={duration},setsar=1",
                    "-t", str(duration), "-c:v", "libx264", "-pix_fmt", "yuv420p",
                    "-an", str(seg)]
-            r = subprocess.run(cmd, capture_output=True, text=True)
+            r = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
             if r.returncode == 0 and seg.exists():
                 return seg
             logger.warning(f"Ken Burns 生成失败({scene.get('id')}): {r.stderr[-300:]}")
@@ -130,13 +137,13 @@ class VideoComposer:
         out = self.cache_dir / "concat.mp4"
         cmd = ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(list_file),
                "-c", "copy", str(out)]
-        r = subprocess.run(cmd, capture_output=True, text=True)
+        r = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
         if r.returncode == 0 and out.exists():
             return out
         logger.warning(f"concat copy 失败，重编码: {r.stderr[-300:]}")
         cmd = ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(list_file),
                "-c:v", "libx264", "-pix_fmt", "yuv420p", str(out)]
-        r = subprocess.run(cmd, capture_output=True, text=True)
+        r = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
         if r.returncode != 0:
             raise Exception(f"拼接失败: {r.stderr[-300:]}")
         return out
@@ -165,7 +172,7 @@ class VideoComposer:
             # 无音频，只重编码视频
             cmd = ["ffmpeg", "-y", "-i", str(concat_path),
                    "-c:v", "libx264", "-pix_fmt", "yuv420p", str(final_path)]
-            r = subprocess.run(cmd, capture_output=True, text=True)
+            r = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
             return r.returncode == 0
 
         filter_complex = ";".join(audio_filters) + ";" + "".join(amix_list) + f"amix=inputs={len(amix_list)}:duration=longest,apad[aout]"
@@ -175,7 +182,7 @@ class VideoComposer:
             "-c:v", "libx264", "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-shortest", str(final_path),
         ]
-        r = subprocess.run(cmd, capture_output=True, text=True)
+        r = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
         if r.returncode != 0:
             logger.warning(f"音频叠加失败: {r.stderr[-400:]}")
             return False
@@ -266,7 +273,7 @@ class VideoComposer:
         if vp and Path(str(vp)).exists():
             cmd = ["ffmpeg", "-y", "-i", str(vp), "-vf", scale_pad,
                    "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an", str(seg)]
-            r = subprocess.run(cmd, capture_output=True, text=True)
+            r = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
             if r.returncode == 0 and seg.exists():
                 return seg
             logger.warning(f"视频段处理失败({shot.shot_id}): {r.stderr[-300:]}")
@@ -280,7 +287,7 @@ class VideoComposer:
                           f"trim=duration={duration},setsar=1",
                    "-t", str(duration), "-c:v", "libx264", "-pix_fmt", "yuv420p",
                    "-an", str(seg)]
-            r = subprocess.run(cmd, capture_output=True, text=True)
+            r = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
             if r.returncode == 0 and seg.exists():
                 return seg
             logger.warning(f"Ken Burns 失败({shot.shot_id}): {r.stderr[-300:]}")
@@ -301,7 +308,7 @@ class VideoComposer:
             else:
                 cmd = ["ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono",
                        "-t", f"{dur:.3f}", "-c:a", "aac", "-b:a", "192k", str(seg)]
-            r = subprocess.run(cmd, capture_output=True, text=True)
+            r = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
             if r.returncode == 0 and seg.exists():
                 seg_audios.append(seg)
             else:
@@ -315,11 +322,11 @@ class VideoComposer:
         out = self.cache_dir / "narration.m4a"
         r = subprocess.run(["ffmpeg", "-y", "-f", "concat", "-safe", "0",
                             "-i", str(list_file), "-c", "copy", str(out)],
-                           capture_output=True, text=True)
+                           capture_output=True, encoding="utf-8", errors="replace")
         if r.returncode != 0:
             r = subprocess.run(["ffmpeg", "-y", "-f", "concat", "-safe", "0",
                                 "-i", str(list_file), "-c:a", "aac", "-b:a", "192k", str(out)],
-                               capture_output=True, text=True)
+                               capture_output=True, encoding="utf-8", errors="replace")
             if r.returncode != 0:
                 logger.warning(f"音轨拼接失败: {r.stderr[-300:]}")
                 return None
@@ -337,8 +344,10 @@ class VideoComposer:
                 cmd += ["-i", str(narration)]
             vf = []
             if burn and has_srt:
-                esc = str(srt_path).replace("\\", "/").replace(":", "\\:")
-                vf.append(f"subtitles='{esc}'")
+                # 实测需「单引号 + \\: 转义」并用；force_style 指定中文字体避免缺字方块
+                esc = escape_ffmpeg_path(str(srt_path))
+                vf.append(f"subtitles='{esc}':force_style='FontName=Microsoft YaHei,"
+                          f"FontSize=20,Outline=1,Shadow=0'")
             if vf:
                 cmd += ["-vf", ",".join(vf)]
             cmd += ["-map", "0:v"]
@@ -348,7 +357,7 @@ class VideoComposer:
             if has_audio:
                 cmd += ["-c:a", "aac", "-b:a", "192k"]
             cmd += ["-shortest", str(final_path)]
-            return subprocess.run(cmd, capture_output=True, text=True)
+            return subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
 
         r = run_mux(True)
         if r.returncode != 0 and has_srt:
