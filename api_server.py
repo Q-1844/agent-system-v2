@@ -2568,7 +2568,7 @@ async def shot_last_frame(project_name: str, shot_id: str):
 
 
 # ==================== 阶段 3：镜头视频生成（shot 级，走 JobQueue 串行视频 worker）====================
-from src.api.agnes_client import resolve_size as _resolve_size
+from src.api.agnes_client import resolve_size as _resolve_size, PollTransientError, AgnesError
 
 
 def _video_preflight(shot, quota, seconds):
@@ -2674,8 +2674,13 @@ async def _handler_video(job, emit):
         await emit("poll", f"{shot.shot_id} {st} {pct}%（已等 {int(waited)}s）", int(pct))
     try:
         res = await controller.agnes_client.poll_video(vid, interval=5, on_progress=on_prog)
-    except Exception:
-        # 轮询失败（视频失败/超时）：标 failed，retry 时走 else 重新提交，不对失效 video_id 死循环
+    except PollTransientError as e:
+        # 网络/超时（连续 5 次）：不标 failed，保留 video_id+generating，
+        # retry/recover 续轮询（不重提交、不丢已生成视频）
+        await emit("warn", f"{shot.shot_id} 轮询暂歇（网络/超时，video_id 保留，重试续轮询）: {str(e)[:150]}", None)
+        raise
+    except AgnesError:
+        # 服务端明确失败 / video_id 不存在：标 failed，retry 时走 else 重新提交
         store.update_shot(job.shot_id,
                           lambda s: setattr(s.video, "status", ShotStatus.FAILED.value))
         raise

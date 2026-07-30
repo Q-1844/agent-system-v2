@@ -78,6 +78,12 @@ class AgnesError(Exception):
         super().__init__(msg); self.status, self.body = status, body
 
 
+class PollTransientError(AgnesError):
+    """轮询的暂时性失败（网络/超时/5xx 耗尽）。调用方不应标 video.status=failed，
+    应保留 video_id 让 retry/recover 续轮询，避免重提交丢掉已生成的视频。
+    与「服务端明确返回 failed / video_id 404」的永久失败区分。"""
+
+
 class AgnesClient:
     def __init__(self, config: dict, quota: QuotaLedger | None = None):
         self.cfg      = config
@@ -284,16 +290,33 @@ class AgnesClient:
 
     async def poll_video(self, video_id: str, *,
                          interval: float = 5.0, max_wait: float = 3600,
-                         on_progress=None) -> dict:
+                         on_progress=None, max_consecutive_failures: int = 5) -> dict:
         """轮询直到 completed / failed。官方建议间隔 5s（AGNES_API_FACTS §3.5）。
         注意：轮询走 text 桶，不占视频桶——否则第二个任务永远提交不了。"""
         waited = 0.0
+        consecutive = 0
         while waited < max_wait:
             await asyncio.sleep(interval); waited += interval
-            r = await self._request("GET", "/agnesapi", "text",
-                                    params={"video_id": video_id,
-                                            "model_name": self.models["video"]},
-                                    max_attempts=3)
+            try:
+                r = await self._request("GET", "/agnesapi", "text",
+                                        params={"video_id": video_id,
+                                                "model_name": self.models["video"]},
+                                        max_attempts=3)
+            except AgnesError as e:
+                if e.status is None:
+                    # HTTP 层错误（网络/5xx/429 耗尽重试）-> 计数重试，不立刻放弃
+                    consecutive += 1
+                    log.warning("poll_video %s 网络错误（连续 %d/%d）: %s",
+                                video_id[:16], consecutive, max_consecutive_failures, e)
+                    if consecutive >= max_consecutive_failures:
+                        raise PollTransientError(
+                            f"轮询连续 {max_consecutive_failures} 次网络失败: {e}")
+                    continue
+                # 有 status（4xx 等，_request 已判定不可重试）-> 永久失败，立刻抛
+                if e.status == 404:
+                    raise AgnesError(f"video_id 不存在: {video_id}", 404)
+                raise
+            consecutive = 0   # 成功，重置
             d = r.json()
             st = d.get("status")
             if on_progress:
@@ -311,7 +334,7 @@ class AgnesClient:
                         "size": d.get("size"), "raw": d}
             if st == "failed":
                 raise AgnesError(f"视频生成失败: {d.get('error')}")
-        raise AgnesError(f"视频生成超时（{max_wait}s），video_id={video_id}")
+        raise PollTransientError(f"视频生成超时（{max_wait}s），video_id={video_id}")
 
     async def download(self, url: str, dest) -> str:
         from pathlib import Path
