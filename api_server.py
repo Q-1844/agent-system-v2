@@ -2631,13 +2631,23 @@ async def _handler_video(job, emit):
         shot = store.load().get_shot(job.shot_id)   # 取最新
 
     prompt = build_video_prompt(shot, mode)
-    w, h = map(int, _resolve_size(project.style.size_tier or "1K",
-                                  project.style.aspect_ratio or "16:9").split("x"))
+    # 🔴 视频提交尺寸：16:9 直接按服务端实测输出 1280x704 提交（FACTS §3.4.1：1312x736 会被
+    #  归一化成 1280x704，两者宽高比不同 1.783 vs 1.818 有裁切；直接提交 1280x704 省这轮归一化）。
+    #  图片仍走档位 1312x736；图片->视频的裁切是单次逐镜，keyframes 接力链传的是图片不累积。
+    #  max_frames_for(1280,704)=441（long_side=1280 落 720p 档），441 实测正是在 1280x704 取得。
+    ratio = project.style.aspect_ratio or "16:9"
+    if ratio == "16:9":
+        w, h = 1280, 704
+    else:
+        w, h = map(int, _resolve_size(project.style.size_tier or "1K", ratio).split("x"))
 
-    # 🔴 恢复：已有 video_id 且 generating -> 续轮询，不重提交
-    if shot.video.video_id and shot.video.status == ShotStatus.GENERATING.value:
+    # 🔴 恢复：已有 video_id 且未 done/failed -> 续轮询，不重提交。
+    #  recover_pending_videos 把轮询超时（仍在跑）的设为 queued 后入队，handler 在此续轮询；
+    #  failed 的不进恢复分支 -> 走 else 重新提交，避免对失效 video_id 死循环轮询。
+    if shot.video.video_id and shot.video.status not in (
+            ShotStatus.DONE.value, ShotStatus.FAILED.value):
         vid = shot.video.video_id
-        await emit("recover", f"{shot.shot_id} 恢复轮询 video_id={vid}", 10)
+        await emit("recover", f"{shot.shot_id} 续轮询 video_id={vid}（不重提交）", 10)
     else:
         await emit("submit", f"{shot.shot_id} 提交中（视频 1 RPM，可能等约 60s）", 10)
         kwargs = dict(num_frames=shot.video.num_frames, frame_rate=shot.video.frame_rate,
@@ -2662,7 +2672,13 @@ async def _handler_video(job, emit):
     # 轮询（5s，走 text 桶不占视频桶）
     async def on_prog(pct, st, waited):
         await emit("poll", f"{shot.shot_id} {st} {pct}%（已等 {int(waited)}s）", int(pct))
-    res = await controller.agnes_client.poll_video(vid, interval=5, on_progress=on_prog)
+    try:
+        res = await controller.agnes_client.poll_video(vid, interval=5, on_progress=on_prog)
+    except Exception:
+        # 轮询失败（视频失败/超时）：标 failed，retry 时走 else 重新提交，不对失效 video_id 死循环
+        store.update_shot(job.shot_id,
+                          lambda s: setattr(s.video, "status", ShotStatus.FAILED.value))
+        raise
 
     # 下载
     dest = project_dir / "output" / "videos" / f"{shot.shot_id}.mp4"
