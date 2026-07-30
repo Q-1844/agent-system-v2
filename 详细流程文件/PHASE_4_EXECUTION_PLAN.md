@@ -53,6 +53,41 @@ export function useJobStream(project: string) {
 
 **刷新场景验证：** 用户 F5 刷新页面 -> EventSource 重新创建 -> 服务端发 snapshot -> `jobs.value` 被替换为当前完整队列 -> 面板立即显示所有运行中/排队/完成/失败任务。不会空白。
 
+**心跳（已实现，确认）：** 后端 `jobs_stream` 每 15s 无事件时发 `: keepalive\n\n` 注释帧（`asyncio.wait_for(q.get(), timeout=15)` 超时分支）。SSE 注释帧 EventSource 不触发任何监听器，自动忽略，但**它确实刷新了 TCP 连接的活跃状态**，防止代理/浏览器在长任务中途掐断空闲连接。前端无需处理。长任务中 poll 进度每 5s 推 `job` 事件，连接本身也是活跃的；心跳是 idle 期（无任务）的兜底。
+
+**🔴 SSE 彻底失败时降级为定时轮询（必须实现）：** EventSource 自动重连，但若服务端长时间下线/网络断，`es.readyState` 停在 `CLOSED` 不再重连，或连续 N 次 onerror。此时不能让界面停在「最后一次收到的状态」装作还在跑。前端 `useJobStream` 需：
+```ts
+let pollTimer: number | null = null;
+let failedStreak = 0;
+es.onerror = () => {
+  failedStreak++;
+  if (failedStreak >= 3) {        // 连续 3 次错误 -> 切轮询
+    es?.close(); es = null;
+    startPolling();               // 降级：每 5s GET /project/{p}/jobs
+  }
+};
+function startPolling() {
+  pollTimer = window.setInterval(async () => {
+    const r = await fetch(`${API_BASE}/api/project/${project}/jobs`);
+    const j = await r.json();
+    jobs.value = j.jobs; queue.value = j.queue;   // 整体替换（同 snapshot 语义）
+    // 轮询期间定期尝试重连 SSE；一旦 SSE 恢复，停轮询
+    tryReconnectSSE();
+  }, 5000);
+}
+function tryReconnectSSE() {
+  const test = new EventSource(`${API_BASE}/api/jobs/stream?project=${project}`);
+  test.addEventListener('snapshot', () => {
+    test.close();
+    stopPolling(); failedStreak = 0; connect();   // SSE 恢复，回切
+  });
+  test.onerror = () => test.close();
+}
+```
+- 降级时 UI 显示「⚠️ 实时连接断开，轮询中（5s）」徽标，让用户知道状态不是实时。
+- 轮询整体替换 `jobs.value`（同 snapshot 语义），不增量，保证与服务器一致。
+- SSE 恢复后自动回切，停轮询。
+
 ## 2. store/jobs.ts（Pinia）
 - `jobs: Job[]`、`queue: QueueStats`、`connected: boolean`。
 - actions：`upsertJob(j)`、`replaceAll(list)`、`clearFinished()`（调 `DELETE /jobs/finished` 后清本地）、`retry(job_id)`、`cancel(job_id)`、`retryFailed()`。
@@ -78,6 +113,7 @@ TypeScript 接口定义 `Job`/`JobState`/`QueueStats`/`OrchestrateResult`。
 - **首帧候选区**：`first_frame.candidates` 缩略图横排（最多 2 张），当前选中高亮（`selected_index`）。
   - 「生成首帧」按钮 -> POST /first-frame -> 卡片进入「生成中」（job 进度由全局 SSE 推送）。
   - 候选出现后，点缩略图选中 -> POST /first-frame/choose {variant} -> 卡片标「已选定」，`url_ready=true`。
+  - 🔴 **裁切安全框（必做）**：图片接口只能出 1312×736（ratio 1.7826），视频输出是 1280×704（ratio 1.8181，实测归一化，见 FACTS §3.4.1）。用户选图时看到的是 1312×736，成片会被中心裁切到 1.8181。候选预览上**叠加安全框**：全宽矩形、上下各内缩 ~7.2px（1312/1.8181≈721.6，736-721.6=14.4，对半），框外（上下细条）用半透明遮罩标「将被裁掉」。让用户选图时把主体放在框内。组件 `components/SafeFrameOverlay.vue`，按 1312×736→1280×704 算比例（top/bottom inset = (1 - 721.6/736)/2 ≈ 0.98%），缩略图与放大预览都叠。尾帧预览同理。
 - **尾帧区**（仅 link_mode=keyframes）：「生成尾帧」按钮 -> POST /last-frame。展示 last_frame 缩略图。
 - **配音状态**：audio.ready 显示 ✓ + 时长；未配音显示「去配音」（跳 audio 页）。
 - **视频区**：「生成视频」按钮 -> POST /video。video.status=generating 显示轮询进度（SSE 推 poll 消息）；done 后内嵌 `<video>` 预览 `video.local`。展示 `seconds_returned`/`size_returned`（回读值，不是 planned）。
@@ -112,13 +148,15 @@ TypeScript 接口定义 `Job`/`JobState`/`QueueStats`/`OrchestrateResult`。
 - [ ] orchestrate dry_run 显示视频数/eta/配额；执行后任务进队列。
 - [ ] 单镜失败 -> QueuePanel 标红 + 重试按钮 -> 重试单独重跑不影响其它。
 - [ ] 切换项目时 SSE 重新订阅（旧连接 close，新 project snapshot 替换）。
+- [ ] 候选预览叠安全框（1312×736 上下细条遮罩「将被裁掉」），用户能据此把主体放框内。
+- [ ] SSE 彻底失败（连续 3 次 onerror）-> 降级轮询 GET /jobs（5s），UI 标「轮询中」；SSE 恢复自动回切。
 
 ## 9. 提交计划（每个可验证小步一个 commit）
 1. `feat(api-client)`: api/index.ts 补 phase 3 方法 + TS 接口
 2. `feat(store)`: store/jobs.ts（jobs/queue/upsert/replace/clear/retry）
-3. `feat(composable)`: useJobStream.ts（全局 SSE + snapshot REPLACE 规范）
+3. `feat(composable)`: useJobStream.ts（全局 SSE + snapshot REPLACE + 心跳忽略 + 降级轮询）
 4. `feat(ui)`: QueuePanel.vue + 接入 MainLayout
-5. `feat(ui)`: storyboard 卡片改造（候选点选 + 尾帧 + 视频预览 + preflight 拦截）
+5. `feat(ui)`: storyboard 卡片改造（候选点选 + 裁切安全框 SafeFrameOverlay + 尾帧 + 视频预览 + preflight 拦截）
 6. `feat(ui)`: OrchestrateModal.vue + dry_run 预估
 7. `feat(ui)`: dashboard 队列概况 + 切项目重订阅
 8. 跑验收 -> tag phase-4-done
