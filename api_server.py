@@ -2321,6 +2321,237 @@ async def get_project_timing(project_name: str):
         raise HTTPException(500, str(e))
 
 
+# ==================== 阶段 3：分镜图 / 尾帧（shot 级，走 JobQueue）====================
+# first_frame：2 候选图生图（角色参考图用公网 url 或 base64），存 local+公网 url，
+#   status=pending 等用户点选；choose 后 status=done，url_ready 才 True（视频唯一入口）。
+# last_frame：仅 keyframes，图生图用 first_frame.url；生成后若 split_next 非空，桥接拷贝给后继首帧。
+from src.core.prompt_builder import (
+    build_shot_prompt, build_i2i_prompt, build_last_frame_prompt)
+
+
+def _shot_char_refs(project, shot):
+    """取出场角色参考图，返回可送图片接口的 ref 列表（公网 URL 或 data:image URI）。
+    都没有返回 []（调用方走文生图）。图片接口支持 base64（FACTS §2.4），无需 ImageHost。"""
+    refs = []
+    for name in shot.characters:
+        c = project.get_character(name)
+        if not c:
+            continue
+        url = c.ref_url()                       # 优先 front/side/back 的公网 url
+        if url:
+            refs.append(url); continue
+        for v in ("front", "side", "back"):     # 只有 local -> base64 data URI
+            a = c.views.get(v)
+            if a and a.local and Path(str(a.local)).exists():
+                b64 = _base64.b64encode(Path(str(a.local)).read_bytes()).decode()
+                refs.append(f"data:image/png;base64,{b64}")
+                break
+    return refs
+
+
+async def _await_first_frame_url(store, shot_id, emit, timeout=180, interval=5):
+    """有界等待 first_frame.url_ready。bridge 场景首帧来自前驱尾帧，可能尚未就绪。
+    超时返回 None（调用方报错）。"""
+    deadline = _time.time() + timeout
+    while _time.time() < deadline:
+        sh = store.load().get_shot(shot_id)
+        if sh and sh.first_frame.url_ready:
+            return sh.first_frame.selected.url
+        await asyncio.sleep(interval)
+    return None
+
+
+async def _handler_first_frame(job, emit):
+    """生成 N 候选分镜图（图生图/文生图），存 local + 公网 url，status=pending 等用户选。"""
+    from src.core.store import ProjectStore
+    from src.core.models import Asset, ShotStatus
+    controller = get_controller()
+    project_dir = controller.project_manager.get_project_dir(job.project)
+    store = ProjectStore(project_dir)
+    project = store.load()
+    shot = project.get_shot(job.shot_id)
+    if shot is None:
+        raise RuntimeError(f"镜头 {job.shot_id} 不存在")
+    force = bool(job.params.get("force", False))
+    if shot.locked and not force:
+        await emit("skip", f"{shot.shot_id} 已锁定，跳过", 100); return
+    if shot.first_frame.ready and not force:
+        await emit("skip", f"{shot.shot_id} 已有分镜图，跳过（force=True 可重生成）", 100); return
+
+    variants = max(1, int(job.params.get("variants", 2)))
+    size_tier = project.style.size_tier or "1K"
+    ratio = project.style.aspect_ratio or "16:9"
+    refs = _shot_char_refs(project, shot)
+    use_i2i = bool(refs)
+    prompt = build_i2i_prompt(project, shot) if use_i2i else build_shot_prompt(project, shot)
+    frames_dir = project_dir / "output" / "frames"
+    frames_dir.mkdir(parents=True, exist_ok=True)
+
+    candidates = []
+    for i in range(variants):
+        await emit("gen", f"{shot.shot_id} 生成候选 {i+1}/{variants}", int(i / variants * 100))
+        seed = (shot.seed + i) if shot.seed is not None else None   # 多候选要有变化
+        res = await controller.agnes_client.generate_image(
+            prompt=prompt, image_refs=refs if use_i2i else None,
+            size_tier=size_tier, ratio=ratio, seed=seed)
+        url = res.get("url")
+        if not url:
+            raise RuntimeError("图片生成未返回公网 URL")
+        dest = frames_dir / f"{shot.shot_id}_first_v{i+1}.png"
+        await controller.agnes_client.download(url, dest)   # 无认证 client，复用于图片资产
+        candidates.append(Asset(local=str(dest), url=url, status=ShotStatus.DONE.value))
+        await emit("gen", f"{shot.shot_id} 候选 {i+1} 完成", int((i + 1) / variants * 100))
+
+    # 写回：候选各自 done，ImageAsset.status=pending（等用户点选 -> url_ready=False）
+    def mut(s):
+        s.first_frame.candidates = candidates
+        s.first_frame.selected_index = 0
+        s.first_frame.status = ShotStatus.PENDING.value
+        s.first_frame.error = None
+        s.first_frame.updated_at = _time.time()
+    store.update_shot(job.shot_id, mut)
+    await emit("done", f"{shot.shot_id} 已生成 {len(candidates)} 个候选，待选择", 100)
+
+
+async def _handler_last_frame(job, emit):
+    """生成尾帧（仅 keyframes，图生图用 first_frame.url）。
+    生成后若 split_next 非空，桥接拷贝给后继首帧（O2.first_frame = O.last_frame，保证 O->O2 无缝）。"""
+    from src.core.store import ProjectStore
+    from src.core.models import Asset, ImageAsset, ShotStatus
+    controller = get_controller()
+    project_dir = controller.project_manager.get_project_dir(job.project)
+    store = ProjectStore(project_dir)
+    project = store.load()
+    shot = project.get_shot(job.shot_id)
+    if shot is None:
+        raise RuntimeError(f"镜头 {job.shot_id} 不存在")
+    if shot.link_mode != "keyframes":
+        raise RuntimeError(f"仅 keyframes 模式需要尾帧（当前 {shot.link_mode}）")
+
+    # 有界等待 first_frame.url_ready（bridge 场景首帧来自前驱尾帧，可能还没好）
+    await emit("wait", f"{shot.shot_id} 等待首帧就绪", 5)
+    ff_url = await _await_first_frame_url(store, job.shot_id, emit)
+    if not ff_url:
+        raise RuntimeError("首帧缺少公网 URL（未选择候选或未生成），无法生成尾帧")
+
+    await emit("gen", f"{shot.shot_id} 生成尾帧", 20)
+    prompt = build_last_frame_prompt(project, shot)
+    res = await controller.agnes_client.generate_image(
+        prompt=prompt, image_refs=[ff_url],
+        size_tier=project.style.size_tier or "1K", ratio=project.style.aspect_ratio or "16:9")
+    url = res.get("url")
+    if not url:
+        raise RuntimeError("尾帧生成未返回公网 URL")
+    dest = project_dir / "output" / "frames" / f"{shot.shot_id}_last.png"
+    await controller.agnes_client.download(url, dest)
+    store.update_shot(job.shot_id, lambda s: s.last_frame.mark_done(str(dest), url))
+    await emit("done", f"{shot.shot_id} 尾帧完成", 90)
+
+    # 🔴 桥接拷贝：split_next 非空且后继首帧未就绪时，把尾帧拷给后继首帧
+    nxt = getattr(shot, "split_next", None)
+    if nxt:
+        succ = project.get_shot(nxt)
+        if succ is not None and not succ.first_frame.ready:
+            def mut_succ(s, d=str(dest), u=url):
+                s.first_frame = ImageAsset(
+                    candidates=[Asset(local=d, url=u, status=ShotStatus.DONE.value)],
+                    selected_index=0, status=ShotStatus.DONE.value)
+            store.update_shot(nxt, mut_succ)
+            await emit("bridge", f"{shot.shot_id} 尾帧桥接为 {nxt} 首帧", 100)
+        else:
+            await emit("done", f"{shot.shot_id} 尾帧完成（后继 {nxt} 已有首帧，不覆盖）", 100)
+    else:
+        await emit("done", f"{shot.shot_id} 尾帧完成", 100)
+
+
+JOB_HANDLERS["first_frame"] = _handler_first_frame
+JOB_HANDLERS["last_frame"] = _handler_last_frame
+
+
+class FirstFrameRequest(BaseModel):
+    variants: int = 2
+    force: bool = False
+
+
+class ChooseFrameRequest(BaseModel):
+    variant: int = 1   # 1-based
+
+
+@app.post("/api/project/{project_name}/shot/{shot_id}/first-frame")
+async def shot_first_frame(project_name: str, shot_id: str, req: FirstFrameRequest):
+    """生成单镜头分镜图候选（入队 first_frame 任务，进度走全局 SSE）"""
+    try:
+        controller = get_controller()
+        project_dir = controller.project_manager.get_project_dir(project_name)
+        from src.core.store import ProjectStore
+        if ProjectStore(project_dir).load().get_shot(shot_id) is None:
+            raise HTTPException(404, f"镜头 {shot_id} 不存在")
+        q = get_job_queue()
+        job = q.submit(project_name, "first_frame", shot_id,
+                       variants=req.variants, force=req.force)
+        return {"job_id": job.job_id, "shot_id": shot_id}
+    except FileNotFoundError:
+        raise HTTPException(404, "项目不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.post("/api/project/{project_name}/shot/{shot_id}/first-frame/choose")
+async def choose_first_frame(project_name: str, shot_id: str, req: ChooseFrameRequest):
+    """选择分镜图候选：设 selected_index + first_frame.status=done（url_ready=True，放行视频）"""
+    try:
+        controller = get_controller()
+        project_dir = controller.project_manager.get_project_dir(project_name)
+        from src.core.store import ProjectStore
+        from src.core.models import ShotStatus
+        store = ProjectStore(project_dir)
+        shot = store.load().get_shot(shot_id)
+        if shot is None:
+            raise HTTPException(404, f"镜头 {shot_id} 不存在")
+        if not shot.first_frame.candidates:
+            raise HTTPException(400, "该镜头尚无分镜图候选，请先生成")
+        idx = req.variant - 1
+        if not (0 <= idx < len(shot.first_frame.candidates)):
+            raise HTTPException(400, f"variant 超出范围（1~{len(shot.first_frame.candidates)}）")
+        store.update_shot(shot_id, lambda s, i=idx: (
+            s.first_frame.select(i),
+            setattr(s.first_frame, "status", ShotStatus.DONE.value),
+        ))
+        return {"shot_id": shot_id, "selected_index": idx,
+                "url": shot.first_frame.candidates[idx].url}
+    except FileNotFoundError:
+        raise HTTPException(404, "项目不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.post("/api/project/{project_name}/shot/{shot_id}/last-frame")
+async def shot_last_frame(project_name: str, shot_id: str):
+    """生成单镜头尾帧（仅 keyframes；入队 last_frame 任务）"""
+    try:
+        controller = get_controller()
+        project_dir = controller.project_manager.get_project_dir(project_name)
+        from src.core.store import ProjectStore
+        shot = ProjectStore(project_dir).load().get_shot(shot_id)
+        if shot is None:
+            raise HTTPException(404, f"镜头 {shot_id} 不存在")
+        if shot.link_mode != "keyframes":
+            raise HTTPException(400, f"仅 keyframes 模式需要尾帧（当前 {shot.link_mode}）")
+        q = get_job_queue()
+        job = q.submit(project_name, "last_frame", shot_id)
+        return {"job_id": job.job_id, "shot_id": shot_id}
+    except FileNotFoundError:
+        raise HTTPException(404, "项目不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
 @app.post("/api/project/{project_name}/compose")
 async def compose_final_video(
     project_name: str, request: Request, background_tasks: BackgroundTasks

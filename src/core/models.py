@@ -99,9 +99,14 @@ class ImageAsset:
 
     @property
     def url_ready(self) -> bool:
-        """能不能送进视频接口。视频接口只吃公网 URL。"""
+        """能不能送进视频接口。视频接口只吃公网 URL。
+        🔴 必须已确认（self.status==done）：first_frame 生成 2 候选后 status=pending
+        （等用户点选），此时 url_ready=False 挡住视频/尾帧；choose 后 status=done 才放行。
+        last_frame 用 mark_done 直接置 done，故生成完即 url_ready=True。"""
+        if self.status != ShotStatus.DONE.value:
+            return False
         s = self.selected
-        return s is not None and s.status == ShotStatus.DONE.value and bool(s.url)
+        return s is not None and bool(s.url)
 
     @classmethod
     def from_dict(cls, d: dict) -> "ImageAsset":
