@@ -591,6 +591,13 @@ class ApiClient {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/shot/${encodeURIComponent(shotId)}/video`, { method: 'POST' });
   }
 
+  // 更新镜头字段（link_mode / locked）
+  async updateShot(projectName: string, shotId: string, params: { link_mode?: string; locked?: boolean }): Promise<{ shot_id: string; link_mode?: string; locked?: boolean }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/shot/${encodeURIComponent(shotId)}`, {
+      method: 'PUT', body: JSON.stringify(params),
+    });
+  }
+
   // 单镜配音（TTS -> 反推 num_frames）
   async generateShotAudio(projectName: string, shotId: string, params: { voice?: string; rate?: string; volume?: string; regenerate?: boolean } = {}): Promise<{ task_id: string; shot_id: string }> {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/shot/${encodeURIComponent(shotId)}/audio`, {

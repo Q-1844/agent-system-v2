@@ -28,7 +28,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'storyboard',
         name: 'Storyboard',
-        component: () => import('@/views/storyboard/index.vue'),
+        component: () => import('@/views/storyboard/ShotBoard.vue'),
         meta: { title: '分镜画廊', icon: 'storyboard' }
       },
       {

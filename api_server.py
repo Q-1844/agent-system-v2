@@ -2747,6 +2747,42 @@ async def shot_video(project_name: str, shot_id: str):
         raise HTTPException(500, str(e))
 
 
+class UpdateShotRequest(BaseModel):
+    link_mode: Optional[str] = None
+    locked: Optional[bool] = None
+
+
+@app.put("/api/project/{project_name}/shot/{shot_id}")
+async def update_shot(project_name: str, shot_id: str, req: UpdateShotRequest):
+    """更新镜头创作字段（link_mode / locked），写回 project.json。"""
+    try:
+        controller = get_controller()
+        project_dir = controller.project_manager.get_project_dir(project_name)
+        from src.core.store import ProjectStore
+        from src.core.models import LinkMode
+        valid = {m.value for m in LinkMode}
+        def mut(s):
+            if req.link_mode is not None:
+                if req.link_mode not in valid:
+                    raise ValueError(f"非法 link_mode: {req.link_mode}")
+                s.link_mode = req.link_mode
+            if req.locked is not None:
+                s.locked = req.locked
+        store = ProjectStore(project_dir)
+        if store.load().get_shot(shot_id) is None:
+            raise HTTPException(404, f"镜头 {shot_id} 不存在")
+        store.update_shot(shot_id, mut)
+        return {"shot_id": shot_id, "link_mode": req.link_mode, "locked": req.locked}
+    except FileNotFoundError:
+        raise HTTPException(404, "项目不存在")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
 # ==================== 阶段 3：audio/compose handler + orchestrator + 全局 SSE + 队列接口 ====================
 # audio/compose 复用阶段 2 已有逻辑（_gen_one_audio / VideoComposer.compose_shots），抽成 handler。
 async def _handler_audio(job, emit):
