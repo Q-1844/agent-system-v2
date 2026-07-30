@@ -2685,6 +2685,216 @@ async def shot_video(project_name: str, shot_id: str):
         raise HTTPException(500, str(e))
 
 
+# ==================== 阶段 3：audio/compose handler + orchestrator + 全局 SSE + 队列接口 ====================
+# audio/compose 复用阶段 2 已有逻辑（_gen_one_audio / VideoComposer.compose_shots），抽成 handler。
+async def _handler_audio(job, emit):
+    """单镜配音（TTS -> 反推 num_frames -> 写回）。复用阶段 2 _gen_one_audio。"""
+    from src.core.store import ProjectStore
+    from src.api.edge_tts_client import EdgeTTSClient
+    controller = get_controller()
+    project_dir = controller.project_manager.get_project_dir(job.project)
+    store = ProjectStore(project_dir)
+    shot = store.load().get_shot(job.shot_id)
+    if shot is None:
+        raise RuntimeError(f"镜头 {job.shot_id} 不存在")
+    voice = job.params.get("voice", "default")
+    rate = job.params.get("rate", "+0%")
+    volume = job.params.get("volume", "+0%")
+    fps = _fps_from_config()
+    await emit("tts", f"{shot.shot_id} 配音中", 10)
+    tts = EdgeTTSClient()
+    _sid, res, timing, err = await _gen_one_audio(
+        tts, project_dir, job.shot_id, shot.dialogue, voice, rate, volume, fps)
+    if err:
+        raise RuntimeError(err)
+    store.update_shot(job.shot_id,
+                      lambda sh: _apply_audio_to_shot(sh, res, timing, voice, rate))
+    msg = f"{shot.shot_id} 配音完成 num_frames={timing.num_frames}"
+    if timing.needs_split:
+        msg += f"（⚠️ 建议拆为 {timing.suggested_splits} 镜）"
+    await emit("done", msg, 100)
+
+
+async def _handler_compose(job, emit):
+    """最终合成（concat->整音轨->烧SRT，Ken Burns 兜底）。在线程内跑 ffmpeg，不阻塞事件循环。"""
+    from src.core.store import ProjectStore
+    from src.pipeline.video_composer import VideoComposer
+    from src.utils.file_saver import FileSaver
+    controller = get_controller()
+    project_dir = controller.project_manager.get_project_dir(job.project)
+    project = ProjectStore(project_dir).load()
+    width = int(job.params.get("width", 1280))
+    height = int(job.params.get("height", 720))
+    fps = int(job.params.get("fps", 24))
+    burn = bool(job.params.get("burn_subtitles", True))
+    composer = VideoComposer(FileSaver(project_dir))
+    await emit("compose", f"开始合成 {project.name}（{width}x{height}@{fps}）", 5)
+    final = await asyncio.to_thread(
+        composer.compose_shots, project,
+        width=width, height=height, fps=fps, burn_subtitles=burn)
+    await emit("done", f"合成完成: {final}", 100)
+
+
+JOB_HANDLERS["audio"] = _handler_audio
+JOB_HANDLERS["compose"] = _handler_compose
+
+
+def _select_shots(p, scope, skip_locked: bool):
+    """orchestrate 范围选择。scope: 'all' | 'pending' | [shot_id,...]。"""
+    shots = p.all_shots()
+    if scope == "pending":
+        sel = [s for s in shots
+               if not (s.first_frame.ready and s.audio.ready
+                       and (s.link_mode != "keyframes" or s.last_frame.ready)
+                       and s.video.ready)]
+    elif isinstance(scope, list):
+        sset = set(scope)
+        sel = [s for s in shots if s.shot_id in sset]
+    else:
+        sel = list(shots)
+    if skip_locked:
+        sel = [s for s in sel if not s.locked]
+    return sel
+
+
+class OrchestrateRequest(BaseModel):
+    stages: List[str] = ["first_frame", "audio", "last_frame", "video", "compose"]
+    scope: Any = "all"        # "all" | "pending" | [shot_id, ...]
+    skip_locked: bool = True
+    dry_run: bool = False
+    voice: str = "default"
+    rate: str = "+0%"
+    volume: str = "+0%"
+    width: int = 1280
+    height: int = 720
+    fps: int = 24
+    burn_subtitles: bool = True
+
+
+@app.post("/api/project/{project_name}/orchestrate")
+async def orchestrate_project(project_name: str, req: OrchestrateRequest):
+    """编排器（替代 /api/run）：内部逐个入队 shot 级 handler，白捡断点续跑。
+    顺序不可调换：first_frame -> audio -> last_frame -> video -> compose。
+    🔴 last_frame/video gate 带 first_frame.url_ready 前置（首帧须已选择）。
+    dry_run 返回视频数量/预计时间/配额消耗，让用户在 1 RPM 现实下预判。"""
+    try:
+        controller = get_controller()
+        project_dir = controller.project_manager.get_project_dir(project_name)
+        from src.core.store import ProjectStore
+        p = ProjectStore(project_dir).load()
+        shots = _select_shots(p, req.scope, req.skip_locked)
+
+        plan: List[tuple] = []
+        if "first_frame" in req.stages:
+            plan += [("first_frame", s.shot_id) for s in shots if not s.first_frame.ready]
+        if "audio" in req.stages:
+            plan += [("audio", s.shot_id) for s in shots
+                     if s.dialogue and not s.audio.ready]
+        if "last_frame" in req.stages:
+            plan += [("last_frame", s.shot_id) for s in shots
+                     if s.link_mode == "keyframes" and not s.last_frame.ready
+                     and s.first_frame.url_ready]
+        if "video" in req.stages:
+            plan += [("video", s.shot_id) for s in shots
+                     if not s.video.ready and s.first_frame.url_ready
+                     and s.video.num_frames > 0]
+
+        n_video = sum(1 for k, _ in plan if k == "video")
+        if req.dry_run:
+            total_seconds = sum(
+                s.video.num_frames / max(s.video.frame_rate, 1) for s in shots
+                if not s.video.ready and s.first_frame.url_ready and s.video.num_frames > 0)
+            return {"dry_run": True, "plan": plan, "plan_count": len(plan),
+                    "video_count": n_video,
+                    "eta_minutes": round(n_video * 70 / 60, 1),
+                    "video_seconds_needed": round(total_seconds, 1)}
+
+        q = get_job_queue()
+        audio_params = {"voice": req.voice, "rate": req.rate, "volume": req.volume}
+        compose_params = {"width": req.width, "height": req.height,
+                          "fps": req.fps, "burn_subtitles": req.burn_subtitles}
+        job_ids = []
+        for kind, sid in plan:
+            if kind == "audio":
+                j = q.submit(project_name, "audio", sid, **audio_params)
+            else:
+                j = q.submit(project_name, kind, sid)
+            job_ids.append(j.job_id)
+        if "compose" in req.stages:
+            job_ids.append(q.submit(project_name, "compose", **compose_params).job_id)
+        return {"dry_run": False, "plan": plan, "plan_count": len(plan),
+                "video_count": n_video, "job_ids": job_ids,
+                "queue": q.stats()}
+    except FileNotFoundError:
+        raise HTTPException(404, "项目不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+# ---- 队列管理接口 + 全局单 SSE ----
+@app.get("/api/project/{project_name}/jobs")
+async def list_project_jobs(project_name: str, state: Optional[str] = None):
+    """列出项目任务（支持 ?state=failed/queued/...）"""
+    return {"jobs": get_job_queue().list_jobs(project=project_name, state=state),
+            "queue": get_job_queue().stats()}
+
+
+@app.get("/api/jobs/stream")
+async def jobs_stream(request: Request, project: Optional[str] = None):
+    """全局单 SSE：一条连接推送所有任务状态变化（替代按任务订阅，避免 6 连接上限卡死）。"""
+    q = get_job_queue()
+    sub = q.subscribe()
+
+    async def gen():
+        try:
+            yield f"event: snapshot\ndata: {json.dumps(q.list_jobs(project), ensure_ascii=False)}\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    payload = await asyncio.wait_for(sub.get(), timeout=15)
+                    if project and payload.get("project") != project:
+                        continue
+                    yield f"event: job\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"   # 防代理超时断流
+        finally:
+            q.unsubscribe(sub)
+
+    return StreamingResponse(
+        gen(), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.post("/api/jobs/{job_id}/cancel")
+async def cancel_job(job_id: str):
+    if not get_job_queue().cancel(job_id):
+        raise HTTPException(400, "任务无法取消（可能已在运行或已完成）")
+    return {"job_id": job_id, "state": "cancelled"}
+
+
+@app.post("/api/jobs/{job_id}/retry")
+async def retry_job(job_id: str):
+    j = get_job_queue().retry(job_id)
+    if j is None:
+        raise HTTPException(400, "任务无法重试（仅 failed/cancelled 可重试）")
+    return {"job_id": job_id, "state": "queued"}
+
+
+@app.post("/api/project/{project_name}/jobs/retry-failed")
+async def retry_failed_jobs(project_name: str):
+    ids = get_job_queue().retry_failed(project_name)
+    return {"retried": ids, "count": len(ids)}
+
+
+@app.delete("/api/project/{project_name}/jobs/finished")
+async def clear_finished_jobs(project_name: str):
+    n = get_job_queue().clear_finished(project_name)
+    return {"cleared": n}
+
+
 @app.post("/api/project/{project_name}/compose")
 async def compose_final_video(
     project_name: str, request: Request, background_tasks: BackgroundTasks
