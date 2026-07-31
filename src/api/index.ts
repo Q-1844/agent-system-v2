@@ -218,72 +218,6 @@ class ApiClient {
     });
   }
 
-  async getProjectProgress(projectName: string): Promise<Record<string, any>> {
-    return this.request(`/api/projects/${projectName}/progress`);
-  }
-
-  async getProjectScenes(projectName: string): Promise<Scene[]> {
-    const data = await this.request<{ scenes: Scene[] }>(
-      `/api/projects/${projectName}/scenes`
-    );
-    return data.scenes;
-  }
-
-  async getProjectCharacters(projectName: string): Promise<Character[]> {
-    const data = await this.request<{ characters: Character[] }>(
-      `/api/projects/${projectName}/characters`
-    );
-    return data.characters;
-  }
-
-  async getProjectOutputs(projectName: string): Promise<ProjectOutputs> {
-    return this.request(`/api/projects/${projectName}/outputs`);
-  }
-
-  // 工作流相关
-  async runWorkflow(
-    projectName: string,
-    scriptContent: string,
-    mode: string = 'interactive'
-  ): Promise<{ task_id: string }> {
-    return this.request('/api/run', {
-      method: 'POST',
-      body: JSON.stringify({
-        project_name: projectName,
-        script_content: scriptContent,
-        mode,
-      }),
-    });
-  }
-
-  async getCurrentTask(): Promise<TaskStatus> {
-    return this.request('/api/task/current');
-  }
-
-  async getTaskStatus(taskId: string): Promise<TaskStatus> {
-    return this.request(`/api/task/${taskId}`);
-  }
-
-  // 场景相关
-  async regenerateScene(projectName: string, sceneId: number): Promise<void> {
-    await this.request(`/api/projects/${projectName}/scenes/${sceneId}/regenerate`, {
-      method: 'POST',
-    });
-  }
-
-  async confirmScene(projectName: string, sceneId: number): Promise<void> {
-    await this.request(`/api/projects/${projectName}/scenes/${sceneId}/confirm`, {
-      method: 'POST',
-    });
-  }
-
-  // 角色相关
-  async regenerateCharacter(projectName: string, characterName: string): Promise<void> {
-    await this.request(`/api/projects/${projectName}/characters/${encodeURIComponent(characterName)}/regenerate`, {
-      method: 'POST',
-    });
-  }
-
   // ============ 角色生成（独立操作） ============
 
   // 单视角生成 + 抠图
@@ -375,26 +309,6 @@ class ApiClient {
     return this.request('/api/character/regenerate-view', {
       method: 'POST',
       body: JSON.stringify(params),
-    });
-  }
-
-  // 动画相关
-  async regenerateAnimation(projectName: string, fromScene: number, toScene: number): Promise<void> {
-    await this.request(`/api/projects/${projectName}/animations/${fromScene}/${toScene}/regenerate`, {
-      method: 'POST',
-    });
-  }
-
-  // 音频相关
-  async generateAllAudio(projectName: string): Promise<void> {
-    await this.request(`/api/projects/${projectName}/audio/generate`, {
-      method: 'POST',
-    });
-  }
-
-  async regenerateAudio(projectName: string, sceneId: number): Promise<void> {
-    await this.request(`/api/projects/${projectName}/audio/${sceneId}/regenerate`, {
-      method: 'POST',
     });
   }
 
@@ -529,29 +443,6 @@ class ApiClient {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/script`, {
       method: 'POST',
       body: JSON.stringify({ script_content: scriptContent, enhance }),
-    });
-  }
-
-  // 单场景分镜生成（自动取场景角色 front 图作参考，后台任务）
-  async generateSceneStoryboard(projectName: string, sceneId: number): Promise<{ task_id: string; message: string }> {
-    return this.request(`/api/project/${encodeURIComponent(projectName)}/scene/${sceneId}/generate-storyboard`, {
-      method: 'POST',
-    });
-  }
-
-  // 单场景音频生成（支持 voice/speed，让前端 TTS 设置生效）
-  async generateSceneAudio(projectName: string, sceneId: number, params: { voice?: string; speed?: number } = {}): Promise<{ task_id: string; message: string }> {
-    return this.request(`/api/project/${encodeURIComponent(projectName)}/audio/${sceneId}/generate`, {
-      method: 'POST',
-      body: JSON.stringify(params),
-    });
-  }
-
-  // 合成最终视频（ffmpeg，后台任务）
-  async composeVideo(projectName: string, params: { scene_duration?: number; width?: number; height?: number; fps?: number } = {}): Promise<{ task_id: string; message: string }> {
-    return this.request(`/api/project/${encodeURIComponent(projectName)}/compose`, {
-      method: 'POST',
-      body: JSON.stringify(params),
     });
   }
 
