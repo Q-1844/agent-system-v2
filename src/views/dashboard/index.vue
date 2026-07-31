@@ -6,8 +6,8 @@
         <p class="subtitle">AI-powered animation workflow</p>
       </div>
       <div class="header-actions">
-        <button class="btn btn-primary" @click="startWorkflow" :disabled="isRunning">
-          {{ isRunning ? '运行中...' : '开始生成' }}
+        <button class="btn btn-primary" @click="goScriptEditor">
+          从剧本开始
         </button>
       </div>
     </div>
@@ -126,18 +126,21 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue';
 import { storeToRefs } from 'pinia';
+import { useRouter } from 'vue-router';
 import { useProjectStore } from '@/store';
 import { useJobStore } from '@/store/jobs';
 import { getImageUrl } from '@/utils/media';
 
 const store = useProjectStore();
 const jobStore = useJobStore();
+const router = useRouter();
 const queue = computed(() => jobStore.queue);
 const jobConnected = computed(() => jobStore.connected);
 // 使用 storeToRefs 保持响应性
 const { scenes, stats, taskStatus, projectName } = storeToRefs(store);
 
-const isRunning = computed(() => taskStatus.value.status === 'running');
+// 引导到剧本编辑器：新管线流程入口（剧本 -> 角色 -> 分镜 -> 导出，分步非一键）
+const goScriptEditor = () => router.push('/script-editor');
 
 const progressPercent = computed(() => {
   if (stats.value.total === 0) return 0;
@@ -162,28 +165,6 @@ const getStatusLabel = (status: string) => {
     case 'skipped': return 'Skipped';
     default: return 'Pending';
   }
-};
-
-const startWorkflow = async () => {
-  const scriptContent = `
-project: "${projectName.value}"
-style: "${store.style}"
-size: "${store.size}"
-
-characters:
-${store.characters.map(c => `  - name: "${c.name}"
-    description: "${c.description}"`).join('\n')}
-
-scenes:
-${store.scenes.map(s => `  - id: ${s.id}
-    description: "${s.description}"
-    characters: ${JSON.stringify(s.characters)}
-    camera: "${s.camera}"
-    lighting: "${s.lighting}"
-    motion: "${s.motion}"${s.dialogue ? `\n    dialogue: "${s.dialogue}"` : ''}`).join('\n')}
-  `;
-
-  await store.runWorkflow(scriptContent);
 };
 
 onMounted(() => {
