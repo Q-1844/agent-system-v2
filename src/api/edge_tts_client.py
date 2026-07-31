@@ -110,31 +110,3 @@ class EdgeTTSClient:
     @staticmethod
     def list_voices() -> List[dict]:
         return [{"id": k, "voice": v} for k, v in VOICES.items()]
-
-    # ---------- v1 垫片：返回 bytes（无词级时间戳）----------
-    # DEPRECATED-SHIM: remove in phase 5. 新代码请用 synthesize_full。
-    async def synthesize(self, text: str, voice: str = "default",
-                         speed: float = 1.0) -> bytes:
-        """【向后兼容】返回 mp3 bytes，无词级时间戳。tts_gen（v1 管线）在用。"""
-        _shim_warn()
-        if not self._available:
-            raise RuntimeError("edge-tts 未安装，请运行: pip install edge-tts")
-        voice_id = VOICES.get(voice, voice) if voice else "zh-CN-XiaoxiaoNeural"
-        # speed 1.0 -> "+0%", 1.5 -> "+50%", 0.8 -> "-20%"
-        rate_pct = int(round((speed - 1.0) * 100))
-        rate = f"+{rate_pct}%" if rate_pct >= 0 else f"{rate_pct}%"
-        audio, _ = await self._stream(text, voice_id, rate=rate)
-        logger.info("Edge TTS(v1垫片) 合成成功: %d 字节, voice=%s, rate=%s",
-                    len(audio), voice_id, rate)
-        return audio
-
-
-_shim_warned = False
-def _shim_warn():
-    global _shim_warned
-    if not _shim_warned:
-        _shim_warned = True
-        msg = "EdgeTTSClient.synthesize 是 v1 垫片，将在阶段 5 移除；新代码请用 synthesize_full。"
-        logger.warning(msg)
-        import warnings as _w
-        _w.warn(msg, DeprecationWarning, stacklevel=3)

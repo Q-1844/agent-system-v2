@@ -352,46 +352,17 @@ class AgnesClient:
         return str(dest)
 
     # ===================== 向后兼容垫片（旧调用方仍可用） =====================
-    # DEPRECATED-SHIM: remove in phase 5. 以下 understand_text / generate_video
-    # 及 generate_image 的 legacy size=/data 兼容层均为旧调用方保留；新代码禁止走垫片。
+    # DEPRECATED-SHIM: 阶段 5 本轮保留 understand_text 及 generate_image 的 legacy size=/data
+    # 兼容层（垫片1/2 角色页面接口仍在用、垫片3 script_parser 仍在用）；随 agnes_client
+    # 单例化（下轮 ③ 拆分）一并清理。垫片4 generate_video / 垫片5 edge_tts.synthesize 已删。
     async def understand_text(self, prompt: str, **kwargs) -> str:
-        """【向后兼容】旧名，等价于 chat。evaluator / script_parser 仍在用。"""
+        """【向后兼容】旧名，等价于 chat。script_parser 仍在用。"""
         _shim_warn("understand_text")
         return await self.chat(
             [{"role": "user", "content": prompt}],
             temperature=kwargs.get("temperature", 0.7),
             max_tokens=kwargs.get("max_tokens", 4096),
         )
-
-    # DEPRECATED-SHIM: remove in phase 5. 新代码请用 create_video() + poll_video()。
-    async def generate_video(self, prompt: str, image_refs: List[str],
-                             mode: str = "keyframes", **kwargs) -> dict:
-        """【向后兼容】旧名：提交 + 轮询一步到位，返回旧形状 dict。
-        animation_gen 仍在用：result["status" / "remixed_from_video_id" / "seconds"]。
-        旧 mode: "keyframes" / "ti2vid"。image_refs 为 URL 列表（旧代码传本地路径，
-        阶段 3 会用 ImageHost 修正）。"""
-        _shim_warn("generate_video")
-        num_frames = kwargs.get("num_frames", 121)
-        frame_rate = kwargs.get("frame_rate", 24)
-        new_mode = "keyframes" if mode == "keyframes" else "i2v"
-        created = await self.create_video(
-            prompt, mode=new_mode,
-            image_urls=image_refs if new_mode == "keyframes" else None,
-            image_url=(image_refs[0] if image_refs else None) if new_mode == "i2v" else None,
-            num_frames=num_frames, frame_rate=frame_rate,
-        )
-        video_id = created.get("video_id") or created.get("task_id") or created.get("id")
-        if not video_id:
-            raise AgnesError(f"视频任务创建无 video_id: {created}")
-        polled = await self.poll_video(video_id)
-        # 返回旧形状：status / remixed_from_video_id / seconds / size
-        return {
-            "status": "completed",
-            "remixed_from_video_id": polled["url"],
-            "seconds": polled["seconds"],
-            "size": polled["size"],
-            "video_id": video_id,
-        }
 
 
 async def _maybe_await(x):
