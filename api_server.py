@@ -79,10 +79,12 @@ from routers import system  # noqa: E402
 from routers import projects  # noqa: E402
 from routers import script  # noqa: E402
 from routers import characters  # noqa: E402
+from routers import compose  # noqa: E402
 app.include_router(system.router)
 app.include_router(projects.router)
 app.include_router(script.router)
 app.include_router(characters.router)
+app.include_router(compose.router)
 
 
 @app.on_event("startup")
@@ -1170,28 +1172,7 @@ async def _handler_audio(job, emit):
     await emit("done", msg, 100)
 
 
-async def _handler_compose(job, emit):
-    """最终合成（concat->整音轨->烧SRT，Ken Burns 兜底）。在线程内跑 ffmpeg，不阻塞事件循环。"""
-    from src.core.store import ProjectStore
-    from src.pipeline.video_composer import VideoComposer
-    from src.utils.file_saver import FileSaver
-    controller = get_controller()
-    project_dir = controller.project_manager.get_project_dir(job.project)
-    project = ProjectStore(project_dir).load()
-    width = int(job.params.get("width", 1280))
-    height = int(job.params.get("height", 720))
-    fps = int(job.params.get("fps", 24))
-    burn = bool(job.params.get("burn_subtitles", True))
-    composer = VideoComposer(FileSaver(project_dir))
-    await emit("compose", f"开始合成 {project.name}（{width}x{height}@{fps}）", 5)
-    final = await asyncio.to_thread(
-        composer.compose_shots, project,
-        width=width, height=height, fps=fps, burn_subtitles=burn)
-    await emit("done", f"合成完成: {final}", 100)
-
-
 JOB_HANDLERS["audio"] = _handler_audio
-JOB_HANDLERS["compose"] = _handler_compose
 
 
 def _select_shots(p, scope, skip_locked: bool):
@@ -1350,62 +1331,6 @@ async def retry_failed_jobs(project_name: str):
 async def clear_finished_jobs(project_name: str):
     n = get_job_queue().clear_finished(project_name)
     return {"cleared": n}
-
-
-@app.post("/api/project/{project_name}/compose-shots")
-async def compose_shots_video(project_name: str, request: Request,
-                              background_tasks: BackgroundTasks):
-    """阶段 2 shot 级合成（concat->整音轨->烧全片SRT，Ken Burns 兜底，无逐镜偏移）"""
-    try:
-        controller = get_controller()
-        project_dir = controller.project_manager.get_project_dir(project_name)
-        try:
-            body = await request.json()
-        except Exception:
-            body = {}
-        width = int(body.get("width", 1280))
-        height = int(body.get("height", 720))
-        fps = int(body.get("fps", 24))
-        burn = bool(body.get("burn_subtitles", True))
-        task_id = _new_task("compose")
-        background_tasks.add_task(
-            _compose_shots_bg, task_id, str(project_dir), width, height, fps, burn
-        )
-        return {"task_id": task_id, "message": "shot 级合成已启动"}
-    except FileNotFoundError:
-        raise HTTPException(404, "项目不存在")
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(500, str(e))
-
-
-async def _compose_shots_bg(task_id, project_dir, width, height, fps, burn):
-    from src.core.store import ProjectStore
-    from src.pipeline.video_composer import VideoComposer
-    from src.utils.file_saver import FileSaver
-    task_store[task_id]["status"] = "running"
-    task_store[task_id]["message"] = "合成中..."
-    try:
-        project = ProjectStore(Path(project_dir)).load()
-        composer = VideoComposer(FileSaver(Path(project_dir)))
-
-        def on_progress(msg, pct):
-            task_store[task_id]["message"] = msg
-            if pct is not None:
-                task_store[task_id]["progress"] = {"percent": pct}
-
-        final = composer.compose_shots(project, width=width, height=height,
-                                       fps=fps, burn_subtitles=burn,
-                                       on_progress=on_progress)
-        task_store[task_id]["status"] = "completed"
-        task_store[task_id]["result"] = {"video_path": str(final)}
-        task_store[task_id]["message"] = "合成完成"
-        logger.info(f"shot 级合成完成: {final}")
-    except Exception as e:
-        task_store[task_id]["status"] = "failed"
-        task_store[task_id]["message"] = f"失败: {e}"
-        logger.error(f"shot 级合成失败: {e}")
 
 
 # ============ 分镜生成测试接口 ============
