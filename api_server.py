@@ -68,6 +68,10 @@ app.add_middleware(
 # 全局状态、任务队列单例、重新托管单例、任务存储、getter、请求模型统已在 deps.py
 # （pipeline_controller / job_queue / _rehost_host 用 deps.X 属性访问，见顶部 import 注释）。
 
+# ============ 路由挂载（阶段5③拆分：各域路由在 routers/，按 PHASE_5 §5.2 顺序逐步搬入）============
+from routers import system  # noqa: E402
+app.include_router(system.router)
+
 
 @app.on_event("startup")
 async def startup():
@@ -175,36 +179,6 @@ def _job_target_exists(project: Optional[str], shot_id: Optional[str]) -> bool:
     return True
 
 
-@app.get("/")
-async def root():
-    """根路径 - 返回简易版前端页面"""
-    html_path = BASE_DIR / "simple.html"
-    if html_path.exists():
-        return FileResponse(str(html_path), media_type="text/html")
-    return {"message": "动画分镜工作流 API", "version": "1.0.0"}
-
-
-@app.get("/api/health")
-async def health_check():
-    """健康检查"""
-    return {
-        "status": "ok" if deps.pipeline_controller else "degraded",
-        "controller_ready": deps.pipeline_controller is not None,
-    }
-
-
-@app.get("/api/system/limits")
-async def system_limits():
-    """返回限流器各桶状态与每日配额用量（供前端排队面板展示）。
-    阶段 1 新增只读接口，不改任何现有接口。"""
-    from src.core.rate_limiter import RateLimiter
-    from src.core.quota import QuotaLedger
-    return {
-        "limits": RateLimiter.get().snapshot(),
-        "quota": QuotaLedger.get_default().snapshot(),
-    }
-
-
 @app.get("/character-test")
 async def character_test_page():
     """角色三视图测试页"""
@@ -301,39 +275,6 @@ async def generate_image_base64(request: Request):
         raise HTTPException(500, str(e))
 
 
-@app.get("/api/image/{project_name}/{category}/{filename}")
-async def serve_image(project_name: str, category: str, filename: str):
-    """提供图片文件服务（带CORS支持）"""
-    try:
-        image_path = projects_dir / project_name / "output" / category / filename
-        if not image_path.exists():
-            raise HTTPException(status_code=404, detail="图片不存在")
-
-        # 根据文件扩展名确定媒体类型
-        ext = image_path.suffix.lower()
-        media_types = {
-            ".png": "image/png",
-            ".jpg": "image/jpeg",
-            ".jpeg": "image/jpeg",
-            ".gif": "image/gif",
-            ".webp": "image/webp",
-        }
-        media_type = media_types.get(ext, "application/octet-stream")
-
-        return FileResponse(
-            path=str(image_path),
-            media_type=media_type,
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Cache-Control": "public, max-age=3600",
-            },
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.get("/api/projects")
 async def list_projects():
     """列出所有项目"""
@@ -356,20 +297,6 @@ async def create_project(name: str):
         return {"message": "项目已创建", "path": str(project_dir)}
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ============ 设置操作 ============
-
-@app.put("/api/settings")
-async def update_settings(settings: dict):
-    """更新全局设置"""
-    try:
-        # 这里可以将设置保存到文件
-        # 暂时只返回成功
-        logger.info(f"设置已更新: {settings}")
-        return {"message": "设置已更新"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
