@@ -138,7 +138,7 @@ async function handleExport() {
   if (exporting.value) return;
   exporting.value = true;
   try {
-    const r: any = await apiClient.composeVideo(projectName.value, {});
+    const r: any = await apiClient.composeShots(projectName.value, {});
     subscribeTask(r.task_id, (s: any) => {
       if (s.status === 'completed') {
         exporting.value = false;
