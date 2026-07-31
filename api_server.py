@@ -40,27 +40,21 @@ from pydantic import BaseModel
 
 from src.pipeline.controller import PipelineController
 from src.utils.project_manager import ProjectManager
-from src.utils.logger import setup_logger
 
-logger = setup_logger("api_server")
+# 共享状态/单例/getter/配置/路径都在 deps（阶段5③拆分：避免 api_server <-> router 循环导入）。
+# 🔴 reassigned 单例（pipeline_controller/job_queue/_rehost_host）用 deps.X 属性访问，
+#    不能 from deps import（会绑死 import 时的 None，startup 赋值后看不到）。
+import deps
+from deps import (
+    logger, BASE_DIR, projects_dir, _APP_CFG, _AGNES_PROXY,
+    JOB_HANDLERS, task_store, current_task, task_progress,
+    get_controller, get_job_queue, get_rehost_host, _new_task,
+)
 
 app = FastAPI(title="动画分镜工作流 API", version="1.0.0")
 
-# 使用绝对路径确保静态文件正确加载
-BASE_DIR = Path(__file__).parent
-projects_dir = BASE_DIR / "projects"
-projects_dir.mkdir(parents=True, exist_ok=True)
+# 静态文件挂载（projects_dir / BASE_DIR / 配置 / 单例 / getter 都在 deps.py）
 app.mount("/projects", StaticFiles(directory=str(projects_dir)), name="projects")
-
-# 全局配置（从 config.yaml 读取；Agnes 在 Cloudflare 后，国内需代理。Clash 默认 7890）
-_AGNES_PROXY = None
-_APP_CFG: dict = {}
-try:
-    import yaml as _yaml
-    _APP_CFG = _yaml.safe_load((BASE_DIR / "config" / "config.yaml").read_text(encoding="utf-8")) or {}
-    _AGNES_PROXY = (_APP_CFG.get("agnes") or {}).get("proxy") or None
-except Exception as _e:
-    logger.warning(f"读取配置失败: {_e}")
 
 # 允许跨域
 app.add_middleware(
@@ -71,63 +65,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 全局状态
-pipeline_controller = None
-current_task = None
-task_progress = {}
-
-# ============ 阶段 3：全局任务队列 ============
-# JOB_HANDLERS 是可变 dict，各 handler 定义处注册（first_frame/last_frame/audio/video/compose）。
-# startup 时用它在 cache/jobs.json 上构造 JobQueue 并启动 worker（1 视频串行 + 3 轻任务并发）。
-JOB_HANDLERS: dict = {}
-job_queue = None  # JobQueue 单例，startup 中创建
-
-
-def get_job_queue():
-    """安全获取全局队列。未就绪返回 503。"""
-    if job_queue is None:
-        raise HTTPException(503, "任务队列未就绪（服务启动中）")
-    return job_queue
-
-
-# 重新托管单例（imgbb：把本地首帧托管成公网 URL，100% 保真）
-_rehost_host = None
-def get_rehost_host():
-    """安全获取重新托管 ImageHost（imgbb 单例）。未就绪返回 503。
-    🔴 imgbb 实测唯一可用方案（2026-07-31）：上传原字节 100% 保真，Agnes 服务端能下载。
-    用于把 v1 迁移的本地首帧（local有/url空）补公网 URL（/first-frame/rehost + video preflight 自动调用）。
-    按文件哈希缓存（cache/imgbb_cache.json），上传失败明示抛错不静默回落。"""
-    global _rehost_host
-    if _rehost_host is None:
-        from src.core.image_host import ImgbbHost
-        ih = (_APP_CFG.get("image_host") or {}).get("imgbb") or {}
-        key = ih.get("api_key", "")
-        if "${IMGBB_API_KEY}" in str(key):
-            key = os.environ.get("IMGBB_API_KEY", "")
-        _rehost_host = ImgbbHost(key, ih.get("expiration", 0),
-                                 cache_path=str(BASE_DIR / "cache" / "imgbb_cache.json"))
-    return _rehost_host
-
-
-class ScriptRequest(BaseModel):
-    """剧本请求"""
-    project_name: str
-    script_content: str
-    mode: str = "interactive"
-
-
-class TaskStatus(BaseModel):
-    """任务状态"""
-    task_id: str
-    status: str  # pending, running, completed, failed
-    progress: dict
-    message: str
+# 全局状态、任务队列单例、重新托管单例、任务存储、getter、请求模型统已在 deps.py
+# （pipeline_controller / job_queue / _rehost_host 用 deps.X 属性访问，见顶部 import 注释）。
 
 
 @app.on_event("startup")
 async def startup():
     """启动时初始化"""
-    global pipeline_controller
     try:
         # 先初始化限流器与配额单例（用 config 的值），再创建 PipelineController
         # （其 AgnesClient 会复用这两个进程级单例）
@@ -139,7 +83,7 @@ async def startup():
                                 limits=_APP_CFG.get("quota"))
 
         config_path = os.path.join(os.path.dirname(__file__), "config", "config.yaml")
-        pipeline_controller = PipelineController(config_path)
+        deps.pipeline_controller = PipelineController(config_path)
         logger.info("API服务器已启动")
     except Exception as e:
         logger.error(f"初始化失败: {e}")
@@ -149,29 +93,18 @@ async def startup():
     _init_default_characters()
 
     # 阶段 3：启动全局任务队列 + 崩溃恢复（恢复在后台跑，不阻塞服务就绪）
-    global job_queue
     try:
         from src.core.job_queue import JobQueue
-        job_queue = JobQueue(BASE_DIR / "cache" / "jobs.json", JOB_HANDLERS)
+        deps.job_queue = JobQueue(BASE_DIR / "cache" / "jobs.json", JOB_HANDLERS)
         # 🔴 清理孤儿 job（project/shot 已删除的 running/queued）--在 start route 前，孤儿不进 worker
-        purged = job_queue.purge_orphans(_job_target_exists)
+        purged = deps.job_queue.purge_orphans(_job_target_exists)
         if purged:
             logger.info(f"启动时清理 {purged} 个孤儿 job")
-        await job_queue.start()
+        await deps.job_queue.start()
         asyncio.create_task(recover_pending_videos())
         logger.info("全局任务队列已就绪")
     except Exception as e:
         logger.error(f"任务队列初始化失败: {e}")
-
-
-def get_controller():
-    """安全获取控制器"""
-    if pipeline_controller is None:
-        raise HTTPException(
-            status_code=503,
-            detail="服务未就绪，Pipeline控制器初始化失败。请检查配置文件和API密钥。"
-        )
-    return pipeline_controller
 
 
 async def recover_pending_videos():
@@ -179,7 +112,7 @@ async def recover_pending_videos():
     的镜头先 poll_video 查一次，不盲目重提交（省 60s + 不重扣配额）。
     已完成 -> 下载入库；仍在跑/失效 -> 标 queued 并入队由 video handler 续轮询。"""
     try:
-        controller = pipeline_controller
+        controller = deps.pipeline_controller
         if controller is None:
             return
         from src.core.store import ProjectStore
@@ -213,8 +146,8 @@ async def recover_pending_videos():
                     logger.warning(f"恢复 {sh.shot_id} 未完成（{e}），重新入队续轮询")
                     store.update_shot(sh.shot_id,
                                       lambda s: setattr(s.video, "status", "queued"))
-                    if "video" in JOB_HANDLERS and job_queue is not None:
-                        job_queue.submit(p.name, "video", sh.shot_id)
+                    if "video" in JOB_HANDLERS and deps.job_queue is not None:
+                        deps.job_queue.submit(p.name, "video", sh.shot_id)
     except Exception as e:
         logger.error(f"recover_pending_videos 失败: {e}")
 
@@ -224,7 +157,7 @@ def _job_target_exists(project: Optional[str], shot_id: Optional[str]) -> bool:
     无 project 的 job（如全局 compose）不算孤儿；controller 未就绪时不误清。"""
     if not project:
         return True
-    ctrl = pipeline_controller
+    ctrl = deps.pipeline_controller
     if ctrl is None:
         return True
     try:
@@ -255,8 +188,8 @@ async def root():
 async def health_check():
     """健康检查"""
     return {
-        "status": "ok" if pipeline_controller else "degraded",
-        "controller_ready": pipeline_controller is not None,
+        "status": "ok" if deps.pipeline_controller else "degraded",
+        "controller_ready": deps.pipeline_controller is not None,
     }
 
 
@@ -1720,8 +1653,8 @@ async def split_shot_dialogue(project_name: str, shot_id: str, req: SplitDialogu
         # 🔴 O 已有首帧（url_ready）时立即入队 O 的尾帧（生成后桥接拷贝给 O2 首帧，保证 O->O2 无缝）；
         #    O 还没首帧则不入队（orchestrator 顺序保证 first_frame -> last_frame）。
         enqueued = None
-        if shot.first_frame.url_ready and job_queue is not None:
-            enqueued = job_queue.submit(project_name, "last_frame", shot.shot_id).job_id
+        if shot.first_frame.url_ready and deps.job_queue is not None:
+            enqueued = deps.job_queue.submit(project_name, "last_frame", shot.shot_id).job_id
         return {"split_into": len(segs),
                 "shot_ids": [sh.shot_id for sh in split_chain],
                 "link_mode": "keyframes",
