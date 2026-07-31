@@ -49,6 +49,7 @@ from deps import (
     logger, BASE_DIR, projects_dir, _APP_CFG, _AGNES_PROXY,
     JOB_HANDLERS, task_store, current_task, task_progress,
     get_controller, get_job_queue, get_rehost_host, _new_task,
+    _read_parsed_script, _write_parsed_script,
 )
 
 app = FastAPI(title="动画分镜工作流 API", version="1.0.0")
@@ -71,8 +72,10 @@ app.add_middleware(
 # ============ 路由挂载（阶段5③拆分：各域路由在 routers/，按 PHASE_5 §5.2 顺序逐步搬入）============
 from routers import system  # noqa: E402
 from routers import projects  # noqa: E402
+from routers import script  # noqa: E402
 app.include_router(system.router)
 app.include_router(projects.router)
+app.include_router(script.router)
 
 
 @app.on_event("startup")
@@ -1073,23 +1076,6 @@ class UpdateProjectCharacterRequest(BaseModel):
     new_name: Optional[str] = None
 
 
-def _read_parsed_script(project_dir: Path) -> dict:
-    """读取项目 parsed_script.json，不存在返回空结构"""
-    script_file = project_dir / "output" / "parsed_script.json"
-    if script_file.exists():
-        with open(script_file, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {"project": {}, "characters": [], "scenes": []}
-
-
-def _write_parsed_script(project_dir: Path, data: dict):
-    """写入项目 parsed_script.json"""
-    script_file = project_dir / "output" / "parsed_script.json"
-    script_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(script_file, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-
 @app.post("/api/project/{project_name}/character/bind")
 async def bind_character_to_project(project_name: str, req: BindCharacterRequest):
     """
@@ -1230,68 +1216,6 @@ async def get_project_characters_full(project_name: str):
 
 
 # ============ 剧本编辑（保存 YAML + 解析 -> parsed_script.json）============
-
-class SaveScriptRequest(BaseModel):
-    script_content: str
-    enhance: bool = False  # 是否用AI增强场景描述（需Agnes，慢）
-
-
-@app.post("/api/project/{project_name}/script")
-async def save_project_script(project_name: str, req: SaveScriptRequest):
-    """保存剧本YAML并解析为 parsed_script.json（保留已有生成结果与角色参考图）"""
-    try:
-        controller = get_controller()
-        project_dir = controller.project_manager.get_project_dir(project_name)
-
-        input_dir = project_dir / "input"
-        input_dir.mkdir(parents=True, exist_ok=True)
-        script_path = input_dir / f"{project_name}.yaml"
-        script_path.write_text(req.script_content, encoding="utf-8")
-
-        from src.pipeline.script_parser import ScriptParser
-        parser = ScriptParser(controller.agnes_client)
-        parsed = await parser.parse(str(script_path))
-
-        # 保留已有场景生成结果
-        existing = _read_parsed_script(project_dir)
-        existing_scenes = {s["id"]: s for s in existing.get("scenes", [])}
-        for scene in parsed.get("scenes", []):
-            sid = scene.get("id")
-            if sid in existing_scenes:
-                old = existing_scenes[sid]
-                for key in ("image_path", "score", "audio_path", "subtitle_path",
-                            "video_path", "status", "transitions", "enhanced_prompt"):
-                    if key in old and key not in scene:
-                        scene[key] = old[key]
-                if old.get("status") == "completed":
-                    scene["status"] = "completed"
-        # 保留已有角色 reference_images（角色页绑定的图不丢）
-        existing_chars = {c["name"]: c for c in existing.get("characters", [])}
-        for char in parsed.get("characters", []):
-            if char["name"] in existing_chars and existing_chars[char["name"]].get("reference_images"):
-                char["reference_images"] = existing_chars[char["name"]]["reference_images"]
-
-        if req.enhance:
-            parsed = await parser.enhance_descriptions(parsed)
-
-        _write_parsed_script(project_dir, parsed)
-        logger.info(f"剧本已保存: {project_name}, 角色{len(parsed.get('characters', []))} 场景{len(parsed.get('scenes', []))}")
-        return {
-            "success": True,
-            "characters_count": len(parsed.get("characters", [])),
-            "scenes_count": len(parsed.get("scenes", [])),
-            "message": "剧本已保存并解析",
-        }
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="项目不存在")
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"剧本格式错误: {e}")
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"保存剧本失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
 
 # ==================== 阶段 2：配音前置（shot 级）====================
 # 配音在视频之前：TTS 拿真实音频时长 -> plan_shot_timing 反推 num_frames -> 写回。

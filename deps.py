@@ -11,6 +11,7 @@ getter（get_controller / get_job_queue / get_rehost_host）读取本模块 glob
 dict 单例（JOB_HANDLERS / task_store / task_progress）只 mutate 不 reassign，`from deps import` 安全。
 """
 import os
+import json
 import uuid
 from pathlib import Path
 
@@ -95,6 +96,24 @@ def _new_task(task_type: str) -> str:
     tid = f"{task_type}_{uuid.uuid4().hex[:8]}"
     task_store[tid] = {"status": "pending", "progress": {}, "message": "", "result": None}
     return tid
+
+
+# ============ parsed_script.json 读写（script + characters 共用）============
+def _read_parsed_script(project_dir: Path) -> dict:
+    """读取项目 parsed_script.json，不存在返回空结构"""
+    script_file = project_dir / "output" / "parsed_script.json"
+    if script_file.exists():
+        with open(script_file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {"project": {}, "characters": [], "scenes": []}
+
+
+def _write_parsed_script(project_dir: Path, data: dict):
+    """写入项目 parsed_script.json"""
+    script_file = project_dir / "output" / "parsed_script.json"
+    script_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(script_file, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
 
 # ============ 保留的旧请求/状态模型（纯搬运；阶段5③-b 再清死代码）============
