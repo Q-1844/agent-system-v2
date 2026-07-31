@@ -31,28 +31,6 @@ agnes:
     polling_interval: 5   # 🔴 从 10 改为 5（官方建议）
     max_wait: 3600
 
-  # 旧 settings 块保留：character_gen / storyboard_gen 仍读取
-  # （阶段 5 清理时随旧管线一并移除）
-  settings:
-    image:
-      size: "1152x768"
-      response_format: "url"
-      num_candidates: 3
-      quality_threshold: 7.0
-      max_retries: 5          # 最大重试次数
-      timeout: 300            # 单次请求超时: 5分钟
-
-    character_sheet:
-      size: "1792x1024"       # 角色设定图：横版，三个视角并排
-      num_candidates: 2       # 角色设定图候选数（减少API调用）
-      quality_threshold: 7.0
-
-    video:
-      num_frames: 121
-      frame_rate: 24
-      polling_interval: 10    # 旧值，保留供旧管线读取；新代码用 agnes.video.polling_interval
-      max_polling_retries: 360  # 最大轮询次数: 360次 × 10秒 = 60分钟
-
 # ImageHost：把本地图片变成 Agnes 服务端能访问的公网 URL。
 # 🔴 默认 imgbb（2026-07-31 实测唯一可用方案：Agnes .cn 服务端能下载 imgbb URL，i2v 成功）。
 #    imgbb 上传原字节 100% 保真，URL 长期有效（吻合 project.json 持久化 + 崩溃恢复设计）。

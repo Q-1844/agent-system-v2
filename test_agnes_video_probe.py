@@ -35,8 +35,8 @@ agnes = config["agnes"]
 base_url = agnes["base_url"].rstrip("/")
 api_key = os.environ.get("AGNES_API_KEY", "")
 video_model = agnes["models"]["video"]
-num_frames = agnes["settings"]["video"]["num_frames"]
-frame_rate = agnes["settings"]["video"]["frame_rate"]
+num_frames = 121  # 阶段5：旧 agnes.settings 块已删，新代码用 snap_num_frames（默认 121）
+frame_rate = agnes["video"]["frame_rate"]
 
 print(f"[INFO] base_url={base_url}")
 print(f"[INFO] api_key={api_key[:12]}... (len={len(api_key)})")
