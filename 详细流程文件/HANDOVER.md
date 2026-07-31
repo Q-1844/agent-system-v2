@@ -110,3 +110,78 @@
 6. GCS URL 复访（本文件第三节）-> 决定 preflight 是否要改
 7. VideoComposer 字幕烧录可考虑自带 CJK 字体（防 ffmpeg 无中文字体）
 8. 回归测试用 `_p4_accept`，全过后删
+
+
+## 八、阶段5②补强（2026-07-31，清空前验证）
+
+### 1. 误删补回验证（逐字段 diff）
+误删发生在 commit 7c88b00（删旧 scene 级接口，python 按行号删范围算错）。补回的 10 个定义对比 ec5a2d4（误删前）vs HEAD（补回后），**逐字段原样一致**：
+- class ShotAudioRequest / class StoryboardRequest / class StoryboardBatchRequest
+- def _build_storyboard_prompt / def _fps_from_config / def _audio_out_path / def _apply_audio_to_shot / async def _gen_one_audio
+- from typing import Any, List / import time as _time
+
+19 passed 0.33s 是补回后跑的结果（非旧结果）。
+
+### 2. 垫片1/2/3 + controller 容器真实依赖清单（③单例化时的检查清单）
+
+#### 垫片1（generate_image size= legacy 入参）+ 垫片2（返回 data 字段）
+被以下接口依赖（size=req.size 入参 + result["data"][0]["url"] 读取）：
+
+**角色页面接口（保留，③迁移到新 API 后删垫片）**：
+- api_server.py:594/599 character_generate_view（/api/character/generate-view）
+- api_server.py:681/687 character_regenerate_view（/api/character/regenerate-view）
+- api_server.py:734/735 character_generate_chain 正面（/api/character/generate-chain）
+- api_server.py:753/755 chain 侧面
+- api_server.py:773/775 chain 背面
+- api_server.py:839/840 character_generate_sheet（/api/character/generate-sheet）
+
+**灰色接口（storyboard/generate 系列，下轮确认用途后处理）**：
+- api_server.py:2620/2627 /api/storyboard/generate
+- api_server.py:2685 /api/storyboard/generate-with-ref
+- api_server.py:2745/2749 /api/storyboard/batch
+
+新管线 first-frame/last-frame/rehost 用新 API（size_tier/ratio + result["url"]，L1873/1918），不走垫片1/2。
+
+#### 垫片3（understand_text -> chat）
+- src/pipeline/script_parser.py:123 `await self.agnes_client.understand_text(prompt)`（剧本解析 enhance_descriptions 用）
+
+#### controller 容器（③单例化时挨个改的检查清单）
+**controller.agnes_client（18 处）**：
+api_server.py: 186, 315, 338, 593, 680, 734, 752, 772, 839, 1427, 1870, 1877, 1915, 1922, 2136, 2174, 2191, 2205
+
+**controller.project_manager（24 处）**：
+api_server.py: 409, 422, 1267, 1321, 1382, 1419, 1534, 1599, 1678, 1743, 1768, 1845, 1898, 1961, 1982, 2016, 2051, 2112, 2224, 2249, 2282, 2311, 2369, 2493
+
+**controller.config**：api_server.py 无引用（grep 零命中）。controller._load_config 设置 self.config 但外部不读，③可删 config 属性。
+
+合计 42 处 controller 引用（agnes_client 18 + project_manager 24）。③单例化 agnes_client + project_manager 后，这 42 处挨个改成 get_agnes_client()/get_project_manager() 依赖注入，即可删 controller 容器。
+
+### 3. 灰色接口调查（本轮不删，结论记录）
+
+灰色接口分两类：
+
+**A. api_server.py 8000 端口的测试路由 + 数据接口**：
+- /character-test (L275), /storyboard-test (L284), /scene-test (L293)：返回测试 HTML 页面
+- /api/generate-image (L302), /api/generate-image-base64 (L325)
+- /api/storyboard/generate (L2590), /generate-with-ref (L2654), /batch (L2712)
+- /api/scene/save (L2889), /scene/list (L2929), /scene/load/{id} (L2949), DELETE /scene/{id}
+
+引用方（独立测试 HTML 页面，通过 8000 端口访问）：
+- character_test.html:259/326 -> /api/generate-image
+- scene_test.html:215 -> /api/generate-image-base64, :279 -> /api/scene/save, :312 -> /api/scene/list
+- storyboard_test.html:255 -> /api/scene/list, :591 -> /api/storyboard/generate
+
+结论：这类灰色接口是**独立测试 HTML 页面的调试后端**，不是主流程。character_test/scene_test/storyboard_test.html 通过 8000 端口的 /character-test 等路由加载，调 generate-image/scene/save 等接口调试角色/场景/分镜生成。主前端（7777）不调。下轮确认是否保留这些测试页面（保留则接口留，删则接口删）。
+
+**B. test_segmentation 独立测试服务器（8765 端口，与 api_server 8000 无关）**：
+- test_segmentation.html + test_segmentation_server.py
+- 最后修改：07d9788（docs: 同步 .cn 入口）+ 085646d（重构前基线）
+- test_segmentation_server.py:349 服务 test_segmentation.html，独立 8765 端口
+- test_segmentation.html:697 提示 "python test_segmentation_server.py"
+
+结论：test_segmentation 是**独立抠图方法对比测试服务器**（8765），与 api_server 8000 完全无关。本轮不动，下轮确认是否保留。
+
+### 未查明/待人工确认
+- character_test/scene_test/storyboard_test.html 这三个测试页面是否还在用（用户调试习惯）。如果不用，灰色接口 A 类可删。
+- test_segmentation 独立服务器是否还用（抠图对比测试）。如果不用，可删。
+- 这两类都不影响主流程，删除代价是"以后没法调试"（不在回归测试体现）。
