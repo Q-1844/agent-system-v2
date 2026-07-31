@@ -70,7 +70,9 @@ app.add_middleware(
 
 # ============ 路由挂载（阶段5③拆分：各域路由在 routers/，按 PHASE_5 §5.2 顺序逐步搬入）============
 from routers import system  # noqa: E402
+from routers import projects  # noqa: E402
 app.include_router(system.router)
+app.include_router(projects.router)
 
 
 @app.on_event("startup")
@@ -273,32 +275,6 @@ async def generate_image_base64(request: Request):
     except Exception as e:
         logger.error(f"生成图片失败: {e}")
         raise HTTPException(500, str(e))
-
-
-@app.get("/api/projects")
-async def list_projects():
-    """列出所有项目"""
-    try:
-        controller = get_controller()
-        projects = controller.project_manager.list_projects()
-        return {"projects": projects}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/projects/create")
-async def create_project(name: str):
-    """创建新项目"""
-    try:
-        controller = get_controller()
-        project_dir = controller.project_manager.create_project(name)
-        return {"message": "项目已创建", "path": str(project_dir)}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============ 角色生成（独立操作） ============
