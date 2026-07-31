@@ -80,11 +80,13 @@ from routers import projects  # noqa: E402
 from routers import script  # noqa: E402
 from routers import characters  # noqa: E402
 from routers import compose  # noqa: E402
+from routers import jobs  # noqa: E402
 app.include_router(system.router)
 app.include_router(projects.router)
 app.include_router(script.router)
 app.include_router(characters.router)
 app.include_router(compose.router)
+app.include_router(jobs.router)
 
 
 @app.on_event("startup")
@@ -291,52 +293,6 @@ async def generate_image_base64(request: Request):
 
 # ============ 角色生成（独立操作） ============
 # 这些接口用于角色生成页面，每步可单独调用
-
-# ============ 工作流操作 ============
-
-@app.get("/api/task/{task_id}")
-async def get_task_status(task_id: str):
-    """获取任务状态（先查 task_store 新任务，再回退旧 current_task）"""
-    if task_id in task_store:
-        return {"task_id": task_id, **task_store[task_id]}
-    if not current_task or current_task["task_id"] != task_id:
-        return {"task_id": task_id, "status": "not_found", "progress": {}, "message": "任务不存在"}
-
-    return current_task
-
-
-@app.get("/api/task/{task_id}/stream")
-async def stream_task_status(task_id: str):
-    """SSE 实时推送任务状态（每秒推送 task_store，直到 completed/failed）"""
-    async def event_stream():
-        while True:
-            if task_id in task_store:
-                t = task_store[task_id]
-                payload = {
-                    "task_id": task_id,
-                    "status": t.get("status"),
-                    "message": t.get("message", ""),
-                    "progress": t.get("progress", {}),
-                    "result": t.get("result"),
-                }
-                yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-                if t.get("status") in ("completed", "failed"):
-                    break
-            elif current_task and current_task.get("task_id") == task_id:
-                yield f"data: {json.dumps({'task_id': task_id, **current_task}, ensure_ascii=False)}\n\n"
-                if current_task.get("status") in ("completed", "failed"):
-                    break
-            else:
-                yield f"data: {json.dumps({'task_id': task_id, 'status': 'not_found'}, ensure_ascii=False)}\n\n"
-                break
-            await asyncio.sleep(1)
-
-    return StreamingResponse(
-        event_stream(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
-
 
 # ==================== 阶段 2：配音前置（shot 级）====================
 # 配音在视频之前：TTS 拿真实音频时长 -> plan_shot_timing 反推 num_frames -> 写回。
@@ -1267,70 +1223,6 @@ async def orchestrate_project(project_name: str, req: OrchestrateRequest):
         raise
     except Exception as e:
         raise HTTPException(500, str(e))
-
-
-# ---- 队列管理接口 + 全局单 SSE ----
-@app.get("/api/project/{project_name}/jobs")
-async def list_project_jobs(project_name: str, state: Optional[str] = None):
-    """列出项目任务（支持 ?state=failed/queued/...）"""
-    return {"jobs": get_job_queue().list_jobs(project=project_name, state=state),
-            "queue": get_job_queue().stats()}
-
-
-@app.get("/api/jobs/stream")
-async def jobs_stream(request: Request, project: Optional[str] = None):
-    """全局单 SSE：一条连接推送所有任务状态变化（替代按任务订阅，避免 6 连接上限卡死）。"""
-    q = get_job_queue()
-    sub = q.subscribe()
-
-    async def gen():
-        try:
-            yield f"event: snapshot\ndata: {json.dumps(q.list_jobs(project), ensure_ascii=False)}\n\n"
-            while True:
-                if await request.is_disconnected():
-                    break
-                try:
-                    payload = await asyncio.wait_for(sub.get(), timeout=15)
-                    if project and payload.get("project") != project:
-                        continue
-                    yield f"event: job\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
-                except asyncio.TimeoutError:
-                    yield ": keepalive\n\n"   # 防代理超时断流
-        finally:
-            q.unsubscribe(sub)
-
-    return StreamingResponse(
-        gen(), media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
-
-
-@app.post("/api/jobs/{job_id}/cancel")
-async def cancel_job(job_id: str, force: bool = False):
-    """取消任务。force=true 可取消 running（标记 cancelled + 中断 handler 释放 worker）。
-    🔴 force 取消 running 需前端二次确认（handler 被中断，已生成部分可能丢失）。"""
-    if not get_job_queue().cancel(job_id, force=force):
-        raise HTTPException(400, "任务无法取消（可能已完成或已取消）")
-    return {"job_id": job_id, "state": "cancelled"}
-
-
-@app.post("/api/jobs/{job_id}/retry")
-async def retry_job(job_id: str):
-    j = get_job_queue().retry(job_id)
-    if j is None:
-        raise HTTPException(400, "任务无法重试（仅 failed/cancelled 可重试）")
-    return {"job_id": job_id, "state": "queued"}
-
-
-@app.post("/api/project/{project_name}/jobs/retry-failed")
-async def retry_failed_jobs(project_name: str):
-    ids = get_job_queue().retry_failed(project_name)
-    return {"retried": ids, "count": len(ids)}
-
-
-@app.delete("/api/project/{project_name}/jobs/finished")
-async def clear_finished_jobs(project_name: str):
-    n = get_job_queue().clear_finished(project_name)
-    return {"cleared": n}
 
 
 # ============ 分镜生成测试接口 ============
