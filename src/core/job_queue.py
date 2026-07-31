@@ -49,10 +49,14 @@ class Job:
     started_at: Optional[float] = None
     finished_at: Optional[float] = None
     attempts: int = 0
+    last_progress_at: Optional[float] = None   # 看门狗：progress 值上次变化时间
 
 
 class JobQueue:
     """单进程全局队列。视频串行；图片/音频 3 并发。两条通道互不阻塞。"""
+
+    WATCHDOG_TIMEOUT = 600     # 看门狗：running 无 progress 超时秒数（生产 600=10min，测试可调小）
+    WATCHDOG_INTERVAL = 30     # 看门狗检查间隔秒数
 
     def __init__(self, state_path: Path, handlers: Dict[str, HandlerFn]):
         self.state_path = Path(state_path)
@@ -62,6 +66,7 @@ class JobQueue:
         self._light_q: asyncio.Queue = asyncio.Queue()
         self._subs: List[asyncio.Queue] = []
         self._tasks: List[asyncio.Task] = []
+        self._running_tasks: Dict[str, asyncio.Task] = {}   # job_id -> 执行 task（force cancel/看门狗中断用）
         self._started = False
         self._load()
 
@@ -112,13 +117,24 @@ class JobQueue:
         q = self._video_q if kind == JobKind.VIDEO.value else self._light_q
         q.put_nowait(job_id)
 
-    def cancel(self, job_id: str) -> bool:
+    def cancel(self, job_id: str, force: bool = False) -> bool:
+        """取消任务。默认仅取消 queued；force=True 时 running 也标 cancelled + 中断 handler 释放 worker。
+        🔴 params 为空的 video job 是正常状态（submit 时不传 video_id，video_id 落 shot.video.video_id），
+        不是 bug——job 记录与 params 在 submit() 里是同一次 _save 原子写，不会分裂。
+        僵尸成因是 running+孤儿(project/shot已删)+无清理，由 purge_orphans + 看门狗解决。"""
         j = self.jobs.get(job_id)
-        if j and j.state == JobState.QUEUED.value:
+        if not j:
+            return False
+        was_running = j.state == JobState.RUNNING.value
+        if j.state == JobState.QUEUED.value or (force and was_running):
             j.state = JobState.CANCELLED.value
             j.finished_at = time.time()
             self._save()
             asyncio.create_task(self._broadcast(j))
+            if was_running:   # 中断正在执行的 handler，释放 worker
+                task = self._running_tasks.get(job_id)
+                if task:
+                    task.cancel()
             return True
         return False
 
@@ -152,6 +168,23 @@ class JobQueue:
             self._save()
         return n
 
+    def purge_orphans(self, exists_fn) -> int:
+        """🔴 清理孤儿 job（用户要求2）：project/shot 已不存在的 running/queued -> cancelled。
+        exists_fn(project, shot_id) -> bool。在 start() route 前调用，孤儿不进 worker、不占计数。"""
+        n = 0
+        for j in list(self.jobs.values()):
+            if j.state in (JobState.RUNNING.value, JobState.QUEUED.value):
+                if not exists_fn(j.project, j.shot_id):
+                    j.state = JobState.CANCELLED.value
+                    j.error = "孤儿任务：project/shot 已删除"
+                    j.message = "已清理（孤儿）"
+                    j.finished_at = time.time()
+                    n += 1
+        if n:
+            self._save()
+            log.info("清理 %d 个孤儿 job", n)
+        return n
+
     # ---------- worker ----------
     async def start(self):
         if self._started:
@@ -177,32 +210,83 @@ class JobQueue:
             job.state = JobState.RUNNING.value
             job.started_at = time.time(); job.attempts += 1
             job.message = job.message or "开始处理"
+            job.last_progress_at = time.time()
             self._save(); await self._broadcast(job)
+            task = asyncio.create_task(self._run_job(job, name))
+            self._running_tasks[job_id] = task
             try:
-                handler = self.handlers.get(job.kind)
-                if handler is None:
-                    raise RuntimeError(f"未注册的 job kind: {job.kind}")
+                await task
+            except asyncio.CancelledError:
+                pass   # force cancel / 看门狗中断，state 已在 _run_job 设好
+            except Exception as e:
+                log.exception("[%s] worker 意外错误 %s", name, job_id)
+            finally:
+                self._running_tasks.pop(job_id, None)
+                q.task_done()
 
-                async def emit(stage: str, msg: str, pct: int | None = None):
-                    job.message = msg or stage
-                    if pct is not None:
-                        job.progress = int(pct)
-                    self._save()
-                    await self._broadcast(job)
+    async def _run_job(self, job: Job, name: str):
+        """执行单个 job 的 handler，带看门狗。force cancel / 看门狗通过 task.cancel() 中断。"""
+        watchdog = asyncio.create_task(self._watchdog(job))
+        try:
+            handler = self.handlers.get(job.kind)
+            if handler is None:
+                raise RuntimeError(f"未注册的 job kind: {job.kind}")
 
-                await handler(job, emit)
+            async def emit(stage: str, msg: str, pct: int | None = None):
+                job.message = msg or stage
+                # 🔴 仅 progress 值变化才刷新 last_progress_at（看门狗据此判卡死）
+                if pct is not None and int(pct) != job.progress:
+                    job.progress = int(pct)
+                    job.last_progress_at = time.time()
+                self._save()
+                await self._broadcast(job)
+
+            await handler(job, emit)
+            if job.state not in (JobState.CANCELLED.value, JobState.FAILED.value):
                 job.state, job.progress = JobState.DONE.value, 100
                 if not job.message:
                     job.message = "完成"
-            except Exception as e:
-                log.exception("[%s] 任务失败 %s", name, job_id)
+        except asyncio.CancelledError:
+            # force cancel / 看门狗中断：不覆盖已设的 cancelled/failed
+            if job.state not in (JobState.CANCELLED.value, JobState.FAILED.value):
+                job.state = JobState.CANCELLED.value
+            raise
+        except Exception as e:
+            if job.state not in (JobState.CANCELLED.value, JobState.FAILED.value):
+                log.exception("[%s] 任务失败 %s", name, job.job_id)
                 job.state = JobState.FAILED.value
                 job.error = str(e)[:800]
                 job.message = f"失败: {str(e)[:200]}"
-            finally:
+        finally:
+            watchdog.cancel()
+            job.finished_at = time.time()
+            self._save()
+            asyncio.create_task(self._broadcast(job))
+
+    async def _watchdog(self, job: Job):
+        """🔴 看门狗（用户要求3）：running 超 10min 且 progress 无变化 -> 标 failed + 中断 handler 释放 worker。
+        progress 值变化时 emit 刷新 last_progress_at；poll 卡死/无 video_id 提交超 10min 触发。
+        轻任务一般快，10min 足够；video 正常约 90s 完成，10min 无变化判定卡死。"""
+        timeout = self.WATCHDOG_TIMEOUT
+        while True:
+            await asyncio.sleep(self.WATCHDOG_INTERVAL)
+            if job.state != JobState.RUNNING.value:
+                return
+            base = getattr(job, "last_progress_at", None) or job.started_at or time.time()
+            idle = time.time() - base
+            if idle > timeout:
+                log.warning("[watchdog] job %s (%s) running %ds 无 progress 变化，判定卡死 -> failed",
+                            job.job_id, job.kind, int(idle))
+                job.state = JobState.FAILED.value
+                job.error = f"看门狗：running {int(idle)}s 无 progress 变化，判定卡死"
+                job.message = "卡死（看门狗释放 worker）"
                 job.finished_at = time.time()
-                self._save(); await self._broadcast(job)
-                q.task_done()
+                self._save()
+                asyncio.create_task(self._broadcast(job))
+                task = self._running_tasks.get(job.job_id)
+                if task:
+                    task.cancel()
+                return
 
     # ---------- SSE ----------
     def subscribe(self) -> asyncio.Queue:

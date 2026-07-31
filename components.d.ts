@@ -7,7 +7,11 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    OrchestrateModal: typeof import('./src/components/OrchestrateModal.vue')['default']
+    QueuePanel: typeof import('./src/components/QueuePanel.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    SafeFrameOverlay: typeof import('./src/components/SafeFrameOverlay.vue')['default']
+    ShotCard: typeof import('./src/components/ShotCard.vue')['default']
   }
 }

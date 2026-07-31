@@ -24,6 +24,8 @@ export function useJobStream(projectRef: Ref<string>) {
   let es: EventSource | null = null;
   let pollTimer: number | null = null;
   let reconnectTimer: number | null = null;
+  let recoveryTimer: number | null = null;
+  let heartbeatTimer: number | null = null;
   let failedStreak = 0;
   let currentProject = '';
 
@@ -31,10 +33,40 @@ export function useJobStream(projectRef: Ref<string>) {
     return `${API_BASE}/api/jobs/stream?project=${encodeURIComponent(p)}`;
   }
 
+  function degradeToPolling(reason: string) {
+    console.log(`[SSE] degrade -> polling (${reason})`);
+    if (es) { try { es.close(); } catch (e) {} es = null; }
+    if (recoveryTimer) { clearTimeout(recoveryTimer); recoveryTimer = null; }
+    failedStreak = 0;
+    store.setConnected(false);
+    stopHeartbeat();
+    startPolling();
+  }
+
+  /** 🔴 前端主动心跳：每 10s ping /api/health。物理断网时 SSE 的 TCP 不会立即断、
+   * onerror 不触发，纯靠 SSE 检测不到断网。心跳 ping 失败 = 网络断 -> 降级轮询。 */
+  function startHeartbeat() {
+    if (heartbeatTimer != null) return;
+    heartbeatTimer = window.setInterval(async () => {
+      if (!es) return;  // 已降级轮询，不心跳（轮询自己探活）
+      try {
+        const r = await fetch(`${API_BASE}/api/health`);
+        if (!r.ok) throw new Error(`health ${r.status}`);
+      } catch (e) {
+        console.log('[SSE] heartbeat ping 失败，判定网络断开', e);
+        degradeToPolling('heartbeat ping failed');
+      }
+    }, 10000);
+  }
+  function stopHeartbeat() {
+    if (heartbeatTimer != null) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+  }
+
   function connect() {
     close();
     currentProject = projectRef.value;
     if (!currentProject) return;
+    console.log(`[SSE] connect project=${currentProject}`);
     store.setConnected(false);
     try {
       es = new EventSource(streamUrl(currentProject));
@@ -42,12 +74,16 @@ export function useJobStream(projectRef: Ref<string>) {
       startPolling();
       return;
     }
+    startHeartbeat();
     // 🔴 snapshot = REPLACE
     es.addEventListener('snapshot', (ev: MessageEvent) => {
       try {
-        store.replaceAll(JSON.parse(ev.data));
+        const arr = JSON.parse(ev.data);
+        console.log(`[SSE] snapshot ${Array.isArray(arr) ? arr.length : '?'} jobs`);
+        store.replaceAll(arr);
         store.setConnected(true);
         failedStreak = 0;
+        if (recoveryTimer) { clearTimeout(recoveryTimer); recoveryTimer = null; }
       } catch (e) { /* ignore parse */ }
     });
     // 🔴 job = UPSERT
@@ -60,13 +96,19 @@ export function useJobStream(projectRef: Ref<string>) {
     });
     es.onerror = () => {
       failedStreak++;
+      console.log(`[SSE] onerror failedStreak=${failedStreak} readyState=${es?.readyState}`);
+      // 🔴 onerror 后 8s 没收到 snapshot（没恢复）-> 降级轮询。
+      // 物理断网时 onerror 不触发（TCP 保持），靠 heartbeat 兜底；此处兜底 onerror 触发但未到 3 次的场景。
+      if (recoveryTimer) clearTimeout(recoveryTimer);
+      recoveryTimer = window.setTimeout(() => {
+        recoveryTimer = null;
+        if (es && es.readyState !== EventSource.OPEN) {
+          degradeToPolling('recovery timeout 8s');
+        }
+      }, 8000);
       if (failedStreak >= 3) {
-        // 彻底降级轮询，不让界面停在最后一次状态装死
-        es?.close(); es = null;
-        store.setConnected(false);
-        startPolling();
+        degradeToPolling('onerror x3');
       }
-      // failedStreak < 3 时 EventSource 自带自动重连
     };
   }
 
@@ -96,11 +138,12 @@ export function useJobStream(projectRef: Ref<string>) {
     const test = new EventSource(streamUrl(currentProject));
     const onSnap = (ev: MessageEvent) => {
       try { store.replaceAll(JSON.parse(ev.data)); } catch (e) { /* ignore */ }
+      console.log('[SSE] reconnect snapshot -> 回切 SSE');
       cleanup();
       test.close();
       stopPolling();
       failedStreak = 0;
-      connect();                           // 回切 SSE
+      connect();                           // 回切 SSE（connect 里 startHeartbeat）
     };
     const cleanup = () => {
       test.removeEventListener('snapshot', onSnap);
@@ -115,7 +158,9 @@ export function useJobStream(projectRef: Ref<string>) {
   function close() {
     if (es) { es.close(); es = null; }
     stopPolling();
+    stopHeartbeat();
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    if (recoveryTimer) { clearTimeout(recoveryTimer); recoveryTimer = null; }
   }
 
   // 切换项目自动重连

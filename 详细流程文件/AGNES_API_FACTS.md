@@ -172,11 +172,15 @@ OpenAI 兼容。
 1. **输出是否保持原始宽高比？**（图片接口会要求 `size`，可能强行重采样）
 2. **输出图与输入图是否逐像素一致 / 视觉一致？**（i2i 是"尽量保持构图"，不是无损复制）
 
-**结论规则（阶段 3 实测后填写）**：
-- 若保真（宽高比不变 + 视觉一致）-> 可用于首帧/尾帧/参考图，`agnes_rehost` 作为默认 ImageHost。
-- 若不保真 -> **只能用于参考图，不能用于尾帧接力**（尾帧逐帧一致性要求高）。此时优先做 `tunnel` 方案（cloudflared 隧道，零注册、原图直出保真，但隧道断 URL 失效，适合调试与中短期跑）。
+**🔴 实测结论（2026-07-31，阶段 4 副本验收 `_p4_accept`）**：**不保真，不能用于首帧/尾帧，只用于不要求保真的参考图**。
+- 实测：原图 1152×768（3:2）-> `agnes_rehost`（size_tier=1K ratio=16:9）输出 1312×736（16:9），**宽高比被改变**（3:2 -> 16:9）。
+- resize 对齐后 `mean_diff=6.6 / max_diff=235`（0-255），即 i2i "keep as is" 是**带尺寸归一化的重新生成**，非逐像素一致，内容有重采样损失。
+- 原因：图片接口按 `size` 参数重采样，不是图床上传原字节。reference 实现用 `1024x1024` 同理（更糟，正方形）。
+- **用途限定**：`agnes_rehost` 作为 ImageHost 第 5 种实现保留，**默认不启用**，仅用于不要求保真的参考图场景。代码注释须写明"会改比例 + 重采样"。
+- 首帧/尾帧要保真（用户"不丢画面"诉求）-> 必须用真图床（imgbb/r2/tunnel，上传原字节）。优先 imgbb（URL 长期有效，吻合 project.json 持久化设计）；tunnel 降级（cloudflared quick tunnel 重启换域名，URL 变死链，只适合调试）。
+- 实现细节：按文件哈希缓存托管结果（同图重试只传一次）；上传失败明示报错，**禁止静默回落到重新生成**（用户以为托管旧图实则换图，比报错更糟）；imgbb 公开图，前端托管按钮附近提示。
 
-> 本阶段（阶段 1）**不实现** `agnes_rehost`，先留接口位。
+> 阶段 1 留接口位、阶段 4 实测落地。`agnes_rehost` 实现已加 `src/core/image_host.py`，但默认不启用（`build_image_host` 不构造它，由 `api_server.get_rehost_host()` 持有单例供参考图场景显式调用）。
 
 ### 3.4 时长计算
 
@@ -263,7 +267,8 @@ Authorization: Bearer <API_KEY>
 
 **🔴 `seconds` 和 `size` 是服务端归一化后的真实值，必须回读入库。** 提交的 `num_frames`/`width`/`height` 可能被改（实测：1312×736 被映射为 1280×704）。前端展示的时长一律用回读值，不许用提交值。
 
-**🔴 下载 mp4/图片资产时不要带 `Authorization` 头。** `platform-outputs.agnes-ai.space` 的 URL 是预签名 URL，带 `Authorization: Bearer ...` 反而返回 401（实测）。`agnes_client.download` 用无认证 client 下载；前端/其它下载代码同理。
+**🔴 下载 mp4/图片资产时不要带 `Authorization` 头。** `platform-outputs.agnes-ai.space` 的 URL 是 **GCS 公开读对象**（HEAD 200，响应头 `X-GUploader-UploadID`/`x-goog-*`/`Server: Uploadserver`，**URL 无任何签名 query**--不是预签名），带 `Authorization: Bearer ...` 反而返回 401（实测，GCS 公开对象对带认证请求做权限检查会失败）。`agnes_client.download` 用无认证 client 下载；前端/其它下载代码同理。
+> 🟢 **URL 有效期（2026-07-31 实测）**：`platform-outputs.agnes-ai.space` 的图片/视频 URL **无签名 query、不会过期**（GCS 公开读，长期有效，只要 Agnes 不删对象）。所以 Agnes 生成的图（first_frame/last_frame handler 存的 url）可直接送进 video 接口，**不需要全部重新托管**；只有 v1 迁移的本地图（local有/url空）和本地编辑过的图需要托管补公网 url。preflight 维持"url空才托管"即可。（旧判断误以为是预签名 URL，实测纠正。）
 
 ### 3.7 状态机
 
@@ -329,6 +334,6 @@ Authorization: Bearer <API_KEY>
 | 视频输入图 | 计划用本地路径 | **必须公网 URL，走 ImageHost** |
 | 视频音频 | 判断为静音 | ✅ 正确，参数表无任何音频字段 |
 | `remixed_from_video_id` | 误以为该字段是 mp4 URL | **`.cn` 直生成任务该字段为 null，URL 在 `url` 字段；poll 用 `remixed_from_video_id->url->video_url` fallback（实测勘误）** |
-| 资产下载认证 | - | **下载 mp4/图片资产不带 Authorization 头（预签名 URL，带认证 401）** |
+| 资产下载认证 | - | **下载 mp4/图片资产不带 Authorization 头（GCS 公开读对象，非预签名，URL 无签名 query 不过期；带认证 401）** |
 | Endpoint | `apihub.agnes-ai.com`（国际站，国内需代理） | **`apihub.agnes-ai.cn`（国内直连，2026-07-29 上线，无需代理）** |
 

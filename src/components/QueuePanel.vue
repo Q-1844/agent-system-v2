@@ -37,6 +37,7 @@
           <div class="qp-job-actions">
             <button v-if="j.state === 'failed'" class="qp-btn sm" @click="store.retry(j.job_id)">重试</button>
             <button v-if="j.state === 'queued'" class="qp-btn sm" @click="store.cancel(j.job_id)">取消</button>
+            <button v-if="j.state === 'running'" class="qp-btn sm" @click="onForceCancel(j.job_id)" title="中断 handler 释放 worker，已生成部分可能丢失">强制取消</button>
           </div>
         </div>
         <div v-if="!jobs.length" class="qp-empty">暂无任务</div>
@@ -67,6 +68,11 @@ function stateLabel(s: JobState): string {
 }
 function onRetryFailed() { store.retryFailed(props.projectName); }
 function onClear() { store.clearFinished(props.projectName); }
+function onForceCancel(jobId: string) {
+  if (window.confirm('强制取消运行中的任务？handler 会被中断，已生成部分可能丢失。')) {
+    store.cancel(jobId, true);
+  }
+}
 </script>
 
 <style lang="scss" scoped>

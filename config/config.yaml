@@ -53,16 +53,21 @@ agnes:
       polling_interval: 10    # 旧值，保留供旧管线读取；新代码用 agnes.video.polling_interval
       max_polling_retries: 360  # 最大轮询次数: 360次 × 10秒 = 60分钟
 
-# ImageHost：把本地图片变成 Agnes 服务端能访问的公网 URL（阶段 1 抽象，阶段 3 视频管线接入）
-# passthrough = 直通，仅复用 Agnes 原始 URL（默认；修过的图会在此层显式报错）
+# ImageHost：把本地图片变成 Agnes 服务端能访问的公网 URL。
+# 🔴 默认 imgbb（2026-07-31 实测唯一可用方案：Agnes .cn 服务端能下载 imgbb URL，i2v 成功）。
+#    imgbb 上传原字节 100% 保真，URL 长期有效（吻合 project.json 持久化 + 崩溃恢复设计）。
+#    按文件 sha1 哈希缓存（cache/imgbb_cache.json），同图重试只传一次。
+# agnes_rehost：不保真（i2i 重采样改比例），仅参考图用，默认不启用，不在此配置。
+# tunnel：URL 不稳定（重启换域名），降级调试用，不做默认。
+# passthrough：不能上传本地图，仅复用 Agnes 原始 URL。
 image_host:
-  kind: "passthrough"
-  # imgbb:
-  #   api_key: "${IMGBB_API_KEY}"
-  #   expiration: 0          # 0=永不过期
-  # r2:
+  kind: "imgbb"
+  imgbb:
+    api_key: "${IMGBB_API_KEY}"
+    expiration: 0          # 0=永不过期
+  # r2:        # 未配置
   #   account_id / access_key / secret_key / bucket / public_base
-  # tunnel:
+  # tunnel:    # 未启用（降级调试）
   #   public_base / serve_root
 
 # 每日配额账本（免费用户官方未公布确切数值，给保守默认值）

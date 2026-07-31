@@ -581,6 +581,11 @@ class ApiClient {
     });
   }
 
+  // 重新托管首帧（local有/url空 -> Agnes i2i 'keep as is' 洗公网URL，不重新生成、不丢画面）
+  async rehostFirstFrame(projectName: string, shotId: string): Promise<{ shot_id: string; url: string; rehosted: boolean }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/shot/${encodeURIComponent(shotId)}/first-frame/rehost`, { method: 'POST' });
+  }
+
   // 尾帧生成（仅 keyframes）
   async generateLastFrame(projectName: string, shotId: string): Promise<{ job_id: string; shot_id: string }> {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/shot/${encodeURIComponent(shotId)}/last-frame`, { method: 'POST' });
@@ -634,8 +639,8 @@ class ApiClient {
     const q = state ? `?state=${encodeURIComponent(state)}` : '';
     return this.request(`/api/project/${encodeURIComponent(projectName)}/jobs${q}`);
   }
-  async cancelJob(jobId: string): Promise<{ job_id: string; state: string }> {
-    return this.request(`/api/jobs/${encodeURIComponent(jobId)}/cancel`, { method: 'POST' });
+  async cancelJob(jobId: string, force = false): Promise<{ job_id: string; state: string }> {
+    return this.request(`/api/jobs/${encodeURIComponent(jobId)}/cancel${force ? '?force=true' : ''}`, { method: 'POST' });
   }
   async retryJob(jobId: string): Promise<{ job_id: string; state: string }> {
     return this.request(`/api/jobs/${encodeURIComponent(jobId)}/retry`, { method: 'POST' });

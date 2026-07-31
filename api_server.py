@@ -90,6 +90,25 @@ def get_job_queue():
     return job_queue
 
 
+# 重新托管单例（imgbb：把本地首帧托管成公网 URL，100% 保真）
+_rehost_host = None
+def get_rehost_host():
+    """安全获取重新托管 ImageHost（imgbb 单例）。未就绪返回 503。
+    🔴 imgbb 实测唯一可用方案（2026-07-31）：上传原字节 100% 保真，Agnes 服务端能下载。
+    用于把 v1 迁移的本地首帧（local有/url空）补公网 URL（/first-frame/rehost + video preflight 自动调用）。
+    按文件哈希缓存（cache/imgbb_cache.json），上传失败明示抛错不静默回落。"""
+    global _rehost_host
+    if _rehost_host is None:
+        from src.core.image_host import ImgbbHost
+        ih = (_APP_CFG.get("image_host") or {}).get("imgbb") or {}
+        key = ih.get("api_key", "")
+        if "${IMGBB_API_KEY}" in str(key):
+            key = os.environ.get("IMGBB_API_KEY", "")
+        _rehost_host = ImgbbHost(key, ih.get("expiration", 0),
+                                 cache_path=str(BASE_DIR / "cache" / "imgbb_cache.json"))
+    return _rehost_host
+
+
 class ScriptRequest(BaseModel):
     """剧本请求"""
     project_name: str
@@ -134,6 +153,10 @@ async def startup():
     try:
         from src.core.job_queue import JobQueue
         job_queue = JobQueue(BASE_DIR / "cache" / "jobs.json", JOB_HANDLERS)
+        # 🔴 清理孤儿 job（project/shot 已删除的 running/queued）--在 start route 前，孤儿不进 worker
+        purged = job_queue.purge_orphans(_job_target_exists)
+        if purged:
+            logger.info(f"启动时清理 {purged} 个孤儿 job")
         await job_queue.start()
         asyncio.create_task(recover_pending_videos())
         logger.info("全局任务队列已就绪")
@@ -194,6 +217,29 @@ async def recover_pending_videos():
                         job_queue.submit(p.name, "video", sh.shot_id)
     except Exception as e:
         logger.error(f"recover_pending_videos 失败: {e}")
+
+
+def _job_target_exists(project: Optional[str], shot_id: Optional[str]) -> bool:
+    """判断 job 的 target 是否还存在（清理孤儿 job 用）。project/shot 任一不存在 -> False。
+    无 project 的 job（如全局 compose）不算孤儿；controller 未就绪时不误清。"""
+    if not project:
+        return True
+    ctrl = pipeline_controller
+    if ctrl is None:
+        return True
+    try:
+        pdir = ctrl.project_manager.get_project_dir(project)
+    except Exception:
+        return False
+    if not (pdir / "output" / "project.json").exists():
+        return False
+    if shot_id:
+        from src.core.store import ProjectStore
+        try:
+            return ProjectStore(pdir).load().get_shot(shot_id) is not None
+        except Exception:
+            return False
+    return True
 
 
 @app.get("/")
@@ -2570,6 +2616,44 @@ async def choose_first_frame(project_name: str, shot_id: str, req: ChooseFrameRe
         raise HTTPException(500, str(e))
 
 
+@app.post("/api/project/{project_name}/shot/{shot_id}/first-frame/rehost")
+async def rehost_first_frame(project_name: str, shot_id: str):
+    """重新托管首帧：local 有 / url 空 -> imgbb 上传 -> 回填 url + status=done。
+    100% 保真，不重新生成、不丢画面。用于 v1 迁移的本地首帧补公网 URL（送进视频接口）。
+    幂等：已有 url 直接返回 rehosted=False。同步调用（几秒），不入队、不占 video 名额。
+    🔴 imgbb 图为公开图（拿到链接即可访问）。上传失败明示抛错，不静默回落到重新生成。"""
+    try:
+        controller = get_controller()
+        project_dir = controller.project_manager.get_project_dir(project_name)
+        from src.core.store import ProjectStore
+        from src.core.models import ShotStatus
+        store = ProjectStore(project_dir)
+        shot = store.load().get_shot(shot_id)
+        if shot is None:
+            raise HTTPException(404, f"镜头 {shot_id} 不存在")
+        sel = shot.first_frame.selected
+        if sel is None or not sel.local:
+            raise HTTPException(400, "首帧无本地图，无法托管（请先生成首帧）")
+        if sel.url:
+            return {"shot_id": shot_id, "url": sel.url, "rehosted": False}
+        url = await get_rehost_host().upload(sel.local)
+        idx = shot.first_frame.selected_index
+        def mut(s, u=url, i=idx):
+            if 0 <= i < len(s.first_frame.candidates):
+                s.first_frame.candidates[i].url = u
+                s.first_frame.candidates[i].status = ShotStatus.DONE.value
+            s.first_frame.status = ShotStatus.DONE.value
+            s.first_frame.updated_at = _time.time()
+        store.update_shot(shot_id, mut)
+        return {"shot_id": shot_id, "url": url, "rehosted": True}
+    except FileNotFoundError:
+        raise HTTPException(404, "项目不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
 @app.post("/api/project/{project_name}/shot/{shot_id}/last-frame")
 async def shot_last_frame(project_name: str, shot_id: str):
     """生成单镜头尾帧（仅 keyframes；入队 last_frame 任务）"""
@@ -2642,6 +2726,22 @@ async def _handler_video(job, emit):
     shot = project.get_shot(job.shot_id)
     if shot is None:
         raise RuntimeError(f"镜头 {job.shot_id} 不存在")
+
+    # 🔴 自动重新托管：首帧 local 有 / url 空（v1 迁移数据）-> imgbb 补公网 URL（100% 保真，不丢画面）。
+    #  用户无感：不用知道公网 URL 是什么，preflight 前自动补齐。不重新生成。上传失败明示抛错。
+    sel_ff = shot.first_frame.selected
+    if (shot.first_frame.status == "done" and sel_ff and sel_ff.local
+            and not sel_ff.url):
+        await emit("rehost", f"{shot.shot_id} 首帧重新托管中（补公网 URL）", 3)
+        url = await get_rehost_host().upload(sel_ff.local)
+        def _mut_rehost(s, u=url, idx=shot.first_frame.selected_index):
+            if 0 <= idx < len(s.first_frame.candidates):
+                s.first_frame.candidates[idx].url = u
+                s.first_frame.candidates[idx].status = "done"
+            s.first_frame.status = "done"
+            s.first_frame.updated_at = _time.time()
+        store.update_shot(job.shot_id, _mut_rehost)
+        shot = store.load().get_shot(job.shot_id)   # 取最新
 
     seconds = shot.video.num_frames / max(shot.video.frame_rate, 1)
     ok, why = _video_preflight(shot, controller.agnes_client.quota, seconds)
@@ -2967,9 +3067,11 @@ async def jobs_stream(request: Request, project: Optional[str] = None):
 
 
 @app.post("/api/jobs/{job_id}/cancel")
-async def cancel_job(job_id: str):
-    if not get_job_queue().cancel(job_id):
-        raise HTTPException(400, "任务无法取消（可能已在运行或已完成）")
+async def cancel_job(job_id: str, force: bool = False):
+    """取消任务。force=true 可取消 running（标记 cancelled + 中断 handler 释放 worker）。
+    🔴 force 取消 running 需前端二次确认（handler 被中断，已生成部分可能丢失）。"""
+    if not get_job_queue().cancel(job_id, force=force):
+        raise HTTPException(400, "任务无法取消（可能已完成或已取消）")
     return {"job_id": job_id, "state": "cancelled"}
 
 

@@ -2,6 +2,9 @@
   <div class="shot-board">
     <div class="toolbar">
       <h2>分镜（shot 级）</h2>
+      <select class="proj-select" :value="projectName" @change="onProjectChange(($event.target as HTMLSelectElement).value)" title="切换项目">
+        <option v-for="p in projects" :key="p" :value="p">{{ p }}</option>
+      </select>
       <div class="toolbar-info" v-if="projectName">{{ projectName }} · {{ shotCount }} 镜</div>
       <button class="btn" @click="load">刷新</button>
     </div>
@@ -30,8 +33,17 @@ const projectName = computed(() => projStore.projectName);
 const jobStore = useJobStore();
 
 const shots = ref<ShotData[]>([]);
+const projects = ref<string[]>([]);
 const loading = ref(false);
 const shotCount = computed(() => shots.value.length);
+
+async function loadProjects() {
+  try { projects.value = await apiClient.listProjects(); }
+  catch (e: any) { console.error('[ShotBoard] 加载项目列表失败', e); }
+}
+async function onProjectChange(name: string) {
+  if (name && name !== projectName.value) await projStore.loadProject(name);
+}
 
 async function load() {
   if (!projectName.value) return;
@@ -56,7 +68,7 @@ watch(() => jobStore.jobs.map(j => j.job_id + j.state).join('|'), () => {
   }
 });
 
-onMounted(load);
+onMounted(async () => { await loadProjects(); await load(); });
 watch(projectName, load);
 </script>
 
@@ -66,6 +78,10 @@ watch(projectName, load);
   display: flex; align-items: center; gap: 12px; margin-bottom: 8px;
   h2 { font-size: 16px; color: var(--text-primary); margin: 0; }
   .toolbar-info { font-size: 12px; color: var(--text-muted); margin-left: auto; }
+  .proj-select {
+    padding: 3px 8px; border-radius: 5px; border: 1px solid var(--border);
+    background: var(--bg-hover); color: var(--text-secondary); font-size: 12px; cursor: pointer;
+  }
   .btn {
     padding: 4px 12px; border-radius: 5px; border: 1px solid var(--border);
     background: var(--bg-hover); color: var(--text-secondary); cursor: pointer; font-size: 12px;

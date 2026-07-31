@@ -27,8 +27,13 @@
           <button class="sc-gen" :disabled="busy('first_frame')" @click="genFirstFrame">
             {{ busy('first_frame') ? '生成中…' : (shot.first_frame.candidates.length ? '重生成' : '生成首帧') }}
           </button>
+          <button class="sc-gen" v-if="ffNeedsRehost" :disabled="rehosting" @click="rehostFirstFrame"
+                  title="上传到 imgbb 公开图床拿公网URL，不重新生成、不丢画面">
+            {{ rehosting ? '托管中…' : '重新托管' }}
+          </button>
         </div>
-        <div class="sc-hint" v-if="shot.first_frame.candidates.length && !ffUrlReady">👆 点缩略图选定首帧（选定后才能生成视频）</div>
+        <div class="sc-hint" v-if="shot.first_frame.candidates.length && !ffUrlReady && !ffNeedsRehost">👆 点缩略图选定首帧（选定后才能生成视频）</div>
+        <div class="sc-hint" v-if="ffNeedsRehost">📦 本地图待托管：点「重新托管」上传到 imgbb 公开图床（图会公开可访问），或直接生成视频（自动托管）</div>
       </div>
 
       <div class="sc-section" v-if="shot.link_mode === 'keyframes'">
@@ -72,7 +77,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { apiClient } from '@/api';
 import type { ShotData } from '@/api';
 import { getImageUrl, getVideoUrl } from '@/utils/media';
@@ -89,13 +94,20 @@ const jobStore = useJobStore();
 const ffUrlReady = computed(() =>
   props.shot.first_frame.status === 'done' &&
   !!props.shot.first_frame.candidates[props.shot.first_frame.selected_index]?.url);
+// 🔴 本地图待托管：v1 迁移数据 local有/url空。不重新生成，走 rehost 补公网 URL。
+const ffNeedsRehost = computed(() =>
+  props.shot.first_frame.status === 'done' &&
+  !!props.shot.first_frame.candidates[props.shot.first_frame.selected_index]?.local &&
+  !props.shot.first_frame.candidates[props.shot.first_frame.selected_index]?.url);
+// 首帧可用于视频：已选定(url_ready) 或 待托管(video handler 会自动 rehost)
+const ffUsable = computed(() => ffUrlReady.value || ffNeedsRehost.value);
 const lfUrlReady = computed(() =>
   props.shot.last_frame.status === 'done' &&
   !!props.shot.last_frame.candidates[props.shot.last_frame.selected_index]?.url);
 const audioReady = computed(() => props.shot.audio.status === 'done' && !!props.shot.audio.local);
 const videoReady = computed(() => props.shot.video.status === 'done' && !!props.shot.video.local);
 
-const ffLabel = computed(() => labelFor(props.shot.first_frame.status, ffUrlReady.value));
+const ffLabel = computed(() => labelFor(props.shot.first_frame.status, ffUrlReady.value, ffNeedsRehost.value));
 const lfLabel = computed(() => labelFor(props.shot.last_frame.status, lfUrlReady.value));
 const audioLabel = computed(() => props.shot.audio.status === 'done' ? '已配音' : '未配音');
 const videoLabel = computed(() => {
@@ -108,14 +120,14 @@ const videoLabel = computed(() => {
 const videoBlockReason = computed(() => {
   if (videoReady.value) return '';
   if (!props.shot.video.num_frames) return '尚未配音，无法确定时长';
-  if (!ffUrlReady.value) return '请先生成并选择首帧';
+  if (!ffUsable.value) return '请先生成并选择首帧';
   if (props.shot.link_mode === 'keyframes' && !lfUrlReady.value) return '请先生成尾帧';
   return '';
 });
 const canGenVideo = computed(() => !videoBlockReason.value);
 
-function labelFor(status: string, urlReady: boolean): string {
-  if (status === 'done') return urlReady ? '已选定' : '待选定';
+function labelFor(status: string, urlReady: boolean, needsRehost = false): string {
+  if (status === 'done') return urlReady ? '已选定' : (needsRehost ? '本地图待托管' : '待选定');
   if (status === 'pending') return '待选定';
   if (status === 'generating') return '生成中';
   if (status === 'failed') return '失败';
@@ -131,6 +143,16 @@ function jobMsg(kind: string): string {
 function imgUrl(p: string) { return getImageUrl(p); }
 function vidUrl(p: string) { return getVideoUrl(p); }
 
+const rehosting = ref(false);
+async function rehostFirstFrame() {
+  rehosting.value = true;
+  try {
+    await apiClient.rehostFirstFrame(props.projectName, props.shot.shot_id);
+    message.success('已托管，可生成视频');
+    emit('refresh');
+  } catch (e: any) { message.error(`托管失败: ${e.message || e}`); }
+  finally { rehosting.value = false; }
+}
 async function genFirstFrame() {
   try {
     await apiClient.generateFirstFrame(props.projectName, props.shot.shot_id, { variants: 2 });

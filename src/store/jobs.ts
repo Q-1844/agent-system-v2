@@ -31,8 +31,8 @@ export const useJobStore = defineStore('jobs', () => {
   function setConnected(c: boolean) { connected.value = c; }
 
   // ---- 调 API ----
-  async function cancel(jobId: string) {
-    try { await apiClient.cancelJob(jobId); }
+  async function cancel(jobId: string, force = false) {
+    try { await apiClient.cancelJob(jobId, force); }
     catch (e: any) { naiveMessage.error(`取消失败: ${e.message || e}`); }
   }
   async function retry(jobId: string) {
