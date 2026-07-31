@@ -1229,17 +1229,6 @@ async def get_project_characters_full(project_name: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ============ 简单任务存储（1.7 将重构为 TaskRegistry + SSE）============
-task_store: dict = {}
-
-
-def _new_task(task_type: str) -> str:
-    """创建任务并返回 task_id"""
-    tid = f"{task_type}_{uuid.uuid4().hex[:8]}"
-    task_store[tid] = {"status": "pending", "progress": {}, "message": "", "result": None}
-    return tid
-
-
 # ============ 剧本编辑（保存 YAML + 解析 -> parsed_script.json）============
 
 class SaveScriptRequest(BaseModel):
