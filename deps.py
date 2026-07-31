@@ -13,7 +13,9 @@ dict 单例（JOB_HANDLERS / task_store / task_progress）只 mutate 不 reassig
 import os
 import json
 import uuid
+import base64 as _base64
 from pathlib import Path
+from typing import Optional
 
 from fastapi import HTTPException
 from pydantic import BaseModel
@@ -114,6 +116,22 @@ def _write_parsed_script(project_dir: Path, data: dict):
     script_file.parent.mkdir(parents=True, exist_ok=True)
     with open(script_file, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+# ============ base64 图片 IO（characters + scene 灰色路由共用）============
+def _save_base64_image(base64_str: str, file_path: Path):
+    """保存base64图片到文件"""
+    image_bytes = _base64.b64decode(base64_str)
+    with open(file_path, "wb") as f:
+        f.write(image_bytes)
+
+
+def _load_image_as_base64(file_path: Path) -> Optional[str]:
+    """加载图片文件为base64"""
+    if file_path.exists():
+        with open(file_path, "rb") as f:
+            return _base64.b64encode(f.read()).decode("utf-8")
+    return None
 
 
 # ============ 保留的旧请求/状态模型（纯搬运；阶段5③-b 再清死代码）============
