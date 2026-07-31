@@ -54,7 +54,8 @@
     <div class="sc-row">
       <div class="sc-section">
         <div class="sc-label">配音 <span class="sc-status" :class="shot.audio.status">{{ audioLabel }}</span></div>
-        <div class="sc-val" v-if="audioReady">{{ (shot.audio.duration_ms / 1000).toFixed(2) }}s · {{ shot.video.num_frames }}帧@{{ shot.video.frame_rate }}fps</div>
+        <div class="sc-val" v-if="audioReady && shot.video.num_frames">{{ (shot.audio.duration_ms / 1000).toFixed(2) }}s · {{ shot.video.num_frames }}帧@{{ shot.video.frame_rate }}fps</div>
+        <div class="sc-val muted" v-else-if="audioReady">已配音（时长待反推，刷新页面自动补）</div>
         <div class="sc-val muted" v-else>未配音（去音频页生成）</div>
       </div>
 
@@ -119,7 +120,7 @@ const videoLabel = computed(() => {
 
 const videoBlockReason = computed(() => {
   if (videoReady.value) return '';
-  if (!props.shot.video.num_frames) return '尚未配音，无法确定时长';
+  if (!props.shot.video.num_frames) return audioReady.value ? '配音时长待反推（刷新页面自动补）' : '尚未配音，无法确定时长';
   if (!ffUsable.value) return '请先生成并选择首帧';
   if (props.shot.link_mode === 'keyframes' && !lfUrlReady.value) return '请先生成尾帧';
   return '';

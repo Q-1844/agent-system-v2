@@ -1,7 +1,7 @@
 # src/core/store.py
 # 项目数据读写：原子写、v1->v2 迁移、读-改-写单个 shot。
 # 🔴 硬性规则：所有生成任务写回结果必须走 store.update_shot()，禁止只改内存字典。
-import json, os, shutil, tempfile, time
+import json, os, shutil, subprocess, tempfile, time
 from dataclasses import asdict
 from pathlib import Path
 from typing import Optional, Callable
@@ -21,6 +21,39 @@ def _atomic_write_json(path: Path, data: dict):
         if os.path.exists(tmp):
             os.unlink(tmp)
         raise
+
+
+def _ffprobe_duration_ms_sync(path: str) -> int:
+    """同步 ffprobe 探音频时长（ms）。失败返回 0。"""
+    try:
+        r = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
+            capture_output=True, text=True, timeout=10)
+        return int(float(r.stdout.strip()) * 1000)
+    except Exception:
+        return 0
+
+
+def _backfill_shot_timing(shot: dict, fps: int = 24) -> bool:
+    """检测 audio.local 有但 video.num_frames 缺失/0 -> ffprobe 探时长 -> plan_shot_timing 反推回填。
+    不碰音频文件（音色/断句不变）。返回是否改动。
+    🔴 v1 迁移数据 audio 有 local 但 num_frames=0，导致前端「已配音0.00s+尚未配音」矛盾。
+    用现有音频 ffprobe 量时长反推，不要求用户重新配音。"""
+    from .timing import plan_shot_timing
+    audio = shot.get("audio") or {}
+    video = shot.get("video") or {}
+    local = audio.get("local")
+    if not local or video.get("num_frames"):
+        return False
+    dur_ms = _ffprobe_duration_ms_sync(local)
+    if dur_ms <= 0:
+        return False
+    timing = plan_shot_timing(dur_ms / 1000, fps)
+    audio["duration_ms"] = dur_ms
+    video["num_frames"] = timing.num_frames
+    video["frame_rate"] = timing.frame_rate
+    return True
 
 
 def migrate_v1_to_v2(old: dict) -> dict:
@@ -55,6 +88,7 @@ def migrate_v1_to_v2(old: dict) -> dict:
             "subtitle_srt": old_scene.get("subtitle_path"),
             "status": "pending",
         }
+        _backfill_shot_timing(shot)   # ffprobe 量现有音频时长反推 num_frames（不碰音频）
         scenes.append({"scene_id": sid, "title": old_scene.get("title", ""),
                        "summary": old_scene.get("description", ""), "shots": [shot]})
     return {
@@ -93,6 +127,14 @@ class ProjectStore:
             raise FileNotFoundError(f"项目数据不存在: {self.dir}")
         if raw.get("schema_version", 1) < 2:
             raw = migrate_v1_to_v2(raw)
+            _atomic_write_json(self.path, raw)
+        # backfill：已 v2 但 num_frames 没反推的（迁移在 backfill 加入前做的项目，如「我的动画短片」）
+        changed = False
+        for sc in raw.get("scenes", []):
+            for sh in sc.get("shots", []):
+                if _backfill_shot_timing(sh):
+                    changed = True
+        if changed:
             _atomic_write_json(self.path, raw)
         return self._from_dict(raw)
 
