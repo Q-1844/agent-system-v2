@@ -32,18 +32,6 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '分镜画廊', icon: 'storyboard' }
       },
       {
-        path: 'animation',
-        name: 'Animation',
-        component: () => import('@/views/animation/index.vue'),
-        meta: { title: '动画预览', icon: 'animation' }
-      },
-      {
-        path: 'audio',
-        name: 'Audio',
-        component: () => import('@/views/audio/index.vue'),
-        meta: { title: '音频管理', icon: 'audio' }
-      },
-      {
         path: 'settings',
         name: 'Settings',
         component: () => import('@/views/settings/index.vue'),
