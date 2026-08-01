@@ -8,8 +8,9 @@
 #   6. 视频轮询 5s，回读 seconds/size
 #   7. 接入 RateLimiter + QuotaLedger
 #   8. size 用档位 + ratio
-# 另：generate_image 兼容旧 size= 入参与 data 字段返回（垫片1/2，角色页面接口仍在用）；
-# understand_text / generate_video 垫片已随阶段5③-b 删除（script_parser 改用 chat）。
+# 另：阶段5 垫片已全部清理--垫片1/2（generate_image legacy size= + data 字段）随③-e 删
+# （角色接口改 size_tier/ratio + result["url"]），垫片3（understand_text）随③-b 删，
+# 垫片4/5（generate_video / edge_tts.synthesize）早已删。
 from __future__ import annotations
 import asyncio, logging, random
 from typing import Any, Dict, List, Optional
@@ -20,17 +21,6 @@ from ..core.rate_limiter import RateLimiter
 from ..core.quota import QuotaLedger
 
 log = setup_logger("agnes_client")
-
-# ── 垫片（向后兼容）一次性告警 ──
-# 阶段 5 移除垫片前，提醒新代码不要走垫片。每个垫片名仅告警一次（进程级）。
-_shim_warned: set = set()
-def _shim_warn(name: str):
-    if name not in _shim_warned:
-        _shim_warned.add(name)
-        msg = f"垫片 {name} 是向后兼容入口，将在阶段 5 移除；新代码请勿使用（见 DEPRECATED-SHIM 标记）。"
-        log.warning(msg)
-        import warnings as _w
-        _w.warn(msg, DeprecationWarning, stacklevel=3)
 
 RETRYABLE = {408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524}
 
@@ -173,23 +163,15 @@ class AgnesClient:
                              image_refs: Optional[List[str]] = None,
                              size_tier: str = "1K", ratio: str = "16:9",
                              seed: Optional[int] = None,
-                             want_b64: bool = False,
-                             **legacy) -> dict:
-        """返回 {"url": str|None, "b64": str|None, "data": [...]}。
-        image_refs 支持公网 URL 或 data:image/png;base64,...
-        legacy.size 兼容旧调用方（直接透传，服务端会归一化）；
-        返回额外带 data 字段，兼容旧代码 result["data"][0]["url"]。"""
+                             want_b64: bool = False) -> dict:
+        """返回 {"url": str|None, "b64": str|None}。
+        image_refs 支持公网 URL 或 data:image/png;base64,..."""
         if self.quota:
             ok, why = self.quota.can("images", 1)
             if not ok: raise AgnesError(why)
 
         bucket = f"image_{size_tier.lower()}"
-        # DEPRECATED-SHIM: remove in phase 5. legacy.size 与返回的 data 字段为旧调用方兼容；
-        # 新代码请用 size_tier/ratio 并读 result["url"]。
-        legacy_size = legacy.get("size")
-        if legacy_size:
-            _shim_warn("generate_image(size=...)")
-        size = legacy_size if legacy_size else resolve_size(size_tier, ratio)
+        size = resolve_size(size_tier, ratio)
         is_i2i = bool(image_refs)
 
         def build(pos: str) -> dict:
@@ -228,8 +210,7 @@ class AgnesClient:
                 log.info("图生图 image 位置确定为: %s", pos)
             if self.quota: self.quota.consume("images", 1)
             d = r.json()["data"][0]
-            # DEPRECATED-SHIM: data 字段仅供旧调用方 result["data"][0]["url"]，新代码读 result["url"]
-            return {"url": d.get("url"), "b64": d.get("b64_json"), "data": [d]}
+            return {"url": d.get("url"), "b64": d.get("b64_json")}
         raise last_err or AgnesError("图片生成失败")
 
     # ---------- 视频 ----------
@@ -358,12 +339,8 @@ class AgnesClient:
                         f.write(chunk)
         return str(dest)
 
-    # generate_image 仍保留 legacy size= 入参与 data 字段返回（垫片1/2，见上方 L166 内联
-    # DEPRECATED-SHIM 标记：6 角色接口 + 3 灰色接口用 size= + result["data"][0]["url"]）。
-    # 清理需改请求参数本身（size= -> size_tier/ratio、data[0].url -> result["url"]），
-    # 正确性只能发真实 Agnes 请求验证（单测无法证明尺寸对），留待有 Agnes 连接时做。
-    # 垫片3 understand_text 已删（script_parser 改用 chat）；
-    # 垫片4 generate_video / 垫片5 edge_tts.synthesize 早已删。
+    # 阶段5 垫片已全部清理（③-e 清垫片1/2、③-b 清垫片3、更早清垫片4/5）。
+    # generate_image 现只接受 size_tier/ratio，返回 {url, b64}（无 data 字段）。
 
 
 async def _maybe_await(x):

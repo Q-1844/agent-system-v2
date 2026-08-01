@@ -225,7 +225,8 @@ class ApiClient {
     description: string;
     view: string;
     style?: string;
-    size?: string;
+    size_tier?: string;
+    ratio?: string;
   }): Promise<{
     success: boolean;
     raw_base64: string;
@@ -243,7 +244,8 @@ class ApiClient {
   async generateCharacterChain(params: {
     description: string;
     style?: string;
-    size?: string;
+    size_tier?: string;
+    ratio?: string;
   }): Promise<{
     success: boolean;
     raw_views: Record<string, string>;
@@ -262,7 +264,8 @@ class ApiClient {
   async generateCharacterSheet(params: {
     description: string;
     style?: string;
-    size?: string;
+    size_tier?: string;
+    ratio?: string;
   }): Promise<{
     success: boolean;
     sheet_raw: string;
@@ -296,7 +299,8 @@ class ApiClient {
     description: string;
     view: string;
     style?: string;
-    size?: string;
+    size_tier?: string;
+    ratio?: string;
     ref_images?: string[];
   }): Promise<{
     success: boolean;

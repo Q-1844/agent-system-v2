@@ -43,7 +43,8 @@ class SingleViewRequest(BaseModel):
     description: str          # 角色描述（英文）
     view: str = "front"       # front / side / back
     style: str = "anime"      # 风格
-    size: str = "1024x1536"
+    size_tier: str = "1K"
+    ratio: str = "2:3"        # 竖图（角色三视图：正面/侧面/背面）
 
 
 class SegmentOnlyRequest(BaseModel):
@@ -56,7 +57,8 @@ class RegenerateViewRequest(BaseModel):
     description: str
     view: str                    # 要重新生成的视角
     style: str = "anime"
-    size: str = "1024x1536"
+    size_tier: str = "1K"
+    ratio: str = "2:3"        # 竖图（角色三视图：正面/侧面/背面）
     ref_images: list[str] = []   # 参考图 base64 列表
 
 
@@ -64,14 +66,16 @@ class ChainViewRequest(BaseModel):
     """链式三视图生成请求"""
     description: str
     style: str = "anime"
-    size: str = "1024x1536"
+    size_tier: str = "1K"
+    ratio: str = "2:3"        # 竖图（角色三视图：正面/侧面/背面）
 
 
 class SheetViewRequest(BaseModel):
     """设定图三视图生成请求"""
     description: str
     style: str = "anime"
-    size: str = "1536x1024"
+    size_tier: str = "1K"
+    ratio: str = "3:2"        # 横图（设定图：三视角并排）
 
 
 # ============ prompt 构建 ============
@@ -173,14 +177,11 @@ async def character_generate_view(req: SingleViewRequest):
 
     try:
         result = await agnes.generate_image(
-            prompt=prompt, size=req.size
+            prompt=prompt, size_tier=req.size_tier, ratio=req.ratio
         )
-        if not result or "data" not in result or not result["data"]:
+        if not result or not result.get("url"):
             raise HTTPException(500, "图片生成失败")
-
-        url = result["data"][0].get("url")
-        if not url:
-            raise HTTPException(500, "返回数据中没有URL")
+        url = result["url"]
 
         # 下载图片
         import httpx
@@ -257,15 +258,12 @@ async def character_regenerate_view(req: RegenerateViewRequest):
 
     try:
         result = await agnes.generate_image(
-            prompt=prompt, size=req.size,
+            prompt=prompt, size_tier=req.size_tier, ratio=req.ratio,
             image_refs=image_refs if image_refs else None,
         )
-        if not result or "data" not in result or not result["data"]:
+        if not result or not result.get("url"):
             raise HTTPException(500, "图片生成失败")
-
-        url = result["data"][0].get("url")
-        if not url:
-            raise HTTPException(500, "返回数据中没有URL")
+        url = result["url"]
 
         async with httpx.AsyncClient(proxy=_AGNES_PROXY) as client:
             raw_bytes = (await client.get(url, timeout=60)).content
@@ -307,8 +305,8 @@ async def character_generate_chain(req: ChainViewRequest):
         # 1. 生成正面
         steps.append({"step": 1, "action": "生成正面", "status": "processing"})
         front_prompt = _build_view_prompt(req.description, req.style, "front")
-        front_result = await agnes.generate_image(prompt=front_prompt, size=req.size)
-        front_url = front_result["data"][0]["url"]
+        front_result = await agnes.generate_image(prompt=front_prompt, size_tier=req.size_tier, ratio=req.ratio)
+        front_url = front_result["url"]
         async with httpx.AsyncClient(proxy=_AGNES_PROXY) as client:
             front_raw = (await client.get(front_url, timeout=60)).content
         results["front_raw"] = _base64.b64encode(front_raw).decode("utf-8")
@@ -326,9 +324,9 @@ async def character_generate_chain(req: ChainViewRequest):
         side_prompt = _build_img2img_prompt(req.description, req.style, "side")
         side_ref = _transparent_to_white_bg_bytes(front_seg)
         side_result = await agnes.generate_image(
-            prompt=side_prompt, size=req.size, image_refs=[f"data:image/png;base64,{side_ref}"]
+            prompt=side_prompt, size_tier=req.size_tier, ratio=req.ratio, image_refs=[f"data:image/png;base64,{side_ref}"]
         )
-        side_url = side_result["data"][0]["url"]
+        side_url = side_result["url"]
         async with httpx.AsyncClient(proxy=_AGNES_PROXY) as client:
             side_raw = (await client.get(side_url, timeout=60)).content
         results["side_raw"] = _base64.b64encode(side_raw).decode("utf-8")
@@ -346,9 +344,9 @@ async def character_generate_chain(req: ChainViewRequest):
         back_prompt = _build_img2img_prompt(req.description, req.style, "back")
         back_ref = _transparent_to_white_bg_bytes(front_seg)
         back_result = await agnes.generate_image(
-            prompt=back_prompt, size=req.size, image_refs=[f"data:image/png;base64,{back_ref}"]
+            prompt=back_prompt, size_tier=req.size_tier, ratio=req.ratio, image_refs=[f"data:image/png;base64,{back_ref}"]
         )
-        back_url = back_result["data"][0]["url"]
+        back_url = back_result["url"]
         async with httpx.AsyncClient(proxy=_AGNES_PROXY) as client:
             back_raw = (await client.get(back_url, timeout=60)).content
         results["back_raw"] = _base64.b64encode(back_raw).decode("utf-8")
@@ -409,8 +407,8 @@ async def character_generate_sheet(req: SheetViewRequest):
         # 1. 生成设定图
         steps.append({"step": 1, "action": "生成设定图", "status": "processing"})
         prompt = _build_sheet_prompt(req.description, req.style)
-        sheet_result = await agnes.generate_image(prompt=prompt, size=req.size)
-        sheet_url = sheet_result["data"][0]["url"]
+        sheet_result = await agnes.generate_image(prompt=prompt, size_tier=req.size_tier, ratio=req.ratio)
+        sheet_url = sheet_result["url"]
         async with httpx.AsyncClient(proxy=_AGNES_PROXY) as client:
             sheet_raw = (await client.get(sheet_url, timeout=60)).content
         results["sheet_raw"] = _base64.b64encode(sheet_raw).decode("utf-8")
