@@ -85,7 +85,8 @@ class PollTransientError(AgnesError):
 
 
 class AgnesClient:
-    def __init__(self, config: dict, quota: QuotaLedger | None = None):
+    def __init__(self, config: dict, quota: QuotaLedger | None = None,
+                 transport: Optional[httpx.BaseTransport] = None):
         self.cfg      = config
         self.base_url = config["base_url"].rstrip("/")
         self.api_key  = config["api_key"]
@@ -96,6 +97,10 @@ class AgnesClient:
         self.quota    = quota or QuotaLedger.get_default()
         self._client: Optional[httpx.AsyncClient] = None
         self._img_pos: Optional[str] = None      # "extra" | "top"，双位置探测结果缓存
+        # 测试注入用（阶段5③-c）：传 httpx.MockTransport 拦截所有请求；默认 None 走真实网络。
+        # 生产路径（api_server.startup 构造 AgnesClient）不传 transport，初始化行为不变。
+        # 传了 transport 时 httpx 忽略 proxy（MockTransport 不走网络）。
+        self.transport = transport
 
     # ---------- 连接池 ----------
     async def client(self) -> httpx.AsyncClient:
@@ -106,7 +111,8 @@ class AgnesClient:
                          "Content-Type": "application/json"},
                 timeout=httpx.Timeout(connect=30, read=360, write=60, pool=30),
                 limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
-                proxy=self.proxy, follow_redirects=True)
+                proxy=self.proxy, follow_redirects=True,
+                transport=self.transport)
         return self._client
 
     async def aclose(self):
@@ -343,7 +349,8 @@ class AgnesClient:
         # 带 Authorization 头反而 401（实测），用无认证 client 下载。
         async with httpx.AsyncClient(
                 timeout=httpx.Timeout(connect=30, read=600, write=60, pool=30),
-                follow_redirects=True, proxy=self.proxy) as cli:
+                follow_redirects=True, proxy=self.proxy,
+                transport=self.transport) as cli:
             async with cli.stream("GET", url) as r:
                 r.raise_for_status()
                 with open(dest, "wb") as f:
