@@ -17,7 +17,7 @@ import deps
 from deps import (
     logger, _APP_CFG, _AGNES_PROXY,
     JOB_HANDLERS, task_store, _new_task,
-    get_controller, get_job_queue, get_rehost_host,
+    get_agnes_client, get_project_manager, get_job_queue, get_rehost_host,
 )
 
 router = APIRouter()
@@ -85,8 +85,7 @@ async def shot_audio(project_name: str, shot_id: str, req: ShotAudioRequest,
                      background_tasks: BackgroundTasks):
     """单镜配音（TTS -> 反推 num_frames -> 写回 audio+video 参数）"""
     try:
-        controller = get_controller()
-        project_dir = controller.project_manager.get_project_dir(project_name)
+        project_dir = get_project_manager().get_project_dir(project_name)
         from src.core.store import ProjectStore
         if ProjectStore(project_dir).load().get_shot(shot_id) is None:
             raise HTTPException(404, f"镜头 {shot_id} 不存在")
@@ -150,8 +149,7 @@ async def batch_audio(project_name: str, req: BatchAudioRequest,
                       background_tasks: BackgroundTasks):
     """批量配音（edge-tts 不占 Agnes 限流桶，并发 4，顺序写回避免丢失更新）"""
     try:
-        controller = get_controller()
-        project_dir = controller.project_manager.get_project_dir(project_name)
+        project_dir = get_project_manager().get_project_dir(project_name)
         from src.core.store import ProjectStore
         p = ProjectStore(project_dir).load()
         shots = p.all_shots()
@@ -229,8 +227,7 @@ class SplitDialogueRequest(BaseModel):
 async def split_shot_dialogue(project_name: str, shot_id: str, req: SplitDialogueRequest):
     """拆超长台词为多个镜头：原 Shot 保留第1段，后续段插入同场次新 Shot，shot_id 顺移。"""
     try:
-        controller = get_controller()
-        project_dir = controller.project_manager.get_project_dir(project_name)
+        project_dir = get_project_manager().get_project_dir(project_name)
         from src.core.store import ProjectStore
         from src.core.timing import split_dialogue as _split
         from src.core.models import Shot, ImageAsset, ShotStatus
@@ -294,8 +291,7 @@ async def get_project_shots(project_name: str):
     """返回 v2 项目结构（scenes/shots 含 first_frame/last_frame/audio/video 产物）。
     供前端 shot 级页面加载。local 路径前端用 media.ts 转 URL；url 是 Agnes 公网 URL。"""
     try:
-        controller = get_controller()
-        project_dir = controller.project_manager.get_project_dir(project_name)
+        project_dir = get_project_manager().get_project_dir(project_name)
         from src.core.store import ProjectStore
         p = ProjectStore(project_dir).load()
         from dataclasses import asdict
@@ -319,8 +315,7 @@ async def get_project_shots(project_name: str):
 async def get_project_timing(project_name: str):
     """时长预览：每镜 audio_seconds/planned_seconds/needs_split + 全片总时长"""
     try:
-        controller = get_controller()
-        project_dir = controller.project_manager.get_project_dir(project_name)
+        project_dir = get_project_manager().get_project_dir(project_name)
         from src.core.store import ProjectStore
         from src.core.timing import plan_shot_timing
         p = ProjectStore(project_dir).load()
@@ -396,8 +391,7 @@ async def _handler_first_frame(job, emit):
     """生成 N 候选分镜图（图生图/文生图），存 local + 公网 url，status=pending 等用户选。"""
     from src.core.store import ProjectStore
     from src.core.models import Asset, ShotStatus
-    controller = get_controller()
-    project_dir = controller.project_manager.get_project_dir(job.project)
+    project_dir = get_project_manager().get_project_dir(job.project)
     store = ProjectStore(project_dir)
     project = store.load()
     shot = project.get_shot(job.shot_id)
@@ -422,14 +416,14 @@ async def _handler_first_frame(job, emit):
     for i in range(variants):
         await emit("gen", f"{shot.shot_id} 生成候选 {i+1}/{variants}", int(i / variants * 100))
         seed = (shot.seed + i) if shot.seed is not None else None   # 多候选要有变化
-        res = await controller.agnes_client.generate_image(
+        res = await get_agnes_client().generate_image(
             prompt=prompt, image_refs=refs if use_i2i else None,
             size_tier=size_tier, ratio=ratio, seed=seed)
         url = res.get("url")
         if not url:
             raise RuntimeError("图片生成未返回公网 URL")
         dest = frames_dir / f"{shot.shot_id}_first_v{i+1}.png"
-        await controller.agnes_client.download(url, dest)   # 无认证 client，复用于图片资产
+        await get_agnes_client().download(url, dest)   # 无认证 client，复用于图片资产
         candidates.append(Asset(local=str(dest), url=url, status=ShotStatus.DONE.value))
         await emit("gen", f"{shot.shot_id} 候选 {i+1} 完成", int((i + 1) / variants * 100))
 
@@ -449,8 +443,7 @@ async def _handler_last_frame(job, emit):
     生成后若 split_next 非空，桥接拷贝给后继首帧（O2.first_frame = O.last_frame，保证 O->O2 无缝）。"""
     from src.core.store import ProjectStore
     from src.core.models import Asset, ImageAsset, ShotStatus
-    controller = get_controller()
-    project_dir = controller.project_manager.get_project_dir(job.project)
+    project_dir = get_project_manager().get_project_dir(job.project)
     store = ProjectStore(project_dir)
     project = store.load()
     shot = project.get_shot(job.shot_id)
@@ -467,14 +460,14 @@ async def _handler_last_frame(job, emit):
 
     await emit("gen", f"{shot.shot_id} 生成尾帧", 20)
     prompt = build_last_frame_prompt(project, shot)
-    res = await controller.agnes_client.generate_image(
+    res = await get_agnes_client().generate_image(
         prompt=prompt, image_refs=[ff_url],
         size_tier=project.style.size_tier or "1K", ratio=project.style.aspect_ratio or "16:9")
     url = res.get("url")
     if not url:
         raise RuntimeError("尾帧生成未返回公网 URL")
     dest = project_dir / "output" / "frames" / f"{shot.shot_id}_last.png"
-    await controller.agnes_client.download(url, dest)
+    await get_agnes_client().download(url, dest)
     store.update_shot(job.shot_id, lambda s: s.last_frame.mark_done(str(dest), url))
     await emit("done", f"{shot.shot_id} 尾帧完成", 90)
 
@@ -512,8 +505,7 @@ class ChooseFrameRequest(BaseModel):
 async def shot_first_frame(project_name: str, shot_id: str, req: FirstFrameRequest):
     """生成单镜头分镜图候选（入队 first_frame 任务，进度走全局 SSE）"""
     try:
-        controller = get_controller()
-        project_dir = controller.project_manager.get_project_dir(project_name)
+        project_dir = get_project_manager().get_project_dir(project_name)
         from src.core.store import ProjectStore
         if ProjectStore(project_dir).load().get_shot(shot_id) is None:
             raise HTTPException(404, f"镜头 {shot_id} 不存在")
@@ -533,8 +525,7 @@ async def shot_first_frame(project_name: str, shot_id: str, req: FirstFrameReque
 async def choose_first_frame(project_name: str, shot_id: str, req: ChooseFrameRequest):
     """选择分镜图候选：设 selected_index + first_frame.status=done（url_ready=True，放行视频）"""
     try:
-        controller = get_controller()
-        project_dir = controller.project_manager.get_project_dir(project_name)
+        project_dir = get_project_manager().get_project_dir(project_name)
         from src.core.store import ProjectStore
         from src.core.models import ShotStatus
         store = ProjectStore(project_dir)
@@ -567,8 +558,7 @@ async def rehost_first_frame(project_name: str, shot_id: str):
     幂等：已有 url 直接返回 rehosted=False。同步调用（几秒），不入队、不占 video 名额。
     🔴 imgbb 图为公开图（拿到链接即可访问）。上传失败明示抛错，不静默回落到重新生成。"""
     try:
-        controller = get_controller()
-        project_dir = controller.project_manager.get_project_dir(project_name)
+        project_dir = get_project_manager().get_project_dir(project_name)
         from src.core.store import ProjectStore
         from src.core.models import ShotStatus
         store = ProjectStore(project_dir)
@@ -602,8 +592,7 @@ async def rehost_first_frame(project_name: str, shot_id: str):
 async def shot_last_frame(project_name: str, shot_id: str):
     """生成单镜头尾帧（仅 keyframes；入队 last_frame 任务）"""
     try:
-        controller = get_controller()
-        project_dir = controller.project_manager.get_project_dir(project_name)
+        project_dir = get_project_manager().get_project_dir(project_name)
         from src.core.store import ProjectStore
         shot = ProjectStore(project_dir).load().get_shot(shot_id)
         if shot is None:
@@ -663,8 +652,7 @@ async def _handler_video(job, emit):
     from src.core.store import ProjectStore
     from src.core.prompt_builder import build_video_prompt
     from src.core.models import ShotStatus
-    controller = get_controller()
-    project_dir = controller.project_manager.get_project_dir(job.project)
+    project_dir = get_project_manager().get_project_dir(job.project)
     store = ProjectStore(project_dir)
     project = store.load()
     shot = project.get_shot(job.shot_id)
@@ -688,7 +676,7 @@ async def _handler_video(job, emit):
         shot = store.load().get_shot(job.shot_id)   # 取最新
 
     seconds = shot.video.num_frames / max(shot.video.frame_rate, 1)
-    ok, why = _video_preflight(shot, controller.agnes_client.quota, seconds)
+    ok, why = _video_preflight(shot, get_agnes_client().quota, seconds)
     if not ok:
         raise RuntimeError(why)   # 不发起 API 请求
 
@@ -726,7 +714,7 @@ async def _handler_video(job, emit):
             kwargs["image_urls"] = [shot.first_frame.selected.url, shot.last_frame.selected.url]
         else:
             kwargs["image_url"] = shot.first_frame.selected.url
-        created = await controller.agnes_client.create_video(prompt, mode=mode, **kwargs)
+        created = await get_agnes_client().create_video(prompt, mode=mode, **kwargs)
         vid = created.get("video_id") or created.get("task_id") or created.get("id")
         if not vid:
             raise RuntimeError(f"视频任务创建无 video_id: {created}")
@@ -743,7 +731,7 @@ async def _handler_video(job, emit):
     async def on_prog(pct, st, waited):
         await emit("poll", f"{shot.shot_id} {st} {pct}%（已等 {int(waited)}s）", int(pct))
     try:
-        res = await controller.agnes_client.poll_video(vid, interval=5, on_progress=on_prog)
+        res = await get_agnes_client().poll_video(vid, interval=5, on_progress=on_prog)
     except PollTransientError as e:
         # 网络/超时（连续 5 次）：不标 failed，保留 video_id+generating，
         # retry/recover 续轮询（不重提交、不丢已生成视频）
@@ -757,7 +745,7 @@ async def _handler_video(job, emit):
 
     # 下载
     dest = project_dir / "output" / "videos" / f"{shot.shot_id}.mp4"
-    await controller.agnes_client.download(res["url"], dest)
+    await get_agnes_client().download(res["url"], dest)
 
     # 🔴 回读入库（seconds/size 是服务端归一化后的真实值，FACTS §3.6）
     store.update_shot(job.shot_id, lambda s, d=str(dest), r=res: (
@@ -775,8 +763,7 @@ JOB_HANDLERS["video"] = _handler_video
 async def shot_video(project_name: str, shot_id: str):
     """生成单镜头视频（入队 video 任务，串行 worker，1 RPM）"""
     try:
-        controller = get_controller()
-        project_dir = controller.project_manager.get_project_dir(project_name)
+        project_dir = get_project_manager().get_project_dir(project_name)
         from src.core.store import ProjectStore
         if ProjectStore(project_dir).load().get_shot(shot_id) is None:
             raise HTTPException(404, f"镜头 {shot_id} 不存在")
@@ -800,8 +787,7 @@ class UpdateShotRequest(BaseModel):
 async def update_shot(project_name: str, shot_id: str, req: UpdateShotRequest):
     """更新镜头创作字段（link_mode / locked），写回 project.json。"""
     try:
-        controller = get_controller()
-        project_dir = controller.project_manager.get_project_dir(project_name)
+        project_dir = get_project_manager().get_project_dir(project_name)
         from src.core.store import ProjectStore
         from src.core.models import LinkMode
         valid = {m.value for m in LinkMode}
@@ -833,8 +819,7 @@ async def _handler_audio(job, emit):
     """单镜配音（TTS -> 反推 num_frames -> 写回）。复用阶段 2 _gen_one_audio。"""
     from src.core.store import ProjectStore
     from src.api.edge_tts_client import EdgeTTSClient
-    controller = get_controller()
-    project_dir = controller.project_manager.get_project_dir(job.project)
+    project_dir = get_project_manager().get_project_dir(job.project)
     store = ProjectStore(project_dir)
     shot = store.load().get_shot(job.shot_id)
     if shot is None:
@@ -899,8 +884,7 @@ async def orchestrate_project(project_name: str, req: OrchestrateRequest):
     🔴 last_frame/video gate 带 first_frame.url_ready 前置（首帧须已选择）。
     dry_run 返回视频数量/预计时间/配额消耗，让用户在 1 RPM 现实下预判。"""
     try:
-        controller = get_controller()
-        project_dir = controller.project_manager.get_project_dir(project_name)
+        project_dir = get_project_manager().get_project_dir(project_name)
         from src.core.store import ProjectStore
         p = ProjectStore(project_dir).load()
         shots = _select_shots(p, req.scope, req.skip_locked)

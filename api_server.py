@@ -94,6 +94,12 @@ async def startup():
 
         config_path = os.path.join(os.path.dirname(__file__), "config", "config.yaml")
         deps.pipeline_controller = PipelineController(config_path)
+        # 阶段5③-b 单例化：从 controller 拆出 agnes_client / project_manager，供各 router
+        # 用 get_agnes_client()/get_project_manager() 直接注入（42 处旧 controller.X 引用已改）。
+        # 构造逻辑（config 加载 + ${AGNES_API_KEY} 环境变量替换 + 实例化）仍留在
+        # PipelineController，本轮不动；controller 容器整体删除留待垫片1/2 清理轮。
+        deps.agnes_client = deps.pipeline_controller.agnes_client
+        deps.project_manager = deps.pipeline_controller.project_manager
         logger.info("API服务器已启动")
     except Exception as e:
         logger.error(f"初始化失败: {e}")

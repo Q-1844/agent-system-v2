@@ -142,19 +142,34 @@
 
 新管线 first-frame/last-frame/rehost 用新 API（size_tier/ratio + result["url"]，L1873/1918），不走垫片1/2。
 
-#### 垫片3（understand_text -> chat）
-- src/pipeline/script_parser.py:123 `await self.agnes_client.understand_text(prompt)`（剧本解析 enhance_descriptions 用）
+#### 🔞 垫片1/2 清理验证规则（清理时必读，别图快只测通不测对）
+垫片1/2 改的是请求参数本身（size= -> size_tier/ratio）与返回取值（result["data"][0]["url"] -> result["url"]）。
+**正确性没法靠单元测试证明**（TestClient 不真调 Agnes），必须发真实 Agnes 请求验证。
+除了确认接口不报 200/500，**还要实际检查生成图片的尺寸是否符合角色页面原本的预期比例**：
+- 阶段1 resolve_size 实测：请求 1280x704 / 1280x720 / 1K 16:9 全返回 1312x736（图片接口归一化，档位表无 1.8181）。
+- 阶段3 归一化裁切实测：1312x736(1.783) 被归一化成 1280x704(1.818)，宽高比不同有裁切。
+两轮都证明过「参数改了、接口通了」≠「尺寸对了」。所以垫片1/2 改完后，每个角色接口要肉眼/脚本
+核验生成图实际像素 = 角色页预期的 size（如 1024x1536 竖图、1536x1024 横设定图），不是只看 HTTP 200。
+🔴 没有真实 Agnes 连接（Clash / 国内节点）前不要做垫片1/2，否则等于盲改参数。
 
-#### controller 容器（③单例化时挨个改的检查清单）
-**controller.agnes_client（18 处）**：
-api_server.py: 186, 315, 338, 593, 680, 734, 752, 772, 839, 1427, 1870, 1877, 1915, 1922, 2136, 2174, 2191, 2205
+#### 垫片3（understand_text -> chat）✅ 已完成（阶段5③-b，2026-08-01）
+- src/pipeline/script_parser.py:123 `understand_text(prompt)` -> `chat([{"role":"user","content":prompt}], temperature=0.7, max_tokens=4096)`
+- agnes_client.py 的 understand_text 垫片方法已删；纯搬运（chat 调用与原垫片等价，不改请求格式）。
 
-**controller.project_manager（24 处）**：
-api_server.py: 409, 422, 1267, 1321, 1382, 1419, 1534, 1599, 1678, 1743, 1768, 1845, 1898, 1961, 1982, 2016, 2051, 2112, 2224, 2249, 2282, 2311, 2369, 2493
+#### controller 容器（③-b 单例化）✅ 引用迁移已完成（2026-08-01）
+42 处 controller.agnes_client / controller.project_manager 引用已全部迁到 deps getter：
+- `get_agnes_client()`：characters(6) + shots(8) + test_pages(5) + script(1, ScriptParser 构造) + lifecycle(1) = 21 处
+- `get_project_manager()`：characters(3) + shots(12) + compose(2) + projects(2) + script(1) + lifecycle(1) = 21 处
+（下行号清单是拆 routers 前的 api_server.py 行号，已失效；以本节计数为准。）
 
-**controller.config**：api_server.py 无引用（grep 零命中）。controller._load_config 设置 self.config 但外部不读，③可删 config 属性。
+原行号清单（历史参考，已失效）：
+- controller.agnes_client 18 处：api_server.py: 186, 315, 338, 593, 680, 734, 752, 772, 839, 1427, 1870, 1877, 1915, 1922, 2136, 2174, 2191, 2205
+- controller.project_manager 24 处：api_server.py: 409, 422, 1267, 1321, 1382, 1419, 1534, 1599, 1678, 1743, 1768, 1845, 1898, 1961, 1982, 2016, 2051, 2112, 2224, 2249, 2282, 2311, 2369, 2493
+- controller.config：外部零引用（grep 命中 0）。controller._load_config 设置 self.config 但外部不读。
 
-合计 42 处 controller 引用（agnes_client 18 + project_manager 24）。③单例化 agnes_client + project_manager 后，这 42 处挨个改成 get_agnes_client()/get_project_manager() 依赖注入，即可删 controller 容器。
+controller 容器**保留为工厂**：api_server.startup 构造 PipelineController 后把 agnes_client / project_manager
+拆到 deps 单例。构造逻辑（config 加载 + ${AGNES_API_KEY} env 替换）不动——单测无法证明 env 替换正确。
+**controller 容器整体删除留待垫片1/2 清理轮**（那时构造可一并迁入 deps，并发真实请求验证尺寸）。
 
 ### 3. 灰色接口调查（本轮不删，结论记录）
 

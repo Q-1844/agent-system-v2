@@ -3,12 +3,17 @@
 阶段5③拆分（PHASE_5 §5.2）：把 api_server.py 模块级的单例、getter、配置、路径、
 任务存储抽到此处。api_server 与各 router 都从此 import，互不循环。
 
-🔴 reassigned 单例（pipeline_controller / job_queue / _rehost_host）在 api_server.startup()
-中赋值：`deps.pipeline_controller = ...` / `deps.job_queue = ...`。
-getter（get_controller / get_job_queue / get_rehost_host）读取本模块 global，未就绪抛 503。
-因此引用这三个单例时必须用 `deps.X` 属性访问，不能用 `from deps import X`
+🔴 reassigned 单例（pipeline_controller / agnes_client / project_manager / job_queue /
+_rehost_host）在 api_server.startup() 中赋值：
+`deps.pipeline_controller = ...` / `deps.job_queue = ...`。
+agnes_client / project_manager 由 PipelineController 构造后从 controller 拆出赋值
+（构造逻辑/env 替换仍留在 controller，本轮只搬访问点）。
+getter（get_controller / get_agnes_client / get_project_manager / get_job_queue /
+get_rehost_host）读取本模块 global，未就绪抛 503。
+因此引用这些单例时必须用 `deps.X` 属性访问，不能用 `from deps import X`
 （后者会在 import 时绑死 None，startup 赋值后看不到）。
 dict 单例（JOB_HANDLERS / task_store / task_progress）只 mutate 不 reassign，`from deps import` 安全。
+getter 函数本身可 `from deps import`（调用时才读 global）。
 """
 import os
 import json
@@ -46,6 +51,11 @@ JOB_HANDLERS: dict = {}
 
 # 全局单例（startup 中赋值；getter 未就绪抛 503）
 pipeline_controller = None
+# agnes_client / project_manager 由 PipelineController 构造后拆出（阶段5③-b 单例化）：
+# 构造逻辑（config 加载 + ${AGNES_API_KEY} 环境变量替换 + AgnesClient/ProjectManager 实例化）
+# 仍留在 controller.py，本轮只把访问点从 controller.X 改成 get_X() 依赖注入。
+agnes_client = None
+project_manager = None
 job_queue = None
 
 
@@ -57,6 +67,26 @@ def get_controller():
             detail="服务未就绪，Pipeline控制器初始化失败。请检查配置文件和API密钥。"
         )
     return pipeline_controller
+
+
+def get_agnes_client():
+    """安全获取 AgnesClient 单例（全项目共享，限流/配额/连接池复用）。未就绪抛 503。"""
+    if agnes_client is None:
+        raise HTTPException(
+            status_code=503,
+            detail="服务未就绪，AgnesClient 初始化失败。请检查配置文件和API密钥。"
+        )
+    return agnes_client
+
+
+def get_project_manager():
+    """安全获取 ProjectManager 单例（项目目录管理）。未就绪抛 503。"""
+    if project_manager is None:
+        raise HTTPException(
+            status_code=503,
+            detail="服务未就绪，ProjectManager 初始化失败。"
+        )
+    return project_manager
 
 
 def get_job_queue():

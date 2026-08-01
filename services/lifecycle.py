@@ -14,11 +14,10 @@ async def recover_pending_videos():
     的镜头先 poll_video 查一次，不盲目重提交（省 60s + 不重扣配额）。
     已完成 -> 下载入库；仍在跑/失效 -> 标 queued 并入队由 video handler 续轮询。"""
     try:
-        controller = deps.pipeline_controller
-        if controller is None:
+        if deps.agnes_client is None:
             return
         from src.core.store import ProjectStore
-        client = controller.agnes_client
+        client = deps.agnes_client
         for pdir in projects_dir.iterdir():
             if not pdir.is_dir():
                 continue
@@ -59,11 +58,10 @@ def job_target_exists(project: Optional[str], shot_id: Optional[str]) -> bool:
     无 project 的 job（如全局 compose）不算孤儿；controller 未就绪时不误清。"""
     if not project:
         return True
-    ctrl = deps.pipeline_controller
-    if ctrl is None:
+    if deps.project_manager is None:
         return True
     try:
-        pdir = ctrl.project_manager.get_project_dir(project)
+        pdir = deps.project_manager.get_project_dir(project)
     except Exception:
         return False
     if not (pdir / "output" / "project.json").exists():

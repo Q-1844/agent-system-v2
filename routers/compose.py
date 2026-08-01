@@ -9,7 +9,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
 
 from deps import (
-    get_controller, logger, _new_task, task_store, JOB_HANDLERS,
+    get_project_manager, logger, _new_task, task_store, JOB_HANDLERS,
 )
 
 router = APIRouter()
@@ -20,8 +20,7 @@ async def _handler_compose(job, emit):
     from src.core.store import ProjectStore
     from src.pipeline.video_composer import VideoComposer
     from src.utils.file_saver import FileSaver
-    controller = get_controller()
-    project_dir = controller.project_manager.get_project_dir(job.project)
+    project_dir = get_project_manager().get_project_dir(job.project)
     project = ProjectStore(project_dir).load()
     width = int(job.params.get("width", 1280))
     height = int(job.params.get("height", 720))
@@ -72,8 +71,7 @@ async def compose_shots_video(project_name: str, request: Request,
                               background_tasks: BackgroundTasks):
     """阶段 2 shot 级合成（concat->整音轨->烧全片SRT，Ken Burns 兜底，无逐镜偏移）"""
     try:
-        controller = get_controller()
-        project_dir = controller.project_manager.get_project_dir(project_name)
+        project_dir = get_project_manager().get_project_dir(project_name)
         try:
             body = await request.json()
         except Exception:

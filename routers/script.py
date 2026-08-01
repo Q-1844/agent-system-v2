@@ -2,7 +2,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from deps import get_controller, logger, _read_parsed_script, _write_parsed_script
+from deps import get_agnes_client, get_project_manager, logger, _read_parsed_script, _write_parsed_script
 
 router = APIRouter()
 
@@ -16,8 +16,7 @@ class SaveScriptRequest(BaseModel):
 async def save_project_script(project_name: str, req: SaveScriptRequest):
     """保存剧本YAML并解析为 parsed_script.json（保留已有生成结果与角色参考图）"""
     try:
-        controller = get_controller()
-        project_dir = controller.project_manager.get_project_dir(project_name)
+        project_dir = get_project_manager().get_project_dir(project_name)
 
         input_dir = project_dir / "input"
         input_dir.mkdir(parents=True, exist_ok=True)
@@ -25,7 +24,7 @@ async def save_project_script(project_name: str, req: SaveScriptRequest):
         script_path.write_text(req.script_content, encoding="utf-8")
 
         from src.pipeline.script_parser import ScriptParser
-        parser = ScriptParser(controller.agnes_client)
+        parser = ScriptParser(get_agnes_client())
         parsed = await parser.parse(str(script_path))
 
         # 保留已有场景生成结果

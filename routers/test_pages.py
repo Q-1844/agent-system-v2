@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from deps import (
-    logger, BASE_DIR, get_controller, _AGNES_PROXY,
+    logger, BASE_DIR, get_agnes_client, _AGNES_PROXY,
     _save_base64_image, _load_image_as_base64,
 )
 
@@ -57,7 +57,7 @@ async def scene_test_page():
 async def generate_image(request: Request):
     """直接生成图片（供测试页调用）"""
     try:
-        controller = get_controller()
+        agnes = get_agnes_client()
         body = await request.json()
         prompt = body.get("prompt", "")
         seed = body.get("seed")
@@ -66,7 +66,7 @@ async def generate_image(request: Request):
         if not prompt:
             raise HTTPException(status_code=400, detail="prompt 不能为空")
 
-        result = await controller.agnes_client.generate_image(
+        result = await agnes.generate_image(
             prompt=prompt, seed=seed, size=size
         )
         return result
@@ -80,7 +80,7 @@ async def generate_image(request: Request):
 async def generate_image_base64(request: Request):
     """生成图片并返回 base64（避免 CORS 问题）"""
     try:
-        controller = get_controller()
+        agnes = get_agnes_client()
         body = await request.json()
         prompt = body.get("prompt", "")
         seed = body.get("seed")
@@ -89,7 +89,7 @@ async def generate_image_base64(request: Request):
         if not prompt:
             raise HTTPException(status_code=400, detail="prompt 不能为空")
 
-        result = await controller.agnes_client.generate_image(
+        result = await agnes.generate_image(
             prompt=prompt, seed=seed, size=size
         )
 
@@ -179,10 +179,7 @@ async def generate_storyboard(req: StoryboardRequest):
 
     返回: image_url, image_base64, prompt
     """
-    try:
-        controller = get_controller()
-    except HTTPException:
-        raise
+    agnes = get_agnes_client()
 
     # 构建 prompt
     prompt = _build_storyboard_prompt(
@@ -200,7 +197,7 @@ async def generate_storyboard(req: StoryboardRequest):
             image_refs = [f"data:image/png;base64,{ref}" for ref in req.image_refs]
 
         # 生成图片
-        result = await controller.agnes_client.generate_image(
+        result = await agnes.generate_image(
             prompt=prompt,
             size=req.size,
             image_refs=image_refs,
@@ -246,10 +243,7 @@ async def generate_storyboard_with_ref(
     """
     使用参考图生成分镜（图生图）
     """
-    try:
-        controller = get_controller()
-    except HTTPException:
-        raise
+    agnes = get_agnes_client()
 
     # 构建 prompt
     prompt = f"Based on this character reference, create a scene: {description}, {style}, anime scene, detailed background"
@@ -258,7 +252,7 @@ async def generate_storyboard_with_ref(
     image_ref = f"data:image/png;base64,{ref_image_base64}"
 
     try:
-        result = await controller.agnes_client.generate_image(
+        result = await agnes.generate_image(
             prompt=prompt,
             size=size,
             image_refs=[image_ref],
@@ -301,10 +295,7 @@ async def generate_storyboard_batch(req: StoryboardBatchRequest):
 
     返回: 每个场景的生成结果
     """
-    try:
-        controller = get_controller()
-    except HTTPException:
-        raise
+    agnes = get_agnes_client()
 
     results = []
 
@@ -325,7 +316,7 @@ async def generate_storyboard_batch(req: StoryboardBatchRequest):
         )
 
         try:
-            result = await controller.agnes_client.generate_image(
+            result = await agnes.generate_image(
                 prompt=prompt,
                 size=req.size,
             )

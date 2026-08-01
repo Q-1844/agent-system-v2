@@ -8,8 +8,8 @@
 #   6. 视频轮询 5s，回读 seconds/size
 #   7. 接入 RateLimiter + QuotaLedger
 #   8. size 用档位 + ratio
-# 另：保留旧方法 understand_text / generate_video 作为向后兼容垫片，
-# generate_image 兼容旧 size= 入参与 data 字段返回，确保现有调用方与旧 HTTP 接口不中断。
+# 另：generate_image 兼容旧 size= 入参与 data 字段返回（垫片1/2，角色页面接口仍在用）；
+# understand_text / generate_video 垫片已随阶段5③-b 删除（script_parser 改用 chat）。
 from __future__ import annotations
 import asyncio, logging, random
 from typing import Any, Dict, List, Optional
@@ -351,18 +351,12 @@ class AgnesClient:
                         f.write(chunk)
         return str(dest)
 
-    # ===================== 向后兼容垫片（旧调用方仍可用） =====================
-    # DEPRECATED-SHIM: 阶段 5 本轮保留 understand_text 及 generate_image 的 legacy size=/data
-    # 兼容层（垫片1/2 角色页面接口仍在用、垫片3 script_parser 仍在用）；随 agnes_client
-    # 单例化（下轮 ③ 拆分）一并清理。垫片4 generate_video / 垫片5 edge_tts.synthesize 已删。
-    async def understand_text(self, prompt: str, **kwargs) -> str:
-        """【向后兼容】旧名，等价于 chat。script_parser 仍在用。"""
-        _shim_warn("understand_text")
-        return await self.chat(
-            [{"role": "user", "content": prompt}],
-            temperature=kwargs.get("temperature", 0.7),
-            max_tokens=kwargs.get("max_tokens", 4096),
-        )
+    # generate_image 仍保留 legacy size= 入参与 data 字段返回（垫片1/2，见上方 L166 内联
+    # DEPRECATED-SHIM 标记：6 角色接口 + 3 灰色接口用 size= + result["data"][0]["url"]）。
+    # 清理需改请求参数本身（size= -> size_tier/ratio、data[0].url -> result["url"]），
+    # 正确性只能发真实 Agnes 请求验证（单测无法证明尺寸对），留待有 Agnes 连接时做。
+    # 垫片3 understand_text 已删（script_parser 改用 chat）；
+    # 垫片4 generate_video / 垫片5 edge_tts.synthesize 早已删。
 
 
 async def _maybe_await(x):

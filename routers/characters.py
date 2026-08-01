@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 import deps
 from deps import (
-    BASE_DIR, logger, get_controller, _AGNES_PROXY,
+    BASE_DIR, logger, get_agnes_client, get_project_manager, _AGNES_PROXY,
     _read_parsed_script, _write_parsed_script,
     _save_base64_image, _load_image_as_base64,
 )
@@ -167,15 +167,12 @@ async def character_generate_view(req: SingleViewRequest):
     生成单个视角 + 抠图
     返回: raw_base64 (白底原图), seg_base64 (透明抠图), prompt
     """
-    try:
-        controller = get_controller()
-    except HTTPException:
-        raise
+    agnes = get_agnes_client()
 
     prompt = _build_view_prompt(req.description, req.style, req.view)
 
     try:
-        result = await controller.agnes_client.generate_image(
+        result = await agnes.generate_image(
             prompt=prompt, size=req.size
         )
         if not result or "data" not in result or not result["data"]:
@@ -238,10 +235,7 @@ async def character_regenerate_view(req: RegenerateViewRequest):
     带参考图重新生成单视角
     传入其他视角的图片作为参考，重新生成指定视角
     """
-    try:
-        controller = get_controller()
-    except HTTPException:
-        raise
+    agnes = get_agnes_client()
 
     import httpx
     segmentor = _get_segmentor()
@@ -262,7 +256,7 @@ async def character_regenerate_view(req: RegenerateViewRequest):
             continue
 
     try:
-        result = await controller.agnes_client.generate_image(
+        result = await agnes.generate_image(
             prompt=prompt, size=req.size,
             image_refs=image_refs if image_refs else None,
         )
@@ -302,10 +296,7 @@ async def character_generate_chain(req: ChainViewRequest):
     链式三视图生成
     正面(文生图) -> 抠图 -> 侧面(图生图,正面作参考) -> 抠图 -> 背面(图生图,正面作参考) -> 抠图
     """
-    try:
-        controller = get_controller()
-    except HTTPException:
-        raise
+    agnes = get_agnes_client()
 
     import httpx
     segmentor = _get_segmentor()
@@ -316,7 +307,7 @@ async def character_generate_chain(req: ChainViewRequest):
         # 1. 生成正面
         steps.append({"step": 1, "action": "生成正面", "status": "processing"})
         front_prompt = _build_view_prompt(req.description, req.style, "front")
-        front_result = await controller.agnes_client.generate_image(prompt=front_prompt, size=req.size)
+        front_result = await agnes.generate_image(prompt=front_prompt, size=req.size)
         front_url = front_result["data"][0]["url"]
         async with httpx.AsyncClient(proxy=_AGNES_PROXY) as client:
             front_raw = (await client.get(front_url, timeout=60)).content
@@ -334,7 +325,7 @@ async def character_generate_chain(req: ChainViewRequest):
         steps.append({"step": 3, "action": "生成侧面(参考正面)", "status": "processing"})
         side_prompt = _build_img2img_prompt(req.description, req.style, "side")
         side_ref = _transparent_to_white_bg_bytes(front_seg)
-        side_result = await controller.agnes_client.generate_image(
+        side_result = await agnes.generate_image(
             prompt=side_prompt, size=req.size, image_refs=[f"data:image/png;base64,{side_ref}"]
         )
         side_url = side_result["data"][0]["url"]
@@ -354,7 +345,7 @@ async def character_generate_chain(req: ChainViewRequest):
         steps.append({"step": 5, "action": "生成背面(参考正面)", "status": "processing"})
         back_prompt = _build_img2img_prompt(req.description, req.style, "back")
         back_ref = _transparent_to_white_bg_bytes(front_seg)
-        back_result = await controller.agnes_client.generate_image(
+        back_result = await agnes.generate_image(
             prompt=back_prompt, size=req.size, image_refs=[f"data:image/png;base64,{back_ref}"]
         )
         back_url = back_result["data"][0]["url"]
@@ -407,10 +398,7 @@ async def character_generate_sheet(req: SheetViewRequest):
     设定图三视图生成
     一张图出三视角 -> 裁剪 -> 分别抠图
     """
-    try:
-        controller = get_controller()
-    except HTTPException:
-        raise
+    agnes = get_agnes_client()
 
     import httpx
     segmentor = _get_segmentor()
@@ -421,7 +409,7 @@ async def character_generate_sheet(req: SheetViewRequest):
         # 1. 生成设定图
         steps.append({"step": 1, "action": "生成设定图", "status": "processing"})
         prompt = _build_sheet_prompt(req.description, req.style)
-        sheet_result = await controller.agnes_client.generate_image(prompt=prompt, size=req.size)
+        sheet_result = await agnes.generate_image(prompt=prompt, size=req.size)
         sheet_url = sheet_result["data"][0]["url"]
         async with httpx.AsyncClient(proxy=_AGNES_PROXY) as client:
             sheet_raw = (await client.get(sheet_url, timeout=60)).content
@@ -765,8 +753,7 @@ async def bind_character_to_project(project_name: str, req: BindCharacterRequest
     - 角色不存在则追加，存在则更新
     """
     try:
-        controller = get_controller()
-        project_dir = controller.project_manager.get_project_dir(project_name)
+        project_dir = get_project_manager().get_project_dir(project_name)
         char_dir = project_dir / "output" / "characters"
         char_dir.mkdir(parents=True, exist_ok=True)
 
@@ -819,8 +806,7 @@ async def update_project_character(
 ):
     """更新项目角色的描述/名称（改名时同步重命名文件、更新场景角色名）"""
     try:
-        controller = get_controller()
-        project_dir = controller.project_manager.get_project_dir(project_name)
+        project_dir = get_project_manager().get_project_dir(project_name)
         data = _read_parsed_script(project_dir)
 
         target = None
@@ -880,8 +866,7 @@ async def update_project_character(
 async def get_project_characters_full(project_name: str):
     """获取项目角色（含 reference_images 路径，供角色页/分镜页使用）"""
     try:
-        controller = get_controller()
-        project_dir = controller.project_manager.get_project_dir(project_name)
+        project_dir = get_project_manager().get_project_dir(project_name)
         data = _read_parsed_script(project_dir)
         chars = data.get("characters", [])
         for c in chars:
