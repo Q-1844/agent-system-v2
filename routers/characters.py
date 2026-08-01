@@ -84,7 +84,7 @@ def _build_view_prompt(description: str, style: str, view: str) -> str:
     base = (
         f"{description}, "
         f"{style} illustration, "
-        "single small character centered, pure white background, full body, "
+        "single small character centered, pure white backdrop, full body, "
         "lots of white space around character, character takes up 40-50% of image, "
         "detailed character design, clean lines, "
         "soft studio lighting, high quality, sharp details"
@@ -105,14 +105,14 @@ def _build_img2img_prompt(description: str, style: str, view: str) -> str:
             f"Keep the exact same character design: {description}. "
             f"Keep the same {style} art style, clothing, hair color, body proportions. "
             f"Small character centered with lots of white space. "
-            f"White background, full body, standing straight, high quality, detailed character design"
+            f"Pure white backdrop, full body, standing straight, high quality, detailed character design"
         ),
         "back": (
             f"Rotate this character to show the back view, character facing away from camera. "
             f"Keep the exact same character design: {description}. "
             f"Keep the same {style} art style, clothing, hair color, body proportions. "
             f"Small character centered with lots of white space. "
-            f"White background, full body, standing pose, back of head and body clearly visible, "
+            f"Pure white backdrop, full body, standing pose, back of head and body clearly visible, "
             f"high quality, detailed character design"
         ),
     }
@@ -127,7 +127,7 @@ def _build_sheet_prompt(description: str, style: str) -> str:
         f"1) Front view facing the camera, "
         f"2) Right side view showing exact 90-degree profile silhouette, "
         f"3) Back view facing completely away from camera with no face visible. "
-        f"Full body, standing in relaxed pose, pure white background, "
+        f"Full body, standing in relaxed pose, pure white backdrop, "
         f"even studio lighting, consistent proportions across all views, "
         f"{style} illustration style, clean lines, "
         f"character design sheet format, high quality, detailed"
