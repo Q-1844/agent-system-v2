@@ -879,7 +879,7 @@ class OrchestrateRequest(BaseModel):
 
 @router.post("/api/project/{project_name}/orchestrate")
 async def orchestrate_project(project_name: str, req: OrchestrateRequest):
-    """编排器（替代 /api/run）：内部逐个入队 shot 级 handler，白捡断点续跑。
+    """编排器：内部逐个入队 shot 级 handler，白捡断点续跑。
     顺序不可调换：first_frame -> audio -> last_frame -> video -> compose。
     🔴 last_frame/video gate 带 first_frame.url_ready 前置（首帧须已选择）。
     dry_run 返回视频数量/预计时间/配额消耗，让用户在 1 RPM 现实下预判。"""
