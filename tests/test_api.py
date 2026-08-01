@@ -78,3 +78,13 @@ def test_old_task_current_404(client):
     # task/{task_id} 把 current 当 task_id，返回 404（task_store 无 'current'）或 200（如有）
     # 关键：不再有专属的 current 路由返回当前任务
     assert r.status_code in (404, 200)
+
+
+def test_old_test_pages_404(client):
+    """test_pages 灰色接口已删（2026-08-01）：测试 HTML 路由 + generate-image + scene 库 + storyboard/generate"""
+    assert client.get("/character-test").status_code == 404
+    assert client.get("/scene-test").status_code == 404
+    assert client.get("/storyboard-test").status_code == 404
+    assert client.post("/api/generate-image", json={}).status_code == 404
+    assert client.get("/api/scene/list").status_code == 404
+    assert client.post("/api/storyboard/generate", json={}).status_code == 404

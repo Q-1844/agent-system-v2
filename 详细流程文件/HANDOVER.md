@@ -171,7 +171,7 @@ controller 容器**保留为工厂**：api_server.startup 构造 PipelineControl
 拆到 deps 单例。构造逻辑（config 加载 + ${AGNES_API_KEY} env 替换）不动——单测无法证明 env 替换正确。
 **controller 容器整体删除留待垫片1/2 清理轮**（那时构造可一并迁入 deps，并发真实请求验证尺寸）。
 
-### 3. 灰色接口调查（本轮不删，结论记录）
+### 3. 灰色接口调查（✅ A类已删 2026-08-01；B类 test_segmentation 待定）
 
 灰色接口分两类：
 
@@ -196,7 +196,7 @@ controller 容器**保留为工厂**：api_server.startup 构造 PipelineControl
 
 结论：test_segmentation 是**独立抠图方法对比测试服务器**（8765），与 api_server 8000 完全无关。本轮不动，下轮确认是否保留。
 
-### 未查明/待人工确认
-- character_test/scene_test/storyboard_test.html 这三个测试页面是否还在用（用户调试习惯）。如果不用，灰色接口 A 类可删。
-- test_segmentation 独立服务器是否还用（抠图对比测试）。如果不用，可删。
-- 这两类都不影响主流程，删除代价是"以后没法调试"（不在回归测试体现）。
+### 待人工确认
+- ✅ A类已删（2026-08-01）：character_test/scene_test/storyboard_test.html + routers/test_pages.py + /api/generate-image(-base64) + /api/storyboard/generate(-with-ref/batch) + /api/scene/* + startup init_default_scenes 调用。grep 确认主前端 7777 不调（src/ 零命中）、无 README/脚本引用。saved_scenes 数据目录留盘未删（无代码读取，要清可手动 rm）。
+- test_segmentation 独立服务器（8765）是否还用（抠图对比测试）。如果不用，可删。本轮不动。
+- test_segmentation 不影响主流程，删除代价是"以后没法调试"（不在回归测试体现）。

@@ -68,7 +68,6 @@ from routers import characters  # noqa: E402
 from routers import compose  # noqa: E402
 from routers import jobs  # noqa: E402
 from routers import shots  # noqa: E402
-from routers import test_pages  # noqa: E402
 app.include_router(system.router)
 app.include_router(projects.router)
 app.include_router(script.router)
@@ -76,7 +75,6 @@ app.include_router(characters.router)
 app.include_router(compose.router)
 app.include_router(jobs.router)
 app.include_router(shots.router)
-app.include_router(test_pages.router)
 
 
 @app.on_event("startup")
@@ -107,8 +105,6 @@ async def startup():
 
     # 初始化默认角色到角色库
     characters._init_default_characters()
-    # 初始化默认场景到场景库（灰色接口 test_pages）
-    test_pages.init_default_scenes()
 
     # 阶段 3：启动全局任务队列 + 崩溃恢复（恢复在后台跑，不阻塞服务就绪）
     try:
