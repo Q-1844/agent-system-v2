@@ -24,7 +24,7 @@
 | 文本模型 | `agnes-2.0-flash` |
 | 图片模型 | `agnes-image-2.1-flash`（另有 `agnes-image-2.0-flash`） |
 | 视频模型 | `agnes-video-v2.0` |
-| 价格 | 当前全部 $0（文本 $0/1M token、图片 $0/张、视频 $0/秒）。⚠️ 视频/图片后续调整概率较高，以 platform.agnes-ai.cn 计费页为准 |
+| 价格 | 当前全部 $0（文本 $0/1M token、图片 $0/张、视频 $0/秒）。⚠️ 视频/图片后续调整概率较高，以 platform.agnes-ai.cn 计费页为准。🔴 2026-08-01 探针实测（probe_agnes_image.py）：.cn 图片接口可通（1K 1:1 单图 200，返回 1024x1024 PNG），但**计费是否真的 $0 无法从 API 响应判断**（响应体无任何计费/额度字段），platform.agnes-ai.cn 计费页仍需人工核对 |
 
 **模型名必须走配置文件，不许硬编码在业务代码里。** Agnes 迭代很快，新版本随时可能上线。
 
@@ -310,6 +310,15 @@ Authorization: Bearer <API_KEY>
 - 视频还额外受**每日生成秒数**配额约束（Token Plan 用户是每天 500 秒；免费用户官方未公布具体数值，**按存在配额来设计**）
 - 图片按**张数**计
 - 文本按**请求次数**计
+
+### 4.3.1 探针实测（2026-08-01，probe_agnes_image.py，.cn 节点）
+
+用现有 AgnesClient 发 1K 1:1 单图请求（不改任何代码），确认图片接口现状：
+- ✅ 接口通：POST /v1/images/generations 200，返回 url=`platform-outputs.agnes-ai.space/images/t2i/<hash>.png`
+- ✅ 实际尺寸 1024x1024（1:1 档位无归一化；与 §3.4.1 记的 1K 16:9->1312x736 归一化一致--仅非标准档才被归一化）
+- ✅ 资产下载 200（image/png，1.06MB），GCS 公开读对象无需认证（§5 已记）
+- 本地 QuotaLedger（项目自配，**非 Agnes 服务端配额**）：images limit=500/天，1 请求消耗 1 单位
+- 🔴 **真实计费（扣钱/免费额度）API 响应里没有任何字段可判断**，须人工去 platform.agnes-ai.cn 计费页核对（"去 platform 查计费页别信二手报道"待办仍未闭环，探针只证通了接口、没证计费）
 
 ### 4.4 限制池是按「密钥类型」共享的
 
