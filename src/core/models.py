@@ -248,6 +248,47 @@ class Shot:
     characters: List[str] = field(default_factory=list)
     dialogue: str = ""
 
+    # ---- 结构化镜头字段（提示词.md 镜头工作台）----
+    # 旧字段 camera/lighting/motion/prompt_en 等保留兼容（§14 兼容规则 6/7/8），
+    # 新字段与旧字段不互相覆盖：camera(机位+运镜) 与 camera_angle/camera_movement 分离；
+    # prompt_en 继续作为首帧英文提示词兼容字段（§14 规则 5），first_frame 不另设 prompt_en。
+    # 首帧
+    opening_state: str = ""           # 主体起始状态（姿态/朝向/表情/物体初始状态）
+    camera_angle: str = ""            # 机位角度（平视/低机位/高机位/...，与运镜分离）
+    composition: str = ""             # 构图（专业）
+    important_details: str = ""       # 重要画面细节（专业）
+    required_elements: List[str] = field(default_factory=list)  # 必须保持/出现的元素（专业，多选+自定义）
+    # 尾帧
+    last_frame_description: str = ""  # 结束画面
+    end_state: str = ""               # 主体结束状态
+    frame_change: str = ""            # 相对首帧的变化
+    preserve_elements: List[str] = field(default_factory=list)  # 保持一致（角色身份/面部/服装/场景/...）
+    add_elements: str = ""            # 新增元素（专业）
+    remove_elements: str = ""         # 删除元素（专业）
+    end_composition: str = ""         # 结束构图/摄影机状态（专业）
+    preserve_custom: str = ""         # 自定义保持要求（专业）
+    # 视频
+    camera_movement: str = ""         # 摄影机运动（与机位 camera 分离）
+    motion_pace: str = ""             # 动作节奏
+    environment_motion: str = ""      # 环境运动（专业）
+    action_sequence: str = ""         # 动作发生顺序（专业）
+    camera_movement_detail: str = ""  # 摄影机运动细节（专业）
+    transition_description: str = ""  # 首尾帧过渡关系（仅 keyframes，专业）
+    video_preserve_elements: List[str] = field(default_factory=list)  # 视频保持稳定
+    video_preserve_custom: str = ""   # 自定义稳定要求（专业）
+    target_duration_s: Optional[float] = None  # 用户目标时长（秒）；None=跟随配音（audio 反推）
+    # 三类独立英文提示词 + 手动 override + 状态签名（§15）
+    # 首帧 = prompt_en（兼容）+ first_frame_prompt_override；尾帧/视频各一份。
+    # *_prompt_sig = 上次生成该提示词时结构字段的签名，用于检测"结构字段已变化，待更新"。
+    last_frame_prompt_en: str = ""
+    video_prompt_en: str = ""
+    first_frame_prompt_override: str = ""
+    last_frame_prompt_override: str = ""
+    video_prompt_override: str = ""
+    first_frame_prompt_sig: str = ""
+    last_frame_prompt_sig: str = ""
+    video_prompt_sig: str = ""
+
     # ---- 生成策略 ----
     link_mode: str = LinkMode.I2V.value
     seed: Optional[int] = None
