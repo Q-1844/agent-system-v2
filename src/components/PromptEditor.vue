@@ -35,17 +35,17 @@ const statusText = computed(() => ({ empty: '尚未生成', auto: '已自动生�
 </script>
 
 <style lang="scss" scoped>
-.prompt-editor { margin-top: 10px; padding: 10px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; }
-.pe-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.pe-label { font-size: 11px; color: var(--text-muted); }
-.pe-status { font-size: 11px; padding: 1px 7px; border-radius: 8px; border: 1px solid var(--border); color: var(--text-muted);
-  &.auto { color: #4ade80; border-color: #4ade8040; }
-  &.manual { color: #60a5fa; border-color: #60a5fa40; }
-  &.stale { color: #fbbf24; border-color: #fbbf2440; }
+.prompt-editor { margin-top: 16px; padding: 12px 14px; background: var(--bg-surface); border: 1px solid var(--border); border-top: 1px solid var(--border-hover); border-radius: 8px; }
+.pe-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pe-label { font-size: 12px; font-weight: 500; color: var(--text-secondary); white-space: nowrap; }
+.pe-status { font-size: 11px; padding: 2px 8px; border-radius: 9px; border: 1px solid var(--border); color: var(--text-muted); white-space: nowrap;
+  &.auto { color: #4ade80; border-color: rgba(74,222,128,0.4); }
+  &.manual { color: #60a5fa; border-color: rgba(96,165,250,0.4); }
+  &.stale { color: #fbbf24; border-color: rgba(251,191,36,0.4); }
   &.empty { color: var(--text-faint); }
 }
-.pe-actions { margin-left: auto; display: flex; gap: 5px; }
-.mini-btn { padding: 3px 9px; border-radius: 4px; border: 1px solid var(--border); background: none; color: var(--text-secondary); font-size: 11px; cursor: pointer; white-space: nowrap; &:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); } &:disabled { opacity: 0.5; cursor: not-allowed; } }
-.pe-text { width: 100%; margin-top: 8px; background: var(--bg-root); border: 1px solid var(--border); border-radius: 4px; padding: 6px 10px; font-size: 12px; color: var(--text-primary); outline: none; resize: vertical; line-height: 1.5; font-family: inherit; &:focus { border-color: var(--accent); } }
-.pe-preview { margin: 6px 0 0; font-size: 11px; color: var(--text-secondary); cursor: pointer; &:hover { color: var(--accent); } }
+.pe-actions { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.mini-btn { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-root); color: var(--text-secondary); font-size: 12px; cursor: pointer; white-space: nowrap; transition: border-color .12s, color .12s; &:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); } &:disabled { opacity: 0.5; cursor: not-allowed; } }
+.pe-text { width: 100%; margin-top: 10px; background: var(--bg-root); border: 1px solid var(--border); border-radius: 6px; padding: 9px 12px; font-size: 13px; color: var(--text-primary); outline: none; resize: vertical; line-height: 1.55; font-family: inherit; min-height: 84px; &:focus { border-color: var(--accent); } }
+.pe-preview { margin: 8px 0 0; font-size: 12px; color: var(--text-secondary); cursor: pointer; line-height: 1.5; &:hover { color: var(--accent); } }
 </style>

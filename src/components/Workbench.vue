@@ -107,9 +107,18 @@
               <div class="field"><label>相对首帧的变化</label>
                 <textarea v-model="form.frame_change" rows="2" placeholder="例：机甲抬起右臂，身体后倾"></textarea>
               </div>
-              <div class="field"><label>保持一致</label>
-                <div class="check-grid">
-                  <label v-for="o in PRESERVE_OPTIONS" :key="o.v"><input type="checkbox" :checked="form.preserve_elements.includes(o.v)" @change="toggleList(form.preserve_elements, o.v)" />{{ o.l }}</label>
+              <div class="field">
+                <label>保持一致</label>
+                <div class="preserve-groups">
+                  <div v-for="g in PRESERVE_GROUPS" :key="g.title" class="preserve-group">
+                    <div class="pg-title">{{ g.title }}</div>
+                    <div class="tile-grid">
+                      <label v-for="o in g.opts" :key="o.v" class="tile">
+                        <input type="checkbox" :checked="form.preserve_elements.includes(o.v)" @change="toggleList(form.preserve_elements, o.v)" />
+                        <span class="tile-body"><span class="tile-label">{{ o.l }}</span><span class="tile-check">✓</span></span>
+                      </label>
+                    </div>
+                  </div>
                 </div>
               </div>
               <template v-if="mode === 'professional'">
@@ -150,9 +159,13 @@
               </select>
               <input v-if="durationMode === 'custom'" type="number" step="0.5" min="1" max="20" v-model.number="form.target_duration_s" class="dur-input" />
             </div>
-            <div class="field"><label>保持稳定</label>
-              <div class="check-grid">
-                <label v-for="o in videoPreserveOptions" :key="o.v"><input type="checkbox" :checked="form.video_preserve_elements.includes(o.v)" @change="toggleList(form.video_preserve_elements, o.v)" />{{ o.l }}</label>
+            <div class="field">
+              <label>保持稳定</label>
+              <div class="tile-grid">
+                <label v-for="o in videoPreserveOptions" :key="o.v" class="tile">
+                  <input type="checkbox" :checked="form.video_preserve_elements.includes(o.v)" @change="toggleList(form.video_preserve_elements, o.v)" />
+                  <span class="tile-body"><span class="tile-label">{{ o.l }}</span><span class="tile-check">✓</span></span>
+                </label>
               </div>
             </div>
             <template v-if="mode === 'professional'">
@@ -173,43 +186,64 @@
           </template>
         </div>
 
-        <!-- 右：当前阶段候选/预览/结果 -->
+        <!-- 右：当前阶段预览/生成（统一骨架：标题栏 + 生成按钮 + 内容块） -->
         <div class="wb-right">
-          <!-- 首帧结果 -->
-          <div v-if="stage === 'first'">
-            <button class="gen-btn" :disabled="busy('first_frame')" @click="genFirstFrame">{{ busy('first_frame') ? '生成中…' : '生成首帧（2 候选）' }}</button>
+          <!-- 首帧 -->
+          <section v-if="stage === 'first'" class="result-panel">
+            <header class="result-head">
+              <h3 class="result-title">首帧候选</h3>
+              <button class="gen-btn" :disabled="busy('first_frame')" @click="genFirstFrame">{{ busy('first_frame') ? '生成中…' : '生成首帧（2 候选）' }}</button>
+            </header>
             <div v-for="b in ffBatchesReversed" :key="b.batch_id" class="batch">
               <div class="batch-head" @click="toggleFFBatch(b.batch_id)">
                 <span class="batch-chevron">{{ isFFBatchExpanded(b.batch_id) ? '▾' : '▸' }}</span>
                 <span class="batch-title">批次 · {{ b.candidates.length }} 候选 · {{ b.status === 'done' ? '完成' : b.status }}</span>
               </div>
               <div v-if="isFFBatchExpanded(b.batch_id)" class="cands">
-                <div v-for="(c, i) in b.candidates" :key="c.candidate_id" class="cand" :class="{ sel: c.candidate_id === shot.selected_first_frame }" @click="chooseFirst(c.candidate_id)">
+                <div v-for="(c, i) in b.candidates" :key="c.candidate_id" class="cand" :class="{ sel: c.candidate_id === shot.selected_first_frame }" :style="{ aspectRatio: previewRatio }" @click="chooseFirst(c.candidate_id)">
                   <img v-if="c.local" :src="imgUrl(c.local)" /><SafeFrameOverlay /><span class="cand-idx">v{{ i + 1 }}</span>
                 </div>
               </div>
             </div>
             <div v-if="!shot.first_frame_batches?.length" class="empty-state">根据镜头画面和角色参考生成两张起始画面候选。</div>
             <button v-if="ffNeedsRehost" class="mini-btn rehost" @click="rehost">修复图片链接（本地图待托管）</button>
-          </div>
-          <!-- 尾帧结果 -->
-          <div v-else-if="stage === 'last'">
+          </section>
+
+          <!-- 尾帧 -->
+          <section v-else-if="stage === 'last'" class="result-panel">
+            <header class="result-head">
+              <h3 class="result-title">尾帧预览</h3>
+              <button v-if="form.link_mode === 'keyframes'" class="gen-btn" :disabled="!ffUrlReady || busy('last_frame')" @click="genLastFrame" :title="!ffUrlReady ? '需先选定首帧' : ''">{{ busy('last_frame') ? '生成中…' : '生成尾帧' }}</button>
+            </header>
             <div v-if="form.link_mode !== 'keyframes'" class="empty-state">当前接续方式不需要尾帧。</div>
             <template v-else>
-              <button class="gen-btn" :disabled="!ffUrlReady || busy('last_frame')" @click="genLastFrame" :title="!ffUrlReady ? '需先选定首帧' : ''">{{ busy('last_frame') ? '生成中…' : '生成尾帧' }}</button>
-              <div v-if="!ffUrlReady" class="empty-state">请先选择首帧，再生成尾帧。</div>
-              <div class="cands">
-                <div v-for="c in latestLFCands" :key="c.candidate_id" class="cand" :class="{ sel: c.candidate_id === shot.selected_last_frame }">
-                  <img v-if="c.local" :src="imgUrl(c.local)" /><SafeFrameOverlay />
+              <div class="result-block">
+                <div class="result-block-title">参考首帧</div>
+                <div class="preview-frame" :style="previewBoxStyle">
+                  <img v-if="ffUrl" :src="ffUrl" />
+                  <span v-else class="preview-empty">未选择首帧</span>
+                </div>
+                <div class="ref-count">参考图：首帧 1{{ shot.characters?.length ? ' + 角色 ' + shot.characters.length : '' }}</div>
+              </div>
+              <div class="result-block">
+                <div class="result-block-title">尾帧结果</div>
+                <div v-if="!ffUrlReady" class="empty-state">请先选择首帧，再生成尾帧。</div>
+                <div v-else-if="!latestLFCands.length" class="empty-state">基于已选首帧生成镜头结束状态，保持角色和场景连续。</div>
+                <div v-else class="cands">
+                  <div v-for="c in latestLFCands" :key="c.candidate_id" class="cand" :class="{ sel: c.candidate_id === shot.selected_last_frame }" :style="{ aspectRatio: previewRatio }">
+                    <img v-if="c.local" :src="imgUrl(c.local)" /><SafeFrameOverlay />
+                  </div>
                 </div>
               </div>
-              <div v-if="!latestLFCands.length" class="empty-state">基于已选首帧生成镜头结束状态，保持角色和场景连续。</div>
-              <div class="ref-count">参考图：首帧 1{{ shot.characters?.length ? ' + 角色 ' + shot.characters.length : '' }}</div>
             </template>
-          </div>
-          <!-- 视频结果 -->
-          <div v-else>
-            <button class="gen-btn" :disabled="!canGenVideo || busy('video')" @click="genVideo" :title="videoBlockReason">{{ busy('video') ? jobMsg('video') : '生成视频' }}</button>
+          </section>
+
+          <!-- 视频 -->
+          <section v-else class="result-panel">
+            <header class="result-head">
+              <h3 class="result-title">视频版本</h3>
+              <button class="gen-btn" :disabled="!canGenVideo || busy('video')" @click="genVideo" :title="videoBlockReason">{{ busy('video') ? jobMsg('video') : '生成视频' }}</button>
+            </header>
             <div v-if="videoBlockReason && !busy('video')" class="warn">⚠ {{ videoBlockReason }}</div>
             <div v-if="videoVersionsReversed.length" class="video-versions">
               <div v-for="v in videoVersionsReversed" :key="v.version_id" class="video-version" :class="{ final: v.version_id === shot.final_video }">
@@ -222,7 +256,7 @@
               </div>
             </div>
             <div v-if="!videoVersionsReversed.length" class="empty-state">根据输入帧、主体动作和运镜生成视频。</div>
-          </div>
+          </section>
         </div>
       </div>
     </div>
@@ -294,6 +328,11 @@ const VIDEO_PRESERVE_OPTIONS = [
   { l: '服装 / 装甲', v: 'outfit and armor' }, { l: '主体造型', v: 'subject shape' },
   { l: '场景布局', v: 'scene layout' }, { l: '画面风格', v: 'visual style' },
 ];
+// 尾帧"保持一致"分组（仅界面表达，复用 PRESERVE_OPTIONS 的值，不改后端字段顺序）
+const PRESERVE_GROUPS = [
+  { title: '角色与主体', keys: ['character identity', 'facial features', 'outfit and armor', 'main object shape'] },
+  { title: '画面与镜头', keys: ['scene layout', 'camera angle', 'visual style'] },
+].map(g => ({ ...g, opts: PRESERVE_OPTIONS.filter(o => g.keys.includes(o.v)) }));
 
 // ---------- 模式 + 阶段 ----------
 type Mode = 'standard' | 'professional';
@@ -401,6 +440,19 @@ const seedMode = computed({
 // 无角色时隐藏角色相关稳定项
 const videoPreserveOptions = computed(() =>
   form.characters.length ? VIDEO_PRESERVE_OPTIONS : VIDEO_PRESERVE_OPTIONS.filter(o => !['character identity', 'facial features', 'outfit and armor'].includes(o.v)));
+// 预览框画幅（跟项目 aspect_ratio，16:9 / 9:16 / 1:1）
+const previewRatio = computed(() => {
+  const r = (props.projectRatio || '16:9').split(':').map(Number);
+  return r.length === 2 && r[0] && r[1] ? `${r[0]} / ${r[1]}` : '16 / 9';
+});
+// 参考首帧预览框样式：横版限宽、竖版限高，保持画幅不溢出
+const previewBoxStyle = computed(() => {
+  const r = (props.projectRatio || '16:9').split(':').map(Number);
+  const [w, h] = r.length === 2 && r[0] && r[1] ? r : [16, 9];
+  return w >= h
+    ? { aspectRatio: `${w} / ${h}`, width: '100%', maxWidth: '380px' }
+    : { aspectRatio: `${w} / ${h}`, height: '260px', width: 'auto', maxWidth: '100%' };
+});
 
 // ---------- 提示词签名 + 状态（每阶段） ----------
 function sigOf(stage: Stage): string {
@@ -630,54 +682,99 @@ function vidUrl(p: string) { return getVideoUrl(p); }
 
 <style lang="scss" scoped>
 .wb-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1500; display: flex; align-items: center; justify-content: center; }
-.wb { width: 94vw; height: 92vh; background: var(--bg-root); border: 1px solid var(--border); border-radius: 10px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.4); }
-.wb-head { display: flex; align-items: center; gap: 12px; padding: 10px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.wb { width: 94vw; height: 92vh; max-width: 1700px; background: var(--bg-root); border: 1px solid var(--border); border-radius: 10px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.4); }
+
+/* 顶部 */
+.wb-head { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .wb-title { font-size: 13px; font-weight: 600; color: var(--text-primary); font-family: monospace; }
-.wb-badge { font-size: 11px; color: var(--text-muted); border: 1px solid var(--border); border-radius: 10px; padding: 1px 8px; }
-.mode-switch { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; button { padding: 4px 12px; background: none; border: none; color: var(--text-muted); font-size: 12px; cursor: pointer; &.on { background: var(--accent); color: #fff; } } }
-.prof-hint { font-size: 11px; color: #fbbf24; cursor: pointer; }
-.wb-save { font-size: 12px; color: var(--text-muted); &.saved { color: #4ade80; } &.failed { color: #f87171; } }
-.wb-task { font-size: 12px; color: var(--text-muted); &.busy { color: #60a5fa; } }
-.wb-close { margin-left: auto; background: none; border: none; color: var(--text-muted); font-size: 16px; cursor: pointer; &:hover { color: var(--text-primary); } }
+.wb-badge { font-size: 11px; color: var(--text-muted); border: 1px solid var(--border); border-radius: 10px; padding: 2px 9px; white-space: nowrap; }
+.mode-switch { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; button { padding: 6px 14px; background: none; border: none; color: var(--text-muted); font-size: 12px; cursor: pointer; transition: background .12s, color .12s; &.on { background: var(--accent); color: var(--accent-text); } &:not(.on):hover { color: var(--text-secondary); } } }
+.prof-hint { font-size: 11px; color: #fbbf24; cursor: pointer; white-space: nowrap; }
+.wb-save { font-size: 12px; color: var(--text-muted); white-space: nowrap; &.saved { color: #4ade80; } &.failed { color: #f87171; } }
+.wb-task { font-size: 12px; color: var(--text-muted); white-space: nowrap; &.busy { color: #60a5fa; } }
+.wb-close { margin-left: auto; background: none; border: none; color: var(--text-muted); font-size: 16px; cursor: pointer; padding: 4px; &:hover { color: var(--text-primary); } }
 
-.wb-ctx { padding: 8px 18px; border-bottom: 1px solid var(--border); background: var(--bg-surface); flex-shrink: 0; }
-.ctx-story { summary { font-size: 12px; color: var(--text-muted); cursor: pointer; } p { font-size: 12px; color: var(--text-secondary); margin: 4px 0 0; max-height: 60px; overflow-y: auto; } }
-.ctx-row { display: flex; align-items: center; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
-.ctx-label { font-size: 11px; color: var(--text-muted); min-width: 64px; }
-.ctx-input { background: var(--bg-root); border: 1px solid var(--border); border-radius: 5px; padding: 5px 10px; font-size: 12px; color: var(--text-primary); outline: none; &:focus { border-color: var(--accent); } }
-.audio-status { font-size: 11px; color: var(--text-secondary); }
-.char-chips { display: flex; flex-wrap: wrap; gap: 5px; }
-.chip { padding: 2px 9px; border-radius: 12px; border: 1px solid var(--border); background: none; color: var(--text-muted); font-size: 11px; cursor: pointer; &.on { background: var(--accent); border-color: var(--accent); color: #fff; } }
+/* 公共上下文（保留结构，仅间距/尺度） */
+.wb-ctx { padding: 10px 20px; border-bottom: 1px solid var(--border); background: var(--bg-surface); flex-shrink: 0; }
+.ctx-story { summary { font-size: 12px; color: var(--text-muted); cursor: pointer; } p { font-size: 12px; color: var(--text-secondary); margin: 6px 0 0; max-height: 60px; overflow-y: auto; line-height: 1.5; } }
+.ctx-row { display: flex; align-items: center; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+.ctx-label { font-size: 11px; color: var(--text-muted); min-width: 64px; white-space: nowrap; }
+.ctx-input { background: var(--bg-root); border: 1px solid var(--border); border-radius: 6px; padding: 7px 11px; font-size: 13px; color: var(--text-primary); outline: none; &:focus { border-color: var(--accent); } }
+.audio-status { font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
+.char-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { padding: 5px 11px; border-radius: 14px; border: 1px solid var(--border); background: none; color: var(--text-secondary); font-size: 12px; cursor: pointer; transition: background .12s, border-color .12s, color .12s; &.on { background: var(--accent); border-color: var(--accent); color: var(--accent-text); } &:not(.on):hover { border-color: var(--border-hover); color: var(--text-primary); } }
 
-.stage-tabs { display: flex; gap: 4px; padding: 8px 18px 0; border-bottom: 1px solid var(--border); flex-shrink: 0; button { padding: 6px 22px; border: none; background: none; color: var(--text-muted); font-size: 13px; cursor: pointer; border-bottom: 2px solid transparent; &.on { color: var(--text-primary); border-bottom-color: var(--accent); } } }
+/* 阶段标签 */
+.stage-tabs { display: flex; gap: 2px; padding: 0 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; button { padding: 11px 26px; border: none; background: none; color: var(--text-muted); font-size: 13px; cursor: pointer; border-bottom: 2px solid transparent; transition: color .12s, border-color .12s; &.on { color: var(--text-primary); border-bottom-color: var(--accent); } &:not(.on):hover { color: var(--text-secondary); } } }
 
+/* 主体两栏：左稳定设置栏，右更宽预览/生成区 */
 .wb-body { flex: 1; display: flex; min-height: 0; }
-.wb-left { width: 38%; min-width: 500px; flex-shrink: 0; overflow-y: auto; padding: 14px 18px; border-right: 1px solid var(--border); }
-.field { margin-bottom: 12px; label { display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 4px; } }
-.field input, .field select, .field textarea { width: 100%; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 5px; padding: 6px 10px; font-size: 12px; color: var(--text-primary); outline: none; font-family: inherit; &:focus { border-color: var(--accent); } }
-.field textarea { resize: vertical; line-height: 1.5; }
-.check-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; label { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-secondary); cursor: pointer; } }
-.ff-ref { display: flex; align-items: center; gap: 8px; img { width: 64px; height: 36px; object-fit: cover; border-radius: 4px; border: 1px solid var(--border); } }
-.seed-row, .dur-input { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
+.wb-left { width: 420px; flex: 0 0 420px; min-width: 0; overflow-y: auto; padding: 18px 20px; border-right: 1px solid var(--border); }
+.wb-right { flex: 1; min-width: 0; overflow-y: auto; padding: 18px 20px; }
+
+/* 字段：增大控件高度，层级分明，标签不换行 */
+.field { margin-bottom: 16px; label { display: block; font-size: 12px; font-weight: 500; color: var(--text-secondary); margin-bottom: 6px; white-space: nowrap; } }
+.field input, .field select, .field textarea { width: 100%; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; padding: 9px 12px; font-size: 13px; color: var(--text-primary); outline: none; font-family: inherit; transition: border-color .12s; &:focus { border-color: var(--accent); } &::placeholder { color: var(--text-faint); } }
+.field textarea { resize: vertical; line-height: 1.55; min-height: 64px; }
+.field select { cursor: pointer; }
+/* seed/时长 自定义行内排 */
+.seed-row { display: flex; gap: 8px; align-items: center; & > select { width: auto; flex: 0 0 auto; } & > input { width: auto; flex: 1 1 auto; min-width: 0; } }
+.dur-input { margin-top: 8px; }
+
+/* 首帧基础图 / 输入画面摘要 缩略 */
+.ff-ref { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; img { width: 96px; height: 54px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); } .muted { font-size: 11px; } }
+
+/* 保持一致 / 保持稳定：可选 tile（整块可点，原生 checkbox 保留键盘/无障碍） */
+.preserve-groups { display: flex; flex-direction: column; gap: 14px; }
+.preserve-group { .pg-title { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; } }
+.tile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tile { display: block; position: relative; cursor: pointer; }
+.tile input { position: absolute; opacity: 0; inset: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.tile-body { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text-secondary); font-size: 13px; transition: border-color .12s, background .12s, color .12s; }
+.tile:hover .tile-body { border-color: var(--border-hover); background: var(--bg-hover); color: var(--text-primary); }
+.tile input:focus-visible + .tile-body { border-color: var(--accent); }
+.tile input:checked + .tile-body { border-color: #4ade80; background: rgba(74,222,128,0.07); color: var(--text-primary); }
+.tile-label { white-space: nowrap; }
+.tile-check { opacity: 0; color: #4ade80; font-size: 13px; font-weight: 700; transition: opacity .12s; }
+.tile input:checked + .tile-body .tile-check { opacity: 1; }
+
 .muted { font-size: 11px; color: var(--text-faint); }
 .pad { padding: 12px 0; }
-.mini-btn { padding: 4px 10px; border-radius: 5px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-secondary); font-size: 11px; cursor: pointer; white-space: nowrap; &:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); } &:disabled { opacity: 0.5; cursor: not-allowed; } &.rehost { margin-top: 8px; } }
+.mini-btn { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-secondary); font-size: 12px; cursor: pointer; white-space: nowrap; transition: border-color .12s, color .12s; &:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); } &:disabled { opacity: 0.5; cursor: not-allowed; } &.rehost { margin-top: 10px; } }
 
-.wb-right { flex: 1; min-width: 0; overflow-y: auto; padding: 16px 18px; }
-.gen-btn { padding: 7px 18px; border-radius: 6px; border: none; background: var(--accent); color: var(--accent-text); font-size: 13px; cursor: pointer; margin-bottom: 12px; &:hover:not(:disabled) { background: var(--accent-hover); } &:disabled { opacity: 0.5; cursor: not-allowed; } }
-.cands { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
-.cand { position: relative; aspect-ratio: 16/9; border-radius: 6px; overflow: hidden; cursor: pointer; border: 2px solid transparent; background: var(--bg-surface); &.sel { border-color: #4ade80; } img { width: 100%; height: 100%; object-fit: cover; } }
-.cand-idx { position: absolute; top: 3px; left: 4px; font-size: 10px; color: #fff; background: rgba(0,0,0,0.5); padding: 0 4px; border-radius: 2px; }
-.batch { margin-bottom: 12px; }
-.batch-head { display: flex; align-items: center; gap: 6px; padding: 5px 10px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 5px; cursor: pointer; margin-bottom: 8px; }
+/* 右侧结果面板（三标签统一骨架） */
+.result-panel { display: flex; flex-direction: column; gap: 16px; }
+.result-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.result-title { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.result-block { display: flex; flex-direction: column; gap: 8px; }
+.result-block-title { font-size: 11px; color: var(--text-muted); }
+.preview-frame { border: 1px solid var(--border); border-radius: 8px; background: var(--bg-surface); overflow: hidden; display: flex; align-items: center; justify-content: center; align-self: flex-start; img { width: 100%; height: 100%; object-fit: cover; } }
+.preview-empty { font-size: 12px; color: var(--text-faint); padding: 24px; }
+
+.gen-btn { padding: 9px 20px; border-radius: 6px; border: none; background: var(--accent); color: var(--accent-text); font-size: 13px; cursor: pointer; white-space: nowrap; transition: background .12s; &:hover:not(:disabled) { background: var(--accent-hover); } &:disabled { opacity: 0.5; cursor: not-allowed; } }
+.cands { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.cand { position: relative; border-radius: 8px; overflow: hidden; cursor: pointer; border: 2px solid transparent; background: var(--bg-surface); transition: border-color .12s; &.sel { border-color: #4ade80; } img { width: 100%; height: 100%; object-fit: cover; } }
+.cand-idx { position: absolute; top: 4px; left: 5px; font-size: 10px; color: #fff; background: rgba(0,0,0,0.55); padding: 1px 5px; border-radius: 3px; }
+.batch-head { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; margin-bottom: 10px; &:hover { background: var(--bg-hover); } }
 .batch-chevron { font-size: 12px; color: var(--text-muted); }
 .batch-title { font-size: 12px; color: var(--text-secondary); }
-.video-versions { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
-.video-version { border: 1px solid var(--border); border-radius: 6px; padding: 10px; &.final { border-color: #4ade80; } video { width: 100%; max-height: 44vh; border-radius: 4px; background: #000; } }
-.vv-meta { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.video-versions { display: flex; flex-direction: column; gap: 12px; }
+.video-version { border: 1px solid var(--border); border-radius: 8px; padding: 10px; &.final { border-color: #4ade80; } video { width: 100%; max-height: 44vh; border-radius: 6px; background: #000; } }
+.vv-meta { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
 .vv-ret { font-size: 11px; color: var(--text-muted); }
 .vv-final { font-size: 12px; color: #4ade80; font-weight: 600; }
-.warn { font-size: 12px; color: #fbbf24; margin-top: 8px; }
-.empty-state { font-size: 12px; color: var(--text-faint); padding: 16px; background: var(--bg-surface); border: 1px dashed var(--border); border-radius: 6px; margin-top: 8px; }
-.ref-count { font-size: 11px; color: var(--text-muted); margin-top: 8px; }
+.warn { font-size: 12px; color: #fbbf24; }
+.empty-state { font-size: 12px; color: var(--text-faint); padding: 18px; background: var(--bg-surface); border: 1px dashed var(--border); border-radius: 8px; line-height: 1.6; }
+.ref-count { font-size: 11px; color: var(--text-muted); }
+
+/* 窄窗口：左右堆叠，tile 单列，候选缩窄 */
+@media (max-width: 920px) {
+  .wb { width: 100vw; height: 100vh; max-width: none; border-radius: 0; border: none; }
+  .wb-body { flex-direction: column; }
+  .wb-left { width: 100%; flex-basis: auto; border-right: none; border-bottom: 1px solid var(--border); max-height: 55vh; }
+  .wb-right { max-height: 45vh; }
+  .tile-grid { grid-template-columns: 1fr; }
+  .cands { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+  .stage-tabs button { padding: 11px 18px; }
+}
 </style>
