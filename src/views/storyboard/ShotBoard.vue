@@ -1,64 +1,258 @@
 <template>
   <div class="shot-board">
-    <div class="toolbar">
-      <h2>分镜（shot 级）</h2>
-      <select class="proj-select" :value="projectName" @change="onProjectChange(($event.target as HTMLSelectElement).value)" title="切换项目">
-        <option v-for="p in projects" :key="p" :value="p">{{ p }}</option>
-      </select>
-      <div class="toolbar-info" v-if="projectName">{{ projectName }} · {{ shotCount }} 镜</div>
-      <button class="btn" @click="load">刷新</button>
+    <!-- 无当前项目 -->
+    <div v-if="!projectName" class="empty">
+      请先选择项目
+      <button class="go-btn" @click="goDashboard">前往项目页</button>
     </div>
-    <div class="legend">
-      <span>图: 1312×736 · 视频: 1280×704</span>
-      <span class="legend-safe">绿色虚线=安全框（框外上下细条会被裁掉）</span>
+
+    <!-- 无故事段 -->
+    <div v-else-if="!segments.length" class="empty">
+      当前项目还没有分镜故事，请先在剧本页添加分镜故事。
+      <button class="go-btn" @click="goScript">前往剧本</button>
     </div>
-    <div class="cards" v-if="shots.length">
-      <ShotCard v-for="sh in shots" :key="sh.shot_id" :shot="sh" :project-name="projectName" @refresh="load" />
+
+    <!-- 主体：左故事段列表 + 右当前故事段 -->
+    <div v-else class="board">
+      <button v-if="listCollapsed" class="expand-fab" @click="listCollapsed = false" title="展开故事段列表">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6" /></svg>
+        <span>故事段</span>
+      </button>
+      <aside class="seg-list" :class="{ collapsed: listCollapsed }">
+        <div class="seg-list-head">
+          <span class="seg-list-title">故事段</span>
+          <button class="icon-btn" title="收起故事段列表" @click="listCollapsed = true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6" /></svg>
+          </button>
+        </div>
+        <div class="seg-list-content">
+        <div
+          v-for="(seg, i) in segments"
+          :key="seg.scene_id"
+          class="seg-item"
+          :class="{ active: selected?.scene_id === seg.scene_id }"
+          @click="selected = seg"
+        >
+          <div class="seg-row1">
+            <span class="seg-seq">{{ i + 1 }}</span>
+            <span class="seg-title">{{ seg.summary.trim() ? seg.summary.trim().slice(0, 14) : '未填写故事' }}</span>
+          </div>
+          <div class="seg-row2">
+            <span class="seg-count">{{ shotDone(seg) }}/{{ seg.shots.length }} 镜</span>
+            <img v-if="segThumb(seg)" :src="segThumb(seg)" class="seg-thumb" />
+          </div>
+        </div>
+        </div>
+      </aside>
+
+      <section class="seg-detail" v-if="selected">
+        <!-- 故事段顶部：原文(只读) + 角色 + 覆盖 + 返回剧本 -->
+        <div class="seg-head">
+          <div class="seg-head-top">
+            <span class="seg-no">故事段 {{ selected.scene_id }}</span>
+            <button class="link-btn" @click="goScript">返回剧本修改</button>
+          </div>
+          <p class="seg-story">{{ selected.summary || '（未填写故事）' }}</p>
+          <div class="seg-chars">
+            <span class="seg-chars-label">出场角色：</span>
+            <span v-if="!selected.characters.length" class="muted">无</span>
+            <span v-for="name in selected.characters" :key="name" class="seg-char" :class="{ miss: !charCovered(name) }">
+              {{ name }} {{ charCovered(name) ? '✓' : '⚠' }}
+            </span>
+          </div>
+        </div>
+
+        <!-- 镜头列表 -->
+        <div class="shot-list">
+          <div
+            v-for="(sh, i) in selected.shots"
+            :key="sh.shot_id"
+            class="shot-item"
+            @dblclick="openWorkbench(sh)"
+          >
+            <div class="shot-meta">
+              <span class="shot-seq">{{ sh.shot_id }}</span>
+              <span class="shot-size">{{ sh.shot_size || '中景' }}</span>
+              <span class="shot-desc">{{ (sh.description || '').slice(0, 24) || '未填写画面' }}</span>
+              <span class="shot-chars" v-if="sh.characters.length">{{ sh.characters.join('、') }}</span>
+              <span class="shot-status" :class="shotStatusClass(sh)">{{ shotStatusText(sh) }}</span>
+              <button class="open-btn" @click="openWorkbench(sh)">打开工作台</button>
+            </div>
+            <div class="shot-previews">
+              <div class="preview-box" @click="previewImage(ffUrl(sh))" :class="{ disabled: !ffUrl(sh) }">
+                <img v-if="ffUrl(sh)" :src="ffUrl(sh)" />
+                <SafeFrameOverlay v-if="ffUrl(sh)" />
+                <span v-else class="ph">首帧</span>
+              </div>
+              <div class="preview-box" @click="lfUrl(sh) && previewImage(lfUrl(sh))" :class="{ disabled: !lfUrl(sh), na: sh.link_mode !== 'keyframes' }">
+                <img v-if="lfUrl(sh)" :src="lfUrl(sh)" />
+                <span v-else class="ph">{{ sh.link_mode === 'keyframes' ? '尾帧' : '不需要' }}</span>
+              </div>
+              <div class="preview-box" @click="vidUrl(sh) && previewVideo(vidUrl(sh))" :class="{ disabled: !vidUrl(sh) }">
+                <video v-if="vidUrl(sh)" :src="vidUrl(sh)" preload="metadata" />
+                <span v-else class="ph">视频</span>
+              </div>
+            </div>
+          </div>
+          <button class="add-shot-btn" @click="addShot">+ 添加镜头</button>
+        </div>
+      </section>
     </div>
-    <div class="empty" v-else-if="!loading">项目无镜头。请先在「剧本编辑」保存剧本生成 shots，再来这里生成首帧/视频。</div>
-    <div class="empty" v-else>加载中…</div>
+
+    <!-- 工作台弹层 -->
+    <Workbench
+      v-if="workbenchShot"
+      :key="workbenchShot.shot_id"
+      :shot="workbenchShot"
+      :project-name="projectName"
+      :scene-characters="selected?.characters || []"
+      :scene-id="selected?.scene_id || ''"
+      @close="closeWorkbench"
+      @refresh="load"
+    />
+
+    <!-- 大图/视频预览 -->
+    <div v-if="previewUrl" class="preview-overlay" @click="previewUrl = ''">
+      <img v-if="previewType === 'image'" :src="previewUrl" class="big-img" />
+      <video v-else :src="previewUrl" controls autoplay class="big-video" />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { apiClient } from '@/api';
 import type { ShotData } from '@/api';
 import { useProjectStore } from '@/store';
 import { useJobStore } from '@/store/jobs';
-import ShotCard from '@/components/ShotCard.vue';
+import { getImageUrl, getVideoUrl } from '@/utils/media';
+import SafeFrameOverlay from '@/components/SafeFrameOverlay.vue';
+import Workbench from '@/components/Workbench.vue';
 
+const router = useRouter();
 const projStore = useProjectStore();
 const projectName = computed(() => projStore.projectName);
 const jobStore = useJobStore();
 
-const shots = ref<ShotData[]>([]);
-const projects = ref<string[]>([]);
-const loading = ref(false);
-const shotCount = computed(() => shots.value.length);
+interface Segment {
+  scene_id: string; summary: string; characters: string[]; shots: ShotData[];
+}
+const segments = ref<Segment[]>([]);
+const selected = ref<Segment | null>(null);
+const listCollapsed = ref(false);
+const workbenchShot = ref<ShotData | null>(null);
+const previewUrl = ref('');
+const previewType = ref<'image' | 'video'>('image');
 
-async function loadProjects() {
-  try { projects.value = await apiClient.listProjects(); }
-  catch (e: any) { console.error('[ShotBoard] 加载项目列表失败', e); }
-}
-async function onProjectChange(name: string) {
-  if (name && name !== projectName.value) await projStore.loadProject(name);
-}
+function goDashboard() { router.push('/dashboard'); }
+function goScript() { router.push('/script-editor'); }
 
 async function load() {
-  if (!projectName.value) return;
-  loading.value = true;
+  if (!projectName.value) { segments.value = []; return; }
   try {
     const data = await apiClient.getProjectShots(projectName.value);
-    shots.value = (data.scenes || []).flatMap(s => s.shots || []);
+    segments.value = (data.scenes || []).map((s: any) => ({
+      scene_id: s.scene_id, summary: s.summary || '', characters: s.characters || [], shots: s.shots || [],
+    }));
+    // 保持选中（若仍存在），否则选第一个
+    if (selected.value) {
+      const cur = segments.value.find(s => s.scene_id === selected.value!.scene_id);
+      selected.value = cur || segments.value[0] || null;
+    } else {
+      selected.value = segments.value[0] || null;
+    }
+    // 工作台打开时，刷新其 shot 引用（生成完成后工作台能看到新候选/视频）
+    if (workbenchShot.value) {
+      const wshot = segments.value.flatMap(s => s.shots).find(sh => sh.shot_id === workbenchShot.value!.shot_id);
+      if (wshot) workbenchShot.value = wshot;
+    }
   } catch (e: any) {
-    console.error('[ShotBoard] 加载 shots 失败', e);
-  } finally {
-    loading.value = false;
+    console.error('[ShotBoard] 加载失败', e);
+    segments.value = [];
+    selected.value = null;
   }
 }
 
-// shot 级 job 完成（done/failed）时 debounce 刷新，保持卡片与服务端同步
+// 镜头完成数（video done）
+function shotDone(seg: Segment): number {
+  return seg.shots.filter(sh => sh.video?.status === 'done' && sh.video?.local).length;
+}
+// 故事段首帧缩略图（第一个有首帧的镜头）
+function segThumb(seg: Segment): string {
+  for (const sh of seg.shots) {
+    const u = ffUrl(sh);
+    if (u) return u;
+  }
+  return '';
+}
+// 角色覆盖：该角色是否出现在故事段任一镜头
+function charCovered(name: string): boolean {
+  return !!selected.value?.shots.some(sh => sh.characters.includes(name));
+}
+
+// 三预览框 URL（读批次选择指针 selected_first_frame / selected_last_frame / final_video）
+function ffUrl(sh: ShotData): string {
+  const cid = sh.selected_first_frame;
+  if (!cid) return '';
+  for (const b of sh.first_frame_batches || []) {
+    const c = (b.candidates || []).find(x => x.candidate_id === cid);
+    if (c?.local) return getImageUrl(c.local);
+  }
+  return '';
+}
+function lfUrl(sh: ShotData): string {
+  if (sh.link_mode !== 'keyframes') return '';
+  const cid = sh.selected_last_frame;
+  if (!cid) return '';
+  for (const b of sh.last_frame_batches || []) {
+    const c = (b.candidates || []).find(x => x.candidate_id === cid);
+    if (c?.local) return getImageUrl(c.local);
+  }
+  return '';
+}
+function vidUrl(sh: ShotData): string {
+  const vid = sh.final_video;
+  if (!vid) return '';
+  const v = (sh.video_versions || []).find(x => x.version_id === vid);
+  return v?.local ? getVideoUrl(v.local) : '';
+}
+
+function shotStatusText(sh: ShotData): string {
+  const busy = jobStore.byShot(sh.shot_id).some(j => j.state === 'running' || j.state === 'queued');
+  if (busy) {
+    const j = jobStore.byShot(sh.shot_id).find(j => j.state === 'running' || j.state === 'queued');
+    return j?.kind === 'video' ? '视频排队中' : '生成中';
+  }
+  if (sh.video?.status === 'done' && sh.video?.local) return '已完成';
+  if (sh.first_frame?.status === 'failed' || sh.video?.status === 'failed') return '失败';
+  return '未完成';
+}
+function shotStatusClass(sh: ShotData): string {
+  const s = shotStatusText(sh);
+  if (s === '已完成') return 'done';
+  if (s === '失败') return 'failed';
+  if (s === '未完成') return 'pending';
+  return 'busy';
+}
+
+function openWorkbench(sh: ShotData) { workbenchShot.value = sh; }
+function closeWorkbench() { workbenchShot.value = null; }
+
+function previewImage(url: string) { if (!url) return; previewType.value = 'image'; previewUrl.value = url; }
+function previewVideo(url: string) { if (!url) return; previewType.value = 'video'; previewUrl.value = url; }
+
+async function addShot() {
+  if (!selected.value || !projectName.value) return;
+  try {
+    await apiClient.addShot(projectName.value, selected.value.scene_id);
+    await load();
+  } catch (e: any) {
+    console.error('[ShotBoard] 添加镜头失败', e);
+  }
+}
+
+// shot 级 job 完成 -> debounce 刷新（保持卡片/工作台与服务端同步）
 let reloadTimer: number | null = null;
 watch(() => jobStore.jobs.map(j => j.job_id + j.state).join('|'), () => {
   const finished = jobStore.jobs.some(j => (j.state === 'done' || j.state === 'failed') && j.shot_id);
@@ -68,31 +262,115 @@ watch(() => jobStore.jobs.map(j => j.job_id + j.state).join('|'), () => {
   }
 });
 
-onMounted(async () => { await loadProjects(); await load(); });
-watch(projectName, load);
+onMounted(() => load());
+watch(projectName, () => { selected.value = null; load(); });
 </script>
 
 <style lang="scss" scoped>
-.shot-board { max-width: 1200px; }
-.toolbar {
-  display: flex; align-items: center; gap: 12px; margin-bottom: 8px;
-  h2 { font-size: 16px; color: var(--text-primary); margin: 0; }
-  .toolbar-info { font-size: 12px; color: var(--text-muted); margin-left: auto; }
-  .proj-select {
-    padding: 3px 8px; border-radius: 5px; border: 1px solid var(--border);
-    background: var(--bg-hover); color: var(--text-secondary); font-size: 12px; cursor: pointer;
-  }
-  .btn {
-    padding: 4px 12px; border-radius: 5px; border: 1px solid var(--border);
-    background: var(--bg-hover); color: var(--text-secondary); cursor: pointer; font-size: 12px;
-    &:hover { background: var(--bg-root); }
-  }
+.shot-board { height: calc(100vh - 88px); }
+.empty {
+  height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; color: var(--text-muted); font-size: 14px;
 }
-.legend {
-  font-size: 11px; color: var(--text-muted); margin-bottom: 14px;
-  display: flex; gap: 16px;
-  .legend-safe { color: #4ade80; opacity: 0.8; }
+.go-btn {
+  padding: 8px 18px; border-radius: 6px; border: none; background: var(--accent);
+  color: var(--accent-text); font-size: 13px; cursor: pointer; &:hover { background: var(--accent-hover); }
 }
-.cards { display: flex; flex-direction: column; gap: 12px; }
-.empty { text-align: center; color: var(--text-muted); padding: 60px 0; font-size: 14px; }
+
+.board { display: flex; gap: 16px; height: 100%; position: relative; }
+
+.expand-fab {
+  position: absolute; top: 10px; left: 10px; z-index: 10;
+  display: flex; align-items: center; gap: 4px; padding: 5px 10px 5px 8px;
+  border-radius: 6px; border: 1px solid var(--border); background: var(--bg-surface);
+  color: var(--text-muted); font-size: 12px; cursor: pointer;
+  &:hover { background: var(--bg-hover); color: var(--text-secondary); }
+}
+
+.seg-list {
+  width: 220px; flex-shrink: 0; overflow: hidden; background: var(--bg-surface);
+  border: 1px solid var(--border); border-radius: 8px; padding: 6px;
+  display: flex; flex-direction: column;
+  transition: width 0.2s ease, border-color 0.2s ease, padding 0.2s ease;
+  &.collapsed { width: 0; border: none; padding: 0; background: transparent; }
+}
+.seg-list-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 8px 8px; flex-shrink: 0;
+}
+.seg-list-title { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+.seg-list-content { flex: 1; overflow-y: auto; }
+.icon-btn {
+  width: 24px; height: 24px; border-radius: 4px; border: none; background: none;
+  color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center;
+  &:hover { background: var(--bg-hover); color: var(--text-secondary); }
+}
+.seg-item {
+  padding: 10px 12px; border-radius: 6px; cursor: pointer; border-left: 2px solid transparent;
+  &:hover { background: var(--bg-hover); }
+  &.active { background: var(--bg-hover); border-left-color: var(--accent); }
+}
+.seg-row1 { display: flex; align-items: center; gap: 8px; }
+.seg-seq { font-size: 11px; color: var(--text-faint); }
+.seg-title { font-size: 13px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.seg-row2 { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; }
+.seg-count { font-size: 11px; color: var(--text-muted); }
+.seg-thumb { width: 40px; height: 22px; object-fit: cover; border-radius: 3px; background: var(--bg-root); }
+
+.seg-detail { flex: 1; min-width: 0; overflow-y: auto; }
+.seg-head { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; }
+.seg-head-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.seg-no { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.link-btn { background: none; border: none; color: var(--text-muted); font-size: 12px; cursor: pointer; &:hover { color: var(--accent); } }
+.seg-story { font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin: 0 0 10px; }
+.seg-chars { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.seg-chars-label { font-size: 11px; color: var(--text-muted); }
+.seg-char { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: rgba(74,222,128,0.15); color: #4ade80;
+  &.miss { background: rgba(251,191,36,0.15); color: #fbbf24; } }
+.muted { font-size: 11px; color: var(--text-faint); }
+
+.shot-list { display: flex; flex-direction: column; gap: 10px; }
+.shot-item {
+  background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;
+  &:hover { border-color: var(--text-muted); }
+}
+.shot-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.shot-seq { font-size: 12px; font-weight: 600; color: var(--text-primary); font-family: monospace; }
+.shot-size { font-size: 11px; color: var(--text-muted); padding: 1px 6px; border-radius: 3px; background: var(--bg-hover); }
+.shot-desc { font-size: 12px; color: var(--text-secondary); flex: 1; min-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shot-chars { font-size: 11px; color: var(--text-faint); }
+.shot-status { font-size: 11px; padding: 1px 6px; border-radius: 3px;
+  &.done { background: rgba(74,222,128,0.15); color: #4ade80; }
+  &.failed { background: rgba(248,113,113,0.15); color: #f87171; }
+  &.busy { background: rgba(96,165,250,0.15); color: #60a5fa; }
+  &.pending { background: var(--bg-hover); color: var(--text-muted); }
+}
+.open-btn {
+  margin-left: auto; padding: 4px 12px; border-radius: 5px; border: 1px solid var(--accent);
+  background: transparent; color: var(--accent); font-size: 12px; cursor: pointer;
+  &:hover { background: var(--accent); color: var(--accent-text); }
+}
+
+.shot-previews { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.preview-box {
+  position: relative; aspect-ratio: 16/9; background: var(--bg-root); border: 1px solid var(--border);
+  border-radius: 5px; overflow: hidden; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  &:hover { border-color: var(--accent); }
+  &.disabled { cursor: default; &:hover { border-color: var(--border); } }
+  &.na .ph { color: var(--text-faint); }
+  img, video { width: 100%; height: 100%; object-fit: cover; }
+  .ph { font-size: 11px; color: var(--text-faint); }
+}
+.add-shot-btn {
+  margin-top: 4px; padding: 9px; border-radius: 6px; border: 1px dashed var(--border);
+  background: transparent; color: var(--text-muted); font-size: 13px; cursor: pointer;
+  &:hover { border-color: var(--accent); color: var(--accent); }
+}
+
+.preview-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 2000;
+  display: flex; align-items: center; justify-content: center; cursor: zoom-out;
+  .big-img { max-width: 92vw; max-height: 92vh; object-fit: contain; }
+  .big-video { max-width: 92vw; max-height: 92vh; }
+}
 </style>

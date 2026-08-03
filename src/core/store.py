@@ -90,7 +90,9 @@ def migrate_v1_to_v2(old: dict) -> dict:
         }
         _backfill_shot_timing(shot)   # ffprobe 量现有音频时长反推 num_frames（不碰音频）
         scenes.append({"scene_id": sid, "title": old_scene.get("title", ""),
-                       "summary": old_scene.get("description", ""), "shots": [shot]})
+                       "summary": old_scene.get("description", ""),
+                       "characters": old_scene.get("characters", []),
+                       "shots": [shot]})
     return {
         "name": (old.get("project") or {}).get("name") or old.get("project_name") or "untitled",
         "schema_version": 2,
@@ -102,6 +104,7 @@ def migrate_v1_to_v2(old: dict) -> dict:
                        for k, v in (c.get("reference_images") or {}).items() if v}}
             for c in old.get("characters", [])
         ],
+        "story_text": "",
         "scenes": scenes,
     }
 
@@ -160,12 +163,14 @@ class ProjectStore:
             "created_at": project.created_at,
             "updated_at": project.updated_at,
             "style": asdict(project.style),
+            "story_text": project.story_text,
             "characters": [
                 {"name": c.name, "description_en": c.description_en,
                  "views": {k: asdict(v) for k, v in c.views.items()}}
                 for c in project.characters
             ],
             "scenes": [s.to_dict() for s in project.scenes],
+            "next_scene_seq": project.next_scene_seq,
         }
 
     def _from_dict(self, raw: dict) -> Project:
@@ -180,11 +185,26 @@ class ProjectStore:
                 views=views,
             ))
         scenes = [Scene.from_dict(s) for s in raw.get("scenes", [])]
+        # next_scene_seq 存量兼容：缺失时按已用 scene_id 最大数字 + 1 初始化
+        # （batch 0 §一.3）。删除不回收，禁止运行时扫描 max+1 分配。
+        next_scene_seq = raw.get("next_scene_seq")
+        if next_scene_seq is None:
+            used = []
+            for sc in raw.get("scenes", []):
+                sid = sc.get("scene_id") if isinstance(sc, dict) else getattr(sc, "scene_id", "")
+                if isinstance(sid, str) and sid.startswith("s"):
+                    try:
+                        used.append(int(sid[1:]))
+                    except ValueError:
+                        pass
+            next_scene_seq = (max(used) + 1) if used else 1
         return Project(
             name=raw.get("name", "untitled"),
             style=style,
+            story_text=raw.get("story_text", ""),
             characters=characters,
             scenes=scenes,
+            next_scene_seq=next_scene_seq,
             schema_version=raw.get("schema_version", 2),
             created_at=raw.get("created_at", time.time()),
             updated_at=raw.get("updated_at", time.time()),

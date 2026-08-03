@@ -132,6 +132,42 @@ export interface AudioAssetData extends AssetData {
   voice: string;
   rate: string;
 }
+// 批次历史（Step 2）
+export interface CandidateData {
+  candidate_id: string;
+  local: string | null;
+  url: string | null;
+  status: string;
+  error: string | null;
+  created_at: number;
+}
+export interface ImageBatchData {
+  batch_id: string;
+  kind: string;            // first_frame | last_frame
+  created_at: number;
+  status: string;
+  prompt_snapshot: string;
+  char_ref_snapshot: Record<string, any>;
+  based_on_first_frame: string | null;   // 尾帧批次：基于的首帧 candidate_id
+  candidates: CandidateData[];
+}
+export interface VideoVersionData {
+  version_id: string;
+  created_at: number;
+  status: string;
+  prompt_snapshot: string;
+  char_ref_snapshot: Record<string, any>;
+  first_frame_candidate_id: string | null;
+  last_frame_candidate_id: string | null;
+  video_id: string | null;
+  task_id: string | null;
+  local: string | null;
+  url: string | null;
+  seconds_returned: number | null;
+  size_returned: string | null;
+  num_frames: number;
+  frame_rate: number;
+}
 export interface ShotData {
   shot_id: string;
   scene_id: string;
@@ -152,6 +188,13 @@ export interface ShotData {
   audio: AudioAssetData;
   subtitle_srt: string | null;
   video: VideoAssetData;
+  // 批次历史（Step 2）+ 选择指针
+  first_frame_batches: ImageBatchData[];
+  last_frame_batches: ImageBatchData[];
+  video_versions: VideoVersionData[];
+  selected_first_frame: string | null;   // candidate_id
+  selected_last_frame: string | null;
+  final_video: string | null;            // version_id
   status: string;
   locked: boolean;
   note: string;
@@ -160,9 +203,11 @@ export interface ShotData {
 export interface ProjectShots {
   name: string;
   style: Record<string, any>;
+  story_text: string;
   characters: Array<{ name: string; description_en: string; views: Record<string, AssetData> }>;
   scenes: Array<{
     scene_id: string; title: string; location: string; time_of_day: string; summary: string;
+    characters: string[];
     shots: ShotData[];
   }>;
 }
@@ -442,11 +487,30 @@ class ApiClient {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/characters/full`);
   }
 
+  // 从当前项目删除角色（v2 project.json + 清理三视图文件；不影响角色库）
+  async deleteProjectCharacter(projectName: string, characterName: string): Promise<{ success: boolean; message: string }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/character/${encodeURIComponent(characterName)}`, {
+      method: 'DELETE',
+    });
+  }
+
   // 保存剧本（YAML + 解析 -> parsed_script.json，保留已有生成结果）
   async saveProjectScript(projectName: string, scriptContent: string, enhance: boolean = false): Promise<{ success: boolean; characters_count: number; scenes_count: number; message: string }> {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/script`, {
       method: 'POST',
       body: JSON.stringify({ script_content: scriptContent, enhance }),
+    });
+  }
+
+  // 保存分镜列表（batch 0：按 scene_id 对账--更新 summary/characters/新增/删除/重排，镜头产物保留）
+  // scene_id 为 null 表示新增（后端按 next_scene_seq 分配）；story_text=null 表示不改动完整故事
+  async saveScenes(projectName: string, payload: {
+    story_text?: string | null;
+    scenes: Array<{ scene_id: string | null; summary: string; characters: string[] }>;
+  }): Promise<{ ok: boolean; scenes: Array<{ scene_id: string; summary: string; characters: string[] }> }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/scenes`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
     });
   }
 
@@ -469,10 +533,17 @@ class ApiClient {
     });
   }
 
-  // 选择首帧候选（设 selected_index + status=done -> url_ready=true）
-  async chooseFirstFrame(projectName: string, shotId: string, variant: number): Promise<{ shot_id: string; selected_index: number; url: string }> {
+  // 选择首帧候选（按 candidate_id 跨批次选择，设 selected_first_frame 指针）
+  async chooseFirstFrame(projectName: string, shotId: string, candidateId: string): Promise<{ shot_id: string; candidate_id: string; url: string }> {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/shot/${encodeURIComponent(shotId)}/first-frame/choose`, {
-      method: 'POST', body: JSON.stringify({ variant }),
+      method: 'POST', body: JSON.stringify({ candidate_id: candidateId }),
+    });
+  }
+
+  // 设最终视频版本（final_video 指针，多版本选最终）
+  async setFinalVideo(projectName: string, shotId: string, versionId: string): Promise<{ shot_id: string; final_video: string }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/shot/${encodeURIComponent(shotId)}/video/set-final`, {
+      method: 'POST', body: JSON.stringify({ version_id: versionId }),
     });
   }
 
@@ -491,10 +562,36 @@ class ApiClient {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/shot/${encodeURIComponent(shotId)}/video`, { method: 'POST' });
   }
 
-  // 更新镜头字段（link_mode / locked）
-  async updateShot(projectName: string, shotId: string, params: { link_mode?: string; locked?: boolean }): Promise<{ shot_id: string; link_mode?: string; locked?: boolean }> {
+  // 更新镜头字段（工作台编辑：link_mode/locked + 创作字段，None 字段不改动）
+  async updateShot(projectName: string, shotId: string, params: {
+    link_mode?: string; locked?: boolean;
+    description?: string; prompt_en?: string; negative_prompt?: string;
+    shot_size?: string; camera?: string; lighting?: string; motion?: string;
+    dialogue?: string; characters?: string[];
+  }): Promise<{ shot_id: string }> {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/shot/${encodeURIComponent(shotId)}`, {
       method: 'PUT', body: JSON.stringify(params),
+    });
+  }
+
+  // 在故事段下添加镜头（默认继承故事段角色，立即持久化）
+  async addShot(projectName: string, sceneId: string, characters?: string[] | null): Promise<{ shot_id: string; scene_id: string }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/scene/${encodeURIComponent(sceneId)}/shot`, {
+      method: 'POST', body: JSON.stringify({ characters: characters ?? null }),
+    });
+  }
+
+  // 删除镜头 + 清理其产物文件
+  async deleteShot(projectName: string, shotId: string): Promise<{ shot_id: string; deleted: boolean }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/shot/${encodeURIComponent(shotId)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // 中文画面描述 -> 英文提示词（无副作用）
+  async translateText(text: string): Promise<{ english: string }> {
+    return this.request('/api/translate', {
+      method: 'POST', body: JSON.stringify({ text }),
     });
   }
 

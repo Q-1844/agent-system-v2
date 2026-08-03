@@ -147,6 +147,90 @@ class VideoAsset(Asset):
     attempts: int = 0
 
 
+# ============ 批次历史（Step 2）============
+# 一个 Shot 可有多个首帧/尾帧批次 + 多个视频版本。
+# 选择用独立指针（candidate_id / version_id），不靠删除其他候选。
+# 旧 first_frame/last_frame/video 保留兼容；批次为新真相源（Part B 起 handler 写批次）。
+@dataclass
+class Candidate:
+    candidate_id: str
+    local: Optional[str] = None
+    url: Optional[str] = None
+    status: str = ShotStatus.PENDING.value
+    error: Optional[str] = None
+    created_at: float = 0.0
+
+
+@dataclass
+class ImageBatch:
+    batch_id: str
+    kind: str = "first_frame"            # first_frame | last_frame
+    created_at: float = 0.0
+    status: str = ShotStatus.PENDING.value
+    prompt_snapshot: str = ""            # 生成时的提示词快照
+    char_ref_snapshot: Dict[str, Any] = field(default_factory=dict)   # {角色名: {view, url}}
+    based_on_first_frame: Optional[str] = None   # 尾帧批次：基于的首帧 candidate_id
+    candidates: List[Candidate] = field(default_factory=list)
+
+
+@dataclass
+class VideoVersion:
+    version_id: str
+    created_at: float = 0.0
+    status: str = ShotStatus.PENDING.value
+    prompt_snapshot: str = ""
+    char_ref_snapshot: Dict[str, Any] = field(default_factory=dict)
+    first_frame_candidate_id: Optional[str] = None
+    last_frame_candidate_id: Optional[str] = None
+    video_id: Optional[str] = None
+    task_id: Optional[str] = None
+    local: Optional[str] = None
+    url: Optional[str] = None
+    seconds_returned: Optional[float] = None
+    size_returned: Optional[str] = None
+    num_frames: int = 0
+    frame_rate: int = 24
+
+
+# ---- 批次解析/迁移 helper（Step 2 向后兼容：旧 first_frame/last_frame/video -> 批次）----
+def _parse_candidate(c: dict) -> "Candidate":
+    return Candidate(**{k: v for k, v in (c or {}).items() if k in Candidate.__dataclass_fields__})
+
+def _parse_image_batch(b: dict, kind: str) -> "ImageBatch":
+    b = dict(b or {})
+    b["kind"] = b.get("kind", kind)
+    b["candidates"] = [_parse_candidate(c) for c in b.get("candidates", [])]
+    return ImageBatch(**{k: v for k, v in b.items() if k in ImageBatch.__dataclass_fields__})
+
+def _parse_video_version(v: dict) -> "VideoVersion":
+    return VideoVersion(**{k: v for k, v in (v or {}).items() if k in VideoVersion.__dataclass_fields__})
+
+def _legacy_image_batch(old: "ImageAsset", kind: str) -> List["ImageBatch"]:
+    """旧 ImageAsset.candidates -> 一个 legacy 批次。"""
+    if not old or not old.candidates:
+        return []
+    cands = [Candidate(candidate_id=f"legacy_{kind}_{i+1}", local=c.local, url=c.url,
+                       status=c.status, error=c.error, created_at=c.updated_at or 0.0)
+             for i, c in enumerate(old.candidates)]
+    return [ImageBatch(batch_id=f"legacy_{kind}", kind=kind, created_at=0.0,
+                       status=old.status, candidates=cands)]
+
+def _legacy_selected(old: "ImageAsset", batch: "ImageBatch") -> Optional[str]:
+    if old.status != ShotStatus.DONE.value or not batch.candidates:
+        return None
+    idx = old.selected_index if 0 <= old.selected_index < len(batch.candidates) else 0
+    return batch.candidates[idx].candidate_id
+
+def _legacy_video_version(old: "VideoAsset") -> List["VideoVersion"]:
+    if not old or not (old.local or old.video_id):
+        return []
+    return [VideoVersion(version_id="legacy_video", created_at=old.updated_at or 0.0,
+                         status=old.status, local=old.local, url=old.url,
+                         video_id=old.video_id, task_id=old.task_id,
+                         seconds_returned=old.seconds_returned, size_returned=old.size_returned,
+                         num_frames=old.num_frames, frame_rate=old.frame_rate)]
+
+
 @dataclass
 class Shot:
     shot_id: str                    # "s01_c02"
@@ -174,6 +258,13 @@ class Shot:
     audio: AudioAsset  = field(default_factory=AudioAsset)
     subtitle_srt: Optional[str] = None
     video: VideoAsset  = field(default_factory=VideoAsset)
+    # 批次历史（Step 2）：旧字段保留兼容，批次为新真相源
+    first_frame_batches: List[ImageBatch] = field(default_factory=list)
+    last_frame_batches: List[ImageBatch] = field(default_factory=list)
+    video_versions: List[VideoVersion] = field(default_factory=list)
+    selected_first_frame: Optional[str] = None   # candidate_id 指针
+    selected_last_frame: Optional[str] = None
+    final_video: Optional[str] = None            # version_id 指针
 
     # ---- 状态 ----
     status: str = ShotStatus.PENDING.value
@@ -191,6 +282,20 @@ class Shot:
         d["last_frame"]  = ImageAsset.from_dict(d.get("last_frame", {}) or {})
         d["audio"]       = AudioAsset(**d.get("audio", {}) or {})
         d["video"]       = VideoAsset(**d.get("video", {}) or {})
+        # 批次（Step 2）：已有用之；无则从旧字段迁移出 legacy 批次（向后兼容）
+        ff_raw = d.get("first_frame_batches") or []
+        d["first_frame_batches"] = [_parse_image_batch(b, "first_frame") for b in ff_raw] if ff_raw else _legacy_image_batch(d["first_frame"], "first_frame")
+        lf_raw = d.get("last_frame_batches") or []
+        d["last_frame_batches"] = [_parse_image_batch(b, "last_frame") for b in lf_raw] if lf_raw else _legacy_image_batch(d["last_frame"], "last_frame")
+        vv_raw = d.get("video_versions") or []
+        d["video_versions"] = [_parse_video_version(v) for v in vv_raw] if vv_raw else _legacy_video_version(d["video"])
+        # 选择指针：无则从旧字段推断
+        if d.get("selected_first_frame") is None and d["first_frame_batches"]:
+            d["selected_first_frame"] = _legacy_selected(d["first_frame"], d["first_frame_batches"][0])
+        if d.get("selected_last_frame") is None and d["last_frame_batches"]:
+            d["selected_last_frame"] = _legacy_selected(d["last_frame"], d["last_frame_batches"][0])
+        if d.get("final_video") is None and d["video_versions"] and d["video"].status == ShotStatus.DONE.value:
+            d["final_video"] = d["video_versions"][0].version_id
         known = {f for f in cls.__dataclass_fields__}
         return cls(**{k: v for k, v in d.items() if k in known})
 
@@ -201,7 +306,8 @@ class Scene:
     title: str = ""
     location: str = ""
     time_of_day: str = ""
-    summary: str = ""
+    summary: str = ""                # 分镜故事文本（用户手写）
+    characters: List[str] = field(default_factory=list)   # 出场角色名（来自当前项目角色）
     shots: List[Shot] = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -250,8 +356,12 @@ class StyleAnchor:
 class Project:
     name: str
     style: StyleAnchor = field(default_factory=StyleAnchor)
+    story_text: str = ""             # 项目级完整故事（只存显，不解析/不拆分/不生成）
     characters: List[Character] = field(default_factory=list)
     scenes: List[Scene] = field(default_factory=list)
+    # 分镜 id 分配水位（batch 0）：新建分镜用 s{next_scene_seq:02d} 后自增，
+    # 删除不回收。身份证号语义，详见 PRODUCT_FLOW_DESIGN §一.3。
+    next_scene_seq: int = 1
     schema_version: int = 2
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)

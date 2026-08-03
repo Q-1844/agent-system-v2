@@ -755,6 +755,19 @@ async def bind_character_to_project(project_name: str, req: BindCharacterRequest
         char_dir = project_dir / "output" / "characters"
         char_dir.mkdir(parents=True, exist_ok=True)
 
+        from src.core.store import ProjectStore
+        from src.core.models import Character, Asset, ShotStatus
+        import time
+        store = ProjectStore(project_dir)
+        p = store.load()
+        c = p.get_character(req.name)
+        if c is None:
+            c = Character(name=req.name, description_en=req.description or "")
+            p.characters.append(c)
+        else:
+            if req.description:
+                c.description_en = req.description
+
         ref_images = {}
         for view in ["front", "side", "back"]:
             vdata = req.views.get(view, {}) or {}
@@ -762,32 +775,23 @@ async def bind_character_to_project(project_name: str, req: BindCharacterRequest
                 raw_path = char_dir / f"{req.name}_{view}.png"
                 _save_base64_image(vdata["raw"], raw_path)
                 ref_images[view] = str(raw_path)
+                # 合并：只更新本次提供的视角，其余保留
+                if view not in c.views:
+                    c.views[view] = Asset()
+                c.views[view].local = str(raw_path)
+                c.views[view].status = ShotStatus.DONE.value
+                c.views[view].error = None
+                c.views[view].updated_at = time.time()
             if vdata.get("seg"):
                 seg_path = char_dir / f"{req.name}_{view}_seg.png"
                 _save_base64_image(vdata["seg"], seg_path)
 
-        data = _read_parsed_script(project_dir)
-        chars = data.setdefault("characters", [])
-        target = None
-        for c in chars:
-            if c.get("name") == req.name:
-                target = c
-                break
-        if target is None:
-            target = {"name": req.name, "description": req.description}
-            chars.append(target)
-        else:
-            if req.description:
-                target["description"] = req.description
-        if ref_images:
-            target["reference_images"] = ref_images
-
-        _write_parsed_script(project_dir, data)
-        logger.info(f"角色 {req.name} 已绑定到项目 {project_name}: {list(ref_images.keys())}")
+        store.save(p)
+        logger.info(f"角色 {req.name} 已保存到项目 {project_name}: {list(ref_images.keys())}")
         return {
             "success": True,
             "reference_images": ref_images,
-            "message": f"角色 {req.name} 已绑定到项目 {project_name}",
+            "message": f"角色 {req.name} 已保存到项目 {project_name}",
         }
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="项目不存在")
@@ -805,14 +809,11 @@ async def update_project_character(
     """更新项目角色的描述/名称（改名时同步重命名文件、更新场景角色名）"""
     try:
         project_dir = get_project_manager().get_project_dir(project_name)
-        data = _read_parsed_script(project_dir)
-
-        target = None
-        for c in data.get("characters", []):
-            if c.get("name") == character_name:
-                target = c
-                break
-        if target is None:
+        from src.core.store import ProjectStore
+        store = ProjectStore(project_dir)
+        p = store.load()
+        c = p.get_character(character_name)
+        if c is None:
             raise HTTPException(
                 status_code=404,
                 detail=f"角色 {character_name} 不存在于项目 {project_name}",
@@ -822,33 +823,28 @@ async def update_project_character(
         if req.new_name and req.new_name.strip() and req.new_name.strip() != character_name:
             new_name = req.new_name.strip()
             char_dir = project_dir / "output" / "characters"
-            ri = target.get("reference_images", {})
-            new_ri = {}
-            for view, path_str in ri.items():
-                p = Path(path_str)
-                if p.exists() and p.stem.startswith(character_name + "_"):
-                    new_p = p.with_name(f"{new_name}_{p.stem.split('_', 1)[1]}{p.suffix}")
-                    p.rename(new_p)
-                    new_ri[view] = str(new_p)
-                else:
-                    new_ri[view] = path_str
-            target["reference_images"] = new_ri
-            # 同步重命名 seg 文件（不在 reference_images 里，但需保持一致）
-            for seg_p in char_dir.glob(f"{character_name}_*_seg.png"):
-                rest = seg_p.stem[len(character_name) + 1:]  # e.g. "front_seg"
-                seg_p.rename(seg_p.with_name(f"{new_name}_{rest}{seg_p.suffix}"))
-            target["name"] = new_name
-            for s in data.get("scenes", []):
-                s["characters"] = [
-                    new_name if cn == character_name else cn
-                    for cn in s.get("characters", [])
-                ]
+            # 重命名 raw + seg 文件，更新 views.local
+            for view in list(c.views.keys()):
+                old_raw = char_dir / f"{character_name}_{view}.png"
+                new_raw = char_dir / f"{new_name}_{view}.png"
+                if old_raw.exists():
+                    old_raw.rename(new_raw)
+                    c.views[view].local = str(new_raw)
+                old_seg = char_dir / f"{character_name}_{view}_seg.png"
+                new_seg = char_dir / f"{new_name}_{view}_seg.png"
+                if old_seg.exists():
+                    old_seg.rename(new_seg)
+            c.name = new_name
+            # 更新 shots 里的角色名引用
+            for sc in p.scenes:
+                for sh in sc.shots:
+                    sh.characters = [new_name if cn == character_name else cn for cn in sh.characters]
             renamed = True
 
         if req.description is not None:
-            target["description"] = req.description
+            c.description_en = req.description
 
-        _write_parsed_script(project_dir, data)
+        store.save(p)
         logger.info(f"项目角色 {character_name} 已更新 (renamed={renamed})")
         return {"success": True, "renamed": renamed, "message": "角色已更新"}
     except FileNotFoundError:
@@ -865,14 +861,59 @@ async def get_project_characters_full(project_name: str):
     """获取项目角色（含 reference_images 路径，供角色页/分镜页使用）"""
     try:
         project_dir = get_project_manager().get_project_dir(project_name)
-        data = _read_parsed_script(project_dir)
-        chars = data.get("characters", [])
-        for c in chars:
-            ri = c.get("reference_images", {})
-            if isinstance(ri, dict) and "full" in ri and "back" not in ri:
-                ri["back"] = ri.pop("full")
-        return {"characters": chars}
+        from src.core.store import ProjectStore
+        p = ProjectStore(project_dir).load()
+        out = []
+        for c in p.characters:
+            views_b64 = {}
+            for view_name, asset in c.views.items():
+                raw_b64 = None
+                seg_b64 = None
+                if asset.local:
+                    raw_path = Path(str(asset.local))
+                    if not raw_path.is_absolute():
+                        raw_path = BASE_DIR / raw_path
+                    if raw_path.exists():
+                        raw_b64 = _load_image_as_base64(raw_path)
+                    seg_path = raw_path.with_name(raw_path.stem + "_seg.png")
+                    if seg_path.exists():
+                        seg_b64 = _load_image_as_base64(seg_path)
+                views_b64[view_name] = {"raw": raw_b64, "seg": seg_b64}
+            out.append({"name": c.name, "description_en": c.description_en, "views": views_b64})
+        return {"characters": out}
     except FileNotFoundError:
         return {"characters": []}
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/api/project/{project_name}/character/{character_name}")
+async def delete_project_character(project_name: str, character_name: str):
+    """从当前项目删除角色（v2 project.json）+ 清理其三视图文件。不影响角色库。"""
+    try:
+        project_dir = get_project_manager().get_project_dir(project_name)
+        from src.core.store import ProjectStore
+        store = ProjectStore(project_dir)
+        p = store.load()
+        c = p.get_character(character_name)
+        if c is None:
+            raise HTTPException(status_code=404, detail=f"角色 {character_name} 不存在")
+        # 清理三视图文件
+        char_dir = project_dir / "output" / "characters"
+        for view in c.views:
+            for suffix in [f"_{view}.png", f"_{view}_seg.png"]:
+                f = char_dir / f"{character_name}{suffix}"
+                if f.exists():
+                    try: f.unlink()
+                    except Exception: pass
+        p.characters = [ch for ch in p.characters if ch.name != character_name]
+        store.save(p)
+        logger.info(f"角色 {character_name} 已从项目 {project_name} 删除")
+        return {"success": True, "message": "角色已删除"}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="项目不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"删除角色失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))

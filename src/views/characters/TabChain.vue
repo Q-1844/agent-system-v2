@@ -103,10 +103,22 @@ function restoreFromCache() {
 async function run() {
   loading.value = true;
   steps.value = [];
+  const proj = store.projectName;   // 捕获：生成开始时的项目（切项目后结果仍写回它）
   store.updateGeneratingState(props.char.name, { steps: [] });
 
   try {
     const r = await apiClient.generateCharacterChain({ description: props.char.description, style: 'anime' });
+    const views: any = {};
+    for (const k of ['front', 'side', 'back']) {
+      views[k] = { raw: r.raw_views?.[k], seg: r.seg_views?.[k] || undefined };
+    }
+    // auto-bind 到捕获项目（始终写回原项目，GPT §6/§7）
+    if (r.success) {
+      try { await apiClient.bindCharacterToProject(proj, { name: props.char.name, description: props.char.description, views }); }
+      catch (e: any) { console.error('auto-bind 失败', e); }
+    }
+    // 仅当仍在原项目时更新当前项目 UI/缓存（GPT §7/§8，切项目后不污染新项目）
+    if (proj !== store.projectName) return;
     steps.value = r.steps || [];
     store.updateGeneratingState(props.char.name, { steps: r.steps || [] });
 
@@ -115,18 +127,14 @@ async function run() {
 
     if (r.success) {
       store.showNotification('链式生成完成', 'success');
-      store.cacheCharacterState(props.char.name, props.char.description, {
-        front: { raw: raw.front, seg: seg.front },
-        side: { raw: raw.side, seg: seg.side },
-        back: { raw: raw.back, seg: seg.back },
-      });
+      store.cacheCharacterState(props.char.name, props.char.description, views);
     } else {
       store.showNotification(`部分失败: ${r.error}`, 'error');
     }
   } catch (e: any) {
-    store.showNotification(`失败: ${e.message}`, 'error');
+    if (proj === store.projectName) store.showNotification(`失败: ${e.message}`, 'error');
   } finally {
-    loading.value = false;
+    if (proj === store.projectName) loading.value = false;
   }
 }
 
@@ -141,6 +149,7 @@ async function regenerate(viewKey: string) {
     return;
   }
 
+  const proj = store.projectName;   // 捕获：生成开始时的项目
   store.updateGeneratingState(props.char.name, {
     busy: { [viewKey]: true },
   });
@@ -153,21 +162,30 @@ async function regenerate(viewKey: string) {
       ref_images: refs,
     });
     if (r.success) {
-      raw[viewKey] = r.raw_base64;
-      if (r.seg_base64) seg[viewKey] = r.seg_base64;
-      refCount[viewKey] = r.ref_count;
-      store.showNotification(`${viewKey} 重新生成完成`, 'success');
-
-      store.cacheCharacterState(props.char.name, props.char.description, {
-        front: { raw: raw.front, seg: seg.front },
-        side: { raw: raw.side, seg: seg.side },
-        back: { raw: raw.back, seg: seg.back },
-      });
+      // auto-bind 该视角到捕获项目（合并，其余视角保留，GPT §6/§7）
+      try {
+        await apiClient.bindCharacterToProject(proj, {
+          name: props.char.name, description: props.char.description,
+          views: { [viewKey]: { raw: r.raw_base64, seg: r.seg_base64 || undefined } },
+        });
+      } catch (e: any) { console.error('auto-bind 失败', e); }
+      // 仅当仍在原项目时更新当前项目 UI/缓存
+      if (proj === store.projectName) {
+        raw[viewKey] = r.raw_base64;
+        if (r.seg_base64) seg[viewKey] = r.seg_base64;
+        refCount[viewKey] = r.ref_count;
+        store.showNotification(`${viewKey} 重新生成完成`, 'success');
+        store.cacheCharacterState(props.char.name, props.char.description, {
+          front: { raw: raw.front, seg: seg.front },
+          side: { raw: raw.side, seg: seg.side },
+          back: { raw: raw.back, seg: seg.back },
+        });
+      }
     }
   } catch (e: any) {
-    store.showNotification(`重生成失败: ${e.message}`, 'error');
+    if (proj === store.projectName) store.showNotification(`重生成失败: ${e.message}`, 'error');
   } finally {
-    store.updateGeneratingState(props.char.name, {
+    if (proj === store.projectName) store.updateGeneratingState(props.char.name, {
       busy: { [viewKey]: false },
     });
   }
@@ -176,24 +194,33 @@ async function regenerate(viewKey: string) {
 async function doSegment(viewKey: string) {
   if (!raw[viewKey]) return;
 
+  const proj = store.projectName;   // 捕获：抠图开始时的项目
   store.updateGeneratingState(props.char.name, {
     busySeg: { [viewKey]: true },
   });
 
   try {
     const r = await apiClient.segmentImage(raw[viewKey]);
-    if (r.success) {
-      seg[viewKey] = r.seg_base64;
-      store.cacheCharacterState(props.char.name, props.char.description, {
-        front: { raw: raw.front, seg: seg.front },
-        side: { raw: raw.side, seg: seg.side },
-        back: { raw: raw.back, seg: seg.back },
+    if (r.success && r.seg_base64) {
+      // auto-bind 该视角原图+新抠图到捕获项目（合并，不覆盖其他视角，补缺口）
+      const ok = await store.persistCharacterViews(proj, props.char.name, props.char.description, {
+        [viewKey]: { raw: raw[viewKey], seg: r.seg_base64 },
       });
+      if (!ok) store.showNotification('抠图已完成，但保存到项目失败', 'error');
+      // 仅当仍在原项目时更新当前项目缓存
+      if (proj === store.projectName) {
+        seg[viewKey] = r.seg_base64;
+        store.cacheCharacterState(props.char.name, props.char.description, {
+          front: { raw: raw.front, seg: seg.front },
+          side: { raw: raw.side, seg: seg.side },
+          back: { raw: raw.back, seg: seg.back },
+        });
+      }
     }
   } catch (e: any) {
-    store.showNotification(`抠图失败: ${e.message}`, 'error');
+    if (proj === store.projectName) store.showNotification(`抠图失败: ${e.message}`, 'error');
   } finally {
-    store.updateGeneratingState(props.char.name, {
+    if (proj === store.projectName) store.updateGeneratingState(props.char.name, {
       busySeg: { [viewKey]: false },
     });
   }

@@ -13,5 +13,6 @@ declare module 'vue' {
     RouterView: typeof import('vue-router')['RouterView']
     SafeFrameOverlay: typeof import('./src/components/SafeFrameOverlay.vue')['default']
     ShotCard: typeof import('./src/components/ShotCard.vue')['default']
+    Workbench: typeof import('./src/components/Workbench.vue')['default']
   }
 }

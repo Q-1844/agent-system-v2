@@ -20,25 +20,30 @@ class ProjectManager:
 
     def create_project(self, name: str) -> Path:
         """
-        创建新项目
+        创建新项目：建目录 + 子目录 + 初始化空 project.json（v2）。
 
-        Args:
-            name: 项目名称
-
-        Returns:
-            项目目录路径
+        重名保护：目录已存在则抛 FileExistsError（router 转 409），
+        绝不覆盖已有 project.json / parsed_script.json / 生成资产。
+        新项目用 Project(name) 的 dataclass 默认值（风格/画幅/schema_version/
+        时间戳/next_scene_seq 全部自然生效），不在调用方手拼 JSON。
         """
         project_dir = self.base_dir / name
-        project_dir.mkdir(exist_ok=True)
+        if project_dir.exists():
+            raise FileExistsError(f"项目已存在: {name}")
 
         # 创建标准目录结构
-        (project_dir / "input").mkdir(exist_ok=True)
-        (project_dir / "output" / "characters").mkdir(parents=True, exist_ok=True)
-        (project_dir / "output" / "storyboards").mkdir(parents=True, exist_ok=True)
-        (project_dir / "output" / "videos").mkdir(parents=True, exist_ok=True)
-        (project_dir / "output" / "audio").mkdir(parents=True, exist_ok=True)
-        (project_dir / "output" / "subtitles").mkdir(parents=True, exist_ok=True)
-        (project_dir / "cache" / "checkpoints").mkdir(parents=True, exist_ok=True)
+        (project_dir / "input").mkdir(parents=True)
+        (project_dir / "output" / "characters").mkdir(parents=True)
+        (project_dir / "output" / "storyboards").mkdir(parents=True)
+        (project_dir / "output" / "videos").mkdir(parents=True)
+        (project_dir / "output" / "audio").mkdir(parents=True)
+        (project_dir / "output" / "subtitles").mkdir(parents=True)
+        (project_dir / "cache" / "checkpoints").mkdir(parents=True)
+
+        # 初始化空 project.json，让新项目立即可被 v2 shot 级流程加载（不再 404）
+        from ..core.models import Project
+        from ..core.store import ProjectStore
+        ProjectStore(project_dir).save(Project(name=name))
 
         logger.info(f"项目已创建: {project_dir}")
         return project_dir

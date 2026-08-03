@@ -6,6 +6,7 @@ job handlers：first_frame/last_frame/video/audio（注册到 deps.JOB_HANDLERS�
 """
 import asyncio
 import json
+import uuid
 import base64 as _base64
 from pathlib import Path
 from typing import Optional
@@ -298,6 +299,7 @@ async def get_project_shots(project_name: str):
         return {
             "name": p.name,
             "style": asdict(p.style),
+            "story_text": p.story_text,
             "characters": [{"name": c.name, "description_en": c.description_en,
                             "views": {k: asdict(v) for k, v in c.views.items()}}
                            for c in p.characters],
@@ -388,9 +390,9 @@ async def _await_first_frame_url(store, shot_id, emit, timeout=180, interval=5):
 
 
 async def _handler_first_frame(job, emit):
-    """生成 N 候选分镜图（图生图/文生图），存 local + 公网 url，status=pending 等用户选。"""
+    """生成 N 候选分镜图 -> 新首帧批次（append）+ 同步旧 first_frame（过渡兼容）。status=pending 等用户选。"""
     from src.core.store import ProjectStore
-    from src.core.models import Asset, ShotStatus
+    from src.core.models import Asset, Candidate, ImageBatch, ShotStatus
     project_dir = get_project_manager().get_project_dir(job.project)
     store = ProjectStore(project_dir)
     project = store.load()
@@ -400,8 +402,7 @@ async def _handler_first_frame(job, emit):
     force = bool(job.params.get("force", False))
     if shot.locked and not force:
         await emit("skip", f"{shot.shot_id} 已锁定，跳过", 100); return
-    if shot.first_frame.ready and not force:
-        await emit("skip", f"{shot.shot_id} 已有分镜图，跳过（force=True 可重生成）", 100); return
+    # 批次：每次生成创建新批次（append，多批次历史），不再因"已有"跳过
 
     variants = max(1, int(job.params.get("variants", 2)))
     size_tier = project.style.size_tier or "1K"
@@ -412,7 +413,10 @@ async def _handler_first_frame(job, emit):
     frames_dir = project_dir / "output" / "frames"
     frames_dir.mkdir(parents=True, exist_ok=True)
 
-    candidates = []
+    batch_id = f"ff_{uuid.uuid4().hex[:8]}"
+    now = _time.time()
+    cand_list = []
+    asset_list = []
     for i in range(variants):
         await emit("gen", f"{shot.shot_id} 生成候选 {i+1}/{variants}", int(i / variants * 100))
         seed = (shot.seed + i) if shot.seed is not None else None   # 多候选要有变化
@@ -424,25 +428,35 @@ async def _handler_first_frame(job, emit):
             raise RuntimeError("图片生成未返回公网 URL")
         dest = frames_dir / f"{shot.shot_id}_first_v{i+1}.png"
         await get_agnes_client().download(url, dest)   # 无认证 client，复用于图片资产
-        candidates.append(Asset(local=str(dest), url=url, status=ShotStatus.DONE.value))
+        cid = f"{batch_id}_{i+1}"
+        cand_list.append(Candidate(candidate_id=cid, local=str(dest), url=url,
+                                   status=ShotStatus.DONE.value, created_at=now))
+        asset_list.append(Asset(local=str(dest), url=url, status=ShotStatus.DONE.value))
         await emit("gen", f"{shot.shot_id} 候选 {i+1} 完成", int((i + 1) / variants * 100))
 
-    # 写回：候选各自 done，ImageAsset.status=pending（等用户点选 -> url_ready=False）
+    char_snap = {name: {"url": project.get_character(name).ref_url()}
+                 for name in shot.characters if project.get_character(name)}
+    new_batch = ImageBatch(batch_id=batch_id, kind="first_frame", created_at=now,
+                           status=ShotStatus.PENDING.value, prompt_snapshot=prompt,
+                           char_ref_snapshot=char_snap, candidates=cand_list)
+
     def mut(s):
-        s.first_frame.candidates = candidates
+        s.first_frame_batches.append(new_batch)
+        # 同步旧 first_frame（管线 preflight 读旧字段，过渡兼容）
+        s.first_frame.candidates = asset_list
         s.first_frame.selected_index = 0
         s.first_frame.status = ShotStatus.PENDING.value
         s.first_frame.error = None
-        s.first_frame.updated_at = _time.time()
+        s.first_frame.updated_at = now
     store.update_shot(job.shot_id, mut)
-    await emit("done", f"{shot.shot_id} 已生成 {len(candidates)} 个候选，待选择", 100)
+    await emit("done", f"{shot.shot_id} 已生成 {len(cand_list)} 个候选（批次 {batch_id}），待选择", 100)
 
 
 async def _handler_last_frame(job, emit):
     """生成尾帧（仅 keyframes，图生图用 first_frame.url）。
     生成后若 split_next 非空，桥接拷贝给后继首帧（O2.first_frame = O.last_frame，保证 O->O2 无缝）。"""
     from src.core.store import ProjectStore
-    from src.core.models import Asset, ImageAsset, ShotStatus
+    from src.core.models import Asset, ImageAsset, Candidate, ImageBatch, ShotStatus
     project_dir = get_project_manager().get_project_dir(job.project)
     store = ProjectStore(project_dir)
     project = store.load()
@@ -468,8 +482,23 @@ async def _handler_last_frame(job, emit):
         raise RuntimeError("尾帧生成未返回公网 URL")
     dest = project_dir / "output" / "frames" / f"{shot.shot_id}_last.png"
     await get_agnes_client().download(url, dest)
-    store.update_shot(job.shot_id, lambda s: s.last_frame.mark_done(str(dest), url))
-    await emit("done", f"{shot.shot_id} 尾帧完成", 90)
+    # 写尾帧批次（基于当前 selected_first_frame）+ 设 selected_last_frame + 同步旧 last_frame
+    batch_id = f"lf_{uuid.uuid4().hex[:8]}"
+    now = _time.time()
+    cand = Candidate(candidate_id=f"{batch_id}_1", local=str(dest), url=url,
+                     status=ShotStatus.DONE.value, created_at=now)
+    char_snap = {name: {"url": project.get_character(name).ref_url()}
+                 for name in shot.characters if project.get_character(name)}
+    new_batch = ImageBatch(batch_id=batch_id, kind="last_frame", created_at=now,
+                           status=ShotStatus.DONE.value, prompt_snapshot=prompt,
+                           char_ref_snapshot=char_snap,
+                           based_on_first_frame=shot.selected_first_frame, candidates=[cand])
+    def mut(s, b=new_batch, cid=cand.candidate_id, d=str(dest), u=url):
+        s.last_frame_batches.append(b)
+        s.selected_last_frame = cid
+        s.last_frame.mark_done(d, u)   # 同步旧字段（管线 preflight 读旧）
+    store.update_shot(job.shot_id, mut)
+    await emit("done", f"{shot.shot_id} 尾帧完成（批次 {batch_id}）", 90)
 
     # 🔴 桥接拷贝：split_next 非空且后继首帧未就绪时，把尾帧拷给后继首帧
     nxt = getattr(shot, "split_next", None)
@@ -498,7 +527,7 @@ class FirstFrameRequest(BaseModel):
 
 
 class ChooseFrameRequest(BaseModel):
-    variant: int = 1   # 1-based
+    candidate_id: str   # 跨批次选择（支持从旧批次选，GPT §四）
 
 
 @router.post("/api/project/{project_name}/shot/{shot_id}/first-frame")
@@ -532,17 +561,30 @@ async def choose_first_frame(project_name: str, shot_id: str, req: ChooseFrameRe
         shot = store.load().get_shot(shot_id)
         if shot is None:
             raise HTTPException(404, f"镜头 {shot_id} 不存在")
-        if not shot.first_frame.candidates:
-            raise HTTPException(400, "该镜头尚无分镜图候选，请先生成")
-        idx = req.variant - 1
-        if not (0 <= idx < len(shot.first_frame.candidates)):
-            raise HTTPException(400, f"variant 超出范围（1~{len(shot.first_frame.candidates)}）")
-        store.update_shot(shot_id, lambda s, i=idx: (
-            s.first_frame.select(i),
-            setattr(s.first_frame, "status", ShotStatus.DONE.value),
-        ))
-        return {"shot_id": shot_id, "selected_index": idx,
-                "url": shot.first_frame.candidates[idx].url}
+        if not shot.first_frame_batches:
+            raise HTTPException(400, "该镜头尚无首帧批次，请先生成")
+        # 跨所有批次找候选（支持从旧批次选择）
+        found_batch = None
+        found_idx = -1
+        for b in shot.first_frame_batches:
+            for i, c in enumerate(b.candidates):
+                if c.candidate_id == req.candidate_id:
+                    found_batch, found_idx = b, i
+                    break
+            if found_batch:
+                break
+        if found_batch is None:
+            raise HTTPException(400, f"候选 {req.candidate_id} 不存在")
+        cand = found_batch.candidates[found_idx]
+        def mut(s, b=found_batch, i=found_idx, cid=req.candidate_id):
+            s.selected_first_frame = cid
+            # 同步旧 first_frame 到所选批次（管线 preflight 读旧字段，过渡兼容）
+            from src.core.models import Asset
+            s.first_frame.candidates = [Asset(local=c.local, url=c.url, status=c.status) for c in b.candidates]
+            s.first_frame.selected_index = i
+            setattr(s.first_frame, "status", ShotStatus.DONE.value)
+        store.update_shot(shot_id, mut)
+        return {"shot_id": shot_id, "candidate_id": req.candidate_id, "url": cand.url}
     except FileNotFoundError:
         raise HTTPException(404, "项目不存在")
     except HTTPException:
@@ -747,13 +789,29 @@ async def _handler_video(job, emit):
     dest = project_dir / "output" / "videos" / f"{shot.shot_id}.mp4"
     await get_agnes_client().download(res["url"], dest)
 
-    # 🔴 回读入库（seconds/size 是服务端归一化后的真实值，FACTS §3.6）
-    store.update_shot(job.shot_id, lambda s, d=str(dest), r=res: (
-        s.video.mark_done(d, r["url"]),
-        setattr(s.video, "seconds_returned", r["seconds"]),
-        setattr(s.video, "size_returned", r["size"]),
-    ))
-    await emit("done", f"{shot.shot_id} 完成，实际 {res['seconds']}s / {res['size']}", 100)
+    # 取最新 shot（含 submit 写入的 video_id/task_id），写视频版本 + 设 final_video + 同步旧 video
+    shot = store.load().get_shot(job.shot_id)
+    from src.core.models import VideoVersion
+    vvid = f"vv_{uuid.uuid4().hex[:8]}"
+    now = _time.time()
+    char_snap = {name: {"url": project.get_character(name).ref_url()}
+                 for name in shot.characters if project.get_character(name)}
+    new_vv = VideoVersion(version_id=vvid, created_at=now, status=ShotStatus.DONE.value,
+                          prompt_snapshot=prompt, char_ref_snapshot=char_snap,
+                          first_frame_candidate_id=shot.selected_first_frame,
+                          last_frame_candidate_id=shot.selected_last_frame,
+                          video_id=vid, task_id=shot.video.task_id,
+                          local=str(dest), url=res["url"],
+                          seconds_returned=res["seconds"], size_returned=res["size"],
+                          num_frames=shot.video.num_frames, frame_rate=shot.video.frame_rate)
+    def mut(s, vv=new_vv, d=str(dest), r=res):
+        s.video_versions.append(vv)
+        s.final_video = vv.version_id
+        s.video.mark_done(d, r["url"])           # 同步旧字段（管线/导出读旧）
+        setattr(s.video, "seconds_returned", r["seconds"])
+        setattr(s.video, "size_returned", r["size"])
+    store.update_shot(job.shot_id, mut)
+    await emit("done", f"{shot.shot_id} 完成（版本 {vvid}），实际 {res['seconds']}s / {res['size']}", 100)
 
 
 JOB_HANDLERS["video"] = _handler_video
@@ -778,14 +836,64 @@ async def shot_video(project_name: str, shot_id: str):
         raise HTTPException(500, str(e))
 
 
+class SetFinalVideoRequest(BaseModel):
+    version_id: str
+
+
+@router.post("/api/project/{project_name}/shot/{shot_id}/video/set-final")
+async def set_final_video(project_name: str, shot_id: str, req: SetFinalVideoRequest):
+    """设最终视频版本（final_video 指针）+ 同步旧 video 字段（compose 读旧）。"""
+    try:
+        project_dir = get_project_manager().get_project_dir(project_name)
+        from src.core.store import ProjectStore
+        from src.core.models import ShotStatus
+        store = ProjectStore(project_dir)
+        shot = store.load().get_shot(shot_id)
+        if shot is None:
+            raise HTTPException(404, f"镜头 {shot_id} 不存在")
+        vv = next((v for v in shot.video_versions if v.version_id == req.version_id), None)
+        if vv is None:
+            raise HTTPException(400, f"视频版本 {req.version_id} 不存在")
+
+        def mut(s, v=vv):
+            s.final_video = v.version_id
+            # 同步旧 video 到所选版本（compose/导出读旧字段，过渡兼容）
+            s.video.local = v.local
+            s.video.url = v.url
+            s.video.status = v.status
+            s.video.video_id = v.video_id
+            s.video.task_id = v.task_id
+            s.video.seconds_returned = v.seconds_returned
+            s.video.size_returned = v.size_returned
+            s.video.num_frames = v.num_frames
+            s.video.frame_rate = v.frame_rate
+        store.update_shot(shot_id, mut)
+        return {"shot_id": shot_id, "final_video": req.version_id}
+    except FileNotFoundError:
+        raise HTTPException(404, "项目不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
 class UpdateShotRequest(BaseModel):
     link_mode: Optional[str] = None
     locked: Optional[bool] = None
+    description: Optional[str] = None
+    prompt_en: Optional[str] = None
+    negative_prompt: Optional[str] = None
+    shot_size: Optional[str] = None
+    camera: Optional[str] = None
+    lighting: Optional[str] = None
+    motion: Optional[str] = None
+    dialogue: Optional[str] = None
+    characters: Optional[List[str]] = None
 
 
 @router.put("/api/project/{project_name}/shot/{shot_id}")
 async def update_shot(project_name: str, shot_id: str, req: UpdateShotRequest):
-    """更新镜头创作字段（link_mode / locked），写回 project.json。"""
+    """更新镜头创作字段（工作台编辑），写回 project.json。None 字段不改动。"""
     try:
         project_dir = get_project_manager().get_project_dir(project_name)
         from src.core.store import ProjectStore
@@ -798,11 +906,29 @@ async def update_shot(project_name: str, shot_id: str, req: UpdateShotRequest):
                 s.link_mode = req.link_mode
             if req.locked is not None:
                 s.locked = req.locked
+            if req.description is not None:
+                s.description = req.description
+            if req.prompt_en is not None:
+                s.prompt_en = req.prompt_en
+            if req.negative_prompt is not None:
+                s.negative_prompt = req.negative_prompt
+            if req.shot_size is not None:
+                s.shot_size = req.shot_size
+            if req.camera is not None:
+                s.camera = req.camera
+            if req.lighting is not None:
+                s.lighting = req.lighting
+            if req.motion is not None:
+                s.motion = req.motion
+            if req.dialogue is not None:
+                s.dialogue = req.dialogue
+            if req.characters is not None:
+                s.characters = list(req.characters)
         store = ProjectStore(project_dir)
         if store.load().get_shot(shot_id) is None:
             raise HTTPException(404, f"镜头 {shot_id} 不存在")
         store.update_shot(shot_id, mut)
-        return {"shot_id": shot_id, "link_mode": req.link_mode, "locked": req.locked}
+        return {"shot_id": shot_id}
     except FileNotFoundError:
         raise HTTPException(404, "项目不存在")
     except ValueError as e:
@@ -934,6 +1060,114 @@ async def orchestrate_project(project_name: str, req: OrchestrateRequest):
         raise HTTPException(404, "项目不存在")
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+# ==================== 镜头增删 + 翻译（分镜工作台 Step 1）====================
+class AddShotRequest(BaseModel):
+    characters: Optional[List[str]] = None   # 默认继承故事段角色
+
+
+@router.post("/api/project/{project_name}/scene/{scene_id}/shot")
+async def add_shot(project_name: str, scene_id: str, req: AddShotRequest):
+    """在故事段下添加镜头。shot_id = {scene_id}_c{next}，默认继承故事段角色，立即持久化。"""
+    try:
+        project_dir = get_project_manager().get_project_dir(project_name)
+        from src.core.store import ProjectStore
+        from src.core.models import Shot, ImageAsset
+        store = ProjectStore(project_dir)
+        p = store.load()
+        scene = next((sc for sc in p.scenes if sc.scene_id == scene_id), None)
+        if scene is None:
+            raise HTTPException(404, f"故事段 {scene_id} 不存在")
+        used = []
+        for sh in scene.shots:
+            if sh.shot_id.startswith(scene_id + "_c"):
+                try:
+                    used.append(int(sh.shot_id[len(scene_id) + 2:]))
+                except ValueError:
+                    pass
+        next_n = (max(used) + 1) if used else 1
+        new_id = f"{scene_id}_c{next_n:02d}"
+        chars = list(req.characters) if req.characters is not None else list(scene.characters)
+        new_shot = Shot(shot_id=new_id, scene_id=scene_id, index=len(scene.shots) + 1,
+                        characters=chars, first_frame=ImageAsset(), last_frame=ImageAsset())
+        scene.shots.append(new_shot)
+        store.save(p)
+        logger.info(f"新增镜头 {new_id} 到故事段 {scene_id}")
+        return {"shot_id": new_id, "scene_id": scene_id}
+    except FileNotFoundError:
+        raise HTTPException(404, "项目不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@router.delete("/api/project/{project_name}/shot/{shot_id}")
+async def delete_shot(project_name: str, shot_id: str):
+    """删除镜头 + 清理其产物文件（仅本项目目录内，防 stale 路径误删）。"""
+    try:
+        project_dir = get_project_manager().get_project_dir(project_name)
+        from src.core.store import ProjectStore
+        store = ProjectStore(project_dir)
+        p = store.load()
+        shot = p.get_shot(shot_id)
+        if shot is None:
+            raise HTTPException(404, f"镜头 {shot_id} 不存在")
+        paths = []
+        if shot.video and shot.video.local:
+            paths.append(shot.video.local)
+        if shot.audio and shot.audio.local:
+            paths.append(shot.audio.local)
+        for img in (shot.first_frame, shot.last_frame):
+            if img and img.candidates:
+                for c in img.candidates:
+                    if c.local:
+                        paths.append(c.local)
+        for sc in p.scenes:
+            sc.shots = [sh for sh in sc.shots if sh.shot_id != shot_id]
+        store.save(p)
+        # 保存后再清文件（仅本项目目录内）
+        for pp in paths:
+            try:
+                ppp = Path(pp)
+                if not ppp.is_absolute():
+                    ppp = BASE_DIR / ppp
+                ppp = ppp.resolve()
+                try:
+                    ppp.relative_to(project_dir.resolve())
+                except ValueError:
+                    continue
+                if ppp.exists():
+                    ppp.unlink()
+            except Exception:
+                pass
+        logger.info(f"镜头 {shot_id} 已删除")
+        return {"shot_id": shot_id, "deleted": True}
+    except FileNotFoundError:
+        raise HTTPException(404, "项目不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+class TranslateRequest(BaseModel):
+    text: str
+
+
+@router.post("/api/translate")
+async def translate_text(req: TranslateRequest):
+    """中文画面描述 -> 英文提示词（复用 agnes.chat）。无副作用，前端拿到填入 prompt_en。"""
+    try:
+        agnes = get_agnes_client()
+        prompt = (f"将以下中文画面描述翻译成英文图片生成提示词，"
+                  f"只返回英文提示词，不要其他文字：\n{req.text}")
+        en = await agnes.chat([{"role": "user", "content": prompt}],
+                              temperature=0.5, max_tokens=1024)
+        return {"english": (en or "").strip()}
     except Exception as e:
         raise HTTPException(500, str(e))
 

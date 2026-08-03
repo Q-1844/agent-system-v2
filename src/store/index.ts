@@ -192,6 +192,7 @@ export const useProjectStore = defineStore('project', () => {
     seg_base64?: string;
     metadata?: any;
   }> {
+    const proj = projectName.value;   // 捕获：生成开始时的项目（切项目后结果仍写回它）
     // 更新 busy 状态（使用 spread 确保响应式）
     const currentState = generatingState[charName] || { busy: {}, busySeg: {}, steps: [] };
     generatingState[charName] = {
@@ -207,14 +208,20 @@ export const useProjectStore = defineStore('project', () => {
       });
 
       if (r.success) {
-        // 更新缓存
-        if (!characterCache.value[charName]) {
-          characterCache.value[charName] = { description, views: {} };
+        // 仅当仍在原项目时更新当前项目缓存（切项目后不污染新项目，GPT §7/§8）
+        if (proj === projectName.value) {
+          if (!characterCache.value[charName]) {
+            characterCache.value[charName] = { description, views: {} };
+          }
+          characterCache.value[charName].views[viewKey] = {
+            raw: r.raw_base64,
+            seg: r.seg_base64 || undefined,
+          };
         }
-        characterCache.value[charName].views[viewKey] = {
-          raw: r.raw_base64,
-          seg: r.seg_base64 || undefined,
-        };
+        // auto-bind 到捕获项目（始终写回原项目，不再依赖"绑定到项目"按钮，GPT §6）
+        await persistCharacterViews(proj, charName, description, {
+          [viewKey]: { raw: r.raw_base64, seg: r.seg_base64 || undefined },
+        });
       }
 
       return r;
@@ -236,6 +243,7 @@ export const useProjectStore = defineStore('project', () => {
     seg_base64?: string;
     metadata?: any;
   }> {
+    const proj = projectName.value;   // 捕获：抠图开始时的项目（切项目后仍写回它）
     // 更新 busy 状态（使用 spread 确保响应式）
     const currentState = generatingState[charName] || { busy: {}, busySeg: {}, steps: [] };
     generatingState[charName] = {
@@ -246,19 +254,29 @@ export const useProjectStore = defineStore('project', () => {
     try {
       const r = await apiClient.segmentImage(imageBase64);
 
-      if (r.success && characterCache.value[charName]?.views[viewKey]) {
-        characterCache.value[charName].views[viewKey].seg = r.seg_base64;
+      if (r.success && r.seg_base64) {
+        // auto-bind 该视角原图+新抠图到捕获项目（合并，不覆盖其他视角，补"单独抠图不落盘"缺口）
+        const ok = await persistCharacterViews(proj, charName, "", {
+          [viewKey]: { raw: imageBase64, seg: r.seg_base64 },
+        });
+        if (!ok) showNotification('抠图已完成，但保存到项目失败', 'error');
+        // 仅当仍在原项目时更新当前项目缓存
+        if (proj === projectName.value && characterCache.value[charName]?.views[viewKey]) {
+          characterCache.value[charName].views[viewKey].seg = r.seg_base64;
+        }
       }
 
       return r;
     } finally {
-      // 清除 busy 状态
-      const state = generatingState[charName];
-      if (state) {
-        generatingState[charName] = {
-          ...state,
-          busySeg: { ...state.busySeg, [viewKey]: false },
-        };
+      if (proj === projectName.value) {
+        // 清除 busy 状态
+        const state = generatingState[charName];
+        if (state) {
+          generatingState[charName] = {
+            ...state,
+            busySeg: { ...state.busySeg, [viewKey]: false },
+          };
+        }
       }
     }
   }
@@ -279,12 +297,53 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
 
-  // 加载项目（阶段 5 简化：只设置 projectName）。
-  // 🔴 旧 loadProject 调 getProjectCharacters/getProjectScenes（已删接口），但 grep 确认
-  //    store.characters/store.scenes 无 .vue 引用（characters/script-editor 用本地 ref），
-  //    故简化为只设置 projectName。方法名保留因 characters/script-editor/ShotBoard 的 onMounted 仍调用。
+  // 加载项目：设置 projectName + 清空项目级角色数据（项目隔离：切项目不串）。
+  // 角色列表由 loadProjectCharacters 按需加载（角色页 onMounted/watch 触发）。
   async function loadProject(name: string) {
     projectName.value = name;
+    characters.value = [];
+    characterCache.value = {};
+    Object.keys(generatingState).forEach(k => { delete generatingState[k]; });
+    currentCharacterId.value = null;
+  }
+
+  // 加载当前项目的角色（v2 project.json）。带 token 防竞态：切项目后旧响应不覆盖新。
+  let _loadSeq = 0;
+  async function loadProjectCharacters(name: string) {
+    if (!name) return;
+    const mySeq = ++_loadSeq;
+    try {
+      const result = await apiClient.getProjectCharactersFull(name);
+      if (mySeq !== _loadSeq) return;   // 旧响应，丢弃（用户已切到别的项目）
+      const list = (result.characters || []).map((c: any) => ({
+        name: c.name, description: c.description_en || '', reference_images: {},
+      }));
+      characters.value = list;
+      // 用项目里的 views 填充缓存：刷新后三视图仍可显示，状态(完成 N/3)正确
+      for (const c of result.characters || []) {
+        const views: any = {};
+        for (const [v, data] of Object.entries(c.views || {})) {
+          views[v] = { raw: (data as any).raw || undefined, seg: (data as any).seg || undefined };
+        }
+        characterCache.value[c.name] = { description: c.description_en || '', views };
+      }
+    } catch (e) {
+      console.error('[Store] 加载项目角色失败', e);
+      if (mySeq === _loadSeq) characters.value = [];
+    }
+  }
+
+  // 把角色三视图落盘到指定项目（auto-bind）。proj 是生成开始时捕获的项目，
+  // 即便用户中途切到别的项目，结果仍写回原项目（GPT §7）。
+  // 返回 boolean 供调用方判断是否需要给"保存失败"提示。
+  async function persistCharacterViews(proj: string, name: string, description: string, views: any): Promise<boolean> {
+    try {
+      await apiClient.bindCharacterToProject(proj, { name, description, views });
+      return true;
+    } catch (e: any) {
+      console.error('[Store] 角色落盘失败', e);
+      return false;
+    }
   }
 
   // ============ 设置操作 ============
@@ -320,6 +379,8 @@ export const useProjectStore = defineStore('project', () => {
 
     // 方法
     loadProject,
+    loadProjectCharacters,
+    persistCharacterViews,
     showNotification,
 
     // 角色保存系统方法

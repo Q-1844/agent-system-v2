@@ -135,10 +135,22 @@ async function run() {
   loading.value = true;
   steps.value = [];
   sheetRaw.value = '';
+  const proj = store.projectName;   // 捕获：生成开始时的项目
   store.updateGeneratingState(props.char.name, { steps: [] });
 
   try {
     const r = await apiClient.generateCharacterSheet({ description: props.char.description, style: 'anime' });
+    const views: any = {};
+    for (const k of ['front', 'side', 'back']) {
+      views[k] = { raw: r.crops_raw?.[k], seg: r.seg_views?.[k] || undefined };
+    }
+    // auto-bind 到捕获项目（始终写回原项目，GPT §6/§7）
+    if (r.success) {
+      try { await apiClient.bindCharacterToProject(proj, { name: props.char.name, description: props.char.description, views }); }
+      catch (e: any) { console.error('auto-bind 失败', e); }
+    }
+    // 仅当仍在原项目时更新当前项目 UI/缓存（GPT §7/§8）
+    if (proj !== store.projectName) return;
     steps.value = r.steps || [];
     store.updateGeneratingState(props.char.name, { steps: r.steps || [] });
 
@@ -148,18 +160,14 @@ async function run() {
 
     if (r.success) {
       store.showNotification('设定图生成完成', 'success');
-      store.cacheCharacterState(props.char.name, props.char.description, {
-        front: { raw: crops.front, seg: seg.front },
-        side: { raw: crops.side, seg: seg.side },
-        back: { raw: crops.back, seg: seg.back },
-      });
+      store.cacheCharacterState(props.char.name, props.char.description, views);
     } else {
       store.showNotification(`部分失败: ${r.error}`, 'error');
     }
   } catch (e: any) {
-    store.showNotification(`失败: ${e.message}`, 'error');
+    if (proj === store.projectName) store.showNotification(`失败: ${e.message}`, 'error');
   } finally {
-    loading.value = false;
+    if (proj === store.projectName) loading.value = false;
   }
 }
 

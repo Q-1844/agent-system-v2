@@ -68,6 +68,7 @@ from routers import characters  # noqa: E402
 from routers import compose  # noqa: E402
 from routers import jobs  # noqa: E402
 from routers import shots  # noqa: E402
+from routers import scenes  # noqa: E402
 app.include_router(system.router)
 app.include_router(projects.router)
 app.include_router(script.router)
@@ -75,6 +76,7 @@ app.include_router(characters.router)
 app.include_router(compose.router)
 app.include_router(jobs.router)
 app.include_router(shots.router)
+app.include_router(scenes.router)
 
 
 @app.on_event("startup")
