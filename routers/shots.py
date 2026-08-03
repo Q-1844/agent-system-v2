@@ -376,6 +376,118 @@ def _shot_char_refs(project, shot):
     return refs
 
 
+# ==================== Phase 6A：镜头接力 / 开场来源 ====================
+# opening_source 与 link_mode 独立：link_mode 控制「镜头内部如何生成视频」，
+# opening_source 控制「开场画面从哪来」。参考图收集按来源类型组织，便于未来加 environment/prop。
+def _collect_first_frame_refs(project, shot):
+    """收集首帧参考图（带来源类型）。本轮实现 character + continuity。
+    返回 [{'type','url','label'}, ...]。未来加 environment/prop 在此追加，不改首帧生成入口。
+    - character: 出场角色参考图（公网 url 或 base64 data URI）
+    - continuity: reference_previous 模式下，来源镜头实际视频末帧（url 或 base64，图片生成参考可不托管）"""
+    from src.core.models import OpeningSource
+    refs = []
+    for name in shot.characters:
+        c = project.get_character(name)
+        if not c:
+            continue
+        url = c.ref_url()
+        if url:
+            refs.append({"type": "character", "url": url, "label": name}); continue
+        for v in ("front", "side", "back"):
+            a = c.views.get(v)
+            if a and a.local and Path(str(a.local)).exists():
+                b64 = _base64.b64encode(Path(str(a.local)).read_bytes()).decode()
+                refs.append({"type": "character", "url": f"data:image/png;base64,{b64}", "label": name}); break
+    if shot.opening_source == OpeningSource.REFERENCE_PREVIOUS.value and shot.source_shot_id:
+        prev = project.get_shot(shot.source_shot_id)
+        if prev:
+            end = prev.video_end_frame
+            if end.url:
+                refs.append({"type": "continuity", "url": end.url, "label": f"{prev.shot_id}末帧"})
+            elif end.local and Path(str(end.local)).exists():
+                b64 = _base64.b64encode(Path(str(end.local)).read_bytes()).decode()
+                refs.append({"type": "continuity", "url": f"data:image/png;base64,{b64}", "label": f"{prev.shot_id}末帧"})
+    return refs
+
+
+def _effective_first_frame_url(project, shot):
+    """effective 首帧公网 URL（视频接口用，单一解析点，避免前后端不一致）。
+    inherit_previous -> 来源镜头实际末帧 url；其余 -> 本镜已选首帧 url。不可用返回 ''。"""
+    from src.core.models import OpeningSource
+    if shot.opening_source == OpeningSource.INHERIT_PREVIOUS.value and shot.source_shot_id:
+        prev = project.get_shot(shot.source_shot_id)
+        if prev and prev.video_end_frame.url_ready:
+            return prev.video_end_frame.url or ""
+        return ""
+    sel = shot.first_frame.selected
+    return (sel.url if sel else "") or ""
+
+
+def _effective_first_frame_ready(project, shot):
+    return bool(_effective_first_frame_url(project, shot))
+
+
+def continuity_status(project, shot):
+    """接力状态：(status, message)。status: independent/ready/stale/broken。
+    不静默替换下游、不自动连锁重生成，仅标记。"""
+    from src.core.models import OpeningSource, ShotStatus
+    if shot.opening_source == OpeningSource.INDEPENDENT.value or not shot.source_shot_id:
+        return ("independent", "")
+    prev = project.get_shot(shot.source_shot_id)
+    if not prev:
+        return ("broken", "来源镜头已删除")
+    if prev.scene_id != shot.scene_id:
+        return ("broken", "来源镜头不在同一场景")
+    scene = next((s for s in project.scenes if s.scene_id == shot.scene_id), None)
+    if scene:
+        ids = [s.shot_id for s in scene.shots]
+        if prev.shot_id in ids and shot.shot_id in ids and ids.index(prev.shot_id) >= ids.index(shot.shot_id):
+            return ("broken", "来源镜头不再位于本镜之前")
+    if not prev.final_video or prev.video.status != ShotStatus.DONE.value:
+        return ("broken", "上一镜头未完成视频")
+    end = prev.video_end_frame
+    if shot.opening_source == OpeningSource.INHERIT_PREVIOUS.value:
+        if not end.url_ready:
+            return ("broken", "上一镜头末帧未就绪（无公网 URL）")
+    else:  # reference_previous：local 即可（base64 可作图片生成参考）
+        if not (end.status == ShotStatus.DONE.value and end.local):
+            return ("broken", "上一镜头末帧未就绪")
+    if shot.source_version != prev.final_video:
+        return ("stale", "上一镜头已更新")
+    return ("ready", "")
+
+
+async def _extract_video_end_frame(project_dir, shot_id, video_local, version_id, emit=None):
+    """从最终视频文件提取实际末帧 -> output/frames/{shot_id}_video_end.png，
+    上传 imgbb 取公网 URL（视频接力进 Agnes 视频接口必需；保真不用 agnes_rehost）。
+    提取/托管失败不抛（视频本身仍成功），返回带 error 的 Asset；允许 retry。"""
+    import subprocess
+    from src.core.models import Asset, ShotStatus
+    frames_dir = project_dir / "output" / "frames"
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    end_path = frames_dir / f"{shot_id}_video_end.png"
+    # ffmpeg -sseof 从文件末尾 seek，取 1 帧（短末尾偏移避免空帧）
+    cmd = ["ffmpeg", "-y", "-sseof", "-0.2", "-i", str(video_local),
+           "-frames:v", "1", "-q:v", "2", str(end_path)]
+    try:
+        if emit:
+            await emit("endframe", f"{shot_id} 提取视频末帧", None)
+        r = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace", timeout=60)
+        if r.returncode != 0 or not end_path.exists():
+            return Asset(status=ShotStatus.FAILED.value,
+                         error=f"ffmpeg 末帧提取失败: {(r.stderr or '')[:200]}"), False
+    except Exception as e:
+        return Asset(status=ShotStatus.FAILED.value, error=f"ffmpeg 异常: {e}"), False
+    # 上传 imgbb 取公网 URL（inherit 接力进视频接口必需；reference 可走 base64）
+    try:
+        url = await get_rehost_host().upload(str(end_path))
+        return Asset(local=str(end_path), url=url, status=ShotStatus.DONE.value), True
+    except Exception as e:
+        # 提取成功但托管失败：local 有（reference 可 base64）、url 无（inherit 不可用）
+        return Asset(local=str(end_path), status=ShotStatus.DONE.value,
+                     error=f"末帧托管失败: {e}"), False
+
+
 async def _await_first_frame_url(store, shot_id, emit, timeout=180, interval=5):
     """有界等待 first_frame.url_ready。bridge 场景首帧来自前驱尾帧，可能尚未就绪。
     超时返回 None（调用方报错）。"""
@@ -406,9 +518,15 @@ async def _handler_first_frame(job, emit):
     variants = max(1, int(job.params.get("variants", 2)))
     size_tier = project.style.size_tier or "1K"
     ratio = project.style.aspect_ratio or "16:9"
-    refs = _shot_char_refs(project, shot)
+    typed_refs = _collect_first_frame_refs(project, shot)
+    refs = [r["url"] for r in typed_refs]
     use_i2i = bool(refs)
     prompt = build_first_frame_prompt(project, shot)
+    # reference_previous：提示词表达「保持连续但允许换机位」，不要求逐像素复制
+    if any(r["type"] == "continuity" for r in typed_refs):
+        prompt += (". Maintain continuity with the previous shot's ending frame: keep character identity, "
+                   "environment, outfit and lighting direction; change shot size, camera angle, composition "
+                   "and subject action as specified; do not pixel-copy the previous frame")
     frames_dir = project_dir / "output" / "frames"
     frames_dir.mkdir(parents=True, exist_ok=True)
 
@@ -658,16 +776,17 @@ async def shot_last_frame(project_name: str, shot_id: str):
 from src.api.agnes_client import resolve_size as _resolve_size, PollTransientError, AgnesError
 
 
-def _video_preflight(shot, quota, seconds):
+def _video_preflight(shot, quota, seconds, eff_ff_ready):
     """视频前置硬校验（缺一不可，不通过就不提交，省 60s）。
-    仅检查「硬失败」；keyframes 尾帧 in-progress 的有界等待在 handler 里做。"""
+    仅检查「硬失败」；keyframes 尾帧 in-progress 的有界等待在 handler 里做。
+    eff_ff_ready：effective 首帧是否就绪（inherit_previous 用来源末帧 url，其余用本镜已选首帧 url）。"""
     from src.core.models import ShotStatus
     if shot.locked:
         return False, "镜头已锁定"
     if not shot.video.num_frames:
         return False, "尚未配音且未设置目标时长，无法确定视频时长（请先配音或在视频标签选择时长）"
-    if not shot.first_frame.url_ready:
-        return False, "首帧缺少公网 URL（未选择候选或未生成），请先生成并选择首帧"
+    if not eff_ff_ready:
+        return False, "开场画面未就绪：请先生成并选择首帧，或来源镜头末帧未就绪"
     if shot.link_mode == "keyframes":
         if shot.last_frame.status == ShotStatus.FAILED.value:
             return False, "尾帧生成失败，请重新生成尾帧"
@@ -695,7 +814,7 @@ async def _handler_video(job, emit):
     🔴 已有 video_id 且 generating 时直接续轮询，不重提交、不重扣配额。"""
     from src.core.store import ProjectStore
     from src.core.prompt_builder import build_video_prompt
-    from src.core.models import ShotStatus
+    from src.core.models import ShotStatus, OpeningSource
     project_dir = get_project_manager().get_project_dir(job.project)
     store = ProjectStore(project_dir)
     project = store.load()
@@ -704,9 +823,10 @@ async def _handler_video(job, emit):
         raise RuntimeError(f"镜头 {job.shot_id} 不存在")
 
     # 🔴 自动重新托管：首帧 local 有 / url 空（v1 迁移数据）-> imgbb 补公网 URL（100% 保真，不丢画面）。
-    #  用户无感：不用知道公网 URL 是什么，preflight 前自动补齐。不重新生成。上传失败明示抛错。
+    #  inherit_previous 不使用本镜 first_frame（开场来自来源镜头末帧），跳过。
     sel_ff = shot.first_frame.selected
-    if (shot.first_frame.status == "done" and sel_ff and sel_ff.local
+    if (shot.opening_source != OpeningSource.INHERIT_PREVIOUS.value
+            and shot.first_frame.status == "done" and sel_ff and sel_ff.local
             and not sel_ff.url):
         await emit("rehost", f"{shot.shot_id} 首帧重新托管中（补公网 URL）", 3)
         url = await get_rehost_host().upload(sel_ff.local)
@@ -738,8 +858,10 @@ async def _handler_video(job, emit):
             store.update_shot(job.shot_id, lambda s, nf=planned: setattr(s.video, "num_frames", nf))
             shot = store.load().get_shot(job.shot_id)
 
+    # effective 首帧（inherit_previous -> 来源末帧；其余 -> 本镜已选首帧）。preflight/提交统一用此，避免前后端不一致。
+    eff_ff_url = _effective_first_frame_url(project, shot)
     seconds = shot.video.num_frames / max(shot.video.frame_rate, 1)
-    ok, why = _video_preflight(shot, get_agnes_client().quota, seconds)
+    ok, why = _video_preflight(shot, get_agnes_client().quota, seconds, bool(eff_ff_url))
     if not ok:
         raise RuntimeError(why)   # 不发起 API 请求
 
@@ -765,9 +887,9 @@ async def _handler_video(job, emit):
         kwargs = dict(num_frames=shot.video.num_frames, frame_rate=shot.video.frame_rate,
                       width=w, height=h, seed=shot.seed, negative_prompt=shot.negative_prompt)
         if mode == "keyframes":
-            kwargs["image_urls"] = [shot.first_frame.selected.url, shot.last_frame.selected.url]
+            kwargs["image_urls"] = [eff_ff_url, shot.last_frame.selected.url]
         else:
-            kwargs["image_url"] = shot.first_frame.selected.url
+            kwargs["image_url"] = eff_ff_url
         created = await get_agnes_client().create_video(prompt, mode=mode, **kwargs)
         vid = created.get("video_id") or created.get("task_id") or created.get("id")
         if not vid:
@@ -825,6 +947,18 @@ async def _handler_video(job, emit):
     store.update_shot(job.shot_id, mut)
     await emit("done", f"{shot.shot_id} 完成（版本 {vvid}），实际 {res['seconds']}s / {res['size']}", 100)
 
+    # Phase 6A：提取实际视频末帧（供下游镜头接力）。失败不影响视频成功状态，独立 error + 可 retry。
+    try:
+        end_asset, _ok = await _extract_video_end_frame(project_dir, job.shot_id, str(dest), vvid, emit)
+        def _mut_end(s, ea=end_asset, sv=vvid):
+            s.video_end_frame = ea
+            s.video_end_source_version = sv
+        store.update_shot(job.shot_id, _mut_end)
+        if end_asset.error:
+            await emit("warn", f"{shot.shot_id} 视频末帧提取/托管未完全成功: {end_asset.error[:120]}", None)
+    except Exception as e:
+        logger.warning(f"{shot.shot_id} 视频末帧提取异常（不影响视频完成）: {e}")
+
 
 JOB_HANDLERS["video"] = _handler_video
 
@@ -880,7 +1014,125 @@ async def set_final_video(project_name: str, shot_id: str, req: SetFinalVideoReq
             s.video.num_frames = v.num_frames
             s.video.frame_rate = v.frame_rate
         store.update_shot(shot_id, mut)
+        # 切换最终版本 -> 重新提取实际末帧（来源版本变化，下游接力需更新）
+        if vv.local and Path(vv.local).exists():
+            try:
+                end_asset, _ok = await _extract_video_end_frame(project_dir, shot_id, vv.local, vv.version_id)
+                store.update_shot(shot_id, lambda s, ea=end_asset, sv=vv.version_id: (
+                    setattr(s, "video_end_frame", ea), setattr(s, "video_end_source_version", sv)))
+            except Exception as e:
+                logger.warning(f"{shot_id} set-final 末帧提取异常: {e}")
         return {"shot_id": shot_id, "final_video": req.version_id}
+    except FileNotFoundError:
+        raise HTTPException(404, "项目不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+# ==================== Phase 6A：镜头接力 / 开场来源 接口 ====================
+class OpeningSourceRequest(BaseModel):
+    source: str   # independent | reference_previous | inherit_previous
+
+
+@router.post("/api/project/{project_name}/shot/{shot_id}/opening-source")
+async def set_opening_source(project_name: str, shot_id: str, req: OpeningSourceRequest):
+    """设置当前镜头开场来源。independent 清空来源；reference/inherit 自动取同场景上一镜为来源，
+    写入 source_shot_id + source_version（= 上一镜 final_video）。前置不满足直接 400，不让用户选后撞后端错误。"""
+    try:
+        from src.core.store import ProjectStore
+        from src.core.models import OpeningSource, ShotStatus
+        project_dir = get_project_manager().get_project_dir(project_name)
+        store = ProjectStore(project_dir)
+        project = store.load()
+        shot = project.get_shot(shot_id)
+        if shot is None:
+            raise HTTPException(404, f"镜头 {shot_id} 不存在")
+        if req.source not in {m.value for m in OpeningSource}:
+            raise HTTPException(400, f"非法 opening_source: {req.source}")
+        if req.source == OpeningSource.INDEPENDENT.value:
+            store.update_shot(shot_id, lambda s: (setattr(s, "opening_source", req.source),
+                                                  setattr(s, "source_shot_id", None),
+                                                  setattr(s, "source_version", None)))
+            return {"opening_source": req.source, "source_shot_id": None, "source_version": None,
+                    "status": "independent", "message": ""}
+        # reference/inherit：取同场景上一镜
+        scene = next((s for s in project.scenes if s.scene_id == shot.scene_id), None)
+        if not scene:
+            raise HTTPException(400, "镜头不在任何场景")
+        ids = [s.shot_id for s in scene.shots]
+        if shot_id not in ids or ids.index(shot_id) == 0:
+            raise HTTPException(400, "第一镜只能独立生成")
+        prev_id = ids[ids.index(shot_id) - 1]
+        prev = project.get_shot(prev_id)
+        if not prev or not prev.final_video or prev.video.status != ShotStatus.DONE.value:
+            raise HTTPException(400, "上一镜头完成视频后可用")
+        if req.source == OpeningSource.INHERIT_PREVIOUS.value and not prev.video_end_frame.url_ready:
+            raise HTTPException(400, "上一镜头末帧未就绪（无公网 URL），先在其视频页刷新末帧")
+        sv = prev.final_video
+        store.update_shot(shot_id, lambda s, p=prev_id, v=sv: (setattr(s, "opening_source", req.source),
+                                                               setattr(s, "source_shot_id", p),
+                                                               setattr(s, "source_version", v)))
+        status, msg = continuity_status(store.load(), store.load().get_shot(shot_id))
+        return {"opening_source": req.source, "source_shot_id": prev_id, "source_version": sv,
+                "status": status, "message": msg}
+    except FileNotFoundError:
+        raise HTTPException(404, "项目不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@router.post("/api/project/{project_name}/shot/{shot_id}/sync-source")
+async def sync_source(project_name: str, shot_id: str):
+    """更新为最新末帧：把 source_version 同步到来源镜头当前 final_video（清除 stale）。
+    不自动连锁重生成视频，仅刷新接力指针，决定权留给用户。"""
+    try:
+        from src.core.store import ProjectStore
+        project_dir = get_project_manager().get_project_dir(project_name)
+        store = ProjectStore(project_dir)
+        project = store.load()
+        shot = project.get_shot(shot_id)
+        if shot is None:
+            raise HTTPException(404, f"镜头 {shot_id} 不存在")
+        if not shot.source_shot_id:
+            raise HTTPException(400, "当前为独立生成，无来源可同步")
+        prev = project.get_shot(shot.source_shot_id)
+        if not prev or not prev.final_video:
+            raise HTTPException(400, "来源不可用")
+        sv = prev.final_video
+        store.update_shot(shot_id, lambda s, v=sv: setattr(s, "source_version", v))
+        status, msg = continuity_status(store.load(), store.load().get_shot(shot_id))
+        return {"status": status, "message": msg, "source_version": sv}
+    except FileNotFoundError:
+        raise HTTPException(404, "项目不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@router.post("/api/project/{project_name}/shot/{shot_id}/video-end/refresh")
+async def refresh_video_end(project_name: str, shot_id: str):
+    """重新提取并托管本镜实际视频末帧（末帧提取/托管失败后 retry）。不重新生成视频。"""
+    try:
+        from src.core.store import ProjectStore
+        project_dir = get_project_manager().get_project_dir(project_name)
+        store = ProjectStore(project_dir)
+        shot = store.load().get_shot(shot_id)
+        if shot is None:
+            raise HTTPException(404, f"镜头 {shot_id} 不存在")
+        if not shot.final_video:
+            raise HTTPException(400, "尚未完成视频，无末帧可提取")
+        vv = next((v for v in shot.video_versions if v.version_id == shot.final_video), None)
+        if not vv or not vv.local or not Path(vv.local).exists():
+            raise HTTPException(400, "最终视频文件缺失")
+        end_asset, _ok = await _extract_video_end_frame(project_dir, shot_id, vv.local, vv.version_id)
+        store.update_shot(shot_id, lambda s, ea=end_asset, sv=vv.version_id: (
+            setattr(s, "video_end_frame", ea), setattr(s, "video_end_source_version", sv)))
+        return {"status": end_asset.status, "url": end_asset.url, "error": end_asset.error}
     except FileNotFoundError:
         raise HTTPException(404, "项目不存在")
     except HTTPException:
@@ -932,6 +1184,10 @@ class UpdateShotRequest(BaseModel):
     first_frame_prompt_sig: Optional[str] = None
     last_frame_prompt_sig: Optional[str] = None
     video_prompt_sig: Optional[str] = None
+    # 镜头接力 / 开场来源（Phase 6A）
+    opening_source: Optional[str] = None
+    source_shot_id: Optional[str] = None
+    source_version: Optional[str] = None
 
 
 @router.put("/api/project/{project_name}/shot/{shot_id}")
@@ -978,6 +1234,7 @@ async def update_shot(project_name: str, shot_id: str, req: UpdateShotRequest):
                 "last_frame_prompt_en", "video_prompt_en",
                 "first_frame_prompt_override", "last_frame_prompt_override", "video_prompt_override",
                 "first_frame_prompt_sig", "last_frame_prompt_sig", "video_prompt_sig",
+                "opening_source", "source_shot_id", "source_version",
             ):
                 v = getattr(req, f)
                 if v is not None:

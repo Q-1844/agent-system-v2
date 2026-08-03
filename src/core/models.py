@@ -24,6 +24,14 @@ class LinkMode(str, Enum):
     NONE      = "none"        # 共用参考图，各镜独立
 
 
+class OpeningSource(str, Enum):
+    """镜头开场画面来源（Phase 6A）。与 link_mode 独立：
+    link_mode 控制「镜头内部如何生成视频」，opening_source 控制「开场画面从哪来」。"""
+    INDEPENDENT         = "independent"          # 独立生成
+    REFERENCE_PREVIOUS  = "reference_previous"   # 参考上一镜末帧生成新首帧候选
+    INHERIT_PREVIOUS    = "inherit_previous"     # 直接沿用上一镜实际视频末帧作开场
+
+
 @dataclass
 class Asset:
     """一个生成产物。local 是本地路径，url 是公网 URL（送进 Agnes 用的）。"""
@@ -306,6 +314,16 @@ class Shot:
     selected_first_frame: Optional[str] = None   # candidate_id 指针
     selected_last_frame: Optional[str] = None
     final_video: Optional[str] = None            # version_id 指针
+    # ---- 镜头接力 / 开场来源（Phase 6A；与 link_mode 独立）----
+    # opening_source: 当前镜头开场画面来源；source_shot_id: 接力来源镜头（同场景、位于本镜之前）
+    # source_version: 上次同步时来源镜头的 final_video version_id（stale 检测；不一致即来源已更新）
+    # video_end_frame: 本镜最终视频的「实际末帧」（ffmpeg 提取，非规划的 last_frame）
+    # video_end_source_version: 末帧提取自哪个 video version_id
+    opening_source: str = OpeningSource.INDEPENDENT.value
+    source_shot_id: Optional[str] = None
+    source_version: Optional[str] = None
+    video_end_frame: Asset = field(default_factory=Asset)
+    video_end_source_version: Optional[str] = None
 
     # ---- 状态 ----
     status: str = ShotStatus.PENDING.value
@@ -323,6 +341,9 @@ class Shot:
         d["last_frame"]  = ImageAsset.from_dict(d.get("last_frame", {}) or {})
         d["audio"]       = AudioAsset(**d.get("audio", {}) or {})
         d["video"]       = VideoAsset(**d.get("video", {}) or {})
+        # video_end_frame 是普通 Asset（非 ImageAsset），单独解析
+        _vef = d.get("video_end_frame") or {}
+        d["video_end_frame"] = Asset(**{k: v for k, v in _vef.items() if k in Asset.__dataclass_fields__})
         # 批次（Step 2）：已有用之；无则从旧字段迁移出 legacy 批次（向后兼容）
         ff_raw = d.get("first_frame_batches") or []
         d["first_frame_batches"] = [_parse_image_batch(b, "first_frame") for b in ff_raw] if ff_raw else _legacy_image_batch(d["first_frame"], "first_frame")

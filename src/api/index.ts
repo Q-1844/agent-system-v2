@@ -215,6 +215,12 @@ export interface ShotData {
   first_frame_prompt_sig: string;
   last_frame_prompt_sig: string;
   video_prompt_sig: string;
+  // 镜头接力 / 开场来源（Phase 6A）
+  opening_source: string;            // independent | reference_previous | inherit_previous
+  source_shot_id: string | null;
+  source_version: string | null;
+  video_end_frame: AssetData;        // 本镜最终视频的实际末帧（ffmpeg 提取）
+  video_end_source_version: string | null;
   first_frame: ImageAssetData;
   last_frame: ImageAssetData;
   audio: AudioAssetData;
@@ -579,6 +585,21 @@ class ApiClient {
     });
   }
 
+  // Phase 6A：镜头接力 / 开场来源
+  async setOpeningSource(projectName: string, shotId: string, source: string): Promise<{ opening_source: string; source_shot_id: string | null; source_version: string | null; status: string; message: string }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/shot/${encodeURIComponent(shotId)}/opening-source`, {
+      method: 'POST', body: JSON.stringify({ source }),
+    });
+  }
+  // 更新为最新末帧（同步 source_version，清除 stale）
+  async syncSource(projectName: string, shotId: string): Promise<{ status: string; message: string; source_version: string }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/shot/${encodeURIComponent(shotId)}/sync-source`, { method: 'POST' });
+  }
+  // 重新提取/托管本镜视频末帧（retry）
+  async refreshVideoEnd(projectName: string, shotId: string): Promise<{ status: string; url: string | null; error: string | null }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/shot/${encodeURIComponent(shotId)}/video-end/refresh`, { method: 'POST' });
+  }
+
   // 重新托管首帧（local有/url空 -> Agnes i2i 'keep as is' 洗公网URL，不重新生成、不丢画面）
   async rehostFirstFrame(projectName: string, shotId: string): Promise<{ shot_id: string; url: string; rehosted: boolean }> {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/shot/${encodeURIComponent(shotId)}/first-frame/rehost`, { method: 'POST' });
@@ -610,6 +631,7 @@ class ApiClient {
     last_frame_prompt_en?: string; video_prompt_en?: string;
     first_frame_prompt_override?: string; last_frame_prompt_override?: string; video_prompt_override?: string;
     first_frame_prompt_sig?: string; last_frame_prompt_sig?: string; video_prompt_sig?: string;
+    opening_source?: string; source_shot_id?: string; source_version?: string;
     seed?: number | null;
   }): Promise<{ shot_id: string }> {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/shot/${encodeURIComponent(shotId)}`, {

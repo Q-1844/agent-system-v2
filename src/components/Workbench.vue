@@ -27,8 +27,11 @@
         <button class="ctx-item" data-pop="audio" @click="togglePopover('audio')" :class="{ on: openPopover === 'audio' }">
           <span class="ctx-k">配音</span><span class="ctx-v">{{ audioSummary }}</span>
         </button>
-        <button class="ctx-item" data-pop="link" @click="togglePopover('link')" :class="{ on: openPopover === 'link' }">
-          <span class="ctx-k">接续</span><span class="ctx-v">{{ linkLabel }}</span>
+        <button class="ctx-item" data-pop="opening" @click="togglePopover('opening')" :class="{ on: openPopover === 'opening' }" :title="'开场来源'">
+          <span class="ctx-k">开场</span><span class="ctx-v">{{ openingSourceLabel }}</span>
+        </button>
+        <button class="ctx-item" data-pop="link" @click="togglePopover('link')" :class="{ on: openPopover === 'link' }" :title="'生成方式'">
+          <span class="ctx-k">生成</span><span class="ctx-v">{{ linkLabel }}</span>
         </button>
         <div v-if="storyExpanded" class="ctx-story-full">{{ sceneStory || '（未填写）' }}</div>
       </div>
@@ -58,8 +61,30 @@
             <button class="mini-btn" :disabled="audioBusy" @click="genAudio">{{ audioBusy ? '配音中…' : (shot.audio?.status === 'done' ? '重配' : '生成配音') }}</button>
           </div>
         </template>
+        <template v-else-if="openPopover === 'opening'">
+          <div class="pop-head">开场来源</div>
+          <div class="pop-list" data-autofocus tabindex="-1">
+            <button v-for="m in OPENING_MODES" :key="m.v" class="pop-opt" :class="{ on: shot.opening_source === m.v }"
+              :disabled="m.v !== 'independent' && !prevReady"
+              :title="m.v !== 'independent' && !prevReady ? '上一镜头完成视频后可用' : ''"
+              @click="m.v === 'independent' || prevReady ? setOpeningSource(m.v) : null">
+              <span class="pop-opt-l">{{ m.l }}</span>
+              <span class="pop-opt-d">{{ m.d }}</span>
+              <span v-if="m.v !== 'independent' && !prevReady" class="pop-opt-pre">上一镜头完成视频后可用</span>
+              <span v-if="m.v === 'inherit_previous' && prevReady && !prevEndUrlReady" class="pop-opt-pre">需先提取上一镜末帧</span>
+            </button>
+          </div>
+          <div v-if="shot.opening_source !== 'independent'" class="pop-continuity" :class="continuityStatus.status">
+            <span class="pop-cont-msg">{{ continuityStatus.message || '已就绪' }}</span>
+            <div class="pop-cont-actions">
+              <button v-if="continuityStatus.status === 'stale'" class="mini-btn" @click="syncSource">更新为最新末帧</button>
+              <button v-if="shot.opening_source === 'inherit_previous'" class="mini-btn" @click="setOpeningSource('independent')">改为独立生成</button>
+              <button v-if="shot.opening_source === 'inherit_previous' && sourceShot && !sourceShot.video_end_frame?.url" class="mini-btn" @click="refreshVideoEnd">提取来源末帧</button>
+            </div>
+          </div>
+        </template>
         <template v-else>
-          <div class="pop-head">接续方式</div>
+          <div class="pop-head">生成方式</div>
           <div class="pop-list" data-autofocus tabindex="-1">
             <button v-for="o in LINK_OPTIONS" :key="o.v" class="pop-opt" :class="{ on: form.link_mode === o.v }" @click="form.link_mode = o.v; openPopover = null">
               <span class="pop-opt-l">{{ o.l }}</span>
@@ -88,23 +113,37 @@
           <div class="editor-scroll">
             <!-- 首帧核心 -->
             <template v-if="stage === 'first'">
-              <div class="field"><label>起始画面描述</label>
-                <textarea v-model="form.description" rows="3" placeholder="地点、主体、画面中正在发生的状态"></textarea>
-              </div>
-              <div class="field"><label>主体起始状态</label>
-                <textarea v-model="form.opening_state" rows="2" placeholder="角色姿态/朝向/表情或物体初始状态"></textarea>
-              </div>
-              <div class="field-row">
-                <div class="field"><label>景别</label>
-                  <select v-model="form.shot_size"><option v-for="o in SHOT_SIZES" :key="o.v" :value="o.v">{{ o.l }}</option></select>
-                </div>
-                <div class="field"><label>机位角度</label>
-                  <select v-model="form.camera_angle"><option value="">（不指定）</option><option v-for="o in CAMERA_ANGLES" :key="o.v" :value="o.v">{{ o.l }}</option></select>
+              <!-- inherit_previous：开场沿用上一镜末帧，不生成首帧候选；显示接力信息 -->
+              <div v-if="shot.opening_source === 'inherit_previous'" class="inherit-panel" :class="continuityStatus.status">
+                <div class="inherit-title">开场沿用上一镜末帧</div>
+                <div class="inherit-source">来自 {{ shot.source_shot_id || '上一镜' }} 的视频末帧</div>
+                <div v-if="continuityStatus.message" class="inherit-msg">{{ continuityStatus.message }}</div>
+                <div class="inherit-actions">
+                  <button v-if="continuityStatus.status === 'stale'" class="mini-btn" @click="syncSource">更新为最新末帧</button>
+                  <button class="mini-btn" @click="setOpeningSource('independent')">解除接力</button>
+                  <button v-if="sourceShot && !sourceShot.video_end_frame?.url" class="mini-btn" @click="refreshVideoEnd">提取来源末帧</button>
                 </div>
               </div>
-              <div class="field"><label>光线与氛围</label>
-                <select v-model="form.lighting"><option value="">（不指定）</option><option v-for="o in LIGHTINGS" :key="o.v" :value="o.v">{{ o.l }}</option></select>
-              </div>
+              <!-- independent / reference_previous：正常首帧核心字段 -->
+              <template v-else>
+                <div class="field"><label>起始画面描述</label>
+                  <textarea v-model="form.description" rows="3" placeholder="地点、主体、画面中正在发生的状态"></textarea>
+                </div>
+                <div class="field"><label>主体起始状态</label>
+                  <textarea v-model="form.opening_state" rows="2" placeholder="角色姿态/朝向/表情或物体初始状态"></textarea>
+                </div>
+                <div class="field-row">
+                  <div class="field"><label>景别</label>
+                    <select v-model="form.shot_size"><option v-for="o in SHOT_SIZES" :key="o.v" :value="o.v">{{ o.l }}</option></select>
+                  </div>
+                  <div class="field"><label>机位角度</label>
+                    <select v-model="form.camera_angle"><option value="">（不指定）</option><option v-for="o in CAMERA_ANGLES" :key="o.v" :value="o.v">{{ o.l }}</option></select>
+                  </div>
+                </div>
+                <div class="field"><label>光线与氛围</label>
+                  <select v-model="form.lighting"><option value="">（不指定）</option><option v-for="o in LIGHTINGS" :key="o.v" :value="o.v">{{ o.l }}</option></select>
+                </div>
+              </template>
             </template>
 
             <!-- 尾帧核心 -->
@@ -226,7 +265,7 @@
               <span v-if="!mainCanvasEmpty" class="canvas-label">{{ mainCanvasLabel }}</span>
             </div>
             <div v-if="thumbStrip.length" class="thumb-strip">
-              <button v-for="(t, i) in thumbStrip" :key="t.cid || (t.label + i)" class="thumb" :class="{ sel: t.sel, ref: t.ref }" @click="t.cid && stage === 'first' && chooseFirst(t.cid)">
+              <button v-for="(t, i) in thumbStrip" :key="t.cid || (t.label + i)" class="thumb" :class="{ sel: t.sel, ref: t.ref, cont: t.cont }" @click="t.cid && stage === 'first' && chooseFirst(t.cid)">
                 <img v-if="t.url" :src="t.url" />
                 <span v-else class="muted">?</span>
                 <span class="thumb-tag">{{ t.label || ('v' + t.idx) }}</span>
@@ -291,6 +330,7 @@ const props = defineProps<{
   projectCharacters: Array<{ name: string; description_en: string; views: any }>;
   projectStyleLabel: string; projectRatio: string;
   sceneStory: string; sceneId: string;
+  sceneShots: ShotData[];
 }>();
 const emit = defineEmits<{ (e: 'close'): void; (e: 'refresh'): void }>();
 const jobStore = useJobStore();
@@ -652,8 +692,9 @@ const finalVideoVersion = computed(() => {
 const videoBlockReason = computed(() => {
   if (finalVideoVersion.value?.local) return '';
   if (!props.shot.video?.num_frames && form.target_duration_s === null) return props.shot.audio?.status === 'done' ? '配音时长待反推（刷新自动补）' : '尚未配音且未设置时长';
-  const ffUsable = ffUrlReady.value || ffNeedsRehost.value;
-  if (!ffUsable) return '请先生成并选择首帧';
+  // effective 首帧：inherit 用来源末帧 url；其余用本镜已选首帧 url（或待托管 local）
+  const ffUsable = effectiveFirstFrameReady.value || (props.shot.opening_source !== 'inherit_previous' && ffNeedsRehost.value);
+  if (!ffUsable) return props.shot.opening_source === 'inherit_previous' ? '接力来源末帧未就绪' : '请先生成并选择首帧';
   if (form.link_mode === 'keyframes' && !lfUrlReady.value) return '请先生成尾帧';
   return '';
 });
@@ -665,6 +706,71 @@ async function genVideo() {
 async function setFinalVideo(versionId: string) {
   try { await apiClient.setFinalVideo(props.projectName, props.shot.shot_id, versionId); message.success('已设为最终视频'); emit('refresh'); }
   catch (e: any) { message.error(`设置失败: ${e.message || e}`); }
+}
+
+// ---------- Phase 6A：镜头接力 / 开场来源 ----------
+const OPENING_MODES = [
+  { v: 'independent', l: '独立生成', d: '为这个镜头重新生成首帧。' },
+  { v: 'reference_previous', l: '参考上一镜', d: '保留人物和环境连续性，同时允许换机位和构图。' },
+  { v: 'inherit_previous', l: '沿用上一镜末帧', d: '直接从上一镜头结束画面继续。画面起点一致，后续运动仍由模型生成。' },
+];
+// 同场景上一镜（按 sceneShots 顺序）
+const prevShot = computed<ShotData | null>(() => {
+  const ids = props.sceneShots.map(s => s.shot_id);
+  const i = ids.indexOf(props.shot.shot_id);
+  if (i <= 0) return null;
+  return props.sceneShots[i - 1] || null;
+});
+// 接力来源镜头（source_shot_id 指向，通常 = prevShot）
+const sourceShot = computed<ShotData | null>(() => {
+  if (!props.shot.source_shot_id) return null;
+  return props.sceneShots.find(s => s.shot_id === props.shot.source_shot_id) || null;
+});
+// 上一镜是否就绪（有完成视频；inherit 还需末帧公网 URL）
+const prevReady = computed(() => {
+  const p = prevShot.value; if (!p) return false;
+  if (!p.final_video || p.video?.status !== 'done') return false;
+  return true;
+});
+const prevEndUrlReady = computed(() => !!prevShot.value?.video_end_frame?.url);
+const openingSourceLabel = computed(() => OPENING_MODES.find(m => m.v === props.shot.opening_source)?.l || '独立生成');
+// effective 首帧（与后端 _effective_first_frame_url 一致）：inherit -> 来源末帧 url；其余 -> 本镜已选首帧
+const effectiveFirstFrameUrl = computed(() => {
+  if (props.shot.opening_source === 'inherit_previous' && sourceShot.value) {
+    return sourceShot.value.video_end_frame?.url || '';
+  }
+  return ffUrl.value;
+});
+const effectiveFirstFrameReady = computed(() => !!effectiveFirstFrameUrl.value);
+// 接力状态（前端镜像后端 continuity_status，用于展示与操作）
+const continuityStatus = computed<{ status: string; message: string }>(() => {
+  const s = props.shot;
+  if (s.opening_source === 'independent' || !s.source_shot_id) return { status: 'independent', message: '' };
+  const prev = sourceShot.value;
+  if (!prev) return { status: 'broken', message: '来源镜头已删除' };
+  if (prev.scene_id !== s.scene_id) return { status: 'broken', message: '来源镜头不在同一场景' };
+  if (!prev.final_video || prev.video?.status !== 'done') return { status: 'broken', message: '上一镜头未完成视频' };
+  const end = prev.video_end_frame;
+  if (s.opening_source === 'inherit_previous') {
+    if (!end?.url) return { status: 'broken', message: '上一镜头末帧未就绪（无公网 URL）' };
+  } else if (!(end?.status === 'done' && end?.local)) {
+    return { status: 'broken', message: '上一镜头末帧未就绪' };
+  }
+  if (s.source_version !== prev.final_video) return { status: 'stale', message: '上一镜头已更新' };
+  return { status: 'ready', message: '' };
+});
+async function setOpeningSource(source: string) {
+  try { await apiClient.setOpeningSource(props.projectName, props.shot.shot_id, source); emit('refresh'); }
+  catch (e: any) { message.error(`设置失败: ${e.message || e}`); }
+  finally { openPopover.value = null; }
+}
+async function syncSource() {
+  try { await apiClient.syncSource(props.projectName, props.shot.shot_id); message.success('已更新为最新末帧'); emit('refresh'); }
+  catch (e: any) { message.error(`同步失败: ${e.message || e}`); }
+}
+async function refreshVideoEnd() {
+  try { await apiClient.refreshVideoEnd(props.projectName, props.shot.shot_id); message.success('末帧已重新提取'); emit('refresh'); }
+  catch (e: any) { message.error(`提取失败: ${e.message || e}`); }
 }
 
 // ---------- 配音 ----------
@@ -687,7 +793,7 @@ async function genAudio() {
 }
 
 // ---------- 渐进式 UI 状态（纯前端，不进项目数据） ----------
-type Popover = 'chars' | 'audio' | 'link' | null;
+type Popover = 'chars' | 'audio' | 'link' | 'opening' | null;
 const openPopover = ref<Popover>(null);
 const storyExpanded = ref(false);
 const previewCollapsed = ref(localStorage.getItem('wb_preview_collapsed') === '1');
@@ -734,7 +840,7 @@ const hasHistory = computed(() => {
 // 预览主画布 + 缩略条（不改动候选/指针逻辑，只读现有数据）
 const latestFFBatch = computed(() => props.shot.first_frame_batches?.[props.shot.first_frame_batches.length - 1]);
 const mainCanvasUrl = computed(() => {
-  if (stage.value === 'first') return ffUrl.value;
+  if (stage.value === 'first') return effectiveFirstFrameUrl.value;   // inherit -> 来源末帧；其余 -> 已选首帧
   if (stage.value === 'last') return lfUrl.value || (ffUrlReady.value ? ffUrl.value : '');
   return '';
 });
@@ -745,21 +851,36 @@ const mainCanvasVideoUrl = computed(() => {
 });
 const mainCanvasOverlay = computed(() => {
   if (stage.value === 'last' && !lfUrl.value && ffUrlReady.value) return '尾帧尚未生成';
+  if (stage.value === 'first' && props.shot.opening_source === 'inherit_previous' && !effectiveFirstFrameUrl.value) return '来源末帧未就绪';
   return '';
 });
 const mainCanvasEmpty = computed(() => {
-  if (stage.value === 'first') return !ffUrl.value;
+  if (stage.value === 'first') return !effectiveFirstFrameUrl.value;
   if (stage.value === 'last') return !mainCanvasUrl.value;
   if (stage.value === 'video') return !mainCanvasIsVideo.value;
   return true;
 });
 const mainCanvasLabel = computed(() => {
-  if (stage.value === 'first') return '首帧';
+  if (stage.value === 'first') {
+    if (props.shot.opening_source === 'inherit_previous' && sourceShot.value) return `来自 ${sourceShot.value.shot_id} 的视频末帧`;
+    return '首帧';
+  }
   if (stage.value === 'last') return lfUrl.value ? '尾帧' : '参考首帧';
   return '视频';
 });
 const thumbStrip = computed(() => {
-  if (stage.value === 'first') return (latestFFBatch.value?.candidates || []).map((c, i) => ({ url: c.local ? imgUrl(c.local) : '', cid: c.candidate_id, idx: i + 1, sel: c.candidate_id === props.shot.selected_first_frame }));
+  if (stage.value === 'first') {
+    const arr: any[] = [];
+    // reference_previous：缩略条前置「上一镜参考」（来源末帧），与候选区分
+    if (props.shot.opening_source === 'reference_previous' && sourceShot.value?.video_end_frame?.local) {
+      arr.push({ url: imgUrl(sourceShot.value.video_end_frame.local), label: `${sourceShot.value.shot_id}末帧`, ref: true, cont: true });
+    }
+    for (const c of (latestFFBatch.value?.candidates || [])) {
+      const i = (latestFFBatch.value?.candidates || []).indexOf(c);
+      arr.push({ url: c.local ? imgUrl(c.local) : '', cid: c.candidate_id, idx: i + 1, sel: c.candidate_id === props.shot.selected_first_frame });
+    }
+    return arr;
+  }
   if (stage.value === 'last') {
     const arr: any[] = [];
     if (ffUrl.value) arr.push({ url: ffUrl.value, label: '首帧', ref: true });
@@ -771,6 +892,16 @@ const thumbStrip = computed(() => {
 
 // 阶段主操作（底部 action bar，单一主按钮，不随滚动消失）
 const stageAction = computed(() => {
+  // inherit_previous：开场沿用上一镜末帧，不生成首帧候选；主按钮改为 解除接力 / 更新来源
+  if (stage.value === 'first' && props.shot.opening_source === 'inherit_previous') {
+    const stale = continuityStatus.value.status === 'stale';
+    return {
+      label: stale ? '更新来源' : '解除接力',
+      disabled: false,
+      pre: `开场沿用 ${props.shot.source_shot_id || '上一镜'} 末帧`,
+      fn: stale ? syncSource : () => setOpeningSource('independent'),
+    };
+  }
   if (stage.value === 'first') return { label: busy('first_frame') ? '生成中…' : '生成首帧（2 候选）', disabled: busy('first_frame'), pre: '', fn: genFirstFrame };
   if (stage.value === 'last') return {
     label: busy('last_frame') ? '生成中…' : '生成尾帧',
@@ -846,9 +977,20 @@ function vidUrl(p: string) { return getVideoUrl(p); }
 .pop-audio-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
 .audio-status { font-size: 11px; color: var(--text-secondary); }
 .pop-list { display: flex; flex-direction: column; gap: 4px; }
-.pop-opt { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 10px; background: none; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; text-align: left; &:hover { border-color: var(--border-hover); background: var(--bg-hover); } &.on { border-color: var(--accent); } }
+.pop-opt { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 10px; background: none; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; text-align: left; &:hover:not(:disabled) { border-color: var(--border-hover); background: var(--bg-hover); } &.on { border-color: var(--accent); } &:disabled { opacity: 0.5; cursor: not-allowed; } }
 .pop-opt-l { font-size: 12px; color: var(--text-primary); }
 .pop-opt-d { font-size: 11px; color: var(--text-muted); }
+.pop-opt-pre { font-size: 10px; color: #fbbf24; margin-top: 2px; }
+.pop-continuity { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); &.stale .pop-cont-msg { color: #fbbf24; } &.broken .pop-cont-msg { color: #f87171; } &.ready .pop-cont-msg { color: #4ade80; } }
+.pop-cont-msg { font-size: 11px; color: var(--text-secondary); margin-bottom: 6px; }
+.pop-cont-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* inherit_previous 接力面板（首帧标签） */
+.inherit-panel { padding: 14px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 14px; &.stale { border-color: rgba(251,191,36,0.5); } &.broken { border-color: rgba(248,113,113,0.5); } }
+.inherit-title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.inherit-source { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+.inherit-msg { font-size: 11px; color: #fbbf24; margin-top: 6px; }
+.inherit-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 
 /* 阶段标签 */
 .stage-tabs { display: flex; gap: 2px; padding: 0 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; button { padding: 10px 26px; border: none; background: none; color: var(--text-muted); font-size: 13px; cursor: pointer; border-bottom: 2px solid transparent; &.on { color: var(--text-primary); border-bottom-color: var(--accent); } &:not(.on):hover { color: var(--text-secondary); } } }
@@ -903,7 +1045,7 @@ function vidUrl(p: string) { return getVideoUrl(p); }
 .canvas-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); color: #e5e5e5; font-size: 12px; }
 .canvas-label { position: absolute; top: 6px; left: 8px; font-size: 10px; color: #fff; background: rgba(0,0,0,0.55); padding: 1px 6px; border-radius: 3px; }
 .thumb-strip { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
-.thumb { position: relative; flex: 0 0 auto; width: 88px; height: 50px; border: 2px solid var(--border); border-radius: 5px; overflow: hidden; cursor: pointer; background: var(--bg-surface); padding: 0; &.sel { border-color: #4ade80; } &.ref { border-style: dashed; } img { width: 100%; height: 100%; object-fit: cover; } .muted { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; } }
+.thumb { position: relative; flex: 0 0 auto; width: 88px; height: 50px; border: 2px solid var(--border); border-radius: 5px; overflow: hidden; cursor: pointer; background: var(--bg-surface); padding: 0; &.sel { border-color: #4ade80; } &.ref { border-style: dashed; } &.cont { border-color: #60a5fa; border-style: dotted; } img { width: 100%; height: 100%; object-fit: cover; } .muted { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; } }
 .thumb-tag { position: absolute; bottom: 0; left: 0; right: 0; font-size: 9px; color: #fff; background: rgba(0,0,0,0.55); text-align: center; padding: 1px; }
 .video-versions { display: flex; flex-direction: column; gap: 6px; }
 .video-version { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; &.final { border-color: #4ade80; } }

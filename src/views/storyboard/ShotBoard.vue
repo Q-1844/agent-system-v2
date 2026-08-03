@@ -64,9 +64,14 @@
 
         <!-- 镜头列表 -->
         <div class="shot-list">
+          <template v-for="(sh, i) in selected.shots" :key="sh.shot_id">
+            <div v-if="i > 0" class="shot-connector" :class="connClass(sh)">
+              <span class="conn-line"></span>
+              <span class="conn-label" v-if="sh.opening_source !== 'independent'">{{ connLabel(sh) }}</span>
+              <span v-else class="conn-label muted">独立</span>
+              <span class="conn-line"></span>
+            </div>
           <div
-            v-for="(sh, i) in selected.shots"
-            :key="sh.shot_id"
             class="shot-item"
             @dblclick="openWorkbench(sh)"
           >
@@ -75,6 +80,7 @@
               <span class="shot-size">{{ sh.shot_size || '中景' }}</span>
               <span class="shot-desc">{{ (sh.description || '').slice(0, 24) || '未填写画面' }}</span>
               <span class="shot-chars" v-if="sh.characters.length">{{ sh.characters.join('、') }}</span>
+              <span v-if="sh.opening_source !== 'independent'" class="shot-cont" :class="connClass(sh)">{{ connLabel(sh) }}</span>
               <span class="shot-status" :class="shotStatusClass(sh)">{{ shotStatusText(sh) }}</span>
               <button class="open-btn" @click="openWorkbench(sh)">打开工作台</button>
             </div>
@@ -94,6 +100,7 @@
               </div>
             </div>
           </div>
+          </template>
           <button class="add-shot-btn" @click="addShot">+ 添加镜头</button>
         </div>
       </section>
@@ -110,6 +117,7 @@
       :project-ratio="projectRatio"
       :scene-story="selected?.summary || ''"
       :scene-id="selected?.scene_id || ''"
+      :scene-shots="selected?.shots || []"
       @close="closeWorkbench"
       @refresh="load"
     />
@@ -249,6 +257,18 @@ function shotStatusClass(sh: ShotData): string {
 function openWorkbench(sh: ShotData) { workbenchShot.value = sh; }
 function closeWorkbench() { workbenchShot.value = null; }
 
+// Phase 6A：镜头接力标识（开场来源）。仅展示，不打开工作台也能看懂关系。
+function connLabel(sh: ShotData): string {
+  if (sh.opening_source === 'inherit_previous') return '末帧接力';
+  if (sh.opening_source === 'reference_previous') return '参考接续';
+  return '独立';
+}
+function connClass(sh: ShotData): string {
+  if (sh.opening_source === 'inherit_previous') return 'inherit';
+  if (sh.opening_source === 'reference_previous') return 'ref';
+  return 'none';
+}
+
 function previewImage(url: string) { if (!url) return; previewType.value = 'image'; previewUrl.value = url; }
 function previewVideo(url: string) { if (!url) return; previewType.value = 'video'; previewUrl.value = url; }
 
@@ -344,6 +364,13 @@ watch(projectName, () => { selected.value = null; load(); });
   background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;
   &:hover { border-color: var(--text-muted); }
 }
+.shot-connector { display: flex; align-items: center; gap: 8px; padding: 2px 0 2px 14px; }
+.conn-line { flex: 0 0 18px; height: 1px; background: var(--border); }
+.conn-label { font-size: 10px; color: var(--text-muted); padding: 1px 7px; border-radius: 8px; border: 1px solid var(--border); white-space: nowrap;
+  &.muted { color: var(--text-faint); } }
+.shot-connector.ref .conn-label, .shot-cont.ref { color: #60a5fa; border-color: rgba(96,165,250,0.4); }
+.shot-connector.inherit .conn-label, .shot-cont.inherit { color: #4ade80; border-color: rgba(74,222,128,0.4); }
+.shot-cont { font-size: 10px; padding: 1px 7px; border-radius: 8px; border: 1px solid var(--border); white-space: nowrap; }
 .shot-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
 .shot-seq { font-size: 12px; font-weight: 600; color: var(--text-primary); font-family: monospace; }
 .shot-size { font-size: 11px; color: var(--text-muted); padding: 1px 6px; border-radius: 3px; background: var(--bg-hover); }
