@@ -105,7 +105,10 @@
       :key="workbenchShot.shot_id"
       :shot="workbenchShot"
       :project-name="projectName"
-      :scene-characters="selected?.characters || []"
+      :project-characters="projectCharacters"
+      :project-style-label="projectStyleLabel"
+      :project-ratio="projectRatio"
+      :scene-story="selected?.summary || ''"
       :scene-id="selected?.scene_id || ''"
       @close="closeWorkbench"
       @refresh="load"
@@ -144,6 +147,10 @@ const listCollapsed = ref(false);
 const workbenchShot = ref<ShotData | null>(null);
 const previewUrl = ref('');
 const previewType = ref<'image' | 'video'>('image');
+// 项目级数据（传给 Workbench 作公共上下文：角色多选/风格/画幅徽标）
+const projectCharacters = ref<Array<{ name: string; description_en: string; views: any }>>([]);
+const projectStyleLabel = ref('');
+const projectRatio = ref('');
 
 function goDashboard() { router.push('/dashboard'); }
 function goScript() { router.push('/script-editor'); }
@@ -152,6 +159,9 @@ async function load() {
   if (!projectName.value) { segments.value = []; return; }
   try {
     const data = await apiClient.getProjectShots(projectName.value);
+    projectCharacters.value = data.characters || [];
+    projectStyleLabel.value = (data.style && data.style.art_style) || '';
+    projectRatio.value = (data.style && data.style.aspect_ratio) || '';
     segments.value = (data.scenes || []).map((s: any) => ({
       scene_id: s.scene_id, summary: s.summary || '', characters: s.characters || [], shots: s.shots || [],
     }));

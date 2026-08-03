@@ -8,6 +8,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     OrchestrateModal: typeof import('./src/components/OrchestrateModal.vue')['default']
+    PromptEditor: typeof import('./src/components/PromptEditor.vue')['default']
     QueuePanel: typeof import('./src/components/QueuePanel.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']

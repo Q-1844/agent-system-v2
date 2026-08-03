@@ -183,6 +183,38 @@ export interface ShotData {
   dialogue: string;
   link_mode: string;
   seed: number | null;
+  // 结构化镜头字段（提示词.md 工作台）
+  opening_state: string;
+  camera_angle: string;
+  composition: string;
+  important_details: string;
+  required_elements: string[];
+  last_frame_description: string;
+  end_state: string;
+  frame_change: string;
+  preserve_elements: string[];
+  add_elements: string;
+  remove_elements: string;
+  end_composition: string;
+  preserve_custom: string;
+  camera_movement: string;
+  motion_pace: string;
+  environment_motion: string;
+  action_sequence: string;
+  camera_movement_detail: string;
+  transition_description: string;
+  video_preserve_elements: string[];
+  video_preserve_custom: string;
+  target_duration_s: number | null;
+  // 三类独立提示词 + override + sig
+  last_frame_prompt_en: string;
+  video_prompt_en: string;
+  first_frame_prompt_override: string;
+  last_frame_prompt_override: string;
+  video_prompt_override: string;
+  first_frame_prompt_sig: string;
+  last_frame_prompt_sig: string;
+  video_prompt_sig: string;
   first_frame: ImageAssetData;
   last_frame: ImageAssetData;
   audio: AudioAssetData;
@@ -562,12 +594,23 @@ class ApiClient {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/shot/${encodeURIComponent(shotId)}/video`, { method: 'POST' });
   }
 
-  // 更新镜头字段（工作台编辑：link_mode/locked + 创作字段，None 字段不改动）
+  // 更新镜头字段（工作台编辑：link_mode/locked + 创作字段 + 结构化字段，None 字段不改动）
   async updateShot(projectName: string, shotId: string, params: {
     link_mode?: string; locked?: boolean;
     description?: string; prompt_en?: string; negative_prompt?: string;
     shot_size?: string; camera?: string; lighting?: string; motion?: string;
     dialogue?: string; characters?: string[];
+    // 结构化字段（提示词.md）
+    opening_state?: string; camera_angle?: string; composition?: string; important_details?: string;
+    required_elements?: string[]; last_frame_description?: string; end_state?: string; frame_change?: string;
+    preserve_elements?: string[]; add_elements?: string; remove_elements?: string; end_composition?: string;
+    preserve_custom?: string; camera_movement?: string; motion_pace?: string; environment_motion?: string;
+    action_sequence?: string; camera_movement_detail?: string; transition_description?: string;
+    video_preserve_elements?: string[]; video_preserve_custom?: string; target_duration_s?: number | null;
+    last_frame_prompt_en?: string; video_prompt_en?: string;
+    first_frame_prompt_override?: string; last_frame_prompt_override?: string; video_prompt_override?: string;
+    first_frame_prompt_sig?: string; last_frame_prompt_sig?: string; video_prompt_sig?: string;
+    seed?: number | null;
   }): Promise<{ shot_id: string }> {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/shot/${encodeURIComponent(shotId)}`, {
       method: 'PUT', body: JSON.stringify(params),
