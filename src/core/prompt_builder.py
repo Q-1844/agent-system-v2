@@ -1,15 +1,150 @@
 # src/core/prompt_builder.py
-# 分镜图 / 尾帧 / 视频 prompt 组装（PHASE_3_VIDEO_PIPELINE §3.2）。
-# 🔴 风格锚点全局唯一：所有 prompt 末尾统一拼 project.style.suffix()，
-#    这是全片风格一致的地基。
+# 首帧 / 尾帧 / 视频 prompt 组装（提示词.md §9/§11/§13）。
+# 🔴 三段独立 builder，不再共用一份 prompt_en。
+#    首帧/尾帧 prompt 末尾统一拼 project.style.suffix()（视频继承自输入帧，不拼后缀）。
+#    优先级：*_prompt_override > *_prompt_en（生成/兼容）> 结构字段拼接（fallback，可能中英混合）。
+#    只拼接非空字段；无角色不产生角色一致性虚假要求；seed/negative 不入正向 prompt。
 from __future__ import annotations
 from .models import Project, Shot
 
 
+def _with_suffix(base: str, suffix: str) -> str:
+    """追加风格后缀一次。base 空返回 suffix；suffix 空返回 base。"""
+    if not suffix:
+        return base
+    if not base:
+        return suffix
+    return f"{base}, {suffix}"
+
+
+def _join(parts) -> str:
+    """非空项用 ', ' 连接，去掉首尾空白。"""
+    return ", ".join(p.strip() for p in parts if p and str(p).strip())
+
+
+def _char_identity(project: Project, shot: Shot) -> str:
+    """出场角色的英文身份描述（description_en）。无角色返回空串。
+    不机械重复角色名，不生成"保持一致"虚假要求。"""
+    return _join(c.description_en for c in project.characters
+                 if c.name in shot.characters and c.description_en)
+
+
+def build_first_frame_prompt(project: Project, shot: Shot) -> str:
+    """首帧英文 prompt（提示词.md §9）。
+    优先级：first_frame_prompt_override > prompt_en（兼容）> 结构字段拼接。
+    顺序：角色身份 -> 起始画面 -> 主体起始状态 -> 景别 -> 机位角度 -> 光线
+          -> 构图 -> 重要细节 -> 必须出现的元素 -> [风格后缀]。
+    camera_angle 是新字段（与运镜分离），不回退旧 camera（旧 camera 拆分到 video 运镜）。
+    """
+    suffix = project.style.suffix()
+    if shot.first_frame_prompt_override:
+        return _with_suffix(shot.first_frame_prompt_override.strip(), suffix)
+    if shot.prompt_en:
+        return _with_suffix(shot.prompt_en.strip(), suffix)
+    parts = [
+        _char_identity(project, shot),
+        shot.description,
+        shot.opening_state,
+        shot.shot_size,
+        shot.camera_angle,
+        shot.lighting,
+        shot.composition,
+        shot.important_details,
+        ", ".join(shot.required_elements) if shot.required_elements else "",
+    ]
+    return _with_suffix(_join(parts), suffix)
+
+
+def build_last_frame_prompt(project: Project, shot: Shot) -> str:
+    """尾帧英文 prompt（提示词.md §11）。基于已选首帧。
+    优先级：last_frame_prompt_override > last_frame_prompt_en > 结构字段拼接。
+    无角色时只声明基于首帧，不报错。frame_change 空时回退 motion（§14 兼容规则 7）。
+    """
+    suffix = project.style.suffix()
+    if shot.last_frame_prompt_override:
+        return _with_suffix(shot.last_frame_prompt_override.strip(), suffix)
+    if shot.last_frame_prompt_en:
+        return _with_suffix(shot.last_frame_prompt_en.strip(), suffix)
+    parts = ["Based on the first reference image"]
+    change = shot.frame_change or shot.motion
+    if change:
+        parts.append(f"after this change: {change}")
+    parts.append(shot.last_frame_description)
+    parts.append(shot.end_state)
+    if shot.add_elements:
+        parts.append(f"add: {shot.add_elements}")
+    if shot.remove_elements:
+        parts.append(f"remove: {shot.remove_elements}")
+    parts.append(shot.end_composition)
+    if shot.preserve_elements:
+        parts.append("preserve: " + ", ".join(shot.preserve_elements))
+    parts.append(shot.preserve_custom)
+    if shot.characters:
+        parts.append("keep character identity consistent with the reference images")
+    return _with_suffix(_join(parts), suffix)
+
+
+def build_video_prompt(shot: Shot, mode: str) -> str:
+    """视频英文 prompt（提示词.md §13）。区分 i2v / keyframes（none 由 handler 映射为 i2v）。
+    优先级：video_prompt_override > video_prompt_en > 结构字段拼接。
+    seed/negative_prompt 不拼入正向 prompt（单独 API 参数）。不拼风格后缀（继承自输入帧）。
+    无角色时不出现 face/outfit consistency。camera_movement 空时回退 camera（§14 规则 6）。
+    固定镜头不自动追加 push-in/tracking（直接用字段值）。
+    """
+    if shot.video_prompt_override:
+        return shot.video_prompt_override.strip()
+    if shot.video_prompt_en:
+        return shot.video_prompt_en.strip()
+    motion = shot.motion or "subtle natural motion"
+    cam = shot.camera_movement or shot.camera
+    pace = shot.motion_pace
+    env = shot.environment_motion
+    seq = shot.action_sequence
+    preserve = shot.video_preserve_elements
+    preserve_custom = shot.video_preserve_custom
+    has_char = bool(shot.characters)
+
+    if mode == "keyframes":
+        parts = ["Create a smooth cinematic transition from the first keyframe to the second keyframe"]
+        parts.append(shot.transition_description or f"with this motion: {motion}")
+        if env:
+            parts.append(f"environment: {env}")
+        if cam:
+            parts.append(f"camera: {cam}")
+        if pace:
+            parts.append(f"pace: {pace}")
+        if seq:
+            parts.append(f"sequence: {seq}")
+        consist = (["character identity"] if has_char else []) + ["scene layout"]
+        parts.append("maintain consistency in " + ", ".join(consist))
+        if preserve:
+            parts.append("keep stable: " + ", ".join(preserve))
+        if preserve_custom:
+            parts.append(preserve_custom)
+        return _join(parts)
+
+    # i2v（含 none，handler 已把 none 映射为 i2v）
+    parts = [f"Animate this image: {motion}"]
+    if env:
+        parts.append(f"environment motion: {env}")
+    if cam:
+        parts.append(f"camera movement: {cam}")
+    if pace:
+        parts.append(f"pace: {pace}")
+    if seq:
+        parts.append(f"action sequence: {seq}")
+    if preserve:
+        parts.append("keep stable: " + ", ".join(preserve))
+    if preserve_custom:
+        parts.append(preserve_custom)
+    parts.append("keep character identity and outfit consistent" if has_char
+                 else "keep the overall composition and style consistent")
+    return _join(parts)
+
+
+# ---- 旧 builder（first_frame handler 仍在用，批次3 切换到 build_first_frame_prompt 后删除）----
 def build_shot_prompt(project: Project, shot: Shot) -> str:
-    """组装分镜图英文 prompt。
-    结构：[主体] + [场景/环境] + [风格] + [光照] + [构图] + [质量要求]。
-    用户手改过 shot.prompt_en 就直接用，不覆盖。"""
+    """[DEPRECATED 旧首帧 prompt] 批次3 切换到 build_first_frame_prompt 后删除。"""
     if shot.prompt_en:
         base = shot.prompt_en
     else:
@@ -24,30 +159,7 @@ def build_shot_prompt(project: Project, shot: Shot) -> str:
 
 
 def build_i2i_prompt(project: Project, shot: Shot) -> str:
-    """图生图 prompt：必须同时说明「改什么」和「保留什么」
-    （Agnes 生图文档明确的最佳实践）。"""
+    """[DEPRECATED 旧图生图 prompt] 批次3 切换后删除。"""
     return (f"{build_shot_prompt(project, shot)}. "
             f"Keep the character identity, outfit, and art style from the "
             f"reference image strictly consistent.")
-
-
-def build_last_frame_prompt(project: Project, shot: Shot) -> str:
-    """尾帧 = 首帧 + 动作推进后的状态。强调构图与角色不变。"""
-    motion = shot.motion or "the action continues naturally"
-    return (f"Same scene and same character as the reference image, "
-            f"but after this motion: {motion}. "
-            f"Preserve the original composition, camera angle, lighting, "
-            f"character identity and outfit. {project.style.suffix()}")
-
-
-def build_video_prompt(shot: Shot, mode: str) -> str:
-    """视频 prompt。
-    i2v 要说明「什么动、什么不动」；keyframes 要说明「两帧之间怎么过渡」。"""
-    motion = shot.motion or "subtle natural motion"
-    if mode == "keyframes":
-        return (f"Create a smooth cinematic transition from the first keyframe "
-                f"to the second keyframe. {motion}. Maintain character identity, "
-                f"consistent camera angle and natural motion between frames.")
-    return (f"Animate this image: {motion}. {shot.camera or 'subtle camera movement'}. "
-            f"Keep the character's face, outfit and the overall composition "
-            f"consistent and stable.")
