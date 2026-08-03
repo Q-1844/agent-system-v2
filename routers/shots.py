@@ -353,8 +353,7 @@ async def get_project_timing(project_name: str):
 # first_frame：2 候选图生图（角色参考图用公网 url 或 base64），存 local+公网 url，
 #   status=pending 等用户点选；choose 后 status=done，url_ready 才 True（视频唯一入口）。
 # last_frame：仅 keyframes，图生图用 first_frame.url；生成后若 split_next 非空，桥接拷贝给后继首帧。
-from src.core.prompt_builder import (
-    build_shot_prompt, build_i2i_prompt, build_last_frame_prompt)
+from src.core.prompt_builder import build_first_frame_prompt, build_last_frame_prompt
 
 
 def _shot_char_refs(project, shot):
@@ -409,7 +408,7 @@ async def _handler_first_frame(job, emit):
     ratio = project.style.aspect_ratio or "16:9"
     refs = _shot_char_refs(project, shot)
     use_i2i = bool(refs)
-    prompt = build_i2i_prompt(project, shot) if use_i2i else build_shot_prompt(project, shot)
+    prompt = build_first_frame_prompt(project, shot)
     frames_dir = project_dir / "output" / "frames"
     frames_dir.mkdir(parents=True, exist_ok=True)
 
@@ -419,10 +418,10 @@ async def _handler_first_frame(job, emit):
     asset_list = []
     for i in range(variants):
         await emit("gen", f"{shot.shot_id} 生成候选 {i+1}/{variants}", int(i / variants * 100))
-        seed = (shot.seed + i) if shot.seed is not None else None   # 多候选要有变化
+        # 🔴 图片接口不支持 seed（AGNES_API_FACTS §2.1 / 提示词.md §4.1）：多候选不靠 seed 区分
         res = await get_agnes_client().generate_image(
             prompt=prompt, image_refs=refs if use_i2i else None,
-            size_tier=size_tier, ratio=ratio, seed=seed)
+            size_tier=size_tier, ratio=ratio)
         url = res.get("url")
         if not url:
             raise RuntimeError("图片生成未返回公网 URL")
@@ -474,8 +473,11 @@ async def _handler_last_frame(job, emit):
 
     await emit("gen", f"{shot.shot_id} 生成尾帧", 20)
     prompt = build_last_frame_prompt(project, shot)
+    # image_refs 顺序（提示词.md §11）：1.已选首帧（场景/构图基础）2.角色参考图（身份保持）。
+    # 无角色时 char_refs 为空，只传首帧。首帧始终第一张，不让角色图取代主构图参考。
+    char_refs = _shot_char_refs(project, shot)
     res = await get_agnes_client().generate_image(
-        prompt=prompt, image_refs=[ff_url],
+        prompt=prompt, image_refs=[ff_url] + char_refs,
         size_tier=project.style.size_tier or "1K", ratio=project.style.aspect_ratio or "16:9")
     url = res.get("url")
     if not url:
@@ -663,7 +665,7 @@ def _video_preflight(shot, quota, seconds):
     if shot.locked:
         return False, "镜头已锁定"
     if not shot.video.num_frames:
-        return False, "尚未配音，无法确定视频时长（请先配音）"
+        return False, "尚未配音且未设置目标时长，无法确定视频时长（请先配音或在视频标签选择时长）"
     if not shot.first_frame.url_ready:
         return False, "首帧缺少公网 URL（未选择候选或未生成），请先生成并选择首帧"
     if shot.link_mode == "keyframes":
@@ -717,6 +719,25 @@ async def _handler_video(job, emit):
         store.update_shot(job.shot_id, _mut_rehost)
         shot = store.load().get_shot(job.shot_id)   # 取最新
 
+    # 🔴 视频提交尺寸：16:9 直接按服务端实测输出 1280x704 提交（FACTS §3.4.1：1312x736 会被
+    #  归一化成 1280x704；直接提交 1280x704 省这轮归一化）。max_frames_for(1280,704)=441。
+    ratio = project.style.aspect_ratio or "16:9"
+    if ratio == "16:9":
+        w, h = 1280, 704
+    else:
+        w, h = map(int, _resolve_size(project.style.size_tier or "1K", ratio).split("x"))
+
+    # 用户目标时长（提示词.md §12.1.5）：target_duration_s 非空 -> 转 8n+1 帧数（与 create_video
+    #  内部 snap_num_frames 一致，遵守 max_frames_for）；None -> 跟随配音（audio 反推的 num_frames）。
+    #  写回 shot.video.num_frames，后续 preflight/提交/VideoVersion 都读它，保持一致。
+    if shot.target_duration_s is not None:
+        from src.api.agnes_client import snap_num_frames
+        fps0 = max(shot.video.frame_rate, 1)
+        planned = snap_num_frames(int(round(shot.target_duration_s * fps0)), w, h)
+        if planned != shot.video.num_frames:
+            store.update_shot(job.shot_id, lambda s, nf=planned: setattr(s.video, "num_frames", nf))
+            shot = store.load().get_shot(job.shot_id)
+
     seconds = shot.video.num_frames / max(shot.video.frame_rate, 1)
     ok, why = _video_preflight(shot, get_agnes_client().quota, seconds)
     if not ok:
@@ -731,15 +752,6 @@ async def _handler_video(job, emit):
         shot = store.load().get_shot(job.shot_id)   # 取最新
 
     prompt = build_video_prompt(shot, mode)
-    # 🔴 视频提交尺寸：16:9 直接按服务端实测输出 1280x704 提交（FACTS §3.4.1：1312x736 会被
-    #  归一化成 1280x704，两者宽高比不同 1.783 vs 1.818 有裁切；直接提交 1280x704 省这轮归一化）。
-    #  图片仍走档位 1312x736；图片->视频的裁切是单次逐镜，keyframes 接力链传的是图片不累积。
-    #  max_frames_for(1280,704)=441（long_side=1280 落 720p 档），441 实测正是在 1280x704 取得。
-    ratio = project.style.aspect_ratio or "16:9"
-    if ratio == "16:9":
-        w, h = 1280, 704
-    else:
-        w, h = map(int, _resolve_size(project.style.size_tier or "1K", ratio).split("x"))
 
     # 🔴 恢复：已有 video_id 且未 done/failed -> 续轮询，不重提交。
     #  recover_pending_videos 把轮询超时（仍在跑）的设为 queued 后入队，handler 在此续轮询；
@@ -889,6 +901,37 @@ class UpdateShotRequest(BaseModel):
     motion: Optional[str] = None
     dialogue: Optional[str] = None
     characters: Optional[List[str]] = None
+    # 结构化镜头字段（提示词.md 工作台）
+    opening_state: Optional[str] = None
+    camera_angle: Optional[str] = None
+    composition: Optional[str] = None
+    important_details: Optional[str] = None
+    required_elements: Optional[List[str]] = None
+    last_frame_description: Optional[str] = None
+    end_state: Optional[str] = None
+    frame_change: Optional[str] = None
+    preserve_elements: Optional[List[str]] = None
+    add_elements: Optional[str] = None
+    remove_elements: Optional[str] = None
+    end_composition: Optional[str] = None
+    preserve_custom: Optional[str] = None
+    camera_movement: Optional[str] = None
+    motion_pace: Optional[str] = None
+    environment_motion: Optional[str] = None
+    action_sequence: Optional[str] = None
+    camera_movement_detail: Optional[str] = None
+    transition_description: Optional[str] = None
+    video_preserve_elements: Optional[List[str]] = None
+    video_preserve_custom: Optional[str] = None
+    target_duration_s: Optional[float] = None
+    last_frame_prompt_en: Optional[str] = None
+    video_prompt_en: Optional[str] = None
+    first_frame_prompt_override: Optional[str] = None
+    last_frame_prompt_override: Optional[str] = None
+    video_prompt_override: Optional[str] = None
+    first_frame_prompt_sig: Optional[str] = None
+    last_frame_prompt_sig: Optional[str] = None
+    video_prompt_sig: Optional[str] = None
 
 
 @router.put("/api/project/{project_name}/shot/{shot_id}")
@@ -924,6 +967,21 @@ async def update_shot(project_name: str, shot_id: str, req: UpdateShotRequest):
                 s.dialogue = req.dialogue
             if req.characters is not None:
                 s.characters = list(req.characters)
+            # 结构化字段（提示词.md）：None 不改，否则覆盖（list 拷贝；允许传 [] 清空）
+            for f in (
+                "opening_state", "camera_angle", "composition", "important_details",
+                "required_elements", "last_frame_description", "end_state", "frame_change",
+                "preserve_elements", "add_elements", "remove_elements", "end_composition",
+                "preserve_custom", "camera_movement", "motion_pace", "environment_motion",
+                "action_sequence", "camera_movement_detail", "transition_description",
+                "video_preserve_elements", "video_preserve_custom", "target_duration_s",
+                "last_frame_prompt_en", "video_prompt_en",
+                "first_frame_prompt_override", "last_frame_prompt_override", "video_prompt_override",
+                "first_frame_prompt_sig", "last_frame_prompt_sig", "video_prompt_sig",
+            ):
+                v = getattr(req, f)
+                if v is not None:
+                    setattr(s, f, list(v) if isinstance(v, list) else v)
         store = ProjectStore(project_dir)
         if store.load().get_shot(shot_id) is None:
             raise HTTPException(404, f"镜头 {shot_id} 不存在")

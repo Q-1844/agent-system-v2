@@ -140,26 +140,3 @@ def build_video_prompt(shot: Shot, mode: str) -> str:
     parts.append("keep character identity and outfit consistent" if has_char
                  else "keep the overall composition and style consistent")
     return _join(parts)
-
-
-# ---- 旧 builder（first_frame handler 仍在用，批次3 切换到 build_first_frame_prompt 后删除）----
-def build_shot_prompt(project: Project, shot: Shot) -> str:
-    """[DEPRECATED 旧首帧 prompt] 批次3 切换到 build_first_frame_prompt 后删除。"""
-    if shot.prompt_en:
-        base = shot.prompt_en
-    else:
-        chars = ", ".join(
-            c.description_en for c in project.characters
-            if c.name in shot.characters and c.description_en)
-        base = ", ".join(p for p in [
-            shot.description, chars, shot.shot_size,
-            shot.camera, shot.lighting] if p)
-    suffix = project.style.suffix()
-    return f"{base}, {suffix}" if base else suffix
-
-
-def build_i2i_prompt(project: Project, shot: Shot) -> str:
-    """[DEPRECATED 旧图生图 prompt] 批次3 切换后删除。"""
-    return (f"{build_shot_prompt(project, shot)}. "
-            f"Keep the character identity, outfit, and art style from the "
-            f"reference image strictly consistent.")
