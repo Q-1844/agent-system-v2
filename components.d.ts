@@ -7,6 +7,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    Collapsible: typeof import('./src/components/Collapsible.vue')['default']
     OrchestrateModal: typeof import('./src/components/OrchestrateModal.vue')['default']
     PromptEditor: typeof import('./src/components/PromptEditor.vue')['default']
     QueuePanel: typeof import('./src/components/QueuePanel.vue')['default']
