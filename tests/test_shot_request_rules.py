@@ -8,6 +8,8 @@
 - 尾帧 image_refs 首帧始终第一张 + 含角色参考；无角色只传首帧（测试9）
 """
 import time
+import shutil
+from pathlib import Path
 import pytest
 
 import deps
@@ -19,13 +21,23 @@ from src.api.agnes_client import max_frames_for
 PROJECT = "_test_req_rules"
 
 
+def _force_rmtree(p, tries=10):
+    """Windows 下异步 job 下载文件句柄可能短暂未释放，重试 rmtree。"""
+    import time as _t
+    for _ in range(tries):
+        shutil.rmtree(p, ignore_errors=True)
+        if not Path(p).exists():
+            return
+        _t.sleep(0.4)
+
+
 def _build(pname):
     import shutil
     from src.core.store import ProjectStore
     from src.core.models import (Project, Scene, Shot, StyleAnchor, ImageAsset,
                                  Asset, AudioAsset, VideoAsset, Character)
     pm = get_project_manager()
-    shutil.rmtree(pm.base_dir / pname, ignore_errors=True)
+    _force_rmtree(pm.base_dir / pname)
     pdir = pm.create_project(pname)
     alan = Character(name="Alan", description_en="a boy",
                      views={"front": Asset(url="https://mock.agnes/alan.png", status="done")})
@@ -67,8 +79,8 @@ def _build(pname):
 def proj(client):
     _build(PROJECT)
     yield PROJECT
-    import shutil
-    shutil.rmtree(get_project_manager().get_project_dir(PROJECT), ignore_errors=True)
+    time.sleep(0.3)   # 让异步 job 文件句柄释放（Windows）
+    _force_rmtree(get_project_manager().get_project_dir(PROJECT))
 
 
 @pytest.fixture
