@@ -870,6 +870,8 @@ const mainCanvasLabel = computed(() => {
 });
 const thumbStrip = computed(() => {
   if (stage.value === 'first') {
+    // inherit_previous：开场=来源末帧（主画布显示），本镜候选不参与，放入历史区，缩略条留空
+    if (props.shot.opening_source === 'inherit_previous') return [];
     const arr: any[] = [];
     // reference_previous：缩略条前置「上一镜参考」（来源末帧），与候选区分
     if (props.shot.opening_source === 'reference_previous' && sourceShot.value?.video_end_frame?.local) {
