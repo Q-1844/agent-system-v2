@@ -12,7 +12,7 @@ print("Testing Text API with 60s timeout...")
 
 try:
     data = json.dumps({
-        "model": "agnes-2.0-flash",
+        "model": "agnes-2.5-flash",
         "messages": [{"role": "user", "content": "Say hello in one word"}],
         "temperature": 0.7,
         "max_tokens": 10,

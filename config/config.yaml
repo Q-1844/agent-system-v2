@@ -6,7 +6,7 @@ agnes:
   proxy: ""  # 国内入口直连，留空=不走代理。若改回国际站 .com 需配 Clash 代理 http://127.0.0.1:7890
 
   models:
-    text: "agnes-2.0-flash"
+    text: "agnes-2.5-flash"   # 2026-08-07 升级：agnes-2.0-flash 的 API-compatible upgrade（Chat Completions 兼容）
     image: "agnes-image-2.1-flash"
     video: "agnes-video-v2.0"
 

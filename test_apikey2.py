@@ -12,12 +12,12 @@ BASE_URL = "https://apihub.agnes-ai.cn"
 
 # 测试1: 文本理解接口
 print("=" * 50)
-print("TEST 1: Text API (agnes-2.0-flash)")
+print("TEST 1: Text API (agnes-2.5-flash)")
 print("=" * 50)
 
 try:
     data = json.dumps({
-        "model": "agnes-2.0-flash",
+        "model": "agnes-2.5-flash",
         "messages": [{"role": "user", "content": "Hello, say OK"}],
         "temperature": 0.7,
         "max_tokens": 10,

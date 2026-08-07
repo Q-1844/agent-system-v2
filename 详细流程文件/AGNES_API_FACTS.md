@@ -21,10 +21,14 @@
 | Base URL（国际，需代理） | `https://apihub.agnes-ai.com` |
 | 认证 | `Authorization: Bearer YOUR_API_KEY` |
 | Content-Type | `application/json` |
-| 文本模型 | `agnes-2.0-flash` |
+| 文本模型 | `agnes-2.5-flash` |
 | 图片模型 | `agnes-image-2.1-flash`（另有 `agnes-image-2.0-flash`） |
 | 视频模型 | `agnes-video-v2.0` |
 | 价格 | **已确认免费**：2026-06 官方公告文本/图片/视频三模态无限期免费，图片接口价格页写明 $0/image（文本 $0/1M token、视频 $0/秒）。✅ 2026-08-01 探针实测（probe_agnes_image.py）：.cn 图片接口 1K 1:1 单图 200，返回 1024x1024 PNG |
+
+> 🟢 **2026-08-07 更新：文本模型升级为 `agnes-2.5-flash`。**
+> 它是 `agnes-2.0-flash` 的 **API-compatible upgrade**：Chat Completions 接口仍为 `POST /v1/chat/completions`，请求/响应格式、`messages` 结构、`temperature`/`max_tokens`/`json_mode`（客户端去 code fence）等行为完全一致，仅 model 名变化。
+> 配置源 `config/config.yaml` 的 `agnes.models.text` 改为 `agnes-2.5-flash`，所有经 `AgnesClient.chat()` 的文本能力（StoryWorkflow / AI 整理故事 / 角色描述草稿 / 标准模式生成提示词 / 优化提示词 / 翻译）自动继承，无需改业务代码。图片/视频模型与事实不变。
 
 **模型名必须走配置文件，不许硬编码在业务代码里。** Agnes 迭代很快，新版本随时可能上线。
 
