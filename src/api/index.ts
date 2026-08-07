@@ -315,6 +315,30 @@ export interface ApplyContinuationResult {
   first_new_scene_id: string | null;
 }
 
+// ============ AI 角色设计（Phase AI-2）============
+export interface CharacterDesignDraft {
+  character_name: string;
+  role_summary: string;
+  visual_concept: string;
+  appearance: string;
+  clothing_or_body: string;
+  distinctive_features: string;
+  color_palette: string;
+  consistency_rules: string[];
+  generation_prompt: string;
+}
+
+export interface CharacterDesignDraftState {
+  character_name: string;
+  base_character_name: string;
+  base_character_description: string;
+  base_related_scene_signature: Array<{ scene_id: string; summary: string }>;
+  base_project_style_signature: string;
+  draft: CharacterDesignDraft;
+  status: string;   // draft / applied / stale
+  created_at: number;
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -748,6 +772,41 @@ class ApiClient {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/story/continue/append-story-only`, {
       method: 'POST',
     });
+  }
+
+  // ============ AI 角色设计（Phase AI-2）============
+
+  // AI 设计一个角色，落草稿。可重复调用（重新设计）
+  async designCharacter(projectName: string, characterName: string): Promise<CharacterDesignDraftState> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/character/${encodeURIComponent(characterName)}/design`, {
+      method: 'POST',
+    });
+  }
+
+  // 保存草稿编辑（用户改 generation_prompt 等）
+  async saveCharacterDesign(projectName: string, characterName: string, draft: CharacterDesignDraft): Promise<CharacterDesignDraftState> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/character/${encodeURIComponent(characterName)}/design`, {
+      method: 'PUT', body: JSON.stringify({ draft }),
+    });
+  }
+
+  // 应用 generation_prompt -> Character.description_en（stale 检查）
+  async applyCharacterDesign(projectName: string, characterName: string): Promise<{ ok: boolean; description_en: string }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/character/${encodeURIComponent(characterName)}/design/apply`, {
+      method: 'POST',
+    });
+  }
+
+  // AI 批量设计无草稿角色（逐角色，部分失败不整批失败）
+  async designAllCharacters(projectName: string, names?: string[]): Promise<{ results: Array<{ name: string; ok: boolean; error?: string }> }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/character/design-batch`, {
+      method: 'POST', body: JSON.stringify(names ? { names } : {}),
+    });
+  }
+
+  // 读所有角色设计草稿（刷新恢复）
+  async getCharacterDesigns(projectName: string): Promise<{ designs: Record<string, CharacterDesignDraftState> }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/character/designs`);
   }
 
   // ============ 阶段 3：shot 级管线 ============

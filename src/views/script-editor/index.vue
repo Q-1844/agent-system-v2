@@ -335,10 +335,13 @@ function openOrganizer() {
   }
 }
 function onOrganizerClose() { showOrganizer.value = false; }
-function onOrganizerApplied() {
+function onOrganizerApplied(goDesignChar?: string | null) {
   showOrganizer.value = false;
   load();   // 刷新故事段（新建的 Scene 写入项目）
   store.loadProjectCharacters(projectName.value);   // 刷新角色缓存，角色页也能看到新角色
+  if (goDesignChar) {
+    router.push({ path: '/characters', query: { design: goDesignChar } });
+  }
 }
 
 // ---- AI 续写故事（Phase AI-1B）----
@@ -347,11 +350,13 @@ function openContinuation() {
   showContinuation.value = true;
 }
 function onContinuationClose() { showContinuation.value = false; }
-async function onContinuationApplied(firstNewSceneId: string | null) {
+async function onContinuationApplied(firstNewSceneId: string | null, goDesignChar?: string | null) {
   showContinuation.value = false;
   await load();   // 刷新：新故事段追加到底部，已有不重建
   store.loadProjectCharacters(projectName.value);
-  if (firstNewSceneId) {
+  if (goDesignChar) {
+    router.push({ path: '/characters', query: { design: goDesignChar } });
+  } else if (firstNewSceneId) {
     await nextTick();
     flashNewScene(firstNewSceneId);
   }

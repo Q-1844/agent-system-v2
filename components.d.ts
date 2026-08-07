@@ -7,6 +7,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    CharacterDesignStudio: typeof import('./src/components/CharacterDesignStudio.vue')['default']
     CharacterResolutionPanel: typeof import('./src/components/CharacterResolutionPanel.vue')['default']
     Collapsible: typeof import('./src/components/Collapsible.vue')['default']
     OrchestrateModal: typeof import('./src/components/OrchestrateModal.vue')['default']

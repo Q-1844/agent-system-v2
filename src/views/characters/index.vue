@@ -17,6 +17,11 @@
 
       <!-- 列表内容：文字优先，无头像 -->
       <div class="list-content">
+        <button
+          v-if="characters.length"
+          class="ai-batch-entry"
+          @click="openDesignStudio(null)"
+        >✨ AI 角色设计</button>
         <div
           v-for="char in characters"
           :key="char.name"
@@ -25,6 +30,7 @@
           @click="selectChar(char)"
         >
           <span class="char-name">{{ char.name }}</span>
+          <span class="ai-mark" v-if="statusClass(char) === 'none' || statusClass(char) === 'partial'" title="AI 可设计">AI</span>
           <span class="char-status" :class="statusClass(char)">{{ statusText(char) }}</span>
         </div>
         <div v-if="!characters.length" class="list-empty">暂无角色</div>
@@ -54,6 +60,7 @@
             <input v-else v-model="editNameValue" class="edit-input edit-name" @blur="saveName" @keyup.enter="saveName" @keyup.escape="cancelEditName" ref="nameInput" />
             <span class="edit-hint" v-if="!editingName">双击编辑</span>
             <div class="ws-actions">
+              <button class="btn-ghost" :title="selected.description ? 'AI 优化角色设定' : 'AI 设计角色形象'" @click="openDesignStudio(selected)">AI 设计角色</button>
               <button class="btn-ghost" title="保存到角色库" @click="saveCharacter(selected)">保存到角色库</button>
               <button class="btn-ghost danger" title="删除角色" @click="confirmDeleteChar(selected)">删除</button>
             </div>
@@ -147,6 +154,16 @@
         </div>
       </div>
     </div>
+
+    <!-- AI 角色设计工作区（Phase AI-2） -->
+    <CharacterDesignStudio
+      v-if="showDesignStudio"
+      :project-name="projectName"
+      :initial-character-name="designInitialName"
+      @close="showDesignStudio = false"
+      @applied="onDesignChanged"
+      @generated="onDesignChanged"
+    />
   </div>
 </template>
 
@@ -155,7 +172,10 @@ import { ref, computed, onMounted, nextTick, watch, defineAsyncComponent } from 
 import { storeToRefs } from 'pinia';
 import { useProjectStore } from '@/store';
 import { apiClient } from '@/api';
+import { useRoute } from 'vue-router';
+import CharacterDesignStudio from '@/components/CharacterDesignStudio.vue';
 
+const route = useRoute();
 const store = useProjectStore();
 const { characters, projectName } = storeToRefs(store);
 const selected = ref<any>(null);
@@ -168,6 +188,8 @@ const showDeleteConfirm = ref(false);
 const deleteTarget = ref<any>(null);
 const newCharName = ref('');
 const newCharDesc = ref('');
+const showDesignStudio = ref(false);
+const designInitialName = ref<string | null>(null);
 
 const editingName = ref(false);
 const editingDesc = ref(false);
@@ -341,13 +363,37 @@ function cancelEditDesc() { editingDesc.value = false; }
 onMounted(() => {
   store.loadProjectCharacters(projectName.value);
   store.loadSavedCharacters();
+  // Phase AI-2：从剧本页跳转 ?design=charName -> 选中该角色 + 打开 AI 设计工作区
+  const d = route.query.design;
+  if (d && typeof d === 'string') {
+    designInitialName.value = d;
+    const stop = watch(characters, (list) => {
+      const ch = list.find((c: any) => c.name === d);
+      if (ch) {
+        selected.value = ch;
+        showDesignStudio.value = true;
+        stop();
+      }
+    }, { immediate: true });
+  }
 });
 
 // 切项目：清选中（右侧不显示旧项目角色）+ 加载新项目角色（GPT §3）
 watch(projectName, () => {
   selected.value = null;
+  showDesignStudio.value = false;
   store.loadProjectCharacters(projectName.value);
 });
+
+// ---- AI 角色设计（Phase AI-2）----
+function openDesignStudio(char: any) {
+  designInitialName.value = char?.name || null;
+  showDesignStudio.value = true;
+}
+function onDesignChanged() {
+  // AI 设计应用 / 三视图生成后刷新角色缓存（description_en / views 更新）
+  store.loadProjectCharacters(projectName.value);
+}
 
 // 打开新建对话框时聚焦
 watch(showAddDialog, (v) => { if (v) nextTick(() => addNameInput.value?.focus()); });
@@ -418,6 +464,13 @@ watch(showAddDialog, (v) => { if (v) nextTick(() => addNameInput.value?.focus())
   padding: 2px 8px;
 }
 
+.ai-batch-entry {
+  width: 100%; margin-bottom: 6px; padding: 7px; border-radius: 6px;
+  border: 1px solid var(--accent); background: transparent; color: var(--accent);
+  font-size: 12px; cursor: pointer;
+  &:hover { background: var(--accent); color: var(--accent-text); }
+}
+
 .char-item {
   display: flex;
   align-items: center;
@@ -434,6 +487,11 @@ watch(showAddDialog, (v) => { if (v) nextTick(() => addNameInput.value?.focus())
     background: var(--bg-hover);
     border-left-color: var(--accent);
   }
+}
+
+.ai-mark {
+  font-size: 9px; font-weight: 600; color: var(--accent);
+  border: 1px solid var(--accent); border-radius: 3px; padding: 0 3px;
 }
 
 .char-name {

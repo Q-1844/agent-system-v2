@@ -845,6 +845,10 @@ async def update_project_character(
             c.description_en = req.description
 
         store.save(p)
+        if renamed:
+            # 角色 AI 设计草稿 key 随改名迁移（Phase AI-2 §25）
+            from routers.character_design import migrate_design_key
+            migrate_design_key(project_dir, character_name, new_name)
         logger.info(f"项目角色 {character_name} 已更新 (renamed={renamed})")
         return {"success": True, "renamed": renamed, "message": "角色已更新"}
     except FileNotFoundError:
@@ -908,6 +912,9 @@ async def delete_project_character(project_name: str, character_name: str):
                     except Exception: pass
         p.characters = [ch for ch in p.characters if ch.name != character_name]
         store.save(p)
+        # 清理角色 AI 设计草稿（Phase AI-2 §26）
+        from routers.character_design import delete_design
+        delete_design(project_dir, character_name)
         logger.info(f"角色 {character_name} 已从项目 {project_name} 删除")
         return {"success": True, "message": "角色已删除"}
     except FileNotFoundError:

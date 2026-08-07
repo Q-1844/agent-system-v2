@@ -105,6 +105,9 @@
               <div class="cf-pending-title">新创建但尚未生成形象的角色：</div>
               <div class="cf-pending-names">{{ createdChars.map(c => c.mention).join('、') }}</div>
               <div class="cf-pending-hint">这些角色已经属于当前项目，可以稍后在角色页生成三视图。</div>
+              <button class="btn ghost go-design-btn" :disabled="applying" @click="apply(firstCreatedChar)">
+                采用后前往角色设计
+              </button>
             </div>
           </div>
         </template>
@@ -126,7 +129,7 @@
           v-if="step === 3"
           class="btn primary"
           :disabled="applying"
-          @click="apply"
+          @click="apply(null)"
         >{{ applying ? '采用中…' : '采用故事整理' }}</button>
       </footer>
     </div>
@@ -145,7 +148,7 @@ const { message, dialog } = createDiscreteApi(['message', 'dialog'], {
 });
 
 const props = defineProps<{ projectName: string }>();
-const emit = defineEmits<{ (e: 'close'): void; (e: 'applied'): void }>();
+const emit = defineEmits<{ (e: 'close'): void; (e: 'applied', goDesignChar?: string | null): void }>();
 
 const step = ref<1 | 2 | 3>(1);
 const draft = ref<StoryOrganizationDraft | null>(null);
@@ -170,6 +173,7 @@ const resolvedCount = computed(() =>
   draft.value ? draft.value.characters.length - unresolvedCount.value : 0);
 const createdChars = computed(() =>
   draft.value ? draft.value.characters.filter(r => r.status === 'created') : []);
+const firstCreatedChar = computed(() => createdChars.value[0]?.matched_character_name || null);
 
 function sceneChars(sc: DraftScene): string[] {
   if (!draft.value) return [];
@@ -313,13 +317,13 @@ async function onBatchCreate(targets: Array<{ mention: string; name: string; des
 }
 
 // ---- Step 3 ----
-async function apply() {
+async function apply(goDesignChar?: string | null) {
   if (!draft.value) return;
   applying.value = true;
   try {
     await apiClient.applyStoryOrganize(props.projectName);
     message.success('已采用故事整理');
-    emit('applied');
+    emit('applied', goDesignChar || null);
     emit('close');
   } catch (e: any) {
     const msg = e.message || '';
@@ -494,6 +498,7 @@ onMounted(() => init());
 .cf-pending-title { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
 .cf-pending-names { font-size: 13px; color: var(--text-primary); margin-bottom: 6px; }
 .cf-pending-hint { font-size: 11px; color: var(--text-muted); }
+.go-design-btn { margin-top: 10px; border-color: var(--accent); color: var(--accent); }
 
 .empty { text-align: center; color: var(--text-muted); font-size: 13px; padding: 32px 0; }
 

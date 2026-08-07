@@ -122,6 +122,12 @@
               <div class="cs-protect-item" v-if="hasImages">✓ 已生成图片</div>
               <div class="cs-protect-item" v-if="hasVideos">✓ 已生成视频</div>
             </div>
+            <div class="cs-go-design" v-if="createdChars.length">
+              <span>其中 {{ createdChars.length }} 个新角色尚未生成形象</span>
+              <button class="btn ghost go-design-btn" :disabled="applying" @click="onApply(true)">
+                采用后前往角色设计
+              </button>
+            </div>
           </div>
         </template>
       </div>
@@ -151,7 +157,7 @@
         </template>
         <template v-if="step === 3">
           <button class="btn ghost" @click="back">返回修改</button>
-          <button class="btn primary" :disabled="applying" @click="onApply">
+          <button class="btn primary" :disabled="applying" @click="onApply(false)">
             {{ applying ? '追加中…' : '确认追加' }}
           </button>
         </template>
@@ -172,7 +178,7 @@ const { message, dialog } = createDiscreteApi(['message', 'dialog'], {
 });
 
 const props = defineProps<{ projectName: string }>();
-const emit = defineEmits<{ (e: 'close'): void; (e: 'applied', firstNewSceneId: string | null): void }>();
+const emit = defineEmits<{ (e: 'close'): void; (e: 'applied', firstNewSceneId: string | null, goDesignChar?: string | null): void }>();
 
 const step = ref<1 | 2 | 3>(1);
 const draft = ref<StoryContinuationDraft | null>(null);
@@ -410,12 +416,13 @@ async function onAppendStoryOnly() {
 }
 
 // ---- 确认追加（append-only apply）----
-async function onApply() {
+async function onApply(goDesign = false) {
   applying.value = true;
   try {
     const r = await apiClient.applyContinuation(props.projectName);
     message.success(`已追加 ${r.new_scenes.length} 个故事段`);
-    emit('applied', r.first_new_scene_id);
+    const goDesignChar = goDesign ? (r.new_characters[0] || null) : null;
+    emit('applied', r.first_new_scene_id, goDesignChar);
     emit('close');
   } catch (e: any) {
     const msg = e.message || '';
@@ -565,6 +572,13 @@ onMounted(() => init());
 }
 .cs-protect-title { font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; }
 .cs-protect-item { font-size: 13px; color: #4ade80; margin-bottom: 4px; }
+.cs-go-design {
+  margin-top: 14px; padding: 12px 16px; background: var(--bg-surface);
+  border: 1px solid var(--border); border-radius: 8px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  font-size: 13px; color: var(--text-secondary);
+}
+.go-design-btn { border-color: var(--accent); color: var(--accent); }
 
 // 底部
 .sc-foot {
