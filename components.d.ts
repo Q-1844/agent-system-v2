@@ -7,6 +7,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    CharacterResolutionPanel: typeof import('./src/components/CharacterResolutionPanel.vue')['default']
     Collapsible: typeof import('./src/components/Collapsible.vue')['default']
     OrchestrateModal: typeof import('./src/components/OrchestrateModal.vue')['default']
     PromptEditor: typeof import('./src/components/PromptEditor.vue')['default']
@@ -15,6 +16,7 @@ declare module 'vue' {
     RouterView: typeof import('vue-router')['RouterView']
     SafeFrameOverlay: typeof import('./src/components/SafeFrameOverlay.vue')['default']
     ShotCard: typeof import('./src/components/ShotCard.vue')['default']
+    StoryContinuation: typeof import('./src/components/StoryContinuation.vue')['default']
     StoryOrganizer: typeof import('./src/components/StoryOrganizer.vue')['default']
     Workbench: typeof import('./src/components/Workbench.vue')['default']
   }

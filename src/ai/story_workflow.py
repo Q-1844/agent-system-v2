@@ -53,6 +53,23 @@ class StoryBreakdownResult(BaseModel):
     scenes: list[DraftScene] = Field(default_factory=list)
 
 
+class StoryContinuationDraft(BaseModel):
+    """AI 续写故事草稿（Phase AI-1B）。落 projects/{p}/output/ai/story_continuation_draft.json。
+    append-only：apply 时只追加 story_text 末尾 + Scene 末尾，不动已有内容。
+    stale 围绕 story_text + scene 结构签名判断，不比 updated_at（避免视频/图片任务假 stale）。"""
+    draft_id: str
+    project_name: str
+    base_story_text: str                          # 续写时的完整故事快照（apply stale 比对）
+    base_scene_signature: list[dict]              # [{scene_id, summary, characters}] 不含产物（apply stale 比对）
+    direction: str = ""                           # 用户填写的续写方向
+    scale: str = "standard"                       # short / standard / long
+    continuation_text: str = ""                   # AI 续写正文（用户可编辑）
+    new_scene_drafts: list[DraftScene] = Field(default_factory=list)
+    character_resolution: list[CharacterResolutionItem] = Field(default_factory=list)
+    stage: str = "writing"                        # writing/continuation_ready/scenes_ready/ready_to_apply/applied/stale
+    created_at: float = 0.0
+
+
 # ============ system prompts ============
 _ORGANIZE_SYSTEM = """你是一名影视故事编辑。你的任务是把一个完整故事整理成适合后续进行镜头规划的"故事段"。
 
@@ -90,6 +107,43 @@ _CHAR_BATCH_SYSTEM = """你是一名角色设定编辑。根据给定的完整�
 只返回一个 JSON 对象，不要有任何解释文字，格式如下：
 {"characters": [{"name": "角色名", "description": "该角色的文字设定"}]}
 为每个被请求的角色都给出一项。"""
+
+
+# ============ Phase AI-1B：AI 续写故事 ============
+_CONTINUE_SYSTEM = """你是一名影视故事编剧。请在用户现有故事的基础上继续创作。
+
+要求：
+1. 只写新的续写部分，不要重复输出原故事。
+2. 延续现有人物、世界观、事件因果和情绪。
+3. 不突然改变已经确定的人物身份和关系。
+4. 如果用户提供了续写方向，优先遵守。
+5. 如果用户没有提供方向，根据当前未解决的冲突和目标自然推进。
+6. 根据"短篇 / 标准 / 较长"调整剧情推进幅度：短篇推进较少，标准中等，较长推进更多。
+7. 优先继续使用已有主要人物。只有剧情确实需要时才引入新角色，不要为了增加变化而频繁创造新人物。
+8. 不要写摄影术语，不要写 Shot，不要写首帧、尾帧或视频 prompt。
+9. 输出可以直接追加到完整故事末尾的正文。
+10. 不要以"续写：""下面是……"等说明性文字开头，直接开始写故事正文。"""
+
+_ORGANIZE_CONTINUATION_SYSTEM = """你是一名影视故事编辑。把"新的续写正文"整理成适合后续镜头规划的"故事段"。
+
+上下文中会给出：已有故事的最后一部分、已有最后的故事段。这些只用于保证连续、理解故事从哪里接、避免重复。
+绝不能把已有内容再输出一遍。只把"新的续写正文"拆成新的故事段。
+
+故事段按叙事变化划分（一个事件阶段完成 / 人物目标变化 / 冲突变化 / 地点或时间变化 / 情绪进入新阶段 / 新人物加入 / 故事进入新推进阶段），不要按单个动作、景别、摄影机运动、一句话、每几秒机械拆分。故事段比 Shot 粗（以后还会被拆成多个 Shot）。
+
+不要生成：Shot、景别、机位、运镜、首帧、尾帧、视频提示词、时长。
+
+为每个故事段识别涉及的人物名称（与续写原文中的称呼一致）。无人物则 character_mentions 为空数组。
+
+只返回一个 JSON 对象，不要有任何解释文字：
+{"overview": "一句话概述续写被整理成几个阶段", "scenes": [{"draft_id": "draft_1", "summary": "该故事段发生了什么", "character_mentions": ["人物A"]}]}
+draft_id 从 draft_1 开始递增。"""
+
+_SCALE_HINT = {
+    "short": "短篇（约推进 1-2 个故事段的剧情）",
+    "standard": "标准（约推进 3-4 个故事段）",
+    "long": "较长（约推进 5-7 个故事段）",
+}
 
 
 # ============ 确定性匹配（规格 §九）============
@@ -140,11 +194,10 @@ class StoryWorkflow:
                 "中使用与这些名称一致的称呼）：\n" + "、".join(existing_char_names)
             )
         user = f"完整故事：\n{story_text}{chars_hint}"
-        raw = await self._client.chat(
+        obj = await self._chat_json(
             [{"role": "system", "content": _ORGANIZE_SYSTEM},
              {"role": "user", "content": user}],
-            temperature=0.7, max_tokens=4096, json_mode=True)
-        obj = _parse_json_object(raw)
+            temperature=0.7, max_tokens=4096)
         if obj is None:
             raise ValueError("AI 未返回可解析的 JSON")
         overview = (obj.get("overview") or "").strip()
@@ -182,11 +235,10 @@ class StoryWorkflow:
         if not names:
             return []
         user = f"需要设定的角色：{('、'.join(names))}\n\n完整故事：\n{story_text}"
-        raw = await self._client.chat(
+        obj = await self._chat_json(
             [{"role": "system", "content": _CHAR_BATCH_SYSTEM},
              {"role": "user", "content": user}],
-            temperature=0.7, max_tokens=2048, json_mode=True)
-        obj = _parse_json_object(raw)
+            temperature=0.7, max_tokens=2048)
         if obj is None:
             raise ValueError("AI 未返回可解析的 JSON")
         out: list[tuple[str, str]] = []
@@ -203,6 +255,73 @@ class StoryWorkflow:
             if n not in got:
                 out.append((n, ""))
         return out
+
+    # ---------- AI：JSON 调用 + 解析（parse 失败自动重试一次，规格 §二十九）----------
+    async def _chat_json(self, messages: list[dict], **kw) -> Optional[dict]:
+        """调 chat(json_mode=True) + 解析 JSON。parse 失败自动重试一次（最多一次，不做复杂 repair）。"""
+        raw = await self._client.chat(messages, json_mode=True, **kw)
+        obj = _parse_json_object(raw)
+        if obj is not None:
+            return obj
+        raw2 = await self._client.chat(
+            messages + [{"role": "system",
+                         "content": "重要：只返回一个合法的 JSON 对象，以 { 开头，不要任何说明文字、代码块标记或其他内容。"}],
+            json_mode=True, **kw)
+        return _parse_json_object(raw2)
+
+    # ---------- Phase AI-1B：AI 续写故事（正文，纯文本）----------
+    async def continue_story(self, story_text: str, existing_chars: list[tuple[str, str]],
+                             existing_scene_summaries: list[str], direction: str = "",
+                             scale: str = "standard", style_weak: str = "") -> str:
+        """续写故事正文。json_mode=False，返回普通文本（规格 §六：续写与拆分职责分开，更稳定）。"""
+        scale_hint = _SCALE_HINT.get(scale, _SCALE_HINT["standard"])
+        chars_hint = ""
+        if existing_chars:
+            lines = [f"- {n}：{d}" if d else f"- {n}" for n, d in existing_chars[:20]]
+            chars_hint = "\n\n现有主要人物：\n" + "\n".join(lines)
+        scenes_hint = ""
+        if existing_scene_summaries:
+            tail = existing_scene_summaries[-2:]   # 已有最后 1-2 段作边界
+            scenes_hint = "\n\n已有最后的故事段：\n" + "\n".join(f"- {s}" for s in tail)
+        dir_hint = (f"\n\n用户希望接下来发生的方向（请优先遵守）：{direction.strip()}"
+                    if direction and direction.strip() else "")
+        style_hint = f"\n\n世界观背景（仅作弱参考）：{style_weak}" if style_weak else ""
+        user = (f"现有故事：\n{story_text}{chars_hint}{scenes_hint}{dir_hint}{style_hint}\n\n"
+                f"续写规模：{scale_hint}\n\n请直接写出续写正文。")
+        text = await self._client.chat(
+            [{"role": "system", "content": _CONTINUE_SYSTEM},
+             {"role": "user", "content": user}],
+            temperature=0.8, max_tokens=2048)
+        return text.strip()
+
+    # ---------- Phase AI-1B：整理新增正文（JSON，只拆 continuation_text）----------
+    async def organize_continuation(self, story_text: str, last_scene_summaries: list[str],
+                                    continuation_text: str, style_weak: str = "") -> StoryBreakdownResult:
+        """只把 continuation_text 拆成新故事段。已有 story/scenes 仅作边界上下文，不重复输出。"""
+        story_tail = story_text[-600:] if len(story_text) > 600 else story_text   # 已有故事最后 ~600 字
+        scenes_hint = ""
+        if last_scene_summaries:
+            tail = last_scene_summaries[-2:]
+            scenes_hint = "\n\n已有最后的故事段：\n" + "\n".join(f"- {s}" for s in tail)
+        user = (f"已有故事的最后一部分：\n{story_tail}{scenes_hint}\n\n"
+                f"下面是新的续写正文（只整理这部分，不要整理已有内容）：\n{continuation_text}")
+        obj = await self._chat_json(
+            [{"role": "system", "content": _ORGANIZE_CONTINUATION_SYSTEM},
+             {"role": "user", "content": user}],
+            temperature=0.7, max_tokens=4096)
+        if obj is None:
+            raise ValueError("AI 未返回可解析的 JSON")
+        overview = (obj.get("overview") or "").strip()
+        scenes_raw = obj.get("scenes") or []
+        scenes: list[DraftScene] = []
+        for i, s in enumerate(scenes_raw, start=1):
+            if not isinstance(s, dict):
+                continue
+            did = str(s.get("draft_id") or f"draft_{i}").strip()
+            summary = str(s.get("summary") or "").strip()
+            mentions = [str(m).strip() for m in (s.get("character_mentions") or []) if str(m).strip()]
+            scenes.append(DraftScene(draft_id=did, summary=summary, character_mentions=mentions))
+        return StoryBreakdownResult(overview=overview, scenes=scenes)
 
     # ---------- 纯代码：确定性匹配 ----------
     @staticmethod

@@ -290,6 +290,31 @@ export interface ApplyStoryResult {
   scenes: Array<{ scene_id: string; summary: string; characters: string[] }>;
 }
 
+// ============ AI 续写故事（Phase AI-1B）============
+export type ContinuationScale = 'short' | 'standard' | 'long';
+
+export interface StoryContinuationDraft {
+  draft_id: string;
+  project_name: string;
+  base_story_text: string;
+  base_scene_signature: Array<{ scene_id: string; summary: string; characters: string[] }>;
+  direction: string;
+  scale: ContinuationScale;
+  continuation_text: string;
+  new_scene_drafts: DraftScene[];
+  character_resolution: CharacterResolutionItem[];
+  stage: string;
+  created_at: number;
+}
+
+export interface ApplyContinuationResult {
+  ok: boolean;
+  appended_story_chars: number;
+  new_scenes: Array<{ scene_id: string; summary: string; characters: string[] }>;
+  new_characters: string[];
+  first_new_scene_id: string | null;
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -642,6 +667,85 @@ class ApiClient {
   // 采用故事整理 -> 写入 Scene[]（stale + 已有 Scene 闸门 + 未解决拦截 + 角色去重）
   async applyStoryOrganize(projectName: string): Promise<ApplyStoryResult> {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/story/apply`, {
+      method: 'POST',
+    });
+  }
+
+  // ============ AI 续写故事（Phase AI-1B，append-only）============
+
+  // 生成续写正文（json_mode=False 纯文本），落续写草稿。可重复调用（重新续写）
+  async continueStory(projectName: string, params: {
+    direction?: string;
+    scale?: ContinuationScale;
+  }): Promise<StoryContinuationDraft> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/story/continue`, {
+      method: 'POST', body: JSON.stringify(params),
+    });
+  }
+
+  // 读续写草稿（刷新恢复）。无草稿 404
+  async getContinuationDraft(projectName: string): Promise<StoryContinuationDraft> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/story/continue/draft`);
+  }
+
+  // 保存续写草稿编辑（continuation_text/新段/解决状态/stage）
+  async saveContinuationDraft(projectName: string, payload: {
+    direction: string;
+    scale: ContinuationScale;
+    continuation_text: string;
+    new_scene_drafts: DraftScene[];
+    character_resolution: CharacterResolutionItem[];
+    stage: string;
+  }): Promise<StoryContinuationDraft> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/story/continue/draft`, {
+      method: 'PUT', body: JSON.stringify(payload),
+    });
+  }
+
+  // 整理新增正文 -> 新故事段 + 人物识别 + 匹配（只拆 continuation_text）
+  async organizeContinuation(projectName: string): Promise<StoryContinuationDraft> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/story/continue/organize`, {
+      method: 'POST',
+    });
+  }
+
+  // 解决一个被提及人物（match / create / ignore），复用 Phase AI-1 语义
+  async resolveContinuationCharacter(projectName: string, params: {
+    mention: string;
+    action: 'match' | 'create' | 'ignore';
+    matched_character_name?: string;
+    name?: string;
+    description?: string;
+  }): Promise<StoryContinuationDraft> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/story/continue/resolve-character`, {
+      method: 'POST', body: JSON.stringify(params),
+    });
+  }
+
+  // AI 生成单个角色文字设定
+  async draftContinuationCharacter(projectName: string, mention: string): Promise<{ description: string }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/story/continue/draft-character`, {
+      method: 'POST', body: JSON.stringify({ mention }),
+    });
+  }
+
+  // AI 批量生成缺失角色文字设定（mentions 缺省=所有 unresolved）
+  async draftContinuationCharactersBatch(projectName: string, mentions?: string[]): Promise<{ characters: Array<{ name: string; description: string }> }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/story/continue/draft-characters-batch`, {
+      method: 'POST', body: JSON.stringify(mentions ? { mentions } : {}),
+    });
+  }
+
+  // 采用续写 -> append-only 写入（追加 story_text + 新 Scene，不动已有）
+  async applyContinuation(projectName: string): Promise<ApplyContinuationResult> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/story/continue/apply`, {
+      method: 'POST',
+    });
+  }
+
+  // 仅追加到完整故事（不创建 Scene）
+  async appendStoryOnly(projectName: string): Promise<{ ok: boolean; appended_story_chars: number }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/story/continue/append-story-only`, {
       method: 'POST',
     });
   }

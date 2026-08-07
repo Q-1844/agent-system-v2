@@ -30,6 +30,12 @@
             :title="!storyText.trim() ? '请先写下完整故事，再让 AI 帮你整理。' : 'AI 把完整故事整理成故事段并识别人物'"
             @click.stop="openOrganizer"
           >AI 整理故事</button>
+          <button
+            class="ai-btn ghost"
+            :disabled="!storyText.trim()"
+            :title="!storyText.trim() ? '请先写下完整故事，再续写。' : 'AI 在现有故事基础上继续创作，追加新故事段'"
+            @click.stop="openContinuation"
+          >AI 续写</button>
           <span class="story-edit">{{ storyText.trim() ? '编辑' : '开始编写' }}</span>
         </div>
         <div v-if="storyText.trim()" class="story-preview">{{ storyPreview }}</div>
@@ -48,7 +54,8 @@
           v-for="(sc, i) in scenes"
           :key="sc.uid"
           class="scene-card"
-          :class="{ dragging: dragIndex === i, 'drag-over': dragOverIndex === i && dragIndex !== i }"
+          :class="{ dragging: dragIndex === i, 'drag-over': dragOverIndex === i && dragIndex !== i, 'is-new-flash': newSceneFlashId === sc.scene_id }"
+          :data-scene-id="sc.scene_id"
           draggable="true"
           @dragstart="onDragStart(i)"
           @dragover.prevent="onDragOver(i)"
@@ -94,6 +101,7 @@
       </div>
 
       <button class="add-btn" @click="addScene">+ 添加分镜</button>
+      <button class="cont-entry" :disabled="!storyText.trim()" @click="openContinuation">✨ AI 继续故事</button>
 
       <!-- 完整故事编辑弹窗（大尺寸，非窄确认框） -->
       <div v-if="showStoryDialog" class="dialog-overlay" @click.self="cancelStory">
@@ -148,18 +156,27 @@
         @close="onOrganizerClose"
         @applied="onOrganizerApplied"
       />
+
+      <!-- AI 续写故事工作区（Phase AI-1B） -->
+      <StoryContinuation
+        v-if="showContinuation"
+        :project-name="projectName"
+        @close="onContinuationClose"
+        @applied="onContinuationApplied"
+      />
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { useProjectStore } from '@/store';
 import { apiClient } from '@/api';
 import { getImageUrl } from '@/utils/media';
 import dayjs from 'dayjs';
 import StoryOrganizer from '@/components/StoryOrganizer.vue';
+import StoryContinuation from '@/components/StoryContinuation.vue';
 
 const store = useProjectStore();
 const router = useRouter();
@@ -186,6 +203,8 @@ const storyDraft = ref('');
 const showClearConfirm = ref(false);
 const showOrganizer = ref(false);
 const showExistingScenesConfirm = ref(false);
+const showContinuation = ref(false);
+const newSceneFlashId = ref<string | null>(null);
 
 let uidCounter = 1;
 let saveTimer: number | null = null;
@@ -322,6 +341,28 @@ function onOrganizerApplied() {
   store.loadProjectCharacters(projectName.value);   // 刷新角色缓存，角色页也能看到新角色
 }
 
+// ---- AI 续写故事（Phase AI-1B）----
+function openContinuation() {
+  if (!storyText.value.trim()) return;   // 按钮已禁用，兜底
+  showContinuation.value = true;
+}
+function onContinuationClose() { showContinuation.value = false; }
+async function onContinuationApplied(firstNewSceneId: string | null) {
+  showContinuation.value = false;
+  await load();   // 刷新：新故事段追加到底部，已有不重建
+  store.loadProjectCharacters(projectName.value);
+  if (firstNewSceneId) {
+    await nextTick();
+    flashNewScene(firstNewSceneId);
+  }
+}
+function flashNewScene(sceneId: string) {
+  const el = document.querySelector(`[data-scene-id="${sceneId}"]`);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  newSceneFlashId.value = sceneId;
+  setTimeout(() => { newSceneFlashId.value = null; }, 3500);   // 临时"AI 新增"标记，不写数据模型
+}
+
 // ---- 清空 ----
 function doClear() {
   scenes.value = [];
@@ -383,6 +424,10 @@ onUnmounted(() => { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; 
   background: transparent; color: var(--accent); font-size: 12px; cursor: pointer;
   &:hover:not(:disabled) { background: var(--accent); color: var(--accent-text); }
   &:disabled { opacity: 0.5; cursor: not-allowed; border-color: var(--border); color: var(--text-muted); }
+  &.ghost {
+    border-color: var(--border); color: var(--text-secondary);
+    &:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); background: transparent; }
+  }
 }
 .story-edit { margin-left: 10px; font-size: 12px; color: var(--accent); }
 .story-preview { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
@@ -401,6 +446,19 @@ onUnmounted(() => { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; 
   transition: border-color 0.12s, opacity 0.12s;
   &.dragging { opacity: 0.4; }
   &.drag-over { border-color: var(--accent); border-style: dashed; }
+  &.is-new-flash {
+    border-color: var(--accent); position: relative;
+    animation: new-flash-pulse 3.5s ease-out;
+  }
+  &.is-new-flash::after {
+    content: 'AI 新增'; position: absolute; top: -8px; right: 12px;
+    background: var(--accent); color: var(--accent-text); font-size: 10px;
+    padding: 1px 8px; border-radius: 8px;
+  }
+}
+@keyframes new-flash-pulse {
+  0%, 30% { background: rgba(99, 179, 237, 0.18); }
+  100% { background: var(--bg-surface); }
 }
 
 .card-head {
@@ -448,6 +506,13 @@ onUnmounted(() => { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; 
   margin-top: 12px; width: 100%; padding: 9px; border-radius: 6px;
   border: 1px dashed var(--border); background: transparent; color: var(--text-muted);
   font-size: 13px; cursor: pointer; &:hover { border-color: var(--accent); color: var(--accent); }
+}
+
+.cont-entry {
+  margin-top: 8px; width: 100%; padding: 7px; border-radius: 6px;
+  border: none; background: transparent; color: var(--text-muted); font-size: 12px; cursor: pointer;
+  &:hover:not(:disabled) { color: var(--accent); }
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
 }
 
 // 对话框
