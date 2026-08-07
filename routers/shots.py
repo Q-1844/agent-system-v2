@@ -489,13 +489,19 @@ async def _extract_video_end_frame(project_dir, shot_id, video_local, version_id
 
 
 async def _await_first_frame_url(store, shot_id, emit, timeout=180, interval=5):
-    """有界等待 first_frame.url_ready。bridge 场景首帧来自前驱尾帧，可能尚未就绪。
+    """有界等待 effective 首帧公网 URL 就绪。
+    independent / reference_previous：本镜已选首帧候选 url；
+    inherit_previous：来源镜头视频末帧 url（本镜 first_frame 为空，须走 effective 解析，
+      否则永远等不到 first_frame.url_ready，导致尾帧生成超时失败）。
     超时返回 None（调用方报错）。"""
     deadline = _time.time() + timeout
     while _time.time() < deadline:
-        sh = store.load().get_shot(shot_id)
-        if sh and sh.first_frame.url_ready:
-            return sh.first_frame.selected.url
+        project = store.load()
+        sh = project.get_shot(shot_id)
+        if sh:
+            url = _effective_first_frame_url(project, sh)
+            if url:
+                return url
         await asyncio.sleep(interval)
     return None
 
@@ -559,6 +565,7 @@ async def _handler_first_frame(job, emit):
 
     def mut(s):
         s.first_frame_batches.append(new_batch)
+        s.selected_first_frame = cand_list[0].candidate_id  # 自动选新批次第一候选，生成后右侧预览即时显示
         # 同步旧 first_frame（管线 preflight 读旧字段，过渡兼容）
         s.first_frame.candidates = asset_list
         s.first_frame.selected_index = 0
@@ -713,6 +720,47 @@ async def choose_first_frame(project_name: str, shot_id: str, req: ChooseFrameRe
         raise HTTPException(500, str(e))
 
 
+@router.post("/api/project/{project_name}/shot/{shot_id}/last-frame/choose")
+async def choose_last_frame(project_name: str, shot_id: str, req: ChooseFrameRequest):
+    """选择尾帧候选：设 selected_last_frame + 同步旧 last_frame（管线 preflight 读旧字段，过渡兼容）。
+    跨所有批次找候选（支持从旧批次切回）。"""
+    try:
+        project_dir = get_project_manager().get_project_dir(project_name)
+        from src.core.store import ProjectStore
+        from src.core.models import ShotStatus, Asset
+        store = ProjectStore(project_dir)
+        shot = store.load().get_shot(shot_id)
+        if shot is None:
+            raise HTTPException(404, f"镜头 {shot_id} 不存在")
+        if not shot.last_frame_batches:
+            raise HTTPException(400, "该镜头尚无尾帧批次，请先生成")
+        found_batch = None
+        found_idx = -1
+        for b in shot.last_frame_batches:
+            for i, c in enumerate(b.candidates):
+                if c.candidate_id == req.candidate_id:
+                    found_batch, found_idx = b, i
+                    break
+            if found_batch:
+                break
+        if found_batch is None:
+            raise HTTPException(400, f"候选 {req.candidate_id} 不存在")
+        cand = found_batch.candidates[found_idx]
+        def mut(s, b=found_batch, i=found_idx, cid=req.candidate_id):
+            s.selected_last_frame = cid
+            s.last_frame.candidates = [Asset(local=c.local, url=c.url, status=c.status) for c in b.candidates]
+            s.last_frame.selected_index = i
+            setattr(s.last_frame, "status", ShotStatus.DONE.value)
+        store.update_shot(shot_id, mut)
+        return {"shot_id": shot_id, "candidate_id": req.candidate_id, "url": cand.url}
+    except FileNotFoundError:
+        raise HTTPException(404, "项目不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
 @router.post("/api/project/{project_name}/shot/{shot_id}/first-frame/rehost")
 async def rehost_first_frame(project_name: str, shot_id: str):
     """重新托管首帧：local 有 / url 空 -> imgbb 上传 -> 回填 url + status=done。
@@ -772,6 +820,237 @@ async def shot_last_frame(project_name: str, shot_id: str):
         raise HTTPException(500, str(e))
 
 
+# ==================== 提示词 AI 辅助（根据上下文生成 / 优化，只返回文本，不自动生成资产）====================
+class PromptAIRequest(BaseModel):
+    stage: str                     # "first" | "last" | "video"
+    text: Optional[str] = None     # optimize 时必填（当前编辑器内容）
+
+
+def _collect_prompt_context(project, shot, stage: str) -> dict:
+    """按优先级收集当前阶段上下文（结构化、只读紧邻上下镜、不累积所有历史）。
+    优先级：本镜意图(description) > 故事段 > 镜头位置 > 紧邻上一镜 > 紧邻下一镜 >
+            风格画幅 > 角色 > opening/link/continuity > effective ff/首尾帧状态。"""
+    scene = next((s for s in project.scenes if s.scene_id == shot.scene_id), None)
+    shots_in_scene = scene.shots if scene else []
+    idx = next((i for i, s in enumerate(shots_in_scene) if s.shot_id == shot.shot_id), -1)
+    total = len(shots_in_scene)
+    prev_shot = shots_in_scene[idx - 1] if idx > 0 else None
+    next_shot = shots_in_scene[idx + 1] if 0 <= idx < total - 1 else None
+    cstat, cmsg = continuity_status(project, shot)
+    ctx = {
+        "shot_intent": (shot.description or "").strip(),
+        "scene_summary": (scene.summary if scene else "").strip(),
+        "index": idx + 1 if idx >= 0 else 0,
+        "total": total,
+        "style": project.style.suffix(),
+        "aspect_ratio": project.style.aspect_ratio,
+        "characters": [],
+        "opening_source": shot.opening_source,
+        "link_mode": shot.link_mode,
+        "continuity": cstat + (f"({cmsg})" if cmsg else ""),
+    }
+    for name in shot.characters:
+        c = project.get_character(name)
+        ctx["characters"].append({"name": name, "desc": c.description_en if c and c.description_en else ""})
+    # 紧邻上一镜（意图 + 采用结果，截断不累积全文）
+    if prev_shot:
+        ctx["prev"] = {
+            "shot_id": prev_shot.shot_id,
+            "intent": (prev_shot.description or "").strip(),
+            "first_frame_prompt": (prev_shot.prompt_en or "").strip()[:220],
+            "last_frame_prompt": (prev_shot.last_frame_prompt_en or "").strip()[:160],
+            "video_end_frame_ready": bool(prev_shot.video_end_frame and prev_shot.video_end_frame.url_ready),
+        }
+    # 紧邻下一镜（意图，避免当前镜提前演完下一镜）
+    if next_shot:
+        ctx["next"] = {"shot_id": next_shot.shot_id, "intent": (next_shot.description or "").strip()}
+    if stage in ("last", "video"):
+        ctx["first_frame_prompt"] = (shot.prompt_en or "").strip()
+    if stage == "video":
+        ctx["last_frame_prompt"] = (shot.last_frame_prompt_en or "").strip()
+        # 实际会送 Agnes 的时长（与 video handler 一致）：target_duration_s > num_frames/fps > 默认 3 秒
+        if shot.target_duration_s is not None:
+            resolved_dur = float(shot.target_duration_s)
+        elif shot.video.num_frames > 0:
+            resolved_dur = shot.video.num_frames / max(shot.video.frame_rate, 1)
+        else:
+            resolved_dur = 3.0
+        ctx["target_duration_s"] = round(resolved_dur, 1)
+    return ctx
+
+
+def _format_context(ctx: dict, stage: str) -> str:
+    """把结构化 ctx 拼成简短文本块传给文本模型（避免越积越长）。"""
+    lines = []
+    if ctx.get("shot_intent"):
+        lines.append(f"本镜意图: {ctx['shot_intent']}")
+    if ctx.get("scene_summary"):
+        lines.append(f"故事段(背景): {ctx['scene_summary']}")
+    if ctx.get("total"):
+        lines.append(f"镜头位置: 第 {ctx['index']} 镜 / 共 {ctx['total']} 镜")
+    p = ctx.get("prev")
+    if p:
+        parts = []
+        if p["intent"]:
+            parts.append(f"意图={p['intent']}")
+        if p["first_frame_prompt"]:
+            parts.append(f"首帧={p['first_frame_prompt']}")
+        if p["video_end_frame_ready"]:
+            parts.append("末帧就绪")
+        lines.append(f"上一镜({p['shot_id']}): " + ("; ".join(parts) if parts else "无"))
+    n = ctx.get("next")
+    if n and n.get("intent"):
+        lines.append(f"下一镜({n['shot_id']})意图: {n['intent']}")
+    if ctx.get("characters"):
+        lines.append("角色: " + ", ".join(f"{c['name']}({c['desc']})" if c['desc'] else c['name'] for c in ctx['characters']))
+    if ctx.get("style") or ctx.get("aspect_ratio"):
+        lines.append(f"风格: {ctx.get('style', '')}; 画幅: {ctx.get('aspect_ratio', '')}")
+    lines.append(f"开场来源: {ctx.get('opening_source', '')}; 生成方式: {ctx.get('link_mode', '')}; 接力: {ctx.get('continuity', '')}")
+    if stage in ("last", "video") and ctx.get("first_frame_prompt"):
+        lines.append(f"本镜首帧提示词: {ctx['first_frame_prompt']}")
+    if stage == "video":
+        if ctx.get("last_frame_prompt"):
+            lines.append(f"本镜尾帧提示词: {ctx['last_frame_prompt']}")
+        dur = ctx.get("target_duration_s")
+        lines.append(f"目标时长: {dur} 秒")
+    return "\n".join(lines)
+
+
+_FIRST_FRAME_SYSTEM_HAS_INTENT = (
+    "You are a prompt engineer for an AI image generator. "
+    "Write the English first-frame prompt for THIS shot based on the context. "
+    "The frame MUST express the shot intent. Maintain continuity with the previous shot "
+    "(character identity, environment, lighting) but do NOT repeat its framing or action. "
+    "Do NOT anticipate the next shot's story. Keep project style and opening source consistent. "
+    "Do not invent characters not in the context. Return ONLY the English prompt, no explanation."
+)
+_FIRST_FRAME_SYSTEM_INFER = (
+    "You are a prompt engineer for an AI image generator. The shot intent is empty. "
+    "Based on the scene, this shot's position, and the previous/next shots, infer what THIS shot should show "
+    "and write the English first-frame prompt. Maintain continuity with the previous shot, do not repeat it. "
+    "Do not anticipate the next shot. Do not invent characters not in the context. "
+    'Return ONLY a JSON object: {"shot_intent": "<one sentence in Chinese, what this shot shows in the story>", '
+    '"prompt": "<English first-frame prompt>"}. No extra text.'
+)
+_LAST_FRAME_SYSTEM = (
+    "You are a prompt engineer for an AI image generator. "
+    "Write the English last-frame prompt for THIS shot based on the shot intent, the first-frame prompt, "
+    "and the next shot intent. Describe the ending state after completing this shot's action/change. "
+    "Keep character and scene consistent with the first frame. Do NOT complete the next shot's intent. "
+    "Return ONLY the English prompt, no explanation."
+)
+_VIDEO_SYSTEM = (
+    "You are a prompt engineer for an AI video generator. "
+    "Write the English video prompt describing ONLY the motion/action/camera movement/environment change "
+    "between this shot's first frame and last frame. The target duration is given in context; "
+    "scale the motion to fit this duration: short duration focuses on one clear action; long duration may include "
+    "multiple sequential action phases WITHIN the same continuous shot, but do NOT switch scenes or produce multiple "
+    "cuts or camera angles (one shot = one continuous take). "
+    "Do NOT re-describe the whole scene or story. Do NOT repeat the previous shot's action. Do NOT anticipate the next shot. "
+    "Keep character identity consistent. Return ONLY the English prompt, no explanation."
+)
+_PROMPT_OPT_SYSTEM = (
+    "You are a prompt engineer. Refine the given English prompt: keep the original intent, "
+    "improve clarity, remove redundancy and conflicting requirements, add stage-appropriate detail. "
+    "Do not invent characters or elements not in the context. Do not change the story outcome. "
+    "Return ONLY the refined English prompt, no explanation."
+)
+
+
+@router.post("/api/project/{project_name}/shot/{shot_id}/prompt/generate")
+async def shot_prompt_generate(project_name: str, shot_id: str, req: PromptAIRequest):
+    """根据上下文生成英文提示词（只返回文本，不自动生成资产）。
+    首帧本镜意图空时返回 inferred_shot_intent 供前端确认；单镜故事段直接用故事段作意图不推断。"""
+    try:
+        project_dir = get_project_manager().get_project_dir(project_name)
+        from src.core.store import ProjectStore
+        project = ProjectStore(project_dir).load()
+        shot = project.get_shot(shot_id)
+        if shot is None:
+            raise HTTPException(404, f"镜头 {shot_id} 不存在")
+        if req.stage not in ("first", "last", "video"):
+            raise HTTPException(400, "stage 必须为 first/last/video")
+        ctx = _collect_prompt_context(project, shot, req.stage)
+        ctx_text = _format_context(ctx, req.stage)
+        client = get_agnes_client()
+        if req.stage == "first":
+            has_intent = bool(ctx["shot_intent"])
+            # 单镜故事段 + 无意图 -> 直接用故事段作意图，不推断
+            if not has_intent and ctx["total"] == 1 and ctx["scene_summary"]:
+                user = f"本镜意图(取自故事段): {ctx['scene_summary']}\n\nContext:\n{ctx_text}"
+                en = await client.chat(
+                    [{"role": "system", "content": _FIRST_FRAME_SYSTEM_HAS_INTENT},
+                     {"role": "user", "content": user}],
+                    temperature=0.7, max_tokens=512)
+                return {"prompt": en.strip()}
+            if has_intent:
+                user = f"Stage: first frame\n\nContext:\n{ctx_text}"
+                en = await client.chat(
+                    [{"role": "system", "content": _FIRST_FRAME_SYSTEM_HAS_INTENT},
+                     {"role": "user", "content": user}],
+                    temperature=0.7, max_tokens=512)
+                return {"prompt": en.strip()}
+            # 无意图且多镜 -> 推断本镜意图，返回 inferred_shot_intent 供前端确认
+            user = f"Stage: first frame (infer shot intent)\n\nContext:\n{ctx_text}"
+            raw = await client.chat(
+                [{"role": "system", "content": _FIRST_FRAME_SYSTEM_INFER},
+                 {"role": "user", "content": user}],
+                temperature=0.7, max_tokens=700, json_mode=True)
+            import json as _json, re as _re
+            m = _re.search(r'\{.*\}', raw, _re.DOTALL)
+            if m:
+                try:
+                    obj = _json.loads(m.group(0))
+                    return {"prompt": (obj.get("prompt") or "").strip(),
+                            "inferred_shot_intent": (obj.get("shot_intent") or "").strip()}
+                except Exception:
+                    pass
+            return {"prompt": raw.strip(), "inferred_shot_intent": ""}
+        # 尾帧 / 视频
+        system = _LAST_FRAME_SYSTEM if req.stage == "last" else _VIDEO_SYSTEM
+        stage_desc = "last frame" if req.stage == "last" else "video"
+        en = await client.chat(
+            [{"role": "system", "content": system},
+             {"role": "user", "content": f"Stage: {stage_desc}\n\nContext:\n{ctx_text}"}],
+            temperature=0.7, max_tokens=512)
+        return {"prompt": en.strip()}
+    except FileNotFoundError:
+        raise HTTPException(404, "项目不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@router.post("/api/project/{project_name}/shot/{shot_id}/prompt/optimize")
+async def shot_prompt_optimize(project_name: str, shot_id: str, req: PromptAIRequest):
+    """优化当前英文提示词（只返回文本，不自动生成资产）"""
+    try:
+        project_dir = get_project_manager().get_project_dir(project_name)
+        from src.core.store import ProjectStore
+        project = ProjectStore(project_dir).load()
+        shot = project.get_shot(shot_id)
+        if shot is None:
+            raise HTTPException(404, f"镜头 {shot_id} 不存在")
+        if req.stage not in ("first", "last", "video"):
+            raise HTTPException(400, "stage 必须为 first/last/video")
+        text = (req.text or "").strip()
+        if not text:
+            raise HTTPException(400, "优化需要当前提示词内容（text 不能为空）")
+        ctx = _format_context(_collect_prompt_context(project, shot, req.stage), req.stage)
+        en = await get_agnes_client().chat(
+            [{"role": "system", "content": _PROMPT_OPT_SYSTEM},
+             {"role": "user", "content": f"Current prompt:\n{text}\n\nContext:\n{ctx}"}],
+            temperature=0.5, max_tokens=512)
+        return {"prompt": en.strip()}
+    except FileNotFoundError:
+        raise HTTPException(404, "项目不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
 # ==================== 阶段 3：镜头视频生成（shot 级，走 JobQueue 串行视频 worker）====================
 from src.api.agnes_client import resolve_size as _resolve_size, PollTransientError, AgnesError
 
@@ -784,7 +1063,7 @@ def _video_preflight(shot, quota, seconds, eff_ff_ready):
     if shot.locked:
         return False, "镜头已锁定"
     if not shot.video.num_frames:
-        return False, "尚未配音且未设置目标时长，无法确定视频时长（请先配音或在视频标签选择时长）"
+        return False, "未设置视频时长"
     if not eff_ff_ready:
         return False, "开场画面未就绪：请先生成并选择首帧，或来源镜头末帧未就绪"
     if shot.link_mode == "keyframes":
@@ -847,16 +1126,20 @@ async def _handler_video(job, emit):
     else:
         w, h = map(int, _resolve_size(project.style.size_tier or "1K", ratio).split("x"))
 
-    # 用户目标时长（提示词.md §12.1.5）：target_duration_s 非空 -> 转 8n+1 帧数（与 create_video
-    #  内部 snap_num_frames 一致，遵守 max_frames_for）；None -> 跟随配音（audio 反推的 num_frames）。
+    # 用户目标时长（提示词.md §12.1.5）：target_duration_s 非空 -> 转 8n+1 帧数；None -> 跟随配音。
+    #  配音退出主流程后：None 且无配音（num_frames=0）-> 默认 3 秒反推，不让视频因无配音被阻止。
     #  写回 shot.video.num_frames，后续 preflight/提交/VideoVersion 都读它，保持一致。
+    from src.api.agnes_client import snap_num_frames
+    fps0 = max(shot.video.frame_rate, 1)
     if shot.target_duration_s is not None:
-        from src.api.agnes_client import snap_num_frames
-        fps0 = max(shot.video.frame_rate, 1)
         planned = snap_num_frames(int(round(shot.target_duration_s * fps0)), w, h)
-        if planned != shot.video.num_frames:
-            store.update_shot(job.shot_id, lambda s, nf=planned: setattr(s.video, "num_frames", nf))
-            shot = store.load().get_shot(job.shot_id)
+    elif not shot.video.num_frames:
+        planned = snap_num_frames(int(round(3 * fps0)), w, h)
+    else:
+        planned = shot.video.num_frames
+    if planned != shot.video.num_frames:
+        store.update_shot(job.shot_id, lambda s, nf=planned: setattr(s.video, "num_frames", nf))
+        shot = store.load().get_shot(job.shot_id)
 
     # effective 首帧（inherit_previous -> 来源末帧；其余 -> 本镜已选首帧）。preflight/提交统一用此，避免前后端不一致。
     eff_ff_url = _effective_first_frame_url(project, shot)
@@ -1291,7 +1574,7 @@ def _select_shots(p, scope, skip_locked: bool):
     shots = p.all_shots()
     if scope == "pending":
         sel = [s for s in shots
-               if not (s.first_frame.ready and s.audio.ready
+               if not (s.first_frame.ready
                        and (s.link_mode != "keyframes" or s.last_frame.ready)
                        and s.video.ready)]
     elif isinstance(scope, list):
@@ -1305,7 +1588,7 @@ def _select_shots(p, scope, skip_locked: bool):
 
 
 class OrchestrateRequest(BaseModel):
-    stages: List[str] = ["first_frame", "audio", "last_frame", "video", "compose"]
+    stages: List[str] = ["first_frame", "last_frame", "video", "compose"]
     scope: Any = "all"        # "all" | "pending" | [shot_id, ...]
     skip_locked: bool = True
     dry_run: bool = False
@@ -1321,7 +1604,7 @@ class OrchestrateRequest(BaseModel):
 @router.post("/api/project/{project_name}/orchestrate")
 async def orchestrate_project(project_name: str, req: OrchestrateRequest):
     """编排器：内部逐个入队 shot 级 handler，白捡断点续跑。
-    顺序不可调换：first_frame -> audio -> last_frame -> video -> compose。
+    顺序不可调换：first_frame -> last_frame -> video -> compose（audio 已退出主流程；显式传 stages 含 audio 仍可执行）。
     🔴 last_frame/video gate 带 first_frame.url_ready 前置（首帧须已选择）。
     dry_run 返回视频数量/预计时间/配额消耗，让用户在 1 RPM 现实下预判。"""
     try:

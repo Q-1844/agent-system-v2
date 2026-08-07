@@ -74,6 +74,7 @@
           <div
             class="shot-item"
             @dblclick="openWorkbench(sh)"
+            @contextmenu.prevent="openCtxMenu($event, sh)"
           >
             <div class="shot-meta">
               <span class="shot-seq">{{ sh.shot_id }}</span>
@@ -127,11 +128,18 @@
       <img v-if="previewType === 'image'" :src="previewUrl" class="big-img" />
       <video v-else :src="previewUrl" controls autoplay class="big-video" />
     </div>
+
+    <!-- 镜头右键菜单 -->
+    <div v-if="ctxMenu" class="ctx-menu" :style="ctxMenuStyle" @click.stop>
+      <div class="ctx-shot-id">{{ ctxMenu.shot.shot_id }}</div>
+      <button class="ctx-item" @click="openWorkbench(ctxMenu.shot); closeCtxMenu()">打开工作台</button>
+      <button class="ctx-item danger" @click="confirmDeleteShot">删除镜头</button>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { apiClient } from '@/api';
 import type { ShotData } from '@/api';
@@ -282,6 +290,39 @@ async function addShot() {
   }
 }
 
+// ---------- 镜头右键菜单（删除镜头）----------
+const ctxMenu = ref<{ x: number; y: number; shot: ShotData } | null>(null);
+const ctxMenuStyle = computed(() => {
+  const m = ctxMenu.value; if (!m) return {};
+  const w = 168, h = 104;
+  return {
+    top: Math.min(m.y, (window.innerHeight || 9999) - h) + 'px',
+    left: Math.min(m.x, (window.innerWidth || 9999) - w) + 'px',
+  };
+});
+function openCtxMenu(e: MouseEvent, sh: ShotData) {
+  ctxMenu.value = { x: e.clientX, y: e.clientY, shot: sh };
+}
+function closeCtxMenu() { ctxMenu.value = null; }
+async function confirmDeleteShot() {
+  const sh = ctxMenu.value?.shot;
+  closeCtxMenu();
+  if (!sh || !projectName.value) return;
+  const hasArtifacts = sh.video?.local
+    || (sh.first_frame?.candidates?.length ?? 0) > 0
+    || (sh.last_frame?.candidates?.length ?? 0) > 0;
+  const msg = hasArtifacts
+    ? `确认删除镜头 ${sh.shot_id}？\n该镜头的首帧/尾帧/视频等产物文件会一并删除，无法恢复。`
+    : `确认删除镜头 ${sh.shot_id}？`;
+  if (!window.confirm(msg)) return;
+  try {
+    await apiClient.deleteShot(projectName.value, sh.shot_id);
+    await load();
+  } catch (e: any) {
+    console.error('[ShotBoard] 删除镜头失败', e);
+  }
+}
+
 // shot 级 job 完成 -> debounce 刷新（保持卡片/工作台与服务端同步）
 let reloadTimer: number | null = null;
 watch(() => jobStore.jobs.map(j => j.job_id + j.state).join('|'), () => {
@@ -292,7 +333,17 @@ watch(() => jobStore.jobs.map(j => j.job_id + j.state).join('|'), () => {
   }
 });
 
-onMounted(() => load());
+function onDocClick() { closeCtxMenu(); }
+function onKey(e: KeyboardEvent) { if (e.key === 'Escape') closeCtxMenu(); }
+onMounted(() => {
+  load();
+  document.addEventListener('click', onDocClick);
+  document.addEventListener('keydown', onKey);
+});
+onUnmounted(() => {
+  document.removeEventListener('click', onDocClick);
+  document.removeEventListener('keydown', onKey);
+});
 watch(projectName, () => { selected.value = null; load(); });
 </script>
 
@@ -409,5 +460,19 @@ watch(projectName, () => { selected.value = null; load(); });
   display: flex; align-items: center; justify-content: center; cursor: zoom-out;
   .big-img { max-width: 92vw; max-height: 92vh; object-fit: contain; }
   .big-video { max-width: 92vw; max-height: 92vh; }
+}
+
+.ctx-menu {
+  position: fixed; z-index: 3000; min-width: 140px;
+  background: var(--bg-surface); border: 1px solid var(--border);
+  border-radius: 6px; box-shadow: 0 6px 20px rgba(0,0,0,0.25); padding: 4px;
+}
+.ctx-shot-id { font-size: 11px; color: var(--text-faint); padding: 4px 10px; font-family: monospace; }
+.ctx-item {
+  display: block; width: 100%; text-align: left; padding: 7px 10px;
+  border: none; background: none; color: var(--text-secondary); font-size: 13px;
+  border-radius: 4px; cursor: pointer;
+  &:hover { background: var(--bg-hover); color: var(--text-primary); }
+  &.danger { color: #f87171; &:hover { background: rgba(248,113,113,0.12); color: #f87171; } }
 }
 </style>

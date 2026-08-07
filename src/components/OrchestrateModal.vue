@@ -14,7 +14,7 @@
                 <input type="checkbox" v-model="stages" :value="s.key" /> {{ s.label }}
               </label>
             </div>
-            <div class="om-order">顺序：首帧 → 配音 → 尾帧 → 视频 → 合成</div>
+            <div class="om-order">顺序：首帧 -> 尾帧 -> 视频 -> 合成</div>
           </div>
 
           <div class="om-field om-row">
@@ -68,12 +68,11 @@ const projStore = useProjectStore();
 
 const stageOptions = [
   { key: 'first_frame', label: '首帧' },
-  { key: 'audio', label: '配音' },
   { key: 'last_frame', label: '尾帧' },
   { key: 'video', label: '视频' },
   { key: 'compose', label: '合成' },
 ];
-const stages = ref<string[]>(['first_frame', 'audio', 'last_frame', 'video', 'compose']);
+const stages = ref<string[]>(['first_frame', 'last_frame', 'video', 'compose']);
 const scope = ref('all');
 const skipLocked = ref(true);
 const preview = ref<OrchestrateResult | null>(null);

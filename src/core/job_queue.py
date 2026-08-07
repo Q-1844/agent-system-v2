@@ -92,7 +92,15 @@ class JobQueue:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump({k: asdict(v) for k, v in self.jobs.items()},
                           f, ensure_ascii=False, indent=2)
-            os.replace(tmp, self.state_path)
+            # Windows 下 os.replace 偶发 PermissionError（文件被短暂占用，如杀软扫描/IO 延迟），重试几次
+            for i in range(6):
+                try:
+                    os.replace(tmp, self.state_path)
+                    break
+                except PermissionError:
+                    if i == 5:
+                        raise
+                    time.sleep(0.05 * (i + 1))
         except Exception:
             if os.path.exists(tmp):
                 os.unlink(tmp)

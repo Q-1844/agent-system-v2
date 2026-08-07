@@ -24,9 +24,6 @@
         <button class="ctx-item" data-pop="chars" @click="togglePopover('chars')" :class="{ on: openPopover === 'chars' }">
           <span class="ctx-k">角色</span><span class="ctx-v">{{ charSummary }}</span>
         </button>
-        <button class="ctx-item" data-pop="audio" @click="togglePopover('audio')" :class="{ on: openPopover === 'audio' }">
-          <span class="ctx-k">配音</span><span class="ctx-v">{{ audioSummary }}</span>
-        </button>
         <button class="ctx-item" data-pop="opening" @click="togglePopover('opening')" :class="{ on: openPopover === 'opening' }" :title="'开场来源'">
           <span class="ctx-k">开场</span><span class="ctx-v">{{ openingSourceLabel }}</span>
         </button>
@@ -51,14 +48,6 @@
               <span v-else class="muted">无图</span>
               <span class="pop-ref-name">{{ name }}</span>
             </div>
-          </div>
-        </template>
-        <template v-else-if="openPopover === 'audio'">
-          <div class="pop-head">台词与配音</div>
-          <textarea data-autofocus v-model="form.dialogue" rows="3" class="pop-input" placeholder="台词（可选）"></textarea>
-          <div class="pop-audio-row">
-            <span class="audio-status">{{ audioStatusText }}</span>
-            <button class="mini-btn" :disabled="audioBusy" @click="genAudio">{{ audioBusy ? '配音中…' : (shot.audio?.status === 'done' ? '重配' : '生成配音') }}</button>
           </div>
         </template>
         <template v-else-if="openPopover === 'opening'">
@@ -94,6 +83,22 @@
         </template>
       </div>
 
+      <!-- 本镜意图（公共区域，三标签共享；复用 Shot.description） -->
+      <div class="shot-intent-bar">
+        <span class="si-label">本镜意图</span>
+        <div v-if="!editingIntent" class="si-view" @click="startEditIntent" title="点击编辑本镜意图">
+          <span class="si-text" :class="{ empty: !form.description }">{{ form.description || '（未填写，生成首帧时 AI 会推断）' }}</span>
+          <button class="mini-btn" @click.stop="startEditIntent">编辑</button>
+        </div>
+        <div v-else class="si-edit">
+          <textarea ref="intentTextarea" v-model="intentDraft" rows="3" class="si-textarea" placeholder="简要描述这一个镜头负责表现的剧情，不需要写机位或完整提示词" @keydown.esc="editingIntent = false"></textarea>
+          <div class="si-actions">
+            <button class="mini-btn" @click="saveIntent">完成</button>
+            <button class="mini-btn" @click="editingIntent = false">取消</button>
+          </div>
+        </div>
+      </div>
+
       <!-- 阶段标签 -->
       <div class="stage-tabs">
         <button :class="{ on: stage === 'first' }" @click="stage = 'first'">首帧</button>
@@ -111,21 +116,73 @@
         <!-- 参数面板（主体，单一纵向滚动；核心字段始终可见） -->
         <div class="editor-panel" v-show="!narrow || narrowView === 'editor'">
           <div class="editor-scroll">
-            <!-- 首帧核心 -->
-            <template v-if="stage === 'first'">
-              <!-- inherit_previous：开场沿用上一镜末帧，不生成首帧候选；显示接力信息 -->
-              <div v-if="shot.opening_source === 'inherit_previous'" class="inherit-panel" :class="continuityStatus.status">
-                <div class="inherit-title">开场沿用上一镜末帧</div>
-                <div class="inherit-source">来自 {{ shot.source_shot_id || '上一镜' }} 的视频末帧</div>
-                <div v-if="continuityStatus.message" class="inherit-msg">{{ continuityStatus.message }}</div>
-                <div class="inherit-actions">
-                  <button v-if="continuityStatus.status === 'stale'" class="mini-btn" @click="syncSource">更新为最新末帧</button>
-                  <button class="mini-btn" @click="setOpeningSource('independent')">解除接力</button>
-                  <button v-if="sourceShot && !sourceShot.video_end_frame?.url" class="mini-btn" @click="refreshVideoEnd">提取来源末帧</button>
+            <!-- inherit 接力面板（标准+专业都显示；仅首帧标签 + inherit 模式） -->
+            <div v-if="stage === 'first' && shot.opening_source === 'inherit_previous'" class="inherit-panel" :class="continuityStatus.status">
+              <div class="inherit-title">开场沿用上一镜末帧</div>
+              <div class="inherit-source">来自 {{ shot.source_shot_id || '上一镜' }} 的视频末帧</div>
+              <div v-if="continuityStatus.message" class="inherit-msg">{{ continuityStatus.message }}</div>
+              <div class="inherit-actions">
+                <button v-if="continuityStatus.status === 'stale'" class="mini-btn" @click="syncSource">更新为最新末帧</button>
+                <button class="mini-btn" @click="setOpeningSource('independent')">解除接力</button>
+                <button v-if="sourceShot && !sourceShot.video_end_frame?.url" class="mini-btn" @click="refreshVideoEnd">提取来源末帧</button>
+              </div>
+            </div>
+
+            <!-- 标准模式：每个标签只显示一个主提示词编辑器（+ 尾帧/视频输入帧缩略图） -->
+            <template v-if="mode === 'standard'">
+              <!-- 尾帧标签：当前开场画面（effective first frame）缩略图 -->
+              <div v-if="stage === 'last' && form.link_mode === 'keyframes'" class="eff-frame-preview">
+                <span class="eff-label">当前开场画面</span>
+                <div class="eff-thumb" :class="{ empty: !effectiveFirstFrameUrl }">
+                  <img v-if="effectiveFirstFrameUrl" :src="effectiveFirstFrameUrl" />
+                  <span v-else class="muted">开场画面未就绪</span>
                 </div>
               </div>
-              <!-- independent / reference_previous：正常首帧核心字段 -->
-              <template v-else>
+              <!-- 视频标签：当前输入画面（首帧 -> 尾帧） -->
+              <div v-if="stage === 'video'" class="eff-frame-preview video-input">
+                <div class="eff-thumb small" :class="{ empty: !effectiveFirstFrameUrl }">
+                  <img v-if="effectiveFirstFrameUrl" :src="effectiveFirstFrameUrl" />
+                  <span v-else class="muted">未就绪</span>
+                  <span class="eff-tag">首帧</span>
+                </div>
+                <span class="eff-arrow">→</span>
+                <div v-if="form.link_mode === 'keyframes'" class="eff-thumb small" :class="{ empty: !lfUrl }">
+                  <img v-if="lfUrl" :src="lfUrl" />
+                  <span v-else class="muted">未生成</span>
+                  <span class="eff-tag">尾帧</span>
+                </div>
+              </div>
+              <!-- 视频标签：时长选择（标准模式用户自主设置；默认约 3 秒由后端兜底） -->
+              <div v-if="stage === 'video'" class="duration-row">
+                <span class="dur-label">视频时长</span>
+                <select v-model="durationMode">
+                  <option value="follow">默认（约 3 秒）</option>
+                  <option value="3">约 3 秒</option>
+                  <option value="5">约 5 秒</option>
+                  <option value="10">约 10 秒</option>
+                  <option value="18">约 18 秒</option>
+                  <option value="custom">自定义</option>
+                </select>
+                <input v-if="durationMode === 'custom'" type="number" step="0.5" min="1" max="20" v-model.number="form.target_duration_s" class="dur-input" />
+              </div>
+              <!-- 主提示词编辑器（inherit 首帧模式下隐藏：不生成首帧，提示词无用途） -->
+              <PromptEditor
+                v-if="!(stage === 'first' && shot.opening_source === 'inherit_previous')"
+                v-model="stagePromptModel"
+                :label="stageLabel"
+                :hint="stageHint"
+                :placeholder="stagePlaceholder"
+                :gen-busy="promptBusy[stage]"
+                :opt-busy="optBusy[stage]"
+                @generate="generatePrompt(stage)"
+                @optimize="optimizePrompt(stage)"
+              />
+            </template>
+
+            <!-- 专业模式：结构化字段 + 折叠区 + 最终提示词编辑器 + 更新最终提示词 -->
+            <template v-else>
+              <!-- 首帧核心字段 -->
+              <template v-if="stage === 'first'">
                 <div class="field"><label>起始画面描述</label>
                   <textarea v-model="form.description" rows="3" placeholder="地点、主体、画面中正在发生的状态"></textarea>
                 </div>
@@ -144,109 +201,125 @@
                   <select v-model="form.lighting"><option value="">（不指定）</option><option v-for="o in LIGHTINGS" :key="o.v" :value="o.v">{{ o.l }}</option></select>
                 </div>
               </template>
-            </template>
 
-            <!-- 尾帧核心 -->
-            <template v-else-if="stage === 'last'">
-              <div v-if="form.link_mode !== 'keyframes'" class="muted pad">当前接续方式不需要尾帧。</div>
-              <template v-else>
-                <div class="field"><label>结束画面</label>
-                  <textarea v-model="form.last_frame_description" rows="3" placeholder="镜头结束时最终看到的画面"></textarea>
-                </div>
-                <div class="field"><label>主体结束状态</label>
-                  <textarea v-model="form.end_state" rows="2" placeholder="人物/物体最终姿态、位置、方向、表情"></textarea>
-                </div>
-                <div class="field"><label>相对首帧的变化</label>
-                  <textarea v-model="form.frame_change" rows="3" placeholder="例：机甲抬起右臂，身体后倾"></textarea>
-                </div>
-              </template>
-            </template>
-
-            <!-- 视频核心 -->
-            <template v-else>
-              <div class="field"><label>主体动作</label>
-                <textarea v-model="form.motion" rows="3" placeholder="例：机甲短暂停顿后迅速抬起右臂挡在胸前"></textarea>
-              </div>
-              <div class="field-row">
-                <div class="field"><label>摄影机运动</label>
-                  <select v-model="form.camera_movement"><option value="">（不指定）</option><option v-for="o in CAMERA_MOVEMENTS" :key="o.v" :value="o.v">{{ o.l }}</option></select>
-                </div>
-                <div class="field"><label>动作节奏</label>
-                  <select v-model="form.motion_pace"><option value="">（不指定）</option><option v-for="o in MOTION_PACES" :key="o.v" :value="o.v">{{ o.l }}</option></select>
-                </div>
-              </div>
-              <div class="field"><label>镜头时长</label>
-                <select v-model="durationMode">
-                  <option value="follow">跟随配音</option><option value="3">约 3 秒</option><option value="5">约 5 秒</option><option value="10">约 10 秒</option><option value="18">约 18 秒</option><option value="custom">自定义</option>
-                </select>
-                <input v-if="durationMode === 'custom'" type="number" step="0.5" min="1" max="20" v-model.number="form.target_duration_s" class="dur-input" />
-              </div>
-            </template>
-
-            <!-- 折叠区：一致性约束（尾帧）/ 保持稳定（视频）；标题显示已选数量 -->
-            <Collapsible v-if="stage === 'last' && form.link_mode === 'keyframes'" title="一致性约束" :summary="preserveSummary">
-              <div class="preserve-groups">
-                <div v-for="g in PRESERVE_GROUPS" :key="g.title" class="preserve-group">
-                  <div class="pg-title">{{ g.title }}</div>
-                  <div class="tile-grid">
-                    <label v-for="o in g.opts" :key="o.v" class="tile">
-                      <input type="checkbox" :checked="form.preserve_elements.includes(o.v)" @change="toggleList(form.preserve_elements, o.v)" />
-                      <span class="tile-body"><span class="tile-label">{{ o.l }}</span><span class="tile-check">✓</span></span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-            </Collapsible>
-            <Collapsible v-if="stage === 'video'" title="保持稳定" :summary="videoPreserveSummary">
-              <div class="tile-grid">
-                <label v-for="o in videoPreserveOptions" :key="o.v" class="tile">
-                  <input type="checkbox" :checked="form.video_preserve_elements.includes(o.v)" @change="toggleList(form.video_preserve_elements, o.v)" />
-                  <span class="tile-body"><span class="tile-label">{{ o.l }}</span><span class="tile-check">✓</span></span>
-                </label>
-              </div>
-            </Collapsible>
-
-            <!-- 折叠区：专业控制（专业模式；低频字段仍折叠） -->
-            <Collapsible v-if="mode === 'professional'" title="专业控制" :summary="profSummary">
-              <template v-if="stage === 'first'">
-                <div class="field"><label>构图</label>
-                  <select v-model="form.composition"><option value="">（不指定）</option><option v-for="o in COMPOSITIONS" :key="o.v" :value="o.v">{{ o.l }}</option></select>
-                </div>
-                <div class="field"><label>重要画面细节</label>
-                  <textarea v-model="form.important_details" rows="2" placeholder="背景标志物/道具/特效"></textarea>
-                </div>
-                <div class="field"><label>必须保持/出现的元素（每行一个）</label>
-                  <textarea :value="(form.required_elements||[]).join('\n')" @input="form.required_elements = ($event.target as HTMLTextAreaElement).value.split('\n').map(s=>s.trim()).filter(Boolean)" rows="2" placeholder="爆炸火光&#10;右臂"></textarea>
-                </div>
-              </template>
+              <!-- 尾帧核心字段 -->
               <template v-else-if="stage === 'last'">
-                <div class="field"><label>新增元素</label><input v-model="form.add_elements" placeholder="右侧爆炸火光" /></div>
-                <div class="field"><label>删除元素</label><input v-model="form.remove_elements" placeholder="地面碎石" /></div>
-                <div class="field"><label>结束构图 / 摄影机状态</label><input v-model="form.end_composition" /></div>
-                <div class="field"><label>自定义保持要求</label><input v-model="form.preserve_custom" /></div>
+                <div v-if="form.link_mode !== 'keyframes'" class="muted pad">当前接续方式不需要尾帧。</div>
+                <template v-else>
+                  <div class="field"><label>结束画面</label>
+                    <textarea v-model="form.last_frame_description" rows="3" placeholder="镜头结束时最终看到的画面"></textarea>
+                  </div>
+                  <div class="field"><label>主体结束状态</label>
+                    <textarea v-model="form.end_state" rows="2" placeholder="人物/物体最终姿态、位置、方向、表情"></textarea>
+                  </div>
+                  <div class="field"><label>相对首帧的变化</label>
+                    <textarea v-model="form.frame_change" rows="3" placeholder="例：机甲抬起右臂，身体后倾"></textarea>
+                  </div>
+                </template>
               </template>
+
+              <!-- 视频核心字段 -->
               <template v-else>
-                <div class="field"><label>环境运动</label><input v-model="form.environment_motion" placeholder="烟尘翻卷，远处火光闪烁" /></div>
-                <div class="field"><label>动作发生顺序</label><input v-model="form.action_sequence" placeholder="先停顿，再转头，随后抬臂" /></div>
-                <div class="field"><label>摄影机运动细节</label><input v-model="form.camera_movement_detail" /></div>
-                <div class="field" v-if="form.link_mode === 'keyframes'"><label>首尾帧过渡关系</label><input v-model="form.transition_description" placeholder="从静止站姿自然过渡到格挡姿态" /></div>
-                <div class="field"><label>自定义稳定要求</label><input v-model="form.video_preserve_custom" /></div>
-                <div class="field"><label>Seed（固定 / 随机）</label>
-                  <div class="seed-row">
-                    <select v-model="seedMode"><option value="random">随机</option><option value="fixed">固定 Seed</option></select>
-                    <input v-if="seedMode === 'fixed'" type="number" v-model.number="form.seed" placeholder="整数 seed" />
+                <div class="field"><label>主体动作</label>
+                  <textarea v-model="form.motion" rows="3" placeholder="例：机甲短暂停顿后迅速抬起右臂挡在胸前"></textarea>
+                </div>
+                <div class="field-row">
+                  <div class="field"><label>摄影机运动</label>
+                    <select v-model="form.camera_movement"><option value="">（不指定）</option><option v-for="o in CAMERA_MOVEMENTS" :key="o.v" :value="o.v">{{ o.l }}</option></select>
+                  </div>
+                  <div class="field"><label>动作节奏</label>
+                    <select v-model="form.motion_pace"><option value="">（不指定）</option><option v-for="o in MOTION_PACES" :key="o.v" :value="o.v">{{ o.l }}</option></select>
                   </div>
                 </div>
-                <div class="field"><label>Negative prompt（仅视频）</label><input v-model="form.negative_prompt" placeholder="留空则不发送" /></div>
+                <div class="field"><label>镜头时长</label>
+                  <select v-model="durationMode">
+                    <option value="follow">默认 / 跟随配音</option><option value="3">约 3 秒</option><option value="5">约 5 秒</option><option value="10">约 10 秒</option><option value="18">约 18 秒</option><option value="custom">自定义</option>
+                  </select>
+                  <input v-if="durationMode === 'custom'" type="number" step="0.5" min="1" max="20" v-model.number="form.target_duration_s" class="dur-input" />
+                </div>
+                <div class="field"><label>台词（可选，本批不生成配音）</label>
+                  <textarea v-model="form.dialogue" rows="2" placeholder="台词保留为数据，本批不进入配音流程"></textarea>
+                </div>
               </template>
-            </Collapsible>
 
-            <!-- 折叠区：英文提示词（PromptEditor；标题显示同步状态） -->
-            <Collapsible title="英文提示词" :summary="promptSummary">
-              <PromptEditor v-if="stage === 'first'" v-model="firstPromptModel" :status="firstPromptStatus" :busy="promptBusy.first" :show-full="true" @generate="generatePrompt('first')" @regenerate="generatePrompt('first')" @reset-auto="clearOverride('first')" />
-              <PromptEditor v-else-if="stage === 'last'" v-model="lastPromptModel" :status="lastPromptStatus" :busy="promptBusy.last" :show-full="true" @generate="generatePrompt('last')" @regenerate="generatePrompt('last')" @reset-auto="clearOverride('last')" />
-              <PromptEditor v-else v-model="videoPromptModel" :status="videoPromptStatus" :busy="promptBusy.video" :show-full="true" @generate="generatePrompt('video')" @regenerate="generatePrompt('video')" @reset-auto="clearOverride('video')" />
-            </Collapsible>
+              <!-- 折叠区：一致性约束（尾帧）/ 保持稳定（视频） -->
+              <Collapsible v-if="stage === 'last' && form.link_mode === 'keyframes'" title="一致性约束" :summary="preserveSummary">
+                <div class="preserve-groups">
+                  <div v-for="g in PRESERVE_GROUPS" :key="g.title" class="preserve-group">
+                    <div class="pg-title">{{ g.title }}</div>
+                    <div class="tile-grid">
+                      <label v-for="o in g.opts" :key="o.v" class="tile">
+                        <input type="checkbox" :checked="form.preserve_elements.includes(o.v)" @change="toggleList(form.preserve_elements, o.v)" />
+                        <span class="tile-body"><span class="tile-label">{{ o.l }}</span><span class="tile-check">✓</span></span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </Collapsible>
+              <Collapsible v-if="stage === 'video'" title="保持稳定" :summary="videoPreserveSummary">
+                <div class="tile-grid">
+                  <label v-for="o in videoPreserveOptions" :key="o.v" class="tile">
+                    <input type="checkbox" :checked="form.video_preserve_elements.includes(o.v)" @change="toggleList(form.video_preserve_elements, o.v)" />
+                    <span class="tile-body"><span class="tile-label">{{ o.l }}</span><span class="tile-check">✓</span></span>
+                  </label>
+                </div>
+              </Collapsible>
+
+              <!-- 折叠区：专业控制 -->
+              <Collapsible title="专业控制" :summary="profSummary">
+                <template v-if="stage === 'first'">
+                  <div class="field"><label>构图</label>
+                    <select v-model="form.composition"><option value="">（不指定）</option><option v-for="o in COMPOSITIONS" :key="o.v" :value="o.v">{{ o.l }}</option></select>
+                  </div>
+                  <div class="field"><label>重要画面细节</label>
+                    <textarea v-model="form.important_details" rows="2" placeholder="背景标志物/道具/特效"></textarea>
+                  </div>
+                  <div class="field"><label>必须保持/出现的元素（每行一个）</label>
+                    <textarea :value="(form.required_elements||[]).join('\n')" @input="form.required_elements = ($event.target as HTMLTextAreaElement).value.split('\n').map(s=>s.trim()).filter(Boolean)" rows="2" placeholder="爆炸火光&#10;右臂"></textarea>
+                  </div>
+                </template>
+                <template v-else-if="stage === 'last'">
+                  <div class="field"><label>新增元素</label><input v-model="form.add_elements" placeholder="右侧爆炸火光" /></div>
+                  <div class="field"><label>删除元素</label><input v-model="form.remove_elements" placeholder="地面碎石" /></div>
+                  <div class="field"><label>结束构图 / 摄影机状态</label><input v-model="form.end_composition" /></div>
+                  <div class="field"><label>自定义保持要求</label><input v-model="form.preserve_custom" /></div>
+                </template>
+                <template v-else>
+                  <div class="field"><label>环境运动</label><input v-model="form.environment_motion" placeholder="烟尘翻卷，远处火光闪烁" /></div>
+                  <div class="field"><label>动作发生顺序</label><input v-model="form.action_sequence" placeholder="先停顿，再转头，随后抬臂" /></div>
+                  <div class="field"><label>摄影机运动细节</label><input v-model="form.camera_movement_detail" /></div>
+                  <div class="field" v-if="form.link_mode === 'keyframes'"><label>首尾帧过渡关系</label><input v-model="form.transition_description" placeholder="从静止站姿自然过渡到格挡姿态" /></div>
+                  <div class="field"><label>自定义稳定要求</label><input v-model="form.video_preserve_custom" /></div>
+                  <div class="field"><label>Seed（固定 / 随机）</label>
+                    <div class="seed-row">
+                      <select v-model="seedMode"><option value="random">随机</option><option value="fixed">固定 Seed</option></select>
+                      <input v-if="seedMode === 'fixed'" type="number" v-model.number="form.seed" placeholder="整数 seed" />
+                    </div>
+                  </div>
+                  <div class="field"><label>Negative prompt（仅视频）</label><input v-model="form.negative_prompt" placeholder="留空则不发送" /></div>
+                </template>
+              </Collapsible>
+
+              <!-- 折叠区：最终提示词（编辑器 + 更新最终提示词按钮；按钮只在该阶段主动点击时更新，不因切换模式自动覆盖） -->
+              <Collapsible title="最终提示词" :summary="promptSummary">
+                <div class="prof-prompt-bar">
+                  <button class="mini-btn" :disabled="promptBusy[stage]" @click="updateFinalPrompt(stage)">
+                    {{ promptBusy[stage] ? '更新中…' : '更新最终提示词' }}
+                  </button>
+                  <span v-if="(stage === 'first' ? firstPromptStatus : stage === 'last' ? lastPromptStatus : videoPromptStatus) === 'stale'" class="stale-hint">结构字段已变化，建议更新</span>
+                </div>
+                <PromptEditor
+                  v-model="stagePromptModel"
+                  :label="stageLabel"
+                  :hint="stageHint"
+                  :placeholder="stagePlaceholder"
+                  :gen-busy="promptBusy[stage]"
+                  :opt-busy="optBusy[stage]"
+                  @generate="generatePrompt(stage)"
+                  @optimize="optimizePrompt(stage)"
+                />
+              </Collapsible>
+            </template>
           </div>
         </div>
 
@@ -265,34 +338,39 @@
               <span v-if="!mainCanvasEmpty" class="canvas-label">{{ mainCanvasLabel }}</span>
             </div>
             <div v-if="thumbStrip.length" class="thumb-strip">
-              <button v-for="(t, i) in thumbStrip" :key="t.cid || (t.label + i)" class="thumb" :class="{ sel: t.sel, ref: t.ref, cont: t.cont }" @click="t.cid && stage === 'first' && chooseFirst(t.cid)">
+              <button v-for="(t, i) in thumbStrip" :key="t.cid || (t.label + i)" class="thumb" :class="{ sel: t.sel, ref: t.ref, cont: t.cont }" @click="chooseThumb(t)">
                 <img v-if="t.url" :src="t.url" />
                 <span v-else class="muted">?</span>
                 <span class="thumb-tag">{{ t.label || ('v' + t.idx) }}</span>
               </button>
             </div>
             <div v-if="stage === 'video' && videoVersionsReversed.length" class="video-versions">
-              <div v-for="v in videoVersionsReversed" :key="v.version_id" class="video-version" :class="{ final: v.version_id === shot.final_video }">
-                <span class="vv-ret" v-if="v.seconds_returned">{{ v.seconds_returned }}s / {{ v.size_returned }}</span>
-                <span class="vv-final" v-if="v.version_id === shot.final_video">✓ 最终</span>
-                <button v-else class="mini-btn" @click="setFinalVideo(v.version_id)">设为最终</button>
+              <div v-for="(v, i) in videoVersionsReversed" :key="v.version_id" class="video-version" :class="{ final: v.version_id === shot.final_video }">
+                <video :src="v.local ? vidUrl(v.local) + '#t=0.1' : ''" preload="metadata" class="vv-thumb" :class="{ previewing: previewVersionId === v.version_id }" @click="previewVersion(v.version_id)" title="点击预览"></video>
+                <div class="vv-info">
+                  <span class="vv-no">v{{ videoVersionsReversed.length - i }}</span>
+                  <span class="vv-ret" v-if="v.seconds_returned">{{ v.seconds_returned }}s / {{ v.size_returned }}</span>
+                  <span class="vv-final" v-if="v.version_id === shot.final_video">✓ 最终</span>
+                  <button v-else class="mini-btn" @click="setFinalVideo(v.version_id)">设为最终</button>
+                </div>
               </div>
             </div>
             <button v-if="ffNeedsRehost && stage === 'first'" class="mini-btn" @click="rehost">修复图片链接</button>
-            <Collapsible v-if="hasHistory && stage === 'first'" title="生成历史" :summary="historySummary">
-              <div v-for="b in ffBatchesReversed" :key="b.batch_id" class="batch">
-                <div class="batch-head" @click="toggleFFBatch(b.batch_id)">
-                  <span class="batch-chevron">{{ isFFBatchExpanded(b.batch_id) ? '▾' : '▸' }}</span>
-                  <span class="batch-title">批次 · {{ b.candidates.length }} 候选 · {{ b.status === 'done' ? '完成' : b.status }}</span>
+            <Collapsible v-if="hasHistory && stage !== 'video'" title="生成历史" :summary="historySummary">
+              <div v-for="(b, bi) in batchesReversed" :key="b.batch_id" class="batch">
+                <div class="batch-head" @click="toggleBatch(b.batch_id)">
+                  <span class="batch-chevron">{{ isBatchExpanded(b.batch_id) ? '▾' : '▸' }}</span>
+                  <span class="batch-title">批次 {{ batchesReversed.length - bi }} · {{ b.candidates.length }} 候选 · {{ b.status === 'done' ? '完成' : b.status }}</span>
                 </div>
-                <div v-if="isFFBatchExpanded(b.batch_id)" class="cands">
-                  <div v-for="(c, i) in b.candidates" :key="c.candidate_id" class="cand" :class="{ sel: c.candidate_id === shot.selected_first_frame }" :style="{ aspectRatio: previewRatio }" @click="chooseFirst(c.candidate_id)">
-                    <img v-if="c.local" :src="imgUrl(c.local)" /><SafeFrameOverlay /><span class="cand-idx">v{{ i + 1 }}</span>
+                <div v-if="isBatchExpanded(b.batch_id)" class="cands">
+                  <div v-for="(c, i) in b.candidates" :key="c.candidate_id" class="cand" :class="{ sel: c.candidate_id === selectedCid }" :style="{ aspectRatio: previewRatio }" @click="chooseCand(c.candidate_id)">
+                    <img v-if="c.local" :src="imgUrl(c.local)" /><SafeFrameOverlay v-if="stage === 'first'" /><span class="cand-idx">v{{ i + 1 }}</span>
                   </div>
                 </div>
               </div>
             </Collapsible>
             <div v-if="stage === 'first' && !shot.first_frame_batches?.length" class="empty-state">根据镜头画面和角色参考生成两张起始画面候选。</div>
+            <div v-if="stage === 'last' && form.link_mode === 'keyframes' && !shot.last_frame_batches?.length" class="empty-state">基于首帧生成尾帧画面。</div>
             <div v-if="stage === 'video' && !videoVersionsReversed.length" class="empty-state">根据输入帧、主体动作和运镜生成视频。</div>
           </div>
         </div>
@@ -323,7 +401,7 @@ import { useJobStore } from '@/store/jobs';
 import { useTaskStream } from '@/composables/useTaskStream';
 import { createDiscreteApi, darkTheme } from 'naive-ui';
 
-const { message } = createDiscreteApi(['message'], { configProviderProps: { theme: darkTheme } });
+const { message, dialog } = createDiscreteApi(['message', 'dialog'], { configProviderProps: { theme: darkTheme } });
 
 const props = defineProps<{
   shot: ShotData; projectName: string;
@@ -525,7 +603,8 @@ const firstPromptStatus = computed(() => promptStatusOf('first'));
 const lastPromptStatus = computed(() => promptStatusOf('last'));
 const videoPromptStatus = computed(() => promptStatusOf('video'));
 
-// 提示词 v-model（override 优先，编辑写 override）
+// 提示词 v-model：get 显示 override||en（兼容旧 override 数据）；set 写 _en + 清 override
+// （标准模式直接编辑三个提示词字段 prompt_en/last_frame_prompt_en/video_prompt_en，编辑即生效）
 function promptModel(stage: Stage) {
   return computed({
     get: () => {
@@ -535,20 +614,41 @@ function promptModel(stage: Stage) {
       return override || en || '';
     },
     set: (v: string) => {
-      if (stage === 'first') form.first_frame_prompt_override = v;
-      else if (stage === 'last') form.last_frame_prompt_override = v;
-      else form.video_prompt_override = v;
+      if (stage === 'first') { form.prompt_en = v; form.first_frame_prompt_override = ''; }
+      else if (stage === 'last') { form.last_frame_prompt_en = v; form.last_frame_prompt_override = ''; }
+      else { form.video_prompt_en = v; form.video_prompt_override = ''; }
     },
   });
 }
 const firstPromptModel = promptModel('first');
 const lastPromptModel = promptModel('last');
 const videoPromptModel = promptModel('video');
+// 当前 stage 的提示词 v-model（标准/专业模式共用同一编辑器绑定）
+const stagePromptModel = computed({
+  get: () => stage.value === 'first' ? firstPromptModel.value : stage.value === 'last' ? lastPromptModel.value : videoPromptModel.value,
+  set: (v: string) => {
+    if (stage.value === 'first') firstPromptModel.value = v;
+    else if (stage.value === 'last') lastPromptModel.value = v;
+    else videoPromptModel.value = v;
+  },
+});
+const stageLabel = computed(() => ({ first: '首帧提示词', last: '尾帧提示词', video: '视频提示词' } as const)[stage.value]);
+const stageHint = computed(() => ({
+  first: '描述镜头开始时看到的画面，包括人物、环境、构图和光线。',
+  last: '描述镜头结束时的画面，以及相对开场画面发生了什么变化。',
+  video: '描述人物或物体的动作、环境变化、镜头运动和时间过程。',
+} as const)[stage.value]);
+const stagePlaceholder = computed(() => ({
+  first: '例：A young girl with silver hair standing on a mountain ridge at golden sunrise, medium shot, soft natural light',
+  last: '例：The girl turns to face the camera, wind blowing her cloak, same ridge, golden sunrise',
+  video: '例：The girl slowly turns her head, wind flutters her cloak, subtle camera push-in',
+} as const)[stage.value]);
 
 const promptBusy = reactive({ first: false, last: false, video: false });
+const optBusy = reactive({ first: false, last: false, video: false });
 function buildBrief(stage: Stage): string {
   const f = form;
-  // 用中文标签 + 用户文本拼成中文简述，送文本模型译成英文提示词
+  // 用中文标签 + 用户文本拼成中文简述，送文本模型译成英文提示词（专业模式"更新最终提示词"用）
   const charDesc = props.projectCharacters.filter(c => f.characters.includes(c.name)).map(c => c.description_en).join('，');
   if (stage === 'first') {
     return [charDesc, f.description, f.opening_state, f.shot_size, f.camera_angle, f.lighting, f.composition, f.important_details, (f.required_elements || []).join('，')]
@@ -559,10 +659,73 @@ function buildBrief(stage: Stage): string {
   }
   return [f.motion, f.camera_movement, f.motion_pace, f.environment_motion, f.action_sequence, f.camera_movement_detail, f.transition_description, (f.video_preserve_elements || []).join('，'), f.video_preserve_custom].filter(Boolean).join('；');
 }
+// 本镜意图编辑（复用 form.description，watch(form) 自动保存）
+const editingIntent = ref(false);
+const intentDraft = ref('');
+const intentTextarea = ref<HTMLTextAreaElement | null>(null);
+function startEditIntent() {
+  intentDraft.value = form.description || '';
+  editingIntent.value = true;
+  nextTick(() => intentTextarea.value?.focus());
+}
+function saveIntent() { form.description = intentDraft.value.trim(); editingIntent.value = false; }
+function writePrompt(stage: Stage, en: string) {
+  if (stage === 'first') { form.prompt_en = en; form.first_frame_prompt_override = ''; }
+  else if (stage === 'last') { form.last_frame_prompt_en = en; form.last_frame_prompt_override = ''; }
+  else { form.video_prompt_en = en; form.video_prompt_override = ''; }
+}
+// 根据上下文生成（调后端 AI 接口，只填文本不生成资产）
 async function generatePrompt(stage: Stage) {
+  promptBusy[stage] = true;
+  try {
+    const r = await apiClient.generatePromptContext(props.projectName, props.shot.shot_id, stage);
+    const en = (r.prompt || '').trim();
+    if (!en) { message.error('提示词生成返回空'); return; }
+    // 首帧本镜意图为空时，后端可能返回 inferred_shot_intent -> 弹确认（采用并生成 / 修改）
+    if (stage === 'first' && r.inferred_shot_intent) {
+      dialog.info({
+        title: 'AI 推断本镜意图',
+        content: r.inferred_shot_intent,
+        positiveText: '采用并生成提示词',
+        negativeText: '修改',
+        onPositiveClick: () => {
+          form.description = r.inferred_shot_intent!;
+          writePrompt(stage, en);
+          message.success('提示词已生成，可手改');
+        },
+        onNegativeClick: () => {
+          // 不写 prompt，打开本镜意图编辑器让用户改（预填推断结果）
+          intentDraft.value = r.inferred_shot_intent || '';
+          editingIntent.value = true;
+        },
+      });
+      return;
+    }
+    writePrompt(stage, en);
+    message.success('提示词已生成，可手改');
+  } catch (e: any) { message.error(`提示词生成失败: ${e.message || e}`); }
+  finally { promptBusy[stage] = false; }
+}
+// 优化提示词（以当前编辑器内容为核心，调后端 AI 接口，只覆盖文本不生成资产）
+async function optimizePrompt(stage: Stage) {
+  const current = stagePromptModel.value;
+  if (!current.trim()) { message.info('请先填写或生成提示词'); return; }
+  optBusy[stage] = true;
+  try {
+    const r = await apiClient.optimizePrompt(props.projectName, props.shot.shot_id, stage, current);
+    const en = (r.prompt || '').trim();
+    if (!en) { message.error('优化返回空'); return; }
+    if (stage === 'first') { form.prompt_en = en; form.first_frame_prompt_override = ''; }
+    else if (stage === 'last') { form.last_frame_prompt_en = en; form.last_frame_prompt_override = ''; }
+    else { form.video_prompt_en = en; form.video_prompt_override = ''; }
+    message.success('提示词已优化');
+  } catch (e: any) { message.error(`优化失败: ${e.message || e}`); }
+  finally { optBusy[stage] = false; }
+}
+// 专业模式"更新最终提示词"：按结构字段重新拼接 -> 译英文 -> 写 _en + sig（只在该按钮主动点击时更新）
+async function updateFinalPrompt(stage: Stage) {
   const brief = buildBrief(stage);
   if (!brief.trim()) { message.info('请先填写该阶段的画面/动作字段'); return; }
-  if (promptStatusOf(stage) === 'manual' && !confirm('将按当前字段重新生成，会覆盖手动版本，是否继续？')) return;
   promptBusy[stage] = true;
   try {
     const r = await apiClient.translateText(brief);
@@ -571,14 +734,9 @@ async function generatePrompt(stage: Stage) {
     if (stage === 'first') { form.prompt_en = en; form.first_frame_prompt_override = ''; form.first_frame_prompt_sig = sigOf('first'); }
     else if (stage === 'last') { form.last_frame_prompt_en = en; form.last_frame_prompt_override = ''; form.last_frame_prompt_sig = sigOf('last'); }
     else { form.video_prompt_en = en; form.video_prompt_override = ''; form.video_prompt_sig = sigOf('video'); }
-    message.success('提示词已生成，可手改');
-  } catch (e: any) { message.error(`提示词生成失败: ${e.message || e}`); }
+    message.success('最终提示词已更新');
+  } catch (e: any) { message.error(`更新失败: ${e.message || e}`); }
   finally { promptBusy[stage] = false; }
-}
-function clearOverride(stage: Stage) {
-  if (stage === 'first') form.first_frame_prompt_override = '';
-  else if (stage === 'last') form.last_frame_prompt_override = '';
-  else form.video_prompt_override = '';
 }
 
 // 标准模式下存在非空专业字段 -> "已应用专业设置"
@@ -627,6 +785,27 @@ const selectedFFCand = computed(() => {
 const ffUrlReady = computed(() => !!selectedFFCand.value?.url);
 const ffNeedsRehost = computed(() => !!selectedFFCand.value?.local && !selectedFFCand.value?.url);
 const ffBatchesReversed = computed(() => [...(props.shot.first_frame_batches || [])].reverse());
+const lfBatchesReversed = computed(() => [...(props.shot.last_frame_batches || [])].reverse());
+// 当前 stage 的批次/选择指针（首帧/尾帧统一）
+const batchesReversed = computed(() => stage.value === 'first' ? ffBatchesReversed.value : lfBatchesReversed.value);
+const selectedCid = computed(() => stage.value === 'first' ? props.shot.selected_first_frame : props.shot.selected_last_frame);
+const expandedBatches = ref<Set<string>>(new Set());
+function isBatchExpanded(batchId: string): boolean {
+  if (expandedBatches.value.size === 0) {
+    const latest = batchesReversed.value[0];   // reversed，第一个是最新批次
+    return latest?.batch_id === batchId;
+  }
+  return expandedBatches.value.has(batchId);
+}
+function toggleBatch(batchId: string) {
+  if (expandedBatches.value.size === 0) {
+    const latest = batchesReversed.value[0];
+    if (latest) expandedBatches.value = new Set([latest.batch_id]);
+  }
+  const s = new Set(expandedBatches.value);
+  if (s.has(batchId)) s.delete(batchId); else s.add(batchId);
+  expandedBatches.value = s;
+}
 const expandedFFBatches = ref<Set<string>>(new Set());
 function isFFBatchExpanded(batchId: string): boolean {
   if (expandedFFBatches.value.size === 0) {
@@ -651,6 +830,20 @@ async function genFirstFrame() {
 async function chooseFirst(candidateId: string) {
   try { await apiClient.chooseFirstFrame(props.projectName, props.shot.shot_id, candidateId); emit('refresh'); }
   catch (e: any) { message.error(`选定失败: ${e.message || e}`); }
+}
+async function chooseLast(candidateId: string) {
+  try { await apiClient.chooseLastFrame(props.projectName, props.shot.shot_id, candidateId); emit('refresh'); }
+  catch (e: any) { message.error(`选定失败: ${e.message || e}`); }
+}
+// 历史/缩略条候选点选：按当前 stage 调 chooseFirst/chooseLast
+async function chooseCand(candidateId: string) {
+  if (stage.value === 'first') return chooseFirst(candidateId);
+  if (stage.value === 'last') return chooseLast(candidateId);
+}
+function chooseThumb(t: any) {
+  if (!t.cid) return;
+  if (stage.value === 'first') chooseFirst(t.cid);
+  else if (stage.value === 'last') chooseLast(t.cid);
 }
 async function rehost() {
   try { await apiClient.rehostFirstFrame(props.projectName, props.shot.shot_id); message.success('已托管'); emit('refresh'); }
@@ -684,14 +877,14 @@ async function genLastFrame() {
 }
 
 // ---------- 视频 ----------
-const videoVersionsReversed = computed(() => [...(props.shot.video_versions || [])].reverse());
+const videoVersionsReversed = computed(() => [...(props.shot.video_versions || [])].filter(v => v.local).reverse());
 const finalVideoVersion = computed(() => {
   const vid = props.shot.final_video; if (!vid) return null;
   return (props.shot.video_versions || []).find(v => v.version_id === vid) || null;
 });
 const videoBlockReason = computed(() => {
   if (finalVideoVersion.value?.local) return '';
-  if (!props.shot.video?.num_frames && form.target_duration_s === null) return props.shot.audio?.status === 'done' ? '配音时长待反推（刷新自动补）' : '尚未配音且未设置时长';
+  if (!props.shot.video?.num_frames && form.target_duration_s === null) return '';  // 时长由后端兜底（无配音无 target_duration_s -> 默认 3 秒），不再因无配音拦截
   // effective 首帧：inherit 用来源末帧 url；其余用本镜已选首帧 url（或待托管 local）
   const ffUsable = effectiveFirstFrameReady.value || (props.shot.opening_source !== 'inherit_previous' && ffNeedsRehost.value);
   if (!ffUsable) return props.shot.opening_source === 'inherit_previous' ? '接力来源末帧未就绪' : '请先生成并选择首帧';
@@ -769,7 +962,10 @@ async function syncSource() {
   catch (e: any) { message.error(`同步失败: ${e.message || e}`); }
 }
 async function refreshVideoEnd() {
-  try { await apiClient.refreshVideoEnd(props.projectName, props.shot.shot_id); message.success('末帧已重新提取'); emit('refresh'); }
+  // inherit_previous: 末帧在来源镜头，对来源调 refresh（当前镜头无自己的视频末帧）
+  const targetId = (props.shot.opening_source === 'inherit_previous' && props.shot.source_shot_id)
+    ? props.shot.source_shot_id : props.shot.shot_id;
+  try { await apiClient.refreshVideoEnd(props.projectName, targetId); message.success('末帧已重新提取'); emit('refresh'); }
   catch (e: any) { message.error(`提取失败: ${e.message || e}`); }
 }
 
@@ -828,11 +1024,13 @@ const promptSummaryText = (s: PromptStatus) => ({ empty: '未生成', auto: '自
 const promptSummary = computed(() => promptSummaryText(promptStatusOf(stage.value)));
 const historySummary = computed(() => {
   if (stage.value === 'first') return `${props.shot.first_frame_batches?.length || 0} 个批次`;
+  if (stage.value === 'last') return `${props.shot.last_frame_batches?.length || 0} 个批次`;
   if (stage.value === 'video') return `${props.shot.video_versions?.length || 0} 个版本`;
   return '';
 });
 const hasHistory = computed(() => {
   if (stage.value === 'first') return (props.shot.first_frame_batches?.length || 0) > 0;
+  if (stage.value === 'last') return (props.shot.last_frame_batches?.length || 0) > 0;
   if (stage.value === 'video') return (props.shot.video_versions?.length || 0) > 0;
   return false;
 });
@@ -845,10 +1043,16 @@ const mainCanvasUrl = computed(() => {
   return '';
 });
 const mainCanvasIsVideo = computed(() => stage.value === 'video' && !!(finalVideoVersion.value?.local || videoVersionsReversed.value[0]?.local));
+const previewVersionId = ref<string | null>(null);
+watch(stage, () => { previewVersionId.value = null; });
 const mainCanvasVideoUrl = computed(() => {
-  const v = finalVideoVersion.value || videoVersionsReversed.value[0];
+  const pv = previewVersionId.value ? videoVersionsReversed.value.find(v => v.version_id === previewVersionId.value) : null;
+  const v = pv || finalVideoVersion.value || videoVersionsReversed.value[0];
   return v?.local ? vidUrl(v.local) : '';
 });
+function previewVersion(vid: string) {
+  previewVersionId.value = previewVersionId.value === vid ? null : vid;
+}
 const mainCanvasOverlay = computed(() => {
   if (stage.value === 'last' && !lfUrl.value && ffUrlReady.value) return '尾帧尚未生成';
   if (stage.value === 'first' && props.shot.opening_source === 'inherit_previous' && !effectiveFirstFrameUrl.value) return '来源末帧未就绪';
@@ -907,8 +1111,8 @@ const stageAction = computed(() => {
   if (stage.value === 'first') return { label: busy('first_frame') ? '生成中…' : '生成首帧（2 候选）', disabled: busy('first_frame'), pre: '', fn: genFirstFrame };
   if (stage.value === 'last') return {
     label: busy('last_frame') ? '生成中…' : '生成尾帧',
-    disabled: !ffUrlReady.value || busy('last_frame') || form.link_mode !== 'keyframes',
-    pre: form.link_mode !== 'keyframes' ? '当前接续方式不需要尾帧' : (!ffUrlReady.value ? '需先选择首帧' : ''),
+    disabled: !effectiveFirstFrameReady.value || busy('last_frame') || form.link_mode !== 'keyframes',
+    pre: form.link_mode !== 'keyframes' ? '当前接续方式不需要尾帧' : (!effectiveFirstFrameReady.value ? '开场画面未就绪（请先生成并选择首帧，或来源末帧未就绪）' : ''),
     fn: genLastFrame,
   };
   return { label: busy('video') ? jobMsg('video') : '生成视频', disabled: !canGenVideo.value || busy('video'), pre: videoBlockReason.value, fn: genVideo };
@@ -989,6 +1193,19 @@ function vidUrl(p: string) { return getVideoUrl(p); }
 
 /* inherit_previous 接力面板（首帧标签） */
 .inherit-panel { padding: 14px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 14px; &.stale { border-color: rgba(251,191,36,0.5); } &.broken { border-color: rgba(248,113,113,0.5); } }
+.eff-frame-preview { margin-bottom: 14px; }
+.eff-frame-preview .eff-label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
+.eff-thumb { position: relative; width: 100%; aspect-ratio: 16/9; max-width: 380px; background: var(--bg-root); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; display: flex; align-items: center; justify-content: center;
+  img { width: 100%; height: 100%; object-fit: cover; }
+  .muted { font-size: 12px; color: var(--text-faint); }
+  &.empty { border-style: dashed; }
+  &.small { width: 130px; aspect-ratio: 16/9; max-width: none; }
+}
+.eff-frame-preview.video-input { display: flex; align-items: center; gap: 10px; }
+.eff-arrow { color: var(--text-muted); font-size: 16px; }
+.eff-tag { position: absolute; bottom: 2px; right: 4px; font-size: 10px; padding: 1px 5px; border-radius: 3px; background: rgba(0,0,0,0.6); color: #fff; }
+.prof-prompt-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.stale-hint { font-size: 11px; color: #fbbf24; }
 .inherit-title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
 .inherit-source { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
 .inherit-msg { font-size: 11px; color: #fbbf24; margin-top: 6px; }
@@ -996,6 +1213,13 @@ function vidUrl(p: string) { return getVideoUrl(p); }
 
 /* 阶段标签 */
 .stage-tabs { display: flex; gap: 2px; padding: 0 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; button { padding: 10px 26px; border: none; background: none; color: var(--text-muted); font-size: 13px; cursor: pointer; border-bottom: 2px solid transparent; &.on { color: var(--text-primary); border-bottom-color: var(--accent); } &:not(.on):hover { color: var(--text-secondary); } } }
+.shot-intent-bar { display: flex; align-items: flex-start; gap: 10px; padding: 8px 20px; border-bottom: 1px solid var(--border); background: var(--bg-surface); flex-shrink: 0; }
+.si-label { font-size: 11px; color: var(--text-muted); white-space: nowrap; padding-top: 2px; flex-shrink: 0; }
+.si-view { flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.si-text { flex: 1; font-size: 12px; color: var(--text-secondary); line-height: 1.5; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; &.empty { color: var(--text-faint); font-style: italic; } }
+.si-edit { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.si-textarea { width: 100%; background: var(--bg-root); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 12px; color: var(--text-primary); outline: none; resize: vertical; line-height: 1.5; font-family: inherit; min-height: 56px; &:focus { border-color: var(--accent); } }
+.si-actions { display: flex; gap: 6px; }
 
 /* 主体：参数 + 预览 grid；预览可收起 */
 .wb-main { display: grid; grid-template-columns: minmax(540px, 1.3fr) minmax(340px, 0.7fr); flex: 1; min-height: 0; }
@@ -1017,6 +1241,10 @@ function vidUrl(p: string) { return getVideoUrl(p); }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .seed-row { display: flex; gap: 8px; align-items: center; & > select { width: auto; flex: 0 0 auto; } & > input { width: auto; flex: 1 1 auto; min-width: 0; } }
 .dur-input { margin-top: 8px; }
+.duration-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 12px; flex-wrap: wrap; }
+.duration-row .dur-label { color: var(--text-muted); }
+.duration-row select { padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-root); color: var(--text-secondary); font-size: 12px; }
+.duration-row .dur-input { margin-top: 0; width: 80px; }
 
 /* 保持一致 / 保持稳定：可选 tile */
 .preserve-groups { display: flex; flex-direction: column; gap: 12px; }
@@ -1050,7 +1278,10 @@ function vidUrl(p: string) { return getVideoUrl(p); }
 .thumb { position: relative; flex: 0 0 auto; width: 88px; height: 50px; border: 2px solid var(--border); border-radius: 5px; overflow: hidden; cursor: pointer; background: var(--bg-surface); padding: 0; &.sel { border-color: #4ade80; } &.ref { border-style: dashed; } &.cont { border-color: #60a5fa; border-style: dotted; } img { width: 100%; height: 100%; object-fit: cover; } .muted { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; } }
 .thumb-tag { position: absolute; bottom: 0; left: 0; right: 0; font-size: 9px; color: #fff; background: rgba(0,0,0,0.55); text-align: center; padding: 1px; }
 .video-versions { display: flex; flex-direction: column; gap: 6px; }
-.video-version { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; &.final { border-color: #4ade80; } }
+.video-version { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; &.final { border-color: #4ade80; } }
+.vv-thumb { width: 72px; aspect-ratio: 16/9; border-radius: 4px; object-fit: cover; background: var(--bg-root); flex-shrink: 0; cursor: pointer; &.previewing { outline: 2px solid var(--accent); outline-offset: 1px; } }
+.vv-info { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex: 1; }
+.vv-no { font-size: 11px; font-weight: 600; color: var(--text-secondary); font-family: monospace; }
 .vv-ret { color: var(--text-muted); }
 .vv-final { color: #4ade80; font-weight: 600; }
 

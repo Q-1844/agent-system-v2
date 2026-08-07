@@ -577,6 +577,12 @@ class ApiClient {
       method: 'POST', body: JSON.stringify({ candidate_id: candidateId }),
     });
   }
+  // 选择尾帧候选（跨批次切回，设 selected_last_frame + 同步旧 last_frame）
+  async chooseLastFrame(projectName: string, shotId: string, candidateId: string): Promise<{ shot_id: string; candidate_id: string; url: string }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/shot/${encodeURIComponent(shotId)}/last-frame/choose`, {
+      method: 'POST', body: JSON.stringify({ candidate_id: candidateId }),
+    });
+  }
 
   // 设最终视频版本（final_video 指针，多版本选最终）
   async setFinalVideo(projectName: string, shotId: string, versionId: string): Promise<{ shot_id: string; final_video: string }> {
@@ -657,6 +663,20 @@ class ApiClient {
   async translateText(text: string): Promise<{ english: string }> {
     return this.request('/api/translate', {
       method: 'POST', body: JSON.stringify({ text }),
+    });
+  }
+
+  // 根据上下文生成英文提示词（读项目/镜头上下文，调文本模型，只返回文本不生成资产）
+  async generatePromptContext(projectName: string, shotId: string, stage: 'first' | 'last' | 'video'): Promise<{ prompt: string; inferred_shot_intent?: string }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/shot/${encodeURIComponent(shotId)}/prompt/generate`, {
+      method: 'POST', body: JSON.stringify({ stage }),
+    });
+  }
+
+  // 优化当前英文提示词（以当前文本为核心，调文本模型，只返回文本不生成资产）
+  async optimizePrompt(projectName: string, shotId: string, stage: 'first' | 'last' | 'video', text: string): Promise<{ prompt: string }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/shot/${encodeURIComponent(shotId)}/prompt/optimize`, {
+      method: 'POST', body: JSON.stringify({ stage, text }),
     });
   }
 
