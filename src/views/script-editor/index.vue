@@ -23,6 +23,13 @@
         <div class="story-card-head">
           <span class="story-label">完整故事</span>
           <span class="story-word" v-if="storyWordCount">{{ storyWordCount }}字</span>
+          <span class="story-spacer"></span>
+          <button
+            class="ai-btn"
+            :disabled="!storyText.trim()"
+            :title="!storyText.trim() ? '请先写下完整故事，再让 AI 帮你整理。' : 'AI 把完整故事整理成故事段并识别人物'"
+            @click.stop="openOrganizer"
+          >AI 整理故事</button>
           <span class="story-edit">{{ storyText.trim() ? '编辑' : '开始编写' }}</span>
         </div>
         <div v-if="storyText.trim()" class="story-preview">{{ storyPreview }}</div>
@@ -120,6 +127,27 @@
           </div>
         </div>
       </div>
+
+      <!-- 已有故事段时点 AI 整理的提示（规格 §十八） -->
+      <div v-if="showExistingScenesConfirm" class="dialog-overlay" @click.self="showExistingScenesConfirm = false">
+        <div class="confirm-dialog">
+          <h3>项目已有故事段</h3>
+          <p>当前项目已经有 <b>{{ scenes.length }}</b> 个故事段。</p>
+          <p>AI 可以重新整理完整故事，但不会自动覆盖现有故事段。</p>
+          <div class="dialog-btns">
+            <button class="btn btn-cancel" @click="showExistingScenesConfirm = false">取消</button>
+            <button class="btn btn-confirm" @click="showExistingScenesConfirm = false; showOrganizer = true">查看新的整理方案</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI 整理故事工作区（Phase AI-1） -->
+      <StoryOrganizer
+        v-if="showOrganizer"
+        :project-name="projectName"
+        @close="onOrganizerClose"
+        @applied="onOrganizerApplied"
+      />
     </template>
   </div>
 </template>
@@ -131,6 +159,7 @@ import { useProjectStore } from '@/store';
 import { apiClient } from '@/api';
 import { getImageUrl } from '@/utils/media';
 import dayjs from 'dayjs';
+import StoryOrganizer from '@/components/StoryOrganizer.vue';
 
 const store = useProjectStore();
 const router = useRouter();
@@ -155,6 +184,8 @@ const status = ref<'idle' | 'saving' | 'saved' | 'failed'>('idle');
 const showStoryDialog = ref(false);
 const storyDraft = ref('');
 const showClearConfirm = ref(false);
+const showOrganizer = ref(false);
+const showExistingScenesConfirm = ref(false);
 
 let uidCounter = 1;
 let saveTimer: number | null = null;
@@ -274,6 +305,23 @@ function openStoryDialog() { storyDraft.value = storyText.value; showStoryDialog
 function cancelStory() { showStoryDialog.value = false; }
 function doneStory() { storyText.value = storyDraft.value; showStoryDialog.value = false; scheduleSave(); }
 
+// ---- AI 整理故事（Phase AI-1）----
+function openOrganizer() {
+  if (!storyText.value.trim()) return;   // 按钮已禁用，兜底
+  if (scenes.value.length > 0) {
+    // 已有故事段：先提示，AI 可整理供查看但不自动覆盖（规格 §十八）
+    showExistingScenesConfirm.value = true;
+  } else {
+    showOrganizer.value = true;
+  }
+}
+function onOrganizerClose() { showOrganizer.value = false; }
+function onOrganizerApplied() {
+  showOrganizer.value = false;
+  load();   // 刷新故事段（新建的 Scene 写入项目）
+  store.loadProjectCharacters(projectName.value);   // 刷新角色缓存，角色页也能看到新角色
+}
+
 // ---- 清空 ----
 function doClear() {
   scenes.value = [];
@@ -329,7 +377,14 @@ onUnmounted(() => { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; 
 .story-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
 .story-label { font-size: 13px; font-weight: 600; color: var(--text-primary); }
 .story-word { font-size: 11px; color: var(--text-faint); }
-.story-edit { margin-left: auto; font-size: 12px; color: var(--accent); }
+.story-spacer { flex: 1; }
+.ai-btn {
+  padding: 4px 12px; border-radius: 6px; border: 1px solid var(--accent);
+  background: transparent; color: var(--accent); font-size: 12px; cursor: pointer;
+  &:hover:not(:disabled) { background: var(--accent); color: var(--accent-text); }
+  &:disabled { opacity: 0.5; cursor: not-allowed; border-color: var(--border); color: var(--text-muted); }
+}
+.story-edit { margin-left: 10px; font-size: 12px; color: var(--accent); }
 .story-preview { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
 .story-empty { font-size: 13px; color: var(--text-faint); }
 

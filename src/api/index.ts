@@ -259,6 +259,37 @@ export interface TimingShot {
   dialogue: string;
 }
 
+// ============ AI 整理故事（Phase AI-1）============
+export interface DraftScene {
+  draft_id: string;
+  summary: string;
+  character_mentions: string[];
+}
+
+export type CharacterResolutionStatus = 'matched' | 'unresolved' | 'created' | 'ignored';
+
+export interface CharacterResolutionItem {
+  mention: string;
+  status: CharacterResolutionStatus;
+  matched_character_name: string | null;
+  draft_description: string | null;
+}
+
+export interface StoryOrganizationDraft {
+  draft_id: string;
+  project_name: string;
+  project_updated_at: number;
+  story_text_snapshot: string;
+  overview: string;
+  scenes: DraftScene[];
+  characters: CharacterResolutionItem[];
+}
+
+export interface ApplyStoryResult {
+  ok: boolean;
+  scenes: Array<{ scene_id: string; summary: string; characters: string[] }>;
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -549,6 +580,69 @@ class ApiClient {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/scenes`, {
       method: 'PUT',
       body: JSON.stringify(payload),
+    });
+  }
+
+  // ============ AI 整理故事（Phase AI-1）============
+
+  // AI 整理故事段 + 人物识别 + 确定性匹配，落草稿。可重复调用（重新整理）
+  async organizeStory(projectName: string): Promise<StoryOrganizationDraft> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/story/organize`, {
+      method: 'POST',
+    });
+  }
+
+  // 读现有草稿（刷新恢复）。无草稿 404
+  async getStoryDraft(projectName: string): Promise<StoryOrganizationDraft> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/story/draft`);
+  }
+
+  // 保存草稿编辑（场景文本/排序/删除/解决状态）。不动 project.json
+  async saveStoryDraft(projectName: string, payload: {
+    overview: string;
+    scenes: DraftScene[];
+    characters: CharacterResolutionItem[];
+  }): Promise<StoryOrganizationDraft> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/story/draft`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  // AI 生成单个角色文字设定（只返回文本，不建角色）
+  async draftStoryCharacter(projectName: string, mention: string): Promise<{ description: string }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/story/draft-character`, {
+      method: 'POST',
+      body: JSON.stringify({ mention }),
+    });
+  }
+
+  // AI 批量生成缺失角色文字设定（mentions 缺省=所有 unresolved）
+  async draftStoryCharactersBatch(projectName: string, mentions?: string[]): Promise<{ characters: Array<{ name: string; description: string }> }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/story/draft-characters-batch`, {
+      method: 'POST',
+      body: JSON.stringify(mentions ? { mentions } : {}),
+    });
+  }
+
+  // 解决一个被提及人物：match / create / ignore
+  async resolveStoryCharacter(projectName: string, params: {
+    mention: string;
+    action: 'match' | 'create' | 'ignore';
+    matched_character_name?: string;
+    name?: string;                 // create 时的角色名（默认=mention）
+    description?: string;
+  }): Promise<StoryOrganizationDraft> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/story/resolve-character`, {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  }
+
+  // 采用故事整理 -> 写入 Scene[]（stale + 已有 Scene 闸门 + 未解决拦截 + 角色去重）
+  async applyStoryOrganize(projectName: string): Promise<ApplyStoryResult> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/story/apply`, {
+      method: 'POST',
     });
   }
 
