@@ -14,6 +14,7 @@ declare module 'vue' {
     DirectorStudio: typeof import('./src/components/DirectorStudio.vue')['default']
     OrchestrateModal: typeof import('./src/components/OrchestrateModal.vue')['default']
     ProductionPlannerStudio: typeof import('./src/components/ProductionPlannerStudio.vue')['default']
+    ProjectProductionStudio: typeof import('./src/components/ProjectProductionStudio.vue')['default']
     PromptEditor: typeof import('./src/components/PromptEditor.vue')['default']
     QueuePanel: typeof import('./src/components/QueuePanel.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']

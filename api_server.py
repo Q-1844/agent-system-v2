@@ -74,6 +74,7 @@ from routers import character_design  # noqa: E402
 from routers import director  # noqa: E402
 from routers import production_planner  # noqa: E402
 from routers import autopilot  # noqa: E402
+from routers import project_autopilot  # noqa: E402
 app.include_router(system.router)
 app.include_router(projects.router)
 app.include_router(script.router)
@@ -87,6 +88,7 @@ app.include_router(character_design.router)
 app.include_router(director.router)
 app.include_router(production_planner.router)
 app.include_router(autopilot.router)
+app.include_router(project_autopilot.router)
 
 
 @app.on_event("startup")
@@ -139,6 +141,14 @@ async def startup():
         asyncio.create_task(get_autopilot_manager().recover_runs())
     except Exception as e:
         logger.error(f"Autopilot 恢复失败: {e}")
+
+    # 阶段 AI-5A：恢复中断的 ProjectRun（running/pausing/composing）。
+    # 🔴 必须在 SceneAutopilotManager.recover_runs() 之后（Project 恢复时需要看到 child 正确状态，§三十）。
+    try:
+        from src.ai.project_autopilot import get_project_autopilot_manager
+        asyncio.create_task(get_project_autopilot_manager().recover_runs())
+    except Exception as e:
+        logger.error(f"ProjectRun 恢复失败: {e}")
 
 
 if __name__ == "__main__":

@@ -100,6 +100,7 @@ class SceneAutopilotRun(BaseModel):
     plan_id: str
     plan_snapshot: dict                        # 冻结的 approved plan（§七）
     run_seed: int                              # 本 Run 独立 seed（§六）：derive(plan_seed, run_id)
+    parent_project_run_id: Optional[str] = None   # AI-5A：父 ProjectProductionRun（None=手工点击）
     status: str = RUN_PENDING
     respect_locked: bool = True
     pause_requested: bool = False
@@ -166,6 +167,106 @@ def _structure_changed(run: SceneAutopilotRun, scene) -> Optional[str]:
     except Exception:
         return "plan_snapshot 解析失败"
     return is_plan_stale(plan, scene)
+
+
+# ============ 共享 preflight（§十七/§十八：手工 Autopilot 与 Project Preflight 同一规则）============
+# AI-5A 提取：手工 start_scene_run 与 Project Preflight 必须用同一套 ready 判定，
+# 否则会出现「Project Preflight 说 ready -> 运行时 Scene Autopilot 说 locked invalid」。
+class SceneRunPreflight(BaseModel):
+    """单个 Scene 的 Autopilot 就绪检查结果。issues 用稳定 code，UI 可本地化展示。"""
+    scene_id: str
+    ready: bool
+    shot_count: int
+    plan_id: Optional[str] = None
+    plan_status: Optional[str] = None
+    issues: List[str] = Field(default_factory=list)   # NO_SHOTS / NO_PRODUCTION_PLAN /
+    #   PLAN_NOT_APPROVED / PLAN_STALE / ACTIVE_SCENE_RUN /
+    #   LOCKED_SHOT_NO_FINAL / LOCKED_SOURCE_NO_VIDEO_END / SHOT_NOT_IN_PLAN
+
+
+def _locked_shot_problems(scene, plan, respect_locked: bool) -> List[tuple]:
+    """遍历 Scene 所有 Shot，返回 [(shot_id, issue_code), ...]（按顺序）。
+    issue_code: SHOT_NOT_IN_PLAN / LOCKED_SHOT_NO_FINAL / LOCKED_SOURCE_NO_VIDEO_END。
+    手工 start 与 Project Preflight 共用，保证规则一致（§十八）。"""
+    out: List[tuple] = []
+    planned_by_id = {p.shot_id: p for p in plan.shots}
+    for i, sh in enumerate(scene.shots):
+        p = planned_by_id.get(sh.shot_id)
+        if p is None:
+            out.append((sh.shot_id, "SHOT_NOT_IN_PLAN"))
+            continue
+        if respect_locked and sh.locked:
+            if not sh.final_video or sh.video.status != ShotStatus.DONE.value:
+                out.append((sh.shot_id, "LOCKED_SHOT_NO_FINAL"))
+            elif i + 1 < len(scene.shots):
+                nxt = planned_by_id.get(scene.shots[i + 1].shot_id)
+                if nxt and nxt.requires_previous_video_end and not sh.video_end_frame.url_ready:
+                    out.append((sh.shot_id, "LOCKED_SOURCE_NO_VIDEO_END"))
+    return out
+
+
+def preflight_scene_autopilot(project, scene, plan, respect_locked: bool = True,
+                              *, has_active_run: bool = False) -> SceneRunPreflight:
+    """共享 preflight（§十八）。plan 可为 None（无计划）。has_active_run 由调用方查 manager 后传入
+    （本函数不依赖 manager，保持纯函数可单测）。ready = 无任何 issue。"""
+    issues: List[str] = []
+    shot_count = len(scene.shots) if scene else 0
+    if scene is None or not scene.shots:
+        issues.append("NO_SHOTS")
+    if plan is None:
+        issues.append("NO_PRODUCTION_PLAN")
+    else:
+        if plan.status != "approved":
+            issues.append("PLAN_NOT_APPROVED")
+        if scene is not None:
+            stale = is_plan_stale(plan, scene)
+            if stale:
+                issues.append("PLAN_STALE")
+            if scene.shots and plan.shots:
+                for _sid, code in _locked_shot_problems(scene, plan, respect_locked):
+                    issues.append(code)
+    if has_active_run:
+        issues.append("ACTIVE_SCENE_RUN")
+    return SceneRunPreflight(
+        scene_id=scene.scene_id if scene else "",
+        ready=len(issues) == 0,
+        shot_count=shot_count,
+        plan_id=plan.plan_id if plan else None,
+        plan_status=plan.status if plan else None,
+        issues=issues,
+    )
+
+
+# issue code -> 手工 start 时的中文错误信息（保留原文案，existing 测试依赖子串）
+_ISSUE_MESSAGES = {
+    "NO_SHOTS": "故事段没有镜头",
+    "NO_PRODUCTION_PLAN": "没有 AI 制作计划，请先 AI 制作规划并确认",
+    "PLAN_NOT_APPROVED": "制作计划尚未确认，请先在 AI 制作规划中确认",
+    "PLAN_STALE": "制作计划已过期，请重新生成并确认",
+}
+
+
+def _preflight_issue_to_error(scene, plan, pre: SceneRunPreflight) -> str:
+    """把 preflight 第一个 issue 映射成手工 start 的中文错误信息。
+    locked/不在计划 类需带 shot_id，从 _locked_shot_problems 取。"""
+    if not pre.issues:
+        return ""
+    first = pre.issues[0]
+    if first in _ISSUE_MESSAGES:
+        return _ISSUE_MESSAGES[first]
+    if first == "ACTIVE_SCENE_RUN":
+        return "故事段已有自动制作任务"   # 手工 start 走 _ExistingRunError，不会到这里
+    # locked / not_in_plan：找第一个对应 shot_id
+    if scene and plan:
+        for sid, code in _locked_shot_problems(scene, plan, True):
+            if code == first:
+                if code == "SHOT_NOT_IN_PLAN":
+                    return f"镜头 {sid} 不在制作计划中"
+                if code == "LOCKED_SHOT_NO_FINAL":
+                    return f"镜头 {sid} 已锁定但没有最终视频，请解除锁定或先完成该镜头"
+                if code == "LOCKED_SOURCE_NO_VIDEO_END":
+                    return f"镜头 {sid} 已锁定，但没有可用于后续接力的最终视频末帧。请解除锁定或先完成该镜头。"
+    return "故事段未就绪"
 
 
 # ============ Manager ============
@@ -252,18 +353,21 @@ class SceneAutopilotManager:
         from routers.production_planner import _read_plans
         plans = _read_plans(project_dir)
         plan = plans.get(scene_id)
-        if plan is None:
-            raise ValueError("没有 AI 制作计划，请先 AI 制作规划并确认")
-        if plan.status != "approved":
-            raise ValueError("制作计划尚未确认，请先在 AI 制作规划中确认")
-        stale = is_plan_stale(plan, scene)
-        if stale:
-            raise ValueError(f"制作计划已过期（{stale}），请重新生成并确认")
 
-        # 无同 Scene active Run（§三十四）
+        # 共享 preflight（§十八）：手工 Autopilot 与 Project Preflight 同一规则。
+        # active run 单独处理（须 _ExistingRunError 携带 existing_run_id）。
+        pre = preflight_scene_autopilot(project, scene, plan, respect_locked, has_active_run=False)
+        # 1) plan 级问题优先（与原顺序一致：plan 检查在 active 之前）
+        if any(c in pre.issues for c in (
+                "NO_SHOTS", "NO_PRODUCTION_PLAN", "PLAN_NOT_APPROVED", "PLAN_STALE", "SHOT_NOT_IN_PLAN")):
+            raise ValueError(_preflight_issue_to_error(scene, plan, pre))
+        # 2) 无同 Scene active Run（§三十四）
         active = self.find_active_run(project_name, scene_id)
         if active:
             raise _ExistingRunError(active.run_id)
+        # 3) locked 问题（plan 已就绪、无 active run 后才报 locked）
+        if not pre.ready:
+            raise ValueError(_preflight_issue_to_error(scene, plan, pre))
 
         # Shot 结构与 plan snapshot 一致（plan 刚 approved 且 not stale，必然一致；双保险）
         struct = _structure_changed(SceneAutopilotRun(
@@ -272,31 +376,30 @@ class SceneAutopilotManager:
         if struct:
             raise ValueError(f"镜头结构与计划不一致：{struct}")
 
-        # preflight locked shots（§八 locked Shot）
         planned_by_id = {p.shot_id: p for p in plan.shots}
-        for i, sh in enumerate(scene.shots):
-            p = planned_by_id.get(sh.shot_id)
-            if p is None:
-                raise ValueError(f"镜头 {sh.shot_id} 不在制作计划中")
-            if respect_locked and sh.locked:
-                if not sh.final_video or sh.video.status != ShotStatus.DONE.value:
-                    raise ValueError(f"镜头 {sh.shot_id} 已锁定但没有最终视频，请解除锁定或先完成该镜头")
-                # 后续若依赖它，须有 video_end_frame.url
-                if i + 1 < len(scene.shots):
-                    nxt = planned_by_id.get(scene.shots[i + 1].shot_id)
-                    if nxt and nxt.requires_previous_video_end and not sh.video_end_frame.url_ready:
-                        raise ValueError(f"镜头 {sh.shot_id} 已锁定，但没有可用于后续接力的最终视频末帧。请解除锁定或先完成该镜头。")
 
-        # 创建 Run
+        # 创建 Run + 初始化 ShotExecutionState + 保存 + 启动（与 from_snapshot 共用 _instantiate_run）
+        run = self._instantiate_run(project_name, scene, plan, plan.model_dump(),
+                                    respect_locked, parent_project_run_id=None)
+        await self._save_run(run)
+        self._launch_loop(run)
+        return run
+
+    def _instantiate_run(self, project_name: str, scene, plan: SceneProductionPlan,
+                         plan_snapshot: dict, respect_locked: bool,
+                         parent_project_run_id: Optional[str]) -> SceneAutopilotRun:
+        """创建 SceneAutopilotRun + 初始化 ShotExecutionState（locked -> skipped_locked）。
+        start_scene_run（手工，parent=None）与 start_scene_run_from_snapshot（Project child）共用。"""
+        planned_by_id = {p.shot_id: p for p in plan.shots}
         run_id = f"run_{uuid.uuid4().hex[:10]}"
         run_seed = derive_execution_seed(plan.run_seed, run_id)
         run = SceneAutopilotRun(
-            run_id=run_id, project_name=project_name, scene_id=scene_id,
-            plan_id=plan.plan_id, plan_snapshot=plan.model_dump(),
+            run_id=run_id, project_name=project_name, scene_id=scene.scene_id,
+            plan_id=plan.plan_id, plan_snapshot=plan_snapshot,
             run_seed=run_seed, status=RUN_PENDING, respect_locked=respect_locked,
+            parent_project_run_id=parent_project_run_id,
             created_at=time.time(), updated_at=time.time(),
         )
-        # 初始化 ShotExecutionState
         for i, sh in enumerate(scene.shots):
             p = planned_by_id[sh.shot_id]
             st = ShotExecutionState(shot_id=sh.shot_id, index=i, status=SHOT_PENDING)
@@ -305,9 +408,59 @@ class SceneAutopilotManager:
                 st.video_version_id = sh.final_video
                 st.completed_stages = build_stage_sequence(p)   # 全部跳过
             run.shots.append(st)
-        await self._save_run(run)
+        return run
 
-        # 启动后台 Executor
+    def find_by_parent_project_run(self, project_name: str, parent_project_run_id: str,
+                                   scene_id: str) -> Optional[SceneAutopilotRun]:
+        """crash-safe child 查找（§七）：按 parent_project_run_id + scene_id 找已存在的 child Run
+        （任意状态）。Project Controller 创建 child 前先调用，命中则复用，避免 backend crash 后重建第二套。"""
+        for r in self.list_runs_for_scene(project_name, scene_id):
+            if r.parent_project_run_id == parent_project_run_id:
+                return r
+        return None
+
+    async def start_scene_run_from_snapshot(self, project_name: str, scene_id: str,
+                                            plan_snapshot: dict, *,
+                                            respect_locked: bool = True,
+                                            parent_project_run_id: str) -> SceneAutopilotRun:
+        """从冻结的 plan_snapshot 启动 child SceneRun（§十二，ProjectProductionManager 内部使用，
+        不公开给前端）。不读 live production_plans.json（snapshot 是权威执行计划）。
+        启动前校验当前 Scene/Shot canonical 结构与 frozen snapshot 相符：
+          - 不符 -> _SourceStructureChanged（ProjectRun blocked，error_code=SOURCE_STRUCTURE_CHANGED）
+          - locked 无 final / 末帧缺失 -> ValueError（ProjectRun failed）
+          - 已有「非本 Project 的」active run -> _ExistingRunError（ProjectRun blocked）
+        parent_project_run_id 标记父 ProjectRun（手工 start 为 None）。"""
+        from deps import get_project_manager
+        project_dir = get_project_manager().get_project_dir(project_name)
+        store = ProjectStore(project_dir)
+        project = store.load()
+        scene = next((s for s in project.scenes if s.scene_id == scene_id), None)
+        if scene is None:
+            raise _SourceStructureChanged(f"故事段 {scene_id} 已删除")
+        try:
+            plan = SceneProductionPlan.model_validate(plan_snapshot)
+        except Exception as e:
+            raise _SourceStructureChanged(f"plan_snapshot 解析失败: {e}")
+        # 结构校验：frozen plan 的 scene/shot snapshot 与当前 Scene 比对（§十三 runtime validation）
+        stale = is_plan_stale(plan, scene)
+        if stale:
+            raise _SourceStructureChanged(stale)
+        if not scene.shots:
+            raise _SourceStructureChanged("故事段已无镜头")
+        # locked 校验（复用共享规则，§十八）
+        pre = preflight_scene_autopilot(project, scene, plan, respect_locked, has_active_run=False)
+        if any(c in pre.issues for c in ("LOCKED_SHOT_NO_FINAL", "LOCKED_SOURCE_NO_VIDEO_END", "SHOT_NOT_IN_PLAN")):
+            raise ValueError(_preflight_issue_to_error(scene, plan, pre))
+        # active run：本 Project 自己的 child 可复用（find_by_parent 未命中时的防御）；
+        #  其他 active run（手工/别的 Project）-> 冲突
+        active = self.find_active_run(project_name, scene_id)
+        if active and active.parent_project_run_id == parent_project_run_id:
+            return active
+        if active:
+            raise _ExistingRunError(active.run_id)
+        run = self._instantiate_run(project_name, scene, plan, plan_snapshot,
+                                    respect_locked, parent_project_run_id)
+        await self._save_run(run)
         self._launch_loop(run)
         return run
 
@@ -741,6 +894,12 @@ class _ExistingRunError(Exception):
     def __init__(self, existing_run_id: str):
         self.existing_run_id = existing_run_id
         super().__init__(f"已有 active Run: {existing_run_id}")
+
+
+class _SourceStructureChanged(Exception):
+    """AI-5A：child 从 frozen plan_snapshot 启动时，当前 Scene/Shot canonical 结构与 snapshot 不符。
+    Project Controller 捕获 -> ProjectRun blocked（error_code=SOURCE_STRUCTURE_CHANGED），不可 resume 旧 source。"""
+    pass
 
 
 # ============ 单例 ============

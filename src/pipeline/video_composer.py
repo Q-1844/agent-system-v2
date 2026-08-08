@@ -365,3 +365,86 @@ class VideoComposer:
             r = run_mux(False)
         if r.returncode != 0:
             logger.error(f"合成失败: {r.stderr[-400:]}")
+
+    # ==================== AI-5A：Manifest 驱动合成（不读 shot.final_video）====================
+    def compose_video_versions(self, clips: List[Any], output_path,
+                               width: int = 1280, height: int = 720, fps: int = 24) -> Path:
+        """用 Composition Manifest 的精确 clip 合成完整影片（§三十八/§三十九/§四十/§四十一）。
+        - 每个 clip 归一化到 width x height @ fps，libx264 + aac 48000 stereo（concat 兼容）。
+        - 保留 Agnes 原生 audio（有音轨时，§四十）；无音轨补等长 silence，避免 concat 失败（§四十一）。
+        - 不读 shot.final_video（§三十九），不改任何 Shot（纯输出，§四十四）。
+        clips: list[CompositionClip]（含 local_path + duration_s + shot_id）。返回 final.mp4 Path。"""
+        seg_paths: List[Path] = []
+        for i, clip in enumerate(clips):
+            local = str(clip.local_path) if getattr(clip, "local_path", None) else ""
+            if not local or not Path(local).exists():
+                raise RuntimeError(f"镜头 {getattr(clip,'shot_id','?')} 视频文件不存在: {local}")
+            dur = float(clip.duration_s) if getattr(clip, "duration_s", None) else self._probe_file_duration(Path(local))
+            if not dur or dur <= 0:
+                dur = 3.0
+            seg = self._make_manifest_segment(local, i, width, height, fps, getattr(clip, "shot_id", f"shot{i}"))
+            if not seg:
+                raise RuntimeError(f"镜头 {getattr(clip,'shot_id','?')} 片段生成失败")
+            seg_paths.append(seg)
+            logger.info(f"  镜头 {getattr(clip,'shot_id','?')} 片段 {dur:.2f}s ({i+1}/{len(clips)})")
+        if not seg_paths:
+            raise RuntimeError("没有可合成的片段")
+        concat_path = self._concat(seg_paths)
+        final = Path(output_path)
+        final.parent.mkdir(parents=True, exist_ok=True)
+        # _concat 输出在 cache_dir；复制到目标输出路径（每 Run 独立 final.mp4，§四十二/§五十八）
+        import shutil
+        shutil.copy2(concat_path, final)
+        logger.info(f"Manifest 合成完成: {final}（{len(seg_paths)} 片段）")
+        return final
+
+    def _make_manifest_segment(self, video_local: str, idx: int, w: int, h: int,
+                               fps: int, shot_id: str) -> Optional[Path]:
+        """单 clip 归一化片段：video scale/pad/fps + audio（原生保留 / 无音轨补 silence）。
+        所有片段统一 libx264 + aac 48000 stereo + yuv420p，保证 concat 兼容。"""
+        seg = self.cache_dir / f"manifest_{idx:03d}_{shot_id}.mp4"
+        scale_pad = (f"scale={w}:{h}:force_original_aspect_ratio=decrease,"
+                     f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps={fps}")
+        if self._probe_has_audio(Path(video_local)):
+            # 保留 Agnes 原生 audio，归一化到 aac 48000 stereo
+            cmd = ["ffmpeg", "-y", "-i", video_local, "-vf", scale_pad,
+                   "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                   "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
+                   str(seg)]
+        else:
+            # 无音轨：anullsrc 补等长 silence（-shortest 以视频长度为准）
+            cmd = ["ffmpeg", "-y", "-i", video_local,
+                   "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
+                   "-vf", scale_pad, "-map", "0:v", "-map", "1:a",
+                   "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                   "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
+                   "-shortest", str(seg)]
+        r = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
+        if r.returncode == 0 and seg.exists():
+            return seg
+        logger.warning(f"Manifest 片段生成失败({shot_id}): {r.stderr[-300:]}")
+        return None
+
+    @staticmethod
+    def _probe_has_audio(path: Path) -> bool:
+        """ffprobe 探是否存在音频流。"""
+        try:
+            r = subprocess.run(
+                ["ffprobe", "-v", "error", "-select_streams", "a",
+                 "-show_entries", "stream=index", "-of", "csv=p=0", str(path)],
+                capture_output=True, text=True, timeout=10)
+            return bool((r.stdout or "").strip())
+        except Exception:
+            return False
+
+    @staticmethod
+    def _probe_file_duration(path: Path) -> float:
+        """ffprobe 探文件时长（秒）。失败返回 0。"""
+        try:
+            r = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                 "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
+                capture_output=True, text=True, timeout=10)
+            return float((r.stdout or "").strip())
+        except Exception:
+            return 0.0

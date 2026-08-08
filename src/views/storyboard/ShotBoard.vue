@@ -14,6 +14,11 @@
 
     <!-- 主体：左故事段列表 + 右当前故事段 -->
     <div v-else class="board">
+      <!-- 项目级顶部：完整影片自动制作（Phase AI-5A §四十九）-->
+      <div class="proj-head">
+        <span class="proj-name">{{ projectName }}</span>
+        <button class="ai-full-btn" @click="openProduction">🎬 自动制作完整影片</button>
+      </div>
       <button v-if="listCollapsed" class="expand-fab" @click="listCollapsed = false" title="展开故事段列表">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6" /></svg>
         <span>故事段</span>
@@ -182,6 +187,13 @@
       @close="onAutopilotClose"
     />
 
+    <!-- 完整影片自动制作工作区（Phase AI-5A） -->
+    <ProjectProductionStudio
+      v-if="showProduction"
+      :project-name="projectName"
+      @close="showProduction = false"
+    />
+
     <!-- 镜头右键菜单 -->
     <div v-if="ctxMenu" class="ctx-menu" :style="ctxMenuStyle" @click.stop>
       <div class="ctx-shot-id">{{ ctxMenu.shot.shot_id }}</div>
@@ -204,6 +216,7 @@ import Workbench from '@/components/Workbench.vue';
 import DirectorStudio from '@/components/DirectorStudio.vue';
 import ProductionPlannerStudio from '@/components/ProductionPlannerStudio.vue';
 import AutopilotRunMonitor from '@/components/AutopilotRunMonitor.vue';
+import ProjectProductionStudio from '@/components/ProjectProductionStudio.vue';
 
 const router = useRouter();
 const projStore = useProjectStore();
@@ -222,6 +235,7 @@ const previewType = ref<'image' | 'video'>('image');
 const showDirector = ref(false);
 const showPlanner = ref(false);
 const showAutopilot = ref(false);
+const showProduction = ref(false);
 const appliedHint = ref<{ count: number; firstShotId: string | null } | null>(null);
 // 项目级数据（传给 Workbench 作公共上下文：角色多选/风格/画幅徽标）
 const projectCharacters = ref<Array<{ name: string; description_en: string; views: any }>>([]);
@@ -375,6 +389,11 @@ async function onAutopilotClose() {
   await load();
 }
 
+// Phase AI-5A：完整影片自动制作（项目级）
+function openProduction() {
+  showProduction.value = true;
+}
+
 // Phase 6A：镜头接力标识（开场来源）。仅展示，不打开工作台也能看懂关系。
 function connLabel(sh: ShotData): string {
   if (sh.opening_source === 'inherit_previous') return '末帧接力';
@@ -509,6 +528,17 @@ watch(projectName, () => { selected.value = null; load(); });
 .seg-thumb { width: 40px; height: 22px; object-fit: cover; border-radius: 3px; background: var(--bg-root); }
 
 .seg-detail { flex: 1; min-width: 0; overflow-y: auto; }
+.proj-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; background: var(--bg-surface); border: 1px solid var(--border);
+  border-radius: 8px; margin-bottom: 14px;
+}
+.proj-name { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.ai-full-btn {
+  padding: 6px 16px; border-radius: 6px; border: none;
+  background: var(--accent); color: var(--accent-text, #fff); font-size: 13px; cursor: pointer;
+  &:hover { background: var(--accent-hover); }
+}
 .seg-head { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; }
 .seg-head-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .seg-head-actions { display: flex; align-items: center; gap: 10px; }

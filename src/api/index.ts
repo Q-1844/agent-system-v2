@@ -440,6 +440,68 @@ export interface SceneAutopilotRun {
   updated_at: number;
 }
 
+// ============ 完整影片自动制作（Phase AI-5A Prepared Project Autopilot）============
+export interface ProjectSceneExecutionState {
+  scene_id: string;
+  index: number;
+  status: string;            // pending|running|paused|failed|blocked|completed|cancelled
+  plan_id: string | null;
+  child_run_id: string | null;
+  shot_count: number;
+  error: string | null;
+}
+
+export interface ProjectProductionRun {
+  run_id: string;
+  project_name: string;
+  status: string;            // pending|running|pausing|paused|failed|blocked|composing|completed|cancelled
+  stage: string;             // preflight|scenes|compose|done
+  respect_locked: boolean;
+  pause_requested: boolean;
+  cancel_requested: boolean;
+  current_scene_id: string | null;
+  current_child_run_id: string | null;
+  scenes: ProjectSceneExecutionState[];
+  source_signature: Record<string, any>;
+  source_snapshot_file: string | null;
+  plans_snapshot_file: string | null;
+  composition_manifest_file: string | null;
+  final_output: string | null;
+  final_duration_s: number | null;
+  final_size_bytes: number | null;
+  error: string | null;
+  error_code: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface CompositionClip {
+  scene_id: string;
+  shot_id: string;
+  scene_run_id: string;
+  video_version_id: string;
+  local_path: string | null;
+  url: string | null;
+  duration_s: number | null;
+}
+
+export interface ScenePreflightResult {
+  scene_id: string;
+  ready: boolean;
+  shot_count: number;
+  plan_id: string | null;
+  plan_status: string | null;
+  issues: string[];          // NO_SHOTS|NO_PRODUCTION_PLAN|PLAN_NOT_APPROVED|PLAN_STALE|ACTIVE_SCENE_RUN|...
+}
+
+export interface ProjectProductionPreflight {
+  ready: boolean;
+  scene_count: number;
+  shot_count: number;
+  locked_shot_count: number;
+  scenes: ScenePreflightResult[];
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -1021,6 +1083,51 @@ class ApiClient {
   // 停止（保留已生成资产，§三十一）
   async cancelAutopilot(projectName: string, runId: string): Promise<SceneAutopilotRun> {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/autopilot/run/${encodeURIComponent(runId)}/cancel`, {
+      method: 'POST',
+    });
+  }
+
+  // ============ 完整影片自动制作（Phase AI-5A）============
+
+  // 项目就绪检查（§十七）
+  async getProductionPreflight(projectName: string, respectLocked: boolean = true): Promise<ProjectProductionPreflight> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/production/preflight?respect_locked=${respectLocked}`);
+  }
+
+  // 开始完整制作（后端自己 load + preflight + 冻结 snapshot，§十九）
+  async startProduction(projectName: string, respectLocked: boolean = true): Promise<ProjectProductionRun> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/production/start`, {
+      method: 'POST', body: JSON.stringify({ respect_locked: respectLocked }),
+    });
+  }
+
+  // 列出历史 ProjectRun（§五十七）
+  async listProductionRuns(projectName: string): Promise<ProjectProductionRun[]> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/production/runs`);
+  }
+
+  // 读单个 ProjectRun（Monitor 轮询用）
+  async getProductionRun(projectName: string, runId: string): Promise<ProjectProductionRun> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/production/run/${encodeURIComponent(runId)}`);
+  }
+
+  // 暂停完整制作（传给当前 child，§二十六）
+  async pauseProduction(projectName: string, runId: string): Promise<ProjectProductionRun> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/production/run/${encodeURIComponent(runId)}/pause`, {
+      method: 'POST',
+    });
+  }
+
+  // 继续完整制作（同 source/plans snapshot，§二十七）
+  async resumeProduction(projectName: string, runId: string): Promise<ProjectProductionRun> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/production/run/${encodeURIComponent(runId)}/resume`, {
+      method: 'POST',
+    });
+  }
+
+  // 停止完整制作（保留已生成资产，§二十八）
+  async cancelProduction(projectName: string, runId: string): Promise<ProjectProductionRun> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/production/run/${encodeURIComponent(runId)}/cancel`, {
       method: 'POST',
     });
   }
