@@ -56,6 +56,10 @@
                       :disabled="!selected.shots.length"
                       :title="selected.shots.length ? '' : '请先创建镜头或使用 AI 设计分镜。'"
                       @click="openPlanner">AI 制作规划</button>
+              <button class="ai-direct-btn"
+                      :disabled="!selected.shots.length"
+                      :title="selected.shots.length ? '' : '请先创建镜头。'"
+                      @click="openAutopilot">自动制作本故事段</button>
               <button class="link-btn" @click="goScript">返回剧本修改</button>
             </div>
           </div>
@@ -168,6 +172,16 @@
       @approved="onPlannerApproved"
     />
 
+    <!-- 自动制作工作区（Phase AI-4B） -->
+    <AutopilotRunMonitor
+      v-if="showAutopilot && selected"
+      :project-name="projectName"
+      :scene-id="selected.scene_id"
+      :scene-summary="selected.summary"
+      :shots="selected.shots.map(s => ({ shot_id: s.shot_id, description: s.description }))"
+      @close="onAutopilotClose"
+    />
+
     <!-- 镜头右键菜单 -->
     <div v-if="ctxMenu" class="ctx-menu" :style="ctxMenuStyle" @click.stop>
       <div class="ctx-shot-id">{{ ctxMenu.shot.shot_id }}</div>
@@ -189,6 +203,7 @@ import SafeFrameOverlay from '@/components/SafeFrameOverlay.vue';
 import Workbench from '@/components/Workbench.vue';
 import DirectorStudio from '@/components/DirectorStudio.vue';
 import ProductionPlannerStudio from '@/components/ProductionPlannerStudio.vue';
+import AutopilotRunMonitor from '@/components/AutopilotRunMonitor.vue';
 
 const router = useRouter();
 const projStore = useProjectStore();
@@ -206,6 +221,7 @@ const previewUrl = ref('');
 const previewType = ref<'image' | 'video'>('image');
 const showDirector = ref(false);
 const showPlanner = ref(false);
+const showAutopilot = ref(false);
 const appliedHint = ref<{ count: number; firstShotId: string | null } | null>(null);
 // 项目级数据（传给 Workbench 作公共上下文：角色多选/风格/画幅徽标）
 const projectCharacters = ref<Array<{ name: string; description_en: string; views: any }>>([]);
@@ -345,6 +361,18 @@ function onPlannerApproved() {
   // 🔴 approve 不改 Shot（opening_source 仍默认 independent），无需 reload。
   // 正式 opening_source 由 AI-4B Executor 执行时生效。
   showPlanner.value = false;
+}
+
+// ---- 自动制作（Phase AI-4B）----
+function openAutopilot() {
+  if (!selected.value) return;
+  if (!selected.value.shots.length) return;
+  showAutopilot.value = true;
+}
+async function onAutopilotClose() {
+  showAutopilot.value = false;
+  // Run 可能已生成新首帧/尾帧/视频 -> 刷新镜头列表展示
+  await load();
 }
 
 // Phase 6A：镜头接力标识（开场来源）。仅展示，不打开工作台也能看懂关系。

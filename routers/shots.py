@@ -561,7 +561,8 @@ async def _handler_first_frame(job, emit):
                  for name in shot.characters if project.get_character(name)}
     new_batch = ImageBatch(batch_id=batch_id, kind="first_frame", created_at=now,
                            status=ShotStatus.PENDING.value, prompt_snapshot=prompt,
-                           char_ref_snapshot=char_snap, candidates=cand_list)
+                           char_ref_snapshot=char_snap, candidates=cand_list,
+                           origin_run_id=job.params.get("origin_run_id"))
 
     def mut(s):
         s.first_frame_batches.append(new_batch)
@@ -619,7 +620,8 @@ async def _handler_last_frame(job, emit):
     new_batch = ImageBatch(batch_id=batch_id, kind="last_frame", created_at=now,
                            status=ShotStatus.DONE.value, prompt_snapshot=prompt,
                            char_ref_snapshot=char_snap,
-                           based_on_first_frame=shot.selected_first_frame, candidates=[cand])
+                           based_on_first_frame=shot.selected_first_frame, candidates=[cand],
+                           origin_run_id=job.params.get("origin_run_id"))
     def mut(s, b=new_batch, cid=cand.candidate_id, d=str(dest), u=url):
         s.last_frame_batches.append(b)
         s.selected_last_frame = cid
@@ -1220,7 +1222,8 @@ async def _handler_video(job, emit):
                           video_id=vid, task_id=shot.video.task_id,
                           local=str(dest), url=res["url"],
                           seconds_returned=res["seconds"], size_returned=res["size"],
-                          num_frames=shot.video.num_frames, frame_rate=shot.video.frame_rate)
+                          num_frames=shot.video.num_frames, frame_rate=shot.video.frame_rate,
+                          origin_run_id=job.params.get("origin_run_id"))
     def mut(s, vv=new_vv, d=str(dest), r=res):
         s.video_versions.append(vv)
         s.final_video = vv.version_id
@@ -1768,5 +1771,199 @@ async def translate_text(req: TranslateRequest):
         return {"english": (en or "").strip()}
     except Exception as e:
         raise HTTPException(500, str(e))
+
+
+# ============================================================================
+# AI-4B Autopilot 共享业务 helper（§四十一：HTTP Router 与 Executor 共用，不绕 HTTP/AgnesClient）
+# 提取自上方 endpoint 的核心逻辑；endpoint 行为不变，Autopilot 直接调用。
+# ============================================================================
+
+async def generate_prompt_for_stage(project_name: str, shot_id: str, stage: str,
+                                    *, persist: bool = False) -> dict:
+    """标准模式「根据上下文生成」英文提示词（§十二）。
+    返回 {"prompt": str, "inferred_shot_intent": str}。
+    persist=True 时写入 shot 字段：first->prompt_en, last->last_frame_prompt_en, video->video_prompt_en。
+    shot 不存在 -> RuntimeError；stage 非法 -> ValueError。"""
+    project_dir = get_project_manager().get_project_dir(project_name)
+    from src.core.store import ProjectStore
+    project = ProjectStore(project_dir).load()
+    shot = project.get_shot(shot_id)
+    if shot is None:
+        raise RuntimeError(f"镜头 {shot_id} 不存在")
+    if stage not in ("first", "last", "video"):
+        raise ValueError("stage 必须为 first/last/video")
+    ctx = _collect_prompt_context(project, shot, stage)
+    ctx_text = _format_context(ctx, stage)
+    client = get_agnes_client()
+    inferred = ""
+    if stage == "first":
+        has_intent = bool(ctx["shot_intent"])
+        if not has_intent and ctx["total"] == 1 and ctx["scene_summary"]:
+            user = f"本镜意图(取自故事段): {ctx['scene_summary']}\n\nContext:\n{ctx_text}"
+            en = await client.chat(
+                [{"role": "system", "content": _FIRST_FRAME_SYSTEM_HAS_INTENT},
+                 {"role": "user", "content": user}], temperature=0.7, max_tokens=512)
+            prompt = en.strip()
+        elif has_intent:
+            user = f"Stage: first frame\n\nContext:\n{ctx_text}"
+            en = await client.chat(
+                [{"role": "system", "content": _FIRST_FRAME_SYSTEM_HAS_INTENT},
+                 {"role": "user", "content": user}], temperature=0.7, max_tokens=512)
+            prompt = en.strip()
+        else:
+            user = f"Stage: first frame (infer shot intent)\n\nContext:\n{ctx_text}"
+            raw = await client.chat(
+                [{"role": "system", "content": _FIRST_FRAME_SYSTEM_INFER},
+                 {"role": "user", "content": user}], temperature=0.7, max_tokens=700, json_mode=True)
+            import json as _json, re as _re
+            m = _re.search(r'\{.*\}', raw, _re.DOTALL)
+            if m:
+                try:
+                    obj = _json.loads(m.group(0))
+                    prompt = (obj.get("prompt") or "").strip()
+                    inferred = (obj.get("shot_intent") or "").strip()
+                except Exception:
+                    prompt = raw.strip()
+            else:
+                prompt = raw.strip()
+    else:
+        system = _LAST_FRAME_SYSTEM if stage == "last" else _VIDEO_SYSTEM
+        stage_desc = "last frame" if stage == "last" else "video"
+        en = await client.chat(
+            [{"role": "system", "content": system},
+             {"role": "user", "content": f"Stage: {stage_desc}\n\nContext:\n{ctx_text}"}],
+            temperature=0.7, max_tokens=512)
+        prompt = en.strip()
+
+    if persist:
+        field = {"first": "prompt_en", "last": "last_frame_prompt_en",
+                 "video": "video_prompt_en"}[stage]
+        ProjectStore(project_dir).update_shot(shot_id, lambda s, f=field, p=prompt: setattr(s, f, p))
+    return {"prompt": prompt, "inferred_shot_intent": inferred}
+
+
+def activate_planned_shot(store, project, shot_id, planned) -> dict:
+    """Executor 真正执行 Shot 时正式应用 PlannedShot（§九）。
+    写 shot.opening_source / source_shot_id / source_version / link_mode。
+    reference/inherit：source_version = prev.final_video（本 Run 刚生成的版本，或 skipped_locked 的已有版本）。
+    🔴 不通过 HTTP /opening-source；复用 set_opening_source 的业务逻辑。
+    调用方须先 dependency_ready 校验（reference/inherit 的 prev final_video + video_end_frame 已就绪）。"""
+    from src.core.models import OpeningSource, ShotStatus
+    shot = project.get_shot(shot_id)
+    if shot is None:
+        raise RuntimeError(f"镜头 {shot_id} 不存在")
+    opening = planned.opening_source
+    link_mode = planned.link_mode
+    if opening == OpeningSource.INDEPENDENT.value:
+        store.update_shot(shot_id, lambda s, o=opening, lm=link_mode: (
+            setattr(s, "opening_source", o),
+            setattr(s, "source_shot_id", None),
+            setattr(s, "source_version", None),
+            setattr(s, "link_mode", lm)))
+        return {"opening_source": opening, "source_shot_id": None, "source_version": None,
+                "link_mode": link_mode, "status": "independent", "message": ""}
+    # reference / inherit
+    prev_id = planned.source_shot_id
+    prev = project.get_shot(prev_id) if prev_id else None
+    if not prev or not prev.final_video or prev.video.status != ShotStatus.DONE.value:
+        raise RuntimeError(f"来源镜头 {prev_id} 最终视频未就绪，无法 activate {opening}")
+    if opening == OpeningSource.INHERIT_PREVIOUS.value and not prev.video_end_frame.url_ready:
+        raise RuntimeError(f"来源镜头 {prev_id} 末帧未就绪，无法 inherit")
+    sv = prev.final_video
+    store.update_shot(shot_id, lambda s, o=opening, p=prev_id, v=sv, lm=link_mode: (
+        setattr(s, "opening_source", o),
+        setattr(s, "source_shot_id", p),
+        setattr(s, "source_version", v),
+        setattr(s, "link_mode", lm)))
+    proj2 = store.load()
+    status, msg = continuity_status(proj2, proj2.get_shot(shot_id))
+    return {"opening_source": opening, "source_shot_id": prev_id, "source_version": sv,
+            "link_mode": link_mode, "status": status, "message": msg}
+
+
+def choose_first_frame_business(store, shot_id: str, candidate_id: str) -> dict:
+    """选择首帧候选的业务逻辑（extract 自 choose_first_frame endpoint）。
+    跨所有批次找候选，设 selected_first_frame + 同步旧 first_frame（url_ready=True 放行视频）。"""
+    from src.core.models import ShotStatus, Asset
+    shot = store.load().get_shot(shot_id)
+    if shot is None:
+        raise RuntimeError(f"镜头 {shot_id} 不存在")
+    found_batch, found_idx = None, -1
+    for b in shot.first_frame_batches:
+        for i, c in enumerate(b.candidates):
+            if c.candidate_id == candidate_id:
+                found_batch, found_idx = b, i
+                break
+        if found_batch:
+            break
+    if found_batch is None:
+        raise RuntimeError(f"候选 {candidate_id} 不存在")
+    cand = found_batch.candidates[found_idx]
+    def mut(s, b=found_batch, i=found_idx, cid=candidate_id):
+        s.selected_first_frame = cid
+        s.first_frame.candidates = [Asset(local=c.local, url=c.url, status=c.status) for c in b.candidates]
+        s.first_frame.selected_index = i
+        setattr(s.first_frame, "status", ShotStatus.DONE.value)
+    store.update_shot(shot_id, mut)
+    return {"shot_id": shot_id, "candidate_id": candidate_id, "url": cand.url}
+
+
+def choose_last_frame_business(store, shot_id: str, candidate_id: str) -> dict:
+    """选择尾帧候选的业务逻辑（extract 自 choose_last_frame endpoint）。"""
+    from src.core.models import ShotStatus, Asset
+    shot = store.load().get_shot(shot_id)
+    if shot is None:
+        raise RuntimeError(f"镜头 {shot_id} 不存在")
+    found_batch, found_idx = None, -1
+    for b in shot.last_frame_batches:
+        for i, c in enumerate(b.candidates):
+            if c.candidate_id == candidate_id:
+                found_batch, found_idx = b, i
+                break
+        if found_batch:
+            break
+    if found_batch is None:
+        raise RuntimeError(f"候选 {candidate_id} 不存在")
+    cand = found_batch.candidates[found_idx]
+    def mut(s, b=found_batch, i=found_idx, cid=candidate_id):
+        s.selected_last_frame = cid
+        s.last_frame.candidates = [Asset(local=c.local, url=c.url, status=c.status) for c in b.candidates]
+        s.last_frame.selected_index = i
+        setattr(s.last_frame, "status", ShotStatus.DONE.value)
+    store.update_shot(shot_id, mut)
+    return {"shot_id": shot_id, "candidate_id": candidate_id, "url": cand.url}
+
+
+async def set_final_video_business(store, project_dir, shot_id: str, version_id: str) -> dict:
+    """设最终视频版本的业务逻辑（extract 自 set_final_video endpoint，§二十五）。
+    设 final_video + 同步旧 video 字段 + 重新提取 video_end_frame。
+    🔴 _handler_video 完成时已自动 set final + 提取末帧；本 helper 作为 Executor 显式确认/补提的复用入口。"""
+    from src.core.models import ShotStatus
+    shot = store.load().get_shot(shot_id)
+    if shot is None:
+        raise RuntimeError(f"镜头 {shot_id} 不存在")
+    vv = next((v for v in shot.video_versions if v.version_id == version_id), None)
+    if vv is None:
+        raise RuntimeError(f"视频版本 {version_id} 不存在")
+    def mut(s, v=vv):
+        s.final_video = v.version_id
+        s.video.local = v.local
+        s.video.url = v.url
+        s.video.status = v.status
+        s.video.video_id = v.video_id
+        s.video.task_id = v.task_id
+        s.video.seconds_returned = v.seconds_returned
+        s.video.size_returned = v.size_returned
+        s.video.num_frames = v.num_frames
+        s.video.frame_rate = v.frame_rate
+    store.update_shot(shot_id, mut)
+    if vv.local and Path(vv.local).exists():
+        try:
+            end_asset, _ok = await _extract_video_end_frame(project_dir, shot_id, vv.local, vv.version_id)
+            store.update_shot(shot_id, lambda s, ea=end_asset, sv=vv.version_id: (
+                setattr(s, "video_end_frame", ea), setattr(s, "video_end_source_version", sv)))
+        except Exception as e:
+            logger.warning(f"{shot_id} set-final 末帧提取异常: {e}")
+    return {"shot_id": shot_id, "final_video": version_id}
 
 

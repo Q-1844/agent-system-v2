@@ -398,6 +398,48 @@ export interface SceneProductionPlan {
   stale_reason: string | null;
 }
 
+// ============ AI 自动制作（Phase AI-4B Scene Autopilot Executor）============
+export interface ShotExecutionState {
+  shot_id: string;
+  index: number;
+  status: string;            // pending | waiting_dependency | running | skipped_locked | failed | completed
+  stage: string | null;      // activate_plan/first_prompt/first_frame/.../video_end
+  active_job_id: string | null;
+  active_stage_key: string | null;
+  completed_stages: string[];
+  first_prompt: string | null;
+  first_batch_id: string | null;
+  selected_first_candidate_id: string | null;
+  last_prompt: string | null;
+  last_batch_id: string | null;
+  selected_last_candidate_id: string | null;
+  video_prompt: string | null;
+  video_version_id: string | null;
+  attempts: Record<string, number>;
+  warnings: string[];
+  error: string | null;
+}
+
+export interface SceneAutopilotRun {
+  run_id: string;
+  project_name: string;
+  scene_id: string;
+  plan_id: string;
+  plan_snapshot: Record<string, any>;
+  run_seed: number;
+  status: string;            // pending|running|pausing|paused|blocked|failed|completed|cancelled
+  respect_locked: boolean;
+  pause_requested: boolean;
+  cancel_requested: boolean;
+  current_shot_id: string | null;
+  current_stage: string | null;
+  shots: ShotExecutionState[];
+  error: string | null;
+  error_code: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -939,6 +981,46 @@ class ApiClient {
   // 确认制作计划（status=approved）。🔴 不写正式 Shot.opening_source（AI-4B Executor 生效）
   async approveProductionPlan(projectName: string, sceneId: string): Promise<SceneProductionPlan> {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/scene/${encodeURIComponent(sceneId)}/production-plan/approve`, {
+      method: 'POST',
+    });
+  }
+
+  // ============ AI 自动制作（Phase AI-4B）============
+
+  // 开始自动制作本故事段（后端自己读 plan / 生成 run_seed / 冻结 plan_snapshot）
+  async startAutopilot(projectName: string, sceneId: string, respectLocked: boolean = true): Promise<SceneAutopilotRun> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/scene/${encodeURIComponent(sceneId)}/autopilot/start`, {
+      method: 'POST', body: JSON.stringify({ respect_locked: respectLocked }),
+    });
+  }
+
+  // 列出本故事段历史 Run
+  async listAutopilotRuns(projectName: string, sceneId: string): Promise<SceneAutopilotRun[]> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/scene/${encodeURIComponent(sceneId)}/autopilot/runs`);
+  }
+
+  // 读单个 Run（Run Monitor 轮询用）
+  async getAutopilotRun(projectName: string, runId: string): Promise<SceneAutopilotRun> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/autopilot/run/${encodeURIComponent(runId)}`);
+  }
+
+  // 暂停（当前 job 完成后停，§二十九）
+  async pauseAutopilot(projectName: string, runId: string): Promise<SceneAutopilotRun> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/autopilot/run/${encodeURIComponent(runId)}/pause`, {
+      method: 'POST',
+    });
+  }
+
+  // 继续（从 checkpoint，§三十）
+  async resumeAutopilot(projectName: string, runId: string): Promise<SceneAutopilotRun> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/autopilot/run/${encodeURIComponent(runId)}/resume`, {
+      method: 'POST',
+    });
+  }
+
+  // 停止（保留已生成资产，§三十一）
+  async cancelAutopilot(projectName: string, runId: string): Promise<SceneAutopilotRun> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/autopilot/run/${encodeURIComponent(runId)}/cancel`, {
       method: 'POST',
     });
   }

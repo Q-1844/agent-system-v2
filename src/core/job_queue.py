@@ -332,3 +332,20 @@ class JobQueue:
                  and (state is None or j.state == state)]
         items.sort(key=lambda x: x["created_at"], reverse=True)
         return items[:limit]
+
+    # ---------- AI-4B Autopilot：按 id / origin 查询（幂等防重复提交）----------
+    def get(self, job_id: str) -> Optional[Job]:
+        """按 job_id 取 Job（None = 不存在）。Executor wait_for_job 用。"""
+        return self.jobs.get(job_id)
+
+    def find_by_origin(self, origin_run_id: str,
+                       stage_key: Optional[str] = None) -> Optional[Job]:
+        """按 Autopilot origin 元数据找 job（§十六 幂等：重启后不重复 submit）。
+        扫描 jobs.params：origin_run_id 匹配；stage_key 给定时进一步匹配 autopilot_stage_key。
+        返回最新创建的匹配 job（None = 无）。"""
+        matches = [j for j in self.jobs.values()
+                   if j.params.get("origin_run_id") == origin_run_id
+                   and (stage_key is None or j.params.get("autopilot_stage_key") == stage_key)]
+        if not matches:
+            return None
+        return max(matches, key=lambda j: j.created_at)

@@ -179,6 +179,7 @@ class ImageBatch:
     char_ref_snapshot: Dict[str, Any] = field(default_factory=dict)   # {角色名: {view, url}}
     based_on_first_frame: Optional[str] = None   # 尾帧批次：基于的首帧 candidate_id
     candidates: List[Candidate] = field(default_factory=list)
+    origin_run_id: Optional[str] = None  # AI-4B Autopilot：本批次由哪个 Run 生成（None=手工/旧）
 
 
 @dataclass
@@ -198,6 +199,7 @@ class VideoVersion:
     size_returned: Optional[str] = None
     num_frames: int = 0
     frame_rate: int = 24
+    origin_run_id: Optional[str] = None  # AI-4B Autopilot：本版本由哪个 Run 生成（None=手工/旧）
 
 
 # ---- 批次解析/迁移 helper（Step 2 向后兼容：旧 first_frame/last_frame/video -> 批次）----

@@ -73,6 +73,7 @@ from routers import story  # noqa: E402
 from routers import character_design  # noqa: E402
 from routers import director  # noqa: E402
 from routers import production_planner  # noqa: E402
+from routers import autopilot  # noqa: E402
 app.include_router(system.router)
 app.include_router(projects.router)
 app.include_router(script.router)
@@ -85,6 +86,7 @@ app.include_router(story.router)
 app.include_router(character_design.router)
 app.include_router(director.router)
 app.include_router(production_planner.router)
+app.include_router(autopilot.router)
 
 
 @app.on_event("startup")
@@ -129,6 +131,14 @@ async def startup():
         logger.info("全局任务队列已就绪")
     except Exception as e:
         logger.error(f"任务队列初始化失败: {e}")
+
+    # 阶段 AI-4B：恢复中断的 Autopilot Run（running/pausing）。
+    # active job 由 JobQueue 恢复 + find_by_origin 复用，不重复 submit（§三十二）。
+    try:
+        from src.ai.autopilot import get_autopilot_manager
+        asyncio.create_task(get_autopilot_manager().recover_runs())
+    except Exception as e:
+        logger.error(f"Autopilot 恢复失败: {e}")
 
 
 if __name__ == "__main__":
