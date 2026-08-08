@@ -365,6 +365,39 @@ export interface DirectorApplyResult {
   first_new_shot_id: string | null;
 }
 
+// ============ AI 制作规划（Phase AI-4A）============
+// AI 只输出 opening_source/link_mode/reason；source_shot_id / generate_first_frame /
+// generate_last_frame / requires_previous_video_end / auto_select_policy 由后端代码推导。
+export interface PlannedShot {
+  shot_id: string;
+  opening_source: string;        // independent | reference_previous | inherit_previous
+  link_mode: string;             // i2v | keyframes
+  source_shot_id: string | null; // reference/inherit -> 紧邻上一镜（代码推导，不可用户选）
+  generate_first_frame: boolean; // = opening_source != inherit_previous
+  generate_last_frame: boolean;  // = link_mode == keyframes
+  generate_video: boolean;       // 恒 true（第一版）
+  requires_previous_video_end: boolean; // reference/inherit -> true
+  auto_select_policy: string;    // seeded_random
+  reason: string;
+}
+
+export interface SceneProductionPlan {
+  plan_id: string;
+  project_name: string;
+  scene_id: string;
+  scene_summary_snapshot: string;
+  scene_characters_snapshot: string[];
+  shot_structure_snapshot: Array<{ shot_id: string; description: string; characters: string[]; target_duration_s: number | null }>;
+  run_seed: number;
+  overview: string;
+  shots: PlannedShot[];
+  status: string;            // draft | approved
+  created_at: number;
+  approved_at: number | null;
+  is_stale: boolean;         // 派生标志：scene/shots 结构已变 -> 需重新规划
+  stale_reason: string | null;
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -868,6 +901,44 @@ class ApiClient {
   // 采用镜头方案 -> 创建 Shot[]（stale + 已有 Shot 闸门 + 角色覆盖 + 一次 save）
   async applyDirector(projectName: string, sceneId: string): Promise<DirectorApplyResult> {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/scene/${encodeURIComponent(sceneId)}/director/apply`, {
+      method: 'POST',
+    });
+  }
+
+  // ============ AI 制作规划（Phase AI-4A）============
+
+  // AI 为一个故事段的 Shot[] 制定制作规划，落计划（生成 run_seed）
+  async planProductionPlan(projectName: string, sceneId: string): Promise<SceneProductionPlan> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/scene/${encodeURIComponent(sceneId)}/production-plan/plan`, {
+      method: 'POST',
+    });
+  }
+
+  // 读当前制作计划（含 is_stale 派生标志）。无计划 404
+  async getProductionPlan(projectName: string, sceneId: string): Promise<SceneProductionPlan> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/scene/${encodeURIComponent(sceneId)}/production-plan`);
+  }
+
+  // 保存用户编辑（opening_source/link_mode），后端重算派生字段。source_shot_id 不可用户选
+  async saveProductionPlan(projectName: string, sceneId: string, payload: {
+    overview: string;
+    shots: Array<{ shot_id: string; opening_source: string; link_mode: string; reason: string }>;
+  }): Promise<SceneProductionPlan> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/scene/${encodeURIComponent(sceneId)}/production-plan`, {
+      method: 'PUT', body: JSON.stringify(payload),
+    });
+  }
+
+  // 删计划
+  async deleteProductionPlan(projectName: string, sceneId: string): Promise<{ ok: boolean }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/scene/${encodeURIComponent(sceneId)}/production-plan`, {
+      method: 'DELETE',
+    });
+  }
+
+  // 确认制作计划（status=approved）。🔴 不写正式 Shot.opening_source（AI-4B Executor 生效）
+  async approveProductionPlan(projectName: string, sceneId: string): Promise<SceneProductionPlan> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/scene/${encodeURIComponent(sceneId)}/production-plan/approve`, {
       method: 'POST',
     });
   }

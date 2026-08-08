@@ -52,6 +52,10 @@
             <span class="seg-no">故事段 {{ selected.scene_id }}</span>
             <div class="seg-head-actions">
               <button class="ai-direct-btn" @click="openDirector">AI 设计分镜</button>
+              <button class="ai-direct-btn"
+                      :disabled="!selected.shots.length"
+                      :title="selected.shots.length ? '' : '请先创建镜头或使用 AI 设计分镜。'"
+                      @click="openPlanner">AI 制作规划</button>
               <button class="link-btn" @click="goScript">返回剧本修改</button>
             </div>
           </div>
@@ -152,6 +156,18 @@
       @applied="onDirectorApplied"
     />
 
+    <!-- AI 制作规划工作区（Phase AI-4A） -->
+    <ProductionPlannerStudio
+      v-if="showPlanner && selected"
+      :project-name="projectName"
+      :scene-id="selected.scene_id"
+      :scene-summary="selected.summary"
+      :scene-characters="selected.characters"
+      :shots="selected.shots.map(s => ({ shot_id: s.shot_id, description: s.description, characters: s.characters, target_duration_s: s.target_duration_s }))"
+      @close="showPlanner = false"
+      @approved="onPlannerApproved"
+    />
+
     <!-- 镜头右键菜单 -->
     <div v-if="ctxMenu" class="ctx-menu" :style="ctxMenuStyle" @click.stop>
       <div class="ctx-shot-id">{{ ctxMenu.shot.shot_id }}</div>
@@ -172,6 +188,7 @@ import { getImageUrl, getVideoUrl } from '@/utils/media';
 import SafeFrameOverlay from '@/components/SafeFrameOverlay.vue';
 import Workbench from '@/components/Workbench.vue';
 import DirectorStudio from '@/components/DirectorStudio.vue';
+import ProductionPlannerStudio from '@/components/ProductionPlannerStudio.vue';
 
 const router = useRouter();
 const projStore = useProjectStore();
@@ -188,6 +205,7 @@ const workbenchShot = ref<ShotData | null>(null);
 const previewUrl = ref('');
 const previewType = ref<'image' | 'video'>('image');
 const showDirector = ref(false);
+const showPlanner = ref(false);
 const appliedHint = ref<{ count: number; firstShotId: string | null } | null>(null);
 // 项目级数据（传给 Workbench 作公共上下文：角色多选/风格/画幅徽标）
 const projectCharacters = ref<Array<{ name: string; description_en: string; views: any }>>([]);
@@ -315,6 +333,18 @@ function openFirstShot() {
     if (sh) openWorkbench(sh);
   }
   appliedHint.value = null;
+}
+
+// ---- AI 制作规划（Phase AI-4A）----
+function openPlanner() {
+  if (!selected.value) return;
+  if (!selected.value.shots.length) return;   // 无 Shot 禁用（按钮已 disabled，双保险）
+  showPlanner.value = true;
+}
+function onPlannerApproved() {
+  // 🔴 approve 不改 Shot（opening_source 仍默认 independent），无需 reload。
+  // 正式 opening_source 由 AI-4B Executor 执行时生效。
+  showPlanner.value = false;
 }
 
 // Phase 6A：镜头接力标识（开场来源）。仅展示，不打开工作台也能看懂关系。
@@ -458,7 +488,8 @@ watch(projectName, () => { selected.value = null; load(); });
 .ai-direct-btn {
   padding: 4px 12px; border-radius: 6px; border: 1px solid var(--accent);
   background: transparent; color: var(--accent); font-size: 12px; cursor: pointer;
-  &:hover { background: var(--accent); color: var(--accent-text); }
+  &:hover:not(:disabled) { background: var(--accent); color: var(--accent-text); }
+  &:disabled { opacity: 0.4; cursor: not-allowed; border-color: var(--border); color: var(--text-muted); }
 }
 .link-btn { background: none; border: none; color: var(--text-muted); font-size: 12px; cursor: pointer; &:hover { color: var(--accent); } }
 .applied-hint {

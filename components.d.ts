@@ -12,6 +12,7 @@ declare module 'vue' {
     Collapsible: typeof import('./src/components/Collapsible.vue')['default']
     DirectorStudio: typeof import('./src/components/DirectorStudio.vue')['default']
     OrchestrateModal: typeof import('./src/components/OrchestrateModal.vue')['default']
+    ProductionPlannerStudio: typeof import('./src/components/ProductionPlannerStudio.vue')['default']
     PromptEditor: typeof import('./src/components/PromptEditor.vue')['default']
     QueuePanel: typeof import('./src/components/QueuePanel.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
