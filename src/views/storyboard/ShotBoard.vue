@@ -50,7 +50,10 @@
         <div class="seg-head">
           <div class="seg-head-top">
             <span class="seg-no">故事段 {{ selected.scene_id }}</span>
-            <button class="link-btn" @click="goScript">返回剧本修改</button>
+            <div class="seg-head-actions">
+              <button class="ai-direct-btn" @click="openDirector">AI 设计分镜</button>
+              <button class="link-btn" @click="goScript">返回剧本修改</button>
+            </div>
           </div>
           <p class="seg-story">{{ selected.summary || '（未填写故事）' }}</p>
           <div class="seg-chars">
@@ -60,6 +63,13 @@
               {{ name }} {{ charCovered(name) ? '✓' : '⚠' }}
             </span>
           </div>
+        </div>
+
+        <!-- AI 导演采用后提示（§三十六）-->
+        <div v-if="appliedHint" class="applied-hint">
+          <span>AI 已创建 {{ appliedHint.count }} 个镜头。接下来可打开镜头工作台，生成首帧、尾帧和视频提示词。</span>
+          <button class="link-btn" v-if="appliedHint.firstShotId" @click="openFirstShot">打开镜头 1</button>
+          <button class="link-btn" @click="appliedHint = null">关闭</button>
         </div>
 
         <!-- 镜头列表 -->
@@ -73,6 +83,7 @@
             </div>
           <div
             class="shot-item"
+            :data-shot-id="sh.shot_id"
             @dblclick="openWorkbench(sh)"
             @contextmenu.prevent="openCtxMenu($event, sh)"
           >
@@ -129,6 +140,18 @@
       <video v-else :src="previewUrl" controls autoplay class="big-video" />
     </div>
 
+    <!-- AI 导演工作区（Phase AI-3） -->
+    <DirectorStudio
+      v-if="showDirector && selected"
+      :project-name="projectName"
+      :scene-id="selected.scene_id"
+      :scene-summary="selected.summary"
+      :scene-characters="selected.characters"
+      :has-existing-shots="selected.shots.length > 0"
+      @close="showDirector = false"
+      @applied="onDirectorApplied"
+    />
+
     <!-- 镜头右键菜单 -->
     <div v-if="ctxMenu" class="ctx-menu" :style="ctxMenuStyle" @click.stop>
       <div class="ctx-shot-id">{{ ctxMenu.shot.shot_id }}</div>
@@ -139,7 +162,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { apiClient } from '@/api';
 import type { ShotData } from '@/api';
@@ -148,6 +171,7 @@ import { useJobStore } from '@/store/jobs';
 import { getImageUrl, getVideoUrl } from '@/utils/media';
 import SafeFrameOverlay from '@/components/SafeFrameOverlay.vue';
 import Workbench from '@/components/Workbench.vue';
+import DirectorStudio from '@/components/DirectorStudio.vue';
 
 const router = useRouter();
 const projStore = useProjectStore();
@@ -163,6 +187,8 @@ const listCollapsed = ref(false);
 const workbenchShot = ref<ShotData | null>(null);
 const previewUrl = ref('');
 const previewType = ref<'image' | 'video'>('image');
+const showDirector = ref(false);
+const appliedHint = ref<{ count: number; firstShotId: string | null } | null>(null);
 // 项目级数据（传给 Workbench 作公共上下文：角色多选/风格/画幅徽标）
 const projectCharacters = ref<Array<{ name: string; description_en: string; views: any }>>([]);
 const projectStyleLabel = ref('');
@@ -264,6 +290,32 @@ function shotStatusClass(sh: ShotData): string {
 
 function openWorkbench(sh: ShotData) { workbenchShot.value = sh; }
 function closeWorkbench() { workbenchShot.value = null; }
+
+// ---- AI 导演（Phase AI-3）----
+function openDirector() {
+  if (!selected.value) return;
+  appliedHint.value = null;
+  showDirector.value = true;
+}
+async function onDirectorApplied(firstNewShotId: string | null) {
+  showDirector.value = false;
+  await load();   // 刷新：新 Shot[] 出现在当前 Scene 下
+  if (firstNewShotId) {
+    await nextTick();
+    const el = document.querySelector(`[data-shot-id="${firstNewShotId}"]`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  if (selected.value) {
+    appliedHint.value = { count: selected.value.shots.length, firstShotId: firstNewShotId };
+  }
+}
+function openFirstShot() {
+  if (appliedHint.value?.firstShotId) {
+    const sh = segments.value.flatMap(s => s.shots).find(s => s.shot_id === appliedHint.value!.firstShotId);
+    if (sh) openWorkbench(sh);
+  }
+  appliedHint.value = null;
+}
 
 // Phase 6A：镜头接力标识（开场来源）。仅展示，不打开工作台也能看懂关系。
 function connLabel(sh: ShotData): string {
@@ -401,8 +453,20 @@ watch(projectName, () => { selected.value = null; load(); });
 .seg-detail { flex: 1; min-width: 0; overflow-y: auto; }
 .seg-head { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; }
 .seg-head-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.seg-head-actions { display: flex; align-items: center; gap: 10px; }
 .seg-no { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.ai-direct-btn {
+  padding: 4px 12px; border-radius: 6px; border: 1px solid var(--accent);
+  background: transparent; color: var(--accent); font-size: 12px; cursor: pointer;
+  &:hover { background: var(--accent); color: var(--accent-text); }
+}
 .link-btn { background: none; border: none; color: var(--text-muted); font-size: 12px; cursor: pointer; &:hover { color: var(--accent); } }
+.applied-hint {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: rgba(74, 222, 128, 0.1); border: 1px solid #4ade80; border-radius: 6px;
+  padding: 8px 12px; margin-bottom: 12px; font-size: 12px; color: #4ade80;
+  .link-btn { color: var(--accent); margin-left: auto; }
+}
 .seg-story { font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin: 0 0 10px; }
 .seg-chars { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .seg-chars-label { font-size: 11px; color: var(--text-muted); }

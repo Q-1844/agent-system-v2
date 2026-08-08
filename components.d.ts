@@ -10,6 +10,7 @@ declare module 'vue' {
     CharacterDesignStudio: typeof import('./src/components/CharacterDesignStudio.vue')['default']
     CharacterResolutionPanel: typeof import('./src/components/CharacterResolutionPanel.vue')['default']
     Collapsible: typeof import('./src/components/Collapsible.vue')['default']
+    DirectorStudio: typeof import('./src/components/DirectorStudio.vue')['default']
     OrchestrateModal: typeof import('./src/components/OrchestrateModal.vue')['default']
     PromptEditor: typeof import('./src/components/PromptEditor.vue')['default']
     QueuePanel: typeof import('./src/components/QueuePanel.vue')['default']

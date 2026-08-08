@@ -339,6 +339,32 @@ export interface CharacterDesignDraftState {
   created_at: number;
 }
 
+// ============ AI 导演（Phase AI-3）============
+export interface DirectorShotDraft {
+  draft_id: string;
+  intent: string;
+  characters: string[];
+  target_duration_s: number;
+  purpose: string;
+}
+
+export interface DirectorDraft {
+  draft_id: string;
+  scene_id: string;
+  overview: string;
+  shots: DirectorShotDraft[];
+  scene_summary_snapshot: string;
+  scene_characters_snapshot: string[];
+  director_note: string;
+  created_at: number;
+}
+
+export interface DirectorApplyResult {
+  ok: boolean;
+  shots: Array<{ shot_id: string; scene_id: string; index: number; description: string; characters: string[]; target_duration_s: number }>;
+  first_new_shot_id: string | null;
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -807,6 +833,43 @@ class ApiClient {
   // 读所有角色设计草稿（刷新恢复）
   async getCharacterDesigns(projectName: string): Promise<{ designs: Record<string, CharacterDesignDraftState> }> {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/character/designs`);
+  }
+
+  // ============ AI 导演（Phase AI-3）============
+
+  // AI 规划一个故事段的镜头，落草稿。可重复调用（重新规划）
+  async planDirector(projectName: string, sceneId: string, directorNote: string): Promise<DirectorDraft> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/scene/${encodeURIComponent(sceneId)}/director/plan`, {
+      method: 'POST', body: JSON.stringify({ director_note: directorNote }),
+    });
+  }
+
+  // 读导演草稿（刷新恢复）。无草稿 404
+  async getDirectorDraft(projectName: string, sceneId: string): Promise<DirectorDraft> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/scene/${encodeURIComponent(sceneId)}/director/draft`);
+  }
+
+  // 保存草稿编辑（intent/characters/时长/排序/删除/添加）
+  async saveDirectorDraft(projectName: string, sceneId: string, payload: {
+    overview: string; shots: DirectorShotDraft[]; director_note: string;
+  }): Promise<DirectorDraft> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/scene/${encodeURIComponent(sceneId)}/director/draft`, {
+      method: 'PUT', body: JSON.stringify(payload),
+    });
+  }
+
+  // 删草稿
+  async deleteDirectorDraft(projectName: string, sceneId: string): Promise<{ ok: boolean }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/scene/${encodeURIComponent(sceneId)}/director/draft`, {
+      method: 'DELETE',
+    });
+  }
+
+  // 采用镜头方案 -> 创建 Shot[]（stale + 已有 Shot 闸门 + 角色覆盖 + 一次 save）
+  async applyDirector(projectName: string, sceneId: string): Promise<DirectorApplyResult> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/scene/${encodeURIComponent(sceneId)}/director/apply`, {
+      method: 'POST',
+    });
   }
 
   // ============ 阶段 3：shot 级管线 ============

@@ -71,6 +71,7 @@ from routers import shots  # noqa: E402
 from routers import scenes  # noqa: E402
 from routers import story  # noqa: E402
 from routers import character_design  # noqa: E402
+from routers import director  # noqa: E402
 app.include_router(system.router)
 app.include_router(projects.router)
 app.include_router(script.router)
@@ -81,6 +82,7 @@ app.include_router(shots.router)
 app.include_router(scenes.router)
 app.include_router(story.router)
 app.include_router(character_design.router)
+app.include_router(director.router)
 
 
 @app.on_event("startup")
