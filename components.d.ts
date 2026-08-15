@@ -12,6 +12,7 @@ declare module 'vue' {
     CharacterResolutionPanel: typeof import('./src/components/CharacterResolutionPanel.vue')['default']
     Collapsible: typeof import('./src/components/Collapsible.vue')['default']
     DirectorStudio: typeof import('./src/components/DirectorStudio.vue')['default']
+    FullProductionStudio: typeof import('./src/components/FullProductionStudio.vue')['default']
     OrchestrateModal: typeof import('./src/components/OrchestrateModal.vue')['default']
     ProductionPlannerStudio: typeof import('./src/components/ProductionPlannerStudio.vue')['default']
     ProjectProductionStudio: typeof import('./src/components/ProjectProductionStudio.vue')['default']

@@ -95,6 +95,7 @@ class ProjectProductionRun(BaseModel):
     """项目级制作 Run（§四）。"""
     run_id: str
     project_name: str
+    parent_full_run_id: Optional[str] = None   # AI-5B：父 FullProjectRun（None=手工 AI-5A 制作）
     status: str = PRUN_PENDING
     stage: str = PSTAGE_PREFLIGHT
     respect_locked: bool = True
@@ -300,6 +301,16 @@ class ProjectProductionManager:
                 return r
         return None
 
+    def find_by_parent_full_run(self, project_name: str,
+                                full_run_id: str) -> Optional[ProjectProductionRun]:
+        """crash-safe child 查找（§四十一/§四十二）：按 parent_full_run_id 找已存在的 ProjectProductionRun
+        （任意状态）。FullProjectManager 创建 production child 前先调用，命中则复用，避免 backend crash
+        后重建第二套 child（full_run.production_run_id 未保存的窗口）。"""
+        for r in self.list_runs(project_name):
+            if r.parent_full_run_id == full_run_id:
+                return r
+        return None
+
     # ---------- manifest IO ----------
     def _load_manifest(self, run: ProjectProductionRun) -> Optional[CompositionManifest]:
         p = self._manifest_path(run)
@@ -314,10 +325,12 @@ class ProjectProductionManager:
         _atomic_write_json(self._manifest_path(run), json.loads(manifest.model_dump_json()))
 
     # ---------- 启动 / 恢复 / 控制 ----------
-    async def start_run(self, project_name: str, respect_locked: bool = True) -> ProjectProductionRun:
+    async def start_run(self, project_name: str, respect_locked: bool = True,
+                        parent_full_run_id: Optional[str] = None) -> ProjectProductionRun:
         """§十九 start 流程：load -> 检查无 active ProjectRun -> project preflight ->
         冻结 source snapshot + plans snapshot -> 建 run dir -> 写 run.json -> 启动 Executor。
-        后端自己 load，不信任前端 preflight（§十九）。"""
+        后端自己 load，不信任前端 preflight（§十九）。
+        parent_full_run_id：AI-5B FullProjectManager 传入（手工 AI-5A 制作为 None，§四十一）。"""
         from deps import get_project_manager, logger
         project_dir = get_project_manager().get_project_dir(project_name)
         store = ProjectStore(project_dir)
@@ -355,8 +368,8 @@ class ProjectProductionManager:
         # 创建 Run
         run_id = f"prun_{uuid.uuid4().hex[:10]}"
         run = ProjectProductionRun(
-            run_id=run_id, project_name=project_name, status=PRUN_PENDING,
-            stage=PSTAGE_PREFLIGHT, respect_locked=respect_locked,
+            run_id=run_id, project_name=project_name, parent_full_run_id=parent_full_run_id,
+            status=PRUN_PENDING, stage=PSTAGE_PREFLIGHT, respect_locked=respect_locked,
             source_signature=signature,
             created_at=time.time(), updated_at=time.time(),
         )

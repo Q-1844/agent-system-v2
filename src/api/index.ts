@@ -502,6 +502,66 @@ export interface ProjectProductionPreflight {
   scenes: ScenePreflightResult[];
 }
 
+// ============ AI 完整制作（Phase AI-5B）============
+export interface FullProjectSceneInspect {
+  scene_id: string;
+  state: string;              // READY|NEED_DIRECTOR|NEED_PRODUCTION_PLAN|BLOCKED
+  shot_count: number;
+  has_valid_director_draft: boolean;
+  plan_state: string | null;  // none|draft|approved|stale
+  detail: string;
+}
+
+export interface FullProjectInspect {
+  ready: boolean;             // 无 blocker（缺 Shot/Plan 不是 blocker，AI-5B 自动补齐）
+  scene_count: number;
+  shot_count: number;
+  estimated_new_shots: number | null;   // 始终 null（Director 没跑不能预估，§五十二）
+  scenes: FullProjectSceneInspect[];
+  warnings: string[];         // CHARACTER_WITHOUT_VIEWS:角色名
+  blockers: string[];         // NO_SCENES|MISSING_PROJECT_CHARACTER|ACTIVE_*_RUN
+}
+
+export interface FullProjectSceneState {
+  scene_id: string;
+  index: number;
+  initial_state: string;
+  status: string;             // pending|preparing|ready|failed|blocked
+  action: string | null;      // inspect|director_plan|director_apply|planner_plan|planner_approve|done
+  used_existing_director_draft: boolean;
+  created_shot_ids: string[];
+  used_existing_production_plan: boolean;
+  production_plan_id: string | null;
+  production_plan_source: string | null;
+  expected_plan_fingerprint: string | null;
+  completed_actions: string[];
+  attempts: Record<string, number>;
+  warnings: string[];
+  error: string | null;
+}
+
+export interface FullProjectRun {
+  run_id: string;
+  project_name: string;
+  status: string;             // pending|preparing|pausing|paused|producing|failed|blocked|completed|cancelled
+  stage: string;              // inspect|prepare|finalize_preparation|production|done
+  respect_locked: boolean;
+  pause_requested: boolean;
+  cancel_requested: boolean;
+  current_scene_id: string | null;
+  current_action: string | null;
+  scenes: FullProjectSceneState[];
+  expected_source_signature: Record<string, any>;
+  preparation_manifest_file: string | null;
+  initial_source_snapshot_file: string | null;
+  production_run_id: string | null;
+  final_output: string | null;
+  error: string | null;
+  error_code: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -1128,6 +1188,51 @@ class ApiClient {
   // 停止完整制作（保留已生成资产，§二十八）
   async cancelProduction(projectName: string, runId: string): Promise<ProjectProductionRun> {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/production/run/${encodeURIComponent(runId)}/cancel`, {
+      method: 'POST',
+    });
+  }
+
+  // ============ AI 完整制作（Phase AI-5B）============
+
+  // 纯代码 Inspect（§二十七，不调 AI，不创建 Run）
+  async getFullProductionInspect(projectName: string): Promise<FullProjectInspect> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/full-production/inspect`);
+  }
+
+  // 开始 AI 完整制作（后端 load + inspect + 冻结 snapshot + 启动，§三十）
+  async startFullProduction(projectName: string, respectLocked: boolean = true): Promise<FullProjectRun> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/full-production/start`, {
+      method: 'POST', body: JSON.stringify({ respect_locked: respectLocked }),
+    });
+  }
+
+  // 列出历史 FullProjectRun
+  async listFullProductionRuns(projectName: string): Promise<FullProjectRun[]> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/full-production/runs`);
+  }
+
+  // 读单个 FullProjectRun（Monitor 轮询用）
+  async getFullProductionRun(projectName: string, runId: string): Promise<FullProjectRun> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/full-production/run/${encodeURIComponent(runId)}`);
+  }
+
+  // 暂停（prepare 阶段下一 checkpoint 暂停；production 阶段传给 child，§三十六/§四十五）
+  async pauseFullProduction(projectName: string, runId: string): Promise<FullProjectRun> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/full-production/run/${encodeURIComponent(runId)}/pause`, {
+      method: 'POST',
+    });
+  }
+
+  // 继续（不重处理已 ready Scene / 已 apply Director / 已 approve Plan，§三十四）
+  async resumeFullProduction(projectName: string, runId: string): Promise<FullProjectRun> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/full-production/run/${encodeURIComponent(runId)}/resume`, {
+      method: 'POST',
+    });
+  }
+
+  // 停止（已创建 Shot/Plan/视频保留，不回滚，§三十七/§四十六）
+  async cancelFullProduction(projectName: string, runId: string): Promise<FullProjectRun> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/full-production/run/${encodeURIComponent(runId)}/cancel`, {
       method: 'POST',
     });
   }

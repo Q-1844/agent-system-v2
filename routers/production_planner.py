@@ -88,6 +88,37 @@ class SavePlanRequest(BaseModel):
     shots: List[PlannedShotInput] = Field(default_factory=list)
 
 
+# ============ business helper（§六十四：ProductionPlannerStudio 与 FullProjectManager 共用
+# 同一套 sanitize / derive / approve；不绕 HTTP，不拼 Agnes system prompt）============
+async def plan_production_business(project, scene, project_name: str, client) -> SceneProductionPlan:
+    """AI 制作规划（§六十四）。包 ProductionPlannerWorkflow.plan_scene + sanitize_plan + 填 created_at。
+    不落盘 plan（落盘由调用方决定）。供 routers/production_planner.plan 与 FullProjectManager 共用。
+    raises ValueError（无 Shot，§十六）。"""
+    if not scene.shots:
+        raise ValueError("请先创建镜头或使用 AI 设计分镜。")
+    wf = ProductionPlannerWorkflow(client)
+    ai_result = await wf.plan_scene(project, scene)
+    plan = sanitize_plan(scene, ai_result,
+                         run_seed=new_run_seed(), project_name=project_name)
+    plan.created_at = time.time()
+    return plan
+
+
+def approve_plan_business(plan: SceneProductionPlan, scene) -> SceneProductionPlan:
+    """确认制作计划（§二十/§十七）。stale 校验 + status=approved + approved_at。
+    🔴 不写 shot.opening_source / link_mode / source_shot_id（§六：plan 是未来执行意图，
+    正式 opening_source 由 AI-4B Executor 在执行时应用）。不落盘（落盘由调用方决定）。
+    raises ValueError（无镜头 / stale）。"""
+    if not plan.shots:
+        raise ValueError("计划中没有镜头。")
+    stale_reason = is_plan_stale(plan, scene)
+    if stale_reason:
+        raise ValueError(f"制作计划已过期（{stale_reason}），请重新生成制作计划。")
+    plan.status = "approved"
+    plan.approved_at = time.time()
+    return plan
+
+
 # ============ 1. AI 规划 ============
 @router.post("/api/project/{project_name}/scene/{scene_id}/production-plan/plan")
 async def plan_production(project_name: str, scene_id: str):
@@ -99,16 +130,11 @@ async def plan_production(project_name: str, scene_id: str):
         scene = _find_scene(project, scene_id)
         if scene is None:
             raise HTTPException(404, f"故事段 {scene_id} 不存在")
-        if not scene.shots:
-            # §十六：无 Shot 禁用。后端兜底拦截。
-            raise HTTPException(400, "请先创建镜头或使用 AI 设计分镜。")
-
         client = get_agnes_client()
-        wf = ProductionPlannerWorkflow(client)
-        ai_result = await wf.plan_scene(project, scene)
-        plan = sanitize_plan(scene, ai_result,
-                             run_seed=new_run_seed(), project_name=project_name)
-        plan.created_at = time.time()
+        try:
+            plan = await plan_production_business(project, scene, project_name, client)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
         plans = _read_plans(project_dir)
         plans[scene_id] = plan
         _write_plans(project_dir, plans)
@@ -220,15 +246,15 @@ async def approve_production_plan(project_name: str, scene_id: str):
         plan = plans.get(scene_id)
         if plan is None:
             raise HTTPException(404, "没有 AI 制作计划，请先 AI 制作规划。")
-        if not plan.shots:
-            raise HTTPException(400, "计划中没有镜头。")
 
-        stale_reason = is_plan_stale(plan, scene)
-        if stale_reason:
-            raise HTTPException(409, f"制作计划已过期（{stale_reason}），请重新生成制作计划。")
-
-        plan.status = "approved"
-        plan.approved_at = time.time()
+        # 业务（stale / status=approved / approved_at）走共享 helper（§六十四）
+        try:
+            approve_plan_business(plan, scene)
+        except ValueError as e:
+            msg = str(e)
+            if "过期" in msg:
+                raise HTTPException(409, msg)
+            raise HTTPException(400, msg)
         _write_plans(project_dir, plans)
 
         # 🔴 关键不变量：approve 不动 project.json。校验 Shot.opening_source 仍是默认 independent。

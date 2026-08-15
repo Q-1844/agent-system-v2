@@ -85,6 +85,74 @@ class SaveDraftRequest(BaseModel):
     director_note: str = ""
 
 
+# ============ business helper（§九：DirectorStudio 与 FullProjectManager 共用同一套
+# validation / coverage / Shot 创建 / shot_id 分配；不绕 HTTP，不拼 Agnes system prompt）============
+class DirectorBusinessError(Exception):
+    """Director apply business 错误基类（router -> HTTP，FullProjectManager -> repair/blocked）。"""
+
+
+class DirectorStaleError(DirectorBusinessError):
+    """草稿 stale（scene summary/characters 变化，§二十四）。"""
+
+
+class DirectorHasShotsError(DirectorBusinessError):
+    """Scene 已有 Shot（§十六 禁止覆盖）。"""
+
+
+class DirectorCoverageError(DirectorBusinessError):
+    """角色未覆盖（§十三）。FullProjectManager 据此触发 repair（§八：最多 1 repair）。"""
+
+
+async def plan_scene_business(project, scene, director_note: str, client) -> DirectorDraft:
+    """AI 规划镜头（§九）。包 DirectorWorkflow.plan_scene + 填 created_at。
+    不落盘 draft（落盘由调用方决定）。供 routers/director.plan 与 FullProjectManager 共用。"""
+    wf = DirectorWorkflow(client)
+    draft = await wf.plan_scene(project, scene, director_note)
+    draft.created_at = time.time()
+    return draft
+
+
+def apply_director_draft_business(store, project, scene_id: str,
+                                  draft: DirectorDraft) -> List[Shot]:
+    """采用镜头方案 -> 创建 Shot[]（§十七/§十八）。stale + 已有 Shot 闸门 + 角色覆盖 + 一次 save。
+    只用于 Scene.shots 为空（§十六：已有 Shot 禁止覆盖）。返回创建的 Shot[]（已 save）。
+    🔴 不删 draft（删 draft 由调用方决定）；不写 opening_source/link_mode/prompt（用默认，§二十/二十一/二十二）。
+    raises DirectorStaleError / DirectorHasShotsError / DirectorCoverageError / ValueError。"""
+    scene = _find_scene(project, scene_id)
+    if scene is None:
+        raise ValueError(f"故事段 {scene_id} 不存在")
+    if not draft.shots:
+        raise ValueError("草稿中没有镜头。")
+
+    stale = _check_stale(draft, scene)
+    if stale:
+        raise DirectorStaleError(stale)
+    if scene.shots:
+        raise DirectorHasShotsError("这个故事段已有镜头。本阶段不会自动覆盖或删除已有镜头。")
+    missing = coverage_missing(draft)
+    if missing:
+        raise DirectorCoverageError(
+            f"角色 {('、'.join(missing))} 尚未安排到任何镜头。请将其加入某个镜头或重新规划。")
+
+    # 创建 Shot[]（§十八：复用 Shot 模型，description=intent，其他默认；占位 shot_id 下面统一重编号）
+    new_shots: List[Shot] = []
+    for sh in draft.shots:
+        new_shots.append(Shot(
+            shot_id=f"{scene_id}_cTMP",
+            scene_id=scene_id,
+            index=0,
+            description=sh.intent,
+            characters=list(sh.characters),
+            target_duration_s=sh.target_duration_s,
+        ))
+    scene.shots = new_shots
+    for i, sh in enumerate(scene.shots):
+        sh.index = i + 1
+        sh.shot_id = f"{scene_id}_c{i + 1:02d}"
+    store.save(project)   # 一次 save（§十七：原子完成）
+    return new_shots
+
+
 # ============ 1. AI 规划 ============
 @router.post("/api/project/{project_name}/scene/{scene_id}/director/plan")
 async def director_plan(project_name: str, scene_id: str, req: PlanRequest):
@@ -97,9 +165,7 @@ async def director_plan(project_name: str, scene_id: str, req: PlanRequest):
         if scene is None:
             raise HTTPException(404, f"故事段 {scene_id} 不存在")
         client = get_agnes_client()
-        wf = DirectorWorkflow(client)
-        draft = await wf.plan_scene(project, scene, req.director_note)
-        draft.created_at = time.time()
+        draft = await plan_scene_business(project, scene, req.director_note, client)
         drafts = _read_drafts(project_dir)
         drafts[scene_id] = draft
         _write_drafts(project_dir, drafts)
@@ -185,50 +251,27 @@ async def director_apply(project_name: str, scene_id: str):
         project_dir = get_project_manager().get_project_dir(project_name)
         store = ProjectStore(project_dir)
         project = store.load()
-        scene = _find_scene(project, scene_id)
-        if scene is None:
-            raise HTTPException(404, f"故事段 {scene_id} 不存在")
         drafts = _read_drafts(project_dir)
         draft = drafts.get(scene_id)
         if draft is None:
             raise HTTPException(404, "没有 AI 导演草稿，请先 AI 规划镜头。")
-        if not draft.shots:
-            raise HTTPException(400, "草稿中没有镜头。")
 
-        # stale 检查（§二十四）
-        stale = _check_stale(draft, scene)
-        if stale:
-            raise HTTPException(409, stale)
+        # 业务（stale / 已有 Shot 闸门 / 角色覆盖 / 创建 Shot[] / 一次 save）走共享 helper（§九）
+        try:
+            new_shots = apply_director_draft_business(store, project, scene_id, draft)
+        except DirectorStaleError as e:
+            raise HTTPException(409, str(e))
+        except DirectorHasShotsError as e:
+            raise HTTPException(409, str(e))
+        except DirectorCoverageError as e:
+            raise HTTPException(400, str(e))
+        except ValueError as e:
+            msg = str(e)
+            if "不存在" in msg:
+                raise HTTPException(404, msg)
+            raise HTTPException(400, msg)
 
-        # 已有 Shot 闸门（§十六）：本阶段禁止覆盖已有 Shot
-        if scene.shots:
-            raise HTTPException(409, "这个故事段已有镜头。本阶段不会自动覆盖或删除已有镜头。")
-
-        # 角色覆盖校验（§十三）
-        missing = coverage_missing(draft)
-        if missing:
-            raise HTTPException(400, f"角色 {('、'.join(missing))} 尚未安排到任何镜头。请将其加入某个镜头或重新规划。")
-
-        # 创建 Shot[]（§十八：复用 Shot 模型，description=intent，其他默认）
-        # 不写 opening_source/link_mode/prompt（§二十/二十一/二十二：用默认）
-        new_shots = []
-        for sh in draft.shots:
-            new_shots.append(Shot(
-                shot_id=f"{scene_id}_cTMP",   # 占位，下面统一重编号
-                scene_id=scene_id,
-                index=0,
-                description=sh.intent,
-                characters=list(sh.characters),
-                target_duration_s=sh.target_duration_s,
-            ))
-        scene.shots = new_shots
-        # 统一重编号 shot_id / index（镜像 split-dialogue 模式）
-        for i, sh in enumerate(scene.shots):
-            sh.index = i + 1
-            sh.shot_id = f"{scene_id}_c{i + 1:02d}"
-        store.save(project)   # 一次 save（§十七：原子完成）
-
-        # 删草稿
+        # 删草稿（business helper 不删，由调用方决定）
         drafts = _read_drafts(project_dir)
         drafts.pop(scene_id, None)
         _write_drafts(project_dir, drafts)

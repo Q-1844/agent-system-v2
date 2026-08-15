@@ -75,6 +75,7 @@ from routers import director  # noqa: E402
 from routers import production_planner  # noqa: E402
 from routers import autopilot  # noqa: E402
 from routers import project_autopilot  # noqa: E402
+from routers import full_project_autopilot  # noqa: E402
 app.include_router(system.router)
 app.include_router(projects.router)
 app.include_router(script.router)
@@ -89,6 +90,7 @@ app.include_router(director.router)
 app.include_router(production_planner.router)
 app.include_router(autopilot.router)
 app.include_router(project_autopilot.router)
+app.include_router(full_project_autopilot.router)
 
 
 @app.on_event("startup")
@@ -149,6 +151,15 @@ async def startup():
         asyncio.create_task(get_project_autopilot_manager().recover_runs())
     except Exception as e:
         logger.error(f"ProjectRun 恢复失败: {e}")
+
+    # 阶段 AI-5B：恢复中断的 FullProjectRun（preparing/pausing/producing）。
+    # 🔴 必须在 ProjectProductionManager.recover_runs() 之后（FullProject 最外层，恢复时需看到
+    # production child 正确状态，§四十七）。
+    try:
+        from src.ai.full_project_autopilot import get_full_project_manager
+        asyncio.create_task(get_full_project_manager().recover_runs())
+    except Exception as e:
+        logger.error(f"FullProjectRun 恢复失败: {e}")
 
 
 if __name__ == "__main__":
