@@ -87,6 +87,27 @@
           </div>
         </div>
       </div>
+
+      <!-- AI-6B Agents & Models -->
+      <div class="card">
+        <div class="card-title">Agents &amp; Models</div>
+        <div class="form">
+          <div v-if="!agentRows.length" class="form-group"><span class="hint">加载中…</span></div>
+          <div v-for="a in agentRows" :key="a.id" class="agent-row">
+            <div class="agent-info">
+              <span class="agent-name">{{ a.name }}</span>
+              <span class="agent-desc">{{ a.description }}</span>
+            </div>
+            <select class="input" v-model="a.profile_id" @change="saveAgent(a)">
+              <option v-for="p in profiles" :key="p.id" :value="p.id">{{ p.name }}</option>
+            </select>
+            <label class="checkbox-label">
+              <input type="checkbox" v-model="a.enabled" @change="saveAgent(a)" />
+              <span>Enabled</span>
+            </label>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- 通知 -->
@@ -97,9 +118,11 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, onMounted } from 'vue';
+import { reactive, ref, onMounted } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useProjectStore } from '@/store';
+import { apiClient } from '@/api';
+import type { AgentInfo, AgentModelProfile } from '@/api';
 
 const store = useProjectStore();
 const { projectName, style, size } = storeToRefs(store);
@@ -118,6 +141,41 @@ const form = reactive({
   autoPreview: true,
 });
 
+// AI-6B Agents & Models
+const profiles = ref<AgentModelProfile[]>([]);
+const agentRows = ref<Array<{ id: string; name: string; description: string; profile_id: string; enabled: boolean }>>([]);
+
+async function loadAgents() {
+  try {
+    const [list, profs, settings] = await Promise.all([
+      apiClient.listAgents(),
+      apiClient.listAgentProfiles(),
+      apiClient.getAgentSettings(),
+    ]);
+    profiles.value = profs;
+    const cfg = (settings.agents || {});
+    agentRows.value = list.map(a => {
+      const s = cfg[a.id] || {};
+      return {
+        id: a.id, name: a.name, description: a.description,
+        profile_id: s.model_profile_id || a.model_profile?.id || (profs[0]?.id ?? ''),
+        enabled: s.enabled !== undefined ? s.enabled : a.enabled,
+      };
+    });
+  } catch (e: any) {
+    console.error('加载 Agents 设置失败', e);
+  }
+}
+
+async function saveAgent(a: { id: string; name: string; profile_id: string; enabled: boolean }) {
+  try {
+    await apiClient.updateAgentSetting(a.id, a.profile_id, a.enabled);
+    store.showNotification(`已保存 ${a.name} 设置`, 'success');
+  } catch (e: any) {
+    store.showNotification(`保存失败: ${e.message || e}`, 'error');
+  }
+}
+
 const handleSave = async () => {
   await store.updateSettings({
     projectName: form.projectName,
@@ -131,6 +189,7 @@ onMounted(() => {
   form.projectName = projectName.value;
   form.style = style.value;
   form.size = size.value;
+  loadAgents();
 });
 </script>
 
@@ -230,6 +289,19 @@ onMounted(() => {
     accent-color: var(--text-primary);
   }
 }
+
+.agent-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.agent-info { display: flex; flex-direction: column; gap: 2px; }
+.agent-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.agent-desc { font-size: 11px; color: var(--text-muted); }
+.hint { font-size: 12px; color: var(--text-muted); }
 
 .btn {
   padding: 6px 12px;

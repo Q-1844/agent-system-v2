@@ -590,6 +590,44 @@ export interface PreviewResult {
   after_signature: string;
 }
 
+// ============ AI-6B Multi-Agent Foundation ============
+export interface AgentModelProfile {
+  id: string; name: string;
+  reasoning_model: string | null;
+  fallback_reasoning_model: string | null;
+  image_model: string | null;
+  video_model: string | null;
+  account_policy: string;
+}
+export interface AgentInfo {
+  id: string; name: string; description: string; role: string;
+  read_scopes: string[]; write_scopes: string[];
+  can_delegate_to: string[];
+  model_profile: AgentModelProfile | null;
+  enabled: boolean;
+}
+export interface AgentCapability {
+  id: string; name: string; description: string; category: string;
+  owner_agent: string; allowed_agents: string[]; operations: string[];
+  risk_level: string; implemented: boolean; can_execute: boolean;
+}
+export interface AgentMessage {
+  role: string; content: string; status: string | null; created_at: number;
+}
+export interface AgentSession {
+  session_id: string; project: string; agent_id: string;
+  scope_type: string; scope_id: string;
+  messages: AgentMessage[]; created_at: number; updated_at: number;
+}
+export interface AgentTask {
+  task_id: string; project: string; requester_agent: string; target_agent: string;
+  capability_id: string; instruction: string; scope_type: string; scope_id: string;
+  session_id: string; operation: string; status: string;
+  result_summary: string; artifact_refs: any[];
+  structured_result: any; warnings: string[]; suggested_next_actions: string[];
+  error: string | null; created_at: number; updated_at: number;
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -1484,6 +1522,69 @@ class ApiClient {
   }
   async listChangesets(projectName: string, wid: string): Promise<any[]> {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/workspace/${encodeURIComponent(wid)}/changesets`);
+  }
+
+  // ============ AI-6B Multi-Agent Foundation ============
+  async listAgents(): Promise<AgentInfo[]> {
+    const data = await this.request<{ agents: AgentInfo[] }>('/api/agents');
+    return data.agents;
+  }
+  async listAgentProfiles(): Promise<AgentModelProfile[]> {
+    const data = await this.request<{ profiles: AgentModelProfile[] }>('/api/agents/profiles');
+    return data.profiles;
+  }
+  async getAgentCapabilities(agentId: string): Promise<AgentCapability[]> {
+    const data = await this.request<{ capabilities: AgentCapability[] }>(`/api/agents/${encodeURIComponent(agentId)}/capabilities`);
+    return data.capabilities;
+  }
+  async getAgentSettings(): Promise<{ agents: Record<string, any> }> {
+    return this.request('/api/agents/settings');
+  }
+  async updateAgentSetting(agentId: string, modelProfileId?: string, enabled?: boolean): Promise<any> {
+    return this.request('/api/agents/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ agent_id: agentId, model_profile_id: modelProfileId, enabled }),
+    });
+  }
+  async listAgentSessions(projectName: string): Promise<AgentSession[]> {
+    const data = await this.request<{ sessions: AgentSession[] }>(`/api/project/${encodeURIComponent(projectName)}/agents/sessions`);
+    return data.sessions;
+  }
+  async createAgentSession(projectName: string, agentId: string, scopeType: string, scopeId: string): Promise<AgentSession> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/agents/sessions`, {
+      method: 'POST',
+      body: JSON.stringify({ agent_id: agentId, scope_type: scopeType, scope_id: scopeId }),
+    });
+  }
+  async getAgentSession(projectName: string, sid: string): Promise<AgentSession> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/agents/sessions/${encodeURIComponent(sid)}`);
+  }
+  async sendAgentMessage(projectName: string, sid: string, content: string): Promise<AgentMessage> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/agents/sessions/${encodeURIComponent(sid)}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    });
+  }
+  async listAgentTasks(projectName: string, filters: { requester_agent?: string; target_agent?: string; status?: string } = {}): Promise<AgentTask[]> {
+    const q = new URLSearchParams();
+    if (filters.requester_agent) q.set('requester_agent', filters.requester_agent);
+    if (filters.target_agent) q.set('target_agent', filters.target_agent);
+    if (filters.status) q.set('status', filters.status);
+    const qs = q.toString();
+    const data = await this.request<{ tasks: AgentTask[] }>(`/api/project/${encodeURIComponent(projectName)}/agents/tasks${qs ? '?' + qs : ''}`);
+    return data.tasks;
+  }
+  async createAgentTask(projectName: string, payload: {
+    requester_agent?: string; target_agent: string; scope_type: string;
+    scope_id: string; instruction: string; capability_id: string; operation?: string;
+  }): Promise<AgentTask> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/agents/tasks`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+  async getAgentTask(projectName: string, tid: string): Promise<AgentTask> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/agents/tasks/${encodeURIComponent(tid)}`);
   }
 }
 

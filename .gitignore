@@ -23,6 +23,7 @@ cache/
 projects/
 !projects/.gitkeep
 output/
+agents_data/
 
 # 测试产物
 test_*.json

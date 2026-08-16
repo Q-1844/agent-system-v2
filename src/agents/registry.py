@@ -1,0 +1,330 @@
+# src/agents/registry.py
+# AI-6B AgentRegistry / CapabilityRegistry / ModelProfileRegistry / AgentSettingsStore +
+# 8 个固定 Agent 定义与系统提示（§4/§5/§7/§13/§16/§34）。
+#
+# can_execute（§修正1）须同时满足：agent 存在 + capability 存在 +
+#   capability_id ∈ AgentDefinition.allowed_capabilities + agent_id ∈ cap.allowed_agents +
+#   operation ∈ cap.operations。allowed_capabilities 是真实授权检查，非展示元数据。
+# enabled/disabled 由 AgentRuntime 在执行前单独检查（不在 can_execute 内）。
+#
+# Import 纪律：只 import deps(BASE_DIR/_APP_CFG) / src.core.atomic / 本包。不 import routers/*。
+from __future__ import annotations
+import json
+from pathlib import Path
+from typing import Dict, List, Optional
+
+from deps import BASE_DIR, _APP_CFG
+from src.core.atomic import atomic_write_json
+
+from .models import AgentDefinition, CapabilityDefinition, ModelProfile
+from .capabilities import build_default_capabilities
+
+
+# 固定 8 Agent 稳定 ID（进入持久化数据，勿改）
+SPECIALISTS = [
+    "script_writer", "character_designer", "director", "production_planner",
+    "shot_producer", "continuity_reviewer", "editor",
+]
+SPEC_AGENT_IDS = ["producer"] + SPECIALISTS   # spec 顺序
+
+
+def _build_agents() -> List[AgentDefinition]:
+    return [
+        AgentDefinition(
+            id="producer", name="Producer Supervisor",
+            description="项目总协调者：理解需求、分派任务、汇总结果",
+            role="总协调",
+            allowed_capabilities=["project.inspect"],
+            read_scopes=["project", "workflow", "agent_tasks", "workspaces"],
+            write_scopes=["agent_task"],
+            can_delegate_to=list(SPECIALISTS),
+            default_model_profile="producer_profile"),
+        AgentDefinition(
+            id="script_writer", name="Script Writer",
+            description="负责故事/场景/剧情结构与修改",
+            role="剧本",
+            allowed_capabilities=["story.inspect", "story.edit"],
+            read_scopes=["story", "scenes", "characters"],
+            write_scopes=["story_proposal", "scene_proposal"],
+            can_delegate_to=[], default_model_profile="text_default"),
+        AgentDefinition(
+            id="character_designer", name="Character Designer",
+            description="负责角色设定/视觉/参考图与一致性建议",
+            role="角色",
+            allowed_capabilities=["character.inspect", "character.design"],
+            read_scopes=["characters", "style", "scenes"],
+            write_scopes=["character_proposal", "character_assets"],
+            can_delegate_to=[], default_model_profile="character_profile"),
+        AgentDefinition(
+            id="director", name="Director",
+            description="场景→镜头、分镜结构/节奏/意图；修改须经 Workspace",
+            role="导演",
+            allowed_capabilities=["storyboard.inspect", "storyboard.propose_change"],
+            read_scopes=["scenes", "characters", "shots", "style"],
+            write_scopes=["storyboard_proposal"],
+            can_delegate_to=[], default_model_profile="text_default"),
+        AgentDefinition(
+            id="production_planner", name="Production Planner",
+            description="决定每个 Shot 的制作策略（只规划不执行生成）",
+            role="规划",
+            allowed_capabilities=["production_plan.inspect", "production_plan.create", "shot.inspect"],
+            read_scopes=["shots", "assets", "continuity", "production_state"],
+            write_scopes=["production_plan"],
+            can_delegate_to=[], default_model_profile="text_default"),
+        AgentDefinition(
+            id="shot_producer", name="Shot Producer",
+            description="按 Production Plan 执行镜头制作（首/尾/视频是不同 Capability）",
+            role="制作",
+            allowed_capabilities=["shot.inspect", "production_plan.inspect",
+                                  "shot.first_frame", "shot.last_frame", "shot.video"],
+            read_scopes=["shots", "production_plan", "assets", "job_state"],
+            write_scopes=["shot_production"],
+            can_delegate_to=[], default_model_profile="shot_producer_profile"),
+        AgentDefinition(
+            id="continuity_reviewer", name="Continuity Reviewer",
+            description="角色/画面/空间/动作连续性检查与 retry 提案（只审查+提案）",
+            role="审查",
+            allowed_capabilities=["storyboard.inspect", "shot.inspect",
+                                  "production_plan.inspect", "review.shot", "review.scene"],
+            read_scopes=["shots", "production_plan", "assets", "continuity"],
+            write_scopes=["review_proposal", "retry_proposal"],
+            can_delegate_to=[], default_model_profile="text_default"),
+        AgentDefinition(
+            id="editor", name="Editor",
+            description="版本选择/排列检查/合成/字幕/音轨/导出",
+            role="剪辑",
+            allowed_capabilities=["composition.inspect", "storyboard.inspect",
+                                  "shot.inspect", "composition.compose"],
+            read_scopes=["shots", "versions", "audio", "subtitles", "composition"],
+            write_scopes=["composition", "export"],
+            can_delegate_to=[], default_model_profile="text_default"),
+    ]
+
+
+# ============ ModelProfile 默认值（从 config 派生，保证与配置一致）============
+_agnes_models = ((_APP_CFG.get("agnes") or {}).get("models") or {})
+KNOWN_MODEL_IDS = {v for v in _agnes_models.values() if v}   # 文本/图片/视频模型 id 集合
+
+
+def _default_profiles() -> List[ModelProfile]:
+    t = _agnes_models.get("text")
+    im = _agnes_models.get("image")
+    vi = _agnes_models.get("video")
+    return [
+        ModelProfile(id="text_default", name="文本默认", reasoning_model=t),
+        ModelProfile(id="producer_profile", name="Producer 默认", reasoning_model=t),
+        ModelProfile(id="character_profile", name="角色设计默认",
+                     reasoning_model=t, image_model=im),
+        ModelProfile(id="shot_producer_profile", name="镜头制作默认",
+                     reasoning_model=t, image_model=im, video_model=vi),
+    ]
+
+
+# ============ AgentRegistry ============
+class AgentRegistry:
+    def __init__(self, agents: List[AgentDefinition]):
+        ids = [a.id for a in agents]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Agent ID 不唯一")
+        self._by_id: Dict[str, AgentDefinition] = {a.id: a for a in agents}
+
+    def get(self, agent_id: str) -> Optional[AgentDefinition]:
+        return self._by_id.get(agent_id)
+
+    def exists(self, agent_id: str) -> bool:
+        return agent_id in self._by_id
+
+    def list(self) -> List[AgentDefinition]:
+        return [self._by_id[i] for i in SPEC_AGENT_IDS if i in self._by_id]
+
+    def is_enabled(self, agent_id: str, settings_store) -> bool:
+        """enabled 由 AgentRuntime 在执行前单独检查（§修正1：不在 can_execute 内）。
+        settings 覆盖优先，否则用 AgentDefinition.enabled 默认。"""
+        a = self.get(agent_id)
+        if a is None:
+            return False
+        s = settings_store.get_agent_setting(agent_id)
+        if "enabled" in s:
+            return bool(s["enabled"])
+        return a.enabled
+
+    def can_delegate(self, requester_id: str, target_id: str) -> bool:
+        r = self.get(requester_id)
+        return bool(r) and target_id in r.can_delegate_to
+
+
+# ============ CapabilityRegistry ============
+class CapabilityRegistry:
+    def __init__(self, caps: List[CapabilityDefinition], agent_registry: AgentRegistry):
+        self._by_id: Dict[str, CapabilityDefinition] = {c.id: c for c in caps}
+        self._agents = agent_registry
+
+    def get(self, cap_id: str) -> Optional[CapabilityDefinition]:
+        return self._by_id.get(cap_id)
+
+    def list(self) -> List[CapabilityDefinition]:
+        return list(self._by_id.values())
+
+    def list_for_agent(self, agent_id: str) -> List[CapabilityDefinition]:
+        """该 agent 可用能力：agent 在 allowed_agents，或能力在 agent.allowed_capabilities。"""
+        a = self._agents.get(agent_id)
+        if not a:
+            return []
+        return [c for c in self._by_id.values()
+                if agent_id in c.allowed_agents or c.id in a.allowed_capabilities]
+
+    def can_execute(self, agent_id: str, cap_id: str, operation: str) -> bool:
+        """§修正1：五重校验。allowed_capabilities 是真实授权检查的一环。"""
+        a = self._agents.get(agent_id)
+        if a is None:
+            return False
+        c = self._by_id.get(cap_id)
+        if c is None:
+            return False
+        if cap_id not in a.allowed_capabilities:
+            return False
+        if agent_id not in c.allowed_agents:
+            return False
+        if operation not in c.operations:
+            return False
+        return True
+
+
+# ============ ModelProfileRegistry ============
+class ModelProfileRegistry:
+    def __init__(self, profiles: List[ModelProfile]):
+        self._by_id: Dict[str, ModelProfile] = {p.id: p for p in profiles}
+
+    def get(self, profile_id: str) -> Optional[ModelProfile]:
+        return self._by_id.get(profile_id)
+
+    def list(self) -> List[ModelProfile]:
+        return list(self._by_id.values())
+
+    def resolve_for_agent(self, agent: AgentDefinition, settings: "AgentSettingsStore") -> ModelProfile:
+        s = settings.get_agent_setting(agent.id)
+        pid = (s.get("model_profile_id") or agent.default_model_profile)
+        p = self.get(pid)
+        if p is None:   # 回退默认
+            p = self.get(agent.default_model_profile)
+        if p is None:   # 再无则取第一个
+            p = self.list()[0] if self.list() else None
+        return p
+
+    def validate(self, profile: ModelProfile) -> None:
+        """校验模型 id 在 KNOWN_MODEL_IDS 内（config 未加载时跳过）。"""
+        if not KNOWN_MODEL_IDS:
+            return
+        for f in ("reasoning_model", "fallback_reasoning_model", "image_model", "video_model"):
+            v = getattr(profile, f)
+            if v and v not in KNOWN_MODEL_IDS:
+                raise ValueError(
+                    f"unknown model {f}={v}; known: {sorted(KNOWN_MODEL_IDS)}")
+
+
+# ============ AgentSettingsStore（全局持久化，§23/§26）============
+class AgentSettingsStore:
+    """全局 agent→ModelProfile 绑定 + enabled。落 agents_data/settings.json（atomic）。"""
+
+    def __init__(self, path: Optional[Path] = None):
+        self.path = Path(path) if path else BASE_DIR / "agents_data" / "settings.json"
+
+    def load(self) -> dict:
+        if not self.path.exists():
+            return {"agents": {}}
+        try:
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {"agents": {}}
+        except Exception:
+            return {"agents": {}}
+
+    def save(self, data: dict) -> None:
+        atomic_write_json(self.path, data or {"agents": {}})
+
+    def get_agent_setting(self, agent_id: str) -> dict:
+        return (self.load().get("agents") or {}).get(agent_id) or {}
+
+    def set_agent_profile(self, agent_id: str, profile_id: str) -> None:
+        data = self.load()
+        data.setdefault("agents", {}).setdefault(agent_id, {})
+        data["agents"][agent_id]["model_profile_id"] = profile_id
+        self.save(data)
+
+    def set_agent_enabled(self, agent_id: str, enabled: bool) -> None:
+        data = self.load()
+        data.setdefault("agents", {}).setdefault(agent_id, {})
+        data["agents"][agent_id]["enabled"] = bool(enabled)
+        self.save(data)
+
+    def update_agent(self, agent_id: str, profile_id: Optional[str] = None,
+                     enabled: Optional[bool] = None) -> dict:
+        data = self.load()
+        data.setdefault("agents", {}).setdefault(agent_id, {})
+        if profile_id is not None:
+            data["agents"][agent_id]["model_profile_id"] = profile_id
+        if enabled is not None:
+            data["agents"][agent_id]["enabled"] = bool(enabled)
+        self.save(data)
+        return data["agents"][agent_id]
+
+
+# ============ 一站式构造（AgentRuntime 用）============
+class Registries:
+    def __init__(self, settings_path: Optional[Path] = None):
+        self.agents = AgentRegistry(_build_agents())
+        self.capabilities = CapabilityRegistry(build_default_capabilities(), self.agents)
+        self.profiles = ModelProfileRegistry(_default_profiles())
+        self.settings = AgentSettingsStore(settings_path)
+
+
+# ============ 系统提示（§16，简短稳定，非人格 Prompt）============
+_AGENT_SYSTEM_PROMPTS: Dict[str, str] = {
+    "producer": (
+        "你是 Producer Supervisor，AGNES 项目总协调者。\n"
+        "职责：理解用户项目级要求、阅读项目状态、判断应找哪个专业 Agent、创建 AgentTask 委派、汇总结果。\n"
+        "你可以：查看项目概览（project.inspect）、把任务委派给 7 个 Specialist。\n"
+        "你不能：直接执行专业领域操作（如改分镜、生成图片视频）。专业工作必须委派给对应 Specialist。\n"
+        "当前 project 与 scope 见下方上下文。输出要简明结构化：给出结论与建议下一步。"
+    ),
+    "script_writer": (
+        "你是 Script Writer，负责故事 / 场景 / 剧情结构与修改。\n"
+        "你可以：查看故事与场景（story.inspect）；提出故事/场景修改提案。\n"
+        "你不能：角色图片生成、Shot 制作、Production Plan、视频生成、合成。\n"
+        "修改正式项目须走安全业务接口或 Workspace/ChangeSet。当前 project/scope 见上下文。"
+    ),
+    "character_designer": (
+        "你是 Character Designer，负责角色描述、视觉设定、参考图与一致性建议。\n"
+        "你可以：查看角色（character.inspect）；调用角色生成相关能力（包装现有能力）。\n"
+        "你不能：改故事/分镜/制作计划，不重新实现角色生成 Pipeline。当前 project/scope 见上下文。"
+    ),
+    "director": (
+        "你是 Director，负责 Scene→Shot、分镜结构、镜头节奏与意图。\n"
+        "🔴 你永远不允许直接覆盖 canonical project 的 shots 数组。任何分镜修改必须："
+        "Director Proposal → Semantic ChangeSet → AI-6A Validation → Impact → Workspace。\n"
+        "你可以：查看分镜结构（storyboard.inspect）；提出分镜修改提案（须走 Workspace）。\n"
+        "当前 project/scope 见上下文。"
+    ),
+    "production_planner": (
+        "你是 Production Planner，决定这个 Shot 应该怎么制作。\n"
+        "你可以：查看制作计划（production_plan.inspect）、shot 状态；创建制作策略。\n"
+        "你不负责真正调用图片/视频生成 API。Planner 与 Shot Producer 必须分离。当前 project/scope 见上下文。"
+    ),
+    "shot_producer": (
+        "你是 Shot Producer，按 Production Plan 真正执行镜头制作。\n"
+        "你可以：查看 shot/计划状态；执行首帧/尾帧/视频（不同 Capability，同一 Agent 的不同实例 scope）。\n"
+        "不要为首帧/尾帧/图片/视频分别建不同 Agent。当前 project/scope 见上下文。"
+    ),
+    "continuity_reviewer": (
+        "你是 Continuity Reviewer，负责角色/画面/空间/动作连续性、生成结果检查、失败判断与 retry 提案。\n"
+        "本阶段原则：Inspect + Review + Proposal。你不能随意直接修改 Project。当前 project/scope 见上下文。"
+    ),
+    "editor": (
+        "你是 Editor，负责版本选择、镜头排列检查、Composition、字幕、音轨、最终导出。\n"
+        "你可以：查看合成状态（composition.inspect）；调用现有 Compose/Export 能力。\n"
+        "你不能修改 Story/Character/Storyboard 内容。当前 project/scope 见上下文。"
+    ),
+}
+
+
+def agent_system_prompt(agent_id: str) -> str:
+    return _AGENT_SYSTEM_PROMPTS.get(agent_id, "你是一名 AGNES 专业 Agent。当前 project/scope 见上下文。")

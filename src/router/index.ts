@@ -38,6 +38,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '创作版本', icon: 'workspace' }
       },
       {
+        path: 'agents',
+        name: 'AgentCenter',
+        component: () => import('@/views/agents/index.vue'),
+        meta: { title: 'AI 团队', icon: 'agents' }
+      },
+      {
         path: 'settings',
         name: 'Settings',
         component: () => import('@/views/settings/index.vue'),

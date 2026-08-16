@@ -77,6 +77,7 @@ from routers import autopilot  # noqa: E402
 from routers import project_autopilot  # noqa: E402
 from routers import full_project_autopilot  # noqa: E402
 from routers import workspaces  # noqa: E402  AI-6A Creative Workspace / ChangeSet
+from routers import agents  # noqa: E402  AI-6B Multi-Agent Foundation
 app.include_router(system.router)
 app.include_router(projects.router)
 app.include_router(script.router)
@@ -93,6 +94,7 @@ app.include_router(autopilot.router)
 app.include_router(project_autopilot.router)
 app.include_router(full_project_autopilot.router)
 app.include_router(workspaces.router)
+app.include_router(agents.router)   # AI-6B Multi-Agent Foundation
 
 
 @app.on_event("startup")
