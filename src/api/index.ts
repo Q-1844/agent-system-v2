@@ -562,6 +562,34 @@ export interface FullProjectRun {
   updated_at: number;
 }
 
+// ============ AI-6A Creative Workspace / Semantic ChangeSet ============
+export interface WorkspaceMeta {
+  workspace_id: string;
+  project_name: string;
+  name: string;
+  status: string;            // active | archived
+  revision: number;
+  base_project_signature: string;
+  working_project_signature: string;
+  base_project_file: string;
+  working_project_file: string;
+  shot_seq: Record<string, number>;
+  created_at: number;
+  updated_at: number;
+  archived_at: number | null;
+  base_is_stale?: boolean;   // 派生：canonical 已变（GET 时后端补）
+}
+export type ChangeOp = Record<string, any>;   // 语义 operation dict（update_scene/update_shot/insert_shot/delete_shot/reorder_shots）
+export interface PreviewResult {
+  changeset_id: string;
+  status: string;
+  diff: any[];                // ChangeSet Diff（§十九）
+  impact: { items: any[]; summary: Record<string, any> };
+  warnings: string[];
+  base_workspace_revision: number;
+  after_signature: string;
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -1412,6 +1440,50 @@ class ApiClient {
   }
   async clearFinishedJobs(projectName: string): Promise<{ cleared: number }> {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/jobs/finished`, { method: 'DELETE' });
+  }
+
+  // ============ AI-6A Creative Workspace / ChangeSet（§二十~§二十二）============
+  async listWorkspaces(projectName: string): Promise<WorkspaceMeta[]> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/workspaces`);
+  }
+  async createWorkspace(projectName: string, name: string): Promise<WorkspaceMeta> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/workspaces`, {
+      method: 'POST', body: JSON.stringify({ name }),
+    });
+  }
+  async getWorkspace(projectName: string, wid: string): Promise<WorkspaceMeta> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/workspace/${encodeURIComponent(wid)}`);
+  }
+  async getWorkspaceProject(projectName: string, wid: string): Promise<ProjectShots> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/workspace/${encodeURIComponent(wid)}/project`);
+  }
+  async archiveWorkspace(projectName: string, wid: string): Promise<WorkspaceMeta> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/workspace/${encodeURIComponent(wid)}/archive`, { method: 'POST' });
+  }
+  async deleteWorkspace(projectName: string, wid: string): Promise<{ deleted: boolean }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/workspace/${encodeURIComponent(wid)}`, { method: 'DELETE' });
+  }
+  async getWorkspaceDiff(projectName: string, wid: string): Promise<{ diff: any[] }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/workspace/${encodeURIComponent(wid)}/diff`);
+  }
+  async getWorkspaceImpact(projectName: string, wid: string): Promise<{ diff: any[]; summary: Record<string, any> }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/workspace/${encodeURIComponent(wid)}/impact`);
+  }
+  async previewChangeset(projectName: string, wid: string, payload: {
+    title?: string; intent?: string; base_workspace_revision: number; operations: ChangeOp[];
+  }): Promise<PreviewResult> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/workspace/${encodeURIComponent(wid)}/changeset/preview`, {
+      method: 'POST', body: JSON.stringify(payload),
+    });
+  }
+  async applyChangeset(projectName: string, wid: string, cid: string): Promise<{ applied: boolean; revision: number; changeset_id: string; idempotent?: boolean }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/workspace/${encodeURIComponent(wid)}/changeset/${encodeURIComponent(cid)}/apply`, { method: 'POST' });
+  }
+  async rejectChangeset(projectName: string, wid: string, cid: string): Promise<{ rejected: boolean }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/workspace/${encodeURIComponent(wid)}/changeset/${encodeURIComponent(cid)}/reject`, { method: 'POST' });
+  }
+  async listChangesets(projectName: string, wid: string): Promise<any[]> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/workspace/${encodeURIComponent(wid)}/changesets`);
   }
 }
 

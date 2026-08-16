@@ -32,6 +32,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '分镜画廊', icon: 'storyboard' }
       },
       {
+        path: 'workspace',
+        name: 'Workspace',
+        component: () => import('@/views/workspace/index.vue'),
+        meta: { title: '创作版本', icon: 'workspace' }
+      },
+      {
         path: 'settings',
         name: 'Settings',
         component: () => import('@/views/settings/index.vue'),

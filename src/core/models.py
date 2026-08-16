@@ -438,3 +438,59 @@ class Project:
 
     def get_character(self, name: str) -> Optional[Character]:
         return next((c for c in self.characters if c.name == name), None)
+
+    # ---- 序列化（AI-6A 公共化：ProjectStore._to_dict/_from_dict 原逻辑搬此，供 revision 层复用）----
+    def to_dict(self) -> dict:
+        return {
+            "name": self.name,
+            "schema_version": self.schema_version,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "style": asdict(self.style),
+            "story_text": self.story_text,
+            "characters": [
+                {"name": c.name, "description_en": c.description_en,
+                 "views": {k: asdict(v) for k, v in c.views.items()}}
+                for c in self.characters
+            ],
+            "scenes": [s.to_dict() for s in self.scenes],
+            "next_scene_seq": self.next_scene_seq,
+        }
+
+    @classmethod
+    def from_dict(cls, raw: dict) -> "Project":
+        """从 dict 反序列化（原 ProjectStore._from_dict 逻辑）。
+        next_scene_seq 缺失时按已用 scene_id 最大数字 + 1 初始化（删除不回收）。"""
+        raw = raw or {}
+        style = StyleAnchor(**(raw.get("style") or {}))
+        characters = []
+        for c in raw.get("characters", []):
+            views = {k: Asset(**v) for k, v in (c.get("views") or {}).items()}
+            characters.append(Character(
+                name=c.get("name", ""),
+                description_en=c.get("description_en", ""),
+                views=views,
+            ))
+        scenes = [Scene.from_dict(s) for s in raw.get("scenes", [])]
+        next_scene_seq = raw.get("next_scene_seq")
+        if next_scene_seq is None:
+            used = []
+            for sc in raw.get("scenes", []):
+                sid = sc.get("scene_id") if isinstance(sc, dict) else getattr(sc, "scene_id", "")
+                if isinstance(sid, str) and sid.startswith("s"):
+                    try:
+                        used.append(int(sid[1:]))
+                    except ValueError:
+                        pass
+            next_scene_seq = (max(used) + 1) if used else 1
+        return cls(
+            name=raw.get("name", "untitled"),
+            style=style,
+            story_text=raw.get("story_text", ""),
+            characters=characters,
+            scenes=scenes,
+            next_scene_seq=next_scene_seq,
+            schema_version=raw.get("schema_version", 2),
+            created_at=raw.get("created_at", time.time()),
+            updated_at=raw.get("updated_at", time.time()),
+        )

@@ -76,6 +76,7 @@ from routers import production_planner  # noqa: E402
 from routers import autopilot  # noqa: E402
 from routers import project_autopilot  # noqa: E402
 from routers import full_project_autopilot  # noqa: E402
+from routers import workspaces  # noqa: E402  AI-6A Creative Workspace / ChangeSet
 app.include_router(system.router)
 app.include_router(projects.router)
 app.include_router(script.router)
@@ -91,6 +92,7 @@ app.include_router(production_planner.router)
 app.include_router(autopilot.router)
 app.include_router(project_autopilot.router)
 app.include_router(full_project_autopilot.router)
+app.include_router(workspaces.router)
 
 
 @app.on_event("startup")
