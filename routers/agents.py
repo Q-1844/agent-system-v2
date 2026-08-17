@@ -9,7 +9,7 @@ composition root：本文件是唯一 import routers.production_planner 的地�
 错误映射（§29）：chat 未配置 Agnes 不是 HTTP 错误（send_message 软失败返回 status=not_configured，
 §修正3）；HTTP 错误仅用于请求/配置校验类。
 """
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -18,6 +18,7 @@ import deps
 from deps import get_project_manager
 from src.agents.runtime import get_agent_runtime, AgentError
 from routers.production_planner import _read_plans   # 唯一 import 点（composition root）
+from routers.workspaces import workspace_lock        # 复用同一 per-workspace 锁（AI-6D）
 
 router = APIRouter()
 
@@ -47,6 +48,15 @@ _HTTP = {
     "disabled_agent": 400, "permission_denied": 403,
     "unknown_model_profile": 400, "invalid_model_config": 400,
     "task_failed": 500,
+    # AI-6D Director Proposal
+    "unknown_proposal": 404, "bad_scope": 404,
+    "not_configured": 503, "agnes_failed": 502,
+    "invalid_output": 422, "proposal_failed": 500,
+    # ChangeSetError code 透传（generate_proposal/preview/apply，§17）
+    "SCHEMA": 400, "DUP_SHOT_ID": 400, "REORDER_MISMATCH": 400,
+    "CHAR_REF_INVALID": 400, "INVALID_DURATION": 400, "NOT_FOUND": 404,
+    "WORKSPACE_CHANGED": 409, "STALE": 409, "CONFLICT": 409,
+    "BEFORE_MISMATCH": 409, "BAD_STATUS": 409,
 }
 
 
@@ -183,3 +193,89 @@ async def get_task(project_name: str, tid: str):
     if t is None:
         raise HTTPException(404, "task 不存在")
     return t
+
+
+# ==================== Director Proposals（AI-6D storyboard.propose_change）====================
+class ProposeReq(BaseModel):
+    agent_id: str = "director"
+    scope_type: str           # shot | scene
+    scope_id: str
+    instruction: str = ""
+
+
+class PreviewSelectedReq(BaseModel):
+    selected_item_ids: List[str] = []
+
+
+class ApplyProposalReq(BaseModel):
+    changeset_id: str
+
+
+def _proposal_workspace_id(project_name: str, proposal_id: str) -> str:
+    """取 proposal 的 workspace_id（用于加锁）。proposal 不存在 -> 404。"""
+    p = get_agent_runtime().get_director_proposal(project_name, proposal_id)
+    if p is None:
+        raise HTTPException(404, "proposal 不存在")
+    wid = p.get("workspace_id")
+    if not wid:
+        raise HTTPException(409, "proposal 无关联 workspace")
+    return wid
+
+
+@router.post("/api/project/{project_name}/agents/director/proposals")
+async def create_director_proposal(project_name: str, req: ProposeReq):
+    """生成 Director 修改提案（§11：ctx→Agnes→parse+validate→create workspace→compile→AI-6A preview→persist）。"""
+    try:
+        return await get_agent_runtime().propose_storyboard_change(
+            project_name, req.agent_id, req.scope_type, req.scope_id, req.instruction)
+    except AgentError as e:
+        _raise(e)
+
+
+@router.get("/api/project/{project_name}/agents/director/proposals/{proposal_id}")
+async def get_director_proposal(project_name: str, proposal_id: str):
+    """刷新恢复（§16）：重建 currentProposal（含存储的 preview + base_is_stale）。"""
+    p = get_agent_runtime().get_director_proposal(project_name, proposal_id)
+    if p is None:
+        raise HTTPException(404, "proposal 不存在")
+    return p
+
+
+@router.get("/api/project/{project_name}/agents/director/proposals")
+async def list_director_proposals(project_name: str, scope_type: str, scope_id: str):
+    return {"proposals": get_agent_runtime().list_director_proposals(
+        project_name, scope_type, scope_id)}
+
+
+@router.post("/api/project/{project_name}/agents/director/proposals/{proposal_id}/preview-selected")
+async def preview_selected_proposal(project_name: str, proposal_id: str,
+                                     req: PreviewSelectedReq):
+    """选择性子集再预览（§13/§14）：重编译被选 item → AI-6A 全新 preview。复用同一 workspace 锁。"""
+    wid = _proposal_workspace_id(project_name, proposal_id)
+    try:
+        async with workspace_lock(project_name, wid):
+            return await get_agent_runtime().preview_selected_subset(
+                project_name, proposal_id, req.selected_item_ids)
+    except AgentError as e:
+        _raise(e)
+
+
+@router.post("/api/project/{project_name}/agents/director/proposals/{proposal_id}/apply")
+async def apply_director_proposal(project_name: str, proposal_id: str,
+                                   req: ApplyProposalReq):
+    """应用选中 ChangeSet（§13：按 changeset_id，复用 cs_engine.apply）。复用同一 workspace 锁。"""
+    wid = _proposal_workspace_id(project_name, proposal_id)
+    try:
+        async with workspace_lock(project_name, wid):
+            return await get_agent_runtime().apply_director_proposal(
+                project_name, proposal_id, req.changeset_id)
+    except AgentError as e:
+        _raise(e)
+
+
+@router.post("/api/project/{project_name}/agents/director/proposals/{proposal_id}/dismiss")
+async def dismiss_director_proposal(project_name: str, proposal_id: str):
+    try:
+        return get_agent_runtime().dismiss_director_proposal(project_name, proposal_id)
+    except AgentError as e:
+        _raise(e)

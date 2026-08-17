@@ -4,7 +4,7 @@
 核心不变量（§二）：修改 Workspace != 修改 canonical project。 -->
 <template>
   <div class="cw-studio">
-    <div class="cw-banner">⚠ 实验版本中的修改不会影响正式项目（project.json 不变）</div>
+    <div class="cw-banner">这是实验版本：改动不会影响正式项目</div>
 
     <!-- Workspace Header -->
     <div class="cw-header">
@@ -12,16 +12,16 @@
         <select v-model="activeWid" @change="onSelect" class="cw-select">
           <option :value="null">— 选择创作版本 —</option>
           <option v-for="w in workspaces" :key="w.workspace_id" :value="w.workspace_id">
-            {{ w.name || w.workspace_id }} · rev{{ w.revision }}{{ w.status === 'archived' ? ' · 已归档' : '' }}
+            {{ w.name || w.workspace_id }} · v{{ w.revision }}{{ w.status === 'archived' ? ' · 已归档' : '' }}
           </option>
         </select>
         <input v-model="newWsName" placeholder="新版本名（如：动作更紧凑版）" class="cw-input" @keyup.enter="doCreate" />
         <button class="cw-btn" @click="doCreate" :disabled="busy || !newWsName.trim()">新建创作版本</button>
       </div>
       <div v-if="meta" class="cw-meta">
-        <span class="chip">revision {{ meta.revision }}</span>
+        <span class="chip">版本 {{ meta.revision }}</span>
         <span class="chip" :class="{ stale: meta.base_is_stale }">
-          {{ meta.base_is_stale ? '正式项目已变化（base stale）' : 'base 同步' }}
+          {{ meta.base_is_stale ? '基于较早的正式项目快照' : '与正式项目同步' }}
         </span>
         <button class="cw-btn sm" @click="doArchive" :disabled="busy || meta.status === 'archived'">归档</button>
         <button class="cw-btn sm danger" @click="doDelete" :disabled="busy">删除</button>
@@ -125,7 +125,7 @@
 import { ref, computed, reactive } from 'vue';
 import { apiClient, type WorkspaceMeta, type ProjectShots, type PreviewResult, type ChangeOp } from '@/api';
 
-const props = defineProps<{ projectName: string }>();
+const props = defineProps<{ projectName: string; initialWorkspaceId?: string }>();
 
 const workspaces = ref<WorkspaceMeta[]>([]);
 const activeWid = ref<string | null>(null);
@@ -334,7 +334,14 @@ function diffText(d: any): string {
   return `${d.id}.${d.field}: ${v(d.before)} → ${v(d.after)}`;
 }
 
-loadList();
+loadList().then(() => {
+  // AI-6D §20 deep-link：从 ShotBoard「打开创作版本」带 workspace_id 直达该 workspace。
+  const init = props.initialWorkspaceId;
+  if (init && workspaces.value.some(w => w.workspace_id === init)) {
+    activeWid.value = init;
+    loadWorkspace();
+  }
+});
 </script>
 
 <style lang="scss" scoped>

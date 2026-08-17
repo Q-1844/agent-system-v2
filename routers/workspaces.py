@@ -45,7 +45,9 @@ def _store(project_name: str) -> WorkspaceStore:
 _LOCKS: dict = {}
 
 
-def _lock(project_name: str, workspace_id: str) -> asyncio.Lock:
+def workspace_lock(project_name: str, workspace_id: str) -> asyncio.Lock:
+    """每个 workspace 一把 asyncio.Lock（§三十）。导出供 director proposal 路由复用同一锁对象，
+    避免 preview/apply/delete 与 director 的 preview-selected/apply 在同一 workspace 上并发写。"""
     key = f"{project_name}/{workspace_id}"
     if key not in _LOCKS:
         _LOCKS[key] = asyncio.Lock()
@@ -117,7 +119,7 @@ async def archive_workspace(project_name: str, workspace_id: str):
 
 @router.delete("/api/project/{project_name}/workspace/{workspace_id}")
 async def delete_workspace(project_name: str, workspace_id: str):
-    async with _lock(project_name, workspace_id):
+    async with workspace_lock(project_name, workspace_id):
         _store(project_name).delete(workspace_id)
     return {"deleted": True, "workspace_id": workspace_id}
 
@@ -154,7 +156,7 @@ async def preview_changeset(project_name: str, workspace_id: str, req: PreviewRe
     """Preview：校验 -> clone -> apply 到 clone -> diff + impact -> 持久化 changeset（不写 working）。"""
     try:
         st = _store(project_name)
-        async with _lock(project_name, workspace_id):
+        async with workspace_lock(project_name, workspace_id):
             ws = st.load(workspace_id)
             cs_engine.reconcile(st, ws)
             ops = [ChangeOperation.from_dict(o) for o in req.operations]
@@ -171,7 +173,7 @@ async def apply_changeset(project_name: str, workspace_id: str, changeset_id: st
     返回 workspace_revision + aggregate diff/impact summary（§七十二）。"""
     try:
         st = _store(project_name)
-        async with _lock(project_name, workspace_id):
+        async with workspace_lock(project_name, workspace_id):
             ws = st.load(workspace_id)
             res = cs_engine.apply(st, ws, changeset_id)
         # §七十二：apply 后返回 aggregate diff/impact summary，前端立即更新
@@ -192,7 +194,7 @@ async def apply_changeset(project_name: str, workspace_id: str, changeset_id: st
 async def reject_changeset(project_name: str, workspace_id: str, changeset_id: str):
     try:
         st = _store(project_name)
-        async with _lock(project_name, workspace_id):
+        async with workspace_lock(project_name, workspace_id):
             ws = st.load(workspace_id)
             return cs_engine.reject(st, ws, changeset_id)
     except FileNotFoundError:

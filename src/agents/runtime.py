@@ -24,6 +24,13 @@ from .capabilities import CapabilityContext, dispatch as dispatch_capability
 from .context import build_context
 from .sessions import AgentSessionStore
 from .tasks import AgentTaskStore
+from .proposal_store import ProposalStore
+from .director_proposal import (
+    generate_proposal, preview_selected, apply_proposal, proposal_to_api,
+    ProposalGenerationError, ProposalStatus,
+)
+from src.revision.workspace import WorkspaceStore
+from src.revision.changeset import ChangeSetError
 
 
 class AgentError(Exception):
@@ -311,6 +318,108 @@ class AgentRuntime:
             task.status = TaskStatus.COMPLETED.value
         store.update_task(task)
         return task.to_dict()
+
+
+    # ---------- Director Proposal（storyboard.propose_change，AI-6D）----------
+    def _check_director_permission(self, agent_id: str) -> None:
+        """§3：复用既有 Capability Registry + Agent 权限——Director 专用端点不绕过权限。"""
+        a = self._resolve_agent(agent_id)
+        if not self._is_enabled(agent_id):
+            raise AgentError("disabled_agent", f"Agent 已禁用: {a.name}")
+        if not self.capabilities.can_execute(agent_id, "storyboard.propose_change",
+                                              AgentOp.EXECUTE.value):
+            raise AgentError("permission_denied",
+                             f"{a.name} 无权执行 storyboard.propose_change/execute")
+
+    def _resolve_client_or_none(self):
+        """取 Agnes client，不可用则 None（generate_proposal 会转 not_configured）。"""
+        if self._client is not None:
+            return self._client
+        try:
+            return self._agnes_getter()
+        except Exception:
+            return None
+
+    def _ws_store(self, project: str) -> WorkspaceStore:
+        pd = self._resolve_project_dir(project)
+        return WorkspaceStore(pd, project, self._project_loader(project))
+
+    def _proposal_store(self, project: str) -> ProposalStore:
+        return ProposalStore(self._resolve_project_dir(project), project)
+
+    async def propose_storyboard_change(self, project: str, agent_id: str,
+                                        scope_type: str, scope_id: str,
+                                        instruction: str) -> dict:
+        """生成 Director Proposal（§11）：ctx→Agnes→parse+validate→create workspace→
+        compile→AI-6A preview→persist。失败抛 AgentError（含 ChangeSetError code）。"""
+        self._check_director_permission(agent_id)
+        ws_store = self._ws_store(project)
+        pstore = self._proposal_store(project)
+        client = self._resolve_client_or_none()
+        try:
+            proposal, _pv = await generate_proposal(
+                client, self._project_loader(project), ws_store, pstore,
+                scope_type, scope_id, instruction)
+        except ProposalGenerationError as e:
+            raise AgentError(e.code or "proposal_failed", e.message)
+        ws = ws_store.load(proposal.workspace_id)
+        return proposal_to_api(proposal, ws_store.base_is_stale(ws))
+
+    def get_director_proposal(self, project: str, proposal_id: str) -> Optional[dict]:
+        """刷新恢复（§16）：从持久化 Proposal 重建 currentProposal（含存储的 preview）。"""
+        pstore = self._proposal_store(project)
+        proposal = pstore.get(proposal_id)
+        if proposal is None:
+            return None
+        ws_store = self._ws_store(project)
+        try:
+            ws = ws_store.load(proposal.workspace_id)
+            stale = ws_store.base_is_stale(ws)
+        except Exception:
+            stale = False
+        return proposal_to_api(proposal, stale)
+
+    def list_director_proposals(self, project: str, scope_type: str,
+                                scope_id: str) -> List[dict]:
+        """某 scope 最近的 Proposal（轻量，不含 changeset/base_is_stale）。"""
+        pstore = self._proposal_store(project)
+        return [p.to_dict() for p in pstore.list_by_scope(scope_type, scope_id)]
+
+    async def preview_selected_subset(self, project: str, proposal_id: str,
+                                       selected_item_ids: List[str]) -> dict:
+        """选择性子集再预览（§13/§14）：重编译被选 item → AI-6A 新 preview。"""
+        pstore = self._proposal_store(project)
+        proposal = pstore.get(proposal_id)
+        if proposal is None:
+            raise AgentError("unknown_proposal", f"proposal 不存在: {proposal_id}")
+        ws_store = self._ws_store(project)
+        try:
+            return preview_selected(proposal, selected_item_ids, ws_store, pstore)
+        except ChangeSetError as e:
+            raise AgentError(e.code, f"[{e.code}] {e.message}")
+
+    async def apply_director_proposal(self, project: str, proposal_id: str,
+                                       changeset_id: str) -> dict:
+        """应用选中 ChangeSet（§13：按 changeset_id，复用 cs_engine.apply）。"""
+        pstore = self._proposal_store(project)
+        proposal = pstore.get(proposal_id)
+        if proposal is None:
+            raise AgentError("unknown_proposal", f"proposal 不存在: {proposal_id}")
+        ws_store = self._ws_store(project)
+        try:
+            res = apply_proposal(proposal, changeset_id, ws_store, pstore)
+        except ChangeSetError as e:
+            raise AgentError(e.code, f"[{e.code}] {e.message}")
+        return res
+
+    def dismiss_director_proposal(self, project: str, proposal_id: str) -> dict:
+        pstore = self._proposal_store(project)
+        proposal = pstore.get(proposal_id)
+        if proposal is None:
+            raise AgentError("unknown_proposal", f"proposal 不存在: {proposal_id}")
+        proposal.status = ProposalStatus.DISMISSED.value
+        pstore.save(proposal)
+        return {"dismissed": True, "proposal_id": proposal_id}
 
 
 # ============ 单例（镜像 src/ai/autopilot.py）============

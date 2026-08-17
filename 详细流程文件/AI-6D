@@ -1,0 +1,913 @@
+# AI-6D — Director Proposal Runtime
+
+Implement the first real Director editing vertical slice in AGNES.
+
+The goal of this phase is **not** to add more Agent UI, autonomous planning, or production automation.
+
+The goal is to turn the existing Director from a context-aware chat agent into a Director that can produce a **real, structured, reviewable storyboard proposal** which is safely previewed and applied only inside a Creative Workspace.
+
+The complete vertical slice should become:
+
+```text
+Storyboard context
+        ↓
+Director
+        ↓
+storyboard.propose_change
+        ↓
+Agnes reasoning
+        ↓
+semantic storyboard intentions
+        ↓
+deterministic compiler
+        ↓
+existing AI-6A ChangeOperation[]
+        ↓
+Director Creative Workspace
+        ↓
+ChangeSet Preview
+        ↓
+Validation / Diff / Impact / Warnings
+        ↓
+Storyboard inline Proposal UI
+        ↓
+user selects changes
+        ↓
+preview selected subset again
+        ↓
+apply the new ChangeSet
+        ↓
+Workspace changes
+        ↓
+canonical project remains unchanged
+```
+
+Stop when this vertical slice is genuinely working.
+
+Do not continue into Production Planner, Shot Producer, Reviewer, autonomous Producer, Workspace Production, recursive delegation, or other Agent capabilities.
+
+---
+
+## 1. Read the actual implementation first
+
+Before changing anything, inspect the current implementation of:
+
+* `src/agents/**`
+* `src/agents/capabilities.py`
+* `src/agents/context.py`
+* `src/agents/runtime.py`
+* `src/agents/models.py`
+* `routers/agents.py`
+
+and the complete AI-6A revision system:
+
+* `src/revision/**`
+* Workspace creation/loading
+* ProjectSourceRef
+* ChangeOperation models
+* ChangeSet preview
+* ChangeSet apply
+* validation
+* impact analysis
+* workspace revision / signatures
+
+Also inspect the current AI-6C frontend:
+
+* `src/store/agentUi.ts`
+* `src/components/agent/**`
+* `src/components/storyboard/DirectorContextToolbar.vue`
+* `src/components/storyboard/DirectorProposalOverlay.vue`
+* `src/components/storyboard/ProposedShotCard.vue`
+* `src/components/storyboard/ProposalReviewBar.vue`
+* `src/components/storyboard/proposal.ts`
+* `src/views/storyboard/ShotBoard.vue`
+* `src/api/index.ts`
+
+Do not assume the execution-document examples exactly match the final code.
+
+Prefer adapting to the real existing APIs and models rather than creating parallel abstractions.
+
+---
+
+# 2. Preserve the most important architecture boundary
+
+The LLM must **not** generate a final AI-6A ChangeSet.
+
+It must not be trusted to generate:
+
+* `before` values
+* workspace revision
+* before/after signatures
+* stable IDs for newly inserted shots
+* complete reorder arrays
+* ChangeSet IDs
+* Workspace IDs
+* canonical state assumptions
+
+The Director should express only:
+
+> what creative change it wants to make.
+
+Then deterministic backend code must convert that intent into the existing AI-6A ChangeOperation types.
+
+The architecture must remain:
+
+```text
+LLM creative intention
+        ↓
+validate semantic intention
+        ↓
+read real Workspace project
+        ↓
+deterministic compiler
+        ↓
+existing ChangeOperation
+        ↓
+existing preview_changeset(...)
+```
+
+Never:
+
+```text
+LLM
+↓
+invented ChangeSet JSON
+↓
+Apply
+```
+
+---
+
+# 3. Implement `storyboard.propose_change`
+
+The existing reserved capability:
+
+```text
+storyboard.propose_change
+```
+
+should become a real Director capability.
+
+Keep the existing Capability Registry and permission checks.
+
+Do not bypass Agent permissions just because the frontend calls a Director-specific endpoint.
+
+The capability should be owned/allowed according to the existing registry policy and should remain unavailable to agents that are not authorized.
+
+Do not create a second Director runtime.
+
+Reuse the existing:
+
+* Agent Registry
+* ModelProfile resolution
+* Agent context system
+* Agnes client
+* Agent permissions
+* project resolution
+
+---
+
+# 4. Director scope
+
+For AI-6D, the Director edits **Storyboard shots**, not the screenplay.
+
+Do not let this phase modify:
+
+* project story text
+* Scene story text
+* Scene cast definition
+* project characters
+* character appearance
+* project style
+
+Those belong to other product stages and future specialist Agents.
+
+The first Director Proposal should operate only within one Scene.
+
+Support two scopes:
+
+```text
+shot
+scene
+```
+
+### Shot scope
+
+The Director receives:
+
+* selected shot
+* its Scene
+* nearby shots for continuity/context
+
+It may redesign the selected shot and, when creatively necessary, propose an adjacent shot insertion or replacement.
+
+It must not silently redesign unrelated Scenes.
+
+### Scene scope
+
+The Director receives the current Scene and its complete Shot sequence.
+
+It may propose:
+
+* update an existing Shot
+* insert a Shot
+* delete a Shot
+* reorder Shots
+
+Only inside that Scene.
+
+No cross-Scene operation in AI-6D.
+
+---
+
+# 5. Give the Director useful context, not the entire project dump
+
+Build a dedicated Director storyboard context from the real project.
+
+Include only information useful for directing the current Scene:
+
+* project style / aspect ratio where relevant
+* Scene story text
+* Scene cast
+* current Shot order
+* stable existing Shot IDs
+* each Shot's current editable creative fields
+* selected Shot
+* neighboring Shots
+* current target durations
+* enough generation state to understand whether a Shot already has assets
+
+Do not send:
+
+* base64 images
+* giant asset histories
+* full video URLs unless actually necessary
+* internal revision signatures
+* Workspace implementation details
+* unrelated Scenes
+
+The Director should understand the movie context without receiving an enormous project serialization.
+
+---
+
+# 6. Introduce a small semantic proposal schema
+
+Create a small internal semantic layer between the LLM and ChangeOperation.
+
+This is **not another project mutation model**.
+
+It is only the Director's structured creative intention.
+
+Conceptually something like:
+
+```python
+DirectorProposalIntent
+DirectorProposalItem
+```
+
+A proposal item can represent:
+
+```text
+update_shot
+insert_shot
+delete_shot
+reorder_shot
+```
+
+A semantic item may contain information such as:
+
+```text
+target existing shot
+creative reason
+new description
+new duration
+characters used
+desired insertion position
+desired move position
+```
+
+The exact dataclass/Pydantic organization should follow current project conventions.
+
+Important:
+
+A proposal item should have a server-generated stable `item_id`.
+
+Do not ask the LLM to invent proposal item IDs.
+
+This becomes useful for selective apply.
+
+---
+
+# 7. Keep semantic Proposal Items separate from compiled ChangeOperations
+
+One visible Director proposal item does not necessarily equal one ChangeOperation.
+
+For example:
+
+```text
+Director intention:
+"Insert a reaction shot after Shot 02"
+```
+
+may require the deterministic compiler to produce:
+
+```text
+INSERT_SHOT
++
+REORDER_SHOTS
+```
+
+depending on the actual locked AI-6A model.
+
+The user should still see **one INSERT proposal**, not two unrelated technical operations.
+
+Therefore:
+
+```text
+DirectorProposalItem
+        ↓
+compile
+        ↓
+one or more existing ChangeOperation
+```
+
+Do not expose revision implementation details to the user.
+
+Reuse the current ChangeOperation model exactly.
+
+Do not widen or redesign AI-6A ChangeOperation just to make Director output easier.
+
+---
+
+# 8. Restrict Director output to what AI-6A can actually apply
+
+Inspect the real revision operation models.
+
+If the current `UpdateShot` only supports a limited field set such as:
+
+```text
+description
+characters
+target_duration_s
+```
+
+then AI-6D Director proposals must stay within that supported set.
+
+Do not silently expand AI-6A to camera, lighting, motion, prompt, generated assets, etc. as part of this phase.
+
+If some UI quick action such as “composition” cannot yet map to a safe ChangeOperation, let the Director express it through the currently supported creative description rather than broadening the revision system.
+
+Document the limitation.
+
+---
+
+# 9. Validate LLM output aggressively but simply
+
+The Director output is untrusted model output.
+
+Before compiling it:
+
+* target Scene must exist
+* target Shot must exist
+* target Shot must belong to the allowed Scene
+* Scene-scope proposal cannot touch another Scene
+* characters must come from the Scene's existing cast
+* inserted Shot must not invent a permanent Shot ID
+* delete/update/reorder targets must be valid
+* contradictory operations should be rejected
+* empty or nonsensical proposals should fail cleanly
+
+Do not let invalid model output reach ChangeSet Preview.
+
+If the current Agnes client already exposes a clean structured/tool-call path, it is reasonable to use it.
+
+If it does not, do not redesign the whole Agnes client for this phase.
+
+A strict JSON schema + parse/validate + one repair attempt is acceptable.
+
+The important property is:
+
+```text
+model output
+≠
+trusted mutation
+```
+
+---
+
+# 10. Automatically create a Director Creative Workspace
+
+A valid Director Proposal must never preview against canonical data directly.
+
+After Agnes returns a valid semantic proposal:
+
+```text
+canonical project
+        ↓
+create Creative Workspace
+        ↓
+compile intentions against workspace working project
+        ↓
+preview ChangeSet
+```
+
+Use the existing AI-6A Workspace creation mechanism.
+
+Suggested human-readable name:
+
+```text
+Director · Story 02 · Pacing
+```
+
+or another short title derived safely from the request.
+
+Do not make the LLM responsible for Workspace IDs.
+
+A Proposal should remember:
+
+* `proposal_id`
+* project
+* Director
+* scope type
+* scope ID
+* user instruction
+* proposal title / summary
+* semantic proposal items
+* workspace ID
+* base workspace revision
+* full-preview ChangeSet ID
+* creation time
+* status
+
+Use the project's existing atomic persistence conventions.
+
+A natural location is under the existing Agent project data area if that matches the current implementation.
+
+Do not introduce a database.
+
+---
+
+# 11. Proposal generation should not create garbage Workspaces
+
+Do not create the Workspace before the model response is successfully parsed and validated.
+
+Preferred order:
+
+```text
+read canonical context
+↓
+call Director
+↓
+parse + validate semantic proposal
+↓
+if valid:
+    create Director Workspace
+↓
+compile
+↓
+preview ChangeSet
+```
+
+If Agnes fails or returns invalid content after the allowed repair attempt:
+
+* return a clear proposal-generation failure
+* do not modify canonical
+* do not leave a meaningless Workspace behind
+
+---
+
+# 12. Reuse AI-6A Preview exactly
+
+The full Proposal should be previewed through the existing ChangeSet engine.
+
+Do not reproduce validation, diff, or impact logic inside Agent code.
+
+The Proposal should receive the real:
+
+* validation result
+* structural diff
+* impact report
+* warnings
+* preview ChangeSet ID
+
+from AI-6A.
+
+The Agent layer proposes creative intent.
+
+The Revision layer decides whether that intent is structurally valid and what it affects.
+
+---
+
+# 13. Selective Apply must be real
+
+This is one of the most important parts of AI-6D.
+
+Suppose the Director proposes:
+
+```text
+A
+B
+C
+D
+```
+
+and the initial full preview creates:
+
+```text
+ChangeSet #1 = A+B+C+D
+```
+
+If the user selects only:
+
+```text
+A + C
+```
+
+DO NOT apply ChangeSet #1.
+
+Instead:
+
+```text
+selected Proposal Items A+C
+↓
+compile selected subset again
+↓
+preview again
+↓
+create ChangeSet #2
+↓
+recompute validation/diff/impact/warnings
+↓
+user confirms
+↓
+apply ChangeSet #2
+```
+
+The selected preview must be a real new AI-6A preview.
+
+Do not fake selective apply in frontend state.
+
+Do not remove unselected operations from a previously persisted ChangeSet in memory.
+
+Do not send arbitrary after-values directly to the Apply endpoint.
+
+Apply must continue to use the existing AI-6A rule:
+
+```text
+apply by changeset_id
+```
+
+---
+
+# 14. Select by semantic proposal item
+
+Selective review should preferably operate on:
+
+```text
+proposal item_id
+```
+
+rather than blindly selecting raw ChangeOperation indexes.
+
+Reason:
+
+one semantic Director change may compile to multiple deterministic ChangeOperations.
+
+The backend should know which compiled operations belong to each proposal item.
+
+This allows the UI to present:
+
+```text
+INSERT reaction shot
+UPDATE Shot 02
+DELETE Shot 04
+```
+
+instead of implementation details such as:
+
+```text
+INSERT_SHOT
+REORDER_SHOTS
+```
+
+as two separate creative decisions.
+
+Adapt the current `DirectorProposalOverlay` with the smallest change needed to support this.
+
+---
+
+# 15. KEEP is derived UI state
+
+Do not create a new `KEEP_SHOT` ChangeOperation.
+
+A Shot is visually `KEEP` when no selected Proposal Item affects it.
+
+KEEP is a review presentation concept, not a persisted revision operation.
+
+---
+
+# 16. Proposal persistence and refresh
+
+A real Proposal should survive a frontend refresh.
+
+Persist enough information to retrieve the active proposal again.
+
+Provide the smallest API surface needed to:
+
+* create Proposal
+* fetch Proposal
+* optionally list recent Director proposals for a scope
+* preview a selected subset
+* mark dismissed/applied if appropriate
+
+Follow current router/API conventions.
+
+Do not build a full “Proposal management center”.
+
+That is outside AI-6D.
+
+---
+
+# 17. Concurrency and stale Proposal protection
+
+A Proposal is created against a specific Workspace revision.
+
+Store that revision.
+
+If the same Workspace changes before the Proposal is applied, do not silently reapply old assumptions.
+
+Return a real conflict/stale state and ask the user to regenerate or review again.
+
+Continue relying on AI-6A revision checks.
+
+Do not weaken:
+
+* before-value checks
+* workspace revision checks
+* signatures
+* atomic apply
+
+Similarly, if canonical has moved since the Proposal's Director Workspace was created, do not pretend the Proposal represents the latest canonical storyboard.
+
+Use existing Workspace stale/base-signature information if available and expose a warning.
+
+The Workspace remains a valid historical creative branch; the UI just needs to be honest about its base.
+
+---
+
+# 18. Frontend: connect the real Proposal
+
+AI-6C already created the UI boundary.
+
+Replace:
+
+```text
+currentProposal = null forever
+```
+
+with real Proposal state loaded from the backend.
+
+When a real Director proposal completes:
+
+* populate `DirectorProposalOverlay`
+* render INSERT / UPDATE / DELETE / REORDER in the existing Storyboard proposal components
+* derive KEEP visually
+* show real diff/impact/warnings
+* allow selection by proposal item
+* allow previewing the selected subset
+* apply only the newly previewed selected ChangeSet
+
+Do not rebuild the Storyboard UI.
+
+Do not create a Director sidebar.
+
+Do not create another chat interface.
+
+---
+
+# 19. Conversation and Proposal remain different actions
+
+Do not make every Director chat message automatically create a Proposal.
+
+Preserve two modes:
+
+### Discussion
+
+```text
+Ask Director
+Analyse shot
+```
+
+→ normal Agent Conversation.
+
+### Modification intent
+
+```text
+Improve pacing
+Redesign
+Adjust composition
+```
+
+→ user can explicitly choose:
+
+```text
+Generate modification proposal
+```
+
+→ `storyboard.propose_change`
+
+Also allow a normal Director conversation to expose a restrained:
+
+```text
+Generate storyboard proposal
+```
+
+action using the current conversation/request as the instruction.
+
+But Proposal creation must always be explicit.
+
+Conversation messages are not Proposal objects.
+
+Do not parse Markdown chat messages to discover hidden ChangeOperations.
+
+---
+
+# 20. After Apply
+
+After the selected ChangeSet is successfully applied:
+
+Do not mutate canonical Storyboard.
+
+Show a clear state such as:
+
+```text
+Applied to creative version
+
+The official storyboard has not changed.
+
+[Open creative version]
+[Continue viewing official storyboard]
+```
+
+“Open creative version” should use the existing Creative Workspace Studio / Workspace route.
+
+Do not make ShotBoard source-aware in AI-6D.
+
+That comes later.
+
+---
+
+# 21. Canonical protection
+
+At the end of the complete Director flow:
+
+```text
+projects/<project>/output/project.json
+```
+
+must be byte-for-byte / signature-equivalent to its state before the Proposal operation, except for unrelated external user actions.
+
+The Director is allowed to change only:
+
+```text
+Director Workspace working project
+```
+
+through the existing ChangeSet Apply mechanism.
+
+No Agent code may directly mutate canonical ProjectStore data.
+
+This is the defining invariant of AI-6D.
+
+---
+
+# 22. Do not redesign the Floating Agent visual style in this phase
+
+The current Floating Agent Bar is functionally sufficient for AI-6D.
+
+Do not spend this phase rebuilding:
+
+* shadows
+* border radius
+* spacing
+* typography
+* overall visual language
+* animation system
+
+Only add UI states required by the real Proposal workflow.
+
+We will perform a dedicated visual polish pass after AI-6D, when all real states are visible together.
+
+Do not allow styling work to distract from the backend vertical slice.
+
+---
+
+# 23. Explicitly out of scope
+
+Do not implement:
+
+* Workspace Production
+* Production Planner Agent execution
+* Shot Producer execution
+* Continuity Reviewer
+* autonomous Producer
+* Specialist → Specialist delegation
+* recursive planning
+* debate / reflection loops
+* RAG / vector database
+* MCP
+* LangGraph / CrewAI / AutoGen
+* a generic async distributed Agent task engine
+* automatic model switching
+* cross-Scene Director edits
+* screenplay edits
+* character edits
+* project style edits
+* canonical merge
+* “make Workspace official”
+* a new revision model
+* a new Agent framework
+
+---
+
+# 24. Focused verification
+
+Keep testing proportional to the task.
+
+The important proof is one real vertical slice:
+
+```text
+Open Storyboard
+↓
+select Shot 02
+↓
+Director → Redesign
+↓
+Generate modification proposal
+↓
+real Agnes response
+↓
+real persisted semantic Proposal
+↓
+real Director Workspace
+↓
+real AI-6A ChangeSet preview
+↓
+Ghost Proposal appears in Storyboard
+↓
+proposal contains multiple changes
+↓
+select only two
+↓
+backend creates a NEW selected-subset preview
+↓
+real Impact/Diff update
+↓
+Apply selected ChangeSet
+↓
+Workspace working project changes
+↓
+canonical project remains unchanged
+```
+
+Also prove at least:
+
+* malformed Director output cannot mutate anything
+* out-of-scope Shot IDs are rejected
+* unauthorized Agent cannot execute `storyboard.propose_change`
+* stale Workspace revision causes conflict rather than silent apply
+* refresh restores a persisted Proposal
+* existing Agent Conversation still works
+* existing Workspace / Storyboard / Production regression tests still pass
+
+Do not turn this phase into a testing project.
+
+---
+
+# 25. Final delivery report
+
+When finished, report:
+
+1. files changed
+2. final `storyboard.propose_change` execution path
+3. exact semantic Proposal schema
+4. how model output is parsed and validated
+5. how semantic items compile into existing ChangeOperations
+6. how insertion/reorder stable IDs are handled deterministically
+7. when the Director Workspace is created
+8. Proposal persistence location
+9. how full Preview uses AI-6A
+10. how selected-subset Preview creates a new ChangeSet
+11. how stale Proposal / revision conflicts are handled
+12. how the frontend receives and restores Proposal state
+13. how the existing inline Ghost Proposal UI is connected
+14. proof that canonical `project.json` did not change
+15. what was intentionally left for the next phase
+
+The success condition is not:
+
+> “Director gives a good answer.”
+
+The success condition is:
+
+> **Director can turn a creative instruction into a real, structured, inspectable, selectively applicable storyboard revision inside an isolated Creative Workspace, while the official project remains untouched.**

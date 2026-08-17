@@ -1,17 +1,17 @@
 <template>
-  <!-- AI-6C §14：选中 Shot 后出现的 contextual floating toolbar。
-       极紧凑（36–40px），极轻阴影+1px border+solid surface（§14）。
-       只在选中态渲染（父控制 v-if），非永久 AI 按钮（§35）。
-       动作经 emit 交给 ShotBoard → 设 agent=director + context=shot + 复用 Floating Bar（§15），
-       不调 director.py、不开第二套聊天。 -->
+  <!-- AI-6D.1 §7：紧贴选中 Shot 的内联 Director 行（非独立 toolbar）。
+       无独立边框/阴影/底色——flush 在 shot-item 内。权重分层：
+       生成修改提案 = primary CTA（accent）；chat 动作 = 次要静默文本。
+       触发既有 Floating Agent 交互（ShotBoard.onDirectorAction），不开第二套聊天。 -->
   <div class="dct" @click.stop>
-    <span class="dct-label">DIRECTOR</span>
-    <button class="dct-btn" @click="emit('action', 'ask')">Ask Director</button>
+    <span class="dct-label">Director</span>
+    <button class="dct-quiet" @click="emit('action', 'ask')" title="就这镜向 Director 提问">Ask</button>
     <span class="dct-sep" />
-    <button class="dct-btn" @click="emit('action', 'analyze')">分析镜头</button>
-    <button class="dct-btn" @click="emit('action', 'pace')">优化节奏</button>
-    <button class="dct-btn" @click="emit('action', 'compose')">分析构图</button>
-    <button class="dct-btn" @click="emit('action', 'redesign')">重新设计</button>
+    <button class="dct-quiet" @click="emit('action', 'analyze')">分析</button>
+    <button class="dct-quiet" @click="emit('action', 'pace')">节奏</button>
+    <button class="dct-quiet" @click="emit('action', 'compose')">构图</button>
+    <button class="dct-quiet" @click="emit('action', 'redesign')">重新设计</button>
+    <button class="dct-propose" @click="emit('action', 'propose')" title="生成可审查、可选择应用的修改提案（经创作版本，官方分镜不变）">✂ 修改提案</button>
   </div>
 </template>
 
@@ -21,27 +21,38 @@ const emit = defineEmits<{ (e: 'action', key: string): void }>();
 </script>
 
 <style lang="scss" scoped>
+/* AI-6D.1：flush attached——透明底、无边框、无阴影，读作 shot 的一部分。 */
 .dct {
-  display: flex; align-items: center; gap: 8px;
-  height: 36px;
-  padding: 0 10px;
-  margin-bottom: 8px;                 /* 内联在 shot-item 顶部，下方留间隙 */
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
+  display: flex; align-items: center; gap: 6px;
+  height: 30px;
+  margin: -2px -2px 8px;               /* 贴 shot-item 边缘，不另成一块 */
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  box-shadow: none;
   font-size: 12px;
   user-select: none;
 }
 .dct-label {
-  font-size: 10px; font-weight: 700; letter-spacing: .6px;
-  color: var(--text-muted);
+  font-size: 10px; font-weight: 600; letter-spacing: .5px;
+  color: var(--text-faint);
+  text-transform: lowercase;
 }
-.dct-sep { width: 1px; height: 16px; background: var(--border); }
-.dct-btn {
-  padding: 3px 9px; border-radius: 5px; border: none;
-  background: var(--bg-root); color: var(--text-secondary);
+.dct-sep { width: 1px; height: 12px; background: var(--border); flex-shrink: 0; }
+/* chat 动作：静默文本（次要） */
+.dct-quiet {
+  padding: 2px 6px; border-radius: 4px; border: none;
+  background: none; color: var(--text-muted);
   font-size: 11px; cursor: pointer;
   &:hover { background: var(--bg-hover); color: var(--text-primary); }
+}
+/* 生成修改提案：primary CTA */
+.dct-propose {
+  margin-left: auto;
+  padding: 3px 10px; border-radius: 5px; border: none;
+  background: var(--accent); color: var(--accent-text);
+  font-size: 11px; font-weight: 600; cursor: pointer;
+  &:hover { background: var(--accent-hover); }
 }
 </style>

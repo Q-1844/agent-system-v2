@@ -48,8 +48,8 @@ onMounted(() => { void store.loadAgents(); });
   width: 220px;
   background: var(--bg-surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.32);
+  border-radius: 10px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
   overflow: hidden;
 }
 .as-head {

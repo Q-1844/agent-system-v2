@@ -14,7 +14,7 @@
       @click="store.openBar()"
     >A</button>
 
-    <!-- 状态 B/C：Compact / Expanded Bar（§5）-->
+    <!-- 状态 B/C：Compact / Expanded Bar（§5：单一 command surface，输入为视觉中心）-->
     <template v-else>
       <!-- 拖拽 handle（与输入区域分离，§6：输入文本时不触发 drag）-->
       <span
@@ -24,13 +24,21 @@
         @pointerdown="onDragStart"
       >⋮⋮</span>
 
-      <!-- Agent 名（点击 → Switcher，§10）-->
-      <button class="fab-agent" :disabled="!store.agents.length" @click.stop="onAgentClick" :title="agentTooltip">
-        <span class="fab-agent-name">{{ agentLabel }}</span>
+      <!-- Agent + 上下文（§6：identity secondary；点击 → Switcher）。
+           context 比 agent 更醒目（用户关心"对谁做"，而非 Agent 分类）。-->
+      <button
+        class="fab-ctx"
+        :disabled="!store.agents.length"
+        :title="ctxTooltip"
+        @click.stop="onAgentClick"
+      >
+        <span class="fab-ctx-agent">{{ agentLabel }}</span>
+        <span v-if="contextSuffix" class="fab-ctx-sep">·</span>
+        <span v-if="contextSuffix" class="fab-ctx-scope">{{ contextSuffix }}</span>
         <span v-if="store.running" class="fab-running" :title="runningTitle" />
       </button>
 
-      <!-- 输入（Enter 发送）-->
+      <!-- 输入（Enter 发送）——透明无框，与 bar 同一 surface（§4：消除 double input box）-->
       <input
         v-model="store.draft"
         class="fab-input"
@@ -83,6 +91,25 @@ const agentLabel = computed(() => store.activeAgent?.name || store.activeAgentId
 const agentTooltip = computed(() => store.activeAgent?.role || '切换 Agent');
 const inputPlaceholder = computed(() => 'Ask anything…');
 const runningTitle = computed(() => 'Agent 工作中');
+
+// AI-6D.1 §6：identity secondary。agent 名首词缩写（"Producer Supervisor"→"Producer"），
+// context 更醒目。tooltip 保留全名（不丢信息）。
+const shortAgent = computed(() => {
+  const n = store.activeAgent?.name || store.activeAgentId;
+  return n.split(/\s+/)[0];   // Producer / Script / Character / Production / Shot / Continuity / Director / Editor
+});
+const contextSuffix = computed(() => {
+  const ctx = store.currentContext;
+  if (!ctx || ctx.type === 'project') return '';
+  if (ctx.type === 'shot') return `Shot ${ctx.shotId}`;
+  if (ctx.type === 'scene' || ctx.type === 'shots') return `Story ${ctx.sceneId}`;
+  if (ctx.type === 'character') return ctx.name;
+  return '';
+});
+const ctxTooltip = computed(() => {
+  const a = store.activeAgent?.name || store.activeAgentId;
+  return contextSuffix.value ? `${a} · ${contextSuffix.value}（点击切换 Agent）` : `${a}（点击切换 Agent）`;
+});
 
 // ---- 拖拽（Pointer Events，§6）----
 const drag = { startX: 0, startY: 0, origLeft: 0, origTop: 0, active: false };
@@ -150,24 +177,26 @@ function onAgentCenter() { menuOpen.value = false; router.push('/agents'); }
 </script>
 
 <style lang="scss" scoped>
+/* AI-6D.1：单一 command surface——软阴影、输入无内框、identity 次要。 */
 .fab {
   position: fixed;
   z-index: 110;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 8px 0 4px;
+  gap: 4px;
+  padding: 0 6px 0 2px;
   background: var(--bg-surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.16);
   font-size: 12px;
   color: var(--text-primary);
   user-select: none;
-  transition: width 0.16s ease, height 0.16s ease;
+  transition: width 0.16s ease, box-shadow 0.16s ease;
   touch-action: none;
 
-  &.dragging { transition: none; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.36); }
+  &.dragging { transition: none; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22); }
+  &.collapsed { box-shadow: 0 1px 6px rgba(0, 0, 0, 0.12); }
 }
 
 .fab-collapsed {
@@ -175,16 +204,16 @@ function onAgentCenter() { menuOpen.value = false; router.push('/agents'); }
   margin: 0; padding: 0;
   background: var(--bg-surface);
   border: none;
-  border-radius: 10px;
-  color: var(--text-primary);
-  font-size: 16px; font-weight: 700;
+  border-radius: 12px;
+  color: var(--text-secondary);
+  font-size: 15px; font-weight: 700;
   cursor: pointer;
-  &:hover { background: var(--bg-hover); }
+  &:hover { background: var(--bg-hover); color: var(--text-primary); }
 }
 
 .fab-handle {
   flex-shrink: 0;
-  padding: 0 4px;
+  padding: 0 2px;
   color: var(--text-faint);
   cursor: grab;
   letter-spacing: -2px;
@@ -194,19 +223,29 @@ function onAgentCenter() { menuOpen.value = false; router.push('/agents'); }
   .fab.dragging & { cursor: grabbing; }
 }
 
-.fab-agent {
+/* §6：identity secondary——agent 名 faint + 缩写；context 更醒目。整体可点切 Agent。 */
+.fab-ctx {
   flex-shrink: 0;
   display: inline-flex; align-items: center; gap: 4px;
+  max-width: 130px;
   background: none; border: none;
-  padding: 2px 6px;
+  padding: 3px 6px;
   border-radius: 6px;
-  color: var(--text-secondary);
-  font-size: 12px; font-weight: 600;
   cursor: pointer;
-  &:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); }
-  &:disabled { cursor: default; opacity: 0.7; }
+  &:hover:not(:disabled) { background: var(--bg-hover); }
+  &:disabled { cursor: default; opacity: 0.6; }
 }
-.fab-agent-name { white-space: nowrap; }
+.fab-ctx-agent {
+  font-size: 11px; font-weight: 500;
+  color: var(--text-faint);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.fab-ctx-sep { color: var(--text-faint); font-size: 11px; }
+.fab-ctx-scope {
+  font-size: 11px; font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .fab-running {
   width: 6px; height: 6px; border-radius: 50%;
   background: var(--success);
@@ -215,17 +254,19 @@ function onAgentCenter() { menuOpen.value = false; router.push('/agents'); }
 @keyframes fab-pulse { 0%,100%{opacity:0.4} 50%{opacity:1} }
 @media (prefers-reduced-motion: reduce) { .fab-running { animation: none; opacity: 0.7; } }
 
+/* §4：输入无内框无独立底色，与 bar 同一 surface，是视觉中心。仅 focus 时极淡 ring。 */
 .fab-input {
   flex: 1; min-width: 0;
-  background: var(--bg-root);
-  border: 1px solid var(--border);
+  background: transparent;
+  border: none;
   border-radius: 6px;
-  padding: 5px 8px;
+  padding: 6px 4px;
   font-size: 12px;
   color: var(--text-primary);
   outline: none;
   user-select: text;
-  &:focus { border-color: var(--border-hover); }
+  &::placeholder { color: var(--text-faint); }
+  &:focus { background: var(--bg-root); box-shadow: 0 0 0 1px var(--border-hover) inset; }
 }
 
 .fab-send, .fab-menu-btn {
@@ -241,6 +282,7 @@ function onAgentCenter() { menuOpen.value = false; router.push('/agents'); }
   &:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); }
   &:disabled { opacity: 0.4; cursor: default; }
 }
+.fab-send { color: var(--text-secondary); }
 
 .fab-menu {
   position: absolute;
@@ -249,7 +291,7 @@ function onAgentCenter() { menuOpen.value = false; router.push('/agents'); }
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
   padding: 4px;
   display: flex; flex-direction: column;
   gap: 2px;

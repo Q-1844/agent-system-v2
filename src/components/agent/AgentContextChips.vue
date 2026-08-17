@@ -36,20 +36,21 @@ const title = computed(() => {
 
 <style lang="scss" scoped>
 .acc {
-  display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap;
+  display: inline-flex; align-items: center; gap: 3px; flex-wrap: wrap;
 }
+/* AI-6D.1：极安静的内联 context——无独立 border，不读作 toolbar row。 */
 .acc-chip {
   display: inline-flex; align-items: center;
-  padding: 1px 7px;
-  border: 1px solid var(--border);
+  padding: 1px 6px;
+  border: none;
   border-radius: 4px;
-  font-size: 10px; color: var(--text-secondary);
-  background: var(--bg-root);
+  font-size: 10px; color: var(--text-muted);
+  background: transparent;
 }
 .acc-x {
   background: none; border: none;
-  color: var(--text-muted);
-  font-size: 13px; line-height: 1;
+  color: var(--text-faint);
+  font-size: 12px; line-height: 1;
   cursor: pointer; padding: 0 2px; border-radius: 3px;
   &:hover { color: var(--text-primary); background: var(--bg-hover); }
 }

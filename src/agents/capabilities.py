@@ -79,9 +79,11 @@ def build_default_capabilities() -> List[CapabilityDefinition]:
         _cap("storyboard.inspect", "分镜查看", "读取场景分镜结构（DEMO）",
              CC.STORYBOARD.value, "director",
              ["director", "continuity_reviewer", "editor"], [I], LO, True),
+        # AI-6D：已接通为真实能力。经由 AgentRuntime.propose_storyboard_change（async，
+        # 需 Agnes+Workspace），不经同步 _ADAPTERS dispatch——故不在 _WIRED/_ADAPTERS 中。
         _cap("storyboard.propose_change", "分镜修改提案",
              "KEEP/UPDATE/INSERT/DELETE/REORDER——必须经 Workspace/ChangeSet（§18 红线）",
-             CC.STORYBOARD.value, "director", ["director"], [E], HI, False),
+             CC.STORYBOARD.value, "director", ["director"], [E], HI, True),
         # ---- production_plan ----
         _cap("production_plan.inspect", "制作计划查看", "读取场景制作计划与镜头策略",
              CC.PRODUCTION_PLAN.value, "production_planner",

@@ -59,6 +59,7 @@
             <div class="seg-head-actions">
               <button class="ai-direct-btn" @click="openDirector">AI 设计分镜</button>
               <button class="link-btn" @click="askDirectorStory" title="以当前故事段为上下文，打开 Director 对话">Director 对话</button>
+              <button class="ai-direct-btn" @click="openPropose('scene')" title="以当前故事段为 scope 生成 Director 修改提案（经 Workspace/ChangeSet，官方分镜不变）">✂ Director 修改提案</button>
               <button class="ai-direct-btn"
                       :disabled="!selected.shots.length"
                       :title="selected.shots.length ? '' : '请先创建镜头或使用 AI 设计分镜。'"
@@ -80,12 +81,36 @@
           </div>
         </div>
 
-        <!-- AI-6C §19 Director Proposal 边界（currentProposal 恒 null 时不渲染，§38 场景10）-->
+        <!-- AI-6D.1 §8/§19 Director 修改提案 触发（显式 instruction；生成态内聚）-->
+        <div v-if="proposeOpen" class="propose-bar" :class="{ busy: proposing }">
+          <div class="propose-bar-scope">{{ proposeScope === 'shot' ? '镜头' : '故事段' }} {{ proposeScopeId || '—' }} · Director 修改提案</div>
+          <textarea v-model="proposeInstruction" rows="2" :disabled="proposing"
+            placeholder="描述你想怎么改（如：把第 2 镜拆成反应镜头、压缩节奏、调整情绪）。Director 会给出可逐项选择应用的修改。" />
+          <div class="propose-bar-actions">
+            <button class="link-btn" @click="proposeOpen = false" :disabled="proposing">取消</button>
+            <button class="ai-direct-btn primary" :disabled="proposing || !proposeInstruction.trim()" @click="runPropose">
+              {{ proposing ? '生成中…' : '生成修改提案' }}
+            </button>
+          </div>
+          <div v-if="proposeError" class="propose-error">{{ proposeError }}</div>
+        </div>
+
+        <!-- AI-6D.1 §9 真实 Director Proposal 呈现 + 选择性预览 + apply（官方分镜不变）-->
         <DirectorProposalOverlay
           :proposal="currentProposal"
           :project-name="projectName"
           @close="currentProposal = null"
+          @updated="onProposalUpdated"
+          @applied="onProposalApplied"
         />
+
+        <!-- AI-6D.1 §14 apply 后：克制成功反馈，明确只改创作版本 -->
+        <div v-if="appliedProposal" class="applied-proposal-banner">
+          <span class="apb-ok">✓ 已应用到创作版本</span>
+          <span class="apb-sub">官方分镜未变</span>
+          <button class="link-btn" @click="openCreativeVersion(appliedProposal.workspace_id)">打开创作版本</button>
+          <button class="link-btn" @click="appliedProposal = null">继续查看官方分镜</button>
+        </div>
 
         <!-- AI 导演采用后提示（§三十六）-->
         <div v-if="appliedHint" class="applied-hint">
@@ -253,6 +278,67 @@ const agentUi = useAgentUiStore();          // AI-6C Floating Agent
 const selectedShotId = ref<string | null>(null);   // §13 shot 级 selection（原仅 scene 级）
 const currentProposal = ref<DirectorProposal | null>(null);  // §19 Proposal 边界（无真实数据时不渲染）
 
+// AI-6D Director Proposal（storyboard.propose_change，§11/§13/§16/§19/§20）
+const proposeOpen = ref(false);
+const proposeScope = ref<'shot' | 'scene'>('scene');
+const proposeScopeId = ref('');
+const proposeInstruction = ref('');
+const proposing = ref(false);
+const proposeError = ref('');
+const appliedProposal = ref<{ workspace_id: string } | null>(null);
+
+function openPropose(scope: 'shot' | 'scene') {
+  if (!selected.value) return;
+  proposeScope.value = scope;
+  proposeScopeId.value = scope === 'shot' ? (selectedShotId.value || '') : selected.value.scene_id;
+  proposeInstruction.value = scope === 'shot'
+    ? `请重新设计镜头 ${proposeScopeId.value}，给出一个更具表现力的修改方案（可含更新/插入相邻镜头）。`
+    : `请优化故事段 ${selected.value.scene_id} 的镜头节奏与表现力，给出修改方案。`;
+  proposeError.value = '';
+  proposeOpen.value = true;
+}
+
+async function runPropose() {
+  if (!selected.value || !projectName.value) return;
+  if (proposeScope.value === 'shot' && !proposeScopeId.value) { proposeError.value = '请先选中一个镜头'; return; }
+  proposing.value = true; proposeError.value = '';
+  try {
+    const p = await apiClient.createDirectorProposal(projectName.value, {
+      agent_id: 'director', scope_type: proposeScope.value, scope_id: proposeScopeId.value,
+      instruction: proposeInstruction.value,
+    });
+    currentProposal.value = p;
+    appliedProposal.value = null;
+    proposeOpen.value = false;
+  } catch (e: any) {
+    proposeError.value = e.message || '生成提案失败';
+  } finally { proposing.value = false; }
+}
+
+async function restoreProposal() {
+  // §16 刷新恢复：取当前 scope（shot 优先，否则 scene）最近一个未 dismissed/applied 的 Proposal
+  if (!selected.value || !projectName.value) { currentProposal.value = null; return; }
+  const scope_type = selectedShotId.value ? 'shot' : 'scene';
+  const scope_id = selectedShotId.value || selected.value.scene_id;
+  try {
+    const list = await apiClient.listDirectorProposals(projectName.value, scope_type, scope_id);
+    const active = list.find(p => p.status !== 'applied' && p.status !== 'dismissed');
+    currentProposal.value = active ? await apiClient.getDirectorProposal(projectName.value, active.proposal_id) : null;
+  } catch { /* 静默：刷新恢复非关键 */ }
+}
+
+function onProposalUpdated(p: DirectorProposal) { currentProposal.value = p; }
+
+async function onProposalApplied(p: DirectorProposal) {
+  currentProposal.value = null;
+  appliedProposal.value = { workspace_id: p.workspace_id };
+  await load();   // canonical 未变（§21），reload 保持视图一致
+}
+
+function openCreativeVersion(wid: string) {
+  router.push({ path: '/workspace', query: { workspace_id: wid } });
+}
+
 interface Segment {
   scene_id: string; summary: string; characters: string[]; shots: ShotData[];
 }
@@ -298,6 +384,8 @@ async function load() {
       const wshot = segments.value.flatMap(s => s.shots).find(sh => sh.shot_id === workbenchShot.value!.shot_id);
       if (wshot) workbenchShot.value = wshot;
     }
+    // AI-6D §16：刷新恢复当前 scope 的 active Proposal
+    await restoreProposal();
   } catch (e: any) {
     console.error('[ShotBoard] 加载失败', e);
     segments.value = [];
@@ -383,9 +471,11 @@ function directorPrompt(action: string, sh: ShotData): string {
 }
 
 // §15：quick action 设 agent=director + context=shot + 复用 Floating Bar，不调 director.py、不开第二套聊天
+// §19：'propose' 是显式的 storyboard.propose_change 触发（shot scope），不复用聊天。
 async function onDirectorAction(action: string) {
   const sid = selectedShotId.value;
   if (!selected.value || !sid) return;
+  if (action === 'propose') { openPropose('shot'); return; }
   const sh = selected.value.shots.find(s => s.shot_id === sid);
   if (!sh) return;
   agentUi.draft = action === 'ask' ? '' : directorPrompt(action, sh);
@@ -549,8 +639,8 @@ onUnmounted(() => {
   document.removeEventListener('keydown', onKey);
 });
 watch(projectName, () => { selected.value = null; load(); });
-// AI-6C：切故事段时清空 shot 级 selection
-watch(selected, () => { selectedShotId.value = null; });
+// AI-6C：切故事段时清空 shot 级 selection；AI-6D：并恢复该故事段的 active Proposal
+watch(selected, () => { selectedShotId.value = null; restoreProposal(); });
 </script>
 
 <style lang="scss" scoped>
@@ -636,6 +726,32 @@ watch(selected, () => { selectedShotId.value = null; });
   background: rgba(74, 222, 128, 0.1); border: 1px solid #4ade80; border-radius: 6px;
   padding: 8px 12px; margin-bottom: 12px; font-size: 12px; color: #4ade80;
   .link-btn { color: var(--accent); margin-left: auto; }
+}
+/* AI-6D.1 Director 修改提案 触发条（revision-layer 感：accent 左边框）+ apply 后提示 */
+.propose-bar {
+  display: flex; flex-direction: column; gap: 6px;
+  background: var(--bg-surface); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+  border-radius: 8px; padding: 9px 12px; margin-bottom: 12px;
+  &.busy { opacity: .85; }
+  textarea {
+    width: 100%; resize: vertical; box-sizing: border-box;
+    background: var(--bg-root); border: 1px solid var(--border); border-radius: 5px;
+    color: var(--text-primary); font-size: 12px; padding: 6px 8px; font-family: inherit;
+    &:focus { border-color: var(--border-hover); outline: none; }
+    &:disabled { opacity: .6; }
+  }
+}
+.propose-bar-scope { font-size: 10px; color: var(--text-faint); }
+.propose-bar-actions { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
+.propose-error { font-size: 11px; color: var(--error); }
+.applied-proposal-banner {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.35); border-radius: 6px;
+  padding: 7px 12px; margin-bottom: 12px; font-size: 12px;
+  .apb-ok { color: var(--success); font-weight: 600; }
+  .apb-sub { color: var(--text-muted); font-size: 11px; }
+  .link-btn { color: var(--accent); }
+  .link-btn:last-child { margin-left: auto; }
 }
 .seg-story { font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin: 0 0 10px; }
 .seg-chars { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }

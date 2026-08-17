@@ -5,6 +5,8 @@
 
 const API_BASE_URL = 'http://localhost:8000';
 
+import type { DirectorProposal } from '@/components/storyboard/proposal';   // AI-6D（type-only，无运行时循环）
+
 export interface Project {
   name: string;
   path: string;
@@ -1585,6 +1587,43 @@ class ApiClient {
   }
   async getAgentTask(projectName: string, tid: string): Promise<AgentTask> {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/agents/tasks/${encodeURIComponent(tid)}`);
+  }
+
+  // ============ AI-6D Director Proposal（storyboard.propose_change，§11/§13/§16）============
+  async createDirectorProposal(projectName: string, payload: {
+    agent_id?: string; scope_type: 'shot' | 'scene'; scope_id: string; instruction?: string;
+  }): Promise<DirectorProposal> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/agents/director/proposals`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agent_id: payload.agent_id ?? 'director',
+        scope_type: payload.scope_type, scope_id: payload.scope_id,
+        instruction: payload.instruction ?? '',
+      }),
+    });
+  }
+  async getDirectorProposal(projectName: string, proposalId: string): Promise<DirectorProposal> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/agents/director/proposals/${encodeURIComponent(proposalId)}`);
+  }
+  async listDirectorProposals(projectName: string, scopeType: string, scopeId: string): Promise<DirectorProposal[]> {
+    const data = await this.request<{ proposals: DirectorProposal[] }>(
+      `/api/project/${encodeURIComponent(projectName)}/agents/director/proposals?scope_type=${encodeURIComponent(scopeType)}&scope_id=${encodeURIComponent(scopeId)}`);
+    return data.proposals;
+  }
+  /** §13/§14：选择性子集再预览 -> 后端重编译被选 item -> 全新 changeset（返回新 currentProposal）。 */
+  async previewSelectedProposal(projectName: string, proposalId: string, selectedItemIds: string[]): Promise<DirectorProposal> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/agents/director/proposals/${encodeURIComponent(proposalId)}/preview-selected`, {
+      method: 'POST', body: JSON.stringify({ selected_item_ids: selectedItemIds }),
+    });
+  }
+  /** §13：应用当前 changeset（按 changeset_id，复用 AI-6A apply）。 */
+  async applyDirectorProposal(projectName: string, proposalId: string, changesetId: string): Promise<{ applied: boolean; revision: number; changeset_id: string; idempotent?: boolean; base_is_stale?: boolean; workspace_id: string; status: string }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/agents/director/proposals/${encodeURIComponent(proposalId)}/apply`, {
+      method: 'POST', body: JSON.stringify({ changeset_id: changesetId }),
+    });
+  }
+  async dismissDirectorProposal(projectName: string, proposalId: string): Promise<{ dismissed: boolean; proposal_id: string }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/agents/director/proposals/${encodeURIComponent(proposalId)}/dismiss`, { method: 'POST' });
   }
 }
 
