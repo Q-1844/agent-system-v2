@@ -58,6 +58,7 @@
             <span class="seg-no">故事段 {{ selected.scene_id }}</span>
             <div class="seg-head-actions">
               <button class="ai-direct-btn" @click="openDirector">AI 设计分镜</button>
+              <button class="link-btn" @click="askDirectorStory" title="以当前故事段为上下文，打开 Director 对话">Director 对话</button>
               <button class="ai-direct-btn"
                       :disabled="!selected.shots.length"
                       :title="selected.shots.length ? '' : '请先创建镜头或使用 AI 设计分镜。'"
@@ -79,6 +80,13 @@
           </div>
         </div>
 
+        <!-- AI-6C §19 Director Proposal 边界（currentProposal 恒 null 时不渲染，§38 场景10）-->
+        <DirectorProposalOverlay
+          :proposal="currentProposal"
+          :project-name="projectName"
+          @close="currentProposal = null"
+        />
+
         <!-- AI 导演采用后提示（§三十六）-->
         <div v-if="appliedHint" class="applied-hint">
           <span>AI 已创建 {{ appliedHint.count }} 个镜头。接下来可打开镜头工作台，生成首帧、尾帧和视频提示词。</span>
@@ -97,10 +105,16 @@
             </div>
           <div
             class="shot-item"
+            :class="{ active: selectedShotId === sh.shot_id }"
             :data-shot-id="sh.shot_id"
+            @click="selectShot(sh)"
             @dblclick="openWorkbench(sh)"
             @contextmenu.prevent="openCtxMenu($event, sh)"
           >
+            <DirectorContextToolbar
+              v-if="selectedShotId === sh.shot_id"
+              @action="onDirectorAction"
+            />
             <div class="shot-meta">
               <span class="shot-seq">{{ sh.shot_id }}</span>
               <span class="shot-size">{{ sh.shot_size || '中景' }}</span>
@@ -226,11 +240,18 @@ import ProductionPlannerStudio from '@/components/ProductionPlannerStudio.vue';
 import AutopilotRunMonitor from '@/components/AutopilotRunMonitor.vue';
 import ProjectProductionStudio from '@/components/ProjectProductionStudio.vue';
 import FullProductionStudio from '@/components/FullProductionStudio.vue';
+import DirectorContextToolbar from '@/components/storyboard/DirectorContextToolbar.vue';
+import DirectorProposalOverlay from '@/components/storyboard/DirectorProposalOverlay.vue';
+import type { DirectorProposal } from '@/components/storyboard/proposal';
+import { useAgentUiStore } from '@/store/agentUi';
 
 const router = useRouter();
 const projStore = useProjectStore();
 const projectName = computed(() => projStore.projectName);
 const jobStore = useJobStore();
+const agentUi = useAgentUiStore();          // AI-6C Floating Agent
+const selectedShotId = ref<string | null>(null);   // §13 shot 级 selection（原仅 scene 级）
+const currentProposal = ref<DirectorProposal | null>(null);  // §19 Proposal 边界（无真实数据时不渲染）
 
 interface Segment {
   scene_id: string; summary: string; characters: string[]; shots: ShotData[];
@@ -348,6 +369,40 @@ function shotStatusClass(sh: ShotData): string {
 
 function openWorkbench(sh: ShotData) { workbenchShot.value = sh; }
 function closeWorkbench() { workbenchShot.value = null; }
+
+// ---- AI-6C：Shot 级 selection + Contextual Director（复用 Floating Bar）----
+function selectShot(sh: ShotData) { selectedShotId.value = sh.shot_id; }
+
+function directorPrompt(action: string, sh: ShotData): string {
+  const intent = (sh.description || '').trim() || '（未填写画面意图）';
+  if (action === 'analyze')  return `分析镜头 ${sh.shot_id}（${sh.shot_size || '中景'}）。画面意图：${intent}。请从叙事推进与视觉呈现两个角度评估这一镜。`;
+  if (action === 'pace')     return `镜头 ${sh.shot_id} 的节奏需要优化。画面意图：${intent}。请给出节奏调整建议。`;
+  if (action === 'compose') return `分析镜头 ${sh.shot_id} 的构图。画面意图：${intent}。请给出构图改进建议。`;
+  if (action === 'redesign')return `请重新设计镜头 ${sh.shot_id}。当前画面意图：${intent}。给出一个更具表现力的新镜头方案。`;
+  return '';
+}
+
+// §15：quick action 设 agent=director + context=shot + 复用 Floating Bar，不调 director.py、不开第二套聊天
+async function onDirectorAction(action: string) {
+  const sid = selectedShotId.value;
+  if (!selected.value || !sid) return;
+  const sh = selected.value.shots.find(s => s.shot_id === sid);
+  if (!sh) return;
+  agentUi.draft = action === 'ask' ? '' : directorPrompt(action, sh);
+  await agentUi.setAgentContext('director', {
+    type: 'shot', sceneId: selected.value.scene_id, shotId: sh.shot_id, description: sh.description,
+  });
+  agentUi.expandConversation();
+}
+
+// §16：Story 级 Director 入口，context=scene
+async function askDirectorStory() {
+  if (!selected.value) return;
+  await agentUi.setAgentContext('director', {
+    type: 'scene', sceneId: selected.value.scene_id, summary: selected.value.summary,
+  });
+  agentUi.expandConversation();
+}
 
 // ---- AI 导演（Phase AI-3）----
 function openDirector() {
@@ -494,6 +549,8 @@ onUnmounted(() => {
   document.removeEventListener('keydown', onKey);
 });
 watch(projectName, () => { selected.value = null; load(); });
+// AI-6C：切故事段时清空 shot 级 selection
+watch(selected, () => { selectedShotId.value = null; });
 </script>
 
 <style lang="scss" scoped>
@@ -591,6 +648,7 @@ watch(projectName, () => { selected.value = null; load(); });
 .shot-item {
   background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;
   &:hover { border-color: var(--text-muted); }
+  &.active { border-color: var(--accent); background: var(--bg-hover); }
 }
 .shot-connector { display: flex; align-items: center; gap: 8px; padding: 2px 0 2px 14px; }
 .conn-line { flex: 0 0 18px; height: 1px; background: var(--border); }

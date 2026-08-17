@@ -97,6 +97,7 @@
 
     <QueuePanel v-model:show="queueShow" :project-name="projectName" />
     <OrchestrateModal v-model:show="orchestrateShow" />
+    <FloatingAgentHost />
   </div>
 </template>
 
@@ -111,6 +112,7 @@ import { useJobStream } from '@/composables/useJobStream';
 import { useJobStore } from '@/store/jobs';
 import QueuePanel from '@/components/QueuePanel.vue';
 import OrchestrateModal from '@/components/OrchestrateModal.vue';
+import FloatingAgentHost from '@/components/agent/FloatingAgentHost.vue';
 
 const route = useRoute();
 const currentRoute = computed(() => route);
