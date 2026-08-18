@@ -14,7 +14,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from deps import get_agnes_client, get_project_manager
+from deps import get_agnes_client, get_project_manager, get_job_queue
 from src.core.store import ProjectStore
 
 from .models import (AgentDefinition, AgentMessage, AgentSession, AgentTask,
@@ -30,6 +30,7 @@ from .director_proposal import (
     ProposalGenerationError, ProposalStatus,
 )
 from .planner_capability import create_production_plan as _create_production_plan
+from .shot_producer_capability import execute_shot_production
 from src.revision.workspace import WorkspaceStore
 from src.revision.changeset import ChangeSetError
 
@@ -55,12 +56,19 @@ class AgentRuntime:
                  agnes_getter: Optional[Callable[[], Any]] = None,
                  plans_reader: Optional[Callable[[str, str], Optional[dict]]] = None,
                  settings_path: Optional[Path] = None,
-                 project_dir_resolver: Optional[Callable[[str], Path]] = None):
+                 project_dir_resolver: Optional[Callable[[str], Path]] = None,
+                 job_queue_getter: Optional[Callable[[], Any]] = None,
+                 fake_shot_params: Optional[Dict[str, Any]] = None):
         self._client = client
         self._agnes_getter = agnes_getter or get_agnes_client
         self._plans_reader = plans_reader
         self._project_dir_resolver = project_dir_resolver or (
             lambda name: get_project_manager().get_project_dir(name))
+        # AI-6F.0 §17：Shot Producer 长执行能力通过现有 JobQueue。getter 注入（测试用 lambda）。
+        self._job_queue_getter = job_queue_getter or (lambda: get_job_queue())
+        # AI-6F.0 §7：fake handler 行为可控（_fake_outcome/steps/sleep）；**仅 fake 阶段**，
+        # AI-6F 接通真实生成后移除。
+        self._fake_shot_params = fake_shot_params
         self._reg = Registries(settings_path)
 
     # ---------- 基础访问 ----------
@@ -302,6 +310,12 @@ class AgentRuntime:
             project=project, scope_type=scope_type, scope_id=scope_id,
             project_loader=self._project_loader(project),
             plans_reader=self._plans_reader)
+        if capability_id in self._LONGRUNNING_CAPABILITIES:
+            # AI-6F.0 §4/§6/§17：shot 长执行——提交 durable Job，HTTP 先返回（不等 Job 完成）。
+            # settlement bridge（settlement.py）在 Job 终态后对账 AgentTask。
+            task = await self._delegate_long_running(
+                store, task, ctx, project, scope_type, scope_id, instruction, capability_id)
+            return task.to_dict()
         if capability_id in self._ASYNC_CAPABILITIES:
             result = await self._execute_async_capability(
                 capability_id, ctx, project, scope_type, scope_id, instruction)
@@ -332,6 +346,10 @@ class AgentRuntime:
     # ---------- async capability 执行（§11）----------
     _ASYNC_CAPABILITIES = {"production_plan.create"}
 
+    # AI-6F.0 §17：Shot Producer 长执行能力（提交 durable Job，HTTP 先返回，settlement 对账）。
+    # 与 _ASYNC_CAPABILITIES 区别：前者 await 真实 IO 后同步结算；本类提交后**立即**返回 running。
+    _LONGRUNNING_CAPABILITIES = {"shot.first_frame", "shot.last_frame", "shot.video"}
+
     async def _execute_async_capability(self, capability_id: str, ctx: "CapabilityContext",
                                         project: str, scope_type: str, scope_id: str,
                                         instruction: str) -> AgentStructuredResult:
@@ -343,6 +361,63 @@ class AgentRuntime:
         return AgentStructuredResult(
             status=ResultStatus.NOT_IMPLEMENTED.value,
             summary=f"能力 {capability_id} 未接通 async 执行。")
+
+    async def _delegate_long_running(self, store: "AgentTaskStore", task: "AgentTask",
+                                      ctx: "CapabilityContext", project: str,
+                                      scope_type: str, scope_id: str, instruction: str,
+                                      capability_id: str) -> "AgentTask":
+        """AI-6F.0 §4/§6/§17：Shot Producer 长执行分支。
+        提交 durable fake Job（幂等：先查 task.execution_ref，已存在则 reattach/settle 不重提交）→
+        把 execution_ref 写回 AgentTask → task 保持 running → 立即返回（HTTP 不等 Job 完成）。
+        真实结算由 settlement bridge（settlement.py）在 Job 终态后对账；本处仅处理
+        submit / reattach / settle-from-existing 三种即时结果。"""
+        job_queue = self._resolve_job_queue_or_none()
+        result = await execute_shot_production(
+            client=self._resolve_client_or_none(),
+            project_loader=self._project_loader(project),
+            project_dir=self._resolve_project_dir(project),
+            project_name=project, scope_type=scope_type, scope_id=scope_id,
+            instruction=instruction, capability_id=capability_id,
+            job_queue=job_queue,
+            existing_ref=task.execution_ref,
+            fake_job_params=self._fake_shot_params)
+
+        task.structured_result = result.to_dict()
+        task.result_summary = result.summary
+        task.artifact_refs = list(result.artifact_refs)
+        task.warnings = list(result.warnings)
+        if result.suggested_next_actions:
+            task.suggested_next_actions = list(result.suggested_next_actions)
+
+        if result.status == ResultStatus.RUNNING.value:
+            # §4/§6：已提交/reattach linked Job → execution_ref 落盘 + task 保持 running。
+            # data 已含 job_id；execution_ref 取 result.data 字段（executor 已装配）。
+            data = result.data or {}
+            if data.get("job_id"):
+                task.execution_ref = {
+                    "job_id": data["job_id"],
+                    "kind": data.get("kind"),
+                    "phase": data.get("phase"),
+                    "shot_id": data.get("shot_id") or scope_id,
+                    "submitted_at": data.get("submitted_at"),
+                }
+            # status 保持 running（pending→running 已在 delegate 设）
+        elif result.status == ResultStatus.COMPLETED.value:
+            # §6/§18-10：reattach 发现 linked Job 已 done → 直接结算 completed（不重提交）
+            task.status = TaskStatus.COMPLETED.value
+            task.error = None
+        elif result.status == ResultStatus.NOT_CONFIGURED.value:
+            # §9/§23 软失败（JobQueue 不可用）：task FAILED
+            task.status = TaskStatus.FAILED.value
+            task.error = result.summary
+        elif result.status == ResultStatus.NOT_IMPLEMENTED.value:
+            task.status = TaskStatus.FAILED.value
+            task.error = f"能力未接通: {capability_id}"
+        else:  # FAILED：scope/shot 无效 blocker 或 reattach 发现 linked Job 已 failed（§18-11）
+            task.status = TaskStatus.FAILED.value
+            task.error = result.summary
+        store.update_task(task)
+        return task
 
     async def _execute_production_plan_create(self, ctx: "CapabilityContext", project: str,
                                               scope_type: str, scope_id: str,
@@ -375,6 +450,14 @@ class AgentRuntime:
             return self._client
         try:
             return self._agnes_getter()
+        except Exception:
+            return None
+
+    def _resolve_job_queue_or_none(self):
+        """AI-6F.0 §17：取现有 JobQueue，不可用则 None（shot 执行器转 not_configured 软失败）。
+       SHOT 生产不阻塞 HTTP——即便队列未就绪也返回 task FAILED(not_configured) 而非抛 503。"""
+        try:
+            return self._job_queue_getter()
         except Exception:
             return None
 

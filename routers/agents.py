@@ -15,8 +15,9 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 import deps
-from deps import get_project_manager
+from deps import get_project_manager, JOB_HANDLERS
 from src.agents.runtime import get_agent_runtime, AgentError
+from src.agents.fake_shot_handlers import all_fake_handlers
 from routers.production_planner import _read_plans   # 唯一 import 点（composition root）
 from routers.workspaces import workspace_lock        # 复用同一 per-workspace 锁（AI-6D）
 
@@ -39,6 +40,15 @@ def _plans_reader(project_name: str, scene_id: str) -> Optional[dict]:
 
 # 启动期注入（get_agent_runtime() 构造无副作用，见 runtime.py）
 get_agent_runtime().set_plans_reader(_plans_reader)
+
+
+# ============ AI-6F.0 composition root：注册 fake shot handler 到现有 JobQueue ============
+# §7：Shot Producer 长执行能力用 deterministic fake handler（不调 Agnes、不写真实资产）。
+# 注册到 deps.JOB_HANDLERS（可变 dict），供 JobQueue 在 start 后 dispatch agent_* kind。
+# kind 前缀 "agent_" 与真实 "first_frame"/"last_frame"/"video" 不冲突——真实 handler 仍在
+# routers/shots.py 注册，本处仅补 fake 三键。AI-6F 接通真实生成后移除此注册。
+for _kind, _fn in all_fake_handlers().items():
+    JOB_HANDLERS.setdefault(_kind, _fn)
 
 
 # ============ AgentError.code -> HTTP 状态（§29）============

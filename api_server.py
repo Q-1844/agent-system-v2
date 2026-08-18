@@ -165,6 +165,20 @@ async def startup():
     except Exception as e:
         logger.error(f"FullProjectRun 恢复失败: {e}")
 
+    # 阶段 AI-6F.0：AgentTask durable settlement 对账（§10/§12）。
+    # 🔴 必须在 JobQueue.start() + 各 ProductionRun 恢复之后：本 bridge 扫描所有项目 running
+    # AgentTask，据 linked Job（已被 JobQueue._load 恢复）状态 reattach/settle，不重复 submit。
+    # 先一次性 recover_tasks（startup 对账），再启后台 poll loop（§12 polling fallback——
+    # 正确性不依赖内存 SSE，持久态是真相）。
+    try:
+        from src.agents.settlement import get_settler
+        settler = get_settler()
+        asyncio.create_task(settler.recover_tasks())
+        await settler.start()
+        logger.info("AgentTask settlement bridge 已就绪")
+    except Exception as e:
+        logger.error(f"AgentTask settlement 恢复失败: {e}")
+
 
 if __name__ == "__main__":
     import uvicorn

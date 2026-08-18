@@ -105,17 +105,23 @@ can_delegate_to      = []
 |---|---|---|---|
 | `shot.inspect` | inspect | implemented | 读镜头字段 + 资产/计划状态 |
 | `production_plan.inspect` | inspect | implemented | 读场景制作计划（共享） |
-| `shot.first_frame` | execute,retry,cancel | **not_implemented** | 按计划执行首帧 |
-| `shot.last_frame` | execute,retry,cancel | **not_implemented** | 按计划执行尾帧 |
-| `shot.video` | execute,retry,cancel | **not_implemented** | 按计划执行视频 |
+| `shot.first_frame` | execute,retry,cancel | **implemented (AI-6F.0 fake durable)** | 按计划执行首帧——提交 durable Job，HTTP 先返回，settlement 对账 |
+| `shot.last_frame` | execute,retry,cancel | **implemented (AI-6F.0 fake durable)** | 按计划执行尾帧——同上 |
+| `shot.video` | execute,retry,cancel | **implemented (AI-6F.0 fake durable)** | 按计划执行视频——同上 |
+
+> AI-6F.0：`shot.first_frame/last_frame/video` 经 AgentRuntime `_delegate_long_running`
+> → `shot_producer_capability.execute_shot_production` → 现有 JobQueue（deterministic fake
+> handler，`fake_shot_handlers.py`）→ `AgentTask.execution_ref` 落盘 → HTTP 返回（task=running）
+> → settlement bridge（`settlement.py`）在 Job 终态后对账。**不**调真 Agnes、**不**写真实资产。
+> AI-6F 接通真实生成时把 kind 映射指向 `routers/shots.py` 真实 `JOB_HANDLERS`，runtime/bridge 不变。
 
 ## 12. Reserved future capabilities
 
 | Capability | Op | 状态 | 备注 |
 |---|---|---|---|
-| `shot.first_frame` | execute,retry,cancel | not_implemented | 包装现有 JobQueue/Production，AI-6E.0 不接通 |
-| `shot.last_frame` | execute,retry,cancel | not_implemented | 同上 |
-| `shot.video` | execute,retry,cancel | not_implemented | 同上 |
+| `shot.first_frame` | execute,retry,cancel | implemented (AI-6F.0 fake) | AI-6F 接通真实 Agnes 首帧生成 |
+| `shot.last_frame` | execute,retry,cancel | implemented (AI-6F.0 fake) | AI-6F 接通真实 Agnes 尾帧生成 |
+| `shot.video` | execute,retry,cancel | implemented (AI-6F.0 fake) | AI-6F 接通真实 Agnes 视频生成 |
 
 ## 13. Inputs
 
@@ -245,8 +251,10 @@ read-only inspection：shot.inspect / production_plan.inspect
 
 ## 28. Current implementation status
 
-- **已实现**：`shot.inspect` + `production_plan.inspect`（read-only，scene/shot 级）。
-- **未实现且本阶段不做**：`shot.first_frame` / `shot.last_frame` / `shot.video`（注册权限但 adapter 返回 `not_implemented`）。
-  未来接通须包装现有 JobQueue/Production Pipeline，不重写。
+- **已实现**：`shot.inspect` + `production_plan.inspect`（read-only，scene/shot 级）；
+  `shot.first_frame` / `shot.last_frame` / `shot.video`（AI-6F.0 fake durable bridge——提交
+  JobQueue deterministic fake Job + `AgentTask.execution_ref` 持久链接 + settlement 对账）。
+- **未实现且本阶段不做**：真实 Agnes 首帧/尾帧/视频生成（AI-6F 接通，把 fake kind 映射指向
+  `routers/shots.py` 真实 `JOB_HANDLERS`，runtime/bridge/幂等逻辑不变）。
 - **关键边界**：Planner 决定怎么，Shot Producer 执行怎么；Plan 无效 → blocker 不即兴。
 - **运行时 prompt**：`_AGENT_SYSTEM_PROMPTS["shot_producer"]` 与本契约一致，**未改动**。

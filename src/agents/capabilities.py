@@ -98,12 +98,17 @@ def build_default_capabilities() -> List[CapabilityDefinition]:
              CC.SHOT.value, "shot_producer",
              ["shot_producer", "continuity_reviewer", "editor", "production_planner"],
              [I], LO, True),
+        # AI-6F.0：已接通为真实（fake durable）能力。经由 AgentRuntime delegate 的长执行分支
+        #（_delegate_long_running → execute_shot_production → 现有 JobQueue + fake handler），
+        # 提交 durable Job 后 HTTP 先返回，settlement bridge 对账结算。不经同步 _ADAPTERS dispatch。
+        # 注：当前用 deterministic fake handler（fake_shot_handlers.py），AI-6F 接通真实生成时
+        # 把 kind 映射指向 routers/shots.py 的真实 JOB_HANDLERS，runtime/bridge 逻辑不变。
         _cap("shot.first_frame", "首帧生成", "按 Production Plan 执行首帧制作",
-             CC.SHOT.value, "shot_producer", ["shot_producer"], [E, R, C], HI, False),
+             CC.SHOT.value, "shot_producer", ["shot_producer"], [E, R, C], HI, True),
         _cap("shot.last_frame", "尾帧生成", "按 Production Plan 执行尾帧制作",
-             CC.SHOT.value, "shot_producer", ["shot_producer"], [E, R, C], HI, False),
+             CC.SHOT.value, "shot_producer", ["shot_producer"], [E, R, C], HI, True),
         _cap("shot.video", "视频生成", "按 Production Plan 执行视频制作",
-             CC.SHOT.value, "shot_producer", ["shot_producer"], [E, R, C], HI, False),
+             CC.SHOT.value, "shot_producer", ["shot_producer"], [E, R, C], HI, True),
         # ---- review ----
         _cap("review.shot", "镜头审查", "角色/画面/空间/动作连续性检查与 retry 提案",
              CC.REVIEW.value, "continuity_reviewer", ["continuity_reviewer"], [I], ME, False),

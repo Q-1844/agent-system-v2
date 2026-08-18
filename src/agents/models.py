@@ -59,6 +59,11 @@ class ResultStatus(str, Enum):
     NOT_CONFIGURED   = "not_configured"     # chat 未配置 Agnes（v1 软失败）
     NOT_IMPLEMENTED  = "not_implemented"    # 能力注册权限但 v1 未接通
     FAILED           = "failed"
+    # AI-6F.0：长执行能力（shot.first_frame/last_frame/video）提交 durable Job 后的「已启动、未结算」
+    # 信号。仅用于 AgentStructuredResult.status 透传给 delegate（§4：HTTP 先返回，task 保持 running，
+    # 由 settlement bridge 在 Job 终态后结算）。**不**是 AgentTask.status（§9：task 持久状态仍
+    # pending/running/completed/failed）。structured_result.status="running" 表示进度快照「进行中」。
+    RUNNING          = "running"
 
 
 # ============ AgentDefinition（§4）============
@@ -273,7 +278,16 @@ class AgentStructuredResult:
 @dataclass
 class AgentTask:
     """AI 任务协调记录（≠ JobQueue 的图片/视频/Production 执行任务，§10）。
-    Producer delegation 走正式 AgentTask，可追踪（§27）。"""
+    Producer delegation 走正式 AgentTask，可追踪（§27）。
+
+    AI-6F.0（§5）：execution_ref 是指向**已存在的 durable 执行**（JobQueue.Job /
+    ProductionRun）的最小持久链接。语义要求：后端重启后，Runtime 能据此确定哪个**已存在**
+    的 Job/Run 属于本 task——从而 reattach 而非重复 submit（§6 幂等）。
+    形状：{"job_id", "kind", "phase", "shot_id", "submitted_at"}。
+    这是「最小兼容扩展」——一个 optional dict 字段，**不**新增 ProductionRun 类型、
+    **不**重写 AgentTask 持久化 schema（§3/§5/§21）。AgentTask=协调记录，Job/Run=执行记录，
+    二者链接不复制（§11）。
+    """
     task_id: str
     project: str
     requester_agent: str                     # 谁发起（v1 仅 producer）
@@ -289,6 +303,9 @@ class AgentTask:
     result_summary: str = ""
     artifact_refs: List[Dict[str, Any]] = field(default_factory=list)
     structured_result: Optional[Dict[str, Any]] = None
+    # AI-6F.0 §5：durable 执行链接。None=非长执行 task（inspect / production_plan.create
+    # 等同步结算能力）；非 None=已提交 Job，settlement bridge 据 job_id 结算/reattach。
+    execution_ref: Optional[Dict[str, Any]] = None
     warnings: List[str] = field(default_factory=list)
     suggested_next_actions: List[str] = field(default_factory=list)
     error: Optional[str] = None
@@ -308,6 +325,7 @@ class AgentTask:
             "result_summary": self.result_summary,
             "artifact_refs": list(self.artifact_refs),
             "structured_result": self.structured_result,
+            "execution_ref": self.execution_ref,
             "warnings": list(self.warnings),
             "suggested_next_actions": list(self.suggested_next_actions),
             "error": self.error,
@@ -332,6 +350,7 @@ class AgentTask:
             result_summary=d.get("result_summary", ""),
             artifact_refs=list(d.get("artifact_refs") or []),
             structured_result=d.get("structured_result"),
+            execution_ref=d.get("execution_ref"),
             warnings=list(d.get("warnings") or []),
             suggested_next_actions=list(d.get("suggested_next_actions") or []),
             error=d.get("error"),
