@@ -212,6 +212,10 @@ async function doDelegate() {
   delegating.value = true;
   chatError.value = '';
   try {
+    // §21: operation 从选中 capability 的 metadata 派生（production_plan.create -> execute，
+    // inspect 类 -> inspect），不硬编码 inspect，避免 create 用错 operation。
+    const cap = targetCaps.value.find(c => c.id === delegForm.value.capability_id);
+    const op = cap?.operations?.length ? cap.operations[0] : 'inspect';
     await apiClient.createAgentTask(projectName.value, {
       requester_agent: 'producer',
       target_agent: delegForm.value.target_agent,
@@ -219,7 +223,7 @@ async function doDelegate() {
       scope_id: delegForm.value.scope_id,
       instruction: delegForm.value.instruction,
       capability_id: delegForm.value.capability_id,
-      operation: 'inspect',
+      operation: op,
     });
     await loadTasks();
   } catch (e: any) {

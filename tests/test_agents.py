@@ -120,8 +120,8 @@ def test_specialist_cannot_delegate(tmp_path):
     rt = _runtime(tmp_path)
     # director -> production_planner 禁止
     with pytest.raises(AgentError) as ei:
-        rt.delegate("demo", "director", "production_planner", "scene", "s01",
-                    "x", "production_plan.inspect", "inspect")
+        asyncio.run(rt.delegate("demo", "director", "production_planner", "scene", "s01",
+                    "x", "production_plan.inspect", "inspect"))
     assert ei.value.code == "permission_denied"
     # 无 task 落盘
     assert rt.list_tasks("demo") == []
@@ -157,8 +157,8 @@ def test_session_get_or_create_reuse(tmp_path):
 def test_task_persistence(tmp_path):
     _save_proj(tmp_path)
     rt = _runtime(tmp_path)
-    task = rt.delegate("demo", "producer", "director", "scene", "s01",
-                       "inspect", "storyboard.inspect", "inspect")
+    task = asyncio.run(rt.delegate("demo", "producer", "director", "scene", "s01",
+                       "inspect", "storyboard.inspect", "inspect"))
     # 新 store 同目录恢复
     store2 = AgentTaskStore(tmp_path, "demo")
     got = store2.get(task["task_id"])
@@ -171,8 +171,8 @@ def test_task_persistence(tmp_path):
 def test_delegation_storyboard_inspect(tmp_path):
     _save_proj(tmp_path)
     rt = _runtime(tmp_path)
-    task = rt.delegate("demo", "producer", "director", "scene", "s01",
-                       "检查 s01 分镜结构", "storyboard.inspect", "inspect")
+    task = asyncio.run(rt.delegate("demo", "producer", "director", "scene", "s01",
+                       "检查 s01 分镜结构", "storyboard.inspect", "inspect"))
     assert task["status"] == TaskStatus.COMPLETED.value
     assert task["result_summary"]
     assert {"type": "shot", "id": "s01_c01"} in task["artifact_refs"]
@@ -185,8 +185,8 @@ def test_delegation_permission_denied(tmp_path):
     _save_proj(tmp_path)
     rt = _runtime(tmp_path)
     with pytest.raises(AgentError) as ei:
-        rt.delegate("demo", "producer", "director", "scene", "s01",
-                    "x", "character.design", "execute")
+        asyncio.run(rt.delegate("demo", "producer", "director", "scene", "s01",
+                    "x", "character.design", "execute"))
     assert ei.value.code == "permission_denied"
     assert rt.list_tasks("demo") == []
 
@@ -196,8 +196,8 @@ def test_delegation_unknown_capability(tmp_path):
     _save_proj(tmp_path)
     rt = _runtime(tmp_path)
     with pytest.raises(AgentError) as ei:
-        rt.delegate("demo", "producer", "director", "scene", "s01",
-                    "x", "storyboard.unknown", "inspect")
+        asyncio.run(rt.delegate("demo", "producer", "director", "scene", "s01",
+                    "x", "storyboard.unknown", "inspect"))
     assert ei.value.code == "unknown_capability"
 
 
@@ -207,8 +207,8 @@ def test_delegation_disabled_agent(tmp_path):
     rt = _runtime(tmp_path)
     rt.update_agent_setting("director", enabled=False)
     with pytest.raises(AgentError) as ei:
-        rt.delegate("demo", "producer", "director", "scene", "s01",
-                    "x", "storyboard.inspect", "inspect")
+        asyncio.run(rt.delegate("demo", "producer", "director", "scene", "s01",
+                    "x", "storyboard.inspect", "inspect"))
     assert ei.value.code == "disabled_agent"
 
 
@@ -273,8 +273,8 @@ def test_send_message_with_fake_client(tmp_path):
 def test_restart_recovery(tmp_path):
     _save_proj(tmp_path)
     rt = _runtime(tmp_path)
-    rt.delegate("demo", "producer", "director", "scene", "s01",
-                "x", "storyboard.inspect", "inspect")
+    asyncio.run(rt.delegate("demo", "producer", "director", "scene", "s01",
+                "x", "storyboard.inspect", "inspect"))
     # 新 runtime（同目录）恢复 session + task
     rt2 = _runtime(tmp_path)
     tasks = rt2.list_tasks("demo")
@@ -293,8 +293,8 @@ def test_reserved_capability_not_implemented(tmp_path):
     assert res.status == ResultStatus.NOT_IMPLEMENTED.value
     # delegation 走 reserved capability -> task failed
     rt = _runtime(tmp_path)
-    task = rt.delegate("demo", "producer", "director", "scene", "s01",
-                       "x", "storyboard.propose_change", "execute")
+    task = asyncio.run(rt.delegate("demo", "producer", "director", "scene", "s01",
+                       "x", "storyboard.propose_change", "execute"))
     assert task["status"] == TaskStatus.FAILED.value
 
 
@@ -303,8 +303,8 @@ def test_canonical_unchanged(tmp_path):
     _save_proj(tmp_path)
     before = (tmp_path / "output" / "project.json").read_bytes()
     rt = _runtime(tmp_path)
-    rt.delegate("demo", "producer", "director", "scene", "s01",
-                "x", "storyboard.inspect", "inspect")
+    asyncio.run(rt.delegate("demo", "producer", "director", "scene", "s01",
+                "x", "storyboard.inspect", "inspect"))
     after = (tmp_path / "output" / "project.json").read_bytes()
     assert before == after, "canonical project.json 被 agent 修改（违反 §18/§19 红线）"
 
@@ -326,3 +326,111 @@ def test_api_agent_profiles_and_capabilities(client):
     assert r2.status_code == 200
     caps = r2.json()["capabilities"]
     assert any(c["id"] == "storyboard.inspect" for c in caps)
+
+
+# ============ AI-6E §24: production_plan.create capability & authorization ============
+def test_production_plan_create_registered_and_implemented():
+    """§24-1~3: production_plan.create 存在、implemented=True、owner=production_planner。"""
+    r = Registries()
+    cap = r.capabilities.get("production_plan.create")
+    assert cap is not None
+    assert cap.implemented is True
+    assert cap.owner_agent == "production_planner"
+
+
+def test_production_plan_create_authorization():
+    """§24-4~6: Planner 可执行；Producer/其他 Specialist 不可直接执行。"""
+    r = Registries()
+    assert r.capabilities.can_execute("production_planner", "production_plan.create", "execute") is True
+    # Producer 不能直接执行（须 delegate）
+    assert r.capabilities.can_execute("producer", "production_plan.create", "execute") is False
+    # 无关 Specialist 不可
+    assert r.capabilities.can_execute("director", "production_plan.create", "execute") is False
+    assert r.capabilities.can_execute("script_writer", "production_plan.create", "execute") is False
+    assert r.capabilities.can_execute("shot_producer", "production_plan.create", "execute") is False
+
+
+def test_shot_inspect_allows_planner_owner_unchanged():
+    """§24-7~8: production_planner 现可 shot.inspect；owner 仍 shot_producer。"""
+    r = Registries()
+    assert r.capabilities.can_execute("production_planner", "shot.inspect", "inspect") is True
+    cap = r.capabilities.get("shot.inspect")
+    assert cap.owner_agent == "shot_producer"
+    assert "production_planner" in cap.allowed_agents
+
+
+def test_delegate_production_plan_create(tmp_path):
+    """§24-9: Producer 可 delegate production_plan.create 给 Planner（async 路径，FakeClient 返回 plan JSON）。"""
+    _save_proj(tmp_path)
+    plan_json = ('{"overview":"独立开场","shots":['
+                 '{"shot_id":"s01_c01","opening_source":"independent","link_mode":"i2v","reason":"首镜独立"}]}')
+    rt = _runtime(tmp_path, client=FakeClient(reply=plan_json))
+    task = asyncio.run(rt.delegate("demo", "producer", "production_planner", "scene", "s01",
+                "为场景规划制作", "production_plan.create", "execute"))
+    assert task["status"] == TaskStatus.COMPLETED.value
+    assert task["target_agent"] == "production_planner"
+    assert task["capability_id"] == "production_plan.create"
+    # artifact 引用真实 plan（§14/§15）
+    assert any(rf["type"] == "production_plan" for rf in task["artifact_refs"])
+    # data 含 plan 状态 + derived 字段（§10 确定性）
+    data = task["structured_result"]["data"]
+    assert data["plan_status"] == "draft"
+    assert data["shots"][0]["opening_source"] == "independent"
+    assert data["shots"][0]["generate_first_frame"] is True   # independent -> 生成首帧
+
+
+def test_specialist_cannot_delegate_production_plan_create(tmp_path):
+    """§24-10: Specialist → Planner delegation 仍被拒。"""
+    _save_proj(tmp_path)
+    rt = _runtime(tmp_path, client=FakeClient())
+    with pytest.raises(AgentError) as ei:
+        asyncio.run(rt.delegate("demo", "director", "production_planner", "scene", "s01",
+                    "x", "production_plan.create", "execute"))
+    assert ei.value.code == "permission_denied"
+    assert rt.list_tasks("demo") == []
+
+
+def test_production_plan_create_rejects_unknown_scene(tmp_path):
+    """§24-12: unknown Scene 被干净拒绝（task FAILED，不抛）。"""
+    _save_proj(tmp_path)
+    rt = _runtime(tmp_path, client=FakeClient())
+    task = asyncio.run(rt.delegate("demo", "producer", "production_planner", "scene", "sXX",
+                "x", "production_plan.create", "execute"))
+    assert task["status"] == TaskStatus.FAILED.value
+    assert "未找到场景" in task["result_summary"]
+
+
+def test_production_plan_create_rejects_non_scene_scope(tmp_path):
+    """§24-11: 非 scene scope 被干净拒绝。"""
+    _save_proj(tmp_path)
+    rt = _runtime(tmp_path, client=FakeClient())
+    task = asyncio.run(rt.delegate("demo", "producer", "production_planner", "project", "demo",
+                "x", "production_plan.create", "execute"))
+    assert task["status"] == TaskStatus.FAILED.value
+    assert "scene" in task["result_summary"]
+
+
+def test_production_plan_create_rejects_no_shots(tmp_path):
+    """§6/§12: 场景无镜头 -> 结构化 blocker（概念上游 Director），task FAILED。"""
+    _save_proj(tmp_path)
+    rt = _runtime(tmp_path, client=FakeClient())
+    p = ProjectStore(tmp_path).load()
+    p.scenes[0].shots = []
+    ProjectStore(tmp_path).save(p)
+    task = asyncio.run(rt.delegate("demo", "producer", "production_planner", "scene", "s01",
+                "x", "production_plan.create", "execute"))
+    assert task["status"] == TaskStatus.FAILED.value
+    assert "无镜头" in task["result_summary"]
+    assert task["structured_result"]["data"]["blocker"] == "needs_upstream_change"
+    assert task["structured_result"]["data"]["upstream_owner"] == "director"
+
+
+def test_production_plan_create_disabled_planner_rejected(tmp_path):
+    """§24-13: 禁用 Planner 仍被拒。"""
+    _save_proj(tmp_path)
+    rt = _runtime(tmp_path, client=FakeClient())
+    rt.update_agent_setting("production_planner", enabled=False)
+    with pytest.raises(AgentError) as ei:
+        asyncio.run(rt.delegate("demo", "producer", "production_planner", "scene", "s01",
+                    "x", "production_plan.create", "execute"))
+    assert ei.value.code == "disabled_agent"

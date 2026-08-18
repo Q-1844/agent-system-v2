@@ -18,12 +18,19 @@ opening_source 与 link_mode 是两个独立维度（§三，Phase 6A 设计）�
 """
 from __future__ import annotations
 import hashlib
+import json
+import logging
 import secrets
+import time
+from pathlib import Path
 from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from src.core.atomic import atomic_write_json
 from src.ai.story_workflow import _parse_json_object
+
+_log = logging.getLogger(__name__)
 
 
 # ============ 常量 ============
@@ -340,3 +347,53 @@ def is_plan_stale(plan: SceneProductionPlan, scene) -> Optional[str]:
         if cur_d is not None and snap_d is not None and abs(cur_d - snap_d) > 0.5:
             return f"镜头 {c['shot_id']} 时长已变化"
     return None
+
+
+# ============ 共享业务 + 计划 IO（AI-6E §8 抽取，router 与 Agent capability 共用）============
+# 原物理位置 routers/production_planner.py。AI-6E 为满足 src/agents/* 不 import router
+# 的纪律（§8），把 plan_production_business + 计划 IO 抽到本中性位置（src/ai，不依赖
+# router/deps，纯靠参数）。router 与 Agent capability 调同一函数，不复制业务逻辑。
+
+async def plan_production_business(project, scene, project_name: str, client) -> SceneProductionPlan:
+    """AI 制作规划共享 helper。包 ProductionPlannerWorkflow.plan_scene + sanitize_plan +
+    填 created_at。不落盘 plan（落盘由调用方决定）。
+    供 routers/production_planner.plan 端点与 AI-6E Agent production_plan.create 共用。
+    raises ValueError（无 Shot）。"""
+    if not scene.shots:
+        raise ValueError("请先创建镜头或使用 AI 设计分镜。")
+    wf = ProductionPlannerWorkflow(client)
+    ai_result = await wf.plan_scene(project, scene)
+    plan = sanitize_plan(scene, ai_result,
+                         run_seed=new_run_seed(), project_name=project_name)
+    plan.created_at = time.time()
+    return plan
+
+
+def plans_path(project_dir) -> Path:
+    """production_plans.json 路径（projects/{p}/output/ai/，by scene_id）。"""
+    return Path(project_dir) / "output" / "ai" / "production_plans.json"
+
+
+def read_plans(project_dir) -> dict:
+    """读全部计划 {scene_id: SceneProductionPlan}。解析失败条目跳过（warn）。"""
+    p = plans_path(project_dir)
+    if not p.exists():
+        return {}
+    try:
+        raw = json.loads(p.read_text(encoding="utf-8"))
+        out = {}
+        for sid, d in (raw or {}).items():
+            try:
+                out[sid] = SceneProductionPlan.model_validate(d)
+            except Exception as e:
+                _log.warning("制作计划 %s 解析失败: %s", sid, e)
+        return out
+    except Exception as e:
+        _log.warning("读取制作计划失败: %s", e)
+        return {}
+
+
+def write_plans(project_dir, plans: dict) -> None:
+    """原子写全部计划。plans: {scene_id: SceneProductionPlan}。"""
+    atomic_write_json(plans_path(project_dir),
+                      {sid: p.model_dump() for sid, p in plans.items()})

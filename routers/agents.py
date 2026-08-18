@@ -177,9 +177,10 @@ async def list_tasks(project_name: str,
 
 @router.post("/api/project/{project_name}/agents/tasks")
 async def create_task(project_name: str, req: DelegateReq):
-    """Producer delegation 走正式 AgentTask（可追踪，§27）。同步执行 inspect capability。"""
+    """Producer delegation 走正式 AgentTask（可追踪，§27）。
+    inspect 同步执行；production_plan.create 走 async 执行分支（§11，await 真实 Planner workflow）。"""
     try:
-        return get_agent_runtime().delegate(
+        return await get_agent_runtime().delegate(
             project_name, req.requester_agent, req.target_agent,
             req.scope_type, req.scope_id, req.instruction,
             req.capability_id, req.operation)

@@ -52,8 +52,8 @@ final composition               （属 Editor）
 
 ```text
 production_plan.inspect   读取场景制作计划与镜头策略（已实现）
-production_plan.create    为镜头决定制作策略（预留，AI-6E 下一阶段）
-shot.inspect              读取镜头字段（见 §28 mismatch：权限声明但 can_execute 当前 False）
+production_plan.create    为镜头决定制作策略（AI-6E 已实现，async delegation）
+shot.inspect              读取镜头字段（AI-6E §4 修复 mismatch，can_execute=True）
 ```
 
 ## 6. Tasks it must reject or redirect
@@ -110,14 +110,14 @@ can_delegate_to      = []
 | Capability | Op | 状态 | 说明 |
 |---|---|---|---|
 | `production_plan.inspect` | inspect | implemented | 读场景制作计划（scene 级），返回 plan 状态 + 各 shot opening_source/link_mode |
-| `production_plan.create` | execute | **not_implemented** | 为镜头决定制作策略；**AI-6E 下一阶段实现** |
-| `shot.inspect` | inspect | （见 §28 mismatch） | Planner 声明于 allowed_capabilities，但 shot.inspect.allowed_agents 不含 production_planner → can_execute 当前 False |
+| `production_plan.create` | execute | implemented | 为镜头决定制作策略（AI-6E：经 AgentRuntime delegate async 分支包装中性 `plan_production_business` + 落盘） |
+| `shot.inspect` | inspect | implemented | AI-6E §4 已修复 mismatch：production_planner 加入 shot.inspect.allowed_agents，can_execute=True（owner 仍 shot_producer） |
 
 ## 12. Reserved future capabilities
 
 | Capability | Op | 状态 | 备注 |
 |---|---|---|---|
-| `production_plan.create` | execute | **not_implemented** | 包装 `src/ai/production_planner.py` 现有 Workflow；AI-6E 实现 |
+| （无） | — | — | `production_plan.create` 已于 AI-6E 实现并移入 §11。未来预留：shot 执行 / review 执行 / composition.compose 在各自角色契约。 |
 
 ## 13. Inputs
 
@@ -252,14 +252,14 @@ read-only inspection：production_plan.inspect
 ## 28. Current implementation status
 
 - **已实现**：`production_plan.inspect`（read-only，scene 级，经注入 `plans_reader` 读 `production_plans.json`）。
-- **未实现且本阶段不做**：`production_plan.create`（注册权限但 adapter 返回 `not_implemented`）。AI-6E 下一阶段实现，见下节。
-- **记录的权限 mismatch**（§25 审计）：`production_planner.allowed_capabilities` 列了 `shot.inspect`，
-  但 `shot.inspect` 的 `allowed_agents = [shot_producer, continuity_reviewer, editor]` **不含** production_planner →
-  `can_execute(production_planner, shot.inspect, inspect) == False`（五重校验第 4 重失败）。
-  Planner 实际通过 `build_context` 的 `project_loader` 直接读 `scene.shots`，**不**依赖 `shot.inspect` capability，
-  故当前功能不受影响。**AI-6E.0 不静默修复**——记录 mismatch，建议 AI-6E 决定：
-  (a) 把 production_planner 加入 shot.inspect.allowed_agents；或 (b) 从 Planner.allowed_capabilities 移除 shot.inspect。
-- **运行时 prompt**：`_AGENT_SYSTEM_PROMPTS["production_planner"]` 与本契约一致，**未改动**。
+- **已实现**（AI-6E）：`production_plan.create`——`implemented=True`，经 AgentRuntime delegate 的 async 执行分支
+  （`_execute_production_plan_create` → 中性 `plan_production_business` + 落 `production_plans.json`），
+  不经 sync `_ADAPTERS` dispatch（同 Director `storyboard.propose_change` 模式）。
+- **权限 mismatch 已修复**（AI-6E §4）：AI-6E.0 记录的 mismatch（`production_planner.allowed_capabilities` 含 `shot.inspect`
+  但 `shot.inspect.allowed_agents` 不含 planner → can_execute=False）已按 §4 方案 (a) 修复——把 production_planner
+  加入 `shot.inspect.allowed_agents`（owner 仍 `shot_producer` 不变）。现 `can_execute(production_planner, shot.inspect, inspect) == True`。
+  Planner 仍经 `build_context` 的 `project_loader` 直接读 `scene.shots`（不依赖 shot.inspect 执行），但权限声明现已自洽。
+- **运行时 prompt**：`_AGENT_SYSTEM_PROMPTS["production_planner"]` 与本契约一致，**未改动**（§23）。
 
 ---
 

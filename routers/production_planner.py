@@ -23,42 +23,22 @@ from pydantic import BaseModel, Field
 
 import deps
 from deps import get_project_manager, logger, get_agnes_client
-from src.core.store import ProjectStore, _atomic_write_json
+from src.core.store import ProjectStore
 from src.api.agnes_client import AgnesError
 from src.ai.production_planner import (
     ProductionPlannerWorkflow, sanitize_plan, rederive_from_edits,
     is_plan_stale, new_run_seed, SceneProductionPlan,
+    plan_production_business, read_plans as _read_plans,
+    write_plans as _write_plans, plans_path as _plans_path,
 )
 
 router = APIRouter()
 
 
 # ============ 计划文件 IO ============
-def _plans_path(project_dir: Path) -> Path:
-    return Path(project_dir) / "output" / "ai" / "production_plans.json"
-
-
-def _read_plans(project_dir: Path) -> dict:
-    p = _plans_path(project_dir)
-    if not p.exists():
-        return {}
-    try:
-        raw = json.loads(p.read_text(encoding="utf-8"))
-        out = {}
-        for sid, d in (raw or {}).items():
-            try:
-                out[sid] = SceneProductionPlan.model_validate(d)
-            except Exception as e:
-                logger.warning(f"制作计划 {sid} 解析失败: {e}")
-        return out
-    except Exception as e:
-        logger.warning(f"读取制作计划失败: {e}")
-        return {}
-
-
-def _write_plans(project_dir: Path, plans: dict):
-    _atomic_write_json(_plans_path(project_dir),
-                       {sid: p.model_dump() for sid, p in plans.items()})
+# _plans_path / _read_plans / _write_plans 已抽至 src/ai/production_planner.py
+#（plans_path / read_plans / write_plans），本文件经顶部 import alias 复用——
+# router 与 AI-6E Agent capability 共用同一实现，不复制 IO 逻辑（AI-6E §8）。
 
 
 def _find_scene(project, scene_id: str):
@@ -88,20 +68,10 @@ class SavePlanRequest(BaseModel):
     shots: List[PlannedShotInput] = Field(default_factory=list)
 
 
-# ============ business helper（§六十四：ProductionPlannerStudio 与 FullProjectManager 共用
-# 同一套 sanitize / derive / approve；不绕 HTTP，不拼 Agnes system prompt）============
-async def plan_production_business(project, scene, project_name: str, client) -> SceneProductionPlan:
-    """AI 制作规划（§六十四）。包 ProductionPlannerWorkflow.plan_scene + sanitize_plan + 填 created_at。
-    不落盘 plan（落盘由调用方决定）。供 routers/production_planner.plan 与 FullProjectManager 共用。
-    raises ValueError（无 Shot，§十六）。"""
-    if not scene.shots:
-        raise ValueError("请先创建镜头或使用 AI 设计分镜。")
-    wf = ProductionPlannerWorkflow(client)
-    ai_result = await wf.plan_scene(project, scene)
-    plan = sanitize_plan(scene, ai_result,
-                         run_seed=new_run_seed(), project_name=project_name)
-    plan.created_at = time.time()
-    return plan
+# ============ business helper ============
+# plan_production_business 已抽至 src/ai/production_planner.py（AI-6E §8：router 与
+# Agent capability 共用同一实现，不复制业务逻辑）。本文件经顶部 import alias 复用。
+# approve_plan_business 仍留此（Agent 不调 approve，§17；仅 router 端用）。
 
 
 def approve_plan_business(plan: SceneProductionPlan, scene) -> SceneProductionPlan:

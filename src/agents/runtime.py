@@ -29,6 +29,7 @@ from .director_proposal import (
     generate_proposal, preview_selected, apply_proposal, proposal_to_api,
     ProposalGenerationError, ProposalStatus,
 )
+from .planner_capability import create_production_plan as _create_production_plan
 from src.revision.workspace import WorkspaceStore
 from src.revision.changeset import ChangeSetError
 
@@ -256,11 +257,12 @@ class AgentRuntime:
         t = self._task_store(project).get(tid)
         return t.to_dict() if t else None
 
-    def delegate(self, project: str, requester_agent: str, target_agent: str,
-                 scope_type: str, scope_id: str, instruction: str,
-                 capability_id: str, operation: str = AgentOp.INSPECT.value) -> dict:
-        """Producer → Specialist 委派（同步，§11/§12）。
-        specialist→specialist 禁止：只有 producer 的 can_delegate_to 非空。"""
+    async def delegate(self, project: str, requester_agent: str, target_agent: str,
+                       scope_type: str, scope_id: str, instruction: str,
+                       capability_id: str, operation: str = AgentOp.INSPECT.value) -> dict:
+        """Producer → Specialist 委派（§11/§12）。
+        inspect 能力同步 dispatch；production_plan.create 等 async 能力走 _execute_* 分支
+        （§11：需 await 真实 AI/IO）。specialist→specialist 禁止：只有 producer 的 can_delegate_to 非空。"""
         requester = self._resolve_agent(requester_agent)
         # §12：requester 必须能把任务委派给 target
         if not self.agents.can_delegate(requester_agent, target_agent):
@@ -295,12 +297,16 @@ class AgentRuntime:
         task.status = TaskStatus.RUNNING.value
         store.update_task(task)
 
-        # dispatch
+        # dispatch（§11：async 能力走 _execute_* 分支 await 真实 AI/IO；inspect 走同步 dispatch）
         ctx = CapabilityContext(
             project=project, scope_type=scope_type, scope_id=scope_id,
             project_loader=self._project_loader(project),
             plans_reader=self._plans_reader)
-        result = dispatch_capability(capability_id, ctx)
+        if capability_id in self._ASYNC_CAPABILITIES:
+            result = await self._execute_async_capability(
+                capability_id, ctx, project, scope_type, scope_id, instruction)
+        else:
+            result = dispatch_capability(capability_id, ctx)
 
         # 结算
         task.structured_result = result.to_dict()
@@ -314,10 +320,42 @@ class AgentRuntime:
         elif result.status == ResultStatus.NOT_IMPLEMENTED.value:
             task.status = TaskStatus.FAILED.value
             task.error = f"能力未接通: {capability_id}"
+        elif result.status == ResultStatus.NOT_CONFIGURED.value:
+            # §9/§23 async 能力软失败（Agnes 未配置）：task FAILED，error 明示 not_configured
+            task.status = TaskStatus.FAILED.value
+            task.error = "能力未配置：Agnes 推理模型不可用"
         else:
             task.status = TaskStatus.COMPLETED.value
         store.update_task(task)
         return task.to_dict()
+
+    # ---------- async capability 执行（§11）----------
+    _ASYNC_CAPABILITIES = {"production_plan.create"}
+
+    async def _execute_async_capability(self, capability_id: str, ctx: "CapabilityContext",
+                                        project: str, scope_type: str, scope_id: str,
+                                        instruction: str) -> AgentStructuredResult:
+        """§11 async 能力分支。按 capability_id 派发到对应 _execute_* 方法。
+        未来其他 async 能力（shot 执行等）在此扩展，不扩 sync _ADAPTERS。"""
+        if capability_id == "production_plan.create":
+            return await self._execute_production_plan_create(
+                ctx, project, scope_type, scope_id, instruction)
+        return AgentStructuredResult(
+            status=ResultStatus.NOT_IMPLEMENTED.value,
+            summary=f"能力 {capability_id} 未接通 async 执行。")
+
+    async def _execute_production_plan_create(self, ctx: "CapabilityContext", project: str,
+                                              scope_type: str, scope_id: str,
+                                              instruction: str) -> AgentStructuredResult:
+        """§6/§11/§14 production_plan.create：包装现有 Planner workflow（plan_production_business
+        + 落盘），返回引用真实 production_plans.json artifact 的 AgentStructuredResult。
+        不 approve（§17）、不写 canonical（§18）、不执行 Shot 生成（§31）。
+        instruction 持久化于 AgentTask，v1 不注入 Planner prompt 以保持现有 schema 不变（§9/§23）。"""
+        client = self._resolve_client_or_none()
+        project_dir = self._resolve_project_dir(project)
+        return await _create_production_plan(
+            client, ctx.project_loader, project_dir, project,
+            scope_type, scope_id, instruction)
 
 
     # ---------- Director Proposal（storyboard.propose_change，AI-6D）----------

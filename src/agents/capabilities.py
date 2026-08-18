@@ -88,12 +88,16 @@ def build_default_capabilities() -> List[CapabilityDefinition]:
         _cap("production_plan.inspect", "制作计划查看", "读取场景制作计划与镜头策略",
              CC.PRODUCTION_PLAN.value, "production_planner",
              ["production_planner", "shot_producer", "continuity_reviewer"], [I], LO, True),
+        # AI-6E：已接通为真实能力。经由 AgentRuntime delegate 的 async 执行分支
+        #（_execute_production_plan_create → plan_production_business），需 Agnes+落盘，
+        # 不经同步 _ADAPTERS dispatch——故不在 _WIRED/_ADAPTERS 中。
         _cap("production_plan.create", "制作计划创建", "为镜头决定制作策略（包装现有 Planner）",
-             CC.PRODUCTION_PLAN.value, "production_planner", ["production_planner"], [E], HI, False),
+             CC.PRODUCTION_PLAN.value, "production_planner", ["production_planner"], [E], HI, True),
         # ---- shot ----
         _cap("shot.inspect", "镜头查看", "读取镜头字段与资产/计划状态",
              CC.SHOT.value, "shot_producer",
-             ["shot_producer", "continuity_reviewer", "editor"], [I], LO, True),
+             ["shot_producer", "continuity_reviewer", "editor", "production_planner"],
+             [I], LO, True),
         _cap("shot.first_frame", "首帧生成", "按 Production Plan 执行首帧制作",
              CC.SHOT.value, "shot_producer", ["shot_producer"], [E, R, C], HI, False),
         _cap("shot.last_frame", "尾帧生成", "按 Production Plan 执行尾帧制作",
