@@ -58,7 +58,8 @@ class AgentRuntime:
                  settings_path: Optional[Path] = None,
                  project_dir_resolver: Optional[Callable[[str], Path]] = None,
                  job_queue_getter: Optional[Callable[[], Any]] = None,
-                 fake_shot_params: Optional[Dict[str, Any]] = None):
+                 fake_shot_params: Optional[Dict[str, Any]] = None,
+                 real_shot_pipeline: bool = False):
         self._client = client
         self._agnes_getter = agnes_getter or get_agnes_client
         self._plans_reader = plans_reader
@@ -66,9 +67,13 @@ class AgentRuntime:
             lambda name: get_project_manager().get_project_dir(name))
         # AI-6F.0 §17：Shot Producer 长执行能力通过现有 JobQueue。getter 注入（测试用 lambda）。
         self._job_queue_getter = job_queue_getter or (lambda: get_job_queue())
-        # AI-6F.0 §7：fake handler 行为可控（_fake_outcome/steps/sleep）；**仅 fake 阶段**，
-        # AI-6F 接通真实生成后移除。
+        # AI-6F.0 §7：fake handler 行为可控（_fake_outcome/steps/sleep）。real=False（默认，测试）
+        # 走 fake durable bridge；production（get_agent_runtime）置 real_shot_pipeline=True 走真实 JOB_HANDLERS。
+        # fake_shot_params 仅 fake 路径用，保留以维持 AI-6F.0 测试不变（§7：fake kinds test-only）。
         self._fake_shot_params = fake_shot_params
+        # AI-6F：True=真实生成（first_frame/last_frame/video JOB_HANDLERS + Plan preflight + origin traceability）；
+        # False=fake durable bridge（AI-6F.0，测试默认）。
+        self._real_shot_pipeline = real_shot_pipeline
         self._reg = Registries(settings_path)
 
     # ---------- 基础访问 ----------
@@ -380,7 +385,9 @@ class AgentRuntime:
             instruction=instruction, capability_id=capability_id,
             job_queue=job_queue,
             existing_ref=task.execution_ref,
-            fake_job_params=self._fake_shot_params)
+            fake_job_params=self._fake_shot_params,
+            real=self._real_shot_pipeline,
+            origin_task_id=task.task_id)
 
         task.structured_result = result.to_dict()
         task.result_summary = result.summary
@@ -401,6 +408,12 @@ class AgentRuntime:
                     "shot_id": data.get("shot_id") or scope_id,
                     "submitted_at": data.get("submitted_at"),
                 }
+                # AI-6F §11/§20：持久化 origin_task_id（artifact traceability）+ video_id
+                #（restart-recovery fallback 身份）；仅在有值时写入，避免污染 fake 路径 execution_ref。
+                if data.get("origin_task_id"):
+                    task.execution_ref["origin_task_id"] = data["origin_task_id"]
+                if data.get("video_id"):
+                    task.execution_ref["video_id"] = data["video_id"]
             # status 保持 running（pending→running 已在 delegate 设）
         elif result.status == ResultStatus.COMPLETED.value:
             # §6/§18-10：reattach 发现 linked Job 已 done → 直接结算 completed（不重提交）
@@ -550,7 +563,10 @@ _runtime: Optional[AgentRuntime] = None
 def get_agent_runtime() -> AgentRuntime:
     global _runtime
     if _runtime is None:
-        _runtime = AgentRuntime()
+        # AI-6F：生产单例走真实 shot 生成管线（first_frame/last_frame/video JOB_HANDLERS + Plan
+        # preflight + origin traceability）。测试直接构造 AgentRuntime(...) 不传 real_shot_pipeline
+        # → 默认 False（fake durable bridge，AI-6F.0 测试不变）。
+        _runtime = AgentRuntime(real_shot_pipeline=True)
     return _runtime
 
 

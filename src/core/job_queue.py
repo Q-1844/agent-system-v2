@@ -225,7 +225,13 @@ class JobQueue:
             try:
                 await task
             except asyncio.CancelledError:
-                pass   # force cancel / 看门狗中断，state 已在 _run_job 设好
+                # 区分 worker 自身被 shutdown cancel vs inner job task 被 force-cancel/watchdog cancel。
+                # cancelling()>0 = worker 自身被 cancel（process/lifespan shutdown）→ re-raise 终止 worker，
+                #   否则 asyncio.run/uvicorn 的 _cancel_all_tasks gather 会因 worker 回到 await q.get() 永久挂起。
+                # cancelling()==0 = CancelledError 来自 inner task（force cancel/watchdog，state 已在 _run_job 设好）
+                #   → 既有语义：worker 存活继续处理后续 job（cancel 一个 Job 不杀死 worker）。
+                if asyncio.current_task().cancelling() > 0:
+                    raise
             except Exception as e:
                 log.exception("[%s] worker 意外错误 %s", name, job_id)
             finally:
@@ -255,8 +261,13 @@ class JobQueue:
                 if not job.message:
                     job.message = "完成"
         except asyncio.CancelledError:
-            # force cancel / 看门狗中断：不覆盖已设的 cancelled/failed
-            if job.state not in (JobState.CANCELLED.value, JobState.FAILED.value):
+            # force cancel（cancel(force=True) 预置 CANCELLED）/ 看门狗（预置 FAILED）：保持已设终态。
+            # shutdown cancel（state 仍 RUNNING，未被 cancel()/watchdog 预置）：保留 RUNNING——
+            #   restart _load 保留 video running Job（orphan），settler reattach + recover_pending_videos
+            #   续 poll video_id（§20），不误判为 failed/cancelled。force-cancel 用户语义不变（仍 CANCELLED）。
+            if job.state == JobState.RUNNING.value:
+                pass   # shutdown 中断：保留 RUNNING（非用户取消）
+            elif job.state not in (JobState.CANCELLED.value, JobState.FAILED.value):
                 job.state = JobState.CANCELLED.value
             raise
         except Exception as e:
@@ -267,7 +278,9 @@ class JobQueue:
                 job.message = f"失败: {str(e)[:200]}"
         finally:
             watchdog.cancel()
-            job.finished_at = time.time()
+            # 终态才记 finished_at；shutdown 保留 RUNNING 的 Job 不记（restart 视为 in-flight）
+            if job.state != JobState.RUNNING.value:
+                job.finished_at = time.time()
             self._save()
             asyncio.create_task(self._broadcast(job))
 
