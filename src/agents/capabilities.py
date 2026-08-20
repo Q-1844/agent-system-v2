@@ -59,6 +59,7 @@ def build_default_capabilities() -> List[CapabilityDefinition]:
     E = AgentOp.EXECUTE.value
     R = AgentOp.RETRY.value
     C = AgentOp.CANCEL.value
+    P = AgentOp.PROPOSE.value   # AI-7B：语义提案操作（不落盘、不应用）
     CC = CapabilityCategory
     LO, ME, HI = RiskLevel.LOW.value, RiskLevel.MEDIUM.value, RiskLevel.HIGH.value
     return [
@@ -70,11 +71,25 @@ def build_default_capabilities() -> List[CapabilityDefinition]:
              CC.STORY.value, "script_writer", ["script_writer"], [I], LO, True),
         _cap("story.edit", "故事修改提案", "修改/续写故事（须经安全业务接口或 Workspace）",
              CC.STORY.value, "script_writer", ["script_writer"], [E], HI, False),
+        # AI-7B：剧本语义提案能力（story.propose_change）。仅产出语义意图
+        # （update_story_text/update_scene/insert_scene/delete_scene/reorder_scenes），
+        # 不落盘 canonical、不建 Workspace、不应用——由 change_protocol 在 PROPOSAL_ONLY 模式调度。
+        # 7B-1 仅注册+授权+硬闸；7B-2 经 change_protocol.service 接通真实 LLM 提案。
+        _cap("story.propose_change", "故事语义提案(AI-7B)",
+             "从剧本角度产出语义修改意图（不改 canonical/不建 Workspace/不应用）",
+             CC.STORY.value, "script_writer", ["script_writer"], [P], ME, False),
         # ---- character ----
         _cap("character.inspect", "角色查看", "读取角色设定与参考图状态",
              CC.CHARACTER.value, "character_designer", ["character_designer"], [I], LO, True),
         _cap("character.design", "角色设计", "角色视觉设定/参考图生成（包装现有能力）",
              CC.CHARACTER.value, "character_designer", ["character_designer"], [E], HI, False),
+        # AI-7B：角色语义提案能力（character.propose_change）。仅产出语义意图
+        # （update_character/insert_character/delete_character；改名=needs_user_decision），
+        # 不生成资产、不应用——由 change_protocol 在 PROPOSAL_ONLY 模式调度。
+        # 7B-1 仅注册+授权+硬闸；7B-2 经 change_protocol.service 接通真实 LLM 提案。
+        _cap("character.propose_change", "角色语义提案(AI-7B)",
+             "从角色角度产出语义修改意图（不生成资产/不建 Workspace/不应用）",
+             CC.CHARACTER.value, "character_designer", ["character_designer"], [P], ME, False),
         # ---- storyboard ----
         _cap("storyboard.inspect", "分镜查看", "读取场景分镜结构（DEMO）",
              CC.STORYBOARD.value, "director",

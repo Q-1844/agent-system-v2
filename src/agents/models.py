@@ -35,6 +35,7 @@ class AgentOp(str, Enum):
     EXECUTE = "execute"
     RETRY   = "retry"
     CANCEL  = "cancel"
+    PROPOSE = "propose"   # AI-7B：产出语义修改提案（不落盘、不应用）。READ_ONLY 拒、PROPOSAL_ONLY 放。
 
 
 class CapabilityCategory(str, Enum):

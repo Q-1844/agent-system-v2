@@ -211,6 +211,23 @@ async def startup():
     except Exception as e:
         logger.error(f"Change Analysis 恢复失败: {e}")
 
+    # 阶段 AI-7B：Change Protocol Session 恢复（§87）。扫非终端会话，in-flight 子态→blocked，
+    # stuck-running proposal→failed。不自动重跑 LLM（§57/§87）；用户显式 /resume 才继续。
+    # 不 apply、不写 canonical/Workspace/Production（§2/§76 硬边界）。
+    try:
+        from src.agents.change_protocol.migrations import recover_change_protocol
+        pdir3 = deps.projects_dir
+        n3 = 0
+        if pdir3.exists():
+            for d in pdir3.iterdir():
+                if d.is_dir() and (d / "output" / "project.json").exists():
+                    n3 += recover_change_protocol(d, d.name)
+        if n3:
+            logger.info(f"Change Protocol 恢复：标记 {n3} 个中断会话")
+        logger.info("Change Protocol 恢复已就绪")
+    except Exception as e:
+        logger.error(f"Change Protocol 恢复失败: {e}")
+
 
 if __name__ == "__main__":
     import uvicorn

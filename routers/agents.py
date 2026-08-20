@@ -24,6 +24,7 @@ from src.agents.team_chat import (TeamChatStore, TeamMessage,
 from src.agents.change_analysis import (ChangeAnalysisStore,
                                           create_change_analysis_session,
                                           continue_change_analysis)
+from src.agents.change_protocol import service as cp_service
 from routers.production_planner import _read_plans   # 唯一 import 点（composition root）
 from routers.workspaces import workspace_lock        # 复用同一 per-workspace 锁（AI-6D）
 
@@ -73,7 +74,32 @@ _HTTP = {
     "CHAR_REF_INVALID": 400, "INVALID_DURATION": 400, "NOT_FOUND": 404,
     "WORKSPACE_CHANGED": 409, "STALE": 409, "CONFLICT": 409,
     "BEFORE_MISMATCH": 409, "BAD_STATUS": 409,
+    # AI-7B Change Protocol 失败码（§101）
+    "CHANGE_SESSION_NOT_FOUND": 404, "CHANGE_SESSION_STALE": 409,
+    "MODULE_PROPOSAL_FAILED": 500, "MODULE_PROPOSAL_INVALID": 422,
+    "PROPOSAL_OUTPUT_INVALID": 422, "PROPOSAL_REPAIR_FAILED": 422,
+    "UNSUPPORTED_CHANGE_INTENT": 422,
+    "PLAN_REQUEST_NOT_COVERED": 422, "PLAN_OWNER_MISMATCH": 409,
+    "PLAN_DEPENDENCY_CYCLE": 422, "PLAN_UNRESOLVED_CONFLICT": 409,
+    "PLAN_USER_DECISION_REQUIRED": 409, "PLAN_ENTITY_NOT_FOUND": 404,
+    "PLAN_REFERENCE_CONFLICT": 409, "PLAN_LOCK_CONFLICT": 409,
+    "PLAN_SOURCE_STALE": 409, "PLAN_VALIDATION_FAILED": 422,
+    "PLAN_PREVIEW_FAILED": 422, "PLAN_VERSION_CHANGED": 409,
+    "PLAN_NOT_READY": 409, "PLAN_ALREADY_REJECTED": 409,
+    "PLAN_APPROVAL_STALE": 409,
 }
+
+
+# ============ AI-7B per-ChangeSession 锁（§89，镜像 workspace_lock）============
+# 防两个 resume/approve 并发编译同一 plan。**不跨 LLM 调用持有**（AI-7B proposal-only）。
+_SESSION_LOCKS: dict = {}
+
+
+def session_lock(project_name: str, session_id: str) -> "asyncio.Lock":
+    key = f"{project_name}/{session_id}"
+    if key not in _SESSION_LOCKS:
+        _SESSION_LOCKS[key] = asyncio.Lock()
+    return _SESSION_LOCKS[key]
 
 
 def _raise(e: AgentError):
@@ -415,5 +441,156 @@ async def apply_director_proposal(project_name: str, proposal_id: str,
 async def dismiss_director_proposal(project_name: str, proposal_id: str):
     try:
         return get_agent_runtime().dismiss_director_proposal(project_name, proposal_id)
+    except AgentError as e:
+        _raise(e)
+
+
+# ==================== AI-7B Change Sessions（proposal-only，§92）====================
+# 路由风格对齐 AI-7A change-analysis（kebab-case，/api/project/{p}/change-sessions）。
+# 硬边界（§2/§76/§119/L）：本组端点绝不 apply、不写 canonical/Workspace/Production、
+# 不触发生成。批准 = 持久化确认 + 置 approved_for_execution → STOP。
+class CreateChangeSessionReq(BaseModel):
+    request: str
+    source: str = "team_chat"
+    source_agent_id: Optional[str] = None
+    source_session_id: Optional[str] = None
+    source_message_id: Optional[str] = None
+
+
+class ApprovePlanReq(BaseModel):
+    plan_id: str
+    plan_version: int
+
+
+class DecisionReq(BaseModel):
+    decision_id: str
+    option_id: str
+
+
+class PlanFeedbackReq(BaseModel):
+    feedback: str
+    plan_id: Optional[str] = None
+
+
+class RejectPlanReq(BaseModel):
+    plan_id: Optional[str] = None
+
+
+@router.post("/api/project/{project_name}/change-sessions")
+async def create_change_session(project_name: str, req: CreateChangeSessionReq):
+    """创建 ChangeRequest（proposal_only）+ ChangeSession（routing）+ 捕获 source 签名。
+    7B-1：不后台推进（推进机 7B-2..4 接通）。"""
+    rt = get_agent_runtime()
+    try:
+        rt._resolve_project_dir(project_name)   # 校验项目存在
+    except AgentError as e:
+        _raise(e)
+    return cp_service.create_session(
+        rt, project_name, req.request, source=req.source,
+        source_agent_id=req.source_agent_id, source_session_id=req.source_session_id,
+        source_message_id=req.source_message_id)
+
+
+@router.get("/api/project/{project_name}/change-sessions")
+async def list_change_sessions(project_name: str):
+    rt = get_agent_runtime()
+    try:
+        return cp_service.list_sessions(rt, project_name)
+    except AgentError as e:
+        _raise(e)
+
+
+@router.get("/api/project/{project_name}/change-sessions/{session_id}")
+async def get_change_session(project_name: str, session_id: str):
+    rt = get_agent_runtime()
+    try:
+        s = cp_service.get_session(rt, project_name, session_id)
+    except AgentError as e:
+        _raise(e)
+    if s is None:
+        raise HTTPException(404, "change-session 不存在")
+    return s
+
+
+@router.post("/api/project/{project_name}/change-sessions/{session_id}/resume")
+async def resume_change_session(project_name: str, session_id: str):
+    """幂等推进（§87）。终端态直接返回；stale→stale；legacy→拒。7B-1：推进机在 7B-2..4。"""
+    rt = get_agent_runtime()
+    try:
+        async with session_lock(project_name, session_id):
+            return cp_service.resume_session(rt, project_name, session_id)
+    except AgentError as e:
+        _raise(e)
+
+
+@router.get("/api/project/{project_name}/change-sessions/{session_id}/plan")
+async def get_change_session_plan(project_name: str, session_id: str):
+    rt = get_agent_runtime()
+    try:
+        plan = cp_service.get_plan(rt, project_name, session_id)
+    except AgentError as e:
+        _raise(e)
+    if plan is None:
+        raise HTTPException(404, "该 change-session 暂无 plan")
+    return plan
+
+
+@router.get("/api/project/{project_name}/change-sessions/{session_id}/preview")
+async def get_change_session_preview(project_name: str, session_id: str):
+    rt = get_agent_runtime()
+    try:
+        pv = cp_service.get_preview(rt, project_name, session_id)
+    except AgentError as e:
+        _raise(e)
+    if pv is None:
+        raise HTTPException(404, "该 change-session 暂无 preview")
+    return pv
+
+
+@router.post("/api/project/{project_name}/change-sessions/{session_id}/decision")
+async def submit_change_decision(project_name: str, session_id: str, req: DecisionReq):
+    """回答决策（§93）。验属该 session + pending + option 合法 + 非 stale → answered。"""
+    rt = get_agent_runtime()
+    try:
+        async with session_lock(project_name, session_id):
+            return cp_service.submit_decision(
+                rt, project_name, session_id, req.decision_id, req.option_id)
+    except AgentError as e:
+        _raise(e)
+
+
+@router.post("/api/project/{project_name}/change-sessions/{session_id}/plan-feedback")
+async def change_session_feedback(project_name: str, session_id: str, req: PlanFeedbackReq):
+    """用户请求修改 → plan version+1（§78）。旧 plan=superseded；新 plan=draft。
+    受影响咨询重跑在 7B-2..4；7B-1 仅版本骨架。"""
+    rt = get_agent_runtime()
+    try:
+        async with session_lock(project_name, session_id):
+            return cp_service.request_changes(
+                rt, project_name, session_id, req.feedback, req.plan_id)
+    except AgentError as e:
+        _raise(e)
+
+
+@router.post("/api/project/{project_name}/change-sessions/{session_id}/approve")
+async def approve_change_session(project_name: str, session_id: str, req: ApprovePlanReq):
+    """批准计划（§76/§94）。只持久化确认 + 置 approved_for_execution → STOP。
+    绝不 apply / 不写 canonical·Workspace·Production / 不触发生成（§119/L 负测目标）。"""
+    rt = get_agent_runtime()
+    try:
+        async with session_lock(project_name, session_id):
+            return cp_service.approve_plan(
+                rt, project_name, session_id, req.plan_id, req.plan_version)
+    except AgentError as e:
+        _raise(e)
+
+
+@router.post("/api/project/{project_name}/change-sessions/{session_id}/reject")
+async def reject_change_session(project_name: str, session_id: str, req: RejectPlanReq):
+    """拒绝计划（§80）。session=rejected；历史 artifact 保留。0 mutation。"""
+    rt = get_agent_runtime()
+    try:
+        async with session_lock(project_name, session_id):
+            return cp_service.reject_plan(rt, project_name, session_id, req.plan_id)
     except AgentError as e:
         _raise(e)
