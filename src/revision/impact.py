@@ -32,6 +32,17 @@ def _all_shot_ids(scene) -> List[str]:
     return [s.shot_id for s in scene.shots] if scene else []
 
 
+def _shot_has_frame(sh) -> bool:
+    """AI-7B：角色变更影响——镜头是否已有首帧（决定 frame_regen 推荐）。"""
+    return sh.first_frame.status == "done" or any(
+        c.status == "done" for c in sh.first_frame.candidates)
+
+
+def _shot_has_video(sh) -> bool:
+    """AI-7B：镜头是否已有最终视频（决定 video_regen 推荐）。"""
+    return bool(sh.final_video) or sh.video.status == "done"
+
+
 def _add(items, et, eid, pid, reason, action):
     items.append(ImpactItem(entity=EntityRef(entity_type=et, entity_id=eid, parent_id=pid),
                             reason_code=reason, recommended_action=action))
@@ -119,6 +130,74 @@ def compute_impact(operations, before_project) -> ImpactReport:
                 _shot(sid); S["prompt_rebuild"].add(sid); S["continuity_review"].add(sid)
                 if op.summary:
                     S["frame_regen"].add(sid); S["video_regen"].add(sid)
+
+        # ============ AI-7B 新 op（§28）============
+        elif op.op_type == OT.UPDATE_STORY_TEXT.value:
+            _add(items, "story", "story_text", None, RC.STORY_TEXT_CHANGED.value,
+                 "project story text changed; review story context")
+
+        elif op.op_type == OT.INSERT_SCENE.value:
+            nsid = op.new_scene.proposed_scene_id if op.new_scene else ""
+            if nsid:
+                S["affected_scene"].add(nsid); S["review_scene"].add(nsid)
+                _add(items, ET.SCENE.value, nsid, None, RC.SCENE_INSERTED.value,
+                     "new scene inserted; storyboard needed later; production plan later")
+
+        elif op.op_type == OT.DELETE_SCENE.value:
+            _sc(op.scene_id)
+            _add(items, ET.SCENE.value, op.scene_id, None, RC.SCENE_DELETED.value,
+                 "scene removed; historical assets retained")
+            # 邻接 scene 连续性
+            sids = [s.scene_id for s in before_project.scenes]
+            if op.scene_id in sids:
+                i = sids.index(op.scene_id)
+                for nid in ([sids[i - 1]] if i > 0 else []) + ([sids[i + 1]] if i < len(sids) - 1 else []):
+                    S["continuity_review"].add(nid); S["affected_scene"].add(nid)
+                    _add(items, ET.SCENE.value, nid, None, RC.ADJACENCY_CHANGED.value,
+                         "adjacent scene continuity review")
+
+        elif op.op_type == OT.REORDER_SCENES.value:
+            for sid in (op.ordered_scene_ids or []):
+                S["affected_scene"].add(sid); S["continuity_review"].add(sid)
+                _add(items, ET.SCENE.value, sid, None, RC.SCENE_REORDERED.value,
+                     "scene order changed; continuity review")
+
+        elif op.op_type == OT.UPDATE_CHARACTER.value:
+            cname = op.character_name or ""
+            _add(items, ET.CHARACTER.value, cname, None, RC.CHARACTER_DESCRIPTION_CHANGED.value,
+                 "character description changed (visual identity); regenerate views later")
+            # §30：角色外貌变更 → 该角色出场的 shot frame/video 可能需重新生成（不自动删 storyboard）
+            for s in before_project.scenes:
+                for sh in s.shots:
+                    if cname in sh.characters:
+                        _shot(sh.shot_id)
+                        if _shot_has_frame(sh):
+                            S["frame_regen"].add(sh.shot_id)
+                        if _shot_has_video(sh):
+                            S["video_regen"].add(sh.shot_id)
+                        S["prompt_rebuild"].add(sh.shot_id); S["continuity_review"].add(sh.shot_id)
+                        _add(items, ET.SHOT.value, sh.shot_id, s.scene_id,
+                             RC.CHARACTER_DESCRIPTION_CHANGED.value,
+                             "shot contains changed character; frame/video may need regeneration")
+
+        elif op.op_type == OT.INSERT_CHARACTER.value:
+            cname = op.new_character.name if op.new_character else ""
+            _add(items, ET.CHARACTER.value, cname, None, RC.CHARACTER_ADDED.value,
+                 "new character added; visual assets required later")
+
+        elif op.op_type == OT.DELETE_CHARACTER.value:
+            cname = op.character_name or ""
+            _add(items, ET.CHARACTER.value, cname, None, RC.CHARACTER_REMOVED.value,
+                 "character removed; remove/replace references; historical assets retained")
+            for s in before_project.scenes:
+                if cname in s.characters:
+                    S["affected_scene"].add(s.scene_id)
+                for sh in s.shots:
+                    if cname in sh.characters:
+                        _shot(sh.shot_id); S["continuity_review"].add(sh.shot_id)
+                        _add(items, ET.SHOT.value, sh.shot_id, s.scene_id,
+                             RC.CHARACTER_REMOVED.value,
+                             "shot references removed character; must be addressed")
 
     summary = {
         "scenes_changed": len(S["affected_scene"]),

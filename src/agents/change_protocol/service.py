@@ -35,6 +35,8 @@ from .impact import compute_proposal_impact
 from .conflicts import analyze_conflicts, has_unresolved_hard
 from .plan_compiler import compile_change_plan
 from .plan_validator import validate as validate_plan, has_errors as has_validation_errors
+from .projection import ProposalProjectionEngine
+from src.revision.changeset import ChangeSetError
 
 
 def _new_id(prefix: str) -> str:
@@ -370,6 +372,61 @@ async def _analyze_and_compile(rt: AgentRuntime, project: str, session: ChangeSe
     return session.to_dict()
 
 
+# ============ 预览构建（§60/§62/§65；7B-4）============
+def _build_preview(rt: AgentRuntime, project: str, session: ChangeSession) -> dict:
+    """validated plan → 纯内存投影 → PlanPreviewArtifact（零落盘，§61/§64）→ preview_ready。
+    plan.status=preview_ready / session.status=ready_for_review。投影失败→blocked。"""
+    store = _store(rt, project)
+    intel = rt.project_intelligence(project)
+    proj = intel._project()
+    # §90 stale
+    if session.source_snapshot_signature:
+        cur = _current_signature(rt, project)
+        if cur != session.source_snapshot_signature:
+            session.status = "stale"
+            store.save_session(session)
+            return session.to_dict()
+    if not session.active_plan_id:
+        session.status = "blocked"
+        session.error = "无 active plan 可投影"
+        store.save_session(session)
+        return session.to_dict()
+    plan = store.get_plan(session.active_plan_id)
+    if plan is None or plan.status != "validated":
+        session.status = "blocked"
+        session.error = f"plan 状态={plan.status if plan else 'missing'}，需 validated"
+        store.save_session(session)
+        return session.to_dict()
+    # §48 plan signature 重检
+    cur = _current_signature(rt, project)
+    if plan.source_snapshot_signature and cur != plan.source_snapshot_signature:
+        plan.status = "stale"
+        store.save_plan(plan)
+        session.status = "stale"
+        store.save_session(session)
+        return session.to_dict()
+    proposals = [p for p in store.list_proposals(session.session_id) if p.status == "completed"]
+    session.status = "building_preview"
+    store.save_session(session)
+    try:
+        pv = ProposalProjectionEngine().build_preview(proj, plan, proposals)
+    except ChangeSetError as e:
+        plan.validation_issues = list(plan.validation_issues) + [
+            {"code": e.code, "message": e.message, "severity": "error"}]
+        store.save_plan(plan)
+        session.status = "blocked"
+        session.error = f"projection failed: [{e.code}] {e.message}"
+        store.save_session(session)
+        return session.to_dict()
+    store.save_preview(pv)
+    plan.preview_id = pv.preview_id
+    plan.status = "preview_ready"
+    store.save_plan(plan)
+    session.status = "ready_for_review"
+    store.save_session(session)
+    return session.to_dict()
+
+
 async def resume_session(rt: AgentRuntime, project: str, session_id: str) -> dict:
     """幂等推进会话。终端态直接返回；stale→stale；legacy→拒。
     7B-2：routing/consulting → 跑首轮提案（并行，§25）→ 全完成→analyzing_dependencies
@@ -416,6 +473,9 @@ async def resume_session(rt: AgentRuntime, project: str, session_id: str) -> dic
     # 7B-3：依赖/impact/冲突 → 决策 → 定向 round 2 → 编译 plan → 校验
     if session.status == "analyzing_dependencies":
         return await _analyze_and_compile(rt, project, session)
+    # 7B-4：validated plan → 纯内存投影 → preview_ready / ready_for_review
+    if session.status == "validating_plan":
+        return _build_preview(rt, project, session)
     # 用户回答决策后 → 重新分析+编译（§35：resume same ChangeSession，仅受影响 proposal 重跑在 7B-2+）
     if session.status == "awaiting_user_decision":
         blocking_pending = len([d for d in store.list_decisions(session.session_id)

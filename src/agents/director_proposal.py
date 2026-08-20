@@ -476,13 +476,13 @@ def _move_after(order: List[str], moving_id: str, anchor_id: Optional[str]) -> L
     return order
 
 
-def compile_items(items: List[DirectorProposalItem], ws_store: WorkspaceStore,
-                  ws, working: Project) -> List[ChangeOperation]:
-    """语义 items → 现有 ChangeOperation[]（§7/§13）。纯函数、可对任意子集重跑。
-    before 读 working（绝不取自 LLM）；insert 由 ws_store.allocate_shot_id 分配稳定 id；
-    带位置的 insert/reorder 编译为额外 REORDER_SHOTS（§7：一个 item 可对应多个 op）。"""
+def compile_items_pure(items: List["DirectorProposalItem"], working: Project,
+                        alloc_fn: Callable[[str], str]) -> List[ChangeOperation]:
+    """语义 items → ChangeOperation[]（§7/§13）。纯函数、可对任意子集重跑。
+    before 读 working（绝不取自 LLM）；insert 由 alloc_fn(scene_id) 分配稳定 id；
+    带位置的 insert/reorder 编译为额外 REORDER_SHOTS（§7：一个 item 可对应多个 op）。
+    §21/§62：抽出纯版本——AI-7B ProposalProjection 复用，传纯内存 allocator，不需 ws_store。"""
     ops: List[ChangeOperation] = []
-    # 记录位置意图，按 scene 聚合
     positional: dict = {}     # scene_id -> list[(moving_id, anchor_id)]
     deletes: dict = {}        # scene_id -> set(shot_id)
 
@@ -509,7 +509,7 @@ def compile_items(items: List[DirectorProposalItem], ws_store: WorkspaceStore,
 
         elif item.action == ProposalAction.INSERT_SHOT.value:
             # 服务端分配稳定 shot_id（§2/§11）；preview/apply 复用同一 id
-            new_id = ws_store.allocate_shot_id(ws, item.scene_id)
+            new_id = alloc_fn(item.scene_id)
             ns = NewShotSpec(shot_id=new_id, description=item.description or "",
                              characters=list(item.characters or []),
                              target_duration_s=item.target_duration_s)
@@ -522,13 +522,11 @@ def compile_items(items: List[DirectorProposalItem], ws_store: WorkspaceStore,
             positional.setdefault(item.scene_id, []).append(
                 (item.shot_id, item.after_shot_id))
 
-    # 每个有位置意图的 scene：算出最终顺序，若与“自然后顺序”不同则发 REORDER_SHOTS
     for scene_id, moves in positional.items():
         scene = _scene_of(working, scene_id)
         if scene is None:
             continue
         del_set = deletes.get(scene_id, set())
-        # 自然后顺序：原始镜头（去掉被删）+ 新插入镜头（已在 ops 中 append，按插入顺序）
         original_kept = [sh.shot_id for sh in scene.shots if sh.shot_id not in del_set]
         appended = [op.new_shot.shot_id for op in ops
                     if op.op_type == OT.INSERT_SHOT.value and op.scene_id == scene_id]
@@ -541,6 +539,13 @@ def compile_items(items: List[DirectorProposalItem], ws_store: WorkspaceStore,
                 op_type=OT.REORDER_SHOTS.value, scene_id=scene_id,
                 ordered_shot_ids=final))
     return ops
+
+
+def compile_items(items: List[DirectorProposalItem], ws_store: WorkspaceStore,
+                  ws, working: Project) -> List[ChangeOperation]:
+    """既有 direct Director UI 流程的编译入口（§7/§13）。§21：委托 compile_items_pure，
+    注入 ws_store.allocate_shot_id 作为稳定 id 分配器。行为不变。"""
+    return compile_items_pure(items, working, lambda scene_id: ws_store.allocate_shot_id(ws, scene_id))
 
 
 # ============ 编排 ============

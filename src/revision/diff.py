@@ -44,8 +44,28 @@ def _diff_shots(scene_id, bs, as_) -> List[dict]:
 
 
 def diff_projects(before, after) -> List[dict]:
-    """两个 Project 的结构化 diff，按 scene_id / shot_id 稳定对齐。"""
+    """两个 Project 的结构化 diff，按 scene_id / shot_id 稳定对齐。
+    AI-7B（§67-§69）：增 story_text + character diff（additive；既有 shot/scene op 不触 story/char）。"""
     out: List[dict] = []
+    # §68 Story diff
+    if before.story_text != after.story_text:
+        out.append({"kind": "update", "entity": "story", "id": "story_text",
+                    "parent_id": None, "field": "story_text",
+                    "before": before.story_text, "after": after.story_text})
+    # §69 Character diff（按 name 对齐）
+    bchars = {c.name: c for c in before.characters}
+    achars = {c.name: c for c in after.characters}
+    for name in sorted(set(bchars) | set(achars)):
+        bc, ac = bchars.get(name), achars.get(name)
+        if ac and not bc:
+            out.append({"kind": "insert", "entity": "character", "id": name, "parent_id": None,
+                        "after": {"name": name, "description_en": ac.description_en}})
+        elif bc and not ac:
+            out.append({"kind": "delete", "entity": "character", "id": name, "parent_id": None,
+                        "before": {"name": name, "description_en": bc.description_en}})
+        elif bc and ac and bc.description_en != ac.description_en:
+            out.append({"kind": "update", "entity": "character", "id": name, "parent_id": None,
+                        "field": "description_en", "before": bc.description_en, "after": ac.description_en})
     b = {s.scene_id: s for s in before.scenes}
     a = {s.scene_id: s for s in after.scenes}
     for sid in sorted(set(b) | set(a)):

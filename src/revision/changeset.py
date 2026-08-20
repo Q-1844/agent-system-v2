@@ -16,7 +16,7 @@ from .models import (WorkspaceChangeSet, ChangeOperation, ChangeSetStatus, Chang
                      Actor, OpType as OT, creative_source_signature)
 from .diff import changeset_diff
 from .impact import compute_impact
-from ..core.models import Project, Shot
+from ..core.models import Project, Shot, Scene, Character
 
 
 class ChangeSetError(Exception):
@@ -31,11 +31,16 @@ class ChangeSetError(Exception):
 # ============ op schema / 硬校验 ============
 _VALID_OPS = {ot.value for ot in OT}
 
+# 需 op.scene_id（指向现有 scene）的 op；其余为 project 级（update_story_text /
+# insert_scene（id 在 new_scene）/ reorder_scenes（ordered_scene_ids）/ character*）。
+_NEEDS_SCENE_ID = {OT.UPDATE_SCENE.value, OT.UPDATE_SHOT.value, OT.INSERT_SHOT.value,
+                   OT.DELETE_SHOT.value, OT.REORDER_SHOTS.value, OT.DELETE_SCENE.value}
+
 
 def _validate_op_schema(op: ChangeOperation) -> None:
     if not op.op_type or op.op_type not in _VALID_OPS:
         raise ChangeSetError("SCHEMA", f"未知 op_type: {op.op_type!r}")
-    if not op.scene_id:
+    if op.op_type in _NEEDS_SCENE_ID and not op.scene_id:
         raise ChangeSetError("SCHEMA", "缺少 scene_id")
     if op.op_type in (OT.UPDATE_SHOT.value, OT.DELETE_SHOT.value) and not op.shot_id:
         raise ChangeSetError("SCHEMA", f"{op.op_type} 需要 shot_id")
@@ -43,6 +48,19 @@ def _validate_op_schema(op: ChangeOperation) -> None:
         raise ChangeSetError("SCHEMA", "insert_shot 需要 new_shot")
     if op.op_type == OT.REORDER_SHOTS.value and not op.ordered_shot_ids:
         raise ChangeSetError("SCHEMA", "reorder_shots 需要 ordered_shot_ids")
+    # AI-7B 新 op schema（§52-§57）
+    if op.op_type == OT.UPDATE_STORY_TEXT.value and op.story_text is None:
+        raise ChangeSetError("SCHEMA", "update_story_text 需要 story_text")
+    if op.op_type == OT.INSERT_SCENE.value and op.new_scene is None:
+        raise ChangeSetError("SCHEMA", "insert_scene 需要 new_scene")
+    if op.op_type == OT.DELETE_SCENE.value and not op.scene_id:
+        raise ChangeSetError("SCHEMA", "delete_scene 需要 scene_id")
+    if op.op_type == OT.REORDER_SCENES.value and not op.ordered_scene_ids:
+        raise ChangeSetError("SCHEMA", "reorder_scenes 需要 ordered_scene_ids")
+    if op.op_type in (OT.UPDATE_CHARACTER.value, OT.DELETE_CHARACTER.value) and not op.character_name:
+        raise ChangeSetError("SCHEMA", f"{op.op_type} 需要 character_name")
+    if op.op_type == OT.INSERT_CHARACTER.value and op.new_character is None:
+        raise ChangeSetError("SCHEMA", "insert_character 需要 new_character")
 
 
 def _final_validate(clone: Project, warnings: List[str]) -> None:
@@ -53,6 +71,11 @@ def _final_validate(clone: Project, warnings: List[str]) -> None:
     proj_names = {c.name for c in clone.characters}
     for sc in clone.scenes:
         scene_names = set(sc.characters)
+        # AI-7B §32/§45：scene cast 引用不存在的项目角色 → 硬拒绝（删除角色留 forbidden ref）
+        for ch in scene_names:
+            if ch not in proj_names:
+                raise ChangeSetError("CHAR_REF_INVALID",
+                                      f"故事段 {sc.scene_id} 角色表引用不存在的项目角色 {ch}")
         used: set = set()
         for sh in sc.shots:
             used.update(sh.characters)
@@ -71,9 +94,67 @@ def _final_validate(clone: Project, warnings: List[str]) -> None:
 
 def _apply_ops_to_clone(clone: Project, operations: List[ChangeOperation]) -> Tuple[Project, List[str]]:
     """把 operations 作用到 clone（深拷贝），返回 (candidate, soft_warnings)。
-    所有 before 必须与 clone 当前值匹配（§十三），否则 BEFORE_MISMATCH。"""
+    所有 before 必须与 clone 当前值匹配（§十三），否则 BEFORE_MISMATCH。
+    AI-7B（§52-§57）：project 级 op（story_text / character* / reorder_scenes）不经 scene 查找。"""
     warnings: List[str] = []
     for op in operations:
+        # ---- project 级 op（无需 scene 查找）----
+        if op.op_type == OT.UPDATE_STORY_TEXT.value:
+            if op.story_text and op.story_text.before != clone.story_text:
+                raise ChangeSetError("BEFORE_MISMATCH", "story_text before 不匹配")
+            clone.story_text = op.story_text.after
+            continue
+        if op.op_type == OT.UPDATE_CHARACTER.value:
+            char = next((c for c in clone.characters if c.name == op.character_name), None)
+            if char is None:
+                raise ChangeSetError("NOT_FOUND", f"角色 {op.character_name} 不存在")
+            if op.description_en:
+                if op.description_en.before != char.description_en:
+                    raise ChangeSetError("BEFORE_MISMATCH",
+                                          f"角色 {op.character_name} description_en before 不匹配")
+                char.description_en = op.description_en.after
+            continue
+        if op.op_type == OT.INSERT_CHARACTER.value:
+            nc = op.new_character
+            if not nc or not nc.name:
+                raise ChangeSetError("SCHEMA", "insert_character 需要 new_character.name")
+            if any(c.name == nc.name for c in clone.characters):
+                raise ChangeSetError("DUP_CHARACTER_NAME", f"角色 {nc.name} 已存在")
+            clone.characters.append(Character(name=nc.name, description_en=nc.description_en))
+            continue
+        if op.op_type == OT.DELETE_CHARACTER.value:
+            if not any(c.name == op.character_name for c in clone.characters):
+                raise ChangeSetError("NOT_FOUND", f"角色 {op.character_name} 不存在")
+            clone.characters = [c for c in clone.characters if c.name != op.character_name]
+            continue
+        if op.op_type == OT.REORDER_SCENES.value:
+            ids = list(op.ordered_scene_ids or [])
+            cur = [s.scene_id for s in clone.scenes]
+            if len(ids) != len(cur) or set(ids) != set(cur):
+                raise ChangeSetError("REORDER_MISMATCH", "reorder_scenes IDs 与当前 scene 集合不一致")
+            if len(set(ids)) != len(ids):
+                raise ChangeSetError("REORDER_MISMATCH", "reorder_scenes IDs 有重复")
+            by = {s.scene_id: s for s in clone.scenes}
+            clone.scenes = [by[i] for i in ids]
+            continue
+        if op.op_type == OT.INSERT_SCENE.value:
+            ns = op.new_scene
+            if not ns or not ns.proposed_scene_id:
+                raise ChangeSetError("SCHEMA", "insert_scene 需要 new_scene.proposed_scene_id")
+            if any(s.scene_id == ns.proposed_scene_id for s in clone.scenes):
+                raise ChangeSetError("DUP_SCENE_ID", f"故事段 {ns.proposed_scene_id} 已存在")
+            new_scene = Scene(scene_id=ns.proposed_scene_id, summary=ns.summary,
+                              characters=list(ns.characters))
+            if ns.after_scene_id:
+                idx = next((i for i, s in enumerate(clone.scenes)
+                            if s.scene_id == ns.after_scene_id), None)
+                if idx is None:
+                    raise ChangeSetError("NOT_FOUND", f"after_scene_id {ns.after_scene_id} 不存在")
+                clone.scenes.insert(idx + 1, new_scene)
+            else:
+                clone.scenes.append(new_scene)
+            continue
+        # ---- scene 级 op（需 scene 查找）----
         scene = next((s for s in clone.scenes if s.scene_id == op.scene_id), None)
         if scene is None:
             raise ChangeSetError("NOT_FOUND", f"故事段 {op.scene_id} 不存在")
@@ -131,6 +212,11 @@ def _apply_ops_to_clone(clone: Project, operations: List[ChangeOperation]) -> Tu
             if not scene.shots:
                 warnings.append(f"故事段 {op.scene_id} 删除后无镜头（soft）")
 
+        elif op.op_type == OT.DELETE_SCENE.value:
+            # §17/§32：删除场景移出 working structure；其内镜头随之移出。历史资产保留。
+            clone.scenes = [s for s in clone.scenes if s.scene_id != op.scene_id]
+            warnings.append(f"故事段 {op.scene_id} 删除（其内镜头随之移出）")
+
         elif op.op_type == OT.REORDER_SHOTS.value:
             ids = list(op.ordered_shot_ids or [])
             cur = [s.shot_id for s in scene.shots]
@@ -148,6 +234,22 @@ def _apply_ops_to_clone(clone: Project, operations: List[ChangeOperation]) -> Tu
     return clone, warnings
 
 
+# ============ 纯内存预览核心（§62）============
+def preview_operations_on_project(source_project: Project,
+                                   operations: List[ChangeOperation]):
+    """§62：纯内存预览核心。deepcopy source → 校验 schema → apply ops → diff → impact。
+    **不分配 ID**（编译器已分配 stable id）/ **不落盘** / **不建 workspace** / 不碰 canonical。
+    返回 (candidate, diff, impact, warnings)。Workspace preview 与 AI-7B ProposalProjection
+    都复用此核心（§62）——AI-7B 路径绝不调用本模块的 apply/persist。"""
+    for op in operations:
+        _validate_op_schema(op)
+    clone = Project.from_dict(source_project.to_dict())
+    candidate, warnings = _apply_ops_to_clone(clone, operations)
+    diff = changeset_diff(source_project, candidate)
+    impact = compute_impact(operations, source_project)
+    return candidate, diff, impact, warnings
+
+
 # ============ preview ============
 def preview(ws_store, ws, title: str, intent: str,
             base_workspace_revision: int, operations: List[ChangeOperation]) -> dict:
@@ -161,19 +263,16 @@ def preview(ws_store, ws, title: str, intent: str,
 
     working = ws_store.load_working_project(ws.workspace_id)
     before_sig = ws_store.working_signature(ws.workspace_id)
-    clone = Project.from_dict(working.to_dict())
 
     # InsertShot：Preview 阶段分配最终 stable shot_id；Apply 复用同一个（§十一）
     for op in operations:
         if op.op_type == OT.INSERT_SHOT.value and op.new_shot and not op.new_shot.shot_id:
             op.new_shot.shot_id = ws_store.allocate_shot_id(ws, op.scene_id)
 
-    candidate, warnings = _apply_ops_to_clone(clone, operations)
+    # §62：复用纯内存预览核心（workspace preview = 纯核心 + ID 分配 + 落盘 changeset）
+    candidate, diff, impact, warnings = preview_operations_on_project(working, operations)
     candidate_dict = candidate.to_dict()
     after_sig = creative_source_signature(candidate_dict)
-
-    diff = changeset_diff(working, candidate)
-    impact = compute_impact(operations, working)
 
     cid = "cs_" + secrets.token_hex(6)
     cs = WorkspaceChangeSet(

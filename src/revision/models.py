@@ -44,6 +44,14 @@ class OpType(str, Enum):
     INSERT_SHOT = "insert_shot"
     DELETE_SHOT = "delete_shot"
     REORDER_SHOTS = "reorder_shots"
+    # AI-7B 扩展（§52-§57）：Story / Scene / Character 语义操作
+    UPDATE_STORY_TEXT = "update_story_text"
+    INSERT_SCENE = "insert_scene"
+    DELETE_SCENE = "delete_scene"
+    REORDER_SCENES = "reorder_scenes"
+    UPDATE_CHARACTER = "update_character"
+    INSERT_CHARACTER = "insert_character"
+    DELETE_CHARACTER = "delete_character"
 
 
 class EntityType(str, Enum):
@@ -64,6 +72,14 @@ class ImpactReasonCode(str, Enum):
     SHOT_REORDERED = "SHOT_REORDERED"
     ADJACENCY_CHANGED = "ADJACENCY_CHANGED"
     CONTINUITY_CHAIN_CHANGED = "CONTINUITY_CHAIN_CHANGED"
+    # AI-7B 扩展（§28）：Story / Scene / Character
+    STORY_TEXT_CHANGED = "STORY_TEXT_CHANGED"
+    SCENE_INSERTED = "SCENE_INSERTED"
+    SCENE_DELETED = "SCENE_DELETED"
+    SCENE_REORDERED = "SCENE_REORDERED"
+    CHARACTER_ADDED = "CHARACTER_ADDED"
+    CHARACTER_DESCRIPTION_CHANGED = "CHARACTER_DESCRIPTION_CHANGED"
+    CHARACTER_REMOVED = "CHARACTER_REMOVED"
 
 
 # ============ before / after ============
@@ -85,9 +101,28 @@ class NewShotSpec:
 
 
 @dataclass
+class NewSceneSpec:
+    """AI-7B InsertScene 的新故事段规格（§53）。proposed_scene_id 由确定性分配器产出
+    （复用 Project.next_scene_seq，§54；不回收、不重编号）。"""
+    after_scene_id: Optional[str] = None   # 插在哪个现有段之后；None=加到末尾
+    proposed_scene_id: str = ""
+    summary: str = ""
+    characters: List[str] = field(default_factory=list)
+
+
+@dataclass
+class NewCharacterSpec:
+    """AI-7B InsertCharacter 的新角色规格（§56）。name 即身份（无 character_id）。"""
+    name: str = ""
+    description_en: str = ""
+
+
+@dataclass
 class ChangeOperation:
     """语义操作（不使用 raw JSON Patch，§八）。单 dataclass + op_type 判别。
-    update_scene/update_shot 用 BeforeAfter 字段；insert/delete/reorder 用结构 payload。"""
+    update_scene/update_shot 用 BeforeAfter 字段；insert/delete/reorder 用结构 payload。
+    AI-7B（§52-§57）扩展：update_story_text / insert_scene / delete_scene / reorder_scenes /
+    update_character / insert_character / delete_character。"""
     op_type: str                       # OpType 值
     scene_id: str = ""
     shot_id: Optional[str] = None
@@ -100,19 +135,33 @@ class ChangeOperation:
     new_shot: Optional[NewShotSpec] = None
     # reorder_shots（§十二：用 ordered_shot_ids，不存 from_index/to_index）
     ordered_shot_ids: Optional[List[str]] = None
+    # AI-7B 新字段
+    story_text: Optional[BeforeAfter] = None          # update_story_text
+    new_scene: Optional[NewSceneSpec] = None          # insert_scene
+    ordered_scene_ids: Optional[List[str]] = None      # reorder_scenes
+    character_name: Optional[str] = None             # update_character / delete_character
+    description_en: Optional[BeforeAfter] = None      # update_character
+    new_character: Optional[NewCharacterSpec] = None  # insert_character
+    before: Optional[dict] = None                    # delete_scene / delete_character 快照
 
     def to_dict(self) -> dict:
         d: dict = {}
-        for k in ("op_type", "scene_id", "shot_id", "ordered_shot_ids"):
+        for k in ("op_type", "scene_id", "shot_id", "ordered_shot_ids",
+                  "ordered_scene_ids", "character_name", "before"):
             v = getattr(self, k)
             if v is not None:
                 d[k] = v
-        for k in ("summary", "characters", "description", "target_duration_s"):
+        for k in ("summary", "characters", "description", "target_duration_s",
+                  "story_text", "description_en"):
             v = getattr(self, k)
             if v is not None:
                 d[k] = {"before": v.before, "after": v.after}
         if self.new_shot is not None:
             d["new_shot"] = asdict(self.new_shot)
+        if self.new_scene is not None:
+            d["new_scene"] = asdict(self.new_scene)
+        if self.new_character is not None:
+            d["new_character"] = asdict(self.new_character)
         return d
 
     @classmethod
@@ -125,12 +174,13 @@ class ChangeOperation:
                 return BeforeAfter(before=v.get("before"), after=v.get("after"))
             return None
 
-        ns = d.get("new_shot")
-        new_shot = (
-            NewShotSpec(**{k: v for k, v in ns.items() if k in NewShotSpec.__dataclass_fields__})
-            if isinstance(ns, dict) else None
-        )
+        def _spec(key, spec_cls):
+            v = d.get(key)
+            return (spec_cls(**{k: val for k, val in v.items() if k in spec_cls.__dataclass_fields__})
+                    if isinstance(v, dict) else None)
+
         osi = d.get("ordered_shot_ids")
+        osci = d.get("ordered_scene_ids")
         return cls(
             op_type=d.get("op_type") or d.get("type") or "",
             scene_id=d.get("scene_id", ""),
@@ -139,8 +189,15 @@ class ChangeOperation:
             characters=_ba("characters"),
             description=_ba("description"),
             target_duration_s=_ba("target_duration_s"),
-            new_shot=new_shot,
+            new_shot=_spec("new_shot", NewShotSpec),
             ordered_shot_ids=list(osi) if osi is not None else None,
+            story_text=_ba("story_text"),
+            new_scene=_spec("new_scene", NewSceneSpec),
+            ordered_scene_ids=list(osci) if osci is not None else None,
+            character_name=d.get("character_name"),
+            description_en=_ba("description_en"),
+            new_character=_spec("new_character", NewCharacterSpec),
+            before=d.get("before"),
         )
 
 
