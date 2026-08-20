@@ -14,6 +14,7 @@
 # stale/legacy 守卫（不谎报进度）。
 from __future__ import annotations
 import asyncio
+import json
 import secrets
 import time
 from typing import List, Optional
@@ -21,13 +22,19 @@ from typing import List, Optional
 from src.revision.models import creative_source_signature
 
 from ..runtime import AgentRuntime, AgentError
-from ..inquiry import classify_request
+from ..inquiry import classify_request, _pack_text
 from .models import (ChangeRequest, ChangeSession, UnifiedChangePlan, PlanApproval,
-                      ChangeDecisionRequest, SESSION_TERMINAL)
+                      ChangeDecisionRequest, ChangeDecisionOption, ModuleProposal,
+                      ModuleProposalItem, SESSION_TERMINAL)
 from .store import ChangeProtocolStore
 from .script_proposal import run_script_proposal
 from .character_proposal import run_character_proposal
 from .storyboard_proposal import run_storyboard_proposal
+from .dependency import build_dependency_facts
+from .impact import compute_proposal_impact
+from .conflicts import analyze_conflicts, has_unresolved_hard
+from .plan_compiler import compile_change_plan
+from .plan_validator import validate as validate_plan, has_errors as has_validation_errors
 
 
 def _new_id(prefix: str) -> str:
@@ -175,6 +182,194 @@ async def _run_first_round_proposals(rt: AgentRuntime, project: str,
     return out
 
 
+# ============ 决策选项生成（§35；Producer LLM 给两个互斥选项）============
+DECISION_OPTIONS_SYSTEM = """你是 AGNES 的 Producer。用户的变更请求存在创作歧义，需用户决策。
+基于请求与歧义描述，给出**恰好两个**简短、人类可读、互斥的选项（A/B）。
+只返回 JSON，不要解释文字：
+{"options":[{"option_id":"a","label":"...","description":"..."},{"option_id":"b","label":"...","description":"..."}]}"""
+
+
+def _parse_decision_options(raw):
+    from .proposal_helpers import parse_proposal_json
+    obj = parse_proposal_json(raw)
+    opts = obj.get("options") or []
+    if not isinstance(opts, list) or len(opts) < 2:
+        raise ValueError("options 需至少 2 项")
+    out = []
+    for o in opts[:2]:
+        oid = str(o.get("option_id") or "").strip() or ("ab"[len(out)])
+        out.append({"option_id": oid, "label": str(o.get("label") or "")[:120],
+                    "description": str(o.get("description") or "")[:300]})
+    return out
+
+
+async def _producer_decision_options(client, request_text: str, decision_text: str) -> List[dict]:
+    """§35：Producer 给两个互斥选项。无 client → 退化占位（A/B）。"""
+    from .proposal_helpers import call_and_parse
+    fallback = [
+        ChangeDecisionOption(option_id="a", label="方案 A", description=decision_text[:80]).to_dict(),
+        ChangeDecisionOption(option_id="b", label="方案 B", description=decision_text[:80]).to_dict()]
+    if client is None:
+        return fallback
+    messages = [{"role": "system", "content": DECISION_OPTIONS_SYSTEM},
+                {"role": "user", "content": f"用户请求：{request_text}\n歧义：{decision_text}\n只返回 JSON。"}]
+    parsed, err = await call_and_parse(client, messages, _parse_decision_options)
+    if err or not parsed:
+        return fallback
+    return parsed
+
+
+async def _create_decisions_for_proposals(rt, project: str, session: ChangeSession,
+                                          completed: List[ModuleProposal],
+                                          request: ChangeRequest, client) -> List[ChangeDecisionRequest]:
+    """§34/§35：proposal.user_decisions_needed → ChangeDecisionRequest（blocking）。幂等（不重建已有）。"""
+    store = _store(rt, project)
+    existing = store.list_decisions(session.session_id)
+    decisions: List[ChangeDecisionRequest] = []
+    for prop in completed:
+        for need in prop.user_decisions_needed:
+            already = next((d for d in existing if need in (d.question or "")), None)
+            if already:
+                decisions.append(already)
+                continue
+            opts = await _producer_decision_options(client, request.original_user_request, need)
+            dec = ChangeDecisionRequest(
+                decision_id=_new_id("dec"), change_session_id=session.session_id,
+                question=need, options=opts, blocking=True, status="pending",
+                created_at=_now(), updated_at=_now())
+            store.save_decision(dec)
+            decisions.append(dec)
+    return decisions
+
+
+def _director_round2_target(completed: List[ModuleProposal]) -> Optional[str]:
+    """§26：Director 在 round 1 因无 scene scope 延后；Script 定稿受影响场景后，round 2 问 Director。
+    返回应问的 scene_id，或 None（无需 round 2）。"""
+    if any(p.module == "storyboard" for p in completed):
+        return None   # Director 已参与
+    for p in completed:
+        if p.module == "script":
+            for it_dict in p.items:
+                item = ModuleProposalItem.from_dict(it_dict)
+                sid = (item.intent or {}).get("scene_id") or (item.intent or {}).get("after_scene_id")
+                if sid:
+                    return sid
+    return None
+
+
+async def _run_director_round2(rt, project: str, session: ChangeSession,
+                               request: ChangeRequest, completed: List[ModuleProposal], client):
+    target = _director_round2_target(completed)
+    if not target:
+        return
+    await run_storyboard_proposal(rt, project, session.session_id, request,
+                                  session.source_snapshot_signature, "scene", target,
+                                  round=2, client=client)
+
+
+# ============ 分析 + 编译 + 校验（§23/§27/§28/§33/§41）============
+async def _analyze_and_compile(rt: AgentRuntime, project: str, session: ChangeSession) -> dict:
+    """7B-3：proposals 完成后 → 依赖/impact/冲突 → 创作决策 → 定向 round 2 → 编译 plan → 校验。
+    终态：awaiting_user_decision（有 blocking 决策）/ blocked（硬冲突或校验失败）/ validating_plan
+    （plan validated，preview 留 7B-4）。纯代码分析 + Producer 决策 LLM（不重跑 proposal LLM）。"""
+    store = _store(rt, project)
+    intel = rt.project_intelligence(project)
+    proj = intel._project()
+    # §90 stale
+    if session.source_snapshot_signature:
+        cur = _current_signature(rt, project)
+        if cur != session.source_snapshot_signature:
+            session.status = "stale"
+            store.save_session(session)
+            return session.to_dict()
+    request = store.get_request(session.request_id)
+    if request is None:
+        session.status = "failed"
+        session.error = "关联 ChangeRequest 丢失"
+        store.save_session(session)
+        return session.to_dict()
+    completed = [p for p in store.list_proposals(session.session_id) if p.status == "completed"]
+    if not completed:
+        session.status = "blocked"
+        session.error = "无 completed 提案可编译"
+        store.save_session(session)
+        return session.to_dict()
+    cli = rt._resolve_client_or_none()
+
+    # §34/§35：创作歧义 → 阻塞决策（仅 pending 才等待；已答的计入 plan.user_decision_ids）
+    decisions = await _create_decisions_for_proposals(rt, project, session, completed, request, cli)
+    pending = [d for d in decisions if d.status == "pending"]
+    if pending:
+        session.pending_decision_ids = [d.decision_id for d in pending]
+        session.status = "awaiting_user_decision"
+        store.save_session(session)
+        return session.to_dict()
+    answered_decision_ids = [d.decision_id for d in decisions if d.status == "answered"]
+
+    # §27/§28/§33：确定性事实
+    dep_facts = build_dependency_facts(completed, intel)
+    impact_facts = compute_proposal_impact(completed, proj)
+    conflicts = analyze_conflicts(completed, proj)
+    # §46：未解决硬冲突 → blocked（§26：硬不相容 → BLOCKED）
+    if has_unresolved_hard(conflicts):
+        session.status = "blocked"
+        session.error = "存在未解决的结构硬冲突"
+        store.save_session(session)
+        return session.to_dict()
+
+    # §26：定向 round 2（Director 延后且 Script 定稿了场景）
+    if _director_round2_target(completed) and session.consultation_round < 2:
+        session.consultation_round = 2
+        session.status = "consulting"
+        store.save_session(session)
+        await _run_director_round2(rt, project, session, request, completed, cli)
+        completed = [p for p in store.list_proposals(session.session_id) if p.status == "completed"]
+        dep_facts = build_dependency_facts(completed, intel)
+        impact_facts = compute_proposal_impact(completed, proj)
+        conflicts = analyze_conflicts(completed, proj)
+        if has_unresolved_hard(conflicts):
+            session.status = "blocked"
+            session.error = "存在未解决的结构硬冲突（round 2 后）"
+            store.save_session(session)
+            return session.to_dict()
+
+    # §23：编译 UnifiedChangePlan（Producer 只编排，不写专业内容）
+    session.status = "synthesizing_plan"
+    store.save_session(session)
+    version = (session.plan_version or 0) + 1
+    plan = compile_change_plan(session, request, completed, dep_facts, impact_facts,
+                               conflicts, decision_ids=answered_decision_ids, version=version,
+                               source_signature=session.source_snapshot_signature,
+                               project=proj, parent_plan_id=session.active_plan_id)
+    # §41：校验
+    session.status = "validating_plan"
+    store.save_session(session)
+    blocking_pending = len([d for d in store.list_decisions(session.session_id)
+                            if d.blocking and d.status == "pending"])
+    issues = validate_plan(request, session, plan, completed, proj, impact_facts,
+                           conflicts, blocking_pending_decisions=blocking_pending)
+    plan.validation_issues = issues
+    if has_validation_errors(issues):
+        plan.status = ("needs_user_decision"
+                       if any(i["code"] == "PLAN_USER_DECISION_REQUIRED" for i in issues)
+                       else "draft")
+        store.save_plan(plan)
+        session.active_plan_id = plan.plan_id
+        session.plan_version = version
+        session.status = "blocked"
+        session.error = json.dumps(issues, ensure_ascii=False)[:500]
+        store.save_session(session)
+        return session.to_dict()
+    # §48/§65：plan validated；applyable 恒 False（preview 留 7B-4 → preview_ready）
+    plan.status = "validated"
+    store.save_plan(plan)
+    session.active_plan_id = plan.plan_id
+    session.plan_version = version
+    session.status = "validating_plan"   # plan 已 validated；7B-4 建 preview → building_preview → ready_for_review
+    store.save_session(session)
+    return session.to_dict()
+
+
 async def resume_session(rt: AgentRuntime, project: str, session_id: str) -> dict:
     """幂等推进会话。终端态直接返回；stale→stale；legacy→拒。
     7B-2：routing/consulting → 跑首轮提案（并行，§25）→ 全完成→analyzing_dependencies
@@ -218,8 +413,20 @@ async def resume_session(rt: AgentRuntime, project: str, session_id: str) -> dic
         store.save_session(session)
         return session.to_dict()
 
-    # analyzing_dependencies / awaiting_user_decision / ready_for_review / building_preview
-    # → 7B-3/7B-4 尚未接通；幂等返回当前态，不谎报进度。
+    # 7B-3：依赖/impact/冲突 → 决策 → 定向 round 2 → 编译 plan → 校验
+    if session.status == "analyzing_dependencies":
+        return await _analyze_and_compile(rt, project, session)
+    # 用户回答决策后 → 重新分析+编译（§35：resume same ChangeSession，仅受影响 proposal 重跑在 7B-2+）
+    if session.status == "awaiting_user_decision":
+        blocking_pending = len([d for d in store.list_decisions(session.session_id)
+                                if d.blocking and d.status == "pending"])
+        if blocking_pending == 0:
+            session.status = "analyzing_dependencies"
+            store.save_session(session)
+            return await _analyze_and_compile(rt, project, session)
+        return session.to_dict()   # 仍有阻塞决策未答，等待用户
+
+    # validating_plan(plan validated)/building_preview/ready_for_review → 7B-4 尚未接通；幂等返回
     return session.to_dict()
 
 

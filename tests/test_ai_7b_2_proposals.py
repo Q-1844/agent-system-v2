@@ -220,15 +220,20 @@ def test_resume_partial_failure_blocked(tmp_path):
     assert statuses.get("character") == "failed"
 
 
-# ============ ⑦ 幂等：resume 不重跑已完成提案（§25/§87）============
+# ============ ⑦ 幂等：resume 不重跑已完成 round-1 提案（§25/§87）============
 def test_resume_idempotent_no_rerun(tmp_path):
     ProjectStore(tmp_path).save(_proj())
     client = ScriptedProposalClient()
     rt = _rt(tmp_path, client=client)
     sid, _cr = _make_cr(rt, "demo", "把 Xiaoyu 头发改长并修改结局")
-    asyncio.run(cps.resume_session(rt, "demo", sid))
-    calls_after_round1 = client.calls
-    # 再次 resume（会话已 analyzing_dependencies）→ 不重跑提案
+    asyncio.run(cps.resume_session(rt, "demo", sid))   # round 1 → analyzing_dependencies
+    store = ChangeProtocolStore(rt._resolve_project_dir("demo"), "demo")
+    r1_script = [p for p in store.list_proposals(sid) if p.module == "script"]
+    r1_char = [p for p in store.list_proposals(sid) if p.module == "character"]
+    # 再次 resume → 编译（7B-3）；可能触发 Director round 2（合法），但不重跑 script/character round 1
     s2 = asyncio.run(cps.resume_session(rt, "demo", sid))
-    assert s2["status"] == "analyzing_dependencies"
-    assert client.calls == calls_after_round1          # 无额外 LLM 调用
+    assert s2["status"] == "validating_plan"
+    r2_script = [p for p in store.list_proposals(sid) if p.module == "script"]
+    r2_char = [p for p in store.list_proposals(sid) if p.module == "character"]
+    assert len(r2_script) == len(r1_script)            # §25：已完成 round-1 不重跑
+    assert len(r2_char) == len(r1_char)
