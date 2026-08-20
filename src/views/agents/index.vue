@@ -6,8 +6,13 @@
     </div>
 
     <div class="body">
-      <!-- 左：8 个 Agent 卡 -->
+      <!-- 左：Team Chat 入口 + 8 个 Agent 卡 -->
       <aside class="agent-list">
+        <div class="agent-card team-entry" :class="{ active: selectedId === '__team__' }"
+             @click="selectTeam">
+          <div class="agent-name">Team Chat</div>
+          <div class="agent-role">项目级群聊 · Producer</div>
+        </div>
         <div v-for="a in agents" :key="a.id"
              class="agent-card" :class="{ active: selectedId === a.id, disabled: !a.enabled }"
              @click="selectAgent(a.id)">
@@ -20,8 +25,12 @@
         </div>
       </aside>
 
-      <!-- 右：聊天 / 委派 -->
-      <section class="panel" v-if="selected">
+      <!-- 右：Team Chat 或 聊天/委派 -->
+      <section v-if="selectedId === '__team__'" class="panel team-panel">
+        <TeamChatPanel />
+      </section>
+
+      <section class="panel" v-else-if="selected">
         <div class="panel-head">
           <div>
             <span class="p-title">{{ selected.name }}</span>
@@ -106,6 +115,7 @@ import { ref, computed, onMounted, nextTick } from 'vue';
 import { apiClient } from '@/api';
 import type { AgentInfo, AgentCapability, AgentSession, AgentTask } from '@/api';
 import { useProjectStore } from '@/store';
+import TeamChatPanel from '@/components/agent/TeamChatPanel.vue';
 
 const store = useProjectStore();
 const projectName = computed(() => store.projectName);
@@ -156,6 +166,11 @@ async function selectAgent(id: string) {
   if (id === 'producer') loadTasks();
   await openSession();
   if (id !== 'producer') await loadTargetCaps(id);
+}
+
+function selectTeam() {
+  selectedId.value = '__team__';
+  chatError.value = '';
 }
 
 async function loadTargetCaps(agentId: string) {
@@ -248,6 +263,9 @@ onMounted(() => { loadAgents(); });
   &:hover { border-color: var(--border-hover, var(--accent)); }
   &.active { border-color: var(--accent); background: var(--bg-hover); }
   &.disabled { opacity: .5; } }
+.agent-card.team-entry { border-style: dashed; margin-bottom: 4px;
+  .agent-role { color: var(--accent); } }
+.team-panel { padding: 0; }
 .agent-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
 .agent-role { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 .agent-meta { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }

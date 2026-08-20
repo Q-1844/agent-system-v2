@@ -630,6 +630,66 @@ export interface AgentTask {
   error: string | null; created_at: number; updated_at: number;
 }
 
+// ============ AI-7A Team Group Chat ============
+export interface TeamThread {
+  thread_id: string; project_name: string; created_at: number; updated_at: number;
+}
+export interface TeamMessage {
+  message_id: string; thread_id: string;
+  message_type: string;            // user | agent | summary_card | analysis_card | system
+  agent_id: string | null; text: string | null;
+  source_session_id: string | null; source_task_id: string | null;
+  source_change_session_id: string | null;
+  card_data: any; pending_inquiry: boolean; status: string | null; created_at: number;
+}
+export interface TeamThreadData {
+  thread: TeamThread; messages: TeamMessage[];
+}
+
+// ============ AI-7A Change Analysis Session（analysis-only，§31/§37）============
+export interface ChangePlanDraftItem {
+  module: string; owner_agent_id: string;
+  scope_refs: any[]; summary: string; reason: string; source: string;
+}
+export interface UnifiedChangePlanDraft {
+  plan_draft_id: string; project_name: string; change_session_id: string;
+  status: string;                       // 恒 analysis_only
+  direct_changes: ChangePlanDraftItem[];
+  downstream_changes: ChangePlanDraftItem[];
+  unchanged_scope: any[];
+  dependency_edges: any[];
+  user_decisions_needed: string[];
+  consulted_agents: string[];
+  source_snapshot_signature: string | null;
+  execution_ready: boolean;              // §37：恒 false
+}
+export interface ModuleConsultation {
+  consultation_id: string; change_session_id: string;
+  agent_id: string; module: string; question: string;
+  status: string;                       // pending | running | completed | failed
+  agent_task_id: string | null; result_summary: string | null;
+  direct_implications: string[]; downstream_facts: string[];
+  user_decisions_needed: string[];
+  attempt_count: number; last_error: string | null;
+  created_at: number; updated_at: number;
+}
+export interface ChangeRequestDraft {
+  request_id: string; project_name: string; source: string;
+  source_agent_id: string | null; source_session_id: string | null;
+  original_user_request: string; primary_module: string | null;
+  suspected_modules: string[]; entity_refs: any[];
+  snapshot_signature: string | null; created_at: number;
+}
+export interface ChangeAnalysisSession {
+  session_id: string; project_name: string;
+  request: ChangeRequestDraft;
+  status: string;                       // analyzing|consulting|synthesizing|ready|blocked|failed|cancelled|stale
+  project_signature_at_start: string | null;
+  consultations: ModuleConsultation[];
+  plan_draft_id: string | null; plan_draft: UnifiedChangePlanDraft | null;
+  error: string | null; created_at: number; updated_at: number;
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -1565,6 +1625,40 @@ class ApiClient {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/agents/sessions/${encodeURIComponent(sid)}/messages`, {
       method: 'POST',
       body: JSON.stringify({ content }),
+    });
+  }
+
+  // ============ AI-7A Team Group Chat（polling-first，不新增 realtime bus）============
+  async getTeamThread(projectName: string): Promise<TeamThreadData> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/team-chat/thread`);
+  }
+  async sendTeamMessage(projectName: string, content: string): Promise<{ message: TeamMessage; status: string }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/team-chat/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    });
+  }
+  async getTeamMessages(projectName: string): Promise<TeamMessage[]> {
+    const data = await this.request<{ messages: TeamMessage[] }>(`/api/project/${encodeURIComponent(projectName)}/team-chat/messages`);
+    return data.messages;
+  }
+
+  // ============ AI-7A Change Analysis Session（analysis-only，§31/§37/§55）============
+  async createChangeAnalysis(projectName: string, request: string, source = 'team_chat'): Promise<ChangeAnalysisSession> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/change-analysis`, {
+      method: 'POST', body: JSON.stringify({ request, source }),
+    });
+  }
+  async listChangeAnalysis(projectName: string): Promise<ChangeAnalysisSession[]> {
+    const data = await this.request<{ sessions: ChangeAnalysisSession[] }>(`/api/project/${encodeURIComponent(projectName)}/change-analysis`);
+    return data.sessions;
+  }
+  async getChangeAnalysis(projectName: string, sessionId: string): Promise<ChangeAnalysisSession> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/change-analysis/${encodeURIComponent(sessionId)}`);
+  }
+  async resumeChangeAnalysis(projectName: string, sessionId: string): Promise<ChangeAnalysisSession> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/change-analysis/${encodeURIComponent(sessionId)}/resume`, {
+      method: 'POST',
     });
   }
   async listAgentTasks(projectName: string, filters: { requester_agent?: string; target_agent?: string; status?: string } = {}): Promise<AgentTask[]> {

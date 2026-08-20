@@ -25,6 +25,7 @@ from .context import build_context
 from .sessions import AgentSessionStore
 from .tasks import AgentTaskStore
 from .proposal_store import ProposalStore
+from .project_intelligence import ProjectIntelligenceService
 from .director_proposal import (
     generate_proposal, preview_selected, apply_proposal, proposal_to_api,
     ProposalGenerationError, ProposalStatus,
@@ -480,6 +481,18 @@ class AgentRuntime:
 
     def _proposal_store(self, project: str) -> ProposalStore:
         return ProposalStore(self._resolve_project_dir(project), project)
+
+    # ---------- AI-7A Project Intelligence（只读语义检视，§6）----------
+    def project_intelligence(self, project: str) -> ProjectIntelligenceService:
+        """构造只读 ProjectIntelligenceService，注入现有 resolver（project_loader /
+        plans_reader / task_store / workspace_store）。镜像 _ws_store / _task_store 模式。
+        service 纯读，绝不写 canonical project.json。"""
+        return ProjectIntelligenceService(
+            project_name=project,
+            project_loader=self._project_loader(project),
+            plans_reader=self._plans_reader,
+            task_store_getter=lambda: self._task_store(project),
+            workspace_store_factory=lambda: self._ws_store(project))
 
     async def propose_storyboard_change(self, project: str, agent_id: str,
                                         scope_type: str, scope_id: str,

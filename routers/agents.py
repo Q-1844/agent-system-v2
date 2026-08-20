@@ -10,6 +10,7 @@ composition root：本文件是唯一 import routers.production_planner 的地�
 §修正3）；HTTP 错误仅用于请求/配置校验类。
 """
 from typing import List, Optional
+import asyncio
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -18,6 +19,11 @@ import deps
 from deps import get_project_manager, JOB_HANDLERS
 from src.agents.runtime import get_agent_runtime, AgentError
 from src.agents.fake_shot_handlers import all_fake_handlers
+from src.agents.team_chat import (TeamChatStore, TeamMessage,
+                                   run_team_inquiry_and_persist)
+from src.agents.change_analysis import (ChangeAnalysisStore,
+                                          create_change_analysis_session,
+                                          continue_change_analysis)
 from routers.production_planner import _read_plans   # 唯一 import 点（composition root）
 from routers.workspaces import workspace_lock        # 复用同一 per-workspace 锁（AI-6D）
 
@@ -204,6 +210,127 @@ async def get_task(project_name: str, tid: str):
     if t is None:
         raise HTTPException(404, "task 不存在")
     return t
+
+
+# ==================== AI-7A Project Intelligence（只读语义检视，§6/§75）====================
+@router.get("/api/project/{project_name}/project-intelligence")
+async def project_intelligence(project_name: str,
+                               view: str,
+                               entity_id: Optional[str] = None,
+                               scene_id: Optional[str] = None,
+                               shot_id: Optional[str] = None,
+                               character_id: Optional[str] = None,
+                               include_history: bool = False,
+                               limit: int = 50,
+                               offset: int = 0):
+    """只读项目智能检视（轮询友好）。view 决定语义视图；返回有界 ProjectInspectResult。
+    纯读——不写 canonical、不建 Workspace/ChangeSet、不触发生产（§1/§43）。"""
+    try:
+        return get_agent_runtime().project_intelligence(project_name).inspect(
+            view, entity_id=entity_id, scene_id=scene_id, shot_id=shot_id,
+            character_id=character_id, include_history=include_history,
+            limit=limit, offset=offset).to_dict()
+    except AgentError as e:
+        _raise(e)
+
+
+# ==================== AI-7A Team Group Chat（项目级团队群聊，§22/§24/§75/§76）====================
+class TeamSendReq(BaseModel):
+    content: str
+
+
+@router.get("/api/project/{project_name}/team-chat/thread")
+async def team_chat_thread(project_name: str):
+    """取（幂等创建）项目 team thread + 全部消息。轮询用（§56 刷新不造 dup）。"""
+    rt = get_agent_runtime()
+    try:
+        store = TeamChatStore(rt._resolve_project_dir(project_name), project_name)
+    except AgentError as e:
+        _raise(e)
+    return store.get_or_create_thread()
+
+
+@router.post("/api/project/{project_name}/team-chat/messages")
+async def team_chat_send(project_name: str, req: TeamSendReq):
+    """发用户消息 → 持久化（pending_inquiry=True）→ 后台跑 run_inquiry，HTTP 立即返回。
+    结果落盘后前端轮询 GET messages 见 producer 回复（§76 不长挂）。"""
+    rt = get_agent_runtime()
+    try:
+        pd = rt._resolve_project_dir(project_name)
+    except AgentError as e:
+        _raise(e)
+    store = TeamChatStore(pd, project_name)
+    store.get_or_create_thread()
+    user_msg = store.append_message(
+        TeamMessage(message_type="user", text=req.content, pending_inquiry=True))
+    asyncio.create_task(run_team_inquiry_and_persist(
+        rt, project_name, user_msg.message_id, req.content))
+    return {"message": user_msg.to_dict(), "status": "processing"}
+
+
+@router.get("/api/project/{project_name}/team-chat/messages")
+async def team_chat_messages(project_name: str):
+    """轮询：取最新消息（persistence 即真相，§77）。"""
+    rt = get_agent_runtime()
+    try:
+        store = TeamChatStore(rt._resolve_project_dir(project_name), project_name)
+    except AgentError as e:
+        _raise(e)
+    return {"messages": store.list_messages()}
+
+
+# ==================== AI-7A Change Analysis Session（§31/§37/§42/§49/§55，analysis-only）====================
+class CreateChangeAnalysisReq(BaseModel):
+    request: str
+    source: str = "team_chat"
+    source_agent_id: Optional[str] = None
+    source_session_id: Optional[str] = None
+
+
+@router.post("/api/project/{project_name}/change-analysis")
+async def create_change_analysis(project_name: str, req: CreateChangeAnalysisReq):
+    """创建变更分析会话（analyzing）+ 后台推进（§76 不长挂）。execution_ready 恒 False。"""
+    rt = get_agent_runtime()
+    try:
+        rt._resolve_project_dir(project_name)
+    except AgentError as e:
+        _raise(e)
+    return create_change_analysis_session(
+        rt, project_name, req.request, source=req.source,
+        source_agent_id=req.source_agent_id, source_session_id=req.source_session_id)
+
+
+@router.get("/api/project/{project_name}/change-analysis")
+async def list_change_analysis(project_name: str):
+    rt = get_agent_runtime()
+    try:
+        pd = rt._resolve_project_dir(project_name)
+    except AgentError as e:
+        _raise(e)
+    return {"sessions": ChangeAnalysisStore(pd, project_name).list_sessions()}
+
+
+@router.get("/api/project/{project_name}/change-analysis/{session_id}")
+async def get_change_analysis(project_name: str, session_id: str):
+    rt = get_agent_runtime()
+    try:
+        pd = rt._resolve_project_dir(project_name)
+    except AgentError as e:
+        _raise(e)
+    s = ChangeAnalysisStore(pd, project_name).get_session(session_id)
+    if s is None:
+        raise HTTPException(404, "会话不存在")
+    return s
+
+
+@router.post("/api/project/{project_name}/change-analysis/{session_id}/resume")
+async def resume_change_analysis(project_name: str, session_id: str):
+    """显式恢复（§55/§57：不自动重跑，用户触发）。幂等推进：保留 completed，重跑 pending。"""
+    rt = get_agent_runtime()
+    try:
+        return await continue_change_analysis(rt, project_name, session_id)
+    except AgentError as e:
+        _raise(e)
 
 
 # ==================== Director Proposals（AI-6D storyboard.propose_change）====================

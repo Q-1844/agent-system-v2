@@ -179,6 +179,38 @@ async def startup():
     except Exception as e:
         logger.error(f"AgentTask settlement 恢复失败: {e}")
 
+    # 阶段 AI-7A：Team Chat 持久化恢复（§54/§57）。扫各项目 team thread 的 pending user
+    # 消息，标中断、不重跑 LLM（§57 no infinite loop）。persistence 即真相，polling-first。
+    try:
+        from src.agents.team_chat import recover_team_chat
+        pdir = deps.projects_dir
+        n = 0
+        if pdir.exists():
+            for d in pdir.iterdir():
+                if d.is_dir() and (d / "output" / "project.json").exists():
+                    n += recover_team_chat(d, d.name)
+        if n:
+            logger.info(f"Team Chat 恢复：标记 {n} 条中断分析")
+        logger.info("Team Chat 持久化恢复已就绪")
+    except Exception as e:
+        logger.error(f"Team Chat 恢复失败: {e}")
+
+    # 阶段 AI-7A：Change Analysis Session 恢复（§55/§57）。扫非终端会话，stuck running 咨询
+    # 标 failed（中断），会话→blocked。不自动重跑 LLM（§57）；用户显式 /resume 才继续。
+    try:
+        from src.agents.change_analysis import recover_change_analysis
+        pdir2 = deps.projects_dir
+        n2 = 0
+        if pdir2.exists():
+            for d in pdir2.iterdir():
+                if d.is_dir() and (d / "output" / "project.json").exists():
+                    n2 += recover_change_analysis(d, d.name)
+        if n2:
+            logger.info(f"Change Analysis 恢复：标记 {n2} 个中断会话")
+        logger.info("Change Analysis 恢复已就绪")
+    except Exception as e:
+        logger.error(f"Change Analysis 恢复失败: {e}")
+
 
 if __name__ == "__main__":
     import uvicorn
