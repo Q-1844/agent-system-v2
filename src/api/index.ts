@@ -690,6 +690,73 @@ export interface ChangeAnalysisSession {
   error: string | null; created_at: number; updated_at: number;
 }
 
+// ============ AI-7B Change Session（proposal-only，§10/§11/§36/§65）============
+export interface ChangeRequest {
+  request_id: string; project_name: string; source: string;
+  source_agent_id: string | null; source_session_id: string | null; source_message_id: string | null;
+  original_user_request: string; primary_module: string | null;
+  suspected_modules: string[]; entity_refs: any[];
+  source_snapshot_signature: string; mode: string; created_at: number;
+}
+export interface ChangeSession {
+  session_id: string; project_name: string; request_id: string;
+  status: string;                       // routing|consulting|analyzing_dependencies|...|ready_for_review|approved_for_execution|...
+  source_snapshot_signature: string; consultation_round: number;
+  module_proposal_ids: string[]; impact_fact_ids: string[]; conflict_ids: string[];
+  active_plan_id: string | null; plan_version: number;
+  pending_decision_ids: string[]; error: string | null;
+  schema_version: number; legacy_analysis_only: boolean;
+  created_at: number; updated_at: number;
+}
+export interface ChangePlanItem {
+  plan_item_id: string; module: string; owner_agent_id: string;
+  proposal_item_ids: string[]; scope_refs: any[];
+  summary: string; reason: string; source: string; required: boolean;
+}
+export interface ChangePlanStep {
+  step_id: string; module: string; owner_agent_id: string;
+  plan_item_ids: string[]; depends_on_step_ids: string[]; parallel_group: string | null;
+}
+export interface PlanApproval {
+  plan_id: string; plan_version: number; decision: string;
+  source_snapshot_signature: string; decided_at: number;
+  user_feedback_message_id: string | null;
+}
+export interface UnifiedChangePlan {
+  plan_id: string; change_session_id: string; project_name: string;
+  version: number; source_snapshot_signature: string; status: string;
+  direct_change_items: ChangePlanItem[]; downstream_change_items: ChangePlanItem[];
+  unchanged_scope: any[]; steps: ChangePlanStep[]; dependency_edges: any[];
+  user_decision_ids: string[]; module_proposal_ids: string[];
+  validation_issues: any[]; preview_id: string | null; approval: PlanApproval | null;
+  parent_plan_id: string | null; user_feedback_message_id: string | null; created_at: number;
+}
+export interface ModuleOperationBundle {
+  step_id: string; module: string; owner_agent_id: string;
+  proposal_item_ids: string[]; operations: any[];
+}
+export interface PlanPreviewArtifact {
+  preview_id: string; change_session_id: string; plan_id: string; plan_version: number;
+  source_snapshot_signature: string; module_operations: ModuleOperationBundle[];
+  aggregate_diff: any; aggregate_impact: any; warnings: any[];
+  projected_signature: string; status: string; applyable: boolean;   // §65：恒 false
+  created_at: number;
+}
+export interface ModuleProposal {
+  proposal_id: string; change_session_id: string; module: string;
+  owner_agent_id: string; round: number; status: string;
+  summary: string; items: any[]; dependency_notes: any[];
+  blockers: string[]; user_decisions_needed: string[]; evidence_refs: any[];
+  source_snapshot_signature: string; agent_task_id: string | null;
+  created_at: number; updated_at: number;
+}
+export interface ChangeDecisionOption { option_id: string; label: string; description: string; }
+export interface ChangeDecisionRequest {
+  decision_id: string; change_session_id: string; question: string;
+  options: ChangeDecisionOption[]; blocking: boolean; status: string;
+  selected_option_id: string | null; created_at: number; updated_at: number;
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -1660,6 +1727,63 @@ class ApiClient {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/change-analysis/${encodeURIComponent(sessionId)}/resume`, {
       method: 'POST',
     });
+  }
+
+  // ============ AI-7B Change Sessions（proposal-only，§92/§94/§93）============
+  async createChangeSession(projectName: string, request: string, source = 'team_chat',
+      sourceMessageId?: string): Promise<{ session: ChangeSession; request: ChangeRequest }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/change-sessions`, {
+      method: 'POST',
+      body: JSON.stringify({ request, source, source_message_id: sourceMessageId }),
+    });
+  }
+  async listChangeSessions(projectName: string): Promise<ChangeSession[]> {
+    const data = await this.request<{ sessions: ChangeSession[] }>(
+      `/api/project/${encodeURIComponent(projectName)}/change-sessions`);
+    return data.sessions;
+  }
+  async getChangeSession(projectName: string, sessionId: string): Promise<ChangeSession> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/change-sessions/${encodeURIComponent(sessionId)}`);
+  }
+  async resumeChangeSession(projectName: string, sessionId: string): Promise<ChangeSession> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/change-sessions/${encodeURIComponent(sessionId)}/resume`, {
+      method: 'POST',
+    });
+  }
+  async getChangeSessionPlan(projectName: string, sessionId: string): Promise<UnifiedChangePlan & { preview?: PlanPreviewArtifact } | null> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/change-sessions/${encodeURIComponent(sessionId)}/plan`);
+  }
+  async getChangeSessionPreview(projectName: string, sessionId: string): Promise<PlanPreviewArtifact | null> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/change-sessions/${encodeURIComponent(sessionId)}/preview`);
+  }
+  async submitChangeDecision(projectName: string, sessionId: string, decisionId: string, optionId: string): Promise<any> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/change-sessions/${encodeURIComponent(sessionId)}/decision`, {
+      method: 'POST', body: JSON.stringify({ decision_id: decisionId, option_id: optionId }),
+    });
+  }
+  async requestChangeSessionChanges(projectName: string, sessionId: string, feedback: string, planId?: string): Promise<{ plan: UnifiedChangePlan; superseded_plan_id: string | null }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/change-sessions/${encodeURIComponent(sessionId)}/plan-feedback`, {
+      method: 'POST', body: JSON.stringify({ feedback, plan_id: planId }),
+    });
+  }
+  async approveChangeSession(projectName: string, sessionId: string, planId: string, planVersion: number): Promise<any> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/change-sessions/${encodeURIComponent(sessionId)}/approve`, {
+      method: 'POST', body: JSON.stringify({ plan_id: planId, plan_version: planVersion }),
+    });
+  }
+  async rejectChangeSession(projectName: string, sessionId: string, planId?: string): Promise<any> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/change-sessions/${encodeURIComponent(sessionId)}/reject`, {
+      method: 'POST', body: JSON.stringify({ plan_id: planId }),
+    });
+  }
+  async listChangeSessionProposals(projectName: string, sessionId: string): Promise<ModuleProposal[]> {
+    // 复用 plan 端点不返回 proposals；用 intelligence 旁路非必须——此处留扩展点，
+    // 当前前端从 plan.module_proposal_ids 已足够展示 owner 分组。
+    return [];
+  }
+  async listChangeSessionDecisions(projectName: string, sessionId: string): Promise<ChangeDecisionRequest[]> {
+    // decisions 暂无独立 list 端点；从 session.pending_decision_ids + plan 推导（7B-6 可补端点）。
+    return [];
   }
   async listAgentTasks(projectName: string, filters: { requester_agent?: string; target_agent?: string; status?: string } = {}): Promise<AgentTask[]> {
     const q = new URLSearchParams();

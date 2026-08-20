@@ -61,16 +61,22 @@
       </button>
     </div>
     <div v-if="store.error" class="chat-err">{{ store.error }}</div>
+
+    <!-- AI-7B Change Plan Review（活跃 change-session 时显示，§95）-->
+    <ChangePlanReview v-if="cs.session" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
 import { useTeamChatStore } from '@/store/teamChat';
+import { useChangeSessionStore } from '@/store/changeSession';
 import { useProjectStore } from '@/store';
 import type { TeamMessage } from '@/api';
+import ChangePlanReview from '@/components/agent/ChangePlanReview.vue';
 
 const store = useTeamChatStore();
+const cs = useChangeSessionStore();
 const projectStore = useProjectStore();
 const projectName = computed(() => projectStore.projectName);
 
@@ -91,6 +97,11 @@ async function send() {
   const text = draft.value;
   draft.value = '';
   await store.send(text);
+  // AI-7B：变更类请求 → 创建 ChangeSession（producer 经 team-chat 收到后启动提案流）
+  // 检测变更动词（与后端 classify_request 同义）：改/修改/换成/删除/去掉/调整/替换/make/change/remove
+  if (/改|修改|换成|变成|删除|删掉|去掉|调整|替换|重写|续写|make|change|remove|turn/i.test(text) && !cs.session) {
+    await cs.create(text);
+  }
   await nextTick();
   if (el.value) el.value.scrollTop = el.value.scrollHeight;
 }
@@ -105,12 +116,15 @@ watch(() => store.messages.length, scrollToBottom);
 watch(projectName, async (n, o) => {
   if (n !== o) {
     store.onProjectChange();
-    if (n) await store.load();
+    cs.onProjectChange();
+    if (n) { await store.load(); await cs.restoreActive(); }
   }
 });
 
-onMounted(async () => { if (projectName.value) await store.load(); });
-onBeforeUnmount(() => store.stopPoll());
+onMounted(async () => {
+  if (projectName.value) { await store.load(); await cs.restoreActive(); }
+});
+onBeforeUnmount(() => { store.stopPoll(); cs.stopPoll(); });
 </script>
 
 <style lang="scss" scoped>
