@@ -13,16 +13,21 @@
 # →preview_ready，含真实 LLM 提案/编译器/投影）在 7B-2..4 接通；resume 当前为幂等返回 +
 # stale/legacy 守卫（不谎报进度）。
 from __future__ import annotations
+import asyncio
 import secrets
 import time
-from typing import Optional
+from typing import List, Optional
 
 from src.revision.models import creative_source_signature
 
 from ..runtime import AgentRuntime, AgentError
+from ..inquiry import classify_request
 from .models import (ChangeRequest, ChangeSession, UnifiedChangePlan, PlanApproval,
                       ChangeDecisionRequest, SESSION_TERMINAL)
 from .store import ChangeProtocolStore
+from .script_proposal import run_script_proposal
+from .character_proposal import run_character_proposal
+from .storyboard_proposal import run_storyboard_proposal
 
 
 def _new_id(prefix: str) -> str:
@@ -114,11 +119,66 @@ def get_preview(rt: AgentRuntime, project: str, session_id: str) -> Optional[dic
     return pv.to_dict() if pv is not None else None
 
 
-# ============ resume（§87：幂等推进；§90：stale 守卫）============
-def resume_session(rt: AgentRuntime, project: str, session_id: str) -> dict:
+# ============ resume（§25/§87：幂等推进；§90：stale 守卫）============
+def _has_completed_proposal(store: ChangeProtocolStore, session_id: str,
+                            owner_agent_id: str, round: int) -> bool:
+    """该 (agent, round) 是否已有 completed 提案（重启后不重跑，§25）。"""
+    return any(p.owner_agent_id == owner_agent_id and p.round == round
+               and p.status == "completed"
+               for p in store.list_proposals(session_id))
+
+
+async def _run_first_round_proposals(rt: AgentRuntime, project: str,
+                                     session: ChangeSession,
+                                     change_request: ChangeRequest,
+                                     client) -> List:
+    """§24/§25：分类路由 → 独立首轮提案并行 gather（persist-before-gather 在各 runtime 内）。
+    已 completed 的 (agent, round) 不重跑（§25）。Director 需 scene scope，无则延后 round 2（§26，7B-3）。"""
+    intel = rt.project_intelligence(project)
+    proj = intel._project()
+    classification = classify_request(change_request.original_user_request, proj)
+    modules = classification.get("modules") or []
+    store = _store(rt, project)
+    sig = session.source_snapshot_signature
+    scene_refs = classification.get("scene_refs", [])
+    coros = []
+    for agent_id in modules:
+        if _has_completed_proposal(store, session.session_id, agent_id, 1):
+            continue   # §25：已完成不重跑
+        if agent_id == "script_writer":
+            coros.append(run_script_proposal(rt, project, session.session_id,
+                                              change_request, sig, round=1, client=client))
+        elif agent_id == "character_designer":
+            coros.append(run_character_proposal(rt, project, session.session_id,
+                                                change_request, sig, round=1, client=client))
+        elif agent_id == "director" and scene_refs:
+            # Director scene-scoped：首轮取第一个命中场景；无 scene scope → 延后 round 2（§26）
+            coros.append(run_storyboard_proposal(rt, project, session.session_id,
+                                                  change_request, sig, "scene",
+                                                  scene_refs[0], round=1, client=client))
+    if not coros:
+        return []
+    results = await asyncio.gather(*coros, return_exceptions=True)
+    out = []
+    for r in results:
+        if isinstance(r, Exception):
+            # runtime 应返回 failed proposal 而非抛；此处兜底（记一条失败合成 proposal）
+            mp = __import__("src.agents.change_protocol.models", fromlist=["ModuleProposal"]).ModuleProposal(
+                proposal_id=_new_id("mp"), change_session_id=session.session_id,
+                module="unknown", owner_agent_id="unknown", round=1, status="failed",
+                blockers=[f"runtime exception: {str(r)[:200]}"],
+                source_snapshot_signature=sig, created_at=_now(), updated_at=_now())
+            store.save_proposal(mp)
+            out.append(mp)
+        else:
+            out.append(r)
+    return out
+
+
+async def resume_session(rt: AgentRuntime, project: str, session_id: str) -> dict:
     """幂等推进会话。终端态直接返回；stale→stale；legacy→拒。
-    7B-1：推进机（routing→…→preview_ready）尚未接通（7B-2..4）；当前幂等返回当前态，
-    不谎报进度、不自动重跑 LLM（§57/§87）。"""
+    7B-2：routing/consulting → 跑首轮提案（并行，§25）→ 全完成→analyzing_dependencies
+    （7B-3 接通依赖/冲突/编译）；部分失败→blocked（§103）。已完成提案不重跑（§25/§87）。"""
     store = _store(rt, project)
     session = _load_session(rt, project, session_id)
     _guard_legacy(session)
@@ -131,7 +191,35 @@ def resume_session(rt: AgentRuntime, project: str, session_id: str) -> dict:
             session.status = "stale"
             store.save_session(session)
             return session.to_dict()
-    # 7B-1：推进机在 7B-2..4 接通。返回当前态（routing/awaiting_user_decision 等）。
+
+    if session.status in ("routing", "consulting"):
+        session.status = "consulting"
+        store.save_session(session)
+        change_request = store.get_request(session.request_id)
+        if change_request is None:
+            session.status = "failed"
+            session.error = "关联 ChangeRequest 丢失"
+            store.save_session(session)
+            return session.to_dict()
+        proposals = await _run_first_round_proposals(
+            rt, project, session, change_request,
+            client=rt._resolve_client_or_none())
+        # 汇总 proposal_ids（含已完成的历史 + 本轮新增）
+        all_ids = {p.proposal_id for p in store.list_proposals(session.session_id)}
+        session.module_proposal_ids = sorted(all_ids)
+        failed = [p for p in proposals if p.status == "failed"]
+        if failed:
+            session.status = "blocked"
+            session.error = f"{len(failed)} 个提案失败，请恢复后重试"
+            store.save_session(session)
+            return session.to_dict()
+        # 全完成 → 下一阶段（依赖/冲突/编译/投影在 7B-3/7B-4）
+        session.status = "analyzing_dependencies"
+        store.save_session(session)
+        return session.to_dict()
+
+    # analyzing_dependencies / awaiting_user_decision / ready_for_review / building_preview
+    # → 7B-3/7B-4 尚未接通；幂等返回当前态，不谎报进度。
     return session.to_dict()
 
 

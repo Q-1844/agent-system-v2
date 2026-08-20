@@ -574,12 +574,12 @@ def proposal_to_api(proposal: DirectorProposal, base_is_stale: bool,
     return d
 
 
-async def generate_proposal(client, project_loader: Callable[[], Project],
-                            ws_store: WorkspaceStore, proposal_store,
-                            scope_type: str, scope_id: str,
-                            instruction: str) -> Tuple[DirectorProposal, dict]:
-    """生成提案（§11）：ctx → Agnes → parse+validate(+1 repair) → create workspace →
-    compile → cs_engine.preview → persist。失败抛 ProposalGenerationError，不留 workspace。"""
+async def generate_semantic_proposal(client, project_loader: Callable[[], Project],
+                                     scope_type: str, scope_id: str,
+                                     instruction: str) -> DirectorProposalIntent:
+    """§21：LLM → 语义 DirectorProposalIntent（**不建 workspace / 不编译 / 不预览 / 不落盘**）。
+    AI-7B Team ChangeSession 仅复用此安全下层（+ compile_items + 自有纯内存预览，绝不走 Apply）；
+    既有 direct Director 流程也经此生成意图。提取自 generate_proposal 前半段，行为不变。"""
     if client is None:
         raise ProposalGenerationError("not_configured", "Agnes 推理模型不可用，无法生成提案。")
     project = project_loader()
@@ -595,22 +595,34 @@ async def generate_proposal(client, project_loader: Callable[[], Project],
     except Exception as e:
         raise ProposalGenerationError("agnes_failed", f"Agnes 调用失败：{str(e)[:200]}")
 
-    # 2. parse + validate（一次 repair）
+    # 2. parse + validate（一次 repair，§102）
     try:
-        intent = parse_and_validate(raw, project, scope_type, scope_id)
+        return parse_and_validate(raw, project, scope_type, scope_id)
     except ProposalValidationError as e:
         repair = messages + [{"role": "system",
                               "content": f"上次返回无法使用：{e.message}。请严格遵循 schema，只返回一个合法 JSON 对象。"}]
         try:
             raw2 = await client.chat(repair, json_mode=True, temperature=0.2, max_tokens=2048)
-            intent = parse_and_validate(raw2, project, scope_type, scope_id)
+            return parse_and_validate(raw2, project, scope_type, scope_id)
         except ProposalValidationError as e2:
             raise ProposalGenerationError("invalid_output",
                                           f"Director 输出无法解析/校验：{e2.message}")
         except Exception as e2:
             raise ProposalGenerationError("agnes_failed", f"Agnes repair 调用失败：{str(e2)[:200]}")
 
-    # 3. 创建 Director Workspace（仅在合法后，§11）
+
+async def generate_proposal(client, project_loader: Callable[[], Project],
+                            ws_store: WorkspaceStore, proposal_store,
+                            scope_type: str, scope_id: str,
+                            instruction: str) -> Tuple[DirectorProposal, dict]:
+    """生成提案（§11）：generate_semantic_proposal → create workspace →
+    compile → cs_engine.preview → persist。失败抛 ProposalGenerationError，不留 workspace。
+    §21 重构：语义生成抽到 generate_semantic_proposal；本函数=既有 direct Director UI 流程
+    （create workspace + compile + preview + persist Proposal），行为不变。"""
+    intent = await generate_semantic_proposal(client, project_loader, scope_type, scope_id, instruction)
+    project = project_loader()
+
+    # 创建 Director Workspace（仅在合法后，§11）
     sc = resolve_scope_scene(project, scope_type, scope_id)
     ws = ws_store.create(_workspace_name(sc, intent))
     try:
@@ -626,7 +638,7 @@ async def generate_proposal(client, project_loader: Callable[[], Project],
         ws_store.delete(ws.workspace_id)
         raise
 
-    # 4. 持久化 Proposal（含完整预览结果，刷新恢复用 §16）
+    # 持久化 Proposal（含完整预览结果，刷新恢复用 §16）
     proposal = DirectorProposal(
         proposal_id="", project=project.name, agent_id="director",
         scope_type=scope_type, scope_id=scope_id, instruction=instruction,

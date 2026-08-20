@@ -514,11 +514,11 @@ async def get_change_session(project_name: str, session_id: str):
 
 @router.post("/api/project/{project_name}/change-sessions/{session_id}/resume")
 async def resume_change_session(project_name: str, session_id: str):
-    """幂等推进（§87）。终端态直接返回；stale→stale；legacy→拒。7B-1：推进机在 7B-2..4。"""
+    """幂等推进（§87）。终端态直接返回；stale→stale；legacy→拒。7B-2：跑首轮提案。"""
     rt = get_agent_runtime()
     try:
         async with session_lock(project_name, session_id):
-            return cp_service.resume_session(rt, project_name, session_id)
+            return await cp_service.resume_session(rt, project_name, session_id)
     except AgentError as e:
         _raise(e)
 

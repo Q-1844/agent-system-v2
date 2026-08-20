@@ -126,10 +126,11 @@ def test_legacy_session_readonly_not_executable(tmp_path):
     assert s.legacy_analysis_only is True
     assert s.schema_version == 1
 
-    # resume/approve 拒（§9 不可执行）
+    # resume/approve 拒（§9 不可执行）。resume_session 现为 async（7B-2 起跑提案）。
+    import asyncio
     import pytest
     with pytest.raises(AgentError) as ei:
-        cps.resume_session(rt, "demo", "cs_legacy")
+        asyncio.run(cps.resume_session(rt, "demo", "cs_legacy"))
     assert ei.value.code == "CHANGE_SESSION_STALE"
     with pytest.raises(AgentError):
         cps.approve_plan(rt, "demo", "cs_legacy", "plan_old", 1)
