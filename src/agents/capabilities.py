@@ -126,6 +126,16 @@ def build_default_capabilities() -> List[CapabilityDefinition]:
              CC.SHOT.value, "shot_producer", ["shot_producer"], [E, R, C], HI, True),
         _cap("shot.video", "视频生成", "按 Production Plan 执行视频制作",
              CC.SHOT.value, "shot_producer", ["shot_producer"], [E, R, C], HI, True),
+        # AI-7C §49：shot.audio —— Shot Producer 执行能力，包既有 _handler_audio（JobQueue kind
+        # "audio"），不另造 TTS pipeline、不直调 Edge TTS。AI-7C 受影响 shot 的配音再生用之。
+        _cap("shot.audio", "镜配音", "按 shot dialogue 重新生成配音（包既有 audio business helper）",
+             CC.SHOT.value, "shot_producer", ["shot_producer"], [E, R, C], HI, True),
+        # AI-7C §45：character.views.generate —— Character Agent 执行能力。用**已批准** identity
+        # 生成当前 production reference views（front/side/back），不重新设计角色/不改 description。
+        # 复用既有 chain 生成（§44），durable via JobQueue（§46）。真实 handler 在 §103 acceptance 接通。
+        _cap("character.views.generate", "角色参考图再生(AI-7C)",
+             "用已批准角色身份再生当前 reference views（不改 identity，不重新设计）",
+             CC.CHARACTER.value, "character_designer", ["character_designer"], [E, R, C], HI, True),
         # ---- review ----
         _cap("review.shot", "镜头审查", "角色/画面/空间/动作连续性检查与 retry 提案",
              CC.REVIEW.value, "continuity_reviewer", ["continuity_reviewer"], [I], ME, False),

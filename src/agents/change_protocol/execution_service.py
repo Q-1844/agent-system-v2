@@ -19,6 +19,7 @@ from src.revision import changeset as cs_engine   # 复用既有 preview/apply/r
 from src.revision.changeset import ChangeSetError, preview_operations_on_project
 from src.core.store import ProjectStore
 from src.core.write_lock import project_write_lock
+from src.core.models import Asset
 
 from ..runtime import AgentRuntime, AgentError
 from .modes import AgentExecutionMode
@@ -738,6 +739,89 @@ def get_production_manifest(rt: AgentRuntime, project: str,
     if d is None:
         return None
     return ProductionExecutionManifest.from_dict(d).to_dict()
+
+
+# ============ AI-7C-4b character sync + §68 first-Agnes hard gate ============
+def _assert_agnes_prerequisites(ex: ChangeExecutionSession, store: ChangeProtocolStore,
+                                project_dir) -> None:
+    """§68 first-Agnes hard gate：任何 AI-7C 触发的真 Agnes 请求（character view / audio / video）
+    前置——canonical creative commit==committed + production manifest 持久化 + 冻结的提交后创作态
+    未被改动（current creative_source_signature == canonical_commit.expected_after_signature）。
+    失败 -> AgentError(PRODUCTION_PREREQUISITE_FAILED)，**0 Agnes 调用**（§68 负测目标）。
+    （char refs ready / plans approved / ProductionRun persisted 在 7C-4b/5 各就绪点补查。）"""
+    cc = ex.canonical_commit
+    if not cc or cc.get("status") != "committed":
+        raise AgentError("PRODUCTION_PREREQUISITE_FAILED",
+                         "canonical creative commit 未完成（§68：0 Agnes）")
+    if not ex.production_manifest_file:
+        raise AgentError("PRODUCTION_PREREQUISITE_FAILED",
+                         "production manifest 未持久化（§68：0 Agnes）")
+    cur_sig = creative_source_signature(ProjectStore(project_dir).load().to_dict())
+    expected_after = cc.get("expected_after_signature", "")
+    if expected_after and cur_sig != expected_after:
+        raise AgentError("PRODUCTION_PREREQUISITE_FAILED",
+                         "canonical 提交后创作态已变化（冻结源签名不匹配，§68：0 Agnes）")
+
+
+async def run_character_sync(rt: AgentRuntime, project: str, execution_id: str, *,
+                             view_generator) -> dict:
+    """§43/§44/§46/§51/§67：affected_production 的 character visual sync。creative_only 已在 commit
+    终止（done），此函数对其 no-op（§47）。view_generator 为可注入 callable：``async (char_name)
+    -> dict[view_name, Asset|dict]``。默认真路径（JobQueue character_views Job + chain handler）在
+    §103 acceptance 接通；测试注入 fake（AI-6F fake/test 分离模式）。
+
+    流程：§68 gate -> 读 manifest（character_actions regenerate）-> 每**未 sync** char：
+    view_generator(char)->views -> project_write_lock 短临界区持久化 Character.views（views 仅 image
+    refs，不改 creative sig）-> 记 CharacterSyncRecord -> stage=production_planning（AI-7C-5 接力）。
+    幂等：已 sync char 跳过（重启不重复生成 §46）。Character sync 必须先于 shot production freeze（§51）。"""
+    store = _store(rt, project)
+    ex = store.get_execution(execution_id)
+    if ex is None:
+        raise AgentError("EXECUTION_NOT_FOUND", f"execution 不存在: {execution_id}")
+    if ex.project_name != project:
+        raise AgentError("EXECUTION_NOT_FOUND", "execution 不属于该项目")
+    if ex.status in EXEC_TERMINAL or ex.status == "blocked":
+        return {"execution": ex.to_dict(), "idempotent": True}
+    if ex.stage != "character_sync" or ex.production_mode == "creative_only":
+        return {"execution": ex.to_dict(), "idempotent": True}   # creative_only 已 done；非 sync stage
+
+    project_dir = rt._resolve_project_dir(project)
+    _assert_agnes_prerequisites(ex, store, project_dir)   # §68：失败 -> 0 Agnes
+
+    manifest_d = store.load_execution_audit(execution_id, "production_manifest.json")
+    if not manifest_d:
+        raise AgentError("PRODUCTION_PREREQUISITE_FAILED",
+                         "manifest 不存在，无法 character sync（§68）")
+    manifest = ProductionExecutionManifest.from_dict(manifest_d)
+    chars_to_sync = [n for n, a in manifest.character_actions.items()
+                     if a in ("regenerate", "generate_new")]
+    synced = {r.get("character_name") for r in ex.character_sync}
+    pending = [c for c in chars_to_sync if c not in synced]
+
+    for char_name in pending:
+        views = await view_generator(char_name)   # dict[view_name, Asset|dict]
+        if not views:
+            raise AgentError("CHARACTER_SYNC_FAILED", f"角色 {char_name} view 生成返回空")
+        # §30 reload-latest + project_write_lock 短临界区：views 仅 image refs，不改 creative sig
+        async with project_write_lock(project):
+            pstore = ProjectStore(project_dir)
+            p = pstore.load()
+            ch = next((c for c in p.characters if c.name == char_name), None)
+            if ch is None:
+                raise AgentError("CHARACTER_SYNC_FAILED", f"角色 {char_name} 不存在")
+            ch.views = {k: (Asset(**v) if isinstance(v, dict) else v)
+                        for k, v in views.items()}
+            pstore.save(p)
+        ex.character_sync.append({"character_name": char_name, "status": "completed",
+                                  "views": sorted(views.keys()),
+                                  "completed_at": _now()})
+        ex.status = "running"; ex.updated_at = _now()
+        store.save_execution(ex)   # 每 char 落盘（crash 后可从 character_sync 续，§46）
+
+    ex.stage = "production_planning"   # AI-7C-5 接力（character refs ready，§51）
+    ex.updated_at = _now()
+    store.save_execution(ex)
+    return {"execution": ex.to_dict(), "character_synced": len(pending)}
 
 
 # ============ 查询 ============
