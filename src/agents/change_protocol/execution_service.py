@@ -717,15 +717,24 @@ def compute_production_manifest(ex: ChangeExecutionSession, plan: UnifiedChangeP
 
     expected_video = sum(1 for a in shot_actions.values()
                          if a.get("video") in ("regenerate", "generate_new"))
+    # planner/affected scenes：从 shot_actions 的 shot 所属 scene 派生（补 impact 对 update_character
+    # 不级联 scene 到 production_plan_scene 的 gap），并入 impact 的 scene 级 scope。
+    shot_scenes: set = set()
+    for sid in shot_actions:
+        for s in (project.scenes or []):
+            if any(sh.shot_id == sid for sh in (s.shots or [])):
+                shot_scenes.add(s.scene_id); break
+    planner_scenes_final = shot_scenes | set(planner_scenes)
+    affected_scenes_final = shot_scenes | affected_scenes
     return ProductionExecutionManifest(
         execution_id=ex.execution_id, project_name=ex.project_name,
         committed_source_signature=ex.source_signature,
         affected_character_ids=sorted(char_actions.keys()),
-        affected_scene_ids=sorted(affected_scenes),
+        affected_scene_ids=sorted(affected_scenes_final),
         affected_shot_ids=sorted(set(shot_actions.keys()) | affected_shots_scope),
         character_actions=char_actions,
         shot_actions=shot_actions,
-        planner_scene_ids=sorted(planner_scenes),
+        planner_scene_ids=sorted(planner_scenes_final),
         baseline_asset_refs={},                # AI-7C-5 填（冻结 baseline version IDs）
         expected_video_requests=expected_video,
         production_plan_ids={},                # AI-7C-5 填
@@ -822,6 +831,103 @@ async def run_character_sync(rt: AgentRuntime, project: str, execution_id: str, 
     ex.updated_at = _now()
     store.save_execution(ex)
     return {"execution": ex.to_dict(), "character_synced": len(pending)}
+
+
+# ============ AI-7C-5b affected-scene planning + targeted run（§53/§54/§59）============
+async def run_production_planning(rt: AgentRuntime, project: str, execution_id: str, *,
+                                  plan_creator=None, run_starter=None) -> dict:
+    """§53/§54/§59：affected-scene planning + all-plan-before-production gate + targeted run。
+    plan_creator: ``async (scene_id) -> {plan_id, scene_id, status, shot_ids}``（默认真路径
+    plan_production_business+approve_plan_business，需 Agnes，§103 接通；测试注入 fake）。
+    run_starter: ``async (manifest) -> {run_id}``（默认真 ProjectProductionManager.start_run
+    带 target_scene_ids/shot_actions，§59；测试注入 fake）。
+
+    流程：读 manifest.planner_scene_ids -> 每 scene plan_creator -> §54 all-plan gate
+    （全 approved 才进 production）-> §59 创建 targeted run（target_scene_ids + shot_actions）
+    -> production_run_id + planning records + stage=production_prepare。
+    §57 scope-expansion 是 run-time 关切（continuity 依赖在执行期增长 -> waiting_user），此处不判。"""
+    store = _store(rt, project)
+    ex = store.get_execution(execution_id)
+    if ex is None:
+        raise AgentError("EXECUTION_NOT_FOUND", f"execution 不存在: {execution_id}")
+    if ex.project_name != project:
+        raise AgentError("EXECUTION_NOT_FOUND", "execution 不属于该项目")
+    if ex.status in EXEC_TERMINAL or ex.status == "blocked":
+        return {"execution": ex.to_dict(), "idempotent": True}
+    if ex.stage != "production_planning":
+        return {"execution": ex.to_dict(), "idempotent": True}
+
+    manifest_d = store.load_execution_audit(execution_id, "production_manifest.json")
+    if not manifest_d:
+        raise AgentError("PRODUCTION_PREREQUISITE_FAILED",
+                         "manifest 不存在，无法 planning（§68）")
+    manifest = ProductionExecutionManifest.from_dict(manifest_d)
+    scene_ids = list(manifest.planner_scene_ids)
+    if not scene_ids:
+        # 无受影响 scene 需重规划：直接进 production_prepare（creative-only 已在 done 不应到此处）
+        ex.stage = "production_prepare"; ex.updated_at = _now()
+        store.save_execution(ex)
+        return {"execution": ex.to_dict(), "planned_scenes": 0}
+
+    creator = plan_creator or (lambda sid: _real_plan_creator(rt, project, ex, sid))
+    plans: dict = {}
+    for sid in scene_ids:
+        plan = await creator(sid)
+        plans[sid] = plan
+
+    # §54 all-plan-before-production gate：全 approved 才放行
+    unapproved = [sid for sid, p in plans.items()
+                  if (p or {}).get("status") != "approved"]
+    if unapproved:
+        ex.status = "blocked"; ex.stage = "production_planning"
+        ex.blocker = {"code": "PRODUCTION_PLAN_INVALID",
+                      "unapproved": unapproved,
+                      "message": f"{len(unapproved)} 个 plan 未批准（§54 all-plan gate）"}
+        store.save_execution(ex)
+        return {"execution": ex.to_dict(), "blocked": True,
+                "blocker_code": "PRODUCTION_PLAN_INVALID"}
+
+    # §59 创建 targeted run（target_scene_ids + shot_actions from manifest）
+    starter = run_starter or (lambda m: _real_run_starter(rt, project, ex, m))
+    run = await starter(manifest)
+    ex.production_run_id = (run or {}).get("run_id")
+    ex.planning = [{"scene_id": sid, "plan_id": (plans[sid] or {}).get("plan_id"),
+                    "status": "approved"} for sid in scene_ids]
+    ex.stage = "production_prepare"   # AI-7C 等待 production 执行（真 run 在 §103 acceptance 跑）
+    ex.updated_at = _now()
+    store.save_execution(ex)
+    return {"execution": ex.to_dict(), "planned_scenes": len(scene_ids),
+            "production_run_id": ex.production_run_id}
+
+
+async def _real_plan_creator(rt: AgentRuntime, project: str, ex: ChangeExecutionSession,
+                             scene_id: str) -> dict:
+    """真路径：plan_production_business + approve_plan_business（§55 复用既有 auto-approve 语义）。
+    需 Agnes（Planner LLM），§103 acceptance 接通。返回 {plan_id, scene_id, status, shot_ids}。"""
+    from src.ai.production_planner import plan_production_business, approve_plan_business
+    from deps import get_agnes_client, get_project_manager
+    pdir = get_project_manager().get_project_dir(project)
+    project_obj = ProjectStore(pdir).load()
+    scene = next((s for s in project_obj.scenes if s.scene_id == scene_id), None)
+    if scene is None:
+        raise AgentError("PRODUCTION_PLAN_INVALID", f"scene {scene_id} 不存在")
+    plan = plan_production_business(project_obj, scene, project, get_agnes_client())
+    approve_plan_business(plan, scene)   # §55：AI-7C affected-production 等价 production 授权
+    return {"plan_id": plan.plan_id, "scene_id": scene_id, "status": plan.status,
+            "shot_ids": [ps.shot_id for ps in plan.shots]}
+
+
+async def _real_run_starter(rt: AgentRuntime, project: str, ex: ChangeExecutionSession,
+                            manifest: ProductionExecutionManifest) -> dict:
+    """真路径：ProjectProductionManager.start_run 带 target_scene_ids/shot_actions（§59）。§103 接通。"""
+    from src.ai.project_autopilot import get_project_autopilot_manager
+    mgr = get_project_autopilot_manager()
+    run = await mgr.start_run(project, respect_locked=True,
+                              target_scene_ids=list(manifest.planner_scene_ids),
+                              target_shot_ids=list(manifest.affected_shot_ids or []) or None,
+                              shot_actions=manifest.shot_actions,
+                              parent_change_execution_id=ex.execution_id)
+    return {"run_id": run.run_id}
 
 
 # ============ 查询 ============
