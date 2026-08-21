@@ -16,12 +16,15 @@ from typing import List, Optional
 
 from src.revision.models import _canonical_json, ChangeOperation, creative_source_signature
 from src.revision import changeset as cs_engine   # 复用既有 preview/apply/reconcile（§23/§62）
-from src.revision.changeset import ChangeSetError
+from src.revision.changeset import ChangeSetError, preview_operations_on_project
+from src.core.store import ProjectStore
+from src.core.write_lock import project_write_lock
 
 from ..runtime import AgentRuntime, AgentError
 from .modes import AgentExecutionMode
 from .models import (UnifiedChangePlan, PlanApproval, ModuleProposal)  # noqa: F401 (ModuleProposal 留作 AI-7C-4 扩展点)
 from .execution_models import (ChangeExecutionSession, ExecutionStepRecord,
+                               CanonicalCommitRecord,
                                EXEC_STATUSES, EXEC_TERMINAL, PRODUCTION_MODES,
                                EXEC_ELIGIBILITY)  # noqa: F401 (EXEC_ELIGIBILITY 留作 §4 扩展点)
 from .store import ChangeProtocolStore
@@ -418,6 +421,205 @@ def start_and_replay(rt: AgentRuntime, project: str, session_id: str,
     return res   # 已到 canonical_commit+ ：幂等返回
 
 
+# ============ AI-7C-3 原子 canonical creative commit（§98）============
+_ACTIVE_RUN_STATES = ("running", "pausing", "composing", "preparing", "producing")
+
+
+def _active_production(project: str) -> Optional[str]:
+    """§20 best-effort：检测活跃生产流（ProjectRun/FullRun active 或活跃 video Job）。
+    返回 reason str 或 None。lazy import 避免硬耦合 + 测试无生产模块时返回 None（不阻断）。
+    这是 §33「commit 与 production 不产生 lost update」的 coexistence 规则：commit 前无活跃生产。"""
+    try:
+        from src.ai.project_autopilot import get_project_autopilot_manager
+        for r in get_project_autopilot_manager().list_runs(project):
+            if r.status in _ACTIVE_RUN_STATES:
+                return f"ProjectProductionRun {r.run_id} ({r.status})"
+    except Exception:
+        pass
+    try:
+        from src.ai.full_project_autopilot import get_full_project_manager
+        for r in get_full_project_manager().list_runs(project):
+            if r.status in _ACTIVE_RUN_STATES:
+                return f"FullProjectRun {r.run_id} ({r.status})"
+    except Exception:
+        pass
+    try:
+        from deps import get_job_queue
+        jq = get_job_queue()
+        if jq is not None:
+            for j in jq.list_jobs(project=project, state="running"):
+                if getattr(j, "kind", "") == "video":
+                    return f"active video job {getattr(j, 'job_id', '?')}"
+    except Exception:
+        pass
+    return None
+
+
+def _reconcile_commit(ex: ChangeExecutionSession, store: ChangeProtocolStore,
+                      project_dir) -> None:
+    """§35 崩溃对账：execution 有 COMMIT_INTENT 但无 COMMIT_DONE。读当前 canonical creative 签名：
+    - Case B: == expected_after -> 已提交 -> reconcile committed（不重 apply）
+    - Case A: == before -> 未提交 -> 保持 commit_intent，caller 续提交
+    - Case C: 都不匹配 -> CANONICAL_COMMIT_RECONCILIATION_CONFLICT -> blocked（不猜）
+    caller 负责 save_execution。"""
+    cc = ex.canonical_commit
+    if not cc or cc.get("status") != "commit_intent":
+        return
+    cur_sig = creative_source_signature(ProjectStore(project_dir).load().to_dict())
+    before_sig = cc.get("before_signature", "")
+    after_sig = cc.get("expected_after_signature", "")
+    if after_sig and cur_sig == after_sig:
+        cc["status"] = "committed"
+        cc["committed_at"] = cc.get("committed_at") or _now()
+        ex.canonical_commit = cc
+        if ex.production_mode == "creative_only":
+            ex.stage = "done"; ex.status = "completed"; ex.production_skipped_by_user = True
+        else:
+            ex.stage = "character_sync"; ex.status = "running"
+    elif before_sig and cur_sig == before_sig:
+        return   # Case A：未提交，保持 commit_intent，caller 续提交
+    else:
+        ex.status = "blocked"; ex.stage = "canonical_commit"
+        ex.blocker = {"code": "CANONICAL_COMMIT_RECONCILIATION_CONFLICT",
+                      "current_signature": cur_sig,
+                      "before_signature": before_sig,
+                      "expected_after_signature": after_sig,
+                      "message": "canonical 提交对账冲突（§35 Case C），不猜测"}
+
+
+async def commit_canonical(rt: AgentRuntime, project: str,
+                           execution_id: str) -> dict:
+    """§98 AI-7C-3：原子 canonical creative commit。从 stage=canonical_commit 提交到
+    done（creative_only）/character_sync（affected_production），或 blocked。
+
+    流程（§30/§31/§32/§34/§36）：
+    §35 先对账 in-flight COMMIT_INTENT（崩溃恢复）；
+    §20 active-production preflight（§33 不与 production 并发写）；
+    async project_write_lock 短临界区：reload latest canonical → §32 第二次 stale 校验 →
+    §31 preview_operations_on_project（纯投影，保留无关 production 态 §30）→ §27 等价校验 →
+    §36 canonical_before 审计快照 → §34 COMMIT_INTENT write-ahead → 原子 save → §34 COMMIT_DONE。
+    不 generic workspace→canonical merge（§29）；只提交该批准 plan 的 exact operations。"""
+    store = _store(rt, project)
+    ex = store.get_execution(execution_id)
+    if ex is None:
+        raise AgentError("EXECUTION_NOT_FOUND", f"execution 不存在: {execution_id}")
+    if ex.project_name != project:
+        raise AgentError("EXECUTION_NOT_FOUND", "execution 不属于该项目")
+    # 幂等：已提交
+    cc = ex.canonical_commit
+    if cc and cc.get("status") == "committed":
+        return {"execution": ex.to_dict(), "idempotent": True, "committed": True}
+    if ex.status in EXEC_TERMINAL:
+        return {"execution": ex.to_dict(), "idempotent": True}
+
+    project_dir = rt._resolve_project_dir(project)
+
+    # §35：in-flight COMMIT_INTENT 先对账（崩溃恢复）
+    if cc and cc.get("status") == "commit_intent":
+        _reconcile_commit(ex, store, project_dir)
+        store.save_execution(ex)
+        if ex.canonical_commit.get("status") == "committed":
+            return {"execution": ex.to_dict(), "idempotent": True, "committed": True}  # Case B
+        if ex.status == "blocked":
+            return {"execution": ex.to_dict(), "blocked": True,
+                    "blocker_code": "CANONICAL_COMMIT_RECONCILIATION_CONFLICT"}  # Case C
+        # Case A：保持 commit_intent，续提交（fall through）
+
+    if ex.stage != "canonical_commit":
+        return {"execution": ex.to_dict(), "idempotent": True}   # 未到提交 stage
+
+    # §20 active-production preflight（§33 coexistence 规则）
+    active = _active_production(project)
+    if active:
+        ex.status = "blocked"; ex.stage = "canonical_commit"
+        ex.blocker = {"code": "PROJECT_PRODUCTION_ACTIVE", "detail": active,
+                      "message": "存在活跃生产流，提交被阻断以避免 lost update（§20/§33）"}
+        store.save_execution(ex)
+        return {"execution": ex.to_dict(), "blocked": True,
+                "blocker_code": "PROJECT_PRODUCTION_ACTIVE"}
+
+    plan = store.get_plan(ex.plan_id)
+    preview = store.get_preview(ex.preview_artifact_id)
+    if plan is None or preview is None:
+        raise AgentError("PLAN_PREVIEW_FAILED", "plan/preview artifact 缺失，无法 commit")
+    ops = [ChangeOperation.from_dict(o) for b in (preview.module_operations or [])
+           for o in (b.get("operations") or [])]
+
+    async with project_write_lock(project):
+        pstore = ProjectStore(project_dir)
+        current = pstore.load()   # §30 reload LATEST canonical（含批准后完成的 production 态）
+        before_sig = creative_source_signature(current.to_dict())
+        # §32 第二次 stale 校验（临界区内，关 TOCTOU 窗口）
+        if ex.source_signature and before_sig != ex.source_signature:
+            ex.status = "blocked"; ex.stage = "canonical_commit"
+            ex.blocker = {"code": "PROJECT_CHANGED_AFTER_APPROVAL",
+                          "current_signature": before_sig,
+                          "approved_signature": ex.source_signature,
+                          "message": "canonical 在提交临界区前已变化（§32）"}
+            store.save_execution(ex)
+            return {"execution": ex.to_dict(), "blocked": True,
+                    "blocker_code": "PROJECT_CHANGED_AFTER_APPROVAL"}
+        # §31 纯投影 to LATEST canonical（ops 仅创作字段，保留无关 production 态 §30）
+        try:
+            projected, _diff, _impact, _warn = preview_operations_on_project(current, ops)
+        except ChangeSetError as cse:
+            ex.status = "blocked"; ex.stage = "canonical_commit"
+            ex.blocker = {"code": "EXECUTION_PREVIEW_MISMATCH",
+                          "detail": f"{cse.code}: {cse.message}",
+                          "message": "canonical 提交投影失败（§31）"}
+            store.save_execution(ex)
+            return {"execution": ex.to_dict(), "blocked": True,
+                    "blocker_code": "EXECUTION_PREVIEW_MISMATCH"}
+        projected_sig = creative_source_signature(projected.to_dict())
+        # §27 等价：投影后 canonical 签名 == 批准 preview projected_signature
+        if not preview.projected_signature or projected_sig != preview.projected_signature:
+            ex.status = "blocked"; ex.stage = "canonical_commit"
+            ex.blocker = {"code": "EXECUTION_PREVIEW_MISMATCH",
+                          "projected_signature": projected_sig,
+                          "expected": preview.projected_signature,
+                          "message": "canonical 提交结果与批准预览不一致（§27）"}
+            store.save_execution(ex)
+            return {"execution": ex.to_dict(), "blocked": True,
+                    "blocker_code": "EXECUTION_PREVIEW_MISMATCH"}
+        # §36 pre-commit 不可变审计快照
+        store.save_execution_audit(execution_id, "canonical_before.json", current.to_dict())
+        # §34 COMMIT_INTENT write-ahead（危险窗口：save 成功 但 COMMIT_DONE 前崩溃）
+        cc_rec = CanonicalCommitRecord(
+            status="commit_intent", before_signature=before_sig,
+            expected_after_signature=preview.projected_signature,
+            operation_digest=ex.operation_digest, commit_intent_at=_now())
+        ex.canonical_commit = cc_rec.to_dict()
+        ex.status = "running"; ex.stage = "canonical_commit"
+        store.save_execution(ex)
+        # §31 原子 canonical save（latest + exact approved creative ops）
+        pstore.save(projected)
+        # §34 COMMIT_DONE
+        cc_rec.status = "committed"; cc_rec.committed_at = _now()
+        ex.canonical_commit = cc_rec.to_dict()
+        # §66/§67：creative_only -> done/completed（production skipped）；
+        #          affected_production -> character_sync/running（AI-7C-4 接力）
+        if ex.production_mode == "creative_only":
+            ex.stage = "done"; ex.status = "completed"; ex.production_skipped_by_user = True
+        else:
+            ex.stage = "character_sync"; ex.status = "running"
+        store.save_execution(ex)
+    return {"execution": ex.to_dict(), "committed": True, "idempotent": False}
+
+
+async def start_replay_commit(rt: AgentRuntime, project: str, session_id: str,
+                              plan_id: str, plan_version: int,
+                              production_mode: str = "affected_production") -> dict:
+    """端点入口（AI-7C-3 扩展）：start_and_replay（→ canonical_commit）→ commit_canonical（→
+    done/character_sync）。幂等。creative_only 提交后即 done/completed。"""
+    res = start_and_replay(rt, project, session_id, plan_id, plan_version, production_mode)
+    ex = res.get("execution")
+    if not ex or res.get("blocked") or ex.get("status") == "blocked":
+        return res
+    if ex.get("stage") == "canonical_commit":
+        return await commit_canonical(rt, project, ex["execution_id"])
+    return res
+
+
 # ============ 查询 ============
 def get_execution(rt: AgentRuntime, project: str, session_id: str,
                   execution_id: str) -> Optional[dict]:
@@ -485,6 +687,11 @@ def recover_executions(project_dir, project_name: str) -> int:
         if ex.status in EXEC_TERMINAL:
             continue
         n += 1
+        # §35：in-flight COMMIT_INTENT 崩溃对账（startup discovery 一部分）
+        cc = ex.canonical_commit
+        if cc and cc.get("status") == "commit_intent":
+            _reconcile_commit(ex, store, project_dir)
+            store.save_execution(ex)
         logger.info("AI-7C recover: %s exec=%s plan=%s v%s status=%s stage=%s",
                     project_name, ex.execution_id, ex.plan_id,
                     ex.plan_version, ex.status, ex.stage)

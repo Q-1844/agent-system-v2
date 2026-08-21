@@ -207,3 +207,20 @@ class ChangeProtocolStore:
         matches = [ex for ex in self.list_executions()
                    if ex.plan_id == plan_id and ex.plan_version == plan_version]
         return matches[0] if matches else None
+
+    # ---------- execution audit snapshots（AI-7C §36）----------
+    def save_execution_audit(self, execution_id: str, filename: str, data: dict) -> None:
+        """§36：execution-local 不可变审计快照（canonical_before / production_manifest 等）。
+        路径：change_protocol/execution_audit/{execution_id}/{filename}。"""
+        d = self.root / "execution_audit" / execution_id
+        d.mkdir(parents=True, exist_ok=True)
+        atomic_write_json(d / filename, data)
+
+    def load_execution_audit(self, execution_id: str, filename: str) -> Optional[dict]:
+        p = self.root / "execution_audit" / execution_id / filename
+        if not p.exists():
+            return None
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            return None

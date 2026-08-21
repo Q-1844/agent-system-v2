@@ -94,6 +94,8 @@ _HTTP = {
     "PROJECT_CHANGED_AFTER_APPROVAL": 409,
     "EXECUTION_NOT_FOUND": 404, "EXECUTION_PREVIEW_MISMATCH": 409,
     "PLAN_DEPENDENCY_CYCLE": 422,
+    "PROJECT_PRODUCTION_ACTIVE": 409,
+    "CANONICAL_COMMIT_RECONCILIATION_CONFLICT": 409,
 }
 
 
@@ -616,13 +618,13 @@ class ExecutePlanReq(BaseModel):
 @router.post("/api/project/{project_name}/change-sessions/{session_id}/execute")
 async def execute_change_plan(project_name: str, session_id: str, req: ExecutePlanReq):
     """启动已批准 plan 的执行（§15）。幂等：同一 (plan_id, plan_version) -> 同一 execution。
-    AI-7C-1 create+revalidation -> AI-7C-2 workspace replay + 等价校验 -> stage=canonical_commit。
-    revalidation 失败 -> 409/422；stale -> blocked execution（§18/§81）；preview 不符 -> blocked（§27）。
-    canonical 全程不动（AI-7C-3 才提交）；0 production。"""
+    AI-7C-1 create+revalidation -> AI-7C-2 workspace replay + 等价校验 -> AI-7C-3 原子 canonical
+    creative commit -> done（creative_only）/character_sync（affected_production）。
+    revalidation 失败/stale/preview 不符/活跃生产 -> blocked；canonical 至多提交一次（§16/§34）。"""
     rt = get_agent_runtime()
     try:
         async with session_lock(project_name, session_id):
-            return cp_exec.start_and_replay(
+            return await cp_exec.start_replay_commit(
                 rt, project_name, session_id, req.plan_id, req.plan_version,
                 req.production_mode)
     except AgentError as e:
