@@ -654,6 +654,20 @@ async def get_change_execution(project_name: str, session_id: str, execution_id:
     return ex
 
 
+@router.get("/api/project/{project_name}/change-sessions/{session_id}/executions/{execution_id}/manifest")
+async def get_execution_manifest(project_name: str, session_id: str, execution_id: str):
+    """§40：execution 的 production manifest（deterministic asset actions）。UI 据此展示
+    受影响 char/scene/shot + regen 动作（creative_only 亦落盘以显示后果 §66）。"""
+    rt = get_agent_runtime()
+    try:
+        m = cp_exec.get_production_manifest(rt, project_name, execution_id)
+    except AgentError as e:
+        _raise(e)
+    if m is None:
+        raise HTTPException(404, "manifest 不存在")
+    return m
+
+
 @router.get("/api/project/{project_name}/change-sessions/{session_id}/plans/{plan_version}/eligibility")
 async def get_execution_eligibility(project_name: str, session_id: str,
                                     plan_version: int, plan_id: str):

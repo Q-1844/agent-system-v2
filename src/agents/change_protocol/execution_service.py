@@ -24,7 +24,8 @@ from ..runtime import AgentRuntime, AgentError
 from .modes import AgentExecutionMode
 from .models import (UnifiedChangePlan, PlanApproval, ModuleProposal)  # noqa: F401 (ModuleProposal 留作 AI-7C-4 扩展点)
 from .execution_models import (ChangeExecutionSession, ExecutionStepRecord,
-                               CanonicalCommitRecord,
+                               CanonicalCommitRecord, ProductionExecutionManifest,
+                               ShotProductionActions,
                                EXEC_STATUSES, EXEC_TERMINAL, PRODUCTION_MODES,
                                EXEC_ELIGIBILITY)  # noqa: F401 (EXEC_ELIGIBILITY 留作 §4 扩展点)
 from .store import ChangeProtocolStore
@@ -596,6 +597,16 @@ async def commit_canonical(rt: AgentRuntime, project: str,
         # §34 COMMIT_DONE
         cc_rec.status = "committed"; cc_rec.committed_at = _now()
         ex.canonical_commit = cc_rec.to_dict()
+        # §40/§66：compute + store production manifest（deterministic, 0 LLM）。
+        # creative_only 亦算（§66 可显示 production 后果，但不执行）；affected_production 供 7C-4 sync 用。
+        try:
+            manifest = compute_production_manifest(ex, plan, preview, projected)
+            store.save_execution_audit(execution_id, "production_manifest.json",
+                                       manifest.to_dict())
+            ex.production_manifest_file = "production_manifest.json"
+        except Exception as e:
+            logger.warning("AI-7C production manifest compute failed (exec=%s): %s",
+                            execution_id, e)
         # §66/§67：creative_only -> done/completed（production skipped）；
         #          affected_production -> character_sync/running（AI-7C-4 接力）
         if ex.production_mode == "creative_only":
@@ -618,6 +629,115 @@ async def start_replay_commit(rt: AgentRuntime, project: str, session_id: str,
     if ex.get("stage") == "canonical_commit":
         return await commit_canonical(rt, project, ex["execution_id"])
     return res
+
+
+# ============ AI-7C-4 production impact manifest（§39/§40/§41）============
+def compute_production_manifest(ex: ChangeExecutionSession, plan: UnifiedChangePlan,
+                                preview, project) -> ProductionExecutionManifest:
+    """§39/§41：deterministic production execution manifest（0 LLM）。从批准 operations + 提交后
+    project 直接派生 shot/character actions（不依赖 impact 的 _shot_has_frame 门控——无既有
+    资产的 shot 仍需生成）；impact 仅用于 scene 级 scope（affected/planner scene ids）。
+    只 regen 实际被批准变更 + 依赖闭包 invalidated 的资产，不整项目重生成（§39）。
+
+    规则（§41，按本仓库实际 op 字段）：
+      update_character(description_en) -> char REGENERATE + 引用该 char 的 shot frame/video REGENERATE
+      update_shot(description/characters) -> first_frame REGENERATE, last_frame REGENERATE(若 keyframes), video REGENERATE
+      update_shot(target_duration_s) -> video REGENERATE
+      update_scene(summary/characters) -> scene 内 shot frame/video REGENERATE
+      insert_shot -> 全 generate_new
+      delete_shot -> remove_from_timeline（不删历史资产 §42）
+      reorder_shots -> keep（边界依赖由 7C-5 dependency 分析定）
+      audio -> 现有 shot 无 dialogue op（v1），仅 insert_shot 标 generate_new；其余 keep（§48 v1 限制）"""
+    impact = preview.aggregate_impact or {}
+    affected_scenes = set(impact.get("affected_scene_ids", []))
+    planner_scenes = set(impact.get("production_plan_scene_ids", []))
+    affected_shots_scope = set(impact.get("affected_shot_ids", []))
+
+    ops = [ChangeOperation.from_dict(o) for b in (preview.module_operations or [])
+           for o in (b.get("operations") or [])]
+
+    # ---- character actions（§43）----
+    char_actions: dict = {}
+    for op in ops:
+        if op.op_type == "update_character" and op.character_name:
+            char_actions[op.character_name] = "regenerate"
+        elif op.op_type == "insert_character" and op.new_character:
+            char_actions[op.new_character.name] = "generate_new"
+        elif op.op_type == "delete_character" and op.character_name:
+            char_actions[op.character_name] = "remove_from_timeline"
+    changed_chars = {n for n, a in char_actions.items()
+                     if a in ("regenerate", "generate_new")}
+
+    shots_by_id = {sh.shot_id: sh for s in (project.scenes or []) for sh in (s.shots or [])}
+    shot_actions: dict = {}
+
+    def _ensure(sid: str) -> dict:
+        if sid not in shot_actions:
+            shot_actions[sid] = ShotProductionActions().to_dict()   # all keep
+        return shot_actions[sid]
+
+    for op in ops:
+        if op.op_type == "insert_shot" and op.new_shot and op.new_shot.shot_id:
+            shot_actions[op.new_shot.shot_id] = ShotProductionActions(
+                first_frame="generate_new", audio="generate_new",
+                last_frame="generate_new", video="generate_new").to_dict()
+        elif op.op_type == "delete_shot" and op.shot_id:
+            shot_actions[op.shot_id] = ShotProductionActions(
+                first_frame="remove_from_timeline", audio="remove_from_timeline",
+                last_frame="remove_from_timeline", video="remove_from_timeline").to_dict()
+        elif op.op_type == "update_shot" and op.shot_id:
+            a = _ensure(op.shot_id)
+            sh = shots_by_id.get(op.shot_id)
+            lm = getattr(sh, "link_mode", "i2v") if sh else "i2v"
+            if op.description is not None or op.characters is not None:
+                a["first_frame"] = "regenerate"
+                a["video"] = "regenerate"
+                if lm == "keyframes":
+                    a["last_frame"] = "regenerate"
+            if op.target_duration_s is not None:
+                a["video"] = "regenerate"
+        elif op.op_type == "update_character" and op.character_name in changed_chars:
+            for s in (project.scenes or []):
+                for sh in (s.shots or []):
+                    if op.character_name in sh.characters:
+                        a = _ensure(sh.shot_id)
+                        a["first_frame"] = "regenerate"
+                        a["video"] = "regenerate"
+                        if getattr(sh, "link_mode", "i2v") == "keyframes":
+                            a["last_frame"] = "regenerate"
+        elif op.op_type == "update_scene" and op.scene_id:
+            for s in (project.scenes or []):
+                if s.scene_id == op.scene_id:
+                    for sh in (s.shots or []):
+                        a = _ensure(sh.shot_id)
+                        if op.summary is not None:
+                            a["first_frame"] = "regenerate"
+                        a["video"] = "regenerate"
+
+    expected_video = sum(1 for a in shot_actions.values()
+                         if a.get("video") in ("regenerate", "generate_new"))
+    return ProductionExecutionManifest(
+        execution_id=ex.execution_id, project_name=ex.project_name,
+        committed_source_signature=ex.source_signature,
+        affected_character_ids=sorted(char_actions.keys()),
+        affected_scene_ids=sorted(affected_scenes),
+        affected_shot_ids=sorted(set(shot_actions.keys()) | affected_shots_scope),
+        character_actions=char_actions,
+        shot_actions=shot_actions,
+        planner_scene_ids=sorted(planner_scenes),
+        baseline_asset_refs={},                # AI-7C-5 填（冻结 baseline version IDs）
+        expected_video_requests=expected_video,
+        production_plan_ids={},                # AI-7C-5 填
+        created_at=_now())
+
+
+def get_production_manifest(rt: AgentRuntime, project: str,
+                            execution_id: str) -> Optional[dict]:
+    """读 execution 的 production_manifest 审计快照。"""
+    d = _store(rt, project).load_execution_audit(execution_id, "production_manifest.json")
+    if d is None:
+        return None
+    return ProductionExecutionManifest.from_dict(d).to_dict()
 
 
 # ============ 查询 ============

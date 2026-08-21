@@ -123,6 +123,66 @@ class CanonicalCommitRecord:
         return cls(**_filter(d, cls))
 
 
+# ============ Production Action 枚举（§40）============
+# 值：keep | regenerate | generate_new | remove_from_timeline
+PROD_ACTION = ("keep", "regenerate", "generate_new", "remove_from_timeline")
+
+
+@dataclass
+class ShotProductionActions:
+    """单 Shot 的 production 动作（§40）。"""
+    first_frame: str = "keep"
+    audio: str = "keep"
+    last_frame: str = "keep"
+    video: str = "keep"
+
+    def to_dict(self) -> dict:
+        return {"first_frame": self.first_frame, "audio": self.audio,
+                "last_frame": self.last_frame, "video": self.video}
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "ShotProductionActions":
+        return cls(**_filter(d, cls))
+
+
+@dataclass
+class ProductionExecutionManifest:
+    """§40：production 执行清单。deterministic code 算（§41 不调 LLM）。从批准 plan 的 ImpactReport
+    （preview.aggregate_impact，已含 frame/video regen shot ids）+ 批准 operations（character actions）派生。
+    AI-7C-4 产出；AI-7C-5 填 production_plan_ids + baseline_asset_refs。"""
+    execution_id: str = ""
+    project_name: str = ""
+    committed_source_signature: str = ""
+    affected_character_ids: List[str] = field(default_factory=list)   # character name（本仓库无 character_id）
+    affected_scene_ids: List[str] = field(default_factory=list)
+    affected_shot_ids: List[str] = field(default_factory=list)
+    character_actions: Dict[str, str] = field(default_factory=dict)   # name -> action
+    shot_actions: Dict[str, dict] = field(default_factory=dict)       # shot_id -> ShotProductionActions.to_dict()
+    planner_scene_ids: List[str] = field(default_factory=list)
+    baseline_asset_refs: Dict[str, dict] = field(default_factory=dict)   # AI-7C-5 填
+    expected_video_requests: int = 0
+    production_plan_ids: Dict[str, str] = field(default_factory=dict)     # AI-7C-5 填
+    created_at: float = 0.0
+
+    def to_dict(self) -> dict:
+        return {"execution_id": self.execution_id, "project_name": self.project_name,
+                "committed_source_signature": self.committed_source_signature,
+                "affected_character_ids": list(self.affected_character_ids),
+                "affected_scene_ids": list(self.affected_scene_ids),
+                "affected_shot_ids": list(self.affected_shot_ids),
+                "character_actions": dict(self.character_actions),
+                "shot_actions": dict(self.shot_actions),
+                "planner_scene_ids": list(self.planner_scene_ids),
+                "baseline_asset_refs": dict(self.baseline_asset_refs),
+                "expected_video_requests": self.expected_video_requests,
+                "production_plan_ids": dict(self.production_plan_ids),
+                "created_at": self.created_at}
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "ProductionExecutionManifest":
+        return cls(**_filter(d, cls))
+
+
 # ============ ChangeExecutionSession（§10）============
 @dataclass
 class ChangeExecutionSession:
