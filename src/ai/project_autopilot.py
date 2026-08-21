@@ -113,6 +113,11 @@ class ProjectProductionRun(BaseModel):
     final_size_bytes: Optional[int] = None
     error: Optional[str] = None
     error_code: Optional[str] = None
+    # AI-7C §59 targeted run：None = 既有全项目行为（向后兼容）；设值 = 只跑受影响闭包。
+    target_scene_ids: Optional[List[str]] = None
+    target_shot_ids: Optional[List[str]] = None
+    shot_actions: Optional[Dict[str, Dict[str, Any]]] = None   # shot_id -> {first_frame,audio,last_frame,video}（manifest）
+    parent_change_execution_id: Optional[str] = None          # §69 traceability
     created_at: float = 0.0
     updated_at: float = 0.0
 
@@ -133,6 +138,69 @@ class CompositionManifest(BaseModel):
     project_run_id: str
     clips: List[CompositionClip] = Field(default_factory=list)
     created_at: float = 0.0
+
+
+# ============ AI-7C §64/§65 composition clips（pure，可单测）============
+def _baseline_clip_for_shot(project, scene_id: str, shot_id: str) -> Optional[CompositionClip]:
+    """§64：unaffected shot 的 frozen baseline clip——用当前 shot.final_video version_id
+    （不读 child Run；unaffected shot 未重生成，沿用既有 final 版本）。无 final_video -> None。"""
+    sh = project.get_shot(shot_id) if hasattr(project, "get_shot") else None
+    if sh is None or not sh.final_video:
+        return None
+    vv = next((v for v in (sh.video_versions or [])
+               if v.version_id == sh.final_video), None)
+    if vv is None or not vv.local:
+        return None
+    return CompositionClip(scene_id=scene_id, shot_id=shot_id, scene_run_id="baseline",
+                           video_version_id=sh.final_video, local_path=vv.local,
+                           url=vv.url, duration_s=vv.seconds_returned)
+
+
+def build_composition_clips(project, run: "ProjectProductionRun",
+                            child_state_by_shot: Dict[str, Any],
+                            child_run_id_by_shot: Optional[Dict[str, str]] = None
+                            ) -> List[CompositionClip]:
+    """§三十四/§64/§65：按 source_signature 顺序为**全部** project shot 构建 clip。
+    - 受影响 shot（child_state_by_shot[shot_id].video_version_id 存在）：用 child 新 regen 版本（§三十六）。
+    - targeted run（run.target_scene_ids 非空）下的 unaffected shot：用 shot.final_video baseline（§64 frozen）。
+    - 非 targeted run：所有 shot 必须有 child state（既有行为，缺则 raise）。
+    child_state_by_shot: {shot_id: ShotExecutionState}；child_run_id_by_shot: {shot_id: child_run_id}（traceability §69）。"""
+    clips: List[CompositionClip] = []
+    targeted = bool(run.target_scene_ids)
+    target_scene_set = set(run.target_scene_ids or []) if targeted else set()
+    target_shot_set = set(run.target_shot_ids or []) if run.target_shot_ids else None
+    rid_by_shot = child_run_id_by_shot or {}
+    for snap_scene in run.source_signature.get("scenes", []):
+        scene_id = snap_scene.get("scene_id", "")
+        for sh_dict in snap_scene.get("shots", []):
+            shot_id = sh_dict.get("shot_id", "")
+            state = child_state_by_shot.get(shot_id)
+            # 该 shot 是否「target」（child 应跑过）vs「unaffected」（用 baseline）
+            is_target = (scene_id in target_scene_set) or (target_shot_set and shot_id in target_shot_set)
+            if state is not None and getattr(state, "video_version_id", None):
+                vid = state.video_version_id
+                sh = project.get_shot(shot_id) if hasattr(project, "get_shot") else None
+                vv = next((v for v in (sh.video_versions or [])
+                           if v.version_id == vid), None) if sh else None
+                if vv is None or not vv.local:
+                    raise RuntimeError(f"镜头 {shot_id} 版本 {vid} 不在视频历史")
+                clips.append(CompositionClip(
+                    scene_id=scene_id, shot_id=shot_id,
+                    scene_run_id=rid_by_shot.get(shot_id, ""),
+                    video_version_id=vid, local_path=vv.local, url=vv.url,
+                    duration_s=vv.seconds_returned))
+            elif targeted and not is_target:
+                # unaffected shot（不在 target scene/shot 集合）-> baseline final_video（§64）
+                bc = _baseline_clip_for_shot(project, scene_id, shot_id)
+                if bc is None:
+                    raise RuntimeError(f"镜头 {shot_id} 无 baseline final_video（unaffected shot 未完成，§64）")
+                clips.append(bc)
+            elif targeted and is_target:
+                # target shot 却无 child state：child 应已跑过该 shot，缺则异常（不 fallback baseline）
+                raise RuntimeError(f"镜头 {shot_id} 是 target shot 但 child Run 无视频版本")
+            else:
+                raise RuntimeError(f"镜头 {shot_id} 在 child Run 中无视频版本")
+    return clips
 
 
 # ============ Preflight 结果（§十七）============
@@ -326,11 +394,17 @@ class ProjectProductionManager:
 
     # ---------- 启动 / 恢复 / 控制 ----------
     async def start_run(self, project_name: str, respect_locked: bool = True,
-                        parent_full_run_id: Optional[str] = None) -> ProjectProductionRun:
+                        parent_full_run_id: Optional[str] = None, *,
+                        target_scene_ids: Optional[List[str]] = None,
+                        target_shot_ids: Optional[List[str]] = None,
+                        shot_actions: Optional[Dict[str, Dict[str, Any]]] = None,
+                        parent_change_execution_id: Optional[str] = None) -> ProjectProductionRun:
         """§十九 start 流程：load -> 检查无 active ProjectRun -> project preflight ->
         冻结 source snapshot + plans snapshot -> 建 run dir -> 写 run.json -> 启动 Executor。
         后端自己 load，不信任前端 preflight（§十九）。
-        parent_full_run_id：AI-5B FullProjectManager 传入（手工 AI-5A 制作为 None，§四十一）。"""
+        parent_full_run_id：AI-5B FullProjectManager 传入（手工 AI-5A 制作为 None，§四十一）。
+        AI-7C §59：target_scene_ids 非空 = targeted run（只跑受影响 scene 闭包，unaffected shot 用
+        baseline final_video 合成 §64）。None = 既有全项目行为（向后兼容）。"""
         from deps import get_project_manager, logger
         project_dir = get_project_manager().get_project_dir(project_name)
         store = ProjectStore(project_dir)
@@ -354,7 +428,8 @@ class ProjectProductionManager:
         # 冻结 source snapshot + signature（§九/§十四）
         signature = build_project_source_signature(project)
 
-        # 冻结所有 approved Plan（§十一）
+        # 冻结所有 approved Plan（§十一）。targeted run：只需 scenes_to_run 的 plan，
+        # 但既有行为冻结全部（unaffected scene 亦应有 approved plan，preflight 已保证）。
         from routers.production_planner import _read_plans
         plans = _read_plans(project_dir)
         plans_snapshot: Dict[str, dict] = {}
@@ -365,15 +440,25 @@ class ProjectProductionManager:
                 raise ValueError(f"故事段 {sc.scene_id} 无 approved Plan")
             plans_snapshot[sc.scene_id] = plan.model_dump()
 
+        # AI-7C §59：targeted run 只跑受影响 scene（unaffected scene 不进 run.scenes，合成用 baseline）
+        scenes_to_run = project.scenes
+        if target_scene_ids is not None:
+            tset = set(target_scene_ids)
+            scenes_to_run = [sc for sc in project.scenes if sc.scene_id in tset]
+            if not scenes_to_run:
+                raise ValueError(f"target_scene_ids {target_scene_ids} 无匹配场景")
+
         # 创建 Run
         run_id = f"prun_{uuid.uuid4().hex[:10]}"
         run = ProjectProductionRun(
             run_id=run_id, project_name=project_name, parent_full_run_id=parent_full_run_id,
             status=PRUN_PENDING, stage=PSTAGE_PREFLIGHT, respect_locked=respect_locked,
             source_signature=signature,
+            target_scene_ids=target_scene_ids, target_shot_ids=target_shot_ids,
+            shot_actions=shot_actions, parent_change_execution_id=parent_change_execution_id,
             created_at=time.time(), updated_at=time.time(),
         )
-        for i, sc in enumerate(project.scenes):
+        for i, sc in enumerate(scenes_to_run):
             plan = plans.get(sc.scene_id)
             run.scenes.append(ProjectSceneExecutionState(
                 scene_id=sc.scene_id, index=i, status=PSCENE_PENDING,
@@ -686,37 +771,26 @@ class ProjectProductionManager:
     # ---------- Composition Manifest + compose（§三十三~§四十五）----------
     def _build_composition_manifest(self, project_name: str,
                                     run: ProjectProductionRun) -> CompositionManifest:
-        """所有 Scene child completed 后，根据每个 child ShotExecutionState 构建 Manifest（§三十四）。
-        顺序：Project snapshot scene order -> Scene snapshot shot order。
-        🔴 用 child state.video_version_id，不读当前 shot.final_video（§三十六 Run consistency）。"""
+        """所有 Scene child completed 后，构建 Manifest（§三十四/§64/§65）。
+        顺序：source_signature scene/shot order。targeted run：受影响 shot 用 child 新版本 +
+        unaffected shot 用 baseline final_video（§64）。🔴 用 child state.video_version_id，
+        不读当前 shot.final_video（§三十六 Run consistency）；unaffected baseline 是 frozen 既有版本。"""
         from deps import get_project_manager
         scene_mgr = get_autopilot_manager()
         project = ProjectStore(get_project_manager().get_project_dir(project_name)).load()
-        clips: List[CompositionClip] = []
+        # 解析各 child 的 ShotExecutionState（target scenes 的 child）
+        child_state_by_shot: Dict[str, Any] = {}
+        child_run_id_by_shot: Dict[str, str] = {}
         for entry in run.scenes:
             if entry.status != PSCENE_COMPLETED:
                 raise RuntimeError(f"故事段 {entry.scene_id} 未完成（{entry.status}），无法合成")
             child = scene_mgr.get_run(project_name, entry.child_run_id) if entry.child_run_id else None
             if child is None:
                 raise RuntimeError(f"故事段 {entry.scene_id} 的子 Run 不存在")
-            # snapshot shot 顺序
-            snap_scene = next((s for s in run.source_signature.get("scenes", [])
-                               if s.get("scene_id") == entry.scene_id), None)
-            shot_ids = [sh["shot_id"] for sh in (snap_scene or {}).get("shots", [])]
-            for shot_id in shot_ids:
-                state = next((s for s in child.shots if s.shot_id == shot_id), None)
-                if state is None or not state.video_version_id:
-                    raise RuntimeError(f"镜头 {shot_id} 在 child Run 中无视频版本")
-                # 在 Project 当前 video history 中解析该 version（§三十六）
-                sh = project.get_shot(shot_id)
-                vv = next((v for v in sh.video_versions
-                           if v.version_id == state.video_version_id), None) if sh else None
-                if vv is None or not vv.local:
-                    raise RuntimeError(f"镜头 {shot_id} 版本 {state.video_version_id} 不在视频历史中")
-                clips.append(CompositionClip(
-                    scene_id=entry.scene_id, shot_id=shot_id, scene_run_id=child.run_id,
-                    video_version_id=state.video_version_id, local_path=vv.local, url=vv.url,
-                    duration_s=vv.seconds_returned))
+            for st in child.shots:
+                child_state_by_shot[st.shot_id] = st
+                child_run_id_by_shot[st.shot_id] = child.run_id
+        clips = build_composition_clips(project, run, child_state_by_shot, child_run_id_by_shot)
         return CompositionManifest(project_run_id=run.run_id, clips=clips, created_at=time.time())
 
     async def _compose_project(self, project_name: str, run_id: str):
