@@ -18,16 +18,24 @@ from typing import Set
 
 
 class AgentExecutionMode(str, Enum):
-    """AI-7B 运行模式（§6）。既有正常生产模式（capability 的 execute 路径）不受影响。"""
+    """AI-7B 运行模式（§6）。既有正常生产模式（capability 的 execute 路径）不受影响。
+    AI-7C（§7）：新增 APPROVED_PLAN_EXECUTION——执行引擎应用**已批准**的 ChangeOperation，
+    不走 agent capability dispatch（§9/§26：0 创意 LLM 调用、0 重新决策）。该模式仅可经
+    execute 端点全量校验（approved_plan_id + exact plan_version + valid PlanApproval +
+    AI-7C preflight + ChangeExecutionSession）获得，本身不授予任何 agent 新写权限。"""
     READ_ONLY = "read_only"           # AI-7A：只读检视
     PROPOSAL_ONLY = "proposal_only"   # AI-7B：只读 + 语义提案
+    APPROVED_PLAN_EXECUTION = "approved_plan_execution"   # AI-7C：执行已批准计划
 
 
 # 每种模式允许的 operation 集合（§6）。mutate/produce（execute/retry/cancel 及
 # 任何未列出项）一律拒绝。
+# AI-7C：APPROVED_PLAN_EXECUTION 只允许 inspect——执行引擎本身是独立代码路径（非 agent op），
+# 不经此闸；此模式仅作为"已批准执行进行中"的标记，且 fail-closed（agent 不得借此 propose/mutate）。
 _ALLOWED_OPS: dict = {
     AgentExecutionMode.READ_ONLY.value: {"inspect"},
     AgentExecutionMode.PROPOSAL_ONLY.value: {"inspect", "propose"},
+    AgentExecutionMode.APPROVED_PLAN_EXECUTION.value: {"inspect"},
 }
 
 

@@ -25,6 +25,7 @@ from src.agents.change_analysis import (ChangeAnalysisStore,
                                           create_change_analysis_session,
                                           continue_change_analysis)
 from src.agents.change_protocol import service as cp_service
+from src.agents.change_protocol import execution_service as cp_exec
 from routers.production_planner import _read_plans   # 唯一 import 点（composition root）
 from routers.workspaces import workspace_lock        # 复用同一 per-workspace 锁（AI-6D）
 
@@ -87,6 +88,10 @@ _HTTP = {
     "PLAN_PREVIEW_FAILED": 422, "PLAN_VERSION_CHANGED": 409,
     "PLAN_NOT_READY": 409, "PLAN_ALREADY_REJECTED": 409,
     "PLAN_APPROVAL_STALE": 409,
+    # AI-7C Execution 失败码（§78）
+    "PLAN_NOT_APPROVED": 409, "PLAN_VERSION_MISMATCH": 409,
+    "PLAN_EXECUTION_BINDING_MISSING": 422,
+    "PROJECT_CHANGED_AFTER_APPROVAL": 409,
 }
 
 
@@ -592,5 +597,66 @@ async def reject_change_session(project_name: str, session_id: str, req: RejectP
     try:
         async with session_lock(project_name, session_id):
             return cp_service.reject_plan(rt, project_name, session_id, req.plan_id)
+    except AgentError as e:
+        _raise(e)
+
+
+# ==================== AI-7C Execution（approved-plan execution，§15/§83/§96）====================
+# execute ≠ apply（§4）：不翻 applyable 后门；用独立 ChangeExecutionSession + execution_eligibility。
+# AI-7C-1 范围：创建 + revalidation + 幂等 + 持久化 + stale 阻断。0 Workspace Apply / 0 canonical
+# mutation / 0 Production Plan / 0 Agnes。execute 不自动跑 workspace/commit/production（后续 gate）。
+class ExecutePlanReq(BaseModel):
+    plan_id: str
+    plan_version: int
+    production_mode: str = "affected_production"   # creative_only | affected_production（§15）
+
+
+@router.post("/api/project/{project_name}/change-sessions/{session_id}/execute")
+async def execute_change_plan(project_name: str, session_id: str, req: ExecutePlanReq):
+    """启动已批准 plan 的执行（§15）。幂等：同一 (plan_id, plan_version) -> 同一 execution。
+    revalidation 失败 -> 409/422；stale（批准后项目变化）-> 创建 blocked execution（§18/§81）。
+    AI-7C-1：到此 STOP，不建 workspace / 不 commit / 不生产。"""
+    rt = get_agent_runtime()
+    try:
+        async with session_lock(project_name, session_id):
+            return cp_exec.execute_plan(
+                rt, project_name, session_id, req.plan_id, req.plan_version,
+                req.production_mode)
+    except AgentError as e:
+        _raise(e)
+
+
+@router.get("/api/project/{project_name}/change-sessions/{session_id}/executions")
+async def list_change_executions(project_name: str, session_id: str):
+    """列出该 change-session 的 executions（§83）。polling-first 真相源。"""
+    rt = get_agent_runtime()
+    try:
+        return cp_exec.list_executions(rt, project_name, session_id)
+    except AgentError as e:
+        _raise(e)
+
+
+@router.get("/api/project/{project_name}/change-sessions/{session_id}/executions/{execution_id}")
+async def get_change_execution(project_name: str, session_id: str, execution_id: str):
+    """取单个 execution（§83）。refresh 恢复用：前端据此 + production_run_id 恢复进度。"""
+    rt = get_agent_runtime()
+    try:
+        ex = cp_exec.get_execution(rt, project_name, session_id, execution_id)
+    except AgentError as e:
+        _raise(e)
+    if ex is None:
+        raise HTTPException(404, "execution 不存在")
+    return ex
+
+
+@router.get("/api/project/{project_name}/change-sessions/{session_id}/plans/{plan_version}/eligibility")
+async def get_execution_eligibility(project_name: str, session_id: str,
+                                    plan_version: int, plan_id: str):
+    """§4：execution eligibility（eligible/already_started/already_completed/stale/blocked/
+    invalid_approval）。只读，供 UI 决定 Execute 按钮态。不翻 applyable 后门。"""
+    rt = get_agent_runtime()
+    try:
+        return cp_exec.execution_eligibility(rt, project_name, session_id,
+                                             plan_id, plan_version)
     except AgentError as e:
         _raise(e)

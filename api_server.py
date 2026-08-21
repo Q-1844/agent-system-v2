@@ -228,6 +228,22 @@ async def startup():
     except Exception as e:
         logger.error(f"Change Protocol 恢复失败: {e}")
 
+    # 阶段 AI-7C：ChangeExecutionSession startup discovery（§73/§96）。扫各项目非终态 execution，
+    # 记账待恢复。AI-7C-1 仅发现+记账，不自动推进（workspace replay/commit/production 在后续 gate）。
+    try:
+        from src.agents.change_protocol.execution_service import recover_executions
+        pdir4 = deps.projects_dir
+        n4 = 0
+        if pdir4.exists():
+            for d in pdir4.iterdir():
+                if d.is_dir() and (d / "output" / "project.json").exists():
+                    n4 += recover_executions(d, d.name)
+        if n4:
+            logger.info(f"AI-7C Execution 恢复：发现 {n4} 个 active execution")
+        logger.info("AI-7C Execution 恢复已就绪")
+    except Exception as e:
+        logger.error(f"AI-7C Execution 恢复失败: {e}")
+
 
 if __name__ == "__main__":
     import uvicorn

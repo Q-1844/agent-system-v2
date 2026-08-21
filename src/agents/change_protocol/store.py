@@ -18,9 +18,11 @@ from src.core.atomic import atomic_write_json
 from . import migrations
 from .models import (ChangeSession, ChangeRequest, ModuleProposal, UnifiedChangePlan,
                      PlanPreviewArtifact, ChangeDecisionRequest)
+from .execution_models import ChangeExecutionSession
 
 
-_KINDS = ("requests", "sessions", "proposals", "plans", "previews", "decisions")
+_KINDS = ("requests", "sessions", "proposals", "plans", "previews", "decisions",
+          "executions")
 
 
 class ChangeProtocolStore:
@@ -172,3 +174,36 @@ class ChangeProtocolStore:
             out.append(dec)
         out.sort(key=lambda x: x.created_at, reverse=True)
         return out
+
+    # ---------- executions（AI-7C）----------
+    def save_execution(self, ex: ChangeExecutionSession) -> ChangeExecutionSession:
+        """§86：execution artifact 一文件一对象，原子写。"""
+        if not ex.execution_id:
+            raise ValueError("execution_id 缺失")
+        ex.updated_at = time.time()
+        self._save_dict("executions", ex.execution_id, ex.to_dict())
+        return ex
+
+    def get_execution(self, eid: str) -> Optional[ChangeExecutionSession]:
+        d = self._load_dict("executions", eid)
+        return ChangeExecutionSession.from_dict(d) if d is not None else None
+
+    def list_executions(self, session_id: Optional[str] = None,
+                       project_name: Optional[str] = None) -> List[ChangeExecutionSession]:
+        """列出 executions。可按 change_session_id 过滤。按 updated_at 倒序。"""
+        out = []
+        for d in self._list_dicts("executions"):
+            ex = ChangeExecutionSession.from_dict(d)
+            if session_id and ex.change_session_id != session_id:
+                continue
+            out.append(ex)
+        out.sort(key=lambda x: x.updated_at, reverse=True)
+        return out
+
+    def find_execution(self, plan_id: str, plan_version: int
+                       ) -> Optional[ChangeExecutionSession]:
+        """§15 幂等：按 (plan_id, plan_version) 查已存在 execution。
+        同一 approved plan_version → 至多一个执行（§16）。返回最新一条。"""
+        matches = [ex for ex in self.list_executions()
+                   if ex.plan_id == plan_id and ex.plan_version == plan_version]
+        return matches[0] if matches else None
