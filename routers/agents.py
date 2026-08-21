@@ -670,6 +670,28 @@ async def get_execution_manifest(project_name: str, session_id: str, execution_i
     return m
 
 
+@router.post("/api/project/{project_name}/change-sessions/{session_id}/executions/{execution_id}/resume")
+async def resume_change_execution(project_name: str, session_id: str, execution_id: str):
+    """§83 resume：从当前 stage 推进（幂等；blocked 不可 rebasing resume §81）。"""
+    rt = get_agent_runtime()
+    try:
+        async with session_lock(project_name, session_id):
+            return await cp_exec.resume_execution(rt, project_name, execution_id)
+    except AgentError as e:
+        _raise(e)
+
+
+@router.post("/api/project/{project_name}/change-sessions/{session_id}/executions/{execution_id}/cancel")
+async def cancel_change_execution(project_name: str, session_id: str, execution_id: str):
+    """§38 cancel：提交前 -> cancelled（canonical 不动）；提交后 -> creative 保留 + 停后续 production。"""
+    rt = get_agent_runtime()
+    try:
+        async with session_lock(project_name, session_id):
+            return cp_exec.cancel_execution(rt, project_name, execution_id)
+    except AgentError as e:
+        _raise(e)
+
+
 @router.get("/api/project/{project_name}/change-sessions/{session_id}/plans/{plan_version}/eligibility")
 async def get_execution_eligibility(project_name: str, session_id: str,
                                     plan_version: int, plan_id: str):

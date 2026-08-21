@@ -8,7 +8,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { apiClient } from '@/api';
-import type { ChangeSession, UnifiedChangePlan, PlanPreviewArtifact, ChangeDecisionRequest } from '@/api';
+import type { ChangeSession, UnifiedChangePlan, PlanPreviewArtifact, ChangeDecisionRequest, ChangeExecution } from '@/api';
 import { useProjectStore } from '@/store';
 
 const POLL_MS = 2000;
@@ -20,13 +20,17 @@ const ACTIVE_STATUSES = new Set([
 const TERMINAL_STATUSES = new Set([
   'approved_for_execution', 'rejected', 'stale', 'failed', 'cancelled',
 ]);
+// AI-7C execution 活跃态：轮询 execution（§82 polling-first）
+const EXECUTION_ACTIVE_STATUSES = new Set(['pending', 'running', 'waiting_user']);
+const EXECUTION_TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled']);
 
 export const useChangeSessionStore = defineStore('changeSession', () => {
   const projectStore = useProjectStore();
   const session = ref<ChangeSession | null>(null);
   const plan = ref<(UnifiedChangePlan & { preview?: PlanPreviewArtifact }) | null>(null);
   const decisions = ref<ChangeDecisionRequest[]>([]);
-  const busy = ref(false);          // create/resume/decision/approve/reject 进行中
+  const execution = ref<ChangeExecution | null>(null);
+  const busy = ref(false);          // create/resume/decision/approve/reject/execute 进行中
   const error = ref('');
   const lastRequestText = ref('');
   let pollTimer: number | null = null;
@@ -35,6 +39,13 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
   const isTerminal = computed(() => !!session.value && TERMINAL_STATUSES.has(session.value.status));
   const readyForReview = computed(() => session.value?.status === 'ready_for_review');
   const needsDecision = computed(() => session.value?.status === 'awaiting_user_decision');
+  // AI-7C execution 派生态（§79 pre/post-commit 区分）
+  const approved = computed(() => session.value?.status === 'approved_for_execution');
+  const executionActive = computed(() => !!execution.value && EXECUTION_ACTIVE_STATUSES.has(execution.value.status));
+  const executionBlocked = computed(() => execution.value?.status === 'blocked');
+  const executionDone = computed(() => !!execution.value && EXECUTION_TERMINAL_STATUSES.has(execution.value.status));
+  const creativeCommitted = computed(() => !!execution.value?.canonical_commit && execution.value.canonical_commit.status === 'committed');
+  const needsExecute = computed(() => approved.value && !execution.value);  // 已批准 + 无 execution -> 可 Execute
 
   function _set(s: ChangeSession | null) {
     session.value = s;
@@ -99,6 +110,74 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
         await loadPlan();
       }
     } catch { /* 静默，下次再试 */ }
+    // AI-7C：execution 活跃时轮询 execution（§82 polling-first）
+    if (execution.value && EXECUTION_ACTIVE_STATUSES.has(execution.value.status)) {
+      await loadExecution();
+    }
+  }
+
+  /** AI-7C §15/§67：启动已批准 plan 的执行。幂等：重复调对终态 no-op。 */
+  async function execute(productionMode: string = 'affected_production') {
+    const p = projectStore.projectName;
+    const sid = session.value?.session_id;
+    const pl = plan.value;
+    if (!p || !sid || !pl || busy.value) return;
+    // 已有终态 execution -> 不重启（幂等）；blocked/resume 走 resumeExecution
+    if (execution.value && executionActive.value) return;
+    busy.value = true; error.value = '';
+    try {
+      const res = await apiClient.executeChangePlan(p, sid, pl.plan_id, pl.version, productionMode);
+      execution.value = res.execution;
+      if (executionActive.value) startPoll();
+    } catch (e: any) {
+      error.value = '启动执行失败: ' + (e.message || e);
+    } finally {
+      busy.value = false;
+    }
+  }
+
+  async function loadExecution() {
+    const p = projectStore.projectName;
+    const sid = session.value?.session_id;
+    const eid = execution.value?.execution_id;
+    if (!p || !sid || !eid) return;
+    try {
+      execution.value = await apiClient.getChangeExecution(p, sid, eid);
+    } catch { /* 静默 */ }
+  }
+
+  async function resumeExecution() {
+    const p = projectStore.projectName;
+    const sid = session.value?.session_id;
+    const eid = execution.value?.execution_id;
+    if (!p || !sid || !eid || busy.value) return;
+    busy.value = true; error.value = '';
+    try {
+      const res = await apiClient.resumeChangeExecution(p, sid, eid);
+      execution.value = res.execution;
+      if (executionActive.value) startPoll();
+    } catch (e: any) {
+      error.value = '恢复执行失败: ' + (e.message || e);
+    } finally {
+      busy.value = false;
+    }
+  }
+
+  async function cancelExecution() {
+    const p = projectStore.projectName;
+    const sid = session.value?.session_id;
+    const eid = execution.value?.execution_id;
+    if (!p || !sid || !eid || busy.value) return;
+    busy.value = true; error.value = '';
+    try {
+      const res = await apiClient.cancelChangeExecution(p, sid, eid);
+      execution.value = res.execution;
+      stopPoll();
+    } catch (e: any) {
+      error.value = '取消执行失败: ' + (e.message || e);
+    } finally {
+      busy.value = false;
+    }
   }
 
   function startPoll() {
@@ -176,15 +255,24 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
     }
   }
 
-  /** 刷新恢复（§87）：重载 persisted active session（如有）。由 TeamChatPanel mount 调用。 */
+  /** 刷新恢复（§87/§89）：重载 persisted active session + 其 execution（如有）。TeamChatPanel mount 调用。 */
   async function restoreActive() {
     const p = projectStore.projectName;
     if (!p) return;
     try {
       const sessions = await apiClient.listChangeSessions(p);
       const active = sessions.find(s => !TERMINAL_STATUSES.has(s.status));
-      if (active) { _set(active); if (active.status === 'ready_for_review') await loadPlan(); }
-      else { session.value = null; plan.value = null; }
+      if (active) {
+        _set(active);
+        if (active.status === 'ready_for_review') await loadPlan();
+        // AI-7C §89：approved session 可能挂 execution（refresh 恢复）
+        if (active.status === 'approved_for_execution') {
+          try {
+            const exs = await apiClient.listChangeExecutions(p, active.session_id);
+            if (exs.length) { execution.value = exs[0]; if (executionActive.value) startPoll(); }
+          } catch { /* 无 execution */ }
+        }
+      } else { session.value = null; plan.value = null; execution.value = null; }
     } catch { /* 无会话或项目未选 */ }
   }
 
@@ -193,14 +281,17 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
     session.value = null;
     plan.value = null;
     decisions.value = [];
+    execution.value = null;
     error.value = '';
     lastRequestText.value = '';
   }
 
   return {
-    session, plan, decisions, busy, error, lastRequestText,
+    session, plan, decisions, execution, busy, error, lastRequestText,
     isActive, isTerminal, readyForReview, needsDecision,
+    approved, executionActive, executionBlocked, executionDone, creativeCommitted, needsExecute,
     create, resume, loadPlan, submitDecision, approve, requestChanges, reject,
+    execute, loadExecution, resumeExecution, cancelExecution,
     restoreActive, onProjectChange, stopPoll,
   };
 });

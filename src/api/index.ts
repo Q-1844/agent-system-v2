@@ -757,6 +757,42 @@ export interface ChangeDecisionRequest {
   selected_option_id: string | null; created_at: number; updated_at: number;
 }
 
+// ============ AI-7C Change Execution（§10/§11/§40）============
+export interface ExecutionStepRecord {
+  step_id: string; module: string; owner_agent_id: string;
+  operation_count: number; operation_digest: string; status: string;
+  workspace_revision_before: number | null; workspace_revision_after: number | null;
+  changeset_id: string | null; started_at: number | null; completed_at: number | null;
+  error: Record<string, any> | null;
+}
+export interface CanonicalCommitRecord {
+  status: string; before_signature: string; expected_after_signature: string;
+  operation_digest: string; commit_intent_at: number | null; committed_at: number | null;
+}
+export interface ShotProductionActions {
+  first_frame: string; audio: string; last_frame: string; video: string;
+}
+export interface ProductionExecutionManifest {
+  execution_id: string; project_name: string; committed_source_signature: string;
+  affected_character_ids: string[]; affected_scene_ids: string[]; affected_shot_ids: string[];
+  character_actions: Record<string, string>; shot_actions: Record<string, ShotProductionActions>;
+  planner_scene_ids: string[]; baseline_asset_refs: Record<string, any>;
+  expected_video_requests: number; production_plan_ids: Record<string, string>; created_at: number;
+}
+export interface ChangeExecution {
+  schema_version: number; execution_id: string; project_name: string;
+  change_session_id: string; plan_id: string; plan_version: number; approval_id: string;
+  source_signature: string; preview_artifact_id: string; execution_mode: string;
+  production_mode: string; status: string; stage: string;
+  execution_workspace_id: string | null; operation_digest: string;
+  steps: ExecutionStepRecord[]; canonical_commit: CanonicalCommitRecord | null;
+  character_sync: Record<string, any>[]; planning: Record<string, any>[];
+  production_manifest_file: string | null; production_run_id: string | null;
+  blocker: Record<string, any> | null; error: Record<string, any> | null;
+  cancel_requested: boolean; production_skipped_by_user: boolean;
+  created_at: number; updated_at: number;
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -1775,6 +1811,32 @@ class ApiClient {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/change-sessions/${encodeURIComponent(sessionId)}/reject`, {
       method: 'POST', body: JSON.stringify({ plan_id: planId }),
     });
+  }
+  // ============ AI-7C Execution（§15/§83）============
+  async executeChangePlan(projectName: string, sessionId: string, planId: string,
+      planVersion: number, productionMode: string = 'affected_production'): Promise<{ execution: ChangeExecution; [k: string]: any }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/change-sessions/${encodeURIComponent(sessionId)}/execute`, {
+      method: 'POST', body: JSON.stringify({ plan_id: planId, plan_version: planVersion, production_mode: productionMode }),
+    });
+  }
+  async listChangeExecutions(projectName: string, sessionId: string): Promise<ChangeExecution[]> {
+    const data = await this.request<{ executions: ChangeExecution[] }>(
+      `/api/project/${encodeURIComponent(projectName)}/change-sessions/${encodeURIComponent(sessionId)}/executions`);
+    return data.executions;
+  }
+  async getChangeExecution(projectName: string, sessionId: string, executionId: string): Promise<ChangeExecution> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/change-sessions/${encodeURIComponent(sessionId)}/executions/${encodeURIComponent(executionId)}`);
+  }
+  async getExecutionManifest(projectName: string, sessionId: string, executionId: string): Promise<ProductionExecutionManifest | null> {
+    try {
+      return await this.request(`/api/project/${encodeURIComponent(projectName)}/change-sessions/${encodeURIComponent(sessionId)}/executions/${encodeURIComponent(executionId)}/manifest`);
+    } catch { return null; }
+  }
+  async resumeChangeExecution(projectName: string, sessionId: string, executionId: string): Promise<{ execution: ChangeExecution; [k: string]: any }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/change-sessions/${encodeURIComponent(sessionId)}/executions/${encodeURIComponent(executionId)}/resume`, { method: 'POST' });
+  }
+  async cancelChangeExecution(projectName: string, sessionId: string, executionId: string): Promise<{ execution: ChangeExecution; cancelled: boolean; creative_committed: boolean }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/change-sessions/${encodeURIComponent(sessionId)}/executions/${encodeURIComponent(executionId)}/cancel`, { method: 'POST' });
   }
   async listChangeSessionProposals(projectName: string, sessionId: string): Promise<ModuleProposal[]> {
     // 复用 plan 端点不返回 proposals；用 intelligence 旁路非必须——此处留扩展点，

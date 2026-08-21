@@ -109,10 +109,57 @@
       <div class="cpr-helper">批准只会保存你的确认。当前阶段不会立即修改项目或重新生成素材。</div>
     </template>
 
-    <!-- 已批准 -->
+    <!-- 已批准（AI-7C 执行）-->
     <div v-if="cs.session.status === 'approved_for_execution'" class="cpr-approved">
       <div class="ap-title">方案已批准</div>
-      <div class="ap-sub">等待执行阶段（AI-7C）</div>
+
+      <!-- 未执行：Execute 入口（§3/§15：批准 ≠ apply；执行需显式动作）-->
+      <template v-if="!cs.execution">
+        <div class="ap-sub">此批准尚未修改项目。执行需显式动作（§3：批准 ≠ apply）。</div>
+        <div class="exec-mode">
+          <label class="exec-mode-label">制作模式</label>
+          <select v-model="execMode" class="input exec-mode-select">
+            <option value="affected_production">应用 + 再生受影响制作（默认）</option>
+            <option value="creative_only">仅应用创作变更（不生成素材）</option>
+          </select>
+        </div>
+        <div class="cpr-actions">
+          <button class="btn btn-primary" :disabled="cs.busy" @click="onExecute">执行计划</button>
+        </div>
+        <div class="cpr-helper">执行将重验批准 → 暂存已批准操作 → 原子提交创作变更。制作模式=仅创作时提交后即止（§66）。</div>
+      </template>
+
+      <!-- 执行中/终态：timeline + 前后提交措辞（§79）-->
+      <template v-else>
+        <div class="exec-timeline">
+          <div v-for="s in stageTimeline" :key="s.key" class="exec-stage"
+               :class="{ done: s.state === 'done', current: s.state === 'current', blocked: cs.executionBlocked }">
+            <span class="exec-mark">{{ s.state === 'done' ? '✓' : s.state === 'current' ? '●' : '○' }}</span>
+            <span class="exec-label">{{ s.label }}</span>
+          </div>
+        </div>
+        <!-- §79 前后提交区分 -->
+        <div v-if="!cs.creativeCommitted" class="exec-state pre-commit">
+          尚未提交任何项目变更（§79）。{{ cs.executionBlocked ? '执行受阻：' + (cs.execution.blocker?.message || cs.execution.blocker?.code) : '' }}
+        </div>
+        <div v-else class="exec-state post-commit">
+          创作变更已提交（§79）。{{ cs.executionDone ? '执行完成。' : '制作尚未完成。' }}
+        </div>
+        <!-- blocker 详情 -->
+        <div v-if="cs.executionBlocked" class="exec-blocker">
+          <strong>受阻：</strong>{{ cs.execution.blocker?.message || cs.execution.blocker?.code }}
+          <span v-if="cs.execution.blocker?.code === 'PROJECT_CHANGED_AFTER_APPROVAL'"> — 需重新提案/审批（§81，不可 rebasing resume）</span>
+        </div>
+        <!-- resume / cancel（§38/§81）-->
+        <div class="cpr-actions">
+          <button v-if="cs.executionBlocked" class="btn btn-ghost" :disabled="cs.busy"
+                  @click="cs.resumeExecution()">尝试恢复</button>
+          <button class="btn btn-ghost" :disabled="cs.busy || cs.executionDone" @click="cs.cancelExecution()">取消</button>
+        </div>
+        <div class="cpr-helper">
+          {{ cs.creativeCommitted ? '取消不会回滚已提交的创作变更（§38）。' : '取消将安全停止，canonical 不动（§38）。' }}
+        </div>
+      </template>
     </div>
 
     <!-- 请求修改输入 -->
@@ -140,6 +187,32 @@ const cs = useChangeSessionStore();
 const activeTab = ref('story');
 const showFeedback = ref(false);
 const feedbackText = ref('');
+const execMode = ref<'affected_production' | 'creative_only'>('affected_production');
+
+// AI-7C §86 execution timeline：据 execution.stage 推导各阶段 done/current/pending
+const STAGE_ORDER = [
+  'revalidate', 'workspace_create', 'creative_replay', 'workspace_verify',
+  'canonical_commit', 'character_sync', 'production_planning',
+  'production_prepare', 'production', 'compose', 'done',
+] as const;
+const STAGE_LABELS: Record<string, string> = {
+  revalidate: '重验批准', workspace_create: '建执行 Workspace', creative_replay: '暂存创作变更',
+  workspace_verify: '校验预览一致', canonical_commit: '原子提交创作变更',
+  character_sync: '同步角色参考图', production_planning: '准备制作计划',
+  production_prepare: '冻结制作输入', production: '生成受影响素材',
+  compose: '合成', done: '完成',
+};
+const stageTimeline = computed(() => {
+  const cur = cs.execution?.stage;
+  const idx = cur ? STAGE_ORDER.indexOf(cur as any) : -1;
+  return STAGE_ORDER.map((k, i) => ({
+    key: k,
+    label: STAGE_LABELS[k] || k,
+    state: i < idx ? 'done' : i === idx ? 'current' : 'pending',
+  }));
+});
+
+function onExecute() { cs.execute(execMode.value); }
 
 const statusLabel = computed(() => {
   const map: Record<string, string> = {

@@ -930,6 +930,53 @@ async def _real_run_starter(rt: AgentRuntime, project: str, ex: ChangeExecutionS
     return {"run_id": run.run_id}
 
 
+def cancel_execution(rt: AgentRuntime, project: str, execution_id: str) -> dict:
+    """§38 cancellation 语义：canonical 提交前 -> cancelled（canonical 不动）；提交后 ->
+    cancel_requested=True（committed creative 保留，停止后续 production）。不意味 undo（§38）。"""
+    store = _store(rt, project)
+    ex = store.get_execution(execution_id)
+    if ex is None:
+        raise AgentError("EXECUTION_NOT_FOUND", f"execution 不存在: {execution_id}")
+    if ex.project_name != project:
+        raise AgentError("EXECUTION_NOT_FOUND", "execution 不属于该项目")
+    if ex.status in EXEC_TERMINAL:
+        return {"execution": ex.to_dict(), "idempotent": True}
+    cc = ex.canonical_commit
+    committed = bool(cc and cc.get("status") == "committed")
+    if not committed:
+        # 提交前：安全取消，canonical 未动（§38）
+        ex.status = "cancelled"; ex.cancel_requested = True
+    else:
+        # 提交后：creative 已提交保留；标 cancel_requested 停后续 production（§38）
+        ex.cancel_requested = True
+        if ex.stage not in ("done",):
+            ex.status = "cancelled"   # 无活跃 production 可停（v1 真production 在 §103）；creative 保留
+    ex.updated_at = _now()
+    store.save_execution(ex)
+    return {"execution": ex.to_dict(), "cancelled": True, "creative_committed": committed}
+
+
+async def resume_execution(rt: AgentRuntime, project: str, execution_id: str) -> dict:
+    """§83 resume：从当前 stage 继续推进。v1 复用 start_replay_commit（幂等：重跑 create+replay+
+    commit；character_sync+ 需真 generator 在 §103 接通后推进，当前 no-op past commit）。
+    blocked（stale/preview-mismatch/active-production）不可 resume（§81 stale 不可 rebasing）。"""
+    store = _store(rt, project)
+    ex = store.get_execution(execution_id)
+    if ex is None:
+        raise AgentError("EXECUTION_NOT_FOUND", f"execution 不存在: {execution_id}")
+    if ex.project_name != project:
+        raise AgentError("EXECUTION_NOT_FOUND", "execution 不属于该项目")
+    if ex.status in EXEC_TERMINAL:
+        return {"execution": ex.to_dict(), "idempotent": True}
+    if ex.status == "blocked":
+        # §81：blocked（尤其 stale）不可 rebasing resume；返回 blocked 态供 UI 说明
+        return {"execution": ex.to_dict(), "blocked": True,
+                "blocker_code": (ex.blocker or {}).get("code")}
+    # 幂等推进（re-validate + replay + commit；post-commit no-op）
+    return await start_replay_commit(rt, project, ex.change_session_id,
+                                      ex.plan_id, ex.plan_version, ex.production_mode)
+
+
 # ============ 查询 ============
 def get_execution(rt: AgentRuntime, project: str, session_id: str,
                   execution_id: str) -> Optional[dict]:
