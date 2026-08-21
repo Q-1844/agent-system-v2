@@ -14,7 +14,9 @@ from __future__ import annotations
 import logging
 from typing import List, Optional
 
-from src.revision.models import _canonical_json
+from src.revision.models import _canonical_json, ChangeOperation, creative_source_signature
+from src.revision import changeset as cs_engine   # 复用既有 preview/apply/reconcile（§23/§62）
+from src.revision.changeset import ChangeSetError
 
 from ..runtime import AgentRuntime, AgentError
 from .modes import AgentExecutionMode
@@ -238,6 +240,182 @@ def execute_plan(rt: AgentRuntime, project: str, session_id: str,
             "idempotent": False, "session_id": session_id,
             "plan_id": plan_id, "plan_version": plan_version,
             "status": "pending", "stage": "workspace_create"}
+
+
+# ============ AI-7C-2 创意 replay（§97）============
+def _topo_sort(steps: list) -> list:
+    """§24/§25：稳定拓扑序（Kahn）。依赖 DAG 必须满足；检测到环 -> PLAN_DEPENDENCY_CYCLE。
+    PlanValidator 本应已查环（§25），此为执行期兜底。"""
+    by_id = {s.get("step_id", ""): s for s in steps}
+    indeg = {sid: 0 for sid in by_id}
+    children = {sid: [] for sid in by_id}
+    for s in steps:
+        sid = s.get("step_id", "")
+        for dep in (s.get("depends_on_step_ids") or []):
+            if dep in by_id:
+                indeg[sid] += 1
+                children[dep].append(sid)
+    # 稳定：初始 0 入度按 steps 出现顺序
+    queue = [sid for sid in by_id if indeg[sid] == 0]
+    order = []
+    while queue:
+        sid = queue.pop(0)
+        order.append(sid)
+        for c in children[sid]:
+            indeg[c] -= 1
+            if indeg[c] == 0:
+                queue.append(c)
+    if len(order) != len(by_id):
+        raise AgentError("PLAN_DEPENDENCY_CYCLE", "plan step DAG 存在环（§25 执行期兜底）")
+    return order
+
+
+def _step_record(ex: ChangeExecutionSession, step_id: str) -> dict:
+    for r in ex.steps:
+        if r.get("step_id") == step_id:
+            return r
+    return {}
+
+
+def _set_step_record(ex: ChangeExecutionSession, step_id: str, **fields) -> None:
+    """就地更新某 step record 的字段。"""
+    for r in ex.steps:
+        if r.get("step_id") == step_id:
+            r.update(fields)
+            return
+    # 不存在则追加（兜底）
+    rec = ExecutionStepRecord(step_id=step_id, status="pending").to_dict()
+    rec.update(fields)
+    ex.steps.append(rec)
+
+
+def run_creative_replay(rt: AgentRuntime, project: str,
+                        execution_id: str) -> dict:
+    """§97 AI-7C-2：execution workspace + 确定性创意 replay + 最终等价校验。
+    从 stage=workspace_create 推进到 canonical_commit（AI-7C-3 接力）或 blocked。
+
+    复用既有 changeset.preview/apply（§23）：每 step 一 ChangeSet，preview→apply 到 execution
+    workspace，记 ExecutionStepRecord。拓扑串行（§24，不并发写同 workspace）。重启幂等：已 applied
+    step 跳过（§73）。最终 §27 等价：final working creative_source_signature == preview.projected_signature。
+    **canonical 全程不动**（workspace 是隔离 staging，§22）。0 production。"""
+    store = _store(rt, project)
+    ex = store.get_execution(execution_id)
+    if ex is None:
+        raise AgentError("EXECUTION_NOT_FOUND", f"execution 不存在: {execution_id}")
+    if ex.project_name != project:
+        raise AgentError("EXECUTION_NOT_FOUND", "execution 不属于该项目")
+    # 终态/blocked：幂等返回
+    if ex.status in EXEC_TERMINAL or ex.status == "blocked":
+        return {"execution": ex.to_dict(), "idempotent": True}
+    # 只在 replay 相关 stage 推进
+    if ex.stage not in ("workspace_create", "creative_replay", "workspace_verify"):
+        return {"execution": ex.to_dict(), "idempotent": True}
+
+    ws_store = rt._ws_store(project)
+    plan = store.get_plan(ex.plan_id)
+    preview = store.get_preview(ex.preview_artifact_id)
+    if plan is None or preview is None:
+        raise AgentError("PLAN_PREVIEW_FAILED", "plan/preview artifact 缺失，无法 replay")
+
+    # ---------- stage: workspace_create ----------
+    if ex.stage == "workspace_create":
+        if not ex.execution_workspace_id:
+            # §21：从当前 canonical 建隔离 execution workspace；purpose 经 name 标注 +
+            # execution_workspace_id 绑定（§21：不强加 schema 字段，等效可追溯）。
+            ws = ws_store.create(name=f"AI-7C exec {execution_id[:14]}")
+            ex.execution_workspace_id = ws.workspace_id
+        ex.status = "running"
+        ex.stage = "creative_replay"
+        ex.updated_at = _now()
+        store.save_execution(ex)
+
+    # ---------- stage: creative_replay ----------
+    if ex.stage == "creative_replay":
+        bundles_by_step = {b.get("step_id"): b for b in (preview.module_operations or [])}
+        order = _topo_sort(plan.steps or [])
+        for step_id in order:
+            rec = _step_record(ex, step_id)
+            if rec.get("status") == "applied":
+                continue   # §73 重启跳过已应用 step（不 double-apply）
+            bundle = bundles_by_step.get(step_id, {})
+            ops = [ChangeOperation.from_dict(o) for o in (bundle.get("operations") or [])]
+            ws = ws_store.load(ex.execution_workspace_id)
+            rev_before = ws.revision
+            cid = None
+            try:
+                if ops:
+                    # §23：复用既有 preview（校验 revision + 分配/复用 stable id + 落盘 changeset）
+                    pv = cs_engine.preview(ws_store, ws,
+                                           title=f"AI-7C exec {execution_id[:10]}:{step_id}",
+                                           intent="approved_plan_execution",
+                                           base_workspace_revision=ws.revision,
+                                           operations=ops)
+                    # §23：复用既有 apply（三重校验 + crash-safe 写 working + bump revision）
+                    cs_engine.apply(ws_store, ws, pv["changeset_id"])
+                    cid = pv["changeset_id"]
+            except ChangeSetError as cse:
+                # §97：stale workspace revision / before-mismatch -> 该 step failed，execution blocked。
+                # canonical 未动（workspace 隔离）。不重试、不修复（§9：不创意修复）。
+                _set_step_record(ex, step_id, status="failed",
+                                 workspace_revision_before=rev_before,
+                                 error={"code": cse.code, "message": cse.message},
+                                 completed_at=_now())
+                ex.status = "blocked"
+                ex.stage = "creative_replay"
+                ex.blocker = {"code": cse.code, "step_id": step_id,
+                              "message": cse.message}
+                ex.updated_at = _now()
+                store.save_execution(ex)
+                return {"execution": ex.to_dict(), "blocked": True,
+                        "blocker_code": cse.code}
+            ws2 = ws_store.load(ex.execution_workspace_id)
+            _set_step_record(ex, step_id, status="applied",
+                             workspace_revision_before=rev_before,
+                             workspace_revision_after=ws2.revision,
+                             changeset_id=cid, completed_at=_now())
+            ex.status = "running"
+            ex.updated_at = _now()
+            store.save_execution(ex)   # 每 step 落盘（crash 后可从 step record 续）
+        ex.stage = "workspace_verify"
+        ex.updated_at = _now()
+        store.save_execution(ex)
+
+    # ---------- stage: workspace_verify（§27 最终等价）----------
+    if ex.stage == "workspace_verify":
+        final_working = ws_store.load_working_project(ex.execution_workspace_id)
+        final_sig = creative_source_signature(final_working.to_dict())
+        # §27：final workspace creative signature == approved preview projected_signature
+        if not preview.projected_signature or final_sig != preview.projected_signature:
+            ex.status = "blocked"
+            ex.stage = "workspace_verify"
+            ex.blocker = {"code": "EXECUTION_PREVIEW_MISMATCH",
+                          "final_signature": final_sig,
+                          "expected_projected_signature": preview.projected_signature,
+                          "message": "执行结果与批准预览不一致（§27），canonical 未动"}
+            ex.updated_at = _now()
+            store.save_execution(ex)
+            return {"execution": ex.to_dict(), "blocked": True,
+                    "blocker_code": "EXECUTION_PREVIEW_MISMATCH"}
+        ex.stage = "canonical_commit"   # 等待 AI-7C-3 原子提交
+        ex.updated_at = _now()
+        store.save_execution(ex)
+
+    return {"execution": ex.to_dict(), "idempotent": False}
+
+
+def start_and_replay(rt: AgentRuntime, project: str, session_id: str,
+                     plan_id: str, plan_version: int,
+                     production_mode: str = "affected_production") -> dict:
+    """端点入口：execute_plan（AI-7C-1 创建+revalidation）→ 若未 blocked 则 run_creative_replay
+    （AI-7C-2 workspace replay + 等价校验）。幂等：重复调用对终态/已推进 execution 为 no-op。
+    保持 execute_plan 自身停在 workspace_create（AI-7C-1 契约 + 单测不变）；端点在此之上接力。"""
+    res = execute_plan(rt, project, session_id, plan_id, plan_version, production_mode)
+    ex = res.get("execution")
+    if not ex or res.get("blocked") or ex.get("status") == "blocked":
+        return res   # stale/blocked：不 replay
+    if ex.get("stage") in ("workspace_create", "creative_replay", "workspace_verify"):
+        return run_creative_replay(rt, project, ex["execution_id"])
+    return res   # 已到 canonical_commit+ ：幂等返回
 
 
 # ============ 查询 ============
