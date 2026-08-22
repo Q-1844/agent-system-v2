@@ -121,11 +121,17 @@ async def handler_character_views(job, emit):
     # ---- K1：外观语义版本判定 ----
     target_sig = (job.params.get("appearance_sig") or "").strip()
     meta_sig = (_read_views_meta(project_dir, char_name).get("appearance_sig") or "")
-    same_generation = bool(target_sig) and target_sig == meta_sig
-    # resume 同一生成：已 done 的 view 跳过；新外观修订（sig 不同/无记录）：全部重新生成。
-    done_views = ({v for v, a in (char.views or {}).items()
-                   if getattr(a, "status", None) == "done"}
-                  if same_generation else set())
+    _done = {v for v, a in (char.views or {}).items()
+             if getattr(a, "status", None) == "done"}
+    if not target_sig:
+        # legacy（无外观语义的旧调用方）：保持既有 done-skip 行为，不触发重生成
+        done_views = _done
+    elif target_sig == meta_sig:
+        # resume 同一次生成（sig 一致）：done views 可安全跳过
+        done_views = _done
+    else:
+        # 新批准外观修订（sig 不同/无 meta 记录）：旧 done views 是陈旧输入，全部重新生成
+        done_views = set()
 
     async def _gen(view: str, prompt: str, refs=None, pct: int = 0) -> Asset:
         if view in done_views:
