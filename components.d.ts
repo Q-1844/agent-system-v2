@@ -11,6 +11,7 @@ declare module 'vue' {
     AgentConversationSurface: typeof import('./src/components/agent/AgentConversationSurface.vue')['default']
     AgentSwitcher: typeof import('./src/components/agent/AgentSwitcher.vue')['default']
     AutopilotRunMonitor: typeof import('./src/components/AutopilotRunMonitor.vue')['default']
+    ChangePlanReview: typeof import('./src/components/agent/ChangePlanReview.vue')['default']
     CharacterDesignStudio: typeof import('./src/components/CharacterDesignStudio.vue')['default']
     CharacterResolutionPanel: typeof import('./src/components/CharacterResolutionPanel.vue')['default']
     Collapsible: typeof import('./src/components/Collapsible.vue')['default']
@@ -34,6 +35,7 @@ declare module 'vue' {
     ShotCard: typeof import('./src/components/ShotCard.vue')['default']
     StoryContinuation: typeof import('./src/components/StoryContinuation.vue')['default']
     StoryOrganizer: typeof import('./src/components/StoryOrganizer.vue')['default']
+    TeamChatPanel: typeof import('./src/components/agent/TeamChatPanel.vue')['default']
     Workbench: typeof import('./src/components/Workbench.vue')['default']
   }
 }

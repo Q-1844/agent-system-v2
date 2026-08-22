@@ -12,6 +12,7 @@ import { ref, computed } from 'vue';
 import { apiClient } from '@/api';
 import type { AgentMessage, AgentInfo } from '@/api';
 import { useProjectStore } from '@/store';
+import { useChangeSessionStore } from '@/store/changeSession';
 
 // AI-6C §9：前端轻量 context descriptor。本轮仅 project/scene/shot 是真实 scope；
 // character / shots 在后端无对应 ScopeType，本轮降级（不伪造业务上下文，§9/§35）。
@@ -47,6 +48,7 @@ export function resolveScope(
 
 export const useAgentUiStore = defineStore('agentUi', () => {
   const projectStore = useProjectStore();
+  const csStore = useChangeSessionStore();
 
   // ---- UI state（§5）----
   const uiState = ref<AgentUiState>('compact');
@@ -67,7 +69,21 @@ export const useAgentUiStore = defineStore('agentUi', () => {
   const messages = ref<AgentMessage[]>([]);
   const sending = ref(false);
   const chatError = ref('');
-  const running = ref(false);                            // §28：agent 工作中（读取真实状态，不 fake 进度）
+  // §28 + AI-7C-H §4：running 是**派生态**——只由 (a) 本轮 chat HTTP 在途（sending）或
+  // (b) 后端持久化的 ChangeSession/ChangeExecution 活跃态（changeSession store 轮询所得）
+  // 推导。前端布尔不发明执行真相；LLM 话术（「我开始处理了」）永远不进入此判定。
+  const running = computed(() =>
+    sending.value || csStore.isActive || csStore.executionActive);
+
+  // AI-7C-H §5：确定性变更意图检测（与后端 classify_request._CHANGE_VERBS 同族词表）。
+  // 写意图经 Floating Bar 必须桥接进真实 ChangeSession 工作流（durable），
+  // 而非止于只「谈论」修改的普通 AgentMessage（§23）。只读问答继续走普通 Agent 会话。
+  const CHANGE_INTENT_RE = /改|修改|换成|变成|变得|变为|删除|删掉|去掉|调整|替换|重写|续写|让.{1,20}更|加(强|快|深)|增强|弱化|放大|缩小|make\b|change\b|remove\b|turn\b/i;
+
+  /** §15：活跃执行 + 新变更请求 → 确定性二选一（不静默吞并进运行中的已批准计划）。 */
+  const pendingChangeChoice = ref<string | null>(null);
+  // 暂存的排队变更请求（queue 选择后保留；执行终态时提示用户提交）
+  const _queuedChangeRequests = ref<string[]>([]);
 
   // ---- agent 元数据（§10 复用 Registry/API，不硬编码第二份）----
   const agents = ref<AgentInfo[]>([]);
@@ -201,20 +217,116 @@ export const useAgentUiStore = defineStore('agentUi', () => {
     await ensureSession();
   }
 
-  /** 发送消息（复用 sendAgentMessage；乐观追加 user，回填 assistant，§agents/index.vue 同款）。 */
+  /** 当前 UI context → ChangeSession context_scope（§9：页面上下文即解析指向）。
+   * scene/shot/character 上下文分别映射；project 上下文无 scope。 */
+  function _contextScope(): { sceneId?: string; shotId?: string; characterName?: string } | undefined {
+    const ctx = currentContext.value;
+    if (!ctx || ctx.type === 'project') return undefined;
+    if (ctx.type === 'scene' || ctx.type === 'shots') return { sceneId: ctx.sceneId };
+    if (ctx.type === 'shot') return { sceneId: ctx.sceneId, shotId: ctx.shotId };
+    if (ctx.type === 'character') return { characterName: ctx.name };
+    return undefined;
+  }
+
+  function _pushUserMsg(text: string) {
+    messages.value.push({
+      role: 'user', content: text, status: null, created_at: Date.now() / 1000,
+    });
+  }
+
+  /** §23/§24：写意图桥接——进入真实 ChangeSession 工作流（durable），引用真实 session id。 */
+  async function _bridgeChangeIntent(text: string) {
+    const p = projectStore.projectName;
+    if (!p) { chatError.value = '请先选择项目'; return; }
+    _pushUserMsg(text);
+    if (!conversationOpen.value) conversationOpen.value = true;
+    // §15：已批准执行正在跑 → 确定性二选一，不静默改已批准计划
+    if (csStore.executionActive) {
+      pendingChangeChoice.value = text;
+      messages.value.push({
+        role: 'assistant', status: null, created_at: Date.now() / 1000,
+        content: '当前计划正在执行（' + (csStore.execution?.stage || '') +
+                 '）。这条新修改请求如何处理？请在下方选择：等当前任务完成后处理，或停止当前任务并重新规划。',
+      });
+      return;
+    }
+    const sessionAlive = !!csStore.session &&
+      !['rejected', 'stale', 'failed', 'cancelled'].includes(csStore.session.status);
+    if (sessionAlive) {
+      // 提案阶段的活跃会话：新请求作为修改反馈并入同一会话（不开第二条并行变更流）
+      await csStore.requestChanges(text);
+      messages.value.push({
+        role: 'assistant', status: null, created_at: Date.now() / 1000,
+        content: '已把这条请求并入当前变更会话 ' + (csStore.session?.session_id || '') +
+                 '，作为修改反馈重新整理方案。进度见下方运行卡。',
+      });
+      return;
+    }
+    // 新变更流：Producer=通用入口(floating_bar)；Specialist=专业上下文(direct_agent_chat)
+    const source = activeAgentId.value === 'producer' ? 'floating_bar' : 'direct_agent_chat';
+    await csStore.create(text, undefined, {
+      source: source as 'floating_bar' | 'direct_agent_chat',
+      sourceAgentId: activeAgentId.value,
+      sourceSessionId: activeSessionId.value || undefined,
+      contextScope: _contextScope(),
+    });
+    if (csStore.session) {
+      messages.value.push({
+        role: 'assistant', status: null, created_at: Date.now() / 1000,
+        content: '正在由制作团队整理修改方案（变更会话 ' + csStore.session.session_id +
+                 '）。完成后会在这里呈现方案供你审查。',
+      });
+    } else if (csStore.error) {
+      messages.value.push({
+        role: 'assistant', status: 'failed', created_at: Date.now() / 1000,
+        content: '创建变更会话失败：' + csStore.error,
+      });
+    }
+  }
+
+  /** §15 选择：让当前执行完成后处理（请求暂存，执行结束后并入/重开）。 */
+  async function resolveChangeChoice(choice: 'queue' | 'restart') {
+    const text = pendingChangeChoice.value;
+    pendingChangeChoice.value = null;
+    if (!text) return;
+    if (choice === 'restart') {
+      await csStore.cancelExecution();
+      await csStore.create(text, undefined, {
+        source: activeAgentId.value === 'producer' ? 'floating_bar' : 'direct_agent_chat',
+        sourceAgentId: activeAgentId.value,
+        contextScope: _contextScope(),
+      });
+      messages.value.push({
+        role: 'assistant', status: null, created_at: Date.now() / 1000,
+        content: '已停止当前任务，基于这条请求重新规划（新会话 ' +
+                 (csStore.session?.session_id || '') + '）。',
+      });
+    } else {
+      // queue：保留当前执行到完成；新请求暂存为该会话的后续反馈（执行终态后由用户提交）
+      messages.value.push({
+        role: 'assistant', status: null, created_at: Date.now() / 1000,
+        content: '好的：当前任务继续执行，这条修改请求将在其完成后处理（已记录）。',
+      });
+      _queuedChangeRequests.value.push(text);
+    }
+  }
+
+  /** 发送消息（§5 路由）：变更意图 → ChangeSession 桥接；只读问题 → 普通 Agent 会话。 */
   async function send(content: string) {
     const p = projectStore.projectName;
     const text = content.trim();
     if (!text || sending.value) return;
+    if (CHANGE_INTENT_RE.test(text)) {
+      await _bridgeChangeIntent(text);
+      return;
+    }
     let sid = activeSessionId.value;
     if (!sid) {
       sid = await ensureSession();
       if (!sid) return;
     }
-    messages.value.push({
-      role: 'user', content: text, status: null, created_at: Date.now() / 1000,
-    });
-    sending.value = true; running.value = true; chatError.value = '';
+    _pushUserMsg(text);
+    sending.value = true; chatError.value = '';
     try {
       const reply = await apiClient.sendAgentMessage(p, sid, text);
       messages.value.push(reply);
@@ -223,7 +335,7 @@ export const useAgentUiStore = defineStore('agentUi', () => {
     } catch (e: any) {
       chatError.value = '发送失败: ' + (e.message || e);
     } finally {
-      sending.value = false; running.value = false;
+      sending.value = false;
     }
   }
 
@@ -235,13 +347,15 @@ export const useAgentUiStore = defineStore('agentUi', () => {
     contextAttachedToWorkspace.value = false;
     conversationOpen.value = false;
     chatError.value = '';
+    pendingChangeChoice.value = null;
+    _queuedChangeRequests.value = [];
   }
 
   return {
     // state
     uiState, activeAgentId, activeSessionId, currentContext, contextAttachedToWorkspace,
     posLeft, posTop, isDragging, conversationOpen, messages, sending, chatError, running,
-    agents, draft,
+    agents, draft, pendingChangeChoice, queuedChangeRequests: _queuedChangeRequests,
     // computed
     activeAgent, currentScope,
     // position
@@ -249,6 +363,7 @@ export const useAgentUiStore = defineStore('agentUi', () => {
     // ui state
     openBar, collapse, setUiState, expandConversation, closeConversation, toggleConversation,
     // agent/session
-    loadAgents, ensureSession, setAgent, setContext, setAgentContext, clearContext, send, onProjectChange,
+    loadAgents, ensureSession, setAgent, setContext, setAgentContext, clearContext,
+    send, resolveChangeChoice, onProjectChange,
   };
 });

@@ -18,6 +18,36 @@
       <AgentContextChips />
     </div>
 
+    <!-- AI-7C-H §12：变更会话运行卡——durable 运行时真相（Layer B），非 LLM 话术。
+         状态来自后端持久化 ChangeSession/ChangeExecution（changeSession store 轮询）；
+         无伪造百分比，只显示有确定分母的真实计数。引用真实 session id。 -->
+    <div v-if="cs.session" class="acs-runcard" :class="'rc-' + runPhase">
+      <div class="rc-head">
+        <span class="rc-dot" />
+        <span class="rc-stage">{{ runStageLabel }}</span>
+        <span class="rc-sid">{{ cs.session.session_id }}</span>
+      </div>
+      <!-- §15：活跃执行 + 新变更请求的确定性二选一 -->
+      <div v-if="store.pendingChangeChoice" class="rc-choice">
+        <div class="rc-choice-q">当前计划正在执行，新的修改请求如何处理？</div>
+        <div class="rc-choice-opts">
+          <button class="rc-btn" @click="store.resolveChangeChoice('queue')">让当前任务完成后处理</button>
+          <button class="rc-btn rc-btn-warn" @click="store.resolveChangeChoice('restart')">停止当前任务并重新规划</button>
+        </div>
+      </div>
+      <!-- 有确定分母的真实计数（§28） -->
+      <div v-if="execCounts" class="rc-counts">{{ execCounts }}</div>
+      <!-- blocker：真实失败边界 + 可行动作 -->
+      <div v-if="cs.executionBlocked" class="rc-blocker">
+        受阻：{{ cs.execution?.blocker?.message || cs.execution?.blocker?.code }}
+      </div>
+      <div class="rc-actions">
+        <button class="rc-link" @click="openAgentCenter">
+          {{ cs.needsDecision ? '去确认创作决策' : cs.readyForReview ? '去审查修改方案' : '在 AI 团队中查看' }}
+        </button>
+      </div>
+    </div>
+
     <!-- messages（user 右、assistant 左；status 徽标；无 role 文本标签，靠对齐+底色区分） -->
     <div ref="listEl" class="acs-messages">
       <div v-if="!store.messages.length" class="acs-empty">在下方输入开始对话。</div>
@@ -39,10 +69,14 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
+import { useRouter } from 'vue-router';
 import { useAgentUiStore } from '@/store/agentUi';
+import { useChangeSessionStore } from '@/store/changeSession';
 import AgentContextChips from './AgentContextChips.vue';
 
 const store = useAgentUiStore();
+const cs = useChangeSessionStore();
+const router = useRouter();
 const listEl = ref<HTMLElement | null>(null);
 
 const vh = ref(typeof window === 'undefined' ? 900 : window.innerHeight);
@@ -85,6 +119,56 @@ const hasBusinessContext = computed(() => {
   const ctx = store.currentContext;
   return !!ctx && ctx.type !== 'project';
 });
+
+// ============ AI-7C-H §12：运行卡（durable 真相 → 用户可读阶段）============
+// proposal 阶段标签映射（§12 建议）；execution 阶段沿用 ChangePlanReview 的 STAGE_LABELS 词表。
+const SESSION_STAGE_LABELS: Record<string, string> = {
+  routing: '理解你的要求', consulting: '协调相关专业 Agent',
+  analyzing_dependencies: '分析影响', awaiting_user_decision: '需要你确认',
+  synthesizing_plan: '整理修改方案', validating_plan: '校验方案',
+  building_preview: '准备预览', ready_for_review: '等待你确认',
+  approved_for_execution: '方案已批准', rejected: '已拒绝', stale: '已过期',
+  failed: '失败', cancelled: '已取消', blocked: '受阻',
+};
+const EXEC_STAGE_LABELS: Record<string, string> = {
+  revalidate: '重验批准', workspace_create: '建执行工作区', creative_replay: '暂存创作变更',
+  workspace_verify: '校验预览一致', canonical_commit: '原子提交创作变更',
+  character_sync: '同步角色参考图', production_planning: '准备制作计划',
+  production_prepare: '冻结制作输入', production: '生成受影响素材',
+  compose: '合成成片', done: '完成',
+};
+const runPhase = computed<'proposal' | 'execution' | 'terminal'>(() => {
+  if (cs.execution) {
+    if (cs.executionDone) return 'terminal';
+    return 'execution';
+  }
+  if (cs.approved) return 'terminal';
+  return 'proposal';
+});
+const runStageLabel = computed(() => {
+  if (cs.execution) {
+    if (cs.executionBlocked) return '执行受阻';
+    return EXEC_STAGE_LABELS[cs.execution.stage] || cs.execution.stage;
+  }
+  if (cs.approved) return '已批准，等待执行';
+  return SESSION_STAGE_LABELS[cs.session?.status || ''] || cs.session?.status || '';
+});
+// §28：只显示有确定分母的真实计数（角色参考图 N/M、制作计划 N/M 来自 manifest 分母）
+const execCounts = computed(() => {
+  const ex = cs.execution;
+  if (!ex) return '';
+  const parts: string[] = [];
+  const affectedChars = cs.manifest?.affected_character_ids?.length ?? 0;
+  if (affectedChars > 0) {
+    parts.push(`角色参考图 ${(ex.character_sync || []).length}/${affectedChars}`);
+  }
+  const plannerScenes = cs.manifest?.planner_scene_ids?.length ?? 0;
+  if (plannerScenes > 0) {
+    parts.push(`制作计划 ${(ex.planning || []).length}/${plannerScenes}`);
+  }
+  return parts.join(' · ');
+});
+function openAgentCenter() { router.push('/agents'); }
 
 function statusLabel(s: string) {
   if (s === 'not_configured') return 'AI 未配置';
@@ -151,6 +235,50 @@ onBeforeUnmount(() => window.removeEventListener('resize', onResize));
   padding: 2px 8px 5px;
   flex-shrink: 0;
 }
+
+/* AI-7C-H §12 运行卡：紧凑、结构化、无日志倾倒 */
+.acs-runcard {
+  margin: 0 8px 6px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-root);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex-shrink: 0;
+}
+.rc-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.rc-dot {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+  background: var(--success);
+  animation: acs-pulse 1.4s ease-in-out infinite;
+}
+.rc-execution .rc-dot { background: #60a5fa; }
+.rc-terminal .rc-dot { background: var(--text-faint); animation: none; }
+.rc-stage { font-size: 11px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
+.rc-sid {
+  margin-left: auto; font-size: 10px; color: var(--text-faint);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rc-counts { font-size: 11px; color: var(--text-secondary); }
+.rc-blocker { font-size: 11px; color: #f87171; }
+.rc-actions { display: flex; justify-content: flex-end; }
+.rc-link {
+  background: none; border: none; padding: 2px 4px;
+  font-size: 11px; color: var(--accent, #60a5fa); cursor: pointer;
+  &:hover { text-decoration: underline; }
+}
+.rc-choice { display: flex; flex-direction: column; gap: 5px; }
+.rc-choice-q { font-size: 11px; color: var(--text-primary); }
+.rc-choice-opts { display: flex; gap: 6px; flex-wrap: wrap; }
+.rc-btn {
+  padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--bg-surface); color: var(--text-secondary);
+  font-size: 11px; cursor: pointer;
+  &:hover { background: var(--bg-hover); color: var(--text-primary); }
+}
+.rc-btn-warn { border-color: rgba(248, 113, 113, 0.4); color: #f87171; }
 
 .acs-messages {
   flex: 1; min-height: 120px;

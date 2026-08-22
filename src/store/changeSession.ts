@@ -8,7 +8,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { apiClient } from '@/api';
-import type { ChangeSession, UnifiedChangePlan, PlanPreviewArtifact, ChangeDecisionRequest, ChangeExecution } from '@/api';
+import type { ChangeSession, UnifiedChangePlan, PlanPreviewArtifact, ChangeDecisionRequest, ChangeExecution, ProductionExecutionManifest } from '@/api';
 import { useProjectStore } from '@/store';
 
 const POLL_MS = 2000;
@@ -34,6 +34,8 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
   const plan = ref<(UnifiedChangePlan & { preview?: PlanPreviewArtifact }) | null>(null);
   const decisions = ref<ChangeDecisionRequest[]>([]);
   const execution = ref<ChangeExecution | null>(null);
+  // AI-7C-H §28：execution 的 production manifest（真实计数分母：受影响 char/scene）
+  const manifest = ref<ProductionExecutionManifest | null>(null);
   // L6/§7.5：approved+未执行时的权威 eligibility（stale/blocked/invalid_approval 预呈现，不前端复制规则）
   const eligibility = ref<{ eligibility: string; execution?: ChangeExecution; reason?: string; blocker_code?: string } | null>(null);
   const busy = ref(false);          // create/resume/decision/approve/reject/execute 进行中
@@ -72,13 +74,26 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
     else stopPoll();
   }
 
-  async function create(requestText: string, sourceMessageId?: string) {
+  /** 创建变更会话。AI-7C-H §23/§24：Floating Bar / Specialist 直聊的写意图经此桥接进
+   * 真实 ChangeSession 工作流（durable），不再只是「谈论」修改的普通 AgentMessage。
+   * options.sourceAgentId/sourceSessionId 标注来源；contextScope 携带页面上下文。 */
+  async function create(requestText: string, sourceMessageId?: string, options?: {
+    source?: 'team_chat' | 'floating_bar' | 'direct_agent_chat';
+    sourceAgentId?: string;
+    sourceSessionId?: string;
+    contextScope?: { sceneId?: string; shotId?: string; characterName?: string };
+  }) {
     const p = projectStore.projectName;
     const text = requestText.trim();
     if (!p || !text || busy.value) return;
     busy.value = true; error.value = '';
     try {
-      const res = await apiClient.createChangeSession(p, text, 'team_chat', sourceMessageId);
+      const res = await apiClient.createChangeSession(
+        p, text, options?.source || 'team_chat', sourceMessageId, {
+          sourceAgentId: options?.sourceAgentId,
+          sourceSessionId: options?.sourceSessionId,
+          contextScope: options?.contextScope,
+        });
       lastRequestText.value = text;
       _set(res.session);
       // 立即触发首轮推进（后端 create 不自动后台推进）
@@ -167,6 +182,7 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
     try {
       const res = await apiClient.executeChangePlan(p, sid, pl.plan_id, pl.version, productionMode);
       execution.value = res.execution;
+      manifest.value = null;      // 新 execution：manifest 分母随之更换（§28）
       eligibility.value = null;   // L6：已启动 execution，eligibility 让位 execution 真相
       // M1：execute 停在 character_sync（pre-commit 由 start_replay_commit 完成提交）；
       // 若到 post-commit 阶段且未 blocked，自动 resume 触发后台 kickoff（§3 polling-first，前端轮询推进）
@@ -193,7 +209,21 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
     if (!p || !sid || !eid) return;
     try {
       execution.value = await apiClient.getChangeExecution(p, sid, eid);
+      // AI-7C-H §28：manifest（受影响 char/scene 分母）一次加载——运行卡真实计数用
+      await loadManifest();
     } catch { /* 静默 */ }
+  }
+
+  /** §28：execution 的 production manifest（分母真相）。每个 execution_id 只取一次。 */
+  async function loadManifest() {
+    const p = projectStore.projectName;
+    const sid = session.value?.session_id;
+    const ex = execution.value;
+    if (!p || !sid || !ex) return;
+    if (manifest.value && manifest.value.execution_id === ex.execution_id) return;
+    try {
+      manifest.value = await apiClient.getExecutionManifest(p, sid, ex.execution_id);
+    } catch { manifest.value = null; }
   }
 
   async function resumeExecution() {
@@ -323,12 +353,15 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
           await loadPlan();
           try {
             const exs = await apiClient.listChangeExecutions(p, active.session_id);
-            if (exs.length) execution.value = exs[0];
+            if (exs.length) {
+              execution.value = exs[0];
+              await loadManifest();   // §28：恢复执行进度时带出真实计数分母
+            }
           } catch { /* 无 execution */ }
           // H1：approved + execution 活跃 → 继续轮询（shouldPoll 统一判定，不再被 session 非 ACTIVE 杀掉）
           if (shouldPoll()) startPoll();
         }
-      } else { session.value = null; plan.value = null; execution.value = null; }
+      } else { session.value = null; plan.value = null; execution.value = null; manifest.value = null; }
     } catch { /* 无会话或项目未选 */ }
   }
 
@@ -338,13 +371,14 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
     plan.value = null;
     decisions.value = [];
     execution.value = null;
+    manifest.value = null;
     eligibility.value = null;
     error.value = '';
     lastRequestText.value = '';
   }
 
   return {
-    session, plan, decisions, execution, eligibility, busy, error, lastRequestText,
+    session, plan, decisions, execution, manifest, eligibility, busy, error, lastRequestText,
     isActive, isTerminal, readyForReview, needsDecision,
     approved, executionActive, executionBlocked, executionDone, creativeCommitted, needsExecute,
     create, resume, loadPlan, submitDecision, approve, requestChanges, reject,

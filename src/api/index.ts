@@ -1766,11 +1766,26 @@ class ApiClient {
   }
 
   // ============ AI-7B Change Sessions（proposal-only，§92/§94/§93）============
+  /** AI-7C-H §23/§24：Floating Bar / Specialist 直聊的写意图桥接——source 支持
+   * floating_bar | direct_agent_chat | team_chat；contextScope 携带页面上下文
+   * （sceneId/shotId/characterName），后端持久化为 entity_refs 供分类合并（§9 不反问）。 */
   async createChangeSession(projectName: string, request: string, source = 'team_chat',
-      sourceMessageId?: string): Promise<{ session: ChangeSession; request: ChangeRequest }> {
+      sourceMessageId?: string, options?: {
+        sourceAgentId?: string; sourceSessionId?: string;
+        contextScope?: { sceneId?: string; shotId?: string; characterName?: string };
+      }): Promise<{ session: ChangeSession; request: ChangeRequest }> {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/change-sessions`, {
       method: 'POST',
-      body: JSON.stringify({ request, source, source_message_id: sourceMessageId }),
+      body: JSON.stringify({
+        request, source, source_message_id: sourceMessageId,
+        source_agent_id: options?.sourceAgentId,
+        source_session_id: options?.sourceSessionId,
+        context_scope: options?.contextScope ? {
+          scene_id: options.contextScope.sceneId,
+          shot_id: options.contextScope.shotId,
+          character_name: options.contextScope.characterName,
+        } : undefined,
+      }),
     });
   }
   async listChangeSessions(projectName: string): Promise<ChangeSession[]> {

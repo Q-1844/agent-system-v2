@@ -15,6 +15,49 @@ export const useProjectStore = defineStore('project', () => {
   const style = ref('anime, soft lighting, cinematic composition');
   const size = ref('1152x768');
 
+  // ============ AI-7C-H K3：选中项目身份持久化（F5 恢复）============
+  // 只持久化项目身份/导航态（localStorage 允许）；session/execution 真相仍在后端。
+  const SELECTED_PROJECT_KEY = 'agnes:project:selected:v1';
+  // identityReady：项目身份解析完成（恢复或确认默认）。Agent/ChangeSession 的后端
+  // 真相恢复必须 await 它——保证 F5 后恢复的是正确项目的会话（K3 验收要求）。
+  let _resolveIdentity: () => void = () => {};
+  const identityReady = new Promise<void>((resolve) => { _resolveIdentity = resolve; });
+  const identityRestored = ref(false);
+
+  function _persistSelected(name: string) {
+    try { localStorage.setItem(SELECTED_PROJECT_KEY, name); } catch { /* ignore */ }
+  }
+
+  function _readSelected(): string | null {
+    try { return localStorage.getItem(SELECTED_PROJECT_KEY); } catch { return null; }
+  }
+
+  function _clearSelected() {
+    try { localStorage.removeItem(SELECTED_PROJECT_KEY); } catch { /* ignore */ }
+  }
+
+  /** K3：启动恢复选中项目。读 localStorage -> 对照后端项目列表 -> 有效则恢复，
+   * 无效/后端不可达则回退默认（单次尝试，无崩溃循环）。完成后 resolve identityReady。 */
+  async function restoreSelectedProject() {
+    if (identityRestored.value) return;
+    const stored = _readSelected();
+    if (stored && stored !== projectName.value) {
+      try {
+        const projects = await apiClient.listProjects();
+        if (projects.includes(stored)) {
+          await loadProject(stored);
+        } else {
+          // 项目已删除/失效：清除记录，保持默认，不崩溃
+          _clearSelected();
+        }
+      } catch {
+        // 后端暂不可达：保持默认身份，不清记录（下次刷新可再试）；不循环
+      }
+    }
+    identityRestored.value = true;
+    _resolveIdentity();
+  }
+
   // 角色列表（初始空；阶段 5 loadProject 不再调旧 getProjectCharacters，由各页面本地操作）
   const characters = ref<Character[]>([]);
   // 场景列表（初始空；script-editor 本地编辑，saveProjectScript 保存到 parsed_script.json）
@@ -299,8 +342,10 @@ export const useProjectStore = defineStore('project', () => {
 
   // 加载项目：设置 projectName + 清空项目级角色数据（项目隔离：切项目不串）。
   // 角色列表由 loadProjectCharacters 按需加载（角色页 onMounted/watch 触发）。
+  // K3：显式切换/创建项目时持久化身份（F5 恢复用）。
   async function loadProject(name: string) {
     projectName.value = name;
+    _persistSelected(name);
     characters.value = [];
     characterCache.value = {};
     Object.keys(generatingState).forEach(k => { delete generatingState[k]; });
@@ -370,6 +415,8 @@ export const useProjectStore = defineStore('project', () => {
     characters,
     scenes,
     notification,
+    identityReady,
+    identityRestored,
 
     // 角色保存系统
     savedCharacters,
@@ -379,6 +426,7 @@ export const useProjectStore = defineStore('project', () => {
 
     // 方法
     loadProject,
+    restoreSelectedProject,
     loadProjectCharacters,
     persistCharacterViews,
     showNotification,

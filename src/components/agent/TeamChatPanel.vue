@@ -122,6 +122,8 @@ watch(projectName, async (n, o) => {
 });
 
 onMounted(async () => {
+  // K3：先等项目身份恢复完成（F5 后正确项目），再恢复后端持久化的会话/执行真相
+  await projectStore.identityReady;
   if (projectName.value) { await store.load(); await cs.restoreActive(); }
 });
 onBeforeUnmount(() => { store.stopPoll(); cs.stopPoll(); });

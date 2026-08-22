@@ -75,9 +75,11 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAgentUiStore } from '@/store/agentUi';
+import { useChangeSessionStore } from '@/store/changeSession';
 import AgentSwitcher from './AgentSwitcher.vue';
 
 const store = useAgentUiStore();
+const csStore = useChangeSessionStore();
 const router = useRouter();
 
 const menuOpen = ref(false);
@@ -90,7 +92,13 @@ const barH = computed(() => 48);
 const agentLabel = computed(() => store.activeAgent?.name || store.activeAgentId);
 const agentTooltip = computed(() => store.activeAgent?.role || '切换 Agent');
 const inputPlaceholder = computed(() => 'Ask anything…');
-const runningTitle = computed(() => 'Agent 工作中');
+// AI-7C-H §4/§12：running 点的 tooltip 来自 durable 真相（变更会话阶段 / chat 在途），
+// 不由 LLM 话术推导。
+const runningTitle = computed(() => {
+  if (csStore.executionActive) return `执行中：${csStore.execution?.stage || ''}`;
+  if (csStore.isActive) return `整理修改方案：${csStore.session?.status || ''}`;
+  return '回复中…';
+});
 
 // AI-6D.1 §6：identity secondary。agent 名首词缩写（"Producer Supervisor"→"Producer"），
 // context 更醒目。tooltip 保留全名（不丢信息）。

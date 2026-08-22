@@ -9,14 +9,23 @@
 import { watch, onMounted, onBeforeUnmount } from 'vue';
 import { useProjectStore } from '@/store';
 import { useAgentUiStore } from '@/store/agentUi';
+import { useChangeSessionStore } from '@/store/changeSession';
 import FloatingAgentBar from './FloatingAgentBar.vue';
 import AgentConversationSurface from './AgentConversationSurface.vue';
 
 const projectStore = useProjectStore();
 const store = useAgentUiStore();
+const cs = useChangeSessionStore();
 
 // §4：project 变化销毁当前聊天上下文（session/context/messages），位置保留。
 watch(() => projectStore.projectName, () => store.onProjectChange());
+
+// AI-7C-H §27/K3：F5 后从后端持久化对象重建运行真相（非旧聊天叙述）。
+// 等待项目身份恢复完成（正确项目），再恢复活跃 ChangeSession/Execution（含轮询续接）。
+onMounted(async () => {
+  await projectStore.identityReady;
+  await cs.restoreActive();
+});
 
 // §34：Esc 优先关闭 expanded conversation（不丢失 session）。
 function onKeydown(e: KeyboardEvent) {

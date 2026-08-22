@@ -129,6 +129,10 @@ const projectName = computed(() => store.projectName);
 const { subscribe: subscribeTask } = useTaskStream();
 const exporting = ref(false);
 
+// AI-7C-H K3：应用挂载即恢复持久化的项目身份（在任何 Agent/ChangeSession 真相恢复
+// 之前完成——它们 await store.identityReady）。无效/已删项目回退默认，无崩溃循环。
+void store.restoreSelectedProject();
+
 // 阶段 4：全局任务队列 SSE（随 projectName 变化自动重连）
 const jobStore = useJobStore();
 const queueShow = ref(false);
