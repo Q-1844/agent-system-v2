@@ -171,12 +171,14 @@
 import { ref, computed, onMounted, nextTick, watch, defineAsyncComponent } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useProjectStore } from '@/store';
+import { useAgentUiStore } from '@/store/agentUi';
 import { apiClient } from '@/api';
 import { useRoute } from 'vue-router';
 import CharacterDesignStudio from '@/components/CharacterDesignStudio.vue';
 
 const route = useRoute();
 const store = useProjectStore();
+const agentUi = useAgentUiStore();
 const { characters, projectName } = storeToRefs(store);
 const selected = ref<any>(null);
 const activeTab = ref('single');
@@ -236,6 +238,11 @@ function statusClass(char: any): string {
 
 function selectChar(char: any) {
   selected.value = char;
+  // AI-7C-H §33 Probe 2：选中角色即成为 Floating Agent 的页面上下文
+  // （contextScope.characterName → 后端 entity_refs，Agent 不反问 Which Character）。
+  if (char?.name) {
+    agentUi.setContext({ type: 'character', name: char.name });
+  }
 }
 
 async function addCharacter() {

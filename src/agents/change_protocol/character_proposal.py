@@ -124,8 +124,12 @@ def _parse_character_items(raw: str, project) -> dict:
             "items": items, "user_decisions_needed": decisions}
 
 
-def _build_question(user_request: str) -> str:
-    return (f"用户变更请求：「{user_request}」\n"
+def _build_question(user_request: str, scope_chars: list | None = None) -> str:
+    hint = ""
+    if scope_chars:
+        hint = (f"\n用户当前在页面上选中的角色：{'、'.join(scope_chars)}——"
+                "「这个角色」等指代即指向它，直接对它操作，不要询问是哪个角色。\n")
+    return (f"用户变更请求：「{user_request}」\n{hint}"
             "请从角色（身份 / 外貌文字设定 / 新增 / 删除）角度，提出语义修改意图。"
             "改名不支持——若涉及，放进 user_decisions_needed。只返回上面要求的 JSON 对象。")
 
@@ -141,11 +145,21 @@ async def run_character_proposal(rt, project: str, session_id: str,
     intel = rt.project_intelligence(project)
     proj = intel._project()
     classification = classify_request(change_request.original_user_request, proj)
+    # AI-7C-H §33 Probe 2：合并持久化 context_scope（entity_refs 的 character 指向）。
+    # 「把这个角色的盔甲换成黑色」文本不含角色名——纯文本分类拿不到指向，LLM 会反问
+    # Which Character（§9 禁止）。页面上下文（选中角色）才是解析指向。
+    for ref in (change_request.entity_refs or []):
+        if ref.get("entity_type") == "character" and ref.get("entity_id"):
+            name = str(ref["entity_id"])
+            if name not in classification.get("character_refs", []):
+                classification["character_refs"] = \
+                    classification.get("character_refs", []) + [name]
     scope = scope_refs_from_classification(classification)
+    scope_chars = list(classification.get("character_refs", []))
+    question = _build_question(change_request.original_user_request, scope_chars)
     pack = ProjectContextBuilder(intel).build_for_specialist(
         agent_id=agent_id, request=change_request.original_user_request,
-        scope=scope, consultation_question=_build_question(change_request.original_user_request))
-    question = _build_question(change_request.original_user_request)
+        scope=scope, consultation_question=question)
     task = create_proposal_task(rt, project, agent_id, cap_id, question)
 
     proposal = ModuleProposal(

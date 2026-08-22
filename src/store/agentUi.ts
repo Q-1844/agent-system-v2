@@ -78,7 +78,7 @@ export const useAgentUiStore = defineStore('agentUi', () => {
   // AI-7C-H §5：确定性变更意图检测（与后端 classify_request._CHANGE_VERBS 同族词表）。
   // 写意图经 Floating Bar 必须桥接进真实 ChangeSession 工作流（durable），
   // 而非止于只「谈论」修改的普通 AgentMessage（§23）。只读问答继续走普通 Agent 会话。
-  const CHANGE_INTENT_RE = /改|修改|换成|变成|变得|变为|删除|删掉|去掉|调整|替换|重写|续写|让.{1,20}更|加(强|快|深)|增强|弱化|放大|缩小|make\b|change\b|remove\b|turn\b/i;
+  const CHANGE_INTENT_RE = /改|修改|换成|变成|变得|变为|删除|删掉|去掉|调整|替换|重写|续写|换回|恢复到|恢复成|让.{1,20}更|加(强|快|深)|增强|弱化|放大|缩小|make\b|change\b|remove\b|turn\b/i;
 
   /** §15：活跃执行 + 新变更请求 → 确定性二选一（不静默吞并进运行中的已批准计划）。 */
   const pendingChangeChoice = ref<string | null>(null);

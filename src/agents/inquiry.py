@@ -74,11 +74,20 @@ _AGENT_VIEW: Dict[str, str] = {
 # 程度型变更意图（Probe 1「让这一段更紧张一点」），否则被误判为只读提问、进不了变更流。
 _CHANGE_VERBS = re.compile(
     r"改|修改|换成|变成|变得|变为|删除|删掉|去掉|调整|替换|重写|续写|"
+    r"换回|恢复到|恢复成|"
     r"让.{1,20}更|加(强|快|深)|增强|弱化|放大|缩小|"
     r"make\b|change\b|remove\b|turn\b", re.IGNORECASE)
 _MODULE_KEYWORDS: List[Tuple[str, re.Pattern]] = [
     ("production_plan", re.compile(r"制作计划|production\s*plan|制作策略", re.IGNORECASE)),
-    ("character", re.compile(r"角色|角色设定|外貌|头发|hair|服装|衣服|appearance|character\b", re.IGNORECASE)),
+    # AI-7C-H H3：外观变更词补强——「把 X 改成银色短发、黑色战斗装甲」类请求此前命中
+    # 不了 character（“短发/装甲/造型”不在词表），被误路由到 script（“剧情”等词旁系命中），
+    # 导致 update_character 缺失、char-sync/K1 链路断裂。注意语义边界（回归锚定）：
+    # 仅**名字出现**不加 character（「让 Aran 离开城市」是剧本变更）；只有命中
+    # 外观/造型语义词才路由 character_designer。
+    ("character", re.compile(
+        r"角色|角色设定|外貌|外观|造型|头发|发型|发色|短发|长发|发式|"
+        r"服装|衣服|衣着|穿着|装束|战衣|制服|盔甲|装甲|铠甲|披风|"
+        r"hair|appearance|outfit|armor\b|costume|look\b|character\b", re.IGNORECASE)),
     ("script", re.compile(r"剧本|故事|结局|ending|剧情|台词|script", re.IGNORECASE)),
     ("storyboard", re.compile(r"分镜|场景|节奏|storyboard|镜头节奏", re.IGNORECASE)),
     ("production", re.compile(r"镜头生成|视频生成|首帧|尾帧|video|first\s*frame|生成视频", re.IGNORECASE)),
