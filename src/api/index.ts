@@ -1838,6 +1838,11 @@ class ApiClient {
   async cancelChangeExecution(projectName: string, sessionId: string, executionId: string): Promise<{ execution: ChangeExecution; cancelled: boolean; creative_committed: boolean }> {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/change-sessions/${encodeURIComponent(sessionId)}/executions/${encodeURIComponent(executionId)}/cancel`, { method: 'POST' });
   }
+  /** §4/§7.5：execution eligibility（权威后端判定，不前端复制规则）。供 Execute 按钮态（stale/blocked/invalid_approval 预呈现）。 */
+  async getExecutionEligibility(projectName: string, sessionId: string, planId: string,
+      planVersion: number): Promise<{ eligibility: string; execution?: ChangeExecution; reason?: string; blocker_code?: string }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/change-sessions/${encodeURIComponent(sessionId)}/plans/${encodeURIComponent(planVersion)}/eligibility?plan_id=${encodeURIComponent(planId)}`);
+  }
   async listChangeSessionProposals(projectName: string, sessionId: string): Promise<ModuleProposal[]> {
     // 复用 plan 端点不返回 proposals；用 intelligence 旁路非必须——此处留扩展点，
     // 当前前端从 plan.module_proposal_ids 已足够展示 owner 分组。

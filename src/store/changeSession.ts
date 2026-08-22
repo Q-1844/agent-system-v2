@@ -23,6 +23,10 @@ const TERMINAL_STATUSES = new Set([
 // AI-7C execution 活跃态：轮询 execution（§82 polling-first）
 const EXECUTION_ACTIVE_STATUSES = new Set(['pending', 'running', 'waiting_user']);
 const EXECUTION_TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled']);
+// §3/§89：session 真终态（不可恢复）。approved_for_execution **不**属此列——它是"提议已定但可执行/执行中"，
+// 刷新时需恢复其 plan/execution（H2/F-Extra1）。与 TERMINAL_STATUSES（含 approved，表"提议已定"语义）分离：
+// approved 既是 proposal-settled（isTerminal 仍 true）又是 restorable（恢复 execution）。两概念不可混用（§7.1）。
+const SESSION_NOT_RESTORABLE = new Set(['rejected', 'stale', 'failed', 'cancelled']);
 
 export const useChangeSessionStore = defineStore('changeSession', () => {
   const projectStore = useProjectStore();
@@ -30,6 +34,8 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
   const plan = ref<(UnifiedChangePlan & { preview?: PlanPreviewArtifact }) | null>(null);
   const decisions = ref<ChangeDecisionRequest[]>([]);
   const execution = ref<ChangeExecution | null>(null);
+  // L6/§7.5：approved+未执行时的权威 eligibility（stale/blocked/invalid_approval 预呈现，不前端复制规则）
+  const eligibility = ref<{ eligibility: string; execution?: ChangeExecution; reason?: string; blocker_code?: string } | null>(null);
   const busy = ref(false);          // create/resume/decision/approve/reject/execute 进行中
   const error = ref('');
   const lastRequestText = ref('');
@@ -47,9 +53,22 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
   const creativeCommitted = computed(() => !!execution.value?.canonical_commit && execution.value.canonical_commit.status === 'committed');
   const needsExecute = computed(() => approved.value && !execution.value);  // 已批准 + 无 execution -> 可 Execute
 
+  // §7.1/§7.2：轮询存活取决于 (proposal 活跃) OR (approved 且 execution 活跃)。
+  // 关键修复 H1：approved_for_execution 期间后端不改 session 状态，故 session 非 ACTIVE；
+  // 旧逻辑据此 stopPoll 杀掉 execution 轮询。现显式把"execution 活跃"作为继续轮询的独立判据，
+  // proposal 生命周期与 execution 生命周期分离（§7.1）。execution 终态/阻塞→ shouldPoll false→ 停。
+  function shouldPoll(): boolean {
+    const s = session.value;
+    if (!s) return false;
+    if (ACTIVE_STATUSES.has(s.status)) return true;                 // 提议仍在推进
+    if (s.status === 'approved_for_execution' && executionActive.value) return true;  // 执行活跃
+    return false;
+  }
+
   function _set(s: ChangeSession | null) {
     session.value = s;
-    if (s && ACTIVE_STATUSES.has(s.status)) startPoll();
+    if (s && s.status !== 'approved_for_execution') eligibility.value = null;  // L6：离开 approved 清 eligibility
+    if (s && shouldPoll()) startPoll();
     else stopPoll();
   }
 
@@ -94,8 +113,24 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
     try {
       const pl = await apiClient.getChangeSessionPlan(p, sid);
       plan.value = pl;
+      // L6/§7.5：approved 且未执行时查权威 eligibility（stale/blocked 预呈现）；execution 已存在则跳过
+      await loadEligibility();
       // decisions 从 plan + session 推导：awaiting 时需用户回答（7B-6 可补 list 端点）
     } catch { /* plan 可能尚不存在 */ }
+  }
+
+  /** §4/§7.5：approved+无 execution 时查后端 eligibility（不前端复制规则，server truth wins）。 */
+  async function loadEligibility() {
+    const p = projectStore.projectName;
+    const sid = session.value?.session_id;
+    const pl = plan.value;
+    if (!p || !sid || !pl || session.value?.status !== 'approved_for_execution' || execution.value) {
+      eligibility.value = null;
+      return;
+    }
+    try {
+      eligibility.value = await apiClient.getExecutionEligibility(p, sid, pl.plan_id, pl.version);
+    } catch { eligibility.value = null; }
   }
 
   async function poll() {
@@ -108,6 +143,10 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
       _set(s);
       if (changed && (s.status === 'ready_for_review' || s.status === 'awaiting_user_decision' || s.status === 'validating_plan')) {
         await loadPlan();
+      }
+      // AI-7B: 状态变化到活跃态时自动 resume 推进流水线（routing→consulting→analyzing→…→ready_for_review）
+      if (changed && ACTIVE_STATUSES.has(s.status)) {
+        await resume();
       }
     } catch { /* 静默，下次再试 */ }
     // AI-7C：execution 活跃时轮询 execution（§82 polling-first）
@@ -128,6 +167,17 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
     try {
       const res = await apiClient.executeChangePlan(p, sid, pl.plan_id, pl.version, productionMode);
       execution.value = res.execution;
+      eligibility.value = null;   // L6：已启动 execution，eligibility 让位 execution 真相
+      // M1：execute 停在 character_sync（pre-commit 由 start_replay_commit 完成提交）；
+      // 若到 post-commit 阶段且未 blocked，自动 resume 触发后台 kickoff（§3 polling-first，前端轮询推进）
+      const ex = res.execution;
+      if (ex && !res.blocked && ex.status !== 'blocked'
+          && (ex.stage === 'character_sync' || ex.stage === 'production_planning')) {
+        try {
+          const r2 = await apiClient.resumeChangeExecution(p, sid, ex.execution_id);
+          if (r2.execution) execution.value = r2.execution;
+        } catch { /* kickoff 失败不致命：轮询/手动 resume 可重试 */ }
+      }
       if (executionActive.value) startPoll();
     } catch (e: any) {
       error.value = '启动执行失败: ' + (e.message || e);
@@ -261,16 +311,22 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
     if (!p) return;
     try {
       const sessions = await apiClient.listChangeSessions(p);
-      const active = sessions.find(s => !TERMINAL_STATUSES.has(s.status));
+      // H2：不再用 TERMINAL_STATUSES 过滤（它含 approved_for_execution → 误滤掉 approved 会话 →
+      // 下方 approved 分支成死代码、execution 不恢复）。改用 SESSION_NOT_RESTORABLE：approved 可恢复。
+      const active = sessions.find(s => !SESSION_NOT_RESTORABLE.has(s.status));
       if (active) {
         _set(active);
         if (active.status === 'ready_for_review') await loadPlan();
-        // AI-7C §89：approved session 可能挂 execution（refresh 恢复）
+        // AI-7C §89：approved session 恢复 plan + 可能挂的 execution（H2 + F-Extra1）
         if (active.status === 'approved_for_execution') {
+          // F-Extra1：approved 亦需 plan，否则 execute() 因 !pl 静默 early-return（按钮显但点了没用）
+          await loadPlan();
           try {
             const exs = await apiClient.listChangeExecutions(p, active.session_id);
-            if (exs.length) { execution.value = exs[0]; if (executionActive.value) startPoll(); }
+            if (exs.length) execution.value = exs[0];
           } catch { /* 无 execution */ }
+          // H1：approved + execution 活跃 → 继续轮询（shouldPoll 统一判定，不再被 session 非 ACTIVE 杀掉）
+          if (shouldPoll()) startPoll();
         }
       } else { session.value = null; plan.value = null; execution.value = null; }
     } catch { /* 无会话或项目未选 */ }
@@ -282,12 +338,13 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
     plan.value = null;
     decisions.value = [];
     execution.value = null;
+    eligibility.value = null;
     error.value = '';
     lastRequestText.value = '';
   }
 
   return {
-    session, plan, decisions, execution, busy, error, lastRequestText,
+    session, plan, decisions, execution, eligibility, busy, error, lastRequestText,
     isActive, isTerminal, readyForReview, needsDecision,
     approved, executionActive, executionBlocked, executionDone, creativeCommitted, needsExecute,
     create, resume, loadPlan, submitDecision, approve, requestChanges, reject,

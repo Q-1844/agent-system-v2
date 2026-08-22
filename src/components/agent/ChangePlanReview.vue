@@ -116,6 +116,11 @@
       <!-- 未执行：Execute 入口（§3/§15：批准 ≠ apply；执行需显式动作）-->
       <template v-if="!cs.execution">
         <div class="ap-sub">此批准尚未修改项目。执行需显式动作（§3：批准 ≠ apply）。</div>
+        <!-- L6/§7.5：消费后端 eligibility（stale/blocked 预呈现，未点 Execute 即可知） -->
+        <div v-if="execEligibilityReason" class="exec-eligibility"
+             :class="{ stale: cs.eligibility?.eligibility === 'stale' }">
+          {{ execEligibilityReason }}
+        </div>
         <div class="exec-mode">
           <label class="exec-mode-label">制作模式</label>
           <select v-model="execMode" class="input exec-mode-select">
@@ -124,7 +129,9 @@
           </select>
         </div>
         <div class="cpr-actions">
-          <button class="btn btn-primary" :disabled="cs.busy" @click="onExecute">执行计划</button>
+          <button class="btn btn-primary" :disabled="cs.busy || !canExecute" @click="onExecute">执行计划</button>
+          <button v-if="cs.eligibility?.eligibility === 'stale'" class="btn btn-ghost" :disabled="cs.busy"
+                  @click="onRequestChanges">重新提案</button>
         </div>
         <div class="cpr-helper">执行将重验批准 → 暂存已批准操作 → 原子提交创作变更。制作模式=仅创作时提交后即止（§66）。</div>
       </template>
@@ -152,8 +159,12 @@
         </div>
         <!-- resume / cancel（§38/§81）-->
         <div class="cpr-actions">
-          <button v-if="cs.executionBlocked" class="btn btn-ghost" :disabled="cs.busy"
+          <!-- M5/§81：stale-blocked（PROJECT_CHANGED_AFTER_APPROVAL）不可 rebasing resume，
+               不显"尝试恢复"以免误导；改导向重新提案/审批。其余 blocked 类型仍可尝试恢复。 -->
+          <button v-if="cs.executionBlocked && !staleBlocked" class="btn btn-ghost" :disabled="cs.busy"
                   @click="cs.resumeExecution()">尝试恢复</button>
+          <button v-if="staleBlocked" class="btn btn-primary" :disabled="cs.busy"
+                  @click="onRequestChanges">重新提案</button>
           <button class="btn btn-ghost" :disabled="cs.busy || cs.executionDone" @click="cs.cancelExecution()">取消</button>
         </div>
         <div class="cpr-helper">
@@ -226,6 +237,21 @@ const statusLabel = computed(() => {
 });
 const canResume = computed(() =>
   cs.session && ['blocked', 'awaiting_user_decision', 'routing', 'consulting'].includes(cs.session.status));
+// M5/§81：stale-blocked（项目批准后变化，不可 rebasing resume）→ 不显"尝试恢复"，导向重新提案
+const staleBlocked = computed(() =>
+  cs.executionBlocked && cs.execution?.blocker?.code === 'PROJECT_CHANGED_AFTER_APPROVAL');
+// L6/§7.5：消费后端权威 eligibility（server truth wins）；unknown(null) 不阻断——后端幂等会 block 兜底
+const canExecute = computed(() =>
+  cs.approved && !cs.execution && (cs.eligibility === null || cs.eligibility?.eligibility === 'eligible'));
+const execEligibilityReason = computed(() => {
+  const e = cs.eligibility?.eligibility;
+  if (e === 'stale') return '计划已过期：项目在批准后已变化，需重新提案/审批';
+  if (e === 'blocked') return cs.eligibility?.reason || '执行受阻';
+  if (e === 'invalid_approval') return '批准无效，请重新审批';
+  if (e === 'already_started') return '执行已启动（见下方进度）';
+  if (e === 'already_completed') return '执行已完成';
+  return '';
+});
 
 const directItems = computed<ChangePlanItem[]>(() => cs.plan?.direct_change_items || []);
 const relatedItems = computed<ChangePlanItem[]>(() => cs.plan?.downstream_change_items || []);
@@ -348,6 +374,8 @@ async function onApprove() { await cs.approve(); }
 .cpr-approved { text-align: center; padding: 16px; }
 .ap-title { font-size: 14px; font-weight: 600; color: #4ade80; }
 .ap-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+.exec-eligibility { font-size: 11px; padding: 4px 8px; border-radius: 4px; background: rgba(96,165,250,.12); color: #60a5fa; margin-top: 6px; }
+.exec-eligibility.stale { background: rgba(248,113,113,.12); color: #f87171; }
 
 .cpr-feedback { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
 .fb-input { width: 100%; resize: vertical; }
