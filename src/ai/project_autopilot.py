@@ -264,17 +264,24 @@ def build_project_source_signature(project) -> Dict[str, Any]:
 
 
 def preflight_project(project, project_dir: Path, *, respect_locked: bool = True,
-                      project_name: Optional[str] = None) -> ProjectProductionPreflight:
+                      project_name: Optional[str] = None,
+                      target_scene_ids: Optional[List[str]] = None) -> ProjectProductionPreflight:
     """项目级 preflight（§十七）。复用 preflight_scene_autopilot 逐 Scene 检查（§十八 同一规则）。
-    project_name 用于查 active SceneRun（find_active_run 需项目目录名）。"""
+    project_name 用于查 active SceneRun（find_active_run 需项目目录名）。
+    target_scene_ids（M4/§53）：targeted run 只 preflight 受影响 scene——unaffected scene 用 baseline
+    合成（§64）不参与重生成，其 plan/readiness 不作 gate。否则 unaffected 未规划 scene -> NO_PRODUCTION_PLAN
+    -> ready=False -> targeted run 在 plan-freeze 前就崩（M4 原修复不够）。None=检查全部（既有行为）。"""
     from routers.production_planner import _read_plans
     scene_mgr = get_autopilot_manager()
     pname = project_name or project.name
     plans = _read_plans(project_dir)
+    target_set = set(target_scene_ids) if target_scene_ids else None
+    scenes_to_check = [sc for sc in project.scenes
+                       if (target_set is None or sc.scene_id in target_set)]
     scene_results: List[ScenePreflightResult] = []
     total_shots = 0
     locked_total = 0
-    for sc in project.scenes:
+    for sc in scenes_to_check:
         plan = plans.get(sc.scene_id)
         has_active = scene_mgr.find_active_run(pname, sc.scene_id) is not None
         pre = preflight_scene_autopilot(project, sc, plan, respect_locked, has_active_run=has_active)
@@ -285,7 +292,7 @@ def preflight_project(project, project_dir: Path, *, respect_locked: bool = True
         locked_total += sum(1 for sh in sc.shots if sh.locked)
     ready = bool(scene_results) and all(s.ready for s in scene_results)
     return ProjectProductionPreflight(
-        ready=ready, scene_count=len(project.scenes),
+        ready=ready, scene_count=len(scenes_to_check),
         shot_count=total_shots, locked_shot_count=locked_total, scenes=scene_results)
 
 
@@ -417,9 +424,10 @@ class ProjectProductionManager:
         if active:
             raise _ExistingProjectRunError(active.run_id)
 
-        # project preflight（§十九：start 时后端重新完整检查一次）
+        # project preflight（§十九：start 时后端重新完整检查一次）。M4/§53：targeted run 只查 scenes_to_run
         pre = preflight_project(project, project_dir, respect_locked=respect_locked,
-                                project_name=project_name)
+                                project_name=project_name,
+                                target_scene_ids=target_scene_ids)
         if not pre.ready:
             problems = "; ".join(f"{s.scene_id}({','.join(s.issues)})"
                                  for s in pre.scenes if not s.ready)
