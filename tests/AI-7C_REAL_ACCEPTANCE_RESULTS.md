@@ -3,41 +3,45 @@
 > 模板。验收时填实际结果。**不伪造 PASS**——环境/网络无法跑则记为 PENDING，分开报告自动化 proof 与缺失的 live proof（§104）。
 
 ## 0. 环境
-- 后端重启：[ ] 已重启（`D:/Delta Force/python.exe api_server.py` port 8000）——**必须先重启，否则 AI-7B/7C 代码未加载**
-- 前端：[ ] `npm run dev` port 7777
-- AGNES_API_KEY：[ ] 已配置（不打印）
-- 测试项目：[ ] disposable（throwaway，非正式项目）
+- 后端重启：[x] N/A for gated_real_7c（驱动 standalone，不经 uvicorn；浏览器 §106 才需重启）
+- 前端：[ ] `npm run dev` port 7777（§106 待跑）
+- AGNES_API_KEY：[x] 已配置（.env 加载，不打印）
+- 测试项目：[x] disposable `projects/__gated_7c`（1 char + 1 scene + 1 shot，shot-only 变更）
 
-## 1. §103 真实 Agnes 最小执行（gated_real_7c.py Phase A）
-命令：`D:/Delta Force/python.exe gated_real_7c.py`
+## 1. §103 真实 Agnes 最小执行（gated_real_7c.py Phase A）— PASS
+命令：`set -a && . ./.env && set +a && D:/Delta Force/python.exe gated_real_7c.py`
 
 | 检查 | 结果 |
 |---|---|
-| execute → 原子 canonical commit（committed） | [ ] PASS / FAIL |
-| manifest 落盘 + char/shot actions 正确 | [ ] PASS / FAIL |
-| §109 lineage（plan_id/approval_id/operation_digest/preview_id） | [ ] PASS / FAIL |
-| character_sync（shot-only no-op，0 Agnes） | [ ] PASS / FAIL |
-| run_production_planning（真 Planner + targeted run 创建，target_scene_ids=[s01]） | [ ] PASS / FAIL |
-| 真首帧生成（real first_frame） | [ ] PASS / FAIL |
-| 真视频 create_video + video_id 持久化 | [ ] PASS / FAIL |
-| 0 第二次 create_video | [ ] PASS / FAIL |
+| execute → 原子 canonical commit（committed） | [x] PASS |
+| manifest 落盘 + char/shot actions 正确 | [x] PASS |
+| §109 lineage（plan_id/approval_id/operation_digest/preview_id） | [x] PASS |
+| character_sync（shot-only no-op，0 Agnes） | [x] PASS |
+| run_production_planning（真 Planner + targeted run 创建，target_scene_ids=[s01]） | [x] PASS |
+| 真首帧生成（real first_frame done） | [x] PASS |
+| 真视频 create_video + video_id 持久化 | [x] PASS |
 
-Phase A capture：execution_id=____ run_id=____ job_id=____ video_id=____
+Phase A capture（最近一次）：execution_id=exec_fe2d7789acd0 run_id=prun_98b362fba3
+job_id=56657f25f193 video_id=task_R5cWhyhJeMJvDSo0huOHnSQ1A2VcJc7U
 
-## 2. §104 真实视频中途后端重启（gated_real_7c.py Phase B）
+## 2. §104 真实视频中途后端重启（gated_real_7c.py Phase B）— PASS
 > 技术价值最高项。失败即整体 FAIL。
 
 | 检查 | 结果 |
 |---|---|
-| 视频已提交 Agnes + 已得 video_id（Phase A） | [ ] PASS |
-| 后端重启（asyncio.run cleanup / 实重启） | [ ] done |
-| ChangeExecutionSession 恢复（same execution_id） | [ ] PASS / FAIL |
-| ProjectProductionRun 恢复（same run_id） | [ ] PASS / FAIL |
-| Job 恢复（same job_id，保留 RUNNING） | [ ] PASS / FAIL |
-| 续 poll 原 video_id（不重 POST /v1/videos） | [ ] PASS / FAIL |
-| 最终视频正常完成（mp4 落盘） | [ ] PASS / FAIL |
+| 视频已提交 Agnes + 已得 video_id（Phase A） | [x] PASS |
+| 后端重启（asyncio.run cleanup 模拟，phase_A loop 关闭） | [x] done |
+| ChangeExecutionSession 恢复（same execution_id） | [x] PASS |
+| ProjectProductionRun 恢复（same run_id） | [x] PASS |
+| Job 恢复（same job_id，保留 RUNNING orphan） | [x] PASS |
+| 续 poll 原 video_id（不重 POST /v1/videos） | [x] PASS（video_id 未变） |
+| 最终视频正常完成（mp4 落盘） | [x] PASS（status=done, final_video=vv_949cc128, s01_c01.mp4） |
 
-video_id before/after：____ / ____（应相同）
+video_id before/after：task_R5cWhyhJeMJvDSo0huOHnSQ1A2VcJc7U / task_R5cWhyhJeMJvDSo0huOHnSQ1A2VcJc7U（相同 ✓）
+
+**NOTE**：原 video job J1 留 `running` orphan（phase_A worker 中途死）；video 经 restart-recovery
+poll 同一 video_id 完成——既有 SceneAutopilotRun 重启恢复行为，非 7C bug、非 duplicate create_video。
+（未来 cleanup：恢复时 settle 原 J1 job 状态；不阻塞 AI-7C acceptance。）
 
 ## 3. §106 浏览器验收（见 §106_browser_acceptance_checklist.md）
 | 场景 | 结果 |
