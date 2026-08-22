@@ -218,6 +218,17 @@ class AgentRuntime:
         # 2. 构建 messages（system + context + history）
         ctx_text = build_context(agent_id, project, scope_type, scope_id,
                                  self._project_loader(project), self._plans_reader)
+        # AI-7C-H §13：追加持久化工作流快照（Layer B 运行时真相）——Agent 回答进度只许
+        # 引用此节；未提供的状态按真话纪律回答「无法核实」。懒 import 防循环依赖。
+        try:
+            from .change_protocol.service import active_workflow_snapshot
+            wf = active_workflow_snapshot(self._resolve_project_dir(project), project)
+            if wf:
+                import json as _json
+                ctx_text += ("\n\n# 活跃工作流（持久化运行时真相，回答进度只引用此节）\n"
+                             + _json.dumps(wf, ensure_ascii=False))
+        except Exception:
+            pass
         messages = [{"role": "system",
                      "content": agent_system_prompt(agent_id) + "\n\n" + ctx_text}]
         for m in session.messages:

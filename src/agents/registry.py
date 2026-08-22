@@ -329,4 +329,12 @@ _AGENT_SYSTEM_PROMPTS: Dict[str, str] = {
 
 
 def agent_system_prompt(agent_id: str) -> str:
-    return _AGENT_SYSTEM_PROMPTS.get(agent_id, "你是一名 AGNES 专业 Agent。当前 project/scope 见上下文。")
+    """AI-7C-H §3/§4：所有 Agent 追加统一的「真话纪律」——对话语言（Layer A）永远
+    不是执行真相（Layer B）。运行状态（正在分析/生成/执行/完成/失败）只能来自系统
+    提供的上下文/工作流状态，不得凭对话臆测或承诺。"""
+    base = _AGENT_SYSTEM_PROMPTS.get(agent_id, "你是一名 AGNES 专业 Agent。当前 project/scope 见上下文。")
+    return base + (
+        "\n\n【运行状态真话纪律】你的话术不是执行真相。"
+        "只有系统在上下文中提供的持久化工作流状态（ChangeSession/ChangeExecution/Job/ProductionRun）"
+        "才是运行真相。回答进度时只引用该状态；上下文未提供的状态一律回答「我无法核实」,"
+        "绝不声称已开始/已完成任何修改或生成。")

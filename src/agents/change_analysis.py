@@ -29,7 +29,7 @@ from src.revision.models import creative_source_signature
 from .inquiry import (classify_request, ProjectContextBuilder, ConsultationResult,
                       _create_consultation_task, _consult_llm, _settle_consultation_task,
                       _producer_synthesize_analysis, _AGENT_INSPECT_CAP, _module_for_agent,
-                      assert_read_only_capability, MODULE_OWNER)
+                      assert_read_only_capability, MODULE_OWNER, normalize_module)
 from .runtime import AgentRuntime, AgentError
 
 
@@ -210,7 +210,9 @@ class ReadOnlyPlanValidator:
             if src and src not in ("user_requested", "downstream_impact"):
                 issues.append({"code": "BAD_CATEGORY",
                                "message": f"direct/downstream 分类无效: {src}"})
-            mod = item.get("module")
+            mod = normalize_module(item.get("module", ""))
+            if mod and mod != item.get("module"):
+                item["module"] = mod   # 归一修正（characters→character 等）
             if mod and mod not in MODULE_OWNER:
                 issues.append({"code": "UNKNOWN_MODULE", "message": f"未知模块: {mod}"})
         for a in (draft.get("consulted_agents") or []):
@@ -298,7 +300,8 @@ def _consultations_to_results(session: dict) -> List[ConsultationResult]:
 
 def _wrap_plan_draft(session: dict, analysis: dict) -> UnifiedChangePlanDraft:
     def _items(rows, src):
-        return [{"module": r.get("module", ""), "owner_agent_id": r.get("owner_agent", ""),
+        return [{"module": normalize_module(r.get("module", "")),
+                 "owner_agent_id": r.get("owner_agent", ""),
                  "scope_refs": [], "summary": r.get("summary", ""),
                  "reason": r.get("reason", src), "source": src}
                 for r in (rows or [])]
@@ -307,7 +310,9 @@ def _wrap_plan_draft(session: dict, analysis: dict) -> UnifiedChangePlanDraft:
         change_session_id=session["session_id"], status="analysis_only",
         direct_changes=_items(analysis.get("direct_changes"), "user_requested"),
         downstream_changes=_items(analysis.get("downstream_changes"), "downstream_impact"),
-        unchanged_scope=analysis.get("unchanged", []),
+        unchanged_scope=[{"module": normalize_module(u.get("module", "")),
+                          "entity_id": u.get("entity_id", "")}
+                         for u in (analysis.get("unchanged") or []) if isinstance(u, dict)],
         user_decisions_needed=analysis.get("user_decisions_needed", []),
         consulted_agents=[c["agent_id"] for c in session["consultations"]
                           if c["status"] == "completed"],

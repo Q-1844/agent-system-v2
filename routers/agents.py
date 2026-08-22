@@ -473,6 +473,9 @@ class CreateChangeSessionReq(BaseModel):
     source_agent_id: Optional[str] = None
     source_session_id: Optional[str] = None
     source_message_id: Optional[str] = None
+    # AI-7C-H H3：调用方页面上下文（选中 Scene/Shot/Character）——持久化进 entity_refs，
+    # 分类/提案路由自动合并，Agent 不反问 Which Scene/Character（§9）。
+    context_scope: Optional[dict] = None
 
 
 class ApprovePlanReq(BaseModel):
@@ -506,7 +509,8 @@ async def create_change_session(project_name: str, req: CreateChangeSessionReq):
     return cp_service.create_session(
         rt, project_name, req.request, source=req.source,
         source_agent_id=req.source_agent_id, source_session_id=req.source_session_id,
-        source_message_id=req.source_message_id)
+        source_message_id=req.source_message_id,
+        context_scope=req.context_scope)
 
 
 @router.get("/api/project/{project_name}/change-sessions")

@@ -39,6 +39,25 @@ MODULE_OWNER: Dict[str, str] = {
     "storyboard": "director", "production_plan": "production_planner",
     "production": "shot_producer",
 }
+# LLM 常把 module 名写成复数/别名（project 字段名 characters）→ 归一为 MODULE_OWNER key
+_MODULE_NORMALIZE: Dict[str, str] = {
+    "characters": "character", "chars": "character", "character_design": "character",
+    "scripts": "script", "story": "script",
+    "storyboards": "storyboard", "scenes": "storyboard", "shots": "storyboard",
+    "production_plans": "production_plan", "plans": "production_plan",
+}
+
+
+def normalize_module(mod: str) -> str:
+    """LLM 产出的 module 名归一（characters→character 等）。
+
+    AI-7C-H H0 正式化：LLM 综合分析/咨询常把 module 写成 project 字段名（characters）或
+    复数（scripts/storyboards/plans）。所有 module 名消费点（_normalize_analysis、
+    ReadOnlyPlanValidator、change_protocol 侧）统一经此归一，再做 MODULE_OWNER 查表，
+    避免 UNKNOWN_MODULE / owner 解析失败等伪错误。"""
+    return _MODULE_NORMALIZE.get((mod or "").strip().lower(), (mod or "").strip())
+
+
 _AGENT_INSPECT_CAP: Dict[str, str] = {
     "script_writer": "story.inspect", "character_designer": "character.inspect",
     "director": "storyboard.inspect", "production_planner": "production_plan.inspect",
@@ -51,10 +70,12 @@ _AGENT_VIEW: Dict[str, str] = {
     "shot_producer": "production", "continuity_reviewer": "storyboard",
     "editor": "storyboard",
 }
-# 变更动词（§33：决定 question vs change）
+# 变更动词（§33：决定 question vs change）。H3：补「让…更…」「变得」「加强/增强/弱化」等
+# 程度型变更意图（Probe 1「让这一段更紧张一点」），否则被误判为只读提问、进不了变更流。
 _CHANGE_VERBS = re.compile(
-    r"改|修改|换成|变成|删除|删掉|去掉|调整|替换|make\b|change\b|remove\b|turn\b|"
-    r"调整|重写|续写|换成|变为", re.IGNORECASE)
+    r"改|修改|换成|变成|变得|变为|删除|删掉|去掉|调整|替换|重写|续写|"
+    r"让.{1,20}更|加(强|快|深)|增强|弱化|放大|缩小|"
+    r"make\b|change\b|remove\b|turn\b", re.IGNORECASE)
 _MODULE_KEYWORDS: List[Tuple[str, re.Pattern]] = [
     ("production_plan", re.compile(r"制作计划|production\s*plan|制作策略", re.IGNORECASE)),
     ("character", re.compile(r"角色|角色设定|外貌|头发|hair|服装|衣服|appearance|character\b", re.IGNORECASE)),
@@ -207,7 +228,15 @@ CONSULTATION_SYSTEM = """\
   "user_decisions": ["需要用户决策的项"],
   "evidence": [{"module": "...", "entity_type": "...", "entity_id": "..."}]
 }
-不要编辑任何内容。不要替别的模块做决定。只回答被问的问题。"""
+不要编辑任何内容。不要替别的模块做决定。只回答被问的问题。
+
+澄清纪律（重要）：user_decisions 只在以下情形才列——
+① 两种以上合理解释会产生**明显不同**的创作结果（实质创作歧义）；
+② 项目状态中不存在且无法安全默认的必需信息；
+③ 与其他 Specialist 的有效提议冲突且规则无法裁决；
+④ 超出已批准范围/项目边界的重大动作。
+系统已知的信息（当前选中的场景/角色、项目风格、画幅、既有资产、依赖图、既有默认值）
+一律**自行采用**，绝不要向用户索取（如 Which Scene / 用什么模型 / 什么分辨率）。"""
 
 _ANALYSIS_SCHEMA_INSTR = """\
 综合各 Specialist 咨询，产出 analysis-only 计划。返回 JSON（仅一个对象）：
@@ -495,9 +524,13 @@ async def consult_specialists_parallel(rt: AgentRuntime, project: str,
 
 # ============ run_inquiry（§50/§52，7A-2 引擎入口）============
 async def run_inquiry(rt: AgentRuntime, project: str, user_request: str,
-                      *, client=None, max_rounds: int = 1) -> dict:
+                      *, client=None, max_rounds: int = 1,
+                      workflow_state: Optional[List[dict]] = None) -> dict:
     """Producer 询问运行时入口（7A-3 team-chat 调此）。返回只读答案 / analysis-only 计划。
-    纯读：不写 canonical、不建 Workspace/ChangeSet、不触发生产（§43/§96）。"""
+    纯读：不写 canonical、不建 Workspace/ChangeSet、不触发生产（§43/§96）。
+
+    AI-7C-H §13：workflow_state = 持久化工作流快照（active_workflow_snapshot 产出）。
+    注入 pack 后 Producer 回答「现在做到哪了」时有 Layer B 真相可引用，而非凭对话臆测。"""
     intel = rt.project_intelligence(project)
     proj = intel._project()
     classification = classify_request(user_request, proj)
@@ -509,6 +542,8 @@ async def run_inquiry(rt: AgentRuntime, project: str, user_request: str,
 
     if classification["kind"] == "question":
         pack = builder.build_for_producer(request=user_request, classification=classification)
+        if workflow_state:
+            pack.module_context["active_workflows"] = workflow_state   # §13 进度真相
         obs_calls = getattr(pack, "_inspection_calls", [])
         observability.update({"inspection_calls": obs_calls,
                               "pack_chars": len(_pack_text(pack)),
@@ -633,7 +668,8 @@ def _fallback_analysis(request: str, consultations: List[ConsultationResult]) ->
 
 def _normalize_analysis(obj: dict, request: str,
                          consultations: List[ConsultationResult]) -> dict:
-    """把 LLM 输出归一为安全形态：execution_ready 恒 False；剥除任何 op 字段（§38）。"""
+    """把 LLM 输出归一为安全形态：execution_ready 恒 False；剥除任何 op 字段（§38）。
+    H0：module 名经 normalize_module 归一（characters→character 等）。"""
     def _items(key, src_key):
         out = []
         for it in (obj.get(src_key) or []):
@@ -644,14 +680,15 @@ def _normalize_analysis(obj: dict, request: str,
                                      "insert_shot", "delete_shot", "after", "before")):
                 it = {k: v for k, v in it.items() if k not in
                       ("op", "op_type", "after", "before", "operations")}
-            out.append({"module": str(it.get("module", "")),
+            out.append({"module": normalize_module(str(it.get("module", ""))),
                         "owner_agent": str(it.get("owner_agent", "")),
                         "summary": str(it.get("summary", ""))[:500],
                         "reason": str(it.get("reason", src_key))})
         return out
     direct = _items("direct_changes", "direct_changes")
     downstream = _items("downstream_changes", "downstream_changes")
-    unchanged = [{"module": str(it.get("module", "")), "entity_id": str(it.get("entity_id", ""))}
+    unchanged = [{"module": normalize_module(str(it.get("module", ""))),
+                  "entity_id": str(it.get("entity_id", ""))}
                  for it in (obj.get("unchanged") or []) if isinstance(it, dict)]
     decisions = [str(x) for x in (obj.get("user_decisions_needed") or [])][:20]
     return {"direct_changes": direct, "downstream_changes": downstream,

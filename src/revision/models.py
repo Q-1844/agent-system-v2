@@ -419,10 +419,15 @@ def project_signature(data) -> str:
 
 def creative_source_signature(data) -> str:
     """Creative Source 签名（§六十/§六十一）：只覆盖创作结构，**排除生成资产 / updated_at / JobQueue**。
-    含 story_text/style、characters(name/desc_en/views 身份)、scenes(scene_id/summary/characters)、
+    含 story_text/style、characters(name/desc_en 身份)、scenes(scene_id/summary/characters)、
     shots(shot_id/description/characters/target_duration_s **+ 数组顺序**)。
     shot 顺序进入签名：A B C 与 A C B 是不同 Storyboard（§六十一）。
-    base_is_stale 与 changeset before/after 签名必须用它，而非完整 JSON hash。"""
+    base_is_stale 与 changeset before/after 签名必须用它，而非完整 JSON hash。
+
+    AI-7C-H F-1：Character.views（front/side/back 生成资产）是**生产写回的派生态**，不属于
+    创作语义身份——从签名中剔除。否则已批准执行的 character sync 合法写回会改变签名，
+    重启 re-entry 误报 PROJECT_CHANGED_AFTER_APPROVAL / PRODUCTION_PREREQUISITE_FAILED。
+    真实创作突变（如 description_en 变化）仍改变签名、仍触发 stale 保护。"""
     if hasattr(data, "to_dict"):
         data = data.to_dict()
     elif hasattr(data, "__dataclass_fields__"):
@@ -433,8 +438,7 @@ def creative_source_signature(data) -> str:
         "style": {k: style.get(k, "") for k in
                   ("art_style", "palette", "aspect_ratio", "size_tier", "era", "extra")},
         "characters": sorted(
-            [{"name": c.get("name", ""), "description_en": c.get("description_en", ""),
-              "views": sorted((c.get("views") or {}).keys())}
+            [{"name": c.get("name", ""), "description_en": c.get("description_en", "")}
              for c in (data.get("characters") or [])],
             key=lambda x: x["name"]),
         "scenes": [

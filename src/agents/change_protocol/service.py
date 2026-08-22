@@ -75,15 +75,32 @@ def create_session(rt: AgentRuntime, project: str, original_user_request: str, *
                    source: str = "team_chat",
                    source_agent_id: Optional[str] = None,
                    source_session_id: Optional[str] = None,
-                   source_message_id: Optional[str] = None) -> dict:
+                   source_message_id: Optional[str] = None,
+                   context_scope: Optional[dict] = None) -> dict:
     """创建 ChangeRequest（proposal_only）+ ChangeSession（routing），捕获 source_snapshot_signature。
-    7B-1：不后台推进（推进机在 7B-2..4）。original_user_request 不可变（§10/§105）。"""
+    7B-1：不后台推进（推进机在 7B-2..4）。original_user_request 不可变（§10/§105）。
+
+    AI-7C-H H3（澄清策略 §9）：context_scope = 调用方页面上下文
+    {scene_id?, shot_id?, character_name?}。用户说「让这一段更紧张一点」时不再反问
+    Which Scene——scope 与请求一并持久化（entity_refs），分类/提案路由自动合并。"""
     sig = _current_signature(rt, project)
     now = _now()
+    entity_refs: List[dict] = []
+    cs = context_scope or {}
+    if cs.get("scene_id"):
+        entity_refs.append({"module": "storyboard", "entity_type": "scene",
+                            "entity_id": str(cs["scene_id"])})
+    if cs.get("shot_id"):
+        entity_refs.append({"module": "storyboard", "entity_type": "shot",
+                            "entity_id": str(cs["shot_id"])})
+    if cs.get("character_name"):
+        entity_refs.append({"module": "character", "entity_type": "character",
+                            "entity_id": str(cs["character_name"])})
     req = ChangeRequest(
         request_id=_new_id("cr"), project_name=project, source=source,
         source_agent_id=source_agent_id, source_session_id=source_session_id,
         source_message_id=source_message_id, original_user_request=original_user_request,
+        entity_refs=entity_refs,
         source_snapshot_signature=sig, mode="proposal_only", created_at=now)
     session = ChangeSession(
         session_id=_new_id("cs"), project_name=project, request_id=req.request_id,
@@ -98,6 +115,42 @@ def create_session(rt: AgentRuntime, project: str, original_user_request: str, *
 def get_session(rt: AgentRuntime, project: str, session_id: str) -> Optional[dict]:
     s = _store(rt, project).get_session(session_id)
     return s.to_dict() if s is not None else None
+
+
+# ============ 只读工作流快照（AI-7C-H §13：进度答案来自持久化状态）============
+def active_workflow_snapshot(project_dir, project_name: str, limit: int = 5) -> List[dict]:
+    """只读：当前项目非终态 ChangeSession（含其 execution）的紧凑快照。
+    供 Producer/Agent 回答「现在做到哪了」——Layer B 运行时真相，LLM 只许引用此状态、
+    不得凭对话历史臆测。0 mutation；异常返回 []（调用方安全降级）。"""
+    try:
+        store = ChangeProtocolStore(project_dir, project_name)
+        out = []
+        for s in store.list_sessions():
+            if s.status in SESSION_TERMINAL:
+                continue
+            entry = {"session_id": s.session_id, "status": s.status,
+                     "request": (s.request_id or ""), "updated_at": s.updated_at}
+            out.append(entry)
+        out.sort(key=lambda e: e.get("updated_at") or 0, reverse=True)
+        # 附带各 session 最新 execution（stage 是制作进度的权威粒度）
+        for entry in out[:limit]:
+            try:
+                exs = store.list_executions(entry["session_id"])
+                if exs:
+                    ex = exs[0]
+                    entry["execution"] = {
+                        "execution_id": ex.execution_id, "status": ex.status,
+                        "stage": ex.stage,
+                        "blocker_code": (ex.blocker or {}).get("code"),
+                        "characters_synced": [r.get("character_name")
+                                               for r in (ex.character_sync or [])],
+                        "planned_scenes": [p.get("scene_id") for p in (ex.planning or [])],
+                    }
+            except Exception:
+                pass
+        return out[:limit]
+    except Exception:
+        return []
 
 
 def list_sessions(rt: AgentRuntime, project: str) -> dict:
@@ -137,15 +190,51 @@ def _has_completed_proposal(store: ChangeProtocolStore, session_id: str,
                for p in store.list_proposals(session_id))
 
 
+def _classification_with_scope(request_text: str, proj, change_request) -> dict:
+    """H3 §9：classify_request + 持久化 context_scope（entity_refs）合并。
+    页面上下文（选中 Scene/Shot/Character）自动解析指向，Agent 不反问 Which Scene/Character。
+    文本里显式写出的 ref 优先（去重合并），scope 仅补齐缺失。
+    模块补充**只看 scope**（entity_refs）：文本提及角色名只是叙事引用（如「让 Aran 离开城市」
+    是剧本变更），不代表要改角色设定——不据此加 character_designer（回归测试锚定该语义）。"""
+    classification = dict(classify_request(request_text, proj))
+    scope_chars, scope_scenes, scope_shots = [], [], []
+    for ref in (change_request.entity_refs or []):
+        et, eid = ref.get("entity_type"), ref.get("entity_id")
+        if not et or not eid:
+            continue
+        if et == "scene":
+            scope_scenes.append(eid)
+            if eid not in classification.get("scene_refs", []):
+                classification["scene_refs"] = classification.get("scene_refs", []) + [eid]
+        elif et == "shot":
+            scope_shots.append(eid)
+            if eid not in classification.get("shot_refs", []):
+                classification["shot_refs"] = classification.get("shot_refs", []) + [eid]
+        elif et == "character":
+            scope_chars.append(eid)
+            if eid not in classification.get("character_refs", []):
+                classification["character_refs"] = classification.get("character_refs", []) + [eid]
+    # 模块补充只由 scope 驱动：character scope → 补 character_designer；scene/shot scope → 补 director
+    modules = classification.get("modules") or []
+    if scope_chars and "character_designer" not in modules:
+        modules = modules + ["character_designer"]
+    if (scope_scenes or scope_shots) and "director" not in modules:
+        modules = modules + ["director"]
+    classification["modules"] = modules
+    return classification
+
+
 async def _run_first_round_proposals(rt: AgentRuntime, project: str,
                                      session: ChangeSession,
                                      change_request: ChangeRequest,
                                      client) -> List:
     """§24/§25：分类路由 → 独立首轮提案并行 gather（persist-before-gather 在各 runtime 内）。
-    已 completed 的 (agent, round) 不重跑（§25）。Director 需 scene scope，无则延后 round 2（§26，7B-3）。"""
+    已 completed 的 (agent, round) 不重跑（§25）。Director 需 scene scope，无则延后 round 2（§26，7B-3）。
+    H3：分类合并持久化 context_scope（entity_refs）——页面上下文即解析指向，不反问。"""
     intel = rt.project_intelligence(project)
     proj = intel._project()
-    classification = classify_request(change_request.original_user_request, proj)
+    classification = _classification_with_scope(
+        change_request.original_user_request, proj, change_request)
     modules = classification.get("modules") or []
     store = _store(rt, project)
     sig = session.source_snapshot_signature

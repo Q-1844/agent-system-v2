@@ -219,7 +219,16 @@ async def run_team_inquiry_and_persist(rt, project: str, user_message_id: str,
                     source_change_session_id=sess["session_id"],
                     status="failed" if sess["status"] in ("stale", "failed") else sess["status"])
         else:
-            result = await run_inquiry(rt, project, user_request, client=client)
+            # AI-7C-H §13：注入持久化工作流快照——进度类问题从 Layer B 真相作答
+            workflow_state = None
+            try:
+                from .change_protocol.service import active_workflow_snapshot
+                workflow_state = active_workflow_snapshot(
+                    rt._resolve_project_dir(project), project)
+            except Exception:
+                workflow_state = None
+            result = await run_inquiry(rt, project, user_request, client=client,
+                                       workflow_state=workflow_state)
             if result.get("kind") == "question":
                 msg = TeamMessage(message_type="agent", agent_id="producer",
                                   text=result.get("answer", ""), status="completed")

@@ -913,11 +913,30 @@ async def run_production_planning(rt: AgentRuntime, project: str, execution_id: 
         store.save_execution(ex)
         return {"execution": ex.to_dict(), "planned_scenes": 0}
 
+    # ---- AI-7C-H F-2：durable per-scene planning checkpoint ----
+    # 每个 scene plan 实际产出（plan_creator 返回 approved）后**立即**持久化进 ex.planning
+    # （scene_id + plan_id + status），再进入下一 scene。重启 re-entry 跳过已完成的 scene
+    # （planner LLM 不重复调用），只续跑未完成的。不依赖内存 set（§21 原 bug：s01 完成、
+    # s02 崩溃、重启后 s01 planner 重跑——终态正确但外部调用重复）。
+    done_records = {p.get("scene_id"): p for p in (ex.planning or [])
+                    if p.get("status") == "approved" and p.get("plan_id")}
     creator = plan_creator or (lambda sid: _real_plan_creator(rt, project, ex, sid))
     plans: dict = {}
     for sid in scene_ids:
+        if sid in done_records:
+            # 已持久化完成的 scene plan：completed + still valid（plan_id 引用在案）→ 复用/跳过
+            plans[sid] = {"plan_id": done_records[sid].get("plan_id"),
+                          "scene_id": sid, "status": "approved"}
+            continue
         plan = await creator(sid)
         plans[sid] = plan
+        # F-2：单 scene 完成即落盘（崩溃窗口只丢当前 scene，之前的 planner 结果可复用）
+        if (plan or {}).get("status") == "approved":
+            ex.planning = list(ex.planning or []) + [
+                {"scene_id": sid, "plan_id": (plan or {}).get("plan_id"),
+                 "status": "approved"}]
+            ex.updated_at = _now()
+            store.save_execution(ex)
 
     # §54 all-plan-before-production gate：全 approved 才放行
     unapproved = [sid for sid, p in plans.items()
@@ -935,8 +954,8 @@ async def run_production_planning(rt: AgentRuntime, project: str, execution_id: 
     starter = run_starter or (lambda m: _real_run_starter(rt, project, ex, m))
     run = await starter(manifest)
     ex.production_run_id = (run or {}).get("run_id")
-    ex.planning = [{"scene_id": sid, "plan_id": (plans[sid] or {}).get("plan_id"),
-                    "status": "approved"} for sid in scene_ids]
+    # F-2：ex.planning 已按 scene 增量落盘（见上方 checkpoint），此处不再整体覆写——
+    # 保持崩溃恢复语义：已记录的 scene 记录原样保留。
     ex.stage = "production_prepare"   # AI-7C 等待 production 执行（真 run 在 §103 acceptance 跑）
     ex.updated_at = _now()
     store.save_execution(ex)
@@ -985,17 +1004,29 @@ async def _real_character_view_generator(rt: AgentRuntime, project: str,
                                           execution_id: str, char_name: str) -> dict:
     """§46 真路径：提交 character_views Job（JobQueue，origin=execution_id + stage_key）+ poll 至终态。
     handler（handler_character_views，复用 routers/characters.py chain §44）由 composition root / 驱动
-    注册为 JOB_HANDLERS["character_views"]。返回 {view_name: Asset}（从 Character.views 重载）。"""
+    注册为 JOB_HANDLERS["character_views"]。返回 {view_name: Asset}（从 Character.views 重载）。
+
+    AI-7C-H K1：提交时从**提交后 canonical** 计算 appearance_sig（description_en + art_style 的
+    确定性哈希）随 job 持久化。handler 据此区分「resume 同一生成（done views 跳过）」与
+    「新批准外观修订（旧 done views 是陈旧输入，必须真实重新生成）」。"""
     import asyncio as _aio
+    from ..character_views_handler import character_appearance_sig
     jq = rt._resolve_job_queue_or_none()
     if jq is None:
         raise AgentError("CHARACTER_SYNC_FAILED", "JobQueue 不可用，无法 character sync（§46）")
+    pdir = rt._resolve_project_dir(project)
     stage_key = f"char_views:{execution_id}:{char_name}"
     existing = jq.find_by_origin(execution_id, stage_key)
     if existing is None:
+        p = ProjectStore(pdir).load()
+        ch = next((c for c in p.characters if c.name == char_name), None)
+        if ch is None:
+            raise AgentError("CHARACTER_SYNC_FAILED",
+                             f"角色 {char_name} 不存在于 canonical（K1 提交前校验）")
+        sig = character_appearance_sig(ch.description_en, p.style.art_style or "anime")
         jq.submit(project, "character_views", shot_id=None,
                   origin_run_id=execution_id, autopilot_stage_key=stage_key,
-                  character_name=char_name)
+                  character_name=char_name, appearance_sig=sig)
     deadline = _now() + 600
     while _now() < deadline:
         job = jq.find_by_origin(execution_id, stage_key)
@@ -1009,7 +1040,6 @@ async def _real_character_view_generator(rt: AgentRuntime, project: str,
         raise AgentError("CHARACTER_SYNC_FAILED",
                          f"角色 {char_name} view 生成失败: {getattr(job,'state','?')} {getattr(job,'error','')}")
     # handler 已写 Character.views；reload 读之
-    pdir = rt._resolve_project_dir(project)
     ch = next((c for c in ProjectStore(pdir).load().characters if c.name == char_name), None)
     return dict(ch.views) if ch else {}
 
@@ -1188,12 +1218,19 @@ def execution_eligibility(rt: AgentRuntime, project: str, session_id: str,
 
 
 # ============ startup discovery（§73/§96）============
-def recover_executions(project_dir, project_name: str) -> int:
+def recover_executions(project_dir, project_name: str, *, rt=None) -> int:
     """§73/§96：启动时扫该项目的 active execution（非终态），记账待恢复。
-    AI-7C-1：仅发现 + 记账，不自动推进（workspace replay/commit/production 在后续 gate）。
-    返回 active execution 数（对齐 recover_team_chat/recover_change_protocol 计数签名）。"""
+    AI-7C-1：仅发现 + 记账（workspace replay/commit/production 在后续 gate）。
+
+    AI-7C-H（Event B）：对处于 post-commit 阶段（character_sync/production_planning）且
+    非 blocked/终态 的 execution，启动即后台 kickoff `_run_postcommit_to_completion`。
+    批准后的执行是已授权的生产行为（§7 批准即执行到完成；§27 后端重启用既有 durable
+    恢复机制续跑），重启不应要求用户重新确认。每步函数自带 stage guard + per-char/
+    per-scene 幂等（§46/F-2），进程内 `_INFLIGHT_POSTCOMMIT` 防双派发。
+    rt 仅供测试注入；缺省用全局 runtime。"""
     store = ChangeProtocolStore(project_dir, project_name)
     n = 0
+    kickoff_targets: List[ChangeExecutionSession] = []
     for ex in store.list_executions():
         if ex.status in EXEC_TERMINAL:
             continue
@@ -1203,9 +1240,25 @@ def recover_executions(project_dir, project_name: str) -> int:
         if cc and cc.get("status") == "commit_intent":
             _reconcile_commit(ex, store, project_dir)
             store.save_execution(ex)
+        # Event B：post-commit 活跃执行 → 记录待 kickoff（commit 已落，续跑安全幂等）
+        if (ex.status not in EXEC_TERMINAL and ex.status != "blocked"
+                and ex.stage in ("character_sync", "production_planning")):
+            kickoff_targets.append(ex)
         logger.info("AI-7C recover: %s exec=%s plan=%s v%s status=%s stage=%s",
                     project_name, ex.execution_id, ex.plan_id,
                     ex.plan_version, ex.status, ex.stage)
     if n:
         logger.info("AI-7C: %s 发现 %d 个 active execution 待恢复", project_name, n)
+    if kickoff_targets:
+        try:
+            if rt is None:
+                from ..runtime import get_agent_runtime
+                rt = get_agent_runtime()
+            for ex in kickoff_targets:
+                _maybe_kickoff_postcommit(rt, project_name, ex)
+            logger.info("AI-7C-H: %s kickoff %d 个 post-commit execution（启动续跑）",
+                        project_name, len(kickoff_targets))
+        except Exception as e:   # noqa: BLE001
+            # kickoff 失败不阻断启动；用户/前端 resume 仍可续跑（幂等）
+            logger.warning("AI-7C-H startup kickoff failed (%s): %s", project_name, e)
     return n
