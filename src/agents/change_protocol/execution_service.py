@@ -773,7 +773,7 @@ def _assert_agnes_prerequisites(ex: ChangeExecutionSession, store: ChangeProtoco
 
 
 async def run_character_sync(rt: AgentRuntime, project: str, execution_id: str, *,
-                             view_generator) -> dict:
+                             view_generator=None) -> dict:
     """§43/§44/§46/§51/§67：affected_production 的 character visual sync。creative_only 已在 commit
     终止（done），此函数对其 no-op（§47）。view_generator 为可注入 callable：``async (char_name)
     -> dict[view_name, Asset|dict]``。默认真路径（JobQueue character_views Job + chain handler）在
@@ -807,8 +807,10 @@ async def run_character_sync(rt: AgentRuntime, project: str, execution_id: str, 
     synced = {r.get("character_name") for r in ex.character_sync}
     pending = [c for c in chars_to_sync if c not in synced]
 
+    gen = view_generator if view_generator is not None else (
+        lambda cn: _real_character_view_generator(rt, project, execution_id, cn))   # §103 default
     for char_name in pending:
-        views = await view_generator(char_name)   # dict[view_name, Asset|dict]
+        views = await gen(char_name)   # dict[view_name, Asset|dict]
         if not views:
             raise AgentError("CHARACTER_SYNC_FAILED", f"角色 {char_name} view 生成返回空")
         # §30 reload-latest + project_write_lock 短临界区：views 仅 image refs，不改 creative sig
@@ -935,6 +937,39 @@ async def _real_run_starter(rt: AgentRuntime, project: str, ex: ChangeExecutionS
                               shot_actions=manifest.shot_actions,
                               parent_change_execution_id=ex.execution_id)
     return {"run_id": run.run_id}
+
+
+async def _real_character_view_generator(rt: AgentRuntime, project: str,
+                                          execution_id: str, char_name: str) -> dict:
+    """§46 真路径：提交 character_views Job（JobQueue，origin=execution_id + stage_key）+ poll 至终态。
+    handler（handler_character_views，复用 routers/characters.py chain §44）由 composition root / 驱动
+    注册为 JOB_HANDLERS["character_views"]。返回 {view_name: Asset}（从 Character.views 重载）。"""
+    import asyncio as _aio
+    jq = rt._resolve_job_queue_or_none()
+    if jq is None:
+        raise AgentError("CHARACTER_SYNC_FAILED", "JobQueue 不可用，无法 character sync（§46）")
+    stage_key = f"char_views:{execution_id}:{char_name}"
+    existing = jq.find_by_origin(execution_id, stage_key)
+    if existing is None:
+        jq.submit(project, "character_views", shot_id=None,
+                  origin_run_id=execution_id, autopilot_stage_key=stage_key,
+                  character_name=char_name)
+    deadline = _now() + 600
+    while _now() < deadline:
+        job = jq.find_by_origin(execution_id, stage_key)
+        if job is None:
+            raise AgentError("CHARACTER_SYNC_FAILED", f"character_views job 未找到: {char_name}")
+        if job.state in ("done", "failed", "cancelled"):
+            break
+        await _aio.sleep(1.0)
+    job = jq.find_by_origin(execution_id, stage_key)
+    if job is None or job.state != "done":
+        raise AgentError("CHARACTER_SYNC_FAILED",
+                         f"角色 {char_name} view 生成失败: {getattr(job,'state','?')} {getattr(job,'error','')}")
+    # handler 已写 Character.views；reload 读之
+    pdir = rt._resolve_project_dir(project)
+    ch = next((c for c in ProjectStore(pdir).load().characters if c.name == char_name), None)
+    return dict(ch.views) if ch else {}
 
 
 def cancel_execution(rt: AgentRuntime, project: str, execution_id: str) -> dict:

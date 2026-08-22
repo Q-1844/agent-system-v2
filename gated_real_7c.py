@@ -46,6 +46,7 @@ from routers.shots import (_handler_first_frame, _handler_last_frame, _handler_v
                             _handler_audio, choose_first_frame_business)
 from routers.production_planner import _read_plans, _write_plans
 from src.ai.production_planner import sanitize_plan
+from src.agents.character_views_handler import handler_character_views
 import services.lifecycle as lifecycle
 
 BASE = Path(__file__).resolve().parent
@@ -68,7 +69,8 @@ def build_real_agnes():
 
 def real_handlers():
     return {"first_frame": _handler_first_frame, "last_frame": _handler_last_frame,
-            "video": _handler_video, "audio": _handler_audio}
+            "video": _handler_video, "audio": _handler_audio,
+            "character_views": handler_character_views}
 
 
 def seed_throwaway(pm):
@@ -210,6 +212,80 @@ def _find_video_job(q, project):
     return None
 
 
+def seed_approved_change_plan_char(pdir, proj):
+    """落 approved ChangePlan（character 变更：改 description_en）+ preview。触发 character_sync。"""
+    sig = creative_source_signature(proj.to_dict())
+    desc_before = "a girl with short hair"
+    desc_after = "a girl with long flowing black hair, green eyes"
+    ops = [ChangeOperation(op_type="update_character", character_name=CHAR_NAME,
+                           description_en=BeforeAfter(before=desc_before, after=desc_after))]
+    candidate, _d, impact, _w = preview_operations_on_project(proj, ops)
+    projected = creative_source_signature(candidate.to_dict())
+    store = ChangeProtocolStore(pdir, PROJECT)
+    store.save_session(ChangeSession(session_id="cs_gated", project_name=PROJECT,
+                                     status="approved_for_execution",
+                                     active_plan_id="plan_gated", plan_version=1,
+                                     source_snapshot_signature=sig, schema_version=2,
+                                     created_at=time.time(), updated_at=time.time()))
+    plan = UnifiedChangePlan(plan_id="plan_gated", change_session_id="cs_gated",
+                             project_name=PROJECT, version=1, source_snapshot_signature=sig,
+                             status="approved_for_execution",
+                             steps=[{"step_id": "step_ch", "module": "character",
+                                     "owner_agent_id": "character_designer", "plan_item_ids": [],
+                                     "depends_on_step_ids": [], "parallel_group": None}],
+                             preview_id="pv_gated", created_at=time.time())
+    plan.approval = PlanApproval(plan_id="plan_gated", plan_version=1, decision="approved",
+                                 source_snapshot_signature=sig, decided_at=time.time()).to_dict()
+    store.save_plan(plan)
+    store.save_preview(PlanPreviewArtifact(
+        preview_id="pv_gated", change_session_id="cs_gated", plan_id="plan_gated", plan_version=1,
+        source_snapshot_signature=sig,
+        module_operations=[{"step_id": "step_ch", "module": "character",
+                            "owner_agent_id": "character_designer", "proposal_item_ids": [],
+                            "operations": [ops[0].to_dict()]}],
+        aggregate_impact=impact.to_dict(), projected_signature=projected,
+        applyable=False, created_at=time.time()))
+    return sig, projected
+
+
+async def phase_char_sync(pdir, real_client, sig, projected):
+    """§99 appearance-only char change：execute → commit → character_sync（真 character_views handler）
+    → 验证 Character.views 三视图再生（front/side/back done + url + local）。不跑下游 production。"""
+    q = JobQueue(pdir / "cache" / "jobs.json", real_handlers())
+    deps.job_queue = q
+    await q.start()
+    rt = AgentRuntime(project_dir_resolver=lambda name: pdir,
+                      job_queue_getter=lambda: q, agnes_getter=lambda: real_client,
+                      client=real_client, real_shot_pipeline=True,
+                      settings_path=pdir / "agents_data" / "settings.json")
+    log("execute (start_replay_commit, char change)…")
+    res = await cpx.start_replay_commit(rt, PROJECT, "cs_gated", "plan_gated", 1, "affected_production")
+    ex = res["execution"]
+    assert ex["canonical_commit"]["status"] == "committed", f"commit failed: {ex.get('blocker')}"
+    assert ex["stage"] == "character_sync"
+    log(f"committed. execution_id={ex['execution_id']} stage=character_sync")
+    # manifest 应标 char regenerate
+    m = cpx.get_production_manifest(rt, PROJECT, ex["execution_id"])
+    assert m["character_actions"].get(CHAR_NAME) == "regenerate"
+    log(f"manifest: {CHAR_NAME} -> regenerate (char sync required)")
+    # character_sync（default 真 view_generator → character_views job → handler 生成三视图）
+    log("run_character_sync (real character_views handler)…")
+    await cpx.run_character_sync(rt, PROJECT, ex["execution_id"])   # default real path
+    # 验证 Character.views 三视图再生
+    ch = next(c for c in ProjectStore(pdir).load().characters if c.name == CHAR_NAME)
+    log(f"Character.views keys={sorted(ch.views.keys())}")
+    assert set(ch.views.keys()) == {"front", "side", "back"}, f"views 不全: {ch.views.keys()}"
+    for v, a in ch.views.items():
+        assert a.status == "done", f"{v} status={a.status}"
+        assert a.url, f"{v} 无 url"
+        assert a.local, f"{v} 无 local"
+    log("[OK] character visual sync PASS: front/side/back 三视图再生 (done + url + local)")
+    ex = cpx._store(rt, PROJECT).get_execution(ex["execution_id"])
+    assert ex.stage == "production_planning"
+    assert len(ex.character_sync) == 1
+    return True
+
+
 # ============ Phase B: restart → recover → verify no-duplicate ============
 async def phase_B(pdir, real_client, exec_id, run_id, j1, v1):
     # 🔴 phase_A 的 asyncio.run 关闭时未显式 close httpx client → is_closed=False → phase_B 复用绑定到
@@ -269,15 +345,23 @@ async def phase_B(pdir, real_client, exec_id, run_id, j1, v1):
 
 
 def main():
-    log("=== AI-7C Gate: real execute + canonical commit + targeted production + mid-video restart ===")
+    mode = sys.argv[1] if len(sys.argv) > 1 else "shot"
     real_client, pm = build_real_agnes()
     deps.agnes_client = real_client
     deps.project_manager = pm
     deps._rehost_host = None
     pdir, proj = seed_throwaway(pm)
-    sig, projected = seed_approved_change_plan(pdir, proj)
-    log(f"throwaway project at {pdir}")
+    log(f"throwaway project at {pdir}  mode={mode}")
     try:
+        if mode == "char":
+            log("=== AI-7C §99 char-sync Gate: char change → commit → character_views regeneration ===")
+            sig, projected = seed_approved_change_plan_char(pdir, proj)
+            ok = asyncio.run(phase_char_sync(pdir, real_client, sig, projected))
+            print(f"\n=== AI-7C char-sync Gate: {'PASS' if ok else 'FAIL'} ===")
+            return 0 if ok else 1
+        # default: shot-only §103/§104
+        log("=== AI-7C Gate: real execute + canonical commit + targeted production + mid-video restart ===")
+        sig, projected = seed_approved_change_plan(pdir, proj)
         exec_id, run_id, j1, v1 = asyncio.run(phase_A(pdir, real_client, sig, projected))
         log(f"Phase A done (clean stop). exec={exec_id} run={run_id} J1={j1} V1={v1}")
         ok = asyncio.run(phase_B(pdir, real_client, exec_id, run_id, j1, v1))
