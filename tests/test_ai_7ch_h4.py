@@ -375,3 +375,220 @@ def test_event_b_inflight_guard_prevents_double_kickoff(tmp_path):
             cpx._INFLIGHT_POSTCOMMIT.pop("ex_x", None)
 
     asyncio.run(_check())
+
+
+# ============ ⑦ F-1/Event B soak：双角色 char-sync 中途崩溃重启（§17 必备场景）============
+class _TwoCharFakeAgnes:
+    """A 正常生成；可选挂起 B（模拟崩溃窗口：A 完成、B 进行中）。
+    串行 char-sync 下 calls[0:3]=A 的 front/side/back，calls[3:]=B。"""
+
+    def __init__(self, hang_from_index=None):
+        self.calls = []
+        self.hang_from = hang_from_index   # 第 N 次调用起挂起（60s）
+
+    async def generate_image(self, prompt, *, image_refs=None, size_tier="1K",
+                             ratio="16:9", seed=None, want_b64=False):
+        idx = len(self.calls)
+        self.calls.append(prompt[:20])
+        if self.hang_from is not None and idx >= self.hang_from:
+            await asyncio.sleep(60)   # 崩溃窗口：B 生成中
+        return {"url": f"https://fake/{idx}.png", "b64": None}
+
+    async def chat(self, *a, **k):
+        return "not a plan json"
+
+    async def aclose(self):
+        pass
+
+
+def _seed_2char_project(pdir, pname):
+    """2 char（A/B 均有旧 done views + views_meta 旧 sig）+ 1 scene + approved 2-op plan。"""
+    char_a, char_b = "LinXia", "Aria"
+    old_views = {v: Asset(url=f"https://old/{v}.png", local=f"old/{v}_seg.png",
+                          status="done") for v in ("front", "side", "back")}
+    proj = Project(
+        name=pname, style=StyleAnchor(art_style="anime", aspect_ratio="16:9"),
+        characters=[
+            Character(name=char_a, description_en="a girl with short hair",
+                      views=dict(old_views)),
+            Character(name=char_b, description_en="a calm ranger in green cloak",
+                      views=dict(old_views)),
+        ],
+        scenes=[Scene(scene_id="s01", summary="meet", characters=[char_a, char_b],
+                      shots=[Shot(shot_id="s01_c01", scene_id="s01", index=1,
+                                  description="see", characters=[char_a, char_b],
+                                  target_duration_s=4, link_mode="i2v")])],
+        story_text="once upon a time")
+    ProjectStore(pdir).save(proj)
+    # 旧外观 views_meta（K1：新批准外观 sig 不同 -> 必须重生成）
+    for cn, desc in ((char_a, "a girl with short hair"),
+                     (char_b, "a calm ranger in green cloak")):
+        d = pdir / "output" / "characters" / cn / "views_meta.json"
+        d.parent.mkdir(parents=True, exist_ok=True)
+        d.write_text(json.dumps(
+            {"appearance_sig": character_appearance_sig(desc, "anime"),
+             "views": {}, "updated_at": time.time()}), encoding="utf-8")
+    # approved plan：A、B 都换新外观
+    src = ProjectStore(pdir).load()
+    sig = creative_source_signature(src.to_dict())
+    ops = [
+        ChangeOperation(op_type="update_character", character_name=char_a,
+                        description_en=BeforeAfter(
+                            before="a girl with short hair",
+                            after="a girl with silver hair and black armor")),
+        ChangeOperation(op_type="update_character", character_name=char_b,
+                        description_en=BeforeAfter(
+                            before="a calm ranger in green cloak",
+                            after="a calm ranger in silver cloak")),
+    ]
+    candidate, _d, impact, _w = preview_operations_on_project(src, ops)
+    projected = creative_source_signature(candidate.to_dict())
+    store = ChangeProtocolStore(pdir, pname)
+    store.save_session(ChangeSession(session_id="cs_soak", project_name=pname,
+                                      status="approved_for_execution",
+                                      active_plan_id="plan_soak", plan_version=1,
+                                      source_snapshot_signature=sig, schema_version=2,
+                                      created_at=1.0, updated_at=1.0))
+    plan = UnifiedChangePlan(plan_id="plan_soak", change_session_id="cs_soak",
+                             project_name=pname, version=1,
+                             source_snapshot_signature=sig,
+                             status="approved_for_execution",
+                             steps=[{"step_id": "step_ch", "module": "character",
+                                     "owner_agent_id": "character_designer",
+                                     "plan_item_ids": [], "depends_on_step_ids": [],
+                                     "parallel_group": None}],
+                             preview_id="pv_soak", created_at=1.0)
+    plan.approval = PlanApproval(plan_id="plan_soak", plan_version=1, decision="approved",
+                                 source_snapshot_signature=sig, decided_at=2.0).to_dict()
+    store.save_plan(plan)
+    store.save_preview(PlanPreviewArtifact(
+        preview_id="pv_soak", change_session_id="cs_soak", plan_id="plan_soak",
+        plan_version=1, source_snapshot_signature=sig,
+        module_operations=[{"step_id": "step_ch", "module": "character",
+                            "owner_agent_id": "character_designer",
+                            "proposal_item_ids": [],
+                            "operations": [o.to_dict() for o in ops]}],
+        aggregate_impact=impact.to_dict(), projected_signature=projected,
+        applyable=False, created_at=1.0))
+    return char_a, char_b
+
+
+def _soak_env(monkeypatch, pdir, fake):
+    """公共边界 mock：agnes/segmentor/download/pm。"""
+    monkeypatch.setattr(deps, "agnes_client", fake, raising=False)
+    monkeypatch.setattr(deps, "get_project_manager",
+                        lambda: type("M", (), {"get_project_dir": staticmethod(
+                            lambda name: pdir)})())
+    import routers.characters as rc
+    monkeypatch.setattr(rc, "_get_segmentor", lambda: _FakeSeg())
+
+    async def _dl(url, proxy=None):
+        return b"rawbytes"
+
+    monkeypatch.setattr(cvh, "_download", _dl)
+
+
+def test_f1_eventb_two_char_crash_restart(monkeypatch, tmp_path):
+    """§17 必备：A 重生成完成 + B 未完成 -> 硬停 -> 重启（Event B auto-kickoff）。
+    证明：A 不再重生成（calls A==3 恰一组）；B 续跑完成；execution 继续
+    （无 PROJECT_CHANGED_AFTER_APPROVAL 误报——F-1：sanctioned views 写回不改签名）。"""
+    from src.core.job_queue import JobQueue
+
+    pname = "_test_7ch_soak2c"
+    pdir = tmp_path
+    char_a, char_b = _seed_2char_project(pdir, pname)
+    jobs_path = pdir / "cache" / "jobs.json"
+
+    # ---- Phase A：commit -> resume -> A 完成、B 挂起中 -> 进程"死" ----
+    fake_a = _TwoCharFakeAgnes(hang_from_index=3)   # 第 4 次调用起（B front）挂起
+    _soak_env(monkeypatch, pdir, fake_a)
+
+    async def phase_a():
+        q = JobQueue(jobs_path, {"character_views": handler_character_views})
+        await q.start()
+        rt = AgentRuntime(project_dir_resolver=lambda name: pdir,
+                          job_queue_getter=lambda: q, client=fake_a,
+                          settings_path=pdir / "agents_data" / "settings.json")
+        res = await cpx.start_replay_commit(rt, pname, "cs_soak", "plan_soak", 1,
+                                            "affected_production")
+        ex = res["execution"]
+        assert ex["canonical_commit"]["status"] == "committed", ex.get("blocker")
+        assert ex["stage"] == "character_sync", ex["stage"]
+        eid = ex["execution_id"]
+        await cpx.resume_execution(rt, pname, eid)   # kickoff 后台 char-sync
+        # 等 A 完成（durable：ex.character_sync 落盘）——B 随后开始并挂起
+        deadline = time.time() + 30
+        store = ChangeProtocolStore(pdir, pname)
+        while time.time() < deadline:
+            exx = store.get_execution(eid)
+            if exx and any(r["character_name"] == char_a
+                           for r in exx.character_sync):
+                break
+            await asyncio.sleep(0.2)
+        exx = store.get_execution(eid)
+        assert exx is not None and any(r["character_name"] == char_a
+                                       for r in exx.character_sync), \
+            f"Phase A：A 未完成 char-sync（calls={fake_a.calls}）"
+        assert len(fake_a.calls) >= 3, f"A 应已完成一组三视图: {fake_a.calls}"
+        # 等 B 的挂起调用确实开始（calls 长度 >= 4 说明 B front 已发起且卡住）
+        t0 = time.time()
+        while len(fake_a.calls) < 4 and time.time() - t0 < 10:
+            await asyncio.sleep(0.2)
+        return eid
+        # return -> asyncio.run 结束：worker/后台 task 取消 = 后端硬停（B job 落盘 running）
+
+    eid = asyncio.run(phase_a())
+    calls_after_a = list(fake_a.calls)
+    assert len(calls_after_a) >= 4, f"崩溃窗口应发生在 B 进行中: {calls_after_a}"
+    # 模拟新进程：in-flight 记账清空（重启语义，§73 注释）
+    cpx._INFLIGHT_POSTCOMMIT.pop(eid, None)
+
+    # ---- Phase B：重启 -> JobQueue _load（B running->queued）-> recover（Event B
+    #      auto-kickoff）-> B 续跑完成。planning no-op（本测试聚焦 char-sync 恢复）。 ----
+    fake_b = _TwoCharFakeAgnes()
+    _soak_env(monkeypatch, pdir, fake_b)
+
+    async def _no_planning(rt, project, execution_id, **k):
+        return {"planned_scenes": 0}
+
+    monkeypatch.setattr(cpx, "run_production_planning", _no_planning)
+
+    async def phase_b():
+        q2 = JobQueue(jobs_path, {"character_views": handler_character_views})
+        await q2.start()
+        rt2 = AgentRuntime(project_dir_resolver=lambda name: pdir,
+                           job_queue_getter=lambda: q2, client=fake_b,
+                           settings_path=pdir / "agents_data" / "settings.json")
+        n = cpx.recover_executions(pdir, pname, rt=rt2)   # Event B：自动 kickoff
+        assert n >= 1, "应发现 active execution"
+        store = ChangeProtocolStore(pdir, pname)
+        deadline = time.time() + 60
+        while time.time() < deadline:
+            exx = store.get_execution(eid)
+            if exx and any(r["character_name"] == char_b
+                           for r in exx.character_sync):
+                break
+            await asyncio.sleep(0.3)
+        return store.get_execution(eid)
+
+    ex_final = asyncio.run(phase_b())
+    assert ex_final is not None and any(r["character_name"] == char_b
+                                        for r in ex_final.character_sync), \
+        f"Phase B：B 未续跑完成（calls_b={fake_b.calls}）"
+    # === 核心不变量 ===
+    # ① A 不再重生成：phase B 的 3 次生成全部属于 B（calls 总数恰 3，无 A 的重做）
+    assert len(fake_b.calls) == 3, \
+        f"重启后应只补 B 的一组三视图（A 不重生成），得 {fake_b.calls}"
+    # ② B 完成且是新外观（K1：url 与旧的不同）
+    proj = ProjectStore(pdir).load()
+    ch_b = next(c for c in proj.characters if c.name == char_b)
+    assert all(v.status == "done" for v in ch_b.views.values())
+    assert ch_b.views["front"].url != "https://old/front.png"
+    # ③ F-1：execution 未被 stale 误报阻塞；commit 仍 committed；阶段推进
+    assert ex_final.status != "blocked", \
+        f"F-1 回归：sanctioned views 写回后不应 blocked（blocker={ex_final.blocker}）"
+    assert (ex_final.canonical_commit or {}).get("status") == "committed"
+    assert ex_final.stage in ("production_planning", "production_prepare"), ex_final.stage
+    # ④ 无第二 execution
+    store = ChangeProtocolStore(pdir, pname)
+    assert len(store.list_executions()) == 1
