@@ -30,6 +30,8 @@ from pathlib import Path
 
 os.environ.setdefault("PYTHONUTF8", "1")
 os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+from dotenv import load_dotenv
+load_dotenv()   # 加载 .env（AGNES_API_KEY 等）供 PipelineController ${AGNES_API_KEY} 替换；不硬编码 key
 
 import deps
 from src.core.store import ProjectStore
@@ -344,8 +346,117 @@ async def phase_B(pdir, real_client, exec_id, run_id, j1, v1):
     return same_job and same_vid and no_second_create and video_done
 
 
+# ============ §99b / S5-2 A：char-sync 中途重启 -> 不重复 Agnes 角色生成 ============
+# Phase A2：execute→commit→resume(kickoff 后台 char-sync)→轮询直到 character_views job 提交
+#         →capture job_id + job_state + views_pre → clean stop（asyncio.run 结束，worker+后台 task 取消）。
+# Phase B2：新 loop→_load（char_views job running→queued）→start worker→recover_executions
+#         →直接 run_character_sync（D1 同款，只跑 char-sync 不级联 production_planning）
+#         →find_by_origin 复用既有 job 不重 submit→worker 重跑 queued job→poll 至完成。
+# 主证明：B2 的 char_views job_id == A2（find_by_origin 复用，不重 submit=不重复生成 job）；
+#         done_views 跳过已持久化 view（handler per-view 幂等 line 62-69）；三视图 done+url+local；
+#         stage→production_planning；Agnes generate_image 总调用受控（≤6，catch 全 break）。
+async def phase_char_sync_A(pdir, real_client, sig, projected):
+    """Phase A2：提交 char-sync 后即捕获 char_views job_id 并 clean stop（char-sync 已开始、未完成时后端重启）。"""
+    q = JobQueue(pdir / "cache" / "jobs.json", real_handlers())
+    deps.job_queue = q
+    await q.start()
+    rt = AgentRuntime(project_dir_resolver=lambda name: pdir,
+                      job_queue_getter=lambda: q, agnes_getter=lambda: real_client,
+                      client=real_client, real_shot_pipeline=True,
+                      settings_path=pdir / "agents_data" / "settings.json")
+    log("execute (start_replay_commit, char change)…")
+    res = await cpx.start_replay_commit(rt, PROJECT, "cs_gated", "plan_gated", 1, "affected_production")
+    ex = res["execution"]
+    assert ex["canonical_commit"]["status"] == "committed", f"commit failed: {ex.get('blocker')}"
+    assert ex["stage"] == "character_sync"
+    exec_id = ex["execution_id"]
+    log(f"committed. execution_id={exec_id} stage=character_sync")
+    # resume -> 后台 kickoff char-sync（_run_postcommit_to_completion -> run_character_sync
+    #   -> _real_character_view_generator 提交 character_views job + poll）
+    log("resume (kickoff background char-sync)…")
+    await cpx.resume_execution(rt, PROJECT, exec_id)
+    # 轮询直到 character_views job 提交（find_by_origin 命中 origin=exec_id + stage_key）
+    stage_key = f"char_views:{exec_id}:{CHAR_NAME}"
+    deadline = time.time() + 30
+    job_a = None
+    while time.time() < deadline:
+        job_a = q.find_by_origin(exec_id, stage_key)
+        if job_a is not None:
+            break
+        await asyncio.sleep(0.3)
+    assert job_a is not None, "char_views job 未提交（resume kickoff 未生效？）"
+    ch_pre = next((c for c in ProjectStore(pdir).load().characters if c.name == CHAR_NAME), None)
+    views_pre = {v: getattr(a, "status", None) for v, a in (ch_pre.views or {}).items()} if ch_pre else {}
+    log(f"Phase A2: char_views job submitted id={job_a.job_id} state={job_a.state}; views_pre={views_pre}; clean stop")
+    # clean stop = return -> asyncio.run 结束 -> 后台 task + worker 取消；job 保留（running/queued 落盘）
+    return exec_id, job_a.job_id, job_a.state, views_pre
+
+
+async def phase_char_sync_B(pdir, real_client, exec_id, job_id_a, gen_log):
+    """Phase B2：重启 -> _load(job reset queued) -> worker -> recover -> resume -> 轮询至 char-sync 完成。
+    断言：同一 char_views job_id 复用（不重 submit=不重复生成）；三视图 done+url+local；stage production_planning。"""
+    # 跨 loop client/limiter 复位（phase_B 同款；避免 Event loop is closed）
+    real_client._client = None
+    from src.core.rate_limiter import RateLimiter
+    RateLimiter._instance = None
+    RateLimiter.get()
+    q2 = JobQueue(pdir / "cache" / "jobs.json", real_handlers())
+    deps.job_queue = q2
+    j_pre = q2.get(job_id_a)
+    log(f"restart: jobs={len(q2.jobs)}; char_views job J={job_id_a} state={j_pre.state if j_pre else 'gone'}")
+    assert j_pre is not None, "char_views job 应跨重启持久化"
+    await q2.start()   # worker 起来；重 route reset 的 queued char_views job（done_views 跳过已持久化 view）
+    n_exec = cpx.recover_executions(pdir, PROJECT)
+    log(f"recover_executions: {n_exec} active")
+    rt2 = AgentRuntime(project_dir_resolver=lambda name: pdir,
+                       job_queue_getter=lambda: q2, agnes_getter=lambda: real_client,
+                       client=real_client, real_shot_pipeline=True,
+                       settings_path=pdir / "agents_data" / "settings.json")
+    store = ChangeProtocolStore(pdir, PROJECT)
+    # 直接调 run_character_sync（D1 phase_char_sync 同款；只跑 char-sync，不级联 production_planning
+    #   -> 不触发真实视频生成）。find_by_origin 复用既有 char_views job（不重 submit）+ worker
+    #   (q2.start) 重跑 reset 的 queued job；handler done_views 跳过已持久化 view。
+    log("run_character_sync (reused job via find_by_origin; worker re-processes queued job)…")
+    ex = None
+    try:
+        await cpx.run_character_sync(rt2, PROJECT, exec_id)
+    except Exception as e:
+        ex = store.get_execution(exec_id)
+        print(f"\n  run_character_sync FAILED: {type(e).__name__}: {str(e)[:300]}; "
+              f"exec.status={ex.status if ex else '?'} stage={ex.stage if ex else '?'}")
+        return False
+    ex = store.get_execution(exec_id)
+    # === 不变量证明 ===
+    stage_key = f"char_views:{exec_id}:{CHAR_NAME}"
+    job_b = q2.find_by_origin(exec_id, stage_key)
+    print("\n=== AI-7C-S S5-2 A (char-sync mid-restart) verification ===")
+    print(f"  char_views job_id A2/B2: {job_id_a} / {job_b.job_id if job_b else 'gone'}")
+    same_job = job_b is not None and job_b.job_id == job_id_a
+    print(f"  same char_views job reused (no re-submit = no duplicate generation job): {'YES' if same_job else 'NO'}")
+    ch = next((c for c in ProjectStore(pdir).load().characters if c.name == CHAR_NAME), None)
+    views_done = ch is not None and set(ch.views.keys()) >= {"front", "side", "back"} \
+        and all(v.status == "done" for v in ch.views.values()) \
+        and all(getattr(v, "url", None) and getattr(v, "local", None) for v in ch.views.values())
+    if ch:
+        print(f"  Character.views: {sorted(ch.views.keys())} all_done={views_done}")
+    stage_ok = ex is not None and ex.stage == "production_planning" and ex.status != "blocked"
+    print(f"  execution stage -> production_planning (char-sync recovered): {'YES' if stage_ok else 'NO'}"
+          f" (stage={ex.stage if ex else '?'}, status={ex.status if ex else '?'})")
+    n_calls = len(gen_log)
+    print(f"  Agnes generate_image total calls (one set=3; <=6 allows all-or-nothing writeback waste): {n_calls}")
+    calls_ok = n_calls <= 6
+    print(f"  call count bounded: {'YES' if calls_ok else 'NO'}")
+    print(f"  NOTE: handler 三视图写回是 all-or-nothing per char（末尾一次写）；若崩溃在 pre-writeback")
+    print(f"        窗口，已发起但未持久化的 view 会被重做（非已持久化结果的重复）。")
+    print(f"        主证明=job_id 复用 + done_views 跳过已持久化 view（handler line 62-69）。")
+    return bool(same_job and views_done and stage_ok and calls_ok)
+
+
 def main():
+    global PROJECT
     mode = sys.argv[1] if len(sys.argv) > 1 else "shot"
+    if mode == "char_restart":
+        PROJECT = "__gated_7c_cr"   # 独立 throwaway，不覆盖既有 __gated_7c（保留 D1 char-sync 证据）
     real_client, pm = build_real_agnes()
     deps.agnes_client = real_client
     deps.project_manager = pm
@@ -358,6 +469,24 @@ def main():
             sig, projected = seed_approved_change_plan_char(pdir, proj)
             ok = asyncio.run(phase_char_sync(pdir, real_client, sig, projected))
             print(f"\n=== AI-7C char-sync Gate: {'PASS' if ok else 'FAIL'} ===")
+            return 0 if ok else 1
+        if mode == "char_restart":
+            log("=== AI-7C-S S5-2 A: char-sync mid-restart -> no duplicate Agnes char generation ===")
+            # Agnes generate_image 调用计数 wrapper（辅证：跨两 phase 总调用受控；主证是 job_id 复用）
+            gen_log = []
+            _orig_gen = real_client.generate_image
+            async def _counting_gen(*a, **k):
+                r = await _orig_gen(*a, **k)
+                gen_log.append(True)
+                return r
+            real_client.generate_image = _counting_gen
+            sig, projected = seed_approved_change_plan_char(pdir, proj)
+            exec_id, job_id_a, state_a, _views_pre = asyncio.run(
+                phase_char_sync_A(pdir, real_client, sig, projected))
+            log(f"Phase A2 done (clean stop). exec={exec_id} char_views_job={job_id_a} state={state_a}")
+            ok = asyncio.run(phase_char_sync_B(pdir, real_client, exec_id, job_id_a, gen_log))
+            log(f"Phase B2 done. Gate PASS={ok}")
+            print(f"\n=== AI-7C-S S5-2 A (char-sync mid-restart): {'PASS' if ok else 'FAIL'} ===")
             return 0 if ok else 1
         # default: shot-only §103/§104
         log("=== AI-7C Gate: real execute + canonical commit + targeted production + mid-video restart ===")

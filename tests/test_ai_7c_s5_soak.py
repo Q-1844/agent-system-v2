@@ -10,7 +10,7 @@ import time
 
 import deps
 from deps import get_project_manager
-from src.core.models import Project, Scene, Shot, Character, StyleAnchor
+from src.core.models import Project, Scene, Shot, Character, StyleAnchor, Asset, ImageAsset, VideoAsset
 from src.core.store import ProjectStore
 from src.agents.change_protocol.store import ChangeProtocolStore
 from src.agents.change_protocol.models import (UnifiedChangePlan, PlanPreviewArtifact,
@@ -346,3 +346,83 @@ def test_soak_c_project_isolation(client, monkeypatch):
         import shutil
         shutil.rmtree(pm.get_project_dir("_test_7cs_isoA"), ignore_errors=True)
         shutil.rmtree(pm.get_project_dir("_test_7cs_isoB"), ignore_errors=True)
+
+
+# ============ D：角色重生保留旧生产资产（char-sync 只写 Character.views，不级联删 shot 资产）============
+def _make_project_with_old_assets(pname, char_name):
+    """throwaway：char 无 views（使 char-sync 真再生）+ shot 已有旧 first_frame/video/final_video。
+    v1 注：update_character 只改 description_en 不碰 views（compilers.py §20）；handler done_views
+    跳过已 done view —— 故 char 已有 done views 时 char-sync 不再生（coarse v1，本轮不改，报告记录）。
+    本 setup 用无 views char 让再生发生，以证"再生时不级联删旧 shot 资产"。"""
+    pm = get_project_manager()
+    import shutil
+    shutil.rmtree(pm.base_dir / pname, ignore_errors=True)
+    pdir = pm.create_project(pname)
+    old_ff = "https://old/ff.png"
+    old_vid = "vid_old_7cD"
+    old_final = "projects/old_final_d.mp4"
+    proj = Project(name=pname, style=StyleAnchor(art_style="anime", aspect_ratio="16:9"),
+                   story_text="故事",
+                   characters=[Character(name=char_name,
+                                         description_en="a girl with short hair")],   # 无 views
+                   scenes=[Scene(scene_id="s01", summary="meet", characters=[char_name],
+                                 shots=[Shot(shot_id="s01_c01", scene_id="s01", index=1,
+                                             description="look", characters=[char_name],
+                                             target_duration_s=5, link_mode="i2v",
+                                             first_frame=ImageAsset(
+                                                 candidates=[Asset(url=old_ff, status="done")],
+                                                 selected_index=0, status="done"),
+                                             video=VideoAsset(video_id=old_vid, url="https://old/vid.mp4",
+                                                              status="done"),
+                                             final_video=old_final)])])
+    ProjectStore(pdir).save(proj)
+    return pdir, old_ff, old_vid, old_final
+
+
+def test_soak_d_char_sync_preserves_old_shot_assets(client, monkeypatch):
+    """S5-2 D：shot 已有旧 first_frame/video/final_video；char 无 views。
+    修改外观 -> char-sync（FakeAgnes 再生 views）-> 确认：views 再生为新 url；旧 first_frame/video/
+    final_video 不被删/覆盖（character_views_handler 只写 Character.views line 99，不碰 shot 资产）。"""
+    real_agnes = deps.agnes_client
+    real_rehost = deps._rehost_host
+    fake = FakeAgnes()
+    deps.agnes_client = fake
+    deps._rehost_host = _fake_rehost()
+    _patch_download(monkeypatch)
+    pname = "_test_7cs_soakD"
+    char = "LinXia"
+    pdir, old_ff, old_vid, old_final = _make_project_with_old_assets(pname, char)
+    _seed_char_plan(pdir, pname, char, "cs_d", "plan_d")   # before="a girl with short hair" 与 seed 一致
+    pm = get_project_manager()
+    try:
+        r = client.post(f"/api/project/{pname}/change-sessions/cs_d/execute",
+                        json={"plan_id": "plan_d", "plan_version": 1,
+                              "production_mode": "affected_production"})
+        assert r.status_code == 200, r.text
+        ex = r.json()["execution"]
+        eid = ex["execution_id"]
+        assert ex["canonical_commit"]["status"] == "committed", "commit 应成功（char-sync 前）"
+        client.post(f"/api/project/{pname}/change-sessions/cs_d/executions/{eid}/resume")
+        ch = _wait_char_views_done(pdir, char)
+        assert ch is not None and set(ch.views.keys()) >= {"front", "side", "back"}, \
+            f"char-sync 未完成: {ch.views if ch else None}"
+        # views 再生为新（fake）url
+        assert all(v.url == "https://fake.agnes/char.png" for v in ch.views.values()), \
+            {v: ch.views[v].url for v in ch.views}
+
+        # 旧 shot 生产资产不被删/覆盖（char-sync 只写 Character.views，不级联删 shot）
+        sh = ProjectStore(pdir).load().get_shot("s01_c01")
+        assert sh is not None, "shot 不应被删"
+        assert sh.video.video_id == old_vid, f"旧 video_id 被覆盖: {sh.video.video_id}"
+        assert sh.video.status == "done", f"旧 video status 被改: {sh.video.status}"
+        assert sh.final_video == old_final, f"旧 final_video 被删/改: {sh.final_video}"
+        ff = sh.first_frame
+        assert ff.status == "done" and ff.candidates and ff.candidates[0].url == old_ff, \
+            f"旧 first_frame 被删/改: status={ff.status} cands={[c.url for c in (ff.candidates or [])]}"
+        # 仅 3 次（views 再生一组；shot 资产未被 char-sync 触及 -> 不增调用）
+        assert len(fake.calls) == 3, f"应仅 3 次 char views 调用，得 {len(fake.calls)}（shot 被串生成？）"
+    finally:
+        deps.agnes_client = real_agnes
+        deps._rehost_host = real_rehost
+        import shutil
+        shutil.rmtree(pm.get_project_dir(pname), ignore_errors=True)
