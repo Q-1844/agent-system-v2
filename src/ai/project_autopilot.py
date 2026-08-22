@@ -428,18 +428,6 @@ class ProjectProductionManager:
         # 冻结 source snapshot + signature（§九/§十四）
         signature = build_project_source_signature(project)
 
-        # 冻结所有 approved Plan（§十一）。targeted run：只需 scenes_to_run 的 plan，
-        # 但既有行为冻结全部（unaffected scene 亦应有 approved plan，preflight 已保证）。
-        from routers.production_planner import _read_plans
-        plans = _read_plans(project_dir)
-        plans_snapshot: Dict[str, dict] = {}
-        for sc in project.scenes:
-            plan = plans.get(sc.scene_id)
-            if plan is None:
-                # preflight 已保证有 approved plan；防御
-                raise ValueError(f"故事段 {sc.scene_id} 无 approved Plan")
-            plans_snapshot[sc.scene_id] = plan.model_dump()
-
         # AI-7C §59：targeted run 只跑受影响 scene（unaffected scene 不进 run.scenes，合成用 baseline）
         scenes_to_run = project.scenes
         if target_scene_ids is not None:
@@ -447,6 +435,17 @@ class ProjectProductionManager:
             scenes_to_run = [sc for sc in project.scenes if sc.scene_id in tset]
             if not scenes_to_run:
                 raise ValueError(f"target_scene_ids {target_scene_ids} 无匹配场景")
+
+        # 冻结 approved Plan（§十一）。M4/§53：targeted run 只需 scenes_to_run 的 plan
+        # （affected scenes only）；unaffected scene 无 plan 不阻断 targeted run。非 targeted 仍冻结全部（既有行为）。
+        from routers.production_planner import _read_plans
+        plans = _read_plans(project_dir)
+        plans_snapshot: Dict[str, dict] = {}
+        for sc in scenes_to_run:
+            plan = plans.get(sc.scene_id)
+            if plan is None:
+                raise ValueError(f"故事段 {sc.scene_id} 无 approved Plan")
+            plans_snapshot[sc.scene_id] = plan.model_dump()
 
         # 创建 Run
         run_id = f"prun_{uuid.uuid4().hex[:10]}"

@@ -58,6 +58,13 @@ get_agent_runtime().set_plans_reader(_plans_reader)
 for _kind, _fn in all_fake_handlers().items():
     JOB_HANDLERS.setdefault(_kind, _fn)
 
+# AI-7C-S §10/L1：注册 character_views 真实 handler 到生产 JobQueue。
+# 此前仅 gated_real_7c.py:73 注册；生产 composition root 未注册 → _real_character_view_generator
+# 提交的 character_views job 无 handler → RuntimeError → CHARACTER_SYNC_FAILED（L1）。
+# handler 复用既有 routers.characters chain（§44 prompt+segmentor），不另造生成系统（§12）。
+from src.agents.character_views_handler import handler_character_views
+JOB_HANDLERS.setdefault("character_views", handler_character_views)
+
 
 # ============ AgentError.code -> HTTP 状态（§29）============
 _HTTP = {

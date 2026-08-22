@@ -161,18 +161,27 @@ def test_planning_idempotent(tmp_path):
     assert len(rs_calls) == 1   # 未二次创建 run
 
 
-# ============ ④ 无 manifest -> PRODUCTION_PREREQUISITE_FAILED ============
-def test_planning_no_manifest_blocks(tmp_path):
+# ============ ④ L4/§15：committed 缺 manifest -> 重算（非 block）============
+def test_planning_no_manifest_recomputes_when_committed(tmp_path):
+    """L4：committed execution 缺 manifest -> run_production_planning 经 _ensure_manifest 从
+    已提交 canonical + 批准 ops 确定性重算（不 block）。原 test 期望 PRODUCTION_PREREQUISITE_FAILED，
+    L4 后改为重算（§15：manifest 可从 approved ops + committed project 重算，避免第二真源）。"""
     rt, ex0, _ = _at_production_planning(tmp_path)
-    # 删 manifest
     store = ChangeProtocolStore(rt._resolve_project_dir("demo"), "demo")
-    (rt._resolve_project_dir("demo") / "output" / "agents" / "change_protocol"
-     / "execution_audit" / ex0.execution_id / "production_manifest.json").unlink()
+    audit_p = store.root / "execution_audit" / ex0.execution_id / "production_manifest.json"
+    assert audit_p.exists()
+    audit_p.unlink()   # 删 manifest 模拟 commit 与 manifest 计算间崩溃
+    ex = store.get_execution(ex0.execution_id)
+    ex.production_manifest_file = None
+    store.save_execution(ex)
     pc, _ = _fake_plan_creator()
-    import pytest
-    with pytest.raises(AgentError) as ei:
-        asyncio.run(cpx.run_production_planning(rt, "demo", ex0.execution_id, plan_creator=pc))
-    assert ei.value.code == "PRODUCTION_PREREQUISITE_FAILED"
+    rs, _ = _fake_run_starter()
+    res = asyncio.run(cpx.run_production_planning(
+        rt, "demo", ex0.execution_id, plan_creator=pc, run_starter=rs))
+    assert not res.get("blocked", False), "L4：committed 缺 manifest 应重算而非 block"
+    ex2 = _exec(rt)
+    assert ex2.production_manifest_file == "production_manifest.json"   # 重算后字段复位
+    assert ex2.stage == "production_prepare"
 
 
 # ============ ⑤ 非 production_planning stage -> idempotent no-op ============

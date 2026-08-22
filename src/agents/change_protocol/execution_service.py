@@ -11,6 +11,7 @@
 # 复用 service.py 的共享 helper（_store/_current_signature/_load_session/_guard_legacy/_new_id/_now），
 # 不在 AgentRuntime 上挂方法（对齐 AI-7A/7B composition-root 模式）。
 from __future__ import annotations
+import asyncio
 import logging
 from typing import List, Optional
 
@@ -510,6 +511,12 @@ async def commit_canonical(rt: AgentRuntime, project: str,
     # 幂等：已提交
     cc = ex.canonical_commit
     if cc and cc.get("status") == "committed":
+        # M1 加固：若 stage 被重新置 canonical_commit（如 resume 重跑 start_replay_commit
+        # → run_creative_replay 把 stage 置 canonical_commit），恢复 post-commit stage，
+        # 防 execution 卡在 canonical_commit 无法经 resume 推进到 character_sync。
+        if ex.stage == "canonical_commit":
+            ex.stage = "done" if ex.production_mode == "creative_only" else "character_sync"
+            store.save_execution(ex)
         return {"execution": ex.to_dict(), "idempotent": True, "committed": True}
     if ex.status in EXEC_TERMINAL:
         return {"execution": ex.to_dict(), "idempotent": True}
@@ -711,7 +718,9 @@ def compute_production_manifest(ex: ChangeExecutionSession, plan: UnifiedChangeP
                 if s.scene_id == op.scene_id:
                     for sh in (s.shots or []):
                         a = _ensure(sh.shot_id)
-                        if op.summary is not None:
+                        # M2/§41：summary 或 characters 变更 -> scene 内 shot first_frame REGENERATE
+                        # （原仅 summary 触发，漏 characters -> 角色名单变更首帧不重生成，与 §41 不符）
+                        if op.summary is not None or op.characters is not None:
                             a["first_frame"] = "regenerate"
                         a["video"] = "regenerate"
 
@@ -748,6 +757,38 @@ def get_production_manifest(rt: AgentRuntime, project: str,
     if d is None:
         return None
     return ProductionExecutionManifest.from_dict(d).to_dict()
+
+
+def _ensure_manifest(rt: AgentRuntime, project: str, ex: ChangeExecutionSession) -> Optional[dict]:
+    """L4/§15：确保 production manifest 落盘并返回其 dict。
+    场景：commit_canonical 的 pstore.save(行597) 成功后、manifest 计算(行605)前崩溃 ->
+    重启 _reconcile_commit Case B 置 committed + stage=character_sync，但
+    production_manifest_file 仍 None -> _assert_agnes_prerequisites 永久 blocked 无重算路径。
+    修复：缺失且已提交时，从 已提交 canonical project + 批准 plan/preview 确定性重算
+    （compute_production_manifest 纯函数 0 LLM），落盘 + 设 production_manifest_file。
+    manifest 可从 (approved ops + committed project + execution) 重算 -> 不引入第二真源（§15）。"""
+    store = _store(rt, project)
+    manifest_d = store.load_execution_audit(ex.execution_id, "production_manifest.json")
+    if manifest_d:
+        if not ex.production_manifest_file:
+            ex.production_manifest_file = "production_manifest.json"
+            store.save_execution(ex)
+        return manifest_d
+    cc = ex.canonical_commit
+    if not (cc and cc.get("status") == "committed"):
+        return None   # 未提交，无 manifest 可重算
+    plan = store.get_plan(ex.plan_id)
+    preview = store.get_preview(ex.preview_artifact_id)
+    project_dir = rt._resolve_project_dir(project)
+    committed = ProjectStore(project_dir).load()
+    if not (plan and preview):
+        return None
+    manifest = compute_production_manifest(ex, plan, preview, committed)
+    store.save_execution_audit(ex.execution_id, "production_manifest.json", manifest.to_dict())
+    ex.production_manifest_file = "production_manifest.json"
+    store.save_execution(ex)
+    logger.info("AI-7C L4：execution %s manifest 缺失，已重算落盘", ex.execution_id)
+    return manifest.to_dict()
 
 
 # ============ AI-7C-4b character sync + §68 first-Agnes hard gate ============
@@ -795,12 +836,13 @@ async def run_character_sync(rt: AgentRuntime, project: str, execution_id: str, 
         return {"execution": ex.to_dict(), "idempotent": True}   # creative_only 已 done；非 sync stage
 
     project_dir = rt._resolve_project_dir(project)
-    _assert_agnes_prerequisites(ex, store, project_dir)   # §68：失败 -> 0 Agnes
-
-    manifest_d = store.load_execution_audit(execution_id, "production_manifest.json")
+    # L4/§15：先确保 manifest 落盘（commit 与 manifest 计算间崩溃 -> 缺失且已提交时从 canonical +
+    # 批准 ops 确定性重算），再过 §68 gate。避免永久 blocked 无重算路径。
+    manifest_d = _ensure_manifest(rt, project, ex)
     if not manifest_d:
         raise AgentError("PRODUCTION_PREREQUISITE_FAILED",
-                         "manifest 不存在，无法 character sync（§68）")
+                         "manifest 不存在且无法重算，无法 character sync（§68/L4）")
+    _assert_agnes_prerequisites(ex, store, project_dir)   # §68：失败 -> 0 Agnes（manifest 已就位）
     manifest = ProductionExecutionManifest.from_dict(manifest_d)
     chars_to_sync = [n for n, a in manifest.character_actions.items()
                      if a in ("regenerate", "generate_new")]
@@ -859,10 +901,10 @@ async def run_production_planning(rt: AgentRuntime, project: str, execution_id: 
     if ex.stage != "production_planning":
         return {"execution": ex.to_dict(), "idempotent": True}
 
-    manifest_d = store.load_execution_audit(execution_id, "production_manifest.json")
+    manifest_d = _ensure_manifest(rt, project, ex)
     if not manifest_d:
         raise AgentError("PRODUCTION_PREREQUISITE_FAILED",
-                         "manifest 不存在，无法 planning（§68）")
+                         "manifest 不存在且无法重算，无法 planning（§68/L4）")
     manifest = ProductionExecutionManifest.from_dict(manifest_d)
     scene_ids = list(manifest.planner_scene_ids)
     if not scene_ids:
@@ -998,9 +1040,63 @@ def cancel_execution(rt: AgentRuntime, project: str, execution_id: str) -> dict:
     return {"execution": ex.to_dict(), "cancelled": True, "creative_committed": committed}
 
 
+# ============ M1：post-commit 后台 kickoff（§3 polling-first，不阻塞 HTTP）============
+# 进程内 in-flight 记账：execution_id -> asyncio.Task（强引用防 GC）。重启后清空=正确
+# （无任务存活 -> resume 重派发；每步函数自带 stage guard + per-char/per-scene 幂等，不双写 §46/§54）。
+_INFLIGHT_POSTCOMMIT: dict = {}
+
+
+def _maybe_kickoff_postcommit(rt: AgentRuntime, project: str, ex) -> bool:
+    """若 ex 处于 post-commit 阶段（character_sync/production_planning）且无在飞任务，
+    后台 kickoff _run_postcommit_to_completion。返回是否新 kickoff（已 in-flight/终态/阻塞→False）。
+    §3 polling-first：HTTP 立即返回，前端轮询 execution 状态推进。"""
+    if ex.status in EXEC_TERMINAL or ex.status == "blocked":
+        return False
+    if ex.stage not in ("character_sync", "production_planning"):
+        return False
+    if ex.execution_id in _INFLIGHT_POSTCOMMIT:
+        return False
+    task = asyncio.create_task(_run_postcommit_to_completion(rt, project, ex.execution_id))
+    _INFLIGHT_POSTCOMMIT[ex.execution_id] = task
+    task.add_done_callback(lambda _t, eid=ex.execution_id: _INFLIGHT_POSTCOMMIT.pop(eid, None))
+    return True
+
+
+async def _run_postcommit_to_completion(rt: AgentRuntime, project: str, execution_id: str) -> None:
+    """后台串行跑 character_sync → production_planning → production_prepare。
+    每步函数自带 stage guard + 幂等，故重启后重派发不双写。失败 -> execution blocked（保留 blocker）。"""
+    store = _store(rt, project)
+    try:
+        ex = store.get_execution(execution_id)
+        if ex and ex.stage == "character_sync" and ex.status not in EXEC_TERMINAL and ex.status != "blocked":
+            await run_character_sync(rt, project, execution_id)
+        ex = store.get_execution(execution_id)
+        if ex and ex.stage == "production_planning" and ex.status not in EXEC_TERMINAL and ex.status != "blocked":
+            await run_production_planning(rt, project, execution_id)
+    except AgentError as e:
+        ex = store.get_execution(execution_id)
+        if ex and ex.status not in EXEC_TERMINAL:
+            ex.status = "blocked"
+            ex.blocker = {"code": e.code, "message": str(e)[:300]}
+            ex.updated_at = _now()
+            store.save_execution(ex)
+        logger.warning("AI-7C post-commit task failed (exec=%s): %s %s", execution_id, e.code, e)
+    except Exception as e:  # noqa: BLE001
+        ex = store.get_execution(execution_id)
+        if ex and ex.status not in EXEC_TERMINAL:
+            ex.status = "blocked"
+            ex.blocker = {"code": "POSTCOMMIT_TASK_FAILED", "message": str(e)[:300]}
+            ex.updated_at = _now()
+            store.save_execution(ex)
+        logger.exception("AI-7C post-commit task error (exec=%s): %s", execution_id, e)
+
+
 async def resume_execution(rt: AgentRuntime, project: str, execution_id: str) -> dict:
-    """§83 resume：从当前 stage 继续推进。v1 复用 start_replay_commit（幂等：重跑 create+replay+
-    commit；character_sync+ 需真 generator 在 §103 接通后推进，当前 no-op past commit）。
+    """§83 resume：从当前 stage 继续推进。M1 stage 分发：
+      pre-commit（revalidate/workspace_create/creative_replay/workspace_verify/canonical_commit）
+        → 同步 start_replay_commit（本地快操作：replay+commit）；commit 后若到 post-commit → 接续 kickoff；
+      post-commit（character_sync/production_planning）→ 后台 kickoff（§3 polling-first，HTTP 不阻塞）；
+      production_prepare/production/compose → 既有 ProjectProductionRun 基础设施接管（§58/§71），幂等返回。
     blocked（stale/preview-mismatch/active-production）不可 resume（§81 stale 不可 rebasing）。"""
     store = _store(rt, project)
     ex = store.get_execution(execution_id)
@@ -1014,9 +1110,25 @@ async def resume_execution(rt: AgentRuntime, project: str, execution_id: str) ->
         # §81：blocked（尤其 stale）不可 rebasing resume；返回 blocked 态供 UI 说明
         return {"execution": ex.to_dict(), "blocked": True,
                 "blocker_code": (ex.blocker or {}).get("code")}
-    # 幂等推进（re-validate + replay + commit；post-commit no-op）
-    return await start_replay_commit(rt, project, ex.change_session_id,
-                                      ex.plan_id, ex.plan_version, ex.production_mode)
+    # pre-commit：同步推进 create+replay+commit
+    if ex.stage in ("revalidate", "workspace_create", "creative_replay",
+                    "workspace_verify", "canonical_commit"):
+        res = await start_replay_commit(rt, project, ex.change_session_id,
+                                        ex.plan_id, ex.plan_version, ex.production_mode)
+        ex2 = (res.get("execution") or {})
+        # commit 后到 post-commit → 接续后台 kickoff（一次 resume 驱动到 production_prepare）
+        if (not res.get("blocked") and ex2.get("status") != "blocked"
+                and ex2.get("stage") in ("character_sync", "production_planning")):
+            ex_obj = store.get_execution(ex2.get("execution_id") or execution_id)
+            if ex_obj is not None:
+                _maybe_kickoff_postcommit(rt, project, ex_obj)
+        return res
+    # post-commit：后台 kickoff（§3 polling-first）
+    if ex.stage in ("character_sync", "production_planning"):
+        kicked = _maybe_kickoff_postcommit(rt, project, ex)
+        return {"execution": ex.to_dict(), "kicked_off": kicked, "idempotent": not kicked}
+    # production_prepare/production/compose：既有 ProjectProductionRun 接管，幂等返回
+    return {"execution": ex.to_dict(), "idempotent": True}
 
 
 # ============ 查询 ============

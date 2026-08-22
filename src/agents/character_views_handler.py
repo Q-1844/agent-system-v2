@@ -14,6 +14,7 @@ import re
 
 from ..core.store import ProjectStore
 from ..core.models import Asset
+from ..core.write_lock import project_write_lock
 
 
 def _safe_filename(name: str) -> str:
@@ -52,7 +53,8 @@ async def handler_character_views(job, emit):
         raise RuntimeError(f"角色 {char_name} 不存在")
     style = project.style.art_style or "anime"
     size_tier = project.style.size_tier or "1K"
-    ratio = project.style.aspect_ratio or "16:9"
+    # L2/§44：角色三视图用竖图 2:3，与既有 routers.characters chain 一致（非视频画幅 16:9）。
+    ratio = "2:3"
     agnes = get_agnes_client()
     segmentor = _get_segmentor()
     proxy = getattr(agnes, "_proxy", None) or getattr(agnes, "proxy", None)
@@ -87,11 +89,13 @@ async def handler_character_views(job, emit):
                      refs=[side.url], pct=75)
     views["back"] = back
 
-    # 写回 Character.views（reload latest + 仅改该 char 的 views，保无关态）
-    p = store.load()
-    c = next((x for x in p.characters if x.name == char_name), None)
-    if c is None:
-        raise RuntimeError(f"角色 {char_name} 不存在（写回时）")
-    c.views = views
-    store.save(p)
+    # 写回 Character.views（M3/§33：project_write_lock 短临界区，防并发写丢更新——
+    # handler 与 commit_canonical / 其它 char sync 串行；reload latest + 仅改该 char 的 views，保无关态）
+    async with project_write_lock(job.project):
+        p = store.load()
+        c = next((x for x in p.characters if x.name == char_name), None)
+        if c is None:
+            raise RuntimeError(f"角色 {char_name} 不存在（写回时）")
+        c.views = views
+        store.save(p)
     await emit("done", f"{char_name} 三视图完成", 100)
