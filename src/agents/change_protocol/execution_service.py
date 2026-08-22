@@ -902,17 +902,24 @@ async def run_production_planning(rt: AgentRuntime, project: str, execution_id: 
 
 async def _real_plan_creator(rt: AgentRuntime, project: str, ex: ChangeExecutionSession,
                              scene_id: str) -> dict:
-    """真路径：plan_production_business + approve_plan_business（§55 复用既有 auto-approve 语义）。
-    需 Agnes（Planner LLM），§103 acceptance 接通。返回 {plan_id, scene_id, status, shot_ids}。"""
-    from src.ai.production_planner import plan_production_business, approve_plan_business
+    """真路径：plan_production_business（src.ai，async，需 Agnes Planner LLM）+ approve_plan_business
+    （routers.production_planner，§55 复用既有 auto-approve 语义）。§103 acceptance 接通。
+    返回 {plan_id, scene_id, status, shot_ids}。"""
+    from src.ai.production_planner import plan_production_business   # async
+    from routers.production_planner import approve_plan_business    # 同步
     from deps import get_agnes_client, get_project_manager
     pdir = get_project_manager().get_project_dir(project)
     project_obj = ProjectStore(pdir).load()
     scene = next((s for s in project_obj.scenes if s.scene_id == scene_id), None)
     if scene is None:
         raise AgentError("PRODUCTION_PLAN_INVALID", f"scene {scene_id} 不存在")
-    plan = plan_production_business(project_obj, scene, project, get_agnes_client())
+    plan = await plan_production_business(project_obj, scene, project, get_agnes_client())
     approve_plan_business(plan, scene)   # §55：AI-7C affected-production 等价 production 授权
+    # 🔴 持久化新 plan 到 production_plans.json（否则 start_run preflight 读旧 plan → PLAN_STALE）
+    from routers.production_planner import _read_plans, _write_plans
+    plans = _read_plans(pdir)
+    plans[scene_id] = plan
+    _write_plans(pdir, plans)
     return {"plan_id": plan.plan_id, "scene_id": scene_id, "status": plan.status,
             "shot_ids": [ps.shot_id for ps in plan.shots]}
 

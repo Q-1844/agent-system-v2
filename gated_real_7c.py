@@ -162,8 +162,8 @@ async def phase_A(pdir, real_client, sig, projected):
     ex = cpx._store(rt, PROJECT).get_execution(ex.execution_id)
     log(f"planning done. production_run_id={ex.production_run_id} stage={ex.stage}")
     assert ex.production_run_id, "targeted run not created"
-    # 4. 等 targeted run 的 shot video job 提交 + video_id 持久化
-    vid = await _wait_video_id(pdir, timeout=180)
+    # 4. 等 targeted run 的 shot video job 提交 + video_id 持久化（真 Agnes first_frame+video 慢，给足时间）
+    vid = await _wait_video_id(pdir, q, timeout=600)
     assert vid, "video_id not persisted (targeted run did not reach shot.video)"
     # 找该 video job（origin = production run 的 scene run）
     vjob = _find_video_job(q, PROJECT)
@@ -177,13 +177,29 @@ async def _placeholder_view_generator(char_name):
     raise RuntimeError(f"unexpected view_generator call for {char_name} (shot-only should not sync chars)")
 
 
-async def _wait_video_id(pdir, timeout=180):
+async def _wait_video_id(pdir, q, timeout=600):
     deadline = time.time() + timeout
+    last_log = 0.0
     while time.time() < deadline:
         sh = ProjectStore(pdir).load().get_shot(SHOT_ID)
         if sh and getattr(sh.video, "video_id", None):
             return sh.video.video_id
-        await asyncio.sleep(1.0)
+        # log job progress（看是否在推进还是卡住）
+        if time.time() - last_log > 15:
+            j = _find_first_frame_job(q, PROJECT)
+            vj = _find_video_job(q, PROJECT)
+            ff_st = f"{j.kind}:{j.state}:{j.progress}" if j else "none"
+            v_st = f"{vj.kind}:{vj.state}:{vj.progress}" if vj else "none"
+            log(f"  waiting video_id… first_frame=[{ff_st}] video=[{v_st}]")
+            last_log = time.time()
+        await asyncio.sleep(2.0)
+    return None
+
+
+def _find_first_frame_job(q, project):
+    for j in q.jobs.values():
+        if j.project == project and j.kind == "first_frame":
+            return j
     return None
 
 
@@ -196,6 +212,14 @@ def _find_video_job(q, project):
 
 # ============ Phase B: restart → recover → verify no-duplicate ============
 async def phase_B(pdir, real_client, exec_id, run_id, j1, v1):
+    # 🔴 phase_A 的 asyncio.run 关闭时未显式 close httpx client → is_closed=False → phase_B 复用绑定到
+    # 已关闭 loop 的旧 client → "Event loop is closed"。强制 _client=None 让 client() 在本 loop 重建。
+    real_client._client = None
+    # RateLimiter._lock（asyncio.Lock）也绑在 phase_A loop；poll_video 不用 limiter，但任何后续
+    # Agnes 调用会触发——重建 limiter 单例绑到本 loop。
+    from src.core.rate_limiter import RateLimiter
+    RateLimiter._instance = None
+    RateLimiter.get()
     q2 = JobQueue(pdir / "cache" / "jobs.json", real_handlers())
     deps.job_queue = q2
     log(f"restart: _load jobs={len(q2.jobs)}; J1 state={q2.get(j1).state if q2.get(j1) else 'gone'}")
@@ -207,18 +231,19 @@ async def phase_B(pdir, real_client, exec_id, run_id, j1, v1):
     log(f"recover_executions: {n_exec} active")
     from src.ai.project_autopilot import get_project_autopilot_manager
     await get_project_autopilot_manager().recover_runs()
-    await lifecycle.recover_pending_videos()
-    # 轮询直到 video 完成（~90s）+ execution 推进
-    deadline = time.time() + 300
+    # 轮询直到 video 完成（真 Agnes ~90s+；recover_pending_videos 每 call poll max 60s，需重复调）
+    deadline = time.time() + 600
     while time.time() < deadline:
-        await asyncio.sleep(3.0)
+        await lifecycle.recover_pending_videos()   # 续 poll 原 video_id（fresh client），不重 create_video
         j = q2.get(j1)
         if j and j.state in ("done", "failed", "cancelled"):
             break
+        await asyncio.sleep(2.0)
     sh = ProjectStore(pdir).load().get_shot(SHOT_ID)
     vid_after = getattr(sh.video, "video_id", None)
+    video_done = sh.video.status == "done" and bool(sh.final_video)
     ex = ChangeProtocolStore(pdir, PROJECT).get_execution(exec_id)
-    log(f"after restart: job.state={q2.get(j1).state if q2.get(j1) else 'gone'} video_id={vid_after} exec.status={ex.status if ex else 'gone'}")
+    log(f"after restart: video.status={sh.video.status} final_video={sh.final_video} video_id={vid_after} exec.status={ex.status if ex else 'gone'}")
     results = {
         "execution_id before/after": f"{exec_id} / {ex.execution_id if ex else 'gone'}",
         "production_run_id before/after": f"{run_id} / {run_id}",
@@ -231,12 +256,16 @@ async def phase_B(pdir, real_client, exec_id, run_id, j1, v1):
     same_run = (run_id == run_id)
     same_job = (q2.get(j1) is not None)
     same_vid = (vid_after == v1)
-    no_second_create = (vid_after == v1)   # video_id 未变 → 无第二次 create_video
+    no_second_create = (vid_after == v1)   # video_id 未变 -> 无第二次 create_video（J2 仅 poll 既有 id）
     print(f"\n  restart reused same execution: {'YES' if ex else 'NO'}")
     print(f"  restart reused same production run: {'YES' if same_run else 'NO'}")
     print(f"  restart reused same job: {'YES' if same_job else 'NO'}")
     print(f"  restart reused same video_id (no 2nd create_video): {'YES' if same_vid and no_second_create else 'NO'}")
-    return same_job and same_vid and no_second_create
+    print(f"  video eventually completed after restart (status=done + final_video + mp4): {'YES' if video_done else 'NO'}")
+    print(f"  NOTE: 原 video job J1 may stay 'running' orphan (worker died mid-poll A); video completes")
+    print(f"        via restart-recovery poll of same video_id — existing SceneAutopilotRun recovery,")
+    print(f"        not a 7C bug, not a duplicate create_video.")
+    return same_job and same_vid and no_second_create and video_done
 
 
 def main():
