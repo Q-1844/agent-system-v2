@@ -656,7 +656,9 @@ async def list_change_executions(project_name: str, session_id: str):
 
 @router.get("/api/project/{project_name}/change-sessions/{session_id}/executions/{execution_id}")
 async def get_change_execution(project_name: str, session_id: str, execution_id: str):
-    """取单个 execution（§83）。refresh 恢复用：前端据此 + production_run_id 恢复进度。"""
+    """取单个 execution（§83）。refresh 恢复用：前端据此 + production_run_id 恢复进度。
+    AI-7C-H §八：读取路径惰性收敛取消——cancel_requested 且已无在飞工作/活跃 owned run
+    时收敛为 cancelled（前端轮询此端点，驱动「正在停止…」→「已取消」推进）。"""
     rt = get_agent_runtime()
     try:
         ex = cp_exec.get_execution(rt, project_name, session_id, execution_id)
@@ -664,6 +666,9 @@ async def get_change_execution(project_name: str, session_id: str, execution_id:
         _raise(e)
     if ex is None:
         raise HTTPException(404, "execution 不存在")
+    if ex.get("cancel_requested") and ex.get("status") not in ("cancelled", "completed", "failed"):
+        await cp_exec.maybe_converge_cancellation(rt, project_name, execution_id)
+        ex = cp_exec.get_execution(rt, project_name, session_id, execution_id) or ex
     return ex
 
 
@@ -694,11 +699,13 @@ async def resume_change_execution(project_name: str, session_id: str, execution_
 
 @router.post("/api/project/{project_name}/change-sessions/{session_id}/executions/{execution_id}/cancel")
 async def cancel_change_execution(project_name: str, session_id: str, execution_id: str):
-    """§38 cancel：提交前 -> cancelled（canonical 不动）；提交后 -> creative 保留 + 停后续 production。"""
+    """§38 cancel：提交前 -> cancelled（canonical 不动）；提交后 -> creative 保留 + 停后续
+    production（AI-7C-H：取消传播到 owned ProductionRun，running+cancel_requested=「正在停止…」，
+    由 watcher/读取惰性收敛到 cancelled）。"""
     rt = get_agent_runtime()
     try:
         async with session_lock(project_name, session_id):
-            return cp_exec.cancel_execution(rt, project_name, execution_id)
+            return await cp_exec.cancel_execution(rt, project_name, execution_id)
     except AgentError as e:
         _raise(e)
 

@@ -555,6 +555,16 @@ async def commit_canonical(rt: AgentRuntime, project: str,
            for o in (b.get("operations") or [])]
 
     async with project_write_lock(project):
+        # AI-7C-H §四：锁外等待期间 cancel 可能已发生——临界区内 reload-latest，
+        # 终态/cancel_requested 优先，stale ex 不得把 cancelled 复活回 running。
+        latest = store.get_execution(execution_id)
+        if latest is None:
+            raise AgentError("EXECUTION_NOT_FOUND", f"execution 不存在: {execution_id}")
+        if latest.status in EXEC_TERMINAL:
+            return {"execution": latest.to_dict(), "idempotent": True}
+        if latest.cancel_requested:
+            return {"execution": latest.to_dict(), "cancelling": True}
+        ex = latest   # 锁内后续无 await，用最新对象续（atomic w.r.t. cancel）
         pstore = ProjectStore(project_dir)
         current = pstore.load()   # §30 reload LATEST canonical（含批准后完成的 production 态）
         before_sig = creative_source_signature(current.to_dict())
@@ -791,6 +801,176 @@ def _ensure_manifest(rt: AgentRuntime, project: str, ex: ChangeExecutionSession)
     return manifest.to_dict()
 
 
+# ============ AI-7C-H Cancel Hotfix：guarded execution mutation + cancellation 收敛 ============
+# §四/§五/§六/§七/§八/§九 不变量：取消不能复活。规则：
+#   - 一旦 cancel_requested=True，普通 post-commit 代码不得推进新的执行阶段（stage/status/run）。
+#   - 一旦 Execution 进入 cancelled（终态），任何后台旧 Python 对象不得把它重新保存为 running/blocked。
+#   - post-commit 持久状态修改一律经 mutate_execution_guarded：project_write_lock 短临界区
+#     （复用既有 per-project 锁，不新建锁）→ reload 最新 execution → 检查 → 只改本次需要的字段
+#     → atomic save。绝不长生命周期函数几分钟后 store.save_execution(old_ex) 整对象覆盖。
+#   - 锁不跨 Agnes/Planner/video 等长网络调用；唯一例外是 §七 run-start 临界区
+#     （最终 cancel 检查 + 创建 ProductionRun + run_id 关联，全部本地磁盘操作）。
+_STOP_POLL_S = 2.0            # stopping watcher 轮询间隔（测试可调）
+_STOP_DEADLINE_S = 86400.0    # watcher 兜底上限
+_STOP_WATCHERS: dict = {}     # execution_id -> asyncio.Task（强引用防 GC）
+
+
+async def mutate_execution_guarded(rt: AgentRuntime, project: str, execution_id: str,
+                                    mutator, *, policy: str = "advance"):
+    """§五：最小 guarded execution mutation。锁内 reload 最新 → 策略检查 → mutator(latest)
+    就地修改 → atomic save。返回 (latest, applied)：applied=False 表示被拒绝（取消/终态优先）。
+
+    policy="advance"：普通执行推进（stage/status/新工作）。latest 已 terminal 或
+    cancel_requested → 拒绝（§四：取消不能复活、不得推进新阶段）。
+    policy="record"：已开始最小单元的完成记录（char sync record / scene checkpoint /
+    replay step applied）。仅 latest 已 terminal → 拒绝；cancel_requested 但仍 running
+    → 允许（记录真实发生的完成，§六：已开始单元自然结束，不产生新工作）。"""
+    async with project_write_lock(project):
+        store = _store(rt, project)
+        latest = store.get_execution(execution_id)
+        if latest is None:
+            raise AgentError("EXECUTION_NOT_FOUND", f"execution 不存在: {execution_id}")
+        if latest.status in EXEC_TERMINAL:
+            return latest, False
+        if policy == "advance" and latest.cancel_requested:
+            return latest, False
+        mutator(latest)
+        latest.updated_at = _now()
+        store.save_execution(latest)
+        return latest, True
+
+
+def _get_owned_run(project: str, run_id: Optional[str]):
+    """§八：按精确 production_run_id 读 owned ProjectProductionRun（绝不「找当前项目任意
+    active run」来猜）。run_id 为空/读失败 → None。"""
+    if not run_id:
+        return None
+    try:
+        from src.ai.project_autopilot import get_project_autopilot_manager
+        return get_project_autopilot_manager().get_run(project, run_id)
+    except Exception:
+        return None
+
+
+def _run_is_active(run) -> bool:
+    """§八：owned run 是否仍会产生新工作（pending/running/pausing/paused/composing）。"""
+    if run is None:
+        return False
+    try:
+        from src.ai.project_autopilot import PRUN_ACTIVE
+        return run.status in PRUN_ACTIVE
+    except Exception:
+        return False
+
+
+async def _propagate_cancel_to_owned_run(project: str, run_id: Optional[str]) -> bool:
+    """§八：取消传播到 owned ProductionRun——复用既有 ProjectProductionManager.request_cancel
+    语义（cooperative：允许当前已提交 Agnes job 完成并保存，Scene 间立即停；资产保留不回滚）。
+    幂等；不重写一套 ProductionRun cancellation。"""
+    if not run_id:
+        return False
+    try:
+        from src.ai.project_autopilot import get_project_autopilot_manager, PRUN_TERMINAL
+        mgr = get_project_autopilot_manager()
+        run = mgr.get_run(project, run_id)
+        if run is None or run.status in PRUN_TERMINAL:
+            return False
+        await mgr.request_cancel(project, run_id)
+        return True
+    except Exception as e:   # noqa: BLE001
+        logger.warning("AI-7C-H 取消传播到 ProductionRun %s 失败: %s", run_id, e)
+        return False
+
+
+def _inflight_other_task(execution_id: str) -> bool:
+    """是否有**其他**在飞 post-commit 任务（当前任务自身的在飞不算——它正是收敛驱动者）。"""
+    t = _INFLIGHT_POSTCOMMIT.get(execution_id)
+    return t is not None and t is not asyncio.current_task()
+
+
+async def _converge_cancel_once(rt: AgentRuntime, project: str,
+                                execution_id: str) -> bool:
+    """§三/§八：单次收敛尝试（不等待、不阻塞）。cancel_requested 且不再产生新工作
+    （无其他在飞 post-commit 任务 + owned run 非活跃/不存在）→ 短临界区收敛 cancelled，
+    返回 True。owned run 仍活跃 → 幂等传播取消后返回 False（保持「正在停止…」）。
+    幂等可并发；终态/cancel 检查全部在锁内 reload-latest（§四）。"""
+    store = _store(rt, project)
+    ex = store.get_execution(execution_id)
+    if ex is None or ex.status in EXEC_TERMINAL or not ex.cancel_requested:
+        return True   # 无可收敛（已终态/未请求取消/不存在）
+    if _inflight_other_task(execution_id):
+        return False   # 后台任务仍在收尾，由其结束时收敛
+    run = _get_owned_run(project, ex.production_run_id) if ex.production_run_id else None
+    if _run_is_active(run):
+        await _propagate_cancel_to_owned_run(project, ex.production_run_id)
+        return False   # owned run 仍在停止中（§八：Execution 不提前宣称已取消）
+    async with project_write_lock(project):
+        latest = store.get_execution(execution_id)
+        if (latest is None or latest.status in EXEC_TERMINAL
+                or not latest.cancel_requested):
+            return True
+        if _inflight_other_task(execution_id):
+            return False
+        latest.status = "cancelled"
+        latest.updated_at = _now()
+        store.save_execution(latest)
+        logger.info("AI-7C-H：execution %s 已收敛为 cancelled", execution_id)
+        return True
+
+
+def _spawn_stop_watcher(rt: AgentRuntime, project: str, execution_id: str) -> None:
+    """§八：后台驱动 cancellation 收敛（不阻塞调用方）。幂等（同 execution 仅一个 watcher）。
+    无运行 event loop（纯 sync 上下文）时静默跳过——由 recover/读取惰性收敛路径兜底。"""
+    if execution_id in _STOP_WATCHERS:
+        return
+
+    async def _watch() -> None:
+        deadline = _now() + _STOP_DEADLINE_S
+        try:
+            while _now() < deadline:
+                if await _converge_cancel_once(rt, project, execution_id):
+                    return
+                await asyncio.sleep(_STOP_POLL_S)
+            logger.warning("AI-7C-H stop watcher 超时（exec=%s），保持 stopping 状态",
+                           execution_id)
+        finally:
+            _STOP_WATCHERS.pop(execution_id, None)
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    _STOP_WATCHERS[execution_id] = loop.create_task(_watch())
+
+
+async def maybe_converge_cancellation(rt: AgentRuntime, project: str,
+                                      execution_id: str) -> None:
+    """§八：读取路径惰性收敛（GET execution 轮询调用）。cancel_requested 且已无在飞工作
+    → 收敛 cancelled；owned run 活跃时只传播取消、立即返回（不阻塞读）。幂等。"""
+    store = _store(rt, project)
+    ex = store.get_execution(execution_id)
+    if ex is None or ex.status in EXEC_TERMINAL or not ex.cancel_requested:
+        return
+    await _converge_cancel_once(rt, project, execution_id)
+
+
+async def _mark_postcommit_blocked(rt: AgentRuntime, project: str, execution_id: str,
+                                   code: str, message: str) -> None:
+    """post-commit 失败 → blocked（guarded：取消/终态优先，不覆盖 cancelled/cancel_requested）。"""
+    store = _store(rt, project)
+    ex = store.get_execution(execution_id)
+    if ex is None or ex.status in EXEC_TERMINAL or ex.cancel_requested:
+        return   # 取消优先：由收敛路径处理，不误报受阻
+
+    def _blk(latest):
+        latest.status = "blocked"
+        latest.blocker = {"code": code, "message": message}
+    try:
+        await mutate_execution_guarded(rt, project, execution_id, _blk, policy="advance")
+    except AgentError:
+        pass
+
+
 # ============ AI-7C-4b character sync + §68 first-Agnes hard gate ============
 def _assert_agnes_prerequisites(ex: ChangeExecutionSession, store: ChangeProtocolStore,
                                 project_dir) -> None:
@@ -834,6 +1014,9 @@ async def run_character_sync(rt: AgentRuntime, project: str, execution_id: str, 
         return {"execution": ex.to_dict(), "idempotent": True}
     if ex.stage != "character_sync" or ex.production_mode == "creative_only":
         return {"execution": ex.to_dict(), "idempotent": True}   # creative_only 已 done；非 sync stage
+    # AI-7C-H §六：进入 sync 前已请求取消 → 不推进新工作（§四），交收敛路径
+    if ex.cancel_requested:
+        return {"execution": ex.to_dict(), "cancelling": True}
 
     project_dir = rt._resolve_project_dir(project)
     # L4/§15：先确保 manifest 落盘（commit 与 manifest 计算间崩溃 -> 缺失且已提交时从 canonical +
@@ -852,7 +1035,13 @@ async def run_character_sync(rt: AgentRuntime, project: str, execution_id: str, 
     gen = view_generator if view_generator is not None else (
         lambda cn: _real_character_view_generator(rt, project, execution_id, cn))   # §103 default
     for char_name in pending:
-        views = await gen(char_name)   # dict[view_name, Asset|dict]
+        # AI-7C-H §六：每角色开始前边界检查取消（reload-latest；guard 在落盘时兜底）
+        ex = store.get_execution(execution_id)
+        if ex is None or ex.status in EXEC_TERMINAL:
+            return {"execution": ex.to_dict(), "idempotent": True}
+        if ex.cancel_requested:
+            break   # 不启动下一个角色（已开始单元由下方 record 自然收尾）
+        views = await gen(char_name)   # dict[view_name, Asset|dict]（已开始最小单元，自然结束 §六）
         if not views:
             raise AgentError("CHARACTER_SYNC_FAILED", f"角色 {char_name} view 生成返回空")
         # §30 reload-latest + project_write_lock 短临界区：views 仅 image refs，不改 creative sig
@@ -865,16 +1054,32 @@ async def run_character_sync(rt: AgentRuntime, project: str, execution_id: str, 
             ch.views = {k: (Asset(**v) if isinstance(v, dict) else v)
                         for k, v in views.items()}
             pstore.save(p)
-        ex.character_sync.append({"character_name": char_name, "status": "completed",
-                                  "views": sorted(views.keys()),
-                                  "completed_at": _now()})
-        ex.status = "running"; ex.updated_at = _now()
-        store.save_execution(ex)   # 每 char 落盘（crash 后可从 character_sync 续，§46）
+        # AI-7C-H §五：guarded record——已开始单元的真实完成记录（cancel_requested 仍可记录；
+        # 终态则拒绝），不再 stale 整对象覆盖
+        def _rec(latest, _cn=char_name, _views=views):
+            latest.character_sync.append({"character_name": _cn, "status": "completed",
+                                          "views": sorted(_views.keys()),
+                                          "completed_at": _now()})
+        latest, applied = await mutate_execution_guarded(
+            rt, project, execution_id, _rec, policy="record")
+        if not applied:
+            return {"execution": latest.to_dict(), "idempotent": True}   # 终态：停止推进
+        ex = latest
 
-    ex.stage = "production_planning"   # AI-7C-5 接力（character refs ready，§51）
-    ex.updated_at = _now()
-    store.save_execution(ex)
-    return {"execution": ex.to_dict(), "character_synced": len(pending)}
+    # AI-7C-H §六：进入 planning 前边界检查取消
+    ex = store.get_execution(execution_id)
+    if ex is None or ex.status in EXEC_TERMINAL:
+        return {"execution": ex.to_dict(), "idempotent": True}
+    if ex.cancel_requested:
+        return {"execution": ex.to_dict(), "cancelling": True}
+
+    def _adv(latest):
+        latest.stage = "production_planning"   # AI-7C-5 接力（character refs ready，§51）
+    latest, applied = await mutate_execution_guarded(
+        rt, project, execution_id, _adv, policy="advance")
+    if not applied:
+        return {"execution": latest.to_dict(), "cancelling": True}
+    return {"execution": latest.to_dict(), "character_synced": len(pending)}
 
 
 # ============ AI-7C-5b affected-scene planning + targeted run（§53/§54/§59）============
@@ -900,6 +1105,9 @@ async def run_production_planning(rt: AgentRuntime, project: str, execution_id: 
         return {"execution": ex.to_dict(), "idempotent": True}
     if ex.stage != "production_planning":
         return {"execution": ex.to_dict(), "idempotent": True}
+    # AI-7C-H §六：进入 planning 前已请求取消 → 不推进新工作（§四），交收敛路径
+    if ex.cancel_requested:
+        return {"execution": ex.to_dict(), "cancelling": True}
 
     manifest_d = _ensure_manifest(rt, project, ex)
     if not manifest_d:
@@ -909,9 +1117,13 @@ async def run_production_planning(rt: AgentRuntime, project: str, execution_id: 
     scene_ids = list(manifest.planner_scene_ids)
     if not scene_ids:
         # 无受影响 scene 需重规划：直接进 production_prepare（creative-only 已在 done 不应到此处）
-        ex.stage = "production_prepare"; ex.updated_at = _now()
-        store.save_execution(ex)
-        return {"execution": ex.to_dict(), "planned_scenes": 0}
+        def _adv0(latest):
+            latest.stage = "production_prepare"
+        latest, applied = await mutate_execution_guarded(
+            rt, project, execution_id, _adv0, policy="advance")
+        if not applied:
+            return {"execution": latest.to_dict(), "cancelling": True}
+        return {"execution": latest.to_dict(), "planned_scenes": 0}
 
     # ---- AI-7C-H F-2：durable per-scene planning checkpoint ----
     # 每个 scene plan 实际产出（plan_creator 返回 approved）后**立即**持久化进 ex.planning
@@ -928,39 +1140,65 @@ async def run_production_planning(rt: AgentRuntime, project: str, execution_id: 
             plans[sid] = {"plan_id": done_records[sid].get("plan_id"),
                           "scene_id": sid, "status": "approved"}
             continue
+        # AI-7C-H §六：每 Scene 开始前边界检查取消（reload-latest；guard 落盘时兜底）
+        ex = store.get_execution(execution_id)
+        if ex is None or ex.status in EXEC_TERMINAL:
+            return {"execution": ex.to_dict(), "idempotent": True}
+        if ex.cancel_requested:
+            return {"execution": ex.to_dict(), "cancelling": True}   # 不规划下一个 Scene
         plan = await creator(sid)
         plans[sid] = plan
-        # F-2：单 scene 完成即落盘（崩溃窗口只丢当前 scene，之前的 planner 结果可复用）
+        # F-2：单 scene 完成即落盘（崩溃窗口只丢当前 scene，之前的 planner 结果可复用）。
+        # AI-7C-H §五：guarded record（cancel_requested 仍可记录真实完成；终态拒绝）
         if (plan or {}).get("status") == "approved":
-            ex.planning = list(ex.planning or []) + [
-                {"scene_id": sid, "plan_id": (plan or {}).get("plan_id"),
-                 "status": "approved"}]
-            ex.updated_at = _now()
-            store.save_execution(ex)
+            def _ckpt(latest, _sid=sid, _plan=plan):
+                latest.planning = list(latest.planning or []) + [
+                    {"scene_id": _sid, "plan_id": (_plan or {}).get("plan_id"),
+                     "status": "approved"}]
+            latest, applied = await mutate_execution_guarded(
+                rt, project, execution_id, _ckpt, policy="record")
+            if not applied:
+                return {"execution": latest.to_dict(), "idempotent": True}
+            ex = latest
 
     # §54 all-plan-before-production gate：全 approved 才放行
     unapproved = [sid for sid, p in plans.items()
                   if (p or {}).get("status") != "approved"]
     if unapproved:
-        ex.status = "blocked"; ex.stage = "production_planning"
-        ex.blocker = {"code": "PRODUCTION_PLAN_INVALID",
-                      "unapproved": unapproved,
-                      "message": f"{len(unapproved)} 个 plan 未批准（§54 all-plan gate）"}
-        store.save_execution(ex)
-        return {"execution": ex.to_dict(), "blocked": True,
+        def _blk(latest, _un=unapproved):
+            latest.status = "blocked"; latest.stage = "production_planning"
+            latest.blocker = {"code": "PRODUCTION_PLAN_INVALID",
+                              "unapproved": _un,
+                              "message": f"{len(_un)} 个 plan 未批准（§54 all-plan gate）"}
+        latest, applied = await mutate_execution_guarded(
+            rt, project, execution_id, _blk, policy="advance")
+        if not applied:
+            return {"execution": latest.to_dict(), "cancelling": True}   # 取消优先，不误报受阻
+        return {"execution": latest.to_dict(), "blocked": True,
                 "blocker_code": "PRODUCTION_PLAN_INVALID"}
 
-    # §59 创建 targeted run（target_scene_ids + shot_actions from manifest）
+    # §59 + AI-7C-H §七 run-start 临界区：最终 cancel 检查 + 创建 ProductionRun + run_id
+    # 关联，与 cancel_execution 同一把 project_write_lock（全本地磁盘操作，本 hotfix 唯一
+    # 允许的锁内 run 创建例外）。目标：cancel 先得锁 → 不创建 run（情况 A）；run starter
+    # 先得锁 → run_id 关联落盘后 cancel 能精确找到 R1 并传播取消（情况 B）。绝不孤立 R1。
     starter = run_starter or (lambda m: _real_run_starter(rt, project, ex, m))
-    run = await starter(manifest)
-    ex.production_run_id = (run or {}).get("run_id")
-    # F-2：ex.planning 已按 scene 增量落盘（见上方 checkpoint），此处不再整体覆写——
-    # 保持崩溃恢复语义：已记录的 scene 记录原样保留。
-    ex.stage = "production_prepare"   # AI-7C 等待 production 执行（真 run 在 §103 acceptance 跑）
-    ex.updated_at = _now()
-    store.save_execution(ex)
-    return {"execution": ex.to_dict(), "planned_scenes": len(scene_ids),
-            "production_run_id": ex.production_run_id}
+    async with project_write_lock(project):
+        latest = store.get_execution(execution_id)
+        if latest is None:
+            raise AgentError("EXECUTION_NOT_FOUND", f"execution 不存在: {execution_id}")
+        if latest.status in EXEC_TERMINAL:
+            return {"execution": latest.to_dict(), "idempotent": True}
+        if latest.cancel_requested:
+            return {"execution": latest.to_dict(), "cancelling": True}   # 情况 A：不创建 run
+        run = await starter(manifest)
+        latest.production_run_id = (run or {}).get("run_id")
+        # F-2：ex.planning 已按 scene 增量落盘（见上方 checkpoint），此处不再整体覆写——
+        # 保持崩溃恢复语义：已记录的 scene 记录原样保留。
+        latest.stage = "production_prepare"   # AI-7C 等待 production 执行（真 run 在 §103 acceptance 跑）
+        latest.updated_at = _now()
+        store.save_execution(latest)   # 情况 B：run_id 关联落盘后才释放锁
+    return {"execution": latest.to_dict(), "planned_scenes": len(scene_ids),
+            "production_run_id": latest.production_run_id}
 
 
 async def _real_plan_creator(rt: AgentRuntime, project: str, ex: ChangeExecutionSession,
@@ -1044,30 +1282,43 @@ async def _real_character_view_generator(rt: AgentRuntime, project: str,
     return dict(ch.views) if ch else {}
 
 
-def cancel_execution(rt: AgentRuntime, project: str, execution_id: str) -> dict:
-    """§38 cancellation 语义：canonical 提交前 -> cancelled（canonical 不动）；提交后 ->
-    cancel_requested=True（committed creative 保留，停止后续 production）。不意味 undo（§38）。"""
+async def cancel_execution(rt: AgentRuntime, project: str, execution_id: str) -> dict:
+    """§38 + AI-7C-H cancellation 语义：取消是请求，不是瞬间完成（§三）。
+
+    提交前（canonical 未动）-> 立即终态 cancelled（§38 安全取消）。
+    提交后（committed creative 保留）-> cancel_requested=True，不再推进新工作；
+    owned ProductionRun 仍活跃时取消**精确传播**到该 run（§八，run_id 关联），
+    Execution 保持 running+cancel_requested（前端显示「正在停止…」），由 stop watcher /
+    读取惰性收敛 / 在飞任务收尾驱动收敛到 cancelled（§八：不提前宣称已取消）。
+    不意味 undo（§38）：已落盘资产保留。
+    状态翻转在 project_write_lock 短临界区内 reload-latest（§四/§五：与 §七 run-start
+    临界区同锁，防 stale 复活/孤立 run）。幂等。"""
     store = _store(rt, project)
-    ex = store.get_execution(execution_id)
-    if ex is None:
-        raise AgentError("EXECUTION_NOT_FOUND", f"execution 不存在: {execution_id}")
-    if ex.project_name != project:
-        raise AgentError("EXECUTION_NOT_FOUND", "execution 不属于该项目")
-    if ex.status in EXEC_TERMINAL:
-        return {"execution": ex.to_dict(), "idempotent": True}
-    cc = ex.canonical_commit
-    committed = bool(cc and cc.get("status") == "committed")
-    if not committed:
-        # 提交前：安全取消，canonical 未动（§38）
-        ex.status = "cancelled"; ex.cancel_requested = True
-    else:
-        # 提交后：creative 已提交保留；标 cancel_requested 停后续 production（§38）
+    async with project_write_lock(project):
+        ex = store.get_execution(execution_id)
+        if ex is None:
+            raise AgentError("EXECUTION_NOT_FOUND", f"execution 不存在: {execution_id}")
+        if ex.project_name != project:
+            raise AgentError("EXECUTION_NOT_FOUND", "execution 不属于该项目")
+        if ex.status in EXEC_TERMINAL:
+            return {"execution": ex.to_dict(), "idempotent": True}
+        cc = ex.canonical_commit
+        committed = bool(cc and cc.get("status") == "committed")
         ex.cancel_requested = True
-        if ex.stage not in ("done",):
-            ex.status = "cancelled"   # 无活跃 production 可停（v1 真production 在 §103）；creative 保留
-    ex.updated_at = _now()
-    store.save_execution(ex)
-    return {"execution": ex.to_dict(), "cancelled": True, "creative_committed": committed}
+        if not committed:
+            # 提交前：安全取消，canonical 未动（§38）。立即终态。
+            ex.status = "cancelled"
+        # 提交后：保持 running + cancel_requested（「正在停止…」），由收敛路径处理（§三/§八）
+        ex.updated_at = _now()
+        store.save_execution(ex)
+    if committed:
+        # §八：传播取消到 owned run（幂等）+ watcher 驱动收敛；
+        # 无在飞工作且 run 非活跃时 _converge_cancel_once 立即收敛 cancelled
+        await _converge_cancel_once(rt, project, execution_id)
+        _spawn_stop_watcher(rt, project, execution_id)
+    final = store.get_execution(execution_id)
+    return {"execution": (final or ex).to_dict(), "cancelled": True,
+            "creative_committed": committed}
 
 
 # ============ M1：post-commit 后台 kickoff（§3 polling-first，不阻塞 HTTP）============
@@ -1079,9 +1330,13 @@ _INFLIGHT_POSTCOMMIT: dict = {}
 def _maybe_kickoff_postcommit(rt: AgentRuntime, project: str, ex) -> bool:
     """若 ex 处于 post-commit 阶段（character_sync/production_planning）且无在飞任务，
     后台 kickoff _run_postcommit_to_completion。返回是否新 kickoff（已 in-flight/终态/阻塞→False）。
-    §3 polling-first：HTTP 立即返回，前端轮询 execution 状态推进。"""
+    §3 polling-first：HTTP 立即返回，前端轮询 execution 状态推进。
+    AI-7C-H §四/§九：cancel_requested 的 execution 不派发新 post-commit 工作——
+    取消优先，由收敛路径处理（owned run 活跃时 watcher/读取惰性收敛兜底）。"""
     if ex.status in EXEC_TERMINAL or ex.status == "blocked":
         return False
+    if ex.cancel_requested:
+        return False   # 正在停止：不推进新工作（§四），不 kickoff
     if ex.stage not in ("character_sync", "production_planning"):
         return False
     if ex.execution_id in _INFLIGHT_POSTCOMMIT:
@@ -1094,31 +1349,32 @@ def _maybe_kickoff_postcommit(rt: AgentRuntime, project: str, ex) -> bool:
 
 async def _run_postcommit_to_completion(rt: AgentRuntime, project: str, execution_id: str) -> None:
     """后台串行跑 character_sync → production_planning → production_prepare。
-    每步函数自带 stage guard + 幂等，故重启后重派发不双写。失败 -> execution blocked（保留 blocker）。"""
+    每步函数自带 stage guard + 幂等，故重启后重派发不双写。失败 -> execution blocked（保留 blocker）。
+    AI-7C-H：每步前复查 cancel_requested（§六边界）；blocked 落盘经 guarded mutation
+    （取消/终态优先，不覆盖 cancelled）；任务收尾时驱动取消收敛（§三/§八）。"""
     store = _store(rt, project)
     try:
         ex = store.get_execution(execution_id)
-        if ex and ex.stage == "character_sync" and ex.status not in EXEC_TERMINAL and ex.status != "blocked":
+        if (ex and ex.stage == "character_sync" and ex.status not in EXEC_TERMINAL
+                and ex.status != "blocked" and not ex.cancel_requested):
             await run_character_sync(rt, project, execution_id)
         ex = store.get_execution(execution_id)
-        if ex and ex.stage == "production_planning" and ex.status not in EXEC_TERMINAL and ex.status != "blocked":
+        if (ex and ex.stage == "production_planning" and ex.status not in EXEC_TERMINAL
+                and ex.status != "blocked" and not ex.cancel_requested):
             await run_production_planning(rt, project, execution_id)
     except AgentError as e:
-        ex = store.get_execution(execution_id)
-        if ex and ex.status not in EXEC_TERMINAL:
-            ex.status = "blocked"
-            ex.blocker = {"code": e.code, "message": str(e)[:300]}
-            ex.updated_at = _now()
-            store.save_execution(ex)
+        await _mark_postcommit_blocked(rt, project, execution_id, e.code, str(e)[:300])
         logger.warning("AI-7C post-commit task failed (exec=%s): %s %s", execution_id, e.code, e)
     except Exception as e:  # noqa: BLE001
-        ex = store.get_execution(execution_id)
-        if ex and ex.status not in EXEC_TERMINAL:
-            ex.status = "blocked"
-            ex.blocker = {"code": "POSTCOMMIT_TASK_FAILED", "message": str(e)[:300]}
-            ex.updated_at = _now()
-            store.save_execution(ex)
+        await _mark_postcommit_blocked(rt, project, execution_id,
+                                       "POSTCOMMIT_TASK_FAILED", str(e)[:300])
         logger.exception("AI-7C post-commit task error (exec=%s): %s", execution_id, e)
+    finally:
+        # §三/§八：本任务收尾时若已请求取消且无其他在飞任务/活跃 owned run → 收敛 cancelled
+        try:
+            await _converge_cancel_once(rt, project, execution_id)
+        except Exception:  # noqa: BLE001
+            logger.exception("AI-7C-H cancel 收敛失败 (exec=%s)", execution_id)
 
 
 async def resume_execution(rt: AgentRuntime, project: str, execution_id: str) -> dict:
@@ -1140,6 +1396,12 @@ async def resume_execution(rt: AgentRuntime, project: str, execution_id: str) ->
         # §81：blocked（尤其 stale）不可 rebasing resume；返回 blocked 态供 UI 说明
         return {"execution": ex.to_dict(), "blocked": True,
                 "blocker_code": (ex.blocker or {}).get("code")}
+    # AI-7C-H §六：正在停止（cancel_requested 非终态）→ 不可 resume 推进新工作（§四）。
+    # 尽力收敛（无在飞工作/无活跃 owned run 时直接收敛 cancelled），返回真实状态。
+    if ex.cancel_requested:
+        await maybe_converge_cancellation(rt, project, execution_id)
+        ex2 = store.get_execution(execution_id)
+        return {"execution": (ex2 or ex).to_dict(), "cancelling": True, "idempotent": True}
     # pre-commit：同步推进 create+replay+commit
     if ex.stage in ("revalidate", "workspace_create", "creative_replay",
                     "workspace_verify", "canonical_commit"):
@@ -1240,6 +1502,29 @@ def recover_executions(project_dir, project_name: str, *, rt=None) -> int:
         if cc and cc.get("status") == "commit_intent":
             _reconcile_commit(ex, store, project_dir)
             store.save_execution(ex)
+        # AI-7C-H §九：重启遇「正在停止」（cancel_requested 非终态）→ 完成取消路径，
+        # 不按普通 active execution 恢复 post-commit 续跑（旧计划不复活）。
+        if ex.cancel_requested and ex.status not in EXEC_TERMINAL:
+            run = _get_owned_run(project_name, ex.production_run_id) if ex.production_run_id else None
+            if _run_is_active(run):
+                # owned run 仍活跃：继续请求/恢复其 cancellation + watcher 驱动收敛
+                # （无运行 loop 时由 GET 读取惰性收敛兜底 §八）
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(
+                        _propagate_cancel_to_owned_run(project_name, ex.production_run_id))
+                except RuntimeError:
+                    pass
+                _spawn_stop_watcher(rt, project_name, ex.execution_id)
+                logger.info("AI-7C-H recover: exec=%s 正在停止（owned run %s 活跃），"
+                            "继续收敛取消", ex.execution_id, ex.production_run_id)
+            else:
+                # 无活跃子生产：直接收敛 cancelled（§四：不复活）
+                ex.status = "cancelled"; ex.updated_at = _now()
+                store.save_execution(ex)
+                logger.info("AI-7C-H recover: exec=%s 收敛为 cancelled（取消请求恢复）",
+                            ex.execution_id)
+            continue
         # Event B：post-commit 活跃执行 → 记录待 kickoff（commit 已落，续跑安全幂等）
         if (ex.status not in EXEC_TERMINAL and ex.status != "blocked"
                 and ex.stage in ("character_sync", "production_planning")):

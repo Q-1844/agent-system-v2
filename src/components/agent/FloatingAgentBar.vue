@@ -95,6 +95,8 @@ const inputPlaceholder = computed(() => 'Ask anything…');
 // AI-7C-H §4/§12：running 点的 tooltip 来自 durable 真相（变更会话阶段 / chat 在途），
 // 不由 LLM 话术推导。
 const runningTitle = computed(() => {
+  // AI-7C-H §十一：正在停止来自后端 running+cancel_requested 持久真相
+  if (csStore.executionStopping) return '正在停止当前任务…';
   if (csStore.executionActive) return `执行中：${csStore.execution?.stage || ''}`;
   if (csStore.isActive) return `整理修改方案：${csStore.session?.status || ''}`;
   return '回复中…';

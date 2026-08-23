@@ -145,8 +145,14 @@
             <span class="exec-label">{{ s.label }}</span>
           </div>
         </div>
-        <!-- §79 前后提交区分 -->
-        <div v-if="!cs.creativeCommitted" class="exec-state pre-commit">
+        <!-- §79 前后提交区分；AI-7C-H §十一：正在停止…/已取消 来自后端持久真相 -->
+        <div v-if="cs.executionStopping" class="exec-state stopping">
+          正在停止当前任务…（已提交的创作变更保留，生产不再继续）
+        </div>
+        <div v-else-if="cs.execution?.status === 'cancelled'" class="exec-state cancelled">
+          已取消。{{ cs.creativeCommitted ? '已提交的创作变更保留（§38）。' : 'canonical 未动（§38）。' }}
+        </div>
+        <div v-else-if="!cs.creativeCommitted" class="exec-state pre-commit">
           尚未提交任何项目变更（§79）。{{ cs.executionBlocked ? '执行受阻：' + (cs.execution.blocker?.message || cs.execution.blocker?.code) : '' }}
         </div>
         <div v-else class="exec-state post-commit">
@@ -165,7 +171,7 @@
                   @click="cs.resumeExecution()">尝试恢复</button>
           <button v-if="staleBlocked" class="btn btn-primary" :disabled="cs.busy"
                   @click="onRequestChanges">重新提案</button>
-          <button class="btn btn-ghost" :disabled="cs.busy || cs.executionDone" @click="cs.cancelExecution()">取消</button>
+          <button class="btn btn-ghost" :disabled="cs.busy || cs.executionDone || cs.executionStopping" @click="cs.cancelExecution()">取消</button>
         </div>
         <div class="cpr-helper">
           {{ cs.creativeCommitted ? '取消不会回滚已提交的创作变更（§38）。' : '取消将安全停止，canonical 不动（§38）。' }}

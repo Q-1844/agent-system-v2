@@ -52,6 +52,10 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
   const executionActive = computed(() => !!execution.value && EXECUTION_ACTIVE_STATUSES.has(execution.value.status));
   const executionBlocked = computed(() => execution.value?.status === 'blocked');
   const executionDone = computed(() => !!execution.value && EXECUTION_TERMINAL_STATUSES.has(execution.value.status));
+  // AI-7C-H §三/§十一：正在停止（后端权威 running + cancel_requested），UI 显示「正在停止…」；
+  // 不提前宣称已取消——cancelled 只来自后端持久终态。
+  const executionStopping = computed(() =>
+    !!execution.value && execution.value.status === 'running' && !!execution.value.cancel_requested);
   const creativeCommitted = computed(() => !!execution.value?.canonical_commit && execution.value.canonical_commit.status === 'committed');
   const needsExecute = computed(() => approved.value && !execution.value);  // 已批准 + 无 execution -> 可 Execute
 
@@ -95,6 +99,8 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
           contextScope: options?.contextScope,
         });
       lastRequestText.value = text;
+      // AI-7C-H §十：新会话与旧 execution 解绑（restart 场景旧 cancelled execution 不残留显示）
+      execution.value = null; manifest.value = null; eligibility.value = null;
       _set(res.session);
       // 立即触发首轮推进（后端 create 不自动后台推进）
       await resume();
@@ -252,12 +258,30 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
     try {
       const res = await apiClient.cancelChangeExecution(p, sid, eid);
       execution.value = res.execution;
-      stopPoll();
+      // AI-7C-H §三/§十：取消是请求不是完成——正在停止（running+cancel_requested）时继续
+      // 轮询，直到后端收敛为 cancelled 终态；已终态（提交前立即取消）则停轮询。
+      if (executionActive.value) startPoll();
+      else stopPoll();
     } catch (e: any) {
       error.value = '取消执行失败: ' + (e.message || e);
     } finally {
       busy.value = false;
     }
+  }
+
+  /** AI-7C-H §十：等待旧 execution 安全停止（终态 cancelled/completed/failed）。
+   * 持续读后端权威状态（非本地推断）；超时返回 false（调用方不创建新会话，避免撞
+   * PROJECT_PRODUCTION_ACTIVE）。幂等：无 execution 时立即 true。 */
+  async function waitForExecutionStopped(timeoutMs = 30000): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const ex = execution.value;
+      if (!ex || EXECUTION_TERMINAL_STATUSES.has(ex.status)) return true;
+      await loadExecution();
+      await new Promise(r => setTimeout(r, 500));
+    }
+    const ex = execution.value;
+    return !ex || EXECUTION_TERMINAL_STATUSES.has(ex.status);
   }
 
   function startPoll() {
@@ -380,9 +404,9 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
   return {
     session, plan, decisions, execution, manifest, eligibility, busy, error, lastRequestText,
     isActive, isTerminal, readyForReview, needsDecision,
-    approved, executionActive, executionBlocked, executionDone, creativeCommitted, needsExecute,
+    approved, executionActive, executionBlocked, executionDone, executionStopping, creativeCommitted, needsExecute,
     create, resume, loadPlan, submitDecision, approve, requestChanges, reject,
-    execute, loadExecution, resumeExecution, cancelExecution,
+    execute, loadExecution, resumeExecution, cancelExecution, waitForExecutionStopped,
     restoreActive, onProjectChange, stopPoll,
   };
 });

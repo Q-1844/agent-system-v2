@@ -284,13 +284,33 @@ export const useAgentUiStore = defineStore('agentUi', () => {
     }
   }
 
-  /** §15 选择：让当前执行完成后处理（请求暂存，执行结束后并入/重开）。 */
+  /** §15 选择：让当前执行完成后处理（请求暂存，执行结束后并入/重开）。
+   * AI-7C-H §十：restart 第一版最稳逻辑——POST cancel → UI「正在停止当前任务…」→
+   * 持续读后端权威 Execution/ProductionRun 状态 → 确认旧执行安全 cancelled →
+   * 再创建新 ChangeSession。不提前宣称「正在重新规划」，不先建 S2 撞
+   * PROJECT_PRODUCTION_ACTIVE（_active_production 兜底保留）。 */
   async function resolveChangeChoice(choice: 'queue' | 'restart') {
     const text = pendingChangeChoice.value;
     pendingChangeChoice.value = null;
     if (!text) return;
     if (choice === 'restart') {
+      messages.value.push({
+        role: 'assistant', status: null, created_at: Date.now() / 1000,
+        content: '正在停止当前任务…',
+      });
       await csStore.cancelExecution();
+      // AI-7C-H §十/§十五：窗口须覆盖真实生产收尾（Agnes view 生成 ~1-3min/角色），
+      // 否则 §十五「新 ChangeSession 自动开始」退化为暂存回退。超时仍有不丢请求回退。
+      const stopped = await csStore.waitForExecutionStopped(240000);
+      if (!stopped) {
+        messages.value.push({
+          role: 'assistant', status: 'failed', created_at: Date.now() / 1000,
+          content: '旧任务仍在停止中（生产任务收尾需要一点时间）。这条修改请求已暂存，'
+                   + '请稍后在下一次「停止并重新规划」时重试，或手动恢复。',
+        });
+        _queuedChangeRequests.value.push(text);   // 不丢请求
+        return;
+      }
       await csStore.create(text, undefined, {
         source: activeAgentId.value === 'producer' ? 'floating_bar' : 'direct_agent_chat',
         sourceAgentId: activeAgentId.value,

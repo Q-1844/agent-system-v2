@@ -147,6 +147,10 @@ const runPhase = computed<'proposal' | 'execution' | 'terminal'>(() => {
 });
 const runStageLabel = computed(() => {
   if (cs.execution) {
+    // AI-7C-H §十一：执行中 / 正在停止… / 已取消 三态来自后端持久真相（非 LLM 文本）
+    if (cs.executionStopping) return '正在停止…';
+    if (cs.execution?.status === 'cancelled') return '已取消';
+    if (cs.execution?.status === 'completed') return '已完成';
     if (cs.executionBlocked) return '执行受阻';
     return EXEC_STAGE_LABELS[cs.execution.stage] || cs.execution.stage;
   }

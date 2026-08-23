@@ -83,7 +83,7 @@ def test_cancel_pre_commit(tmp_path):
     assert ex0.canonical_commit is None
     before_bytes = (tmp_path / "output" / "project.json").read_bytes()
 
-    res = cpx.cancel_execution(rt, "demo", ex0.execution_id)
+    res = asyncio.run(cpx.cancel_execution(rt, "demo", ex0.execution_id))   # AI-7C-H：async 化
     assert res["cancelled"] is True
     assert res["creative_committed"] is False
     assert res["execution"]["status"] == "cancelled"
@@ -100,7 +100,7 @@ def test_cancel_post_commit(tmp_path):
     assert ex0.canonical_commit["status"] == "committed"   # 已提交
     committed_bytes = (tmp_path / "output" / "project.json").read_bytes()
 
-    res = cpx.cancel_execution(rt, "demo", ex0.execution_id)
+    res = asyncio.run(cpx.cancel_execution(rt, "demo", ex0.execution_id))   # AI-7C-H：async 化
     assert res["creative_committed"] is True
     # 创作变更保留（canonical 不回滚）
     assert (tmp_path / "output" / "project.json").read_bytes() == committed_bytes
@@ -112,7 +112,7 @@ def test_cancel_terminal_idempotent(tmp_path):
     asyncio.run(cpx.start_replay_commit(rt, "demo", "cs_t", "plan_t", 1, "creative_only"))
     ex0 = _exec(rt)
     assert ex0.status == "completed"
-    res = cpx.cancel_execution(rt, "demo", ex0.execution_id)
+    res = asyncio.run(cpx.cancel_execution(rt, "demo", ex0.execution_id))   # AI-7C-H：async 化
     assert res["idempotent"] is True
 
 
