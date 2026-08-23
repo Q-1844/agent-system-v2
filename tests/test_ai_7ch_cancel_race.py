@@ -7,6 +7,7 @@ import asyncio
 
 import pytest
 
+import deps as deps_mod
 from src.core.models import Project, Scene, Shot, Character, StyleAnchor, Asset
 from src.core.store import ProjectStore
 from src.agents.runtime import AgentRuntime, AgentError
@@ -16,6 +17,9 @@ from src.agents.change_protocol.models import (UnifiedChangePlan, PlanPreviewArt
                                                 PlanApproval, ChangeSession)
 from src.revision.models import ChangeOperation, BeforeAfter, creative_source_signature
 from src.revision.changeset import preview_operations_on_project
+from src.ai import project_autopilot as pap
+from src.ai.project_autopilot import ProjectProductionRun
+from src.utils.project_manager import ProjectManager
 
 
 # ============ fixture：2 角色 + 2 场景项目（update_character 双角色 -> char sync x2 / planner scene x2）============
@@ -570,6 +574,167 @@ def test_resume_cancelling_returns_no_new_work(tmp_path):
         assert len(cpx._INFLIGHT_POSTCOMMIT) == 0
         ex_f = store.get_execution(eid)
         assert ex_f.status == "cancelled"       # resume 路径收敛完成取消
+        _cleanup_watchers(eid)
+
+    asyncio.run(main())
+
+
+# ============ AI-7C-H Final Closure — paused owned run 取消收敛（真实 Manager 路径）============
+# 文档：详细流程文件/AI-7C-H_PAUSED_CANCEL_CLOSURE_TRAE.md
+# 与上面 fake_autopilot 系列不同：这里用**真实** ProjectProductionManager + 真实磁盘
+# 持久化（deps.project_manager -> tmp_path），因为本闭环修复的正是真实
+# request_cancel / recover_runs 的 paused 分支。
+
+def _persist_prun(mgr, run_id, status, *, cancel_requested=False, parent_exec=None,
+                  stage="scenes"):
+    run = ProjectProductionRun(
+        run_id=run_id, project_name="demo", status=status, stage=stage,
+        cancel_requested=cancel_requested,
+        parent_change_execution_id=parent_exec,
+        created_at=1.0, updated_at=1.0)
+    mgr._write_run(run)
+    return run
+
+
+@pytest.fixture
+def real_autopilot(tmp_path, monkeypatch):
+    """真实 ProjectProductionManager + 真实 ProjectManager(tmp_path) 持久化路径。
+    重置模块单例，避免其他测试留下的状态。"""
+    pm = ProjectManager(str(tmp_path))
+    (tmp_path / "demo").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(deps_mod, "project_manager", pm)
+    mgr = pap.ProjectProductionManager()
+    monkeypatch.setattr(pap, "_manager", mgr)
+    return mgr
+
+
+def test_paused_owned_run_cancels_normally(tmp_path, real_autopilot):
+    """Closure Case 1：paused owned R1 + 用户取消 E1 -> 真实 request_cancel 将 R1
+    直接转终态 cancelled（无 loop 可消费请求）-> E1 经收敛链 cancelled；
+    无新 run / 无新 loop / 无资产删除路径；替代会话不再被 R1 阻塞。"""
+
+    async def main():
+        mgr = real_autopilot
+        rt = await _seed(tmp_path, _proj_1c1s())
+        ex0 = _exec(rt)
+        eid = ex0.execution_id
+        store = ChangeProtocolStore(rt._resolve_project_dir("demo"), "demo")
+        # E1 已到 production_prepare 并精确拥有 paused R1
+        ex1 = store.get_execution(eid)
+        ex1.stage = "production_prepare"
+        ex1.production_run_id = "prun_p1"
+        store.save_execution(ex1)
+        _persist_prun(mgr, "prun_p1", "paused", parent_exec=eid)
+        assert len(mgr.list_runs("demo")) == 1
+
+        # 用户「停止当前任务并重新规划」-> 真实 cancel 链
+        res = await cpx.cancel_execution(rt, "demo", eid)
+        assert res["creative_committed"] is True
+        # R1：paused -> cancelled 直接终态（真实 request_cancel paused 分支）
+        r1 = mgr.get_run("demo", "prun_p1")
+        assert r1.status == "cancelled"
+        assert r1.cancel_requested is False
+        # E1：不提前宣称 cancelled（§八），由读取惰性收敛（GET 轮询驱动）到终态
+        ex_c = store.get_execution(eid)
+        assert ex_c.cancel_requested is True
+        assert ex_c.status == "running"
+        await cpx.maybe_converge_cancellation(rt, "demo", eid)
+        ex_f = store.get_execution(eid)
+        assert ex_f.status == "cancelled"
+        # 无新 run / 无活跃 loop（不建新生产、不 resume）
+        assert len(mgr.list_runs("demo")) == 1
+        assert mgr._run_tasks == {}
+        # Gate 4：替代会话不被已放弃的 R1 阻塞
+        assert cpx._active_production("demo") is None
+        # cancelled 终态不被 resume 复活（§四 invariant 2）
+        with pytest.raises(ValueError):
+            await mgr.resume_run("demo", "prun_p1")
+        _cleanup_watchers(eid)
+
+    asyncio.run(main())
+
+
+def test_paused_cancel_restart_reconciliation(tmp_path, real_autopilot):
+    """Closure Case 2：持久化 R1 paused+cancel_requested + E1 running+cancel_requested
+    （崩溃窗口/旧数据组合态）-> 真实 recover_runs 对账 R1 -> cancelled ->
+    recover_executions 收敛 E1 -> cancelled；0 新 run、0 kickoff、不 resume。"""
+
+    async def main():
+        mgr = real_autopilot
+        rt = await _seed(tmp_path, _proj_1c1s())
+        ex0 = _exec(rt)
+        eid = ex0.execution_id
+        store = ChangeProtocolStore(rt._resolve_project_dir("demo"), "demo")
+        # 模拟崩溃窗口持久化态：E1 stopping + owned R1 paused+cancel_requested
+        ex1 = store.get_execution(eid)
+        ex1.stage = "production_prepare"
+        ex1.production_run_id = "prun_p2"
+        ex1.cancel_requested = True
+        store.save_execution(ex1)
+        _persist_prun(mgr, "prun_p2", "paused", cancel_requested=True, parent_exec=eid)
+
+        # 模拟 backend restart：新进程无在飞任务；真实恢复链
+        # （recover_runs 对账 run 在前、recover_executions 收敛 execution 在后，
+        #  与 api_server startup 两个幂等驱动一致）
+        cpx._INFLIGHT_POSTCOMMIT.clear()
+        await mgr.recover_runs()
+        r1 = mgr.get_run("demo", "prun_p2")
+        assert r1.status == "cancelled"            # paused+cancel_requested -> cancelled
+        assert r1.cancel_requested is False
+        n = cpx.recover_executions(rt._resolve_project_dir("demo"), "demo", rt=rt)
+        assert n == 1
+        ex_f = store.get_execution(eid)
+        assert ex_f.status == "cancelled"          # E1 收敛 cancelled
+        assert ex_f.stage == "production_prepare"  # 未推进（不复活旧计划）
+        # 0 新 run / 0 新 loop / 0 kickoff
+        assert len(mgr.list_runs("demo")) == 1
+        assert mgr._run_tasks == {}
+        assert len(cpx._INFLIGHT_POSTCOMMIT) == 0
+        _cleanup_watchers(eid)
+
+    asyncio.run(main())
+
+
+def test_paused_cancel_idempotent_exact_ownership(tmp_path, real_autopilot):
+    """Closure Case 3 + 精确 ownership：paused R1（E1 拥有）+ paused R2（同项目无关 run）。
+    cancel E1 -> 只 R1 -> cancelled，R2 原样不动；重复 cancel 幂等；restart 对账后
+    R1 仍 cancelled、R2 仍 paused（不误取消、不自动 resume）；0 新 run/loop。"""
+
+    async def main():
+        mgr = real_autopilot
+        rt = await _seed(tmp_path, _proj_1c1s())
+        ex0 = _exec(rt)
+        eid = ex0.execution_id
+        store = ChangeProtocolStore(rt._resolve_project_dir("demo"), "demo")
+        ex1 = store.get_execution(eid)
+        ex1.stage = "production_prepare"
+        ex1.production_run_id = "prun_p3"
+        store.save_execution(ex1)
+        _persist_prun(mgr, "prun_p3", "paused", parent_exec=eid)
+        _persist_prun(mgr, "prun_r2", "paused")    # 无关 run（不被 E1 拥有）
+
+        # 第一次取消：只 owned R1 被取消
+        await cpx.cancel_execution(rt, "demo", eid)
+        assert mgr.get_run("demo", "prun_p3").status == "cancelled"
+        r2 = mgr.get_run("demo", "prun_r2")
+        assert r2.status == "paused" and r2.cancel_requested is False   # 精确 ownership
+        await cpx.maybe_converge_cancellation(rt, "demo", eid)
+        assert store.get_execution(eid).status == "cancelled"
+
+        # 重复 cancel：幂等（terminal 直接返回，无新副作用）
+        res2 = await cpx.cancel_execution(rt, "demo", eid)
+        assert res2["idempotent"] is True
+        assert mgr.get_run("demo", "prun_p3").status == "cancelled"
+
+        # restart 对账：R1 保持 cancelled，R2 保持 paused（不误取消/不自动 resume）
+        cpx._INFLIGHT_POSTCOMMIT.clear()
+        await mgr.recover_runs()
+        assert mgr.get_run("demo", "prun_p3").status == "cancelled"
+        assert mgr.get_run("demo", "prun_r2").status == "paused"
+        cpx.recover_executions(rt._resolve_project_dir("demo"), "demo", rt=rt)
+        assert store.get_execution(eid).status == "cancelled"
+        assert len(mgr.list_runs("demo")) == 2
+        assert mgr._run_tasks == {}
         _cleanup_watchers(eid)
 
     asyncio.run(main())

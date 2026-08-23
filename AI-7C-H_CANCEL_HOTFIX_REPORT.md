@@ -2,7 +2,8 @@
 
 > AI-7C-H Cancel / Restart Hotfix 执行报告（承接 AI-7C-H_FINAL_HANDOVER.md 之后，
 > 依据《详细流程文件/AI-7C-H Cancel.md》实施）。
-> 分支 `refactor/shot-pipeline`，基线 HEAD `bd6f98a`（hotfix 改动在工作区，未提交）。
+> 分支 `refactor/shot-pipeline`，基线 HEAD `bd6f98a`；hotfix 主体已提交
+> `27d032b`；§15 paused 闭环在其之上（见文末 Final Closure 章节）。
 
 ## 1. 原 blocker 的真实根因
 
@@ -202,13 +203,9 @@ FloatingBar 提交「把AudA的头发换成蓝色」
 
 ## 14. 仍未解决、会影响本语义的限制
 
-1. **paused owned run + Execution 取消**：`request_cancel` 对 paused run 只置
-   `cancel_requested`，无 loop 驱动其到终态（`recover_runs` 不扫描 paused）→
-   Execution 可能停留在「正在停止…」直至下一次 restart 后仍不收敛
-   （paused+cancel_requested 重启后仍 paused）。属预存在 ProjectRun 语义
-   （§二十六/§二十八/§三十），按 §十二边界本 hotfix 未扩改。建议后续阶段：
-   `request_cancel` 将 paused run 直接转 cancelled，或 `recover_runs` 扫描
-   paused+cancel_requested。
+1. ~~**paused owned run + Execution 取消**~~：**已修复**（见 §15 Final Closure）——
+   `request_cancel` 将 paused run 直接转终态 cancelled，`recover_runs` 对账
+   paused+cancel_requested；确定性测试 + 全量回归通过。
 2. **240s 等待窗口**：极端长收尾（>4 分钟单单元）仍触发暂存回退（请求不丢，
    需用户重新提交）。
 3. **视频生成二进制缺失**（`[WinError 2]`，预存在环境问题）：影响 autopilot
@@ -233,6 +230,109 @@ FloatingBar 提交「把AudA的头发换成蓝色」
 
 ```text
 AI-7C-H CANCEL HOTFIX: PASS
+```
+
+---
+
+## 15. Final Closure — paused owned ProductionRun 取消收敛
+
+> 依据《详细流程文件/AI-7C-H_PAUSED_CANCEL_CLOSURE_TRAE.md》实施。
+> 基线：hotfix 主体 commit `27d032b`（其下基线 `bd6f98a`）。本闭环为 `27d032b`
+> 之上的单独 commit（3 files changed, 328 insertions, 24 deletions；hash 见 git log）。
+
+### 15.1 根因（paused 取消不收敛）
+
+`ProjectProductionRun` 暂停的语义是「执行 loop 在 checkpoint 处退出进程内循环」
+（`_run_loop` pause checkpoint `return`），即 **paused run 没有任何存活消费者**。
+而取消语义是「置 `cancel_requested` 标志，由 loop 在 checkpoint 消费」——对
+running run 成立（loop 还在），对 paused run 落空：
+
+1. `ProjectProductionManager.request_cancel` 对 paused run 只置
+   `cancel_requested=true` 并落盘 → 持久态变为 `paused + cancel_requested`，
+   无人推进；
+2. `recover_runs` 的扫描集合是
+   `(running, pausing, composing, pending)`——**不含 paused**，重启对账跳过它；
+3. 而 `paused ∈ PRUN_ACTIVE`：`_run_is_active(paused)=True` 使 E1 的收敛条件
+   永不满足 → E1 永远 `running + cancel_requested`（「正在停止…」），
+   `waitForExecutionStopped` 240s 超时回退；且 `start_run` 的
+   `_ExistingProjectRunError` 会挡住替代会话的 ProductionRun。
+
+### 15.2 修改文件
+
+| 文件 | 内容 |
+|---|---|
+| `src/ai/project_autopilot.py` | ① `_save_run` 拆出 `_write_run`（per-run 锁内直接落盘，asyncio.Lock 不可重入）；② `request_cancel` 新增 paused 分支：per-run 锁内 reload-latest 后直接转终态 `cancelled`（复用既有「到终态即清 cancel_requested」约定）；锁内复查防重复 cancel 覆盖终态、防与 `resume_run` 竞态复活；③ `resume_run` 改为锁内 reload-latest 复查 resumable（cancelled 不被 resume 复活）；④ `recover_runs` 在 active 扫描前先对账 `paused+cancel_requested → cancelled`（复用 `request_cancel` 的 paused 路径；普通 paused 保持 paused，绝不自动 resume） |
+| `tests/test_ai_7ch_cancel_race.py` | 新增 3 个确定性测试（真实 Manager + 真实磁盘持久化，见 15.6） |
+
+生产文件仅 `project_autopilot.py` 一个；`execution_service.py` / 前端零改动
+（父链收敛复用既有 stop watcher / GET 惰性收敛 / restart 恢复链，见 15.4）。
+
+### 15.3 两个修复点
+
+**A. 正常路径**：`request_cancel(paused)` → per-run 锁内 reload → 仍 paused →
+直接 `status=cancelled`（原子落盘，清除 `cancel_requested`），确定性即时完成——
+paused 无活跃 loop 需要 cooperative 收尾，不存在「已提交的不可分外部单元」。
+锁窗口内若被 `resume_run` 先恢复 active，则落入既有 cooperative 路径
+（置 flag 交给活跃 loop 消费），二者先到先得。幂等：重复 cancel 在锁内
+reload 到终态 → 抛既有 `ValueError("Run 已 cancelled")`（与 terminal 语义一致，
+`_propagate_cancel_to_owned_run` 调用前已挡）。
+
+**B. 重启对账**：`recover_runs` 遇 `paused + cancel_requested` → 走真实
+`request_cancel` 的 paused 路径 → `cancelled`。普通 paused（无取消请求）保持
+paused 不动、不 resume、不重调度。保护旧数据与「request-cancel 与终态落盘之间
+崩溃」的窗口。
+
+### 15.4 running 语义仍为 cooperative（未回归）
+
+- 直接终态规则**只**作用于 `paused` 分支；`running/pausing/pending/composing`
+  仍走原路径：置 `cancel_requested` → 活跃 loop 在 Scene 间 checkpoint 收敛、
+  child 当前已提交 Agnes job 允许完成并保存（§二十八不变）。
+- E1 侧：`_converge_cancel_once` 传播后**首次仍返回 False**（R1 在检查时刻还是
+  active），E1 保持「正在停止…」；下一次收敛驱动（stop watcher 2s 轮询 /
+  GET 惰性收敛 / 前端 `waitForExecutionStopped` 轮询）看到 R1 已 terminal 才把
+  E1 收敛为 `cancelled`——不提前宣称已取消的 §八语义不变。
+- 既有 6 竞态 + resume 测试（9 个）全数通过（15.7）。
+
+### 15.5 资产保留
+
+paused 分支只改 `status/cancel_requested/updated_at` 三个字段，不触碰
+`scenes/final_output/manifest/快照文件`；不删除任何生成资产，不新建 run/job，
+不 resume。取消=停止继续生产、非 undo（§38 不变）。
+
+### 15.6 确定性测试（tests/test_ai_7ch_cancel_race.py，全过）
+
+| Case | 测试 | 断言要点 | 结果 |
+|---|---|---|---|
+| 1 paused owned run 正常取消 | `test_paused_owned_run_cancels_normally` | 真实 `cancel_execution` → R1 `cancelled`（flag 清除）；E1 先 stopping 后经 GET 惰性收敛 `cancelled`；1 个 run、0 loop；`_active_production` 为 None（替代会话不被 R1 阻塞）；`resume_run` 对 cancelled 抛 ValueError（不复活） | PASS |
+| 2 重启对账 | `test_paused_cancel_restart_reconciliation` | 持久化 `R1 paused+cancel_requested` + `E1 running+cancel_requested` → 真实 `recover_runs` → R1 `cancelled` → `recover_executions` → E1 `cancelled`；stage 未推进；0 新 run / 0 loop / 0 kickoff | PASS |
+| 3 幂等 + 精确 ownership | `test_paused_cancel_idempotent_exact_ownership` | 同项目 R1(owned, paused) + R2(无关, paused)：cancel E1 只取消 R1，R2 原样；重复 cancel `idempotent=True`；restart 对账后 R1 仍 cancelled、R2 仍 paused；2 个 run、0 loop | PASS |
+
+三个测试走**真实** `ProjectProductionManager` + 真实磁盘持久化
+（`deps.project_manager → tmp_path`），非 fake manager——因为修复的正是真实
+manager 的 paused 分支。
+
+### 15.7 回归结果
+
+```text
+test_ai_7ch_cancel_race.py(12：原 9 + 新 3) + test_ai_7c_6_cancel.py(5)
++ AI-7C 系列（1/2/3/4/4b/5/5b/7/H4/S2/S3/S4/S5-soak）
++ test_api.py / test_ai_7c_s5_endpoint.py
+= 114 passed, 0 failed
+```
+
+原 cancel-race 六竞态（stale 复活 / char-sync 中取消 / planning 中取消 /
+cancel vs run-start / active run restart / stopping 中 restart）与 resume 尊重
+取消全部原样通过——running 语义与 §七 run-start 临界区未被削弱。
+
+### 15.8 前端
+
+本闭环零前端文件改动（父链收敛由既有 GET 惰性收敛 + `waitForExecutionStopped`
+240s 等待窗口驱动），未重跑 typecheck/build；§12 的其余已知限制不变。
+
+### 15.9 结论
+
+```text
+AI-7C-H cancellation closure PASS
 ```
 
 ```text

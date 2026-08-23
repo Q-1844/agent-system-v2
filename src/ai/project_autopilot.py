@@ -347,11 +347,15 @@ class ProjectProductionManager:
 
     async def _save_run(self, run: ProjectProductionRun):
         """per-run Lock 保护原子写（§三十二）。"""
-        lock = self._lock_for(run.run_id)
-        async with lock:
-            run.updated_at = time.time()
-            _atomic_write_json(self._run_path(run.project_name, run.run_id),
-                               json.loads(run.model_dump_json()))
+        async with self._lock_for(run.run_id):
+            self._write_run(run)
+
+    def _write_run(self, run: ProjectProductionRun):
+        """原子写（caller 已持 per-run lock 时直接落盘；asyncio.Lock 不可重入，
+        锁内临界区用本方法而非 _save_run，AI-7C-H closure）。"""
+        run.updated_at = time.time()
+        _atomic_write_json(self._run_path(run.project_name, run.run_id),
+                           json.loads(run.model_dump_json()))
 
     def list_runs(self, project_name: str) -> List[ProjectProductionRun]:
         out = []
@@ -493,16 +497,19 @@ class ProjectProductionManager:
 
     async def resume_run(self, project_name: str, run_id: str) -> ProjectProductionRun:
         """Resume 同 ProjectRun / 同 source snapshot / 同 plans snapshot（§二十七）。
-        blocked 不可 resume（source 变化，§二十九）。"""
-        run = self._load_run(project_name, run_id)
-        if run is None:
-            raise ValueError("Run 不存在")
-        if run.status not in PRUN_RESUMABLE:
-            raise ValueError(f"Run 状态 {run.status} 不可 resume")
-        run.status = PRUN_RUNNING
-        run.error = None
-        run.error_code = None
-        await self._save_run(run)
+        blocked 不可 resume（source 变化，§二十九）。
+        AI-7C-H closure：per-run lock 内 reload-latest 复查 resumable——
+        request_cancel 可将 paused 直接转终态 cancelled，终态不被 resume 复活。"""
+        async with self._lock_for(run_id):
+            run = self._load_run(project_name, run_id)
+            if run is None:
+                raise ValueError("Run 不存在")
+            if run.status not in PRUN_RESUMABLE:
+                raise ValueError(f"Run 状态 {run.status} 不可 resume")
+            run.status = PRUN_RUNNING
+            run.error = None
+            run.error_code = None
+            self._write_run(run)
         self._launch_loop(run)
         return run
 
@@ -528,12 +535,33 @@ class ProjectProductionManager:
 
     async def request_cancel(self, project_name: str, run_id: str) -> ProjectProductionRun:
         """§二十八：传 cancel 给 child（允许当前已提交 Agnes job 完成并保存），child cancelled 后
-        Project cancelled。Scene 间 -> 立即 cancelled。已生成资产全部保留，不回滚。"""
+        Project cancelled。Scene 间 -> 立即 cancelled。已生成资产全部保留，不回滚。
+
+        AI-7C-H closure：paused run 的执行 loop 已退出（暂停即 checkpoint 返回），
+        无人消费 cancel_requested —— per-run lock 内 reload-latest 后直接转终态
+        cancelled（确定性，不 resume、不建新工作、不删资产）。锁内复查防两类竞态：
+        重复 cancel 不覆盖终态；与 resume_run 并发时先到先得、cancelled 不被复活。"""
+        from deps import logger
         run = self._load_run(project_name, run_id)
         if run is None:
             raise ValueError("Run 不存在")
         if run.status in PRUN_TERMINAL:
             raise ValueError(f"Run 已 {run.status}")
+        if run.status == PRUN_PAUSED:
+            async with self._lock_for(run_id):
+                latest = self._load_run(project_name, run_id)
+                if latest is None:
+                    raise ValueError("Run 不存在")
+                if latest.status in PRUN_TERMINAL:
+                    raise ValueError(f"Run 已 {latest.status}")
+                if latest.status == PRUN_PAUSED:
+                    latest.cancel_requested = False
+                    latest.status = PRUN_CANCELLED
+                    self._write_run(latest)
+                    logger.info(f"ProjectRun {run_id} paused -> cancelled"
+                                f"（AI-7C-H：无活跃 loop，直接终态）")
+                    return latest
+                run = latest   # 锁窗口内被 resume 恢复 active -> 走既有 cooperative 路径
         run.cancel_requested = True
         await self._save_run(run)
         if run.current_child_run_id:
@@ -546,6 +574,8 @@ class ProjectProductionManager:
     async def recover_runs(self):
         """startup 恢复（§三十/§三十一）：扫描所有项目的 running/pausing/composing/pending Run。
         pause_requested -> PAUSED；cancel_requested -> CANCELLED；否则重新调度。
+        AI-7C-H closure：先对账 paused —— paused + cancel_requested -> cancelled
+        （复用 request_cancel 的直接终态路径；普通 paused 保持 paused，绝不自动 resume）。
         必须在 SceneAutopilotManager.recover_runs() 之后执行（Project 恢复时需要看到 child 正确状态）。"""
         from deps import get_project_manager, logger
         pm = get_project_manager()
@@ -563,6 +593,15 @@ class ProjectProductionManager:
                 try:
                     run = ProjectProductionRun.model_validate(json.loads(p.read_text(encoding="utf-8")))
                 except Exception:
+                    continue
+                if run.status == PRUN_PAUSED:
+                    # AI-7C-H closure：paused+cancel_requested 在此对账为 cancelled
+                    # （旧数据/崩溃窗口持久化的组合态，无 loop 可消费该请求）。
+                    if run.cancel_requested:
+                        try:
+                            await self.request_cancel(run.project_name, run.run_id)
+                        except ValueError:
+                            pass   # 竞态下已转 terminal/被恢复 active，既有路径继续收敛
                     continue
                 if run.status not in (PRUN_RUNNING, PRUN_PAUSING, PRUN_COMPOSING, PRUN_PENDING):
                     continue
