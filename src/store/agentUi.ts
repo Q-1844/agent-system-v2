@@ -78,12 +78,13 @@ export const useAgentUiStore = defineStore('agentUi', () => {
   // AI-7C-H §5：确定性变更意图检测（与后端 classify_request._CHANGE_VERBS 同族词表）。
   // 写意图经 Floating Bar 必须桥接进真实 ChangeSession 工作流（durable），
   // 而非止于只「谈论」修改的普通 AgentMessage（§23）。只读问答继续走普通 Agent 会话。
-  const CHANGE_INTENT_RE = /改|修改|换成|变成|变得|变为|删除|删掉|去掉|调整|替换|重写|续写|换回|恢复到|恢复成|让.{1,20}更|加(强|快|深)|增强|弱化|放大|缩小|make\b|change\b|remove\b|turn\b/i;
+  const CHANGE_INTENT_RE = /改|修改|换成|变成|变得|变为|删除|删掉|去掉|调整|替换|重写|续写|换回|恢复到|恢复成|让.{1,20}更|加(强|快|深)|增强|弱化|放大|缩小|拓展|扩写|扩充|扩展|补充|补全|加场|加戏|make\b|change\b|remove\b|turn\b/i;
 
-  /** §15：活跃执行 + 新变更请求 → 确定性二选一（不静默吞并进运行中的已批准计划）。 */
-  const pendingChangeChoice = ref<string | null>(null);
-  // 暂存的排队变更请求（queue 选择后保留；执行终态时提示用户提交）
-  const _queuedChangeRequests = ref<string[]>([]);
+  /** §15：活跃执行 + 新变更请求 → 确定性二选一。AI-7D D2：状态搬到 csStore（共享），
+   * agentUi 侧 computed 镜像，AgentConversationSurface 仍用 store.pendingChangeChoice。 */
+  const pendingChangeChoice = computed(() => csStore.pendingChangeChoice);
+  // 暂存的排队变更请求（queue 选择后保留）；镜像 csStore。
+  const _queuedChangeRequests = computed(() => csStore.queuedChangeRequests);
 
   // ---- agent 元数据（§10 复用 Registry/API，不硬编码第二份）----
   const agents = ref<AgentInfo[]>([]);
@@ -234,101 +235,28 @@ export const useAgentUiStore = defineStore('agentUi', () => {
     });
   }
 
-  /** §23/§24：写意图桥接——进入真实 ChangeSession 工作流（durable），引用真实 session id。 */
+  /** §23/§24：写意图桥接——委托 csStore.bridgeFromDirectChat（共享逻辑，Floating Bar +
+   * Agent Center 同语义），push 返回的 assistant 消息。活跃执行时 csStore.pendingChangeChoice
+   * 置位供 AgentConversationSurface 渲染二选一。 */
   async function _bridgeChangeIntent(text: string) {
     const p = projectStore.projectName;
     if (!p) { chatError.value = '请先选择项目'; return; }
     _pushUserMsg(text);
     if (!conversationOpen.value) conversationOpen.value = true;
-    // §15：已批准执行正在跑 → 确定性二选一，不静默改已批准计划
-    if (csStore.executionActive) {
-      pendingChangeChoice.value = text;
-      messages.value.push({
-        role: 'assistant', status: null, created_at: Date.now() / 1000,
-        content: '当前计划正在执行（' + (csStore.execution?.stage || '') +
-                 '）。这条新修改请求如何处理？请在下方选择：等当前任务完成后处理，或停止当前任务并重新规划。',
-      });
-      return;
-    }
-    const sessionAlive = !!csStore.session &&
-      !['rejected', 'stale', 'failed', 'cancelled'].includes(csStore.session.status);
-    if (sessionAlive) {
-      // 提案阶段的活跃会话：新请求作为修改反馈并入同一会话（不开第二条并行变更流）
-      await csStore.requestChanges(text);
-      messages.value.push({
-        role: 'assistant', status: null, created_at: Date.now() / 1000,
-        content: '已把这条请求并入当前变更会话 ' + (csStore.session?.session_id || '') +
-                 '，作为修改反馈重新整理方案。进度见下方运行卡。',
-      });
-      return;
-    }
-    // 新变更流：Producer=通用入口(floating_bar)；Specialist=专业上下文(direct_agent_chat)
     const source = activeAgentId.value === 'producer' ? 'floating_bar' : 'direct_agent_chat';
-    await csStore.create(text, undefined, {
-      source: source as 'floating_bar' | 'direct_agent_chat',
+    const msgs = await csStore.bridgeFromDirectChat(text, {
+      source,
       sourceAgentId: activeAgentId.value,
       sourceSessionId: activeSessionId.value || undefined,
       contextScope: _contextScope(),
     });
-    if (csStore.session) {
-      messages.value.push({
-        role: 'assistant', status: null, created_at: Date.now() / 1000,
-        content: '正在由制作团队整理修改方案（变更会话 ' + csStore.session.session_id +
-                 '）。完成后会在这里呈现方案供你审查。',
-      });
-    } else if (csStore.error) {
-      messages.value.push({
-        role: 'assistant', status: 'failed', created_at: Date.now() / 1000,
-        content: '创建变更会话失败：' + csStore.error,
-      });
-    }
+    messages.value.push(...msgs);
   }
 
-  /** §15 选择：让当前执行完成后处理（请求暂存，执行结束后并入/重开）。
-   * AI-7C-H §十：restart 第一版最稳逻辑——POST cancel → UI「正在停止当前任务…」→
-   * 持续读后端权威 Execution/ProductionRun 状态 → 确认旧执行安全 cancelled →
-   * 再创建新 ChangeSession。不提前宣称「正在重新规划」，不先建 S2 撞
-   * PROJECT_PRODUCTION_ACTIVE（_active_production 兜底保留）。 */
+  /** §15 二选一：委托 csStore.resolveChangeChoice（queue/restart 逻辑集中），push 返回消息。 */
   async function resolveChangeChoice(choice: 'queue' | 'restart') {
-    const text = pendingChangeChoice.value;
-    pendingChangeChoice.value = null;
-    if (!text) return;
-    if (choice === 'restart') {
-      messages.value.push({
-        role: 'assistant', status: null, created_at: Date.now() / 1000,
-        content: '正在停止当前任务…',
-      });
-      await csStore.cancelExecution();
-      // AI-7C-H §十/§十五：窗口须覆盖真实生产收尾（Agnes view 生成 ~1-3min/角色），
-      // 否则 §十五「新 ChangeSession 自动开始」退化为暂存回退。超时仍有不丢请求回退。
-      const stopped = await csStore.waitForExecutionStopped(240000);
-      if (!stopped) {
-        messages.value.push({
-          role: 'assistant', status: 'failed', created_at: Date.now() / 1000,
-          content: '旧任务仍在停止中（生产任务收尾需要一点时间）。这条修改请求已暂存，'
-                   + '请稍后在下一次「停止并重新规划」时重试，或手动恢复。',
-        });
-        _queuedChangeRequests.value.push(text);   // 不丢请求
-        return;
-      }
-      await csStore.create(text, undefined, {
-        source: activeAgentId.value === 'producer' ? 'floating_bar' : 'direct_agent_chat',
-        sourceAgentId: activeAgentId.value,
-        contextScope: _contextScope(),
-      });
-      messages.value.push({
-        role: 'assistant', status: null, created_at: Date.now() / 1000,
-        content: '已停止当前任务，基于这条请求重新规划（新会话 ' +
-                 (csStore.session?.session_id || '') + '）。',
-      });
-    } else {
-      // queue：保留当前执行到完成；新请求暂存为该会话的后续反馈（执行终态后由用户提交）
-      messages.value.push({
-        role: 'assistant', status: null, created_at: Date.now() / 1000,
-        content: '好的：当前任务继续执行，这条修改请求将在其完成后处理（已记录）。',
-      });
-      _queuedChangeRequests.value.push(text);
-    }
+    const msgs = await csStore.resolveChangeChoice(choice);
+    messages.value.push(...msgs);
   }
 
   /** 发送消息（§5 路由）：变更意图 → ChangeSession 桥接；只读问题 → 普通 Agent 会话。 */
@@ -348,8 +276,10 @@ export const useAgentUiStore = defineStore('agentUi', () => {
     _pushUserMsg(text);
     sending.value = true; chatError.value = '';
     try {
-      const reply = await apiClient.sendAgentMessage(p, sid, text);
-      messages.value.push(reply);
+      // AI-7D D1：只读/对话/查询经统一 /turn runtime（真 inspect 接地，非 legacy 盲聊）。
+      // 变更意图已在上方 _bridgeChangeIntent 桥接进 ChangeSession（D2 细化）。
+      const result = await apiClient.agentTurn(p, sid, text);
+      messages.value.push(result.message);   // assistant AgentMessage（含 meta：intent/evidence_refs）
       if (uiState.value === 'collapsed') uiState.value = 'compact';
       if (!conversationOpen.value) conversationOpen.value = true;   // 有回复自动展开
     } catch (e: any) {
@@ -367,8 +297,7 @@ export const useAgentUiStore = defineStore('agentUi', () => {
     contextAttachedToWorkspace.value = false;
     conversationOpen.value = false;
     chatError.value = '';
-    pendingChangeChoice.value = null;
-    _queuedChangeRequests.value = [];
+    // pendingChangeChoice/queuedChangeRequests 由 csStore.onProjectChange 重置（D2 搬到 csStore）
   }
 
   return {

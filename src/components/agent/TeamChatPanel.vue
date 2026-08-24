@@ -53,16 +53,12 @@
         </div>
       </template>
     </div>
-    <div class="composer">
-      <input v-model="draft" class="input" :placeholder="placeholder"
-             @keyup.enter="send" :disabled="store.sending" />
-      <button class="btn btn-primary" :disabled="store.sending || !draft.trim()" @click="send">
-        {{ store.sending ? '…' : '发送' }}
-      </button>
-    </div>
+    <!-- AI-7D D4：Team Chat = AI-only 协作观察窗，用户不能在此发消息。
+         与某位 Agent 沟通/提修改请求请打开其私聊（Agent Center Direct Chat / Floating Bar）。 -->
+    <div class="tc-aionly-hint">AI 制作团队协作记录 · 与某位 Agent 沟通请打开其私聊</div>
     <div v-if="store.error" class="chat-err">{{ store.error }}</div>
 
-    <!-- AI-7B Change Plan Review（活跃 change-session 时显示，§95）-->
+    <!-- 活跃 change-session 时显示方案（观察；批准在 Direct Chat 进行）-->
     <ChangePlanReview v-if="cs.session" />
   </div>
 </template>
@@ -158,6 +154,8 @@ onBeforeUnmount(() => { store.stopPoll(); cs.stopPoll(); });
 .pc-badge { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
 
 .composer { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--border); }
+.tc-aionly-hint { padding: 10px 12px; border-top: 1px solid var(--border); font-size: 11px;
+  color: var(--text-muted); text-align: center; background: var(--bg-root); }
 .composer .input { flex: 1; }
 .chat-err { color: #f87171; font-size: 11px; padding: 0 10px 8px; }
 .resume-btn { align-self: flex-start; margin-top: 4px; padding: 4px 10px; }

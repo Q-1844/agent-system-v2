@@ -213,15 +213,20 @@ def _eref(module: str, etype: str, eid: str, **kw) -> ProjectEvidenceRef:
 PRODUCER_INQUIRY_SYSTEM = """\
 你是 AGNES 某个项目的项目级 Producer。
 
-AI-7A 阶段你的职责：理解用户的问题或变更请求，用只读项目检视工具按需取相关上下文，
-必要时咨询正确的 Specialist，给出精确的项目级答案。**本阶段不修改任何项目内容。**
+你的职责：理解用户的问题或变更请求，基于系统已在下方为你检视好的项目上下文，给出精确的
+项目级答案。**本阶段不修改任何项目内容。**
 
-规则：
-- 大项目请增量检索：先看概览，只取相关 scope，不要把整项目塞进一次回答。
-- 项目级事实答案须来自检视结果或 Specialist 咨询；数据不足就明说，绝不臆造历史。
-- 不替 Specialist 重写其专业内容（剧本/角色/分镜/计划/制作）。你只负责组合、排序、
-  依赖、协调、沟通。
-- 永不声称某变更已应用。
+🔴 关键规则（AI-7D D1）：
+- 系统已在下方「项目上下文」中为你检视好相关数据（概览+相关模块+依赖事实）。你**直接基于
+  此回答**——检视已完成，数据就在上下文里。你**不能也不需要**调用任何工具去"再查看"。
+- **绝不输出工具调用语法**：不要写 <function=...>、{"function":...}、capability id、
+  <parameter=...> 等。这些是系统协议，不是你能执行的东西；你只输出给用户看的自然语言。
+- **不要说"我来查看一下/让我先看看"然后停下**——上下文已就绪，必须**直接给出完整最终答案**。
+- 项目级事实答案须来自下方检视结果；数据不足就明说「我无法核实 X」，绝不臆造。
+- 结合上方对话历史保持多轮上下文承接（用户说的"刚才/那个"指前文）。
+- 不替 Specialist 重写其专业内容（剧本/角色/分镜/计划/制作）。你只负责组合、排序、依赖、
+  协调、沟通。
+- 永不声称某变更已应用/已执行。
 - 变更请求：只产出 analysis-only 计划（requested / related / unchanged / needs decision），
   禁止包含任何可执行操作（UpdateShot/InsertShot/ChangeOperation 等）。"""
 
@@ -295,11 +300,12 @@ class ProjectContextBuilder:
 
     def build_for_producer(self, *, request: str, classification: dict) -> ProjectContextPack:
         """问题/变更路径的 Producer pack：概览 + 分类指向的相关 scope + 依赖事实。"""
-        overview = self._intel.overview().data
+        ov = self._intel.overview()
+        overview = ov.data
         module_context: Dict[str, Any] = {}
-        ev: List[ProjectEvidenceRef] = []
+        ev: List[ProjectEvidenceRef] = list(ov.evidence_refs)   # AI-7D D1：概览即真 inspect
         deps: List[dict] = []
-        inspection_calls: List[str] = []
+        inspection_calls: List[str] = ["overview"]
         for name in classification.get("character_refs", []):
             r = self._intel.character_usage(name)
             module_context[f"character_usage:{name}"] = r.data
@@ -534,22 +540,29 @@ async def consult_specialists_parallel(rt: AgentRuntime, project: str,
 # ============ run_inquiry（§50/§52，7A-2 引擎入口）============
 async def run_inquiry(rt: AgentRuntime, project: str, user_request: str,
                       *, client=None, max_rounds: int = 1,
-                      workflow_state: Optional[List[dict]] = None) -> dict:
+                      workflow_state: Optional[List[dict]] = None,
+                      force_kind: Optional[str] = None,
+                      history: Optional[List[dict]] = None) -> dict:
     """Producer 询问运行时入口（7A-3 team-chat 调此）。返回只读答案 / analysis-only 计划。
     纯读：不写 canonical、不建 Workspace/ChangeSet、不触发生产（§43/§96）。
 
     AI-7C-H §13：workflow_state = 持久化工作流快照（active_workflow_snapshot 产出）。
-    注入 pack 后 Producer 回答「现在做到哪了」时有 Layer B 真相可引用，而非凭对话臆测。"""
+    注入 pack 后 Producer 回答「现在做到哪了」时有 Layer B 真相可引用，而非凭对话臆测。
+
+    AI-7D D1：force_kind 覆盖 classify_request 的 kind。供 unified_turn 在已分类为
+    project_inquiry/runtime_query 时强制走 question 路径——避免 negated-change 文本
+    （如「先不要修改」）被 run_inquiry 内部 classify_request 误判为 change 而走咨询/综合路径。"""
     intel = rt.project_intelligence(project)
     proj = intel._project()
     classification = classify_request(user_request, proj)
+    kind = force_kind or classification["kind"]
     builder = ProjectContextBuilder(intel)
     cli = client if client is not None else rt._resolve_client_or_none()
     observability: Dict[str, Any] = {"classification": classification, "inspection_calls": [],
                                      "specialists_consulted": [], "pack_chars": 0,
                                      "truncated": False}
 
-    if classification["kind"] == "question":
+    if kind == "question":
         pack = builder.build_for_producer(request=user_request, classification=classification)
         if workflow_state:
             pack.module_context["active_workflows"] = workflow_state   # §13 进度真相
@@ -557,7 +570,7 @@ async def run_inquiry(rt: AgentRuntime, project: str, user_request: str,
         observability.update({"inspection_calls": obs_calls,
                               "pack_chars": len(_pack_text(pack)),
                               "truncated": bool(pack.truncated_sections)})
-        answer = await _producer_answer(rt, project, user_request, pack, cli)
+        answer = await _producer_answer(rt, project, user_request, pack, cli, history=history)
         return {"kind": "question", "answer": answer,
                 "evidence_refs": [r.to_dict() for r in pack.evidence_refs],
                 "context_observability": observability}
@@ -617,15 +630,23 @@ def _mentions_other_module(c: ConsultationResult, modules: List[str]) -> bool:
 
 
 async def _producer_answer(rt: AgentRuntime, project: str, request: str,
-                            pack: ProjectContextPack, client) -> str:
+                            pack: ProjectContextPack, client, *,
+                            history: Optional[List[dict]] = None) -> str:
     from .registry import agent_system_prompt
     if client is None:
         return "[chat 未配置：Agnes 推理模型不可用，无法综合答案。检视数据已就绪。]"
     messages = [
         {"role": "system", "content": agent_system_prompt("producer") + "\n\n" + PRODUCER_INQUIRY_SYSTEM
          + "\n\n" + _pack_text(pack)},
-        {"role": "user", "content": f"基于以上项目上下文，回答用户问题。数据不足请明说，不要臆造。\n问题：{request}"},
     ]
+    # AI-7D D1 Bug B 修复：注入对话历史，使多轮 inquiry 有上下文承接（D1.3）。
+    if history:
+        for m in history:
+            messages.append({"role": m.get("role", "user"), "content": m.get("content", "")})
+    messages.append({"role": "user",
+        "content": f"基于以上项目上下文与对话历史，直接回答用户。数据不足请明说，不要臆造。"
+                   f"不要输出工具调用语法（<function=...>、{{\"function\":...}}）；不要说'我来查看'然后"
+                   f"停下——上下文已就绪，直接给完整最终答案。不要声称已修改/已生成。\n问题：{request}"})
     try:
         return await client.chat(messages, temperature=0.7, max_tokens=1024)
     except Exception as e:
@@ -703,3 +724,195 @@ def _normalize_analysis(obj: dict, request: str,
     return {"direct_changes": direct, "downstream_changes": downstream,
             "unchanged": unchanged, "user_decisions_needed": decisions,
             "execution_ready": False, "change_operations": []}
+
+
+# ============ AI-7D D1 · Direct Chat Turn 意图分类（复用 classify_request）============
+# D1 只实现 conversation / project_inquiry / runtime_query；creative_change 由调用方
+# （base.kind==change）在 D1 降为 conversation（D2 接桥 ChangeSession）。
+_RUNTIME_QUERY_RE = re.compile(
+    r"做到哪|做到哪了|进度|完成了吗|完成了|停了|停止|正在|还剩|还差|刚才那个|刚才那个任务|"
+    r"状态|现在在|到哪|哪一步|几步|现在做到|现在生成到|还在|还几个|做完了吗|做完没",
+    re.IGNORECASE)
+# 项目事实/结构/疑问词——命中任一即非纯闲聊，需真 inspect 接地回答（D1.3：依赖项目事实必须 inspect）。
+# 含"开头/中段/结尾/节奏/叙事"等结构词，使"你更担心开头还是中段"也进 inquiry 而非盲聊。
+_PROJECT_FACT_RE = re.compile(
+    r"剧本|故事|场|角色|镜头|分镜|多少|哪些|什么|在哪|有没有|几场|几镜|开头|中段|结尾|"
+    r"节奏|叙事|剧情|制作|首帧|尾帧|视频|scene|shot|character|script|storyboard|"
+    r"production|plan|版本|草稿|s\d|c\d", re.IGNORECASE)
+
+
+def _is_trivial_chatter(req: str) -> bool:
+    """无项目实体/结构/疑问引用 → 纯闲聊（问候/泛泛元观点）。命中项目事实词即非 trivial。"""
+    return not _PROJECT_FACT_RE.search(req or "")
+
+
+# 否定 + change 动词模式（"先不要修改"/"先别改"/"不要改" → 实为只读意图，非 change）。
+# D1-A/B gate 消息含"先不要修改"/"先别改"——classify_request 的 _CHANGE_VERBS 会误命中"修改"，
+# 需在此识别：change 动词若全部被否定，当作 question 路由（真 inspect 回答），不降为 conversation。
+_NEG_CHANGE_RE = re.compile(
+    r"(不要|先不|先别|暂不|暂别|别|无需|不用|莫|勿)\s*(?:.{0,4}?)\s*"
+    r"(改|修改|换成|变成|变得|变为|删除|删掉|去掉|调整|替换|重写|续写|"
+    r"换回|恢复到|恢复成|变|make|change|remove|turn)", re.IGNORECASE)
+
+
+def _is_negated_change(req: str) -> bool:
+    """change 动词是否全部被否定（"先不要修改" → 只读意图）。
+    判定：存在否定+change 模式，且移除所有否定change 后不再有裸 change 动词。"""
+    if not _NEG_CHANGE_RE.search(req or ""):
+        return False
+    stripped = _NEG_CHANGE_RE.sub("", req or "")
+    return not _CHANGE_VERBS.search(stripped)
+
+
+# ============ AI-7D D3 · runtime_control（自然语言控制命令）============
+# D3.2：停止/恢复/重新规划/批准/拒绝 → unified_turn 分派到既有后端 action（cancel/resume_execution、
+# approve/reject_plan、request_changes、resume_session）。模型只理解意图，代码决定执行边界。
+#
+# 关键防误触（D3 gate 第 3 题）："如果我现在停止，会停掉什么？"是**查询**，不是停止命令。
+# _CONTROL_QUERY_GUARD 命中假设/问句标记 → 不作控制命令（落 runtime_query 由 inquiry 接地回答）。
+_CONTROL_QUERY_GUARD = re.compile(
+    r"如果|假设|假如|要是|万一|会怎样|会怎么样|会停掉|会取消|会完成|能不能|可不可以|"
+    r"是不是|行不行|会不会|吗|呢|\?|？|完成了吗|怎么样了|怎样了", re.IGNORECASE)
+_CONTROL_STOP_RE = re.compile(
+    r"停止|停下|停掉|取消|先停|中断|abort|stop|cancel", re.IGNORECASE)
+# reject 先于 approve："不批准/不采纳/不通过"含 approve 词，须先判 reject。
+_CONTROL_REJECT_RE = re.compile(
+    r"拒绝|否掉|不采纳|不批准|不要这个方案|不通过|驳回|放弃", re.IGNORECASE)
+_CONTROL_APPROVE_RE = re.compile(
+    r"批准|同意|采纳|认可|approve|confirm", re.IGNORECASE)
+_CONTROL_REPLAN_RE = re.compile(
+    r"重新规划|重新做方案|重新提案|重新设计|重新整理方案|重新来过|re-?plan", re.IGNORECASE)
+# bare "继续" 不入（避"继续聊聊"误判）；须"继续执行/继续跑/接着跑/恢复"等强恢复词。
+_CONTROL_RESUME_RE = re.compile(
+    r"恢复|接着跑|继续执行|继续生成|继续跑|接着做|重新开始|resume|continue", re.IGNORECASE)
+
+
+def _classify_control(req: str) -> Optional[str]:
+    """识别控制命令子类（stop/reject/approve/replan/resume），非命令返回 None。
+    guard 命中假设/问句 → None（由调用方落 runtime_query/project_inquiry 接地回答）。"""
+    r = req or ""
+    if _CONTROL_QUERY_GUARD.search(r):
+        return None
+    if _CONTROL_STOP_RE.search(r):
+        return "stop"
+    if _CONTROL_REJECT_RE.search(r):
+        return "reject"
+    if _CONTROL_APPROVE_RE.search(r):
+        return "approve"
+    if _CONTROL_REPLAN_RE.search(r):
+        return "replan"
+    if _CONTROL_RESUME_RE.search(r):
+        return "resume"
+    return None
+
+
+def classify_turn_intent(request: str, project: Optional[Project] = None) -> dict:
+    """AI-7D D1 Direct Chat turn 意图分类。
+
+    复用 classify_request（question|change + modules + refs）。在 question 内进一步分：
+      runtime_query   进度/状态词 → run_inquiry/run_specialist_read_answer(workflow_state=snapshot)
+      runtime_control 控制命令（停止/恢复/批准/拒绝/重规划；guard 排除假设问句）→ unified_turn
+                     分派既有后端 action（D3.2：cancel/resume_execution、approve/reject_plan、
+                     request_changes、resume_session）。先于 runtime_query 判定。
+      conversation    纯闲聊（无项目事实词）→ send_message 盲聊
+      project_inquiry 默认（拿不准就真 inspect，更安全；D1.4）
+    change（base.kind==change 且未被全部否定）→ D1 降为 conversation（不建 session、不输出
+                         半截 holding；D2 接 ChangeSession 桥接）。change 动词被全部否定
+                         （"先不要修改"）→ 当作 question 继续判定（路由 inquiry，真 inspect 回答）。
+
+    返回 {"intent", "base"}。base=classify_request 原始结果。
+    """
+    base = classify_request(request, project)
+    req = request or ""
+    if base["kind"] == "change" and not _is_negated_change(req):
+        return {"intent": "conversation", "base": base,
+                "note": "D1: change→conversation (D2 bridges to ChangeSession)"}
+    # AI-7D D3：runtime_control（控制命令）——先于 runtime_query 判定，使"停止刚才那个"→控制
+    # 而非查询（_RUNTIME_QUERY_RE 也含"停止"）。_CONTROL_QUERY_GUARD 已排除假设/问句
+    # （"如果我现在停止会停掉什么"→ control=None → 落 runtime_query 接地回答，不误执行）。
+    # 控制动词非 _CHANGE_VERBS，与 change 分支无冲突。
+    control = _classify_control(req)
+    if control:
+        return {"intent": "runtime_control", "control": control, "base": base}
+    # change 被全部否定 → 落到 question 判定
+    if _RUNTIME_QUERY_RE.search(req):
+        return {"intent": "runtime_query", "base": base}
+    if _is_trivial_chatter(req):
+        return {"intent": "conversation", "base": base}
+    return {"intent": "project_inquiry", "base": base}
+
+
+def _scope_refs(intel: "ProjectIntelligenceService", scope_type: str, scope_id: str,
+                classification: dict) -> List[ProjectEvidenceRef]:
+    """从 session scope + 分类 refs 派生 specialist pack 的 scope 证据引用。"""
+    refs: List[ProjectEvidenceRef] = []
+    if scope_type == "scene" and scope_id:
+        refs.append(_eref("storyboard", "scene", scope_id))
+    elif scope_type == "shot" and scope_id:
+        refs.append(_eref("storyboard", "shot", scope_id))
+    for sid in classification.get("scene_refs", []):
+        r = _eref("storyboard", "scene", sid)
+        if r not in refs:
+            refs.append(r)
+    for shid in classification.get("shot_refs", []):
+        refs.append(_eref("storyboard", "shot", shid))
+    for name in classification.get("character_refs", []):
+        refs.append(_eref("character", "character", name))
+    return refs[:50]
+
+
+async def run_specialist_read_answer(rt: "AgentRuntime", project: str, agent_id: str,
+                                      scope_type: str, scope_id: str, request: str,
+                                      *, client=None,
+                                      workflow_state: Optional[List[dict]] = None,
+                                      history: Optional[List[dict]] = None) -> dict:
+    """AI-7D D1 · Specialist Direct Chat 只读查询/对话回答。
+
+    复用 ProjectContextBuilder.build_for_specialist 构造该 specialist 有界 pack（overview +
+    该 agent 的 _AGENT_VIEW 视图 + scope 相关 scene/shot/character 视图）——**真读 canonical**，
+    不臆造。用 agent_system_prompt（含真话纪律）+ pack → 一次 LLM 接地自然语言回答。
+
+    纯读：不写 canonical、不建 ChangeSession、不 dispatch mutation（D1 边界）。
+    返回 {answer, evidence_refs, inspection_calls, status}。
+    AI-7C-H §13：workflow_state=持久化工作流快照，runtime_query 时注入 pack 使进度回答有
+    Layer B 真相可引用（非对话臆测）。
+    """
+    intel = rt.project_intelligence(project)
+    proj = intel._project()
+    classification = classify_request(request, proj)
+    scope = _scope_refs(intel, scope_type, scope_id, classification)
+    builder = ProjectContextBuilder(intel)
+    pack = builder.build_for_specialist(agent_id=agent_id, request=request,
+                                         scope=scope, consultation_question=request)
+    if workflow_state:
+        pack.module_context["active_workflows"] = workflow_state
+    obs_calls = getattr(pack, "_inspection_calls", [])
+    ev = [r.to_dict() for r in pack.evidence_refs]
+    cli = client if client is not None else rt._resolve_client_or_none()
+    if cli is None:
+        return {"answer": "[chat 未配置：Agnes 推理模型不可用，无法基于项目上下文回答。请配置后重试。]",
+                "evidence_refs": ev, "inspection_calls": obs_calls,
+                "status": ResultStatus.NOT_CONFIGURED.value}
+    from .registry import agent_system_prompt
+    messages = [
+        {"role": "system",
+         "content": agent_system_prompt(agent_id) + "\n\n" + _pack_text(pack)
+         + "\n\n🔴 系统已为你检视好以上项目上下文，你直接基于此回答。不能也不需要调用工具去"
+           "再查看。绝不输出工具调用语法（<function=...>、{\"function\":...}）。不要说"
+           "'我来查看'然后停下——直接给完整最终答案。结合对话历史保持多轮上下文承接。"},
+    ]
+    # AI-7D D1 Bug B 修复：注入对话历史，使 specialist 多轮 inquiry 有上下文承接（D1.3）。
+    if history:
+        for m in history:
+            messages.append({"role": m.get("role", "user"), "content": m.get("content", "")})
+    messages.append({"role": "user",
+        "content": f"基于以上项目上下文与对话历史，直接回答用户。数据不足请明说，不要臆造。"
+                   f"不要声称已修改/已生成/已执行任何变更或制作。\n问题：{request}"})
+    try:
+        text = await cli.chat(messages, temperature=0.7, max_tokens=1024)
+    except Exception as e:
+        return {"answer": f"[回答失败: {str(e)[:200]}]",
+                "evidence_refs": ev, "inspection_calls": obs_calls,
+                "status": ResultStatus.FAILED.value}
+    return {"answer": text, "evidence_refs": ev, "inspection_calls": obs_calls,
+            "status": ResultStatus.COMPLETED.value}

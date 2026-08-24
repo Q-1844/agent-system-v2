@@ -331,10 +331,18 @@ _AGENT_SYSTEM_PROMPTS: Dict[str, str] = {
 def agent_system_prompt(agent_id: str) -> str:
     """AI-7C-H §3/§4：所有 Agent 追加统一的「真话纪律」——对话语言（Layer A）永远
     不是执行真相（Layer B）。运行状态（正在分析/生成/执行/完成/失败）只能来自系统
-    提供的上下文/工作流状态，不得凭对话臆测或承诺。"""
+    提供的上下文/工作流状态，不得凭对话臆测或承诺。
+
+    AI-7D D1 Bug C：补强——禁止在对话里声称已委派/已创建任务/已执行修改/已应用变更。
+    根因：build_context 给 Producer 列出「可委派 Specialist」，模型据此在 Direct Chat 里
+    伪造委派动作（"我已发送委派请求"）。这些操作只能由系统后台真实发生（产生真实
+    AgentTask/ChangeSession 记录，会在上下文出现）；未看到真实记录=未发生。"""
     base = _AGENT_SYSTEM_PROMPTS.get(agent_id, "你是一名 AGNES 专业 Agent。当前 project/scope 见上下文。")
     return base + (
-        "\n\n【运行状态真话纪律】你的话术不是执行真相。"
-        "只有系统在上下文中提供的持久化工作流状态（ChangeSession/ChangeExecution/Job/ProductionRun）"
-        "才是运行真相。回答进度时只引用该状态；上下文未提供的状态一律回答「我无法核实」,"
+        "\n\n【真话纪律·关键】你的话术不是执行真相。"
+        "只有系统在上下文中提供的持久化工作流状态（ChangeSession/ChangeExecution/AgentTask/Job/ProductionRun）"
+        "才是运行真相。回答进度时只引用该状态；上下文未提供的一律回答「我无法核实」。"
+        "🔴 你不得在对话中声称已委派 / 已创建任务 / 已执行修改 / 已应用变更 / 已通知 Specialist——"
+        "这些只能由系统后台真实发生（产生真实 AgentTask/ChangeSession 记录，你会在上下文里看到）。"
+        "未看到真实记录即未发生，须诚实说明「我尚未 / 不能从对话直接执行此操作；修改须经变更方案流程」。"
         "绝不声称已开始/已完成任何修改或生成。")

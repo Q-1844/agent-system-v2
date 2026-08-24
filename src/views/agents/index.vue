@@ -3,6 +3,12 @@
     <div class="toolbar">
       <h2>AI 团队 · Agent Center</h2>
       <span class="hint">当前项目：{{ projectName || '未选择' }}</span>
+      <!-- AI-7D：变更会话状态 chip（点击开审查弹窗；blocked/ready/awaiting/approved 自动弹出）。
+           之前审查卡内联在对话流且 blocked 态无拒绝按钮，会话卡死无逃生口。 -->
+      <button v-if="cs.session" class="cs-chip" :class="'csst-' + cs.session.status"
+              :title="cs.session.error || ''" @click="showReviewModal = true">
+        变更方案 · {{ csStatusText }}
+      </button>
     </div>
 
     <div class="body">
@@ -91,6 +97,15 @@
               <span class="msg-content">{{ m.content }}</span>
               <span v-if="m.status" class="msg-status" :class="'ms-' + m.status">{{ m.status }}</span>
             </div>
+            <!-- AI-7D：变更会话审查移到 toolbar 弹窗（showReviewModal），不再内联在对话流。
+                 queue/restart 二选一仍内联（执行中 + 新请求时）。 -->
+            <div v-if="cs.pendingChangeChoice" class="change-choice">
+              <div class="cc-q">当前计划正在执行，新修改请求如何处理？</div>
+              <div class="cc-opts">
+                <button class="btn btn-ghost" :disabled="sending" @click="onResolveChoice('queue')">让当前任务完成后处理</button>
+                <button class="btn btn-ghost" :disabled="sending" @click="onResolveChoice('restart')">停止并重新规划</button>
+              </div>
+            </div>
           </div>
           <div class="composer">
             <input v-model="draft" class="input" placeholder="输入消息…"
@@ -107,18 +122,55 @@
         <div class="empty">← 从左侧选择一个 Agent</div>
       </section>
     </div>
+
+    <!-- AI-7D：变更方案审查弹窗（ChangePlanReview 内含拒绝/批准/请求修改；blocked 也能拒绝） -->
+    <Teleport to="body">
+      <div v-if="showReviewModal && cs.session" class="cpr-modal-overlay"
+           @click.self="showReviewModal = false">
+        <div class="cpr-modal">
+          <div class="cpr-modal-head">
+            <span class="cpr-modal-title">变更方案审查</span>
+            <button class="cpr-modal-x" @click="showReviewModal = false">✕</button>
+          </div>
+          <div class="cpr-modal-body">
+            <ChangePlanReview />
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue';
+import { ref, computed, onMounted, nextTick, watch } from 'vue';
 import { apiClient } from '@/api';
 import type { AgentInfo, AgentCapability, AgentSession, AgentTask } from '@/api';
 import { useProjectStore } from '@/store';
+import { useChangeSessionStore } from '@/store/changeSession';
 import TeamChatPanel from '@/components/agent/TeamChatPanel.vue';
+import ChangePlanReview from '@/components/agent/ChangePlanReview.vue';
 
 const store = useProjectStore();
 const projectName = computed(() => store.projectName);
+const cs = useChangeSessionStore();
+// AI-7D：变更方案审查弹窗。状态变 blocked/ready/awaiting/approved 时自动弹出（让用户立刻可见可操作）。
+const showReviewModal = ref(false);
+const csStatusText = computed(() => {
+  const map: Record<string, string> = {
+    routing: '路由中', consulting: '咨询中', analyzing_dependencies: '分析依赖',
+    awaiting_user_decision: '需决策', synthesizing_plan: '综合计划', validating_plan: '校验中',
+    building_preview: '构建预览', ready_for_review: '待审查', approved_for_execution: '已批准',
+    blocked: '阻塞', rejected: '已拒绝', stale: '已过期', failed: '失败', cancelled: '已取消',
+  };
+  return map[cs.session?.status || ''] || cs.session?.status || '';
+});
+watch(() => cs.session?.status, (s) => {
+  if (s && ['blocked', 'ready_for_review', 'awaiting_user_decision', 'approved_for_execution'].includes(s)) {
+    showReviewModal.value = true;
+  }
+});
+// AI-7D D2：change 意图检测（与 agentUi.CHANGE_INTENT_RE 同词表）
+const CHANGE_INTENT_RE = /改|修改|换成|变成|变得|变为|删除|删掉|去掉|调整|替换|重写|续写|换回|恢复到|恢复成|让.{1,20}更|加(强|快|深)|增强|弱化|放大|缩小|拓展|扩写|扩充|扩展|补充|补全|加场|加戏|make\b|change\b|remove\b|turn\b/i;
 
 const agents = ref<AgentInfo[]>([]);
 const selectedId = ref<string>('');
@@ -204,8 +256,19 @@ async function send() {
   sending.value = true;
   chatError.value = '';
   try {
-    const reply = await apiClient.sendAgentMessage(projectName.value, session.value.session_id, content);
-    session.value.messages.push(reply);
+    // AI-7D D2：变更意图 → 真 ChangeSession 桥接（复用 csStore.bridgeFromDirectChat，与
+    // Floating Bar 同语义）；否则只读/对话 → 统一 /turn runtime（D1 真 inspect 接地）。
+    if (CHANGE_INTENT_RE.test(content)) {
+      const msgs = await cs.bridgeFromDirectChat(content, {
+        source: 'direct_agent_chat',
+        sourceAgentId: selectedId.value,
+        sourceSessionId: session.value.session_id,
+      });
+      session.value.messages.push(...msgs);
+    } else {
+      const result = await apiClient.agentTurn(projectName.value, session.value.session_id, content);
+      session.value.messages.push(result.message);   // assistant AgentMessage（含 meta）
+    }
     await nextTick();
     if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight;
   } catch (e: any) {
@@ -248,7 +311,28 @@ async function doDelegate() {
   }
 }
 
-onMounted(() => { loadAgents(); });
+// AI-7D D2：活跃执行 + 新变更请求的二选一（委托 csStore.resolveChangeChoice）
+async function onResolveChoice(choice: 'queue' | 'restart') {
+  if (sending.value) return;
+  sending.value = true;
+  chatError.value = '';
+  try {
+    const msgs = await cs.resolveChangeChoice(choice);
+    session.value?.messages.push(...msgs);
+    await nextTick();
+    if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight;
+  } catch (e: any) {
+    chatError.value = '处理失败: ' + (e.message || e);
+  } finally {
+    sending.value = false;
+  }
+}
+
+onMounted(async () => {
+  loadAgents();
+  // AI-7D D2：恢复进行中的变更会话（F5 不丢真 ChangeSession 真相）
+  if (projectName.value) { await cs.restoreActive(); }
+});
 </script>
 
 <style lang="scss" scoped>
@@ -310,10 +394,35 @@ onMounted(() => { loadAgents(); });
 .composer .input { flex: 1; }
 .chat-err { color: #f87171; font-size: 11px; padding: 0 10px 8px; }
 
+.change-choice { margin: 8px 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-surface); }
+.cc-q { font-size: 12px; color: var(--text-primary); margin-bottom: 6px; }
+.cc-opts { display: flex; gap: 8px; flex-wrap: wrap; }
+
 .btn { padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; border: none; transition: all .15s; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .btn-primary { background: var(--accent); color: var(--accent-text, #fff); }
 .btn-primary:hover:not(:disabled) { filter: brightness(1.1); }
 .btn-ghost { background: none; color: var(--text-muted); }
 .btn-ghost:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-secondary); }
+
+/* AI-7D：变更会话状态 chip（toolbar，点击开审查弹窗） */
+.cs-chip { margin-left: auto; padding: 4px 12px; font-size: 12px; font-weight: 600; border-radius: 12px;
+  border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-secondary); cursor: pointer; transition: all .15s; }
+.cs-chip:hover { background: var(--bg-hover); }
+.csst-blocked, .csst-failed, .csst-stale, .csst-rejected, .csst-cancelled { border-color: rgba(248,113,113,.5); color: #f87171; }
+.csst-ready_for_review, .csst-approved_for_execution { border-color: rgba(74,222,128,.5); color: #4ade80; }
+.csst-awaiting_user_decision { border-color: rgba(251,191,36,.5); color: #fbbf24; }
+.csst-routing, .csst-consulting, .csst-analyzing_dependencies, .csst-synthesizing_plan, .csst-validating_plan, .csst-building_preview { border-color: rgba(96,165,250,.5); color: #60a5fa; }
+
+/* AI-7D：变更方案审查弹窗（Teleport to body） */
+.cpr-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 1000;
+  display: flex; align-items: center; justify-content: center; padding: 24px; }
+.cpr-modal { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px;
+  width: min(720px, 95vw); max-height: 88vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,.4); }
+.cpr-modal-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px;
+  border-bottom: 1px solid var(--border); }
+.cpr-modal-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.cpr-modal-x { background: none; border: none; color: var(--text-muted); font-size: 18px; cursor: pointer; padding: 4px 8px; border-radius: 4px; }
+.cpr-modal-x:hover { background: var(--bg-hover); color: var(--text-primary); }
+.cpr-modal-body { padding: 16px; overflow-y: auto; }
 </style>

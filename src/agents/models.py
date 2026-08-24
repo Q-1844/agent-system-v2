@@ -186,21 +186,29 @@ class ModelProfile:
 # ============ AgentMessage（§8）============
 @dataclass
 class AgentMessage:
-    """一条对话消息。status 承载 not_configured / not_implemented 等结构化状态（§21 软失败）。"""
+    """一条对话消息。status 承载 not_configured / not_implemented 等结构化状态（§21 软失败）。
+
+    AI-7D D1：meta 承载 unified_turn 的结构化真相（intent/evidence_refs/events/
+    linked_task_ids/linked_change_session_id）。None=普通聊天消息（向后兼容旧持久化）。
+    UI 只许据 meta 的真实 backend 记录表示「已查看/正在查看」（D1.4：模型说"我应 inspect"
+    ≠ inspect 发生；只有 meta.evidence_refs/events 存在才算真查看）。"""
     role: str                                # user / assistant / system
     content: str
     status: Optional[str] = None             # None=正常；not_configured / not_implemented
     created_at: float = field(default_factory=time.time)
+    meta: Optional[Dict[str, Any]] = None    # AI-7D D1：unified_turn 结构化真相
 
     def to_dict(self) -> dict:
         return {"role": self.role, "content": self.content,
-                "status": self.status, "created_at": self.created_at}
+                "status": self.status, "created_at": self.created_at,
+                "meta": self.meta}
 
     @classmethod
     def from_dict(cls, d: dict) -> "AgentMessage":
         d = d or {}
         return cls(role=d.get("role", "user"), content=d.get("content", ""),
-                   status=d.get("status"), created_at=d.get("created_at", time.time()))
+                   status=d.get("status"), created_at=d.get("created_at", time.time()),
+                   meta=d.get("meta"))
 
 
 # ============ AgentSession（§8/§9）============

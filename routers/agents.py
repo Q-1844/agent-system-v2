@@ -110,14 +110,9 @@ _HTTP = {
 
 # ============ AI-7B per-ChangeSession 锁（§89，镜像 workspace_lock）============
 # 防两个 resume/approve 并发编译同一 plan。**不跨 LLM 调用持有**（AI-7B proposal-only）。
-_SESSION_LOCKS: dict = {}
-
-
-def session_lock(project_name: str, session_id: str) -> "asyncio.Lock":
-    key = f"{project_name}/{session_id}"
-    if key not in _SESSION_LOCKS:
-        _SESSION_LOCKS[key] = asyncio.Lock()
-    return _SESSION_LOCKS[key]
+# AI-7D D3：session_lock 搬到 src/agents/change_protocol/locks.py（中性模块，router + agents
+# 运行时均可 import；agents 包纪律禁止 import router，故 runtime.py 不能从本文件取锁）。
+from src.agents.change_protocol.locks import session_lock
 
 
 def _raise(e: AgentError):
@@ -215,9 +210,22 @@ async def get_session(project_name: str, sid: str):
 
 @router.post("/api/project/{project_name}/agents/sessions/{sid}/messages")
 async def send_message(project_name: str, sid: str, req: SendMessageReq):
-    """聊天。chat 未配置 Agnes -> 200 + assistant(status=not_configured)（§修正3，不转 503）。"""
+    """聊天（deprecated wrapper，AI-7D D1：内部走 unified_turn 单一 runtime）。返回 assistant
+    AgentMessage。chat 未配置 Agnes -> 200 + assistant(status=not_configured)（§修正3，不转 503）。"""
     try:
         return await get_agent_runtime().send_message_to_session(project_name, sid, req.content)
+    except AgentError as e:
+        _raise(e)
+
+
+@router.post("/api/project/{project_name}/agents/sessions/{sid}/turn")
+async def agent_turn(project_name: str, sid: str, req: SendMessageReq):
+    """AI-7D D1 · 统一 Direct Chat turn。返回 AgentTurnResult（intent + assistant_message +
+    events + evidence_refs）。assistant_message 是用户唯一所见自然语言；events 是真后台事件
+    （非模型叙述）。conversation/project_inquiry/runtime_query 三意图经既有真实运行时；
+    creative_change/runtime_control 列入 TurnIntent 枚举但 D2/D3 实现。"""
+    try:
+        return await get_agent_runtime().unified_turn(project_name, sid, req.content)
     except AgentError as e:
         _raise(e)
 
@@ -476,6 +484,8 @@ class CreateChangeSessionReq(BaseModel):
     # AI-7C-H H3：调用方页面上下文（选中 Scene/Shot/Character）——持久化进 entity_refs，
     # 分类/提案路由自动合并，Agent 不反问 Which Scene/Character（§9）。
     context_scope: Optional[dict] = None
+    # AI-7D D2.5：客户端幂等键（Direct Chat 双击/retry/F5 不造重复 ChangeSession）。
+    client_request_id: Optional[str] = None
 
 
 class ApprovePlanReq(BaseModel):
@@ -510,7 +520,8 @@ async def create_change_session(project_name: str, req: CreateChangeSessionReq):
         rt, project_name, req.request, source=req.source,
         source_agent_id=req.source_agent_id, source_session_id=req.source_session_id,
         source_message_id=req.source_message_id,
-        context_scope=req.context_scope)
+        context_scope=req.context_scope,
+        client_request_id=req.client_request_id)
 
 
 @router.get("/api/project/{project_name}/change-sessions")

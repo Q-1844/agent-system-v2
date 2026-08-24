@@ -201,21 +201,13 @@ class AgentRuntime:
         return s.to_dict() if s else None
 
     # ---------- Chat（send_message，§21 软失败 not_configured）----------
-    async def send_message(self, project: str, agent_id: str,
-                           scope_type: str, scope_id: str, content: str) -> dict:
-        """发消息聊天。chat 未配置 Agnes 是 AI-6B 正常态（软失败）：
-        持久化 user + assistant(status=not_configured)，正常返回该 message，不抛、不影响现有 Workflow。"""
-        a = self._resolve_agent(agent_id)
-        if not self._is_enabled(agent_id):
-            raise AgentError("disabled_agent", f"Agent 已禁用: {a.name}")
-        store = self._session_store(project)
-        session = store.get_or_create(agent_id, scope_type, scope_id)
-        # 1. 持久化 user 消息
-        store.append_message(session.session_id,
-                             AgentMessage(role="user", content=content))
-        session = store.load(session.session_id)   # 重读含新消息
-
-        # 2. 构建 messages（system + context + history）
+    async def _produce_chat_reply(self, project: str, agent_id: str,
+                                  scope_type: str, scope_id: str,
+                                  session: AgentSession) -> AgentMessage:
+        """构建 system+context+history → client.chat → 返回 assistant AgentMessage（不落盘）。
+        AI-7D D1：从 send_message 抽出，供 unified_turn 的 conversation 分支复用，避免重复。
+        chat 未配置 Agnes → 返回 status=not_configured 的 AgentMessage（软失败，§21/§修正3）。"""
+        # 构建 messages（system + context + history）
         ctx_text = build_context(agent_id, project, scope_type, scope_id,
                                  self._project_loader(project), self._plans_reader)
         # AI-7C-H §13：追加持久化工作流快照（Layer B 运行时真相）——Agent 回答进度只许
@@ -235,7 +227,7 @@ class AgentRuntime:
             if m.role in ("user", "assistant") and m.content and m.status is None:
                 messages.append({"role": m.role, "content": m.content})
 
-        # 3. 取 Agnes client（软失败：取不到 -> not_configured，§修正3）
+        # 取 Agnes client（软失败：取不到 -> not_configured，§修正3）
         client = None
         if self._client is not None:
             client = self._client
@@ -245,31 +237,352 @@ class AgentRuntime:
             except Exception:
                 client = None
         if client is None:
-            msg = AgentMessage(role="assistant",
-                               content="[chat 未配置：Agnes 推理模型不可用。请在设置中配置 API Key 后重试。]",
-                               status=ResultStatus.NOT_CONFIGURED.value)
-            store.append_message(session.session_id, msg)
-            return msg.to_dict()
-
-        # 4. 调 LLM
+            return AgentMessage(
+                role="assistant",
+                content="[chat 未配置：Agnes 推理模型不可用。请在设置中配置 API Key 后重试。]",
+                status=ResultStatus.NOT_CONFIGURED.value)
         try:
             text = await client.chat(messages, temperature=0.7, max_tokens=1024)
         except Exception as e:
-            msg = AgentMessage(role="assistant",
-                               content=f"[调用失败: {str(e)[:200]}]",
-                               status=ResultStatus.FAILED.value)
-            store.append_message(session.session_id, msg)
-            return msg.to_dict()
-        msg = AgentMessage(role="assistant", content=text)
+            return AgentMessage(role="assistant",
+                                content=f"[调用失败: {str(e)[:200]}]",
+                                status=ResultStatus.FAILED.value)
+        return AgentMessage(role="assistant", content=text)
+
+    async def send_message(self, project: str, agent_id: str,
+                           scope_type: str, scope_id: str, content: str) -> dict:
+        """发消息聊天（legacy chat 路径）。chat 未配置 Agnes 是 AI-6B 正常态（软失败）：
+        持久化 user + assistant(status=not_configured)，正常返回该 message，不抛、不影响现有 Workflow。
+        AI-7D D1：聊天逻辑抽到 _produce_chat_reply；send_message 保留为 conversation 路径 +
+        /messages wrapper 的底层。"""
+        a = self._resolve_agent(agent_id)
+        if not self._is_enabled(agent_id):
+            raise AgentError("disabled_agent", f"Agent 已禁用: {a.name}")
+        store = self._session_store(project)
+        session = store.get_or_create(agent_id, scope_type, scope_id)
+        store.append_message(session.session_id,
+                             AgentMessage(role="user", content=content))
+        session = store.load(session.session_id)   # 重读含新消息
+        msg = await self._produce_chat_reply(project, agent_id, scope_type, scope_id, session)
         store.append_message(session.session_id, msg)
         return msg.to_dict()
 
-    async def send_message_to_session(self, project: str, sid: str, content: str) -> dict:
-        """messages endpoint 用：按 session_id 取 agent+scope，再 send_message。"""
-        s = self._session_store(project).load(sid)
-        if s is None:
+    # ---------- AI-7D D1 · Unified Direct Chat Turn Runtime ----------
+    async def unified_turn(self, project: str, sid: str, content: str) -> dict:
+        """Direct Chat 统一 turn 入口（D1.7 单一 runtime）。按 session 取 agent+scope →
+        classify_turn_intent 分流：
+          conversation（含 change 降级，D2 接桥）→ _produce_chat_reply（聊天）
+          project_inquiry → Producer: run_inquiry / Specialist: run_specialist_read_answer（真 inspect→接地回答）
+          runtime_query → 同 inquiry 路径 + active_workflow_snapshot 注入
+        返回 AgentTurnResult（D1.5）：assistant_message 是用户唯一所见自然语言；events 是真后台事件
+        （非模型叙述）；evidence_refs 来自真实 inspect。user+assistant(meta) 落盘 AgentSessionStore。
+        assistant_message 永不含 tool-call JSON / capability id / raw stack（D1.6）。"""
+        import secrets as _secrets
+        store = self._session_store(project)
+        session = store.load(sid)
+        if session is None:
             raise AgentError("unknown_scope", f"session 不存在: {sid}")
-        return await self.send_message(project, s.agent_id, s.scope_type, s.scope_id, content)
+        agent_id = session.agent_id
+        scope_type = session.scope_type
+        scope_id = session.scope_id
+        a = self._resolve_agent(agent_id)
+        if not self._is_enabled(agent_id):
+            raise AgentError("disabled_agent", f"Agent 已禁用: {a.name}")
+
+        # 捕获对话历史（append 当前 user 之前的 messages）供 inquiry 路径多轮承接（D1.3 / Bug B）。
+        # conversation 路径（_produce_chat_reply）自己读 session.messages 含历史；inquiry 路径需显式注入。
+        history = [{"role": m.role, "content": m.content}
+                   for m in session.messages
+                   if m.role in ("user", "assistant") and m.content and m.status is None]
+
+        # 1. 持久化 user 消息（一次）
+        store.append_message(sid, AgentMessage(role="user", content=content))
+        session = store.load(sid)   # 重读含 user 消息，供 chat history / 不影响 inquiry pack
+
+        # 2. 分类意图（lazy import 防循环：inquiry 顶部 import runtime）
+        from .inquiry import classify_turn_intent, run_inquiry, run_specialist_read_answer
+        intel = self.project_intelligence(project)
+        proj = intel._project()
+        ti = classify_turn_intent(content, proj)
+        intent = ti["intent"]
+        is_query = (intent == "runtime_query")
+
+        # 3. 持久化工作流快照（runtime_query 注入用；AI-7C-H §13 Layer B 真相）
+        workflow_state = None
+        if is_query:
+            try:
+                from .change_protocol.service import active_workflow_snapshot
+                workflow_state = active_workflow_snapshot(
+                    self._resolve_project_dir(project), project)
+            except Exception:
+                workflow_state = None
+
+        client_configured = self._resolve_client_or_none() is not None
+        events: list = []
+        evidence_refs: list = []
+        inspection_calls: list = []
+        assistant_text = ""
+        status: Optional[str] = None
+        linked_change_session_id: Optional[str] = None
+
+        # 4. 分流
+        # AI-7D D3：runtime_control（控制命令）——纯 code→action→真后态接地回复，不调 LLM
+        #（控制即便 chat 未配置也可用，D3.3 真话纪律；数据来自持久化状态，无假百分比）。
+        if intent == "runtime_control":
+            r = await self._runtime_control_reply(
+                project, sid, agent_id, content, ti.get("control"))
+            assistant_text = r["assistant_text"]
+            events = r["events"]
+            evidence_refs = r.get("evidence_refs", [])
+            status = r.get("status")
+            linked_change_session_id = r.get("linked_change_session_id")
+        elif intent == "conversation":
+            msg = await self._produce_chat_reply(
+                project, agent_id, scope_type, scope_id, session)
+            assistant_text = msg.content
+            status = msg.status
+            # conversation 无 inspect 事件 / 无 evidence
+        elif agent_id == "producer":
+            # Producer 查询：复用 run_inquiry（已 build pack + 真 inspect + _producer_answer 接地）
+            # run_inquiry 签名：(rt, project, user_request, *, client, max_rounds, workflow_state, force_kind)
+            # force_kind="question"：unified_turn 已分类为 project_inquiry/runtime_query，强制 question 路径，
+            # 避免 negated-change 文本（"先不要修改"）被 run_inquiry 内部 classify_request 误判为 change。
+            result = await run_inquiry(
+                self, project, content, force_kind="question",
+                workflow_state=workflow_state if is_query else None,
+                history=history)
+            obs = (result.get("context_observability") or {})
+            inspection_calls = obs.get("inspection_calls", [])
+            evidence_refs = result.get("evidence_refs", [])
+            assistant_text = result.get("answer", "")
+            # inquiry 成功 → status=None（普通 assistant 消息，进历史供多轮承接；Bug B）。
+            # AgentMessage.status 只该是 None/not_configured/failed（COMPLETED 是 AgentTask 状态，误用会
+            # 被 history 过滤 m.status is None 排除，导致无上下文承接）。
+            status = (ResultStatus.NOT_CONFIGURED.value if not client_configured else None)
+            events = [{"kind": "project_inspect",
+                       "summary": "Producer 检视：" + (", ".join(inspection_calls) or "overview"),
+                       "refs": evidence_refs}] if inspection_calls else []
+        else:
+            # Specialist 查询：复用 run_specialist_read_answer（build_for_specialist + 真 inspect + agent_system_prompt 接地）
+            r = await run_specialist_read_answer(
+                self, project, agent_id, scope_type, scope_id, content,
+                workflow_state=workflow_state if is_query else None,
+                history=history)
+            assistant_text = r.get("answer", "")
+            evidence_refs = r.get("evidence_refs", [])
+            inspection_calls = r.get("inspection_calls", [])
+            # inquiry 成功 → status=None（进历史供多轮承接；Bug B）。not_configured/failed 保留。
+            _rs = r.get("status")
+            status = None if _rs == ResultStatus.COMPLETED.value else _rs
+            events = [{"kind": "project_inspect",
+                       "summary": f"{a.name} 检视：" + (", ".join(inspection_calls) or "module view"),
+                       "refs": evidence_refs}] if inspection_calls else []
+
+        # 5. 落盘 assistant 消息（携带 meta：intent/evidence/events，供刷新后「已查看」证据）
+        meta = {"intent": intent, "evidence_refs": evidence_refs,
+                "events": events, "linked_task_ids": [], "linked_change_session_id": linked_change_session_id}
+        asst_msg = AgentMessage(role="assistant", content=assistant_text,
+                                status=status, meta=meta)
+        store.append_message(sid, asst_msg)
+
+        return {
+            "turn_id": "turn_" + _secrets.token_hex(6),
+            "session_id": sid, "agent_id": agent_id,
+            "intent": intent,
+            "assistant_message": assistant_text,
+            "events": events,
+            "linked_task_ids": [],
+            "linked_change_session_id": linked_change_session_id,
+            "evidence_refs": evidence_refs,
+            "message": asst_msg.to_dict(),
+        }
+
+    async def send_message_to_session(self, project: str, sid: str, content: str) -> dict:
+        """AI-7D D1：/messages endpoint 的 deprecated wrapper——内部走 unified_turn（单一 runtime，
+        D1.7）。返回 assistant AgentMessage（向后兼容既有只消费 message 的调用方）。"""
+        result = await self.unified_turn(project, sid, content)
+        return result["message"]
+
+    # ---------- AI-7D D3 · runtime_control（控制命令→既有后端 action→接地回复）----------
+    @staticmethod
+    def _stage_zh(stage: Optional[str]) -> str:
+        """execution stage → 中文（供控制回复引用真进度，D3.3：无假百分比）。"""
+        return {
+            "revalidate": "校验方案", "workspace_create": "准备执行工作区",
+            "creative_replay": "回放创作修改", "workspace_verify": "校验执行结果",
+            "canonical_commit": "提交创作修改",
+            "character_sync": "同步角色参考图",
+            "production_planning": "准备受影响场景的制作计划",
+            "production_prepare": "准备镜头生成",
+            "production": "生成镜头与视频", "compose": "合成最终视频",
+            "done": "已完成",
+        }.get(stage or "", "推进中")
+
+    def _resolve_control_target(self, snapshot) -> Optional[dict]:
+        """从真后态快照解析控制目标。snapshot（active_workflow_snapshot）已按 updated_at 倒序
+        且只含非终态 execution + 非终态 session。优先有 execution 的条目（执行期 stop/resume
+        目标）；否则最近非终态 session（approve/reject/replan 目标）。无活跃→None。"""
+        for entry in snapshot or []:
+            ex = entry.get("execution")
+            if ex:
+                return {
+                    "session_id": entry.get("session_id"),
+                    "execution_id": ex.get("execution_id"),
+                    "request": entry.get("request") or "",
+                    "session_status": entry.get("status"),
+                    "execution_status": ex.get("status"),
+                    "stage": ex.get("stage"),
+                    "production_run_id": ex.get("production_run_id"),
+                }
+        for entry in snapshot or []:
+            return {
+                "session_id": entry.get("session_id"), "execution_id": None,
+                "request": entry.get("request") or "",
+                "session_status": entry.get("status"),
+                "execution_status": None, "stage": None,
+                "production_run_id": None,
+            }
+        return None
+
+    async def _runtime_control_reply(self, project: str, sid: str, agent_id: str,
+                                      content: str, control: Optional[str]) -> dict:
+        """D3.2 分派：自然语言控制命令 → 既有后端 action → 真后态接地回复。
+        纯 code→action→真状态→确定性中文（不调 LLM；控制即便 chat 未配置也可用）。
+        返回 {assistant_text, events, evidence_refs, linked_change_session_id, status}。
+
+        锁（correctness）：cancel/resume_execution 自带 project_write_lock，直接调；
+        approve/reject/request_changes/resume_session 无内部锁 → 持 session_lock（镜像 router，
+        防并发编译同一 plan；锁顺序与 router 一致/子集，无死锁）。"""
+        from .change_protocol import service as cp_service
+        from .change_protocol import execution_service as cp_exec
+        from .change_protocol.locks import session_lock
+
+        project_dir = self._resolve_project_dir(project)
+        snapshot = cp_service.active_workflow_snapshot(project_dir, project)
+        target = self._resolve_control_target(snapshot)
+
+        if target is None:
+            return {"assistant_text": "当前没有正在进行的任务可以操作。",
+                    "events": [{"kind": "runtime_control", "action": control,
+                                "outcome": "no_active_target", "summary": "无活跃任务"}],
+                    "evidence_refs": [], "linked_change_session_id": None, "status": None}
+
+        sid_t = target["session_id"]
+        req_text = target.get("request") or ""
+        ex_id = target.get("execution_id")
+        stage_zh = self._stage_zh(target.get("stage"))
+
+        def _ev(action: str, **kw) -> dict:
+            kw.update({"kind": "runtime_control", "action": action,
+                       "target_session_id": sid_t})
+            if ex_id:
+                kw["target_execution_id"] = ex_id
+            return kw
+
+        # ---- stop ----
+        if control == "stop":
+            if not ex_id:
+                txt = (f"「{req_text}」的方案还在准备中，尚未进入执行，没有正在运行的任务可停止。"
+                       f"如要放弃，可以告诉我「拒绝方案」。")
+                return {"assistant_text": txt,
+                        "events": [_ev("stop", outcome="no_execution", summary=txt)],
+                        "evidence_refs": [], "linked_change_session_id": sid_t, "status": None}
+            res = await cp_exec.cancel_execution(self, project, ex_id)
+            ex = res.get("execution") or {}
+            committed = res.get("creative_committed")
+            if committed:
+                txt = (f"已请求停止「{req_text}」。已落盘的创作修改会保留，正在收尾已开始的工作"
+                       f"（{stage_zh}），不会启动新的生成。当前状态：{ex.get('status', '正在停止')}。")
+            else:
+                txt = (f"已停止「{req_text}」，任务尚未提交到项目，未改动任何项目内容。"
+                       f"当前状态：{ex.get('status', '已取消')}。")
+            return {"assistant_text": txt,
+                    "events": [_ev("stop", outcome=ex.get("status"),
+                                   creative_committed=committed, summary=txt)],
+                    "evidence_refs": [], "linked_change_session_id": sid_t, "status": None}
+
+        # ---- resume ----
+        if control == "resume":
+            if ex_id:
+                res = await cp_exec.resume_execution(self, project, ex_id)
+                ex = res.get("execution") or {}
+                txt = (f"已恢复推进「{req_text}」。当前阶段：{self._stage_zh(ex.get('stage'))}，"
+                       f"状态：{ex.get('status', '运行中')}。")
+                return {"assistant_text": txt,
+                        "events": [_ev("resume", outcome=ex.get("status"), summary=txt)],
+                        "evidence_refs": [], "linked_change_session_id": sid_t, "status": None}
+            async with session_lock(project, sid_t):
+                await cp_service.resume_session(self, project, sid_t)
+            s = cp_service.get_session(self, project, sid_t) or {}
+            txt = f"已恢复推进「{req_text}」。当前状态：{s.get('status', '推进中')}。"
+            return {"assistant_text": txt,
+                    "events": [_ev("resume", outcome=s.get("status"), summary=txt)],
+                    "evidence_refs": [], "linked_change_session_id": sid_t, "status": None}
+
+        # approve/reject/replan：若目标有活跃 execution（已批准执行中）→ 不误操作运行中会话
+        if control in ("approve", "reject", "replan") and ex_id:
+            txt = (f"「{req_text}」的方案已批准并正在执行中（{stage_zh}），不能批准/拒绝/重规划。"
+                   f"如要中止可告诉我「停止」。")
+            return {"assistant_text": txt,
+                    "events": [_ev(control, outcome="already_running", summary=txt)],
+                    "evidence_refs": [], "linked_change_session_id": sid_t, "status": None}
+
+        # ---- approve ----
+        if control == "approve":
+            plan = cp_service.get_plan(self, project, sid_t) or {}
+            plan_id = plan.get("plan_id")
+            version = plan.get("version")
+            s_status = target.get("session_status")
+            if not plan_id or s_status != "ready_for_review":
+                txt = (f"「{req_text}」的方案还没准备好，暂不能批准"
+                       f"（当前状态：{s_status or '准备中'}）。方案就绪后再告诉我批准。")
+                return {"assistant_text": txt,
+                        "events": [_ev("approve", outcome="not_ready", summary=txt)],
+                        "evidence_refs": [], "linked_change_session_id": sid_t, "status": None}
+            async with session_lock(project, sid_t):
+                cp_service.approve_plan(self, project, sid_t, plan_id, version)
+            txt = (f"已批准「{req_text}」的修改方案（版本 {version}）。进入待执行状态——"
+                   f"批准不等于执行，你确认后才会真正修改项目。")
+            return {"assistant_text": txt,
+                    "events": [_ev("approve", plan_id=plan_id, plan_version=version,
+                                   outcome="approved", summary=txt)],
+                    "evidence_refs": [], "linked_change_session_id": sid_t, "status": None}
+
+        # ---- reject ----
+        if control == "reject":
+            plan = cp_service.get_plan(self, project, sid_t) or {}
+            plan_id = plan.get("plan_id")
+            async with session_lock(project, sid_t):
+                cp_service.reject_plan(self, project, sid_t, plan_id)
+            txt = f"已拒绝「{req_text}」的方案，未改动任何项目内容。"
+            return {"assistant_text": txt,
+                    "events": [_ev("reject", plan_id=plan_id, outcome="rejected", summary=txt)],
+                    "evidence_refs": [], "linked_change_session_id": sid_t, "status": None}
+
+        # ---- replan ----
+        if control == "replan":
+            plan = cp_service.get_plan(self, project, sid_t) or {}
+            plan_id = plan.get("plan_id")
+            if not plan_id:
+                txt = f"「{req_text}」当前没有方案可调整。"
+                return {"assistant_text": txt,
+                        "events": [_ev("replan", outcome="no_plan", summary=txt)],
+                        "evidence_refs": [], "linked_change_session_id": sid_t, "status": None}
+            async with session_lock(project, sid_t):
+                res = cp_service.request_changes(self, project, sid_t, content, plan_id)
+            new_plan = (res or {}).get("plan") or {}
+            nv = new_plan.get("version")
+            txt = (f"已按你的反馈重新整理方案（版本 {nv}），正在重新生成提案，"
+                   f"完成后在这里给你看。")
+            return {"assistant_text": txt,
+                    "events": [_ev("replan", plan_id=new_plan.get("plan_id"),
+                                   plan_version=nv, outcome="replanned", summary=txt)],
+                    "evidence_refs": [], "linked_change_session_id": sid_t, "status": None}
+
+        # 兜底（_classify_control 已限定 5 类，不应到这）
+        return {"assistant_text": "我理解你想控制任务，但没识别出具体动作。",
+                "events": [_ev(control, outcome="unhandled")],
+                "evidence_refs": [], "linked_change_session_id": sid_t, "status": None}
 
     # ---------- Tasks ----------
     def list_tasks(self, project: str, requester_agent: Optional[str] = None,

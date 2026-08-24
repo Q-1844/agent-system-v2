@@ -26,6 +26,9 @@ from ..inquiry import classify_request, _pack_text
 from .models import (ChangeRequest, ChangeSession, UnifiedChangePlan, PlanApproval,
                       ChangeDecisionRequest, ChangeDecisionOption, ModuleProposal,
                       ModuleProposalItem, SESSION_TERMINAL)
+# AI-7D D3：EXEC_TERMINAL 用于 active_workflow_snapshot 的 execution 终态过滤
+#（execution_models 仅 stdlib import，无循环依赖）。
+from .execution_models import EXEC_TERMINAL
 from .store import ChangeProtocolStore
 from .script_proposal import run_script_proposal
 from .character_proposal import run_character_proposal
@@ -76,13 +79,24 @@ def create_session(rt: AgentRuntime, project: str, original_user_request: str, *
                    source_agent_id: Optional[str] = None,
                    source_session_id: Optional[str] = None,
                    source_message_id: Optional[str] = None,
-                   context_scope: Optional[dict] = None) -> dict:
+                   context_scope: Optional[dict] = None,
+                   client_request_id: Optional[str] = None) -> dict:
     """创建 ChangeRequest（proposal_only）+ ChangeSession（routing），捕获 source_snapshot_signature。
     7B-1：不后台推进（推进机在 7B-2..4）。original_user_request 不可变（§10/§105）。
 
     AI-7C-H H3（澄清策略 §9）：context_scope = 调用方页面上下文
     {scene_id?, shot_id?, character_name?}。用户说「让这一段更紧张一点」时不再反问
-    Which Scene——scope 与请求一并持久化（entity_refs），分类/提案路由自动合并。"""
+    Which Scene——scope 与请求一并持久化（entity_refs），分类/提案路由自动合并。
+
+    AI-7D D2.5：client_request_id 幂等——同 id 已存在则返回既有 session（Direct Chat
+    双击/retry/F5 不造重复 ChangeSession）。"""
+    store = _store(rt, project)
+    if client_request_id:
+        existing = store.get_session_by_client_request(client_request_id)
+        if existing is not None:
+            req = store.get_request(existing.request_id)
+            return {"session": existing.to_dict(),
+                    "request": req.to_dict() if req else None, "idempotent": True}
     sig = _current_signature(rt, project)
     now = _now()
     entity_refs: List[dict] = []
@@ -99,7 +113,8 @@ def create_session(rt: AgentRuntime, project: str, original_user_request: str, *
     req = ChangeRequest(
         request_id=_new_id("cr"), project_name=project, source=source,
         source_agent_id=source_agent_id, source_session_id=source_session_id,
-        source_message_id=source_message_id, original_user_request=original_user_request,
+        source_message_id=source_message_id, client_request_id=client_request_id,
+        original_user_request=original_user_request,
         entity_refs=entity_refs,
         source_snapshot_signature=sig, mode="proposal_only", created_at=now)
     session = ChangeSession(
@@ -118,36 +133,75 @@ def get_session(rt: AgentRuntime, project: str, session_id: str) -> Optional[dic
 
 
 # ============ 只读工作流快照（AI-7C-H §13：进度答案来自持久化状态）============
+def _execution_snapshot(ex) -> dict:
+    """单 execution 的紧凑真相：stage=制作进度权威粒度 + ProductionRun 真状态。
+    AI-7D D3.1：附 production_run status（复用 execution_service._get_owned_run 同源模式，
+    best-effort，0 mutation，异常→不含 production_run_status）。使「现在在生成角色图还是做
+    分镜」/「还有几个镜头」接地（stage=character_sync→角色图；production_planning/production→
+    分镜/镜头；production_run_status→制作流真态）。"""
+    out = {
+        "execution_id": ex.execution_id, "status": ex.status, "stage": ex.stage,
+        "blocker_code": (ex.blocker or {}).get("code"),
+        "characters_synced": [r.get("character_name") for r in (ex.character_sync or [])],
+        "planned_scenes": [p.get("scene_id") for p in (ex.planning or [])],
+        "production_run_id": ex.production_run_id,
+    }
+    if ex.production_run_id:
+        try:
+            from src.ai.project_autopilot import get_project_autopilot_manager
+            run = get_project_autopilot_manager().get_run(ex.project_name, ex.production_run_id)
+            if run is not None:
+                out["production_run_status"] = run.status
+        except Exception:
+            pass
+    return out
+
+
 def active_workflow_snapshot(project_dir, project_name: str, limit: int = 5) -> List[dict]:
-    """只读：当前项目非终态 ChangeSession（含其 execution）的紧凑快照。
-    供 Producer/Agent 回答「现在做到哪了」——Layer B 运行时真相，LLM 只许引用此状态、
-    不得凭对话历史臆测。0 mutation；异常返回 []（调用方安全降级）。"""
+    """只读：当前项目活跃工作流快照（Layer B 运行时真相）。供 Producer/Agent 回答「现在做到
+    哪了」+ unified_turn runtime_control 目标解析。LLM 只许引用此状态、不得凭对话历史臆测。
+    0 mutation；异常返回 []（调用方安全降级）。
+
+    AI-7D D3：execution-aware——以**非终态 execution**为首选（含 approved_for_execution
+    session 下的 running execution；旧实现只列非终态 session，而 approved_for_execution 属
+    SESSION_TERMINAL → 漏掉已批准+运行中的 execution，使「现在做到哪了」/「停止」在执行期
+    不可见）。再补非终态 session（提案/编译期，无活跃 execution）。每条 execution 附真
+    ProductionRun status（_execution_snapshot）。request 字段存 original_user_request 文本
+    （供控制回复引用「已停止「扩写中段」」）。"""
     try:
         store = ChangeProtocolStore(project_dir, project_name)
-        out = []
-        for s in store.list_sessions():
-            if s.status in SESSION_TERMINAL:
+        out: List[dict] = []
+        seen: set = set()
+
+        def _req_text(sess) -> str:
+            if not (sess and sess.request_id):
+                return ""
+            req = store.get_request(sess.request_id)
+            return (req.original_user_request or "") if req else ""
+
+        # 1. 非终态 execution（含 approved session 下的运行执行）——执行期真相首选
+        for ex in store.list_executions():
+            if ex.status in EXEC_TERMINAL:
                 continue
-            entry = {"session_id": s.session_id, "status": s.status,
-                     "request": (s.request_id or ""), "updated_at": s.updated_at}
-            out.append(entry)
+            sess = store.get_session(ex.change_session_id)
+            out.append({
+                "session_id": ex.change_session_id,
+                "status": sess.status if sess else "approved_for_execution",
+                "request": _req_text(sess),
+                "updated_at": ex.updated_at or (sess.updated_at if sess else 0),
+                "execution": _execution_snapshot(ex),
+            })
+            seen.add(ex.change_session_id)
+        # 2. 非终态 session 且无活跃 execution（提案/编译期：routing/consulting/.../
+        #    ready_for_review）——旧实现已覆盖，保留以答「方案做到哪了」
+        for s in store.list_sessions():
+            if s.status in SESSION_TERMINAL or s.session_id in seen:
+                continue
+            out.append({
+                "session_id": s.session_id, "status": s.status,
+                "request": _req_text(s), "updated_at": s.updated_at,
+            })
         out.sort(key=lambda e: e.get("updated_at") or 0, reverse=True)
-        # 附带各 session 最新 execution（stage 是制作进度的权威粒度）
-        for entry in out[:limit]:
-            try:
-                exs = store.list_executions(entry["session_id"])
-                if exs:
-                    ex = exs[0]
-                    entry["execution"] = {
-                        "execution_id": ex.execution_id, "status": ex.status,
-                        "stage": ex.stage,
-                        "blocker_code": (ex.blocker or {}).get("code"),
-                        "characters_synced": [r.get("character_name")
-                                               for r in (ex.character_sync or [])],
-                        "planned_scenes": [p.get("scene_id") for p in (ex.planning or [])],
-                    }
-            except Exception:
-                pass
         return out[:limit]
     except Exception:
         return []

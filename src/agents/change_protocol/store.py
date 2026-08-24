@@ -98,6 +98,23 @@ class ChangeProtocolStore:
         out.sort(key=lambda s: s.updated_at, reverse=True)
         return out
 
+    def get_session_by_client_request(self, client_request_id: str) -> Optional[ChangeSession]:
+        """AI-7D D2.5：按 client_request_id 查既有 ChangeSession（create_session 幂等去重用）。
+        None=不存在。扫 requests 匹配 client_request_id → 取 request_id → 找其 session。"""
+        if not client_request_id:
+            return None
+        rid = None
+        for d in self._list_dicts("requests"):
+            if d.get("client_request_id") == client_request_id:
+                rid = d.get("request_id")
+                break
+        if not rid:
+            return None
+        for sd in self._list_dicts("sessions"):
+            if sd.get("request_id") == rid:
+                return ChangeSession.from_dict(migrations.normalize_session_dict(sd))
+        return None
+
     # ---------- proposals ----------
     def save_proposal(self, p: ModuleProposal) -> ModuleProposal:
         if not p.proposal_id:

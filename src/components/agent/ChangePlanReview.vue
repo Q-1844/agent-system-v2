@@ -14,6 +14,9 @@
       <span class="st-label" :class="'st-' + cs.session.status">{{ statusLabel }}</span>
       <span v-if="cs.session.error" class="st-err" :title="cs.session.error">{{ cs.session.error.slice(0, 120) }}</span>
       <button v-if="canResume" class="btn btn-ghost" :disabled="cs.busy" @click="cs.resume()">推进</button>
+      <!-- AI-7D：proposal 阶段（blocked/awaiting/routing/consulting 等）也能放弃——
+           之前拒绝按钮只在 ready_for_review 块内，blocked 会话无法拒绝，卡死无逃生口。 -->
+      <button v-if="canReject" class="btn btn-ghost" :disabled="cs.busy" @click="cs.reject()">拒绝</button>
     </div>
 
     <!-- 需决策（§35）-->
@@ -195,7 +198,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useChangeSessionStore } from '@/store/changeSession';
 import type { ChangePlanItem } from '@/api';
 
@@ -204,7 +207,10 @@ const cs = useChangeSessionStore();
 const activeTab = ref('story');
 const showFeedback = ref(false);
 const feedbackText = ref('');
-const execMode = ref<'affected_production' | 'creative_only'>('affected_production');
+// AI-7D D2：execMode 默认从 cs.preferredExecMode（bridge 检测"只…不改"→creative_only），
+// 避免"只改剧本却级联改视频"。用户仍可手动改下拉。
+const execMode = ref<'affected_production' | 'creative_only'>(cs.preferredExecMode);
+watch(() => cs.preferredExecMode, (m) => { execMode.value = m; });
 
 // AI-7C §86 execution timeline：据 execution.stage 推导各阶段 done/current/pending
 const STAGE_ORDER = [
@@ -243,6 +249,11 @@ const statusLabel = computed(() => {
 });
 const canResume = computed(() =>
   cs.session && ['blocked', 'awaiting_user_decision', 'routing', 'consulting'].includes(cs.session.status));
+// AI-7D：proposal 阶段（非 ready/非 approved/非终态）可拒绝。ready 在下方审查块自有拒绝按钮；
+// approved 走执行/取消（reject_plan 会与运行中 execution 冲突，故排除）。blocked 等靠此按钮放弃。
+const canReject = computed(() =>
+  cs.session && !cs.readyForReview && cs.session.status !== 'approved_for_execution'
+  && !['rejected', 'stale', 'failed', 'cancelled'].includes(cs.session.status));
 // M5/§81：stale-blocked（项目批准后变化，不可 rebasing resume）→ 不显"尝试恢复"，导向重新提案
 const staleBlocked = computed(() =>
   cs.executionBlocked && cs.execution?.blocker?.code === 'PROJECT_CHANGED_AFTER_APPROVAL');

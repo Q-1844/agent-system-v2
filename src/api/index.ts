@@ -615,6 +615,37 @@ export interface AgentCapability {
 }
 export interface AgentMessage {
   role: string; content: string; status: string | null; created_at: number;
+  /** AI-7D D1：unified_turn 结构化真相（intent/evidence_refs/events/linked_*）。
+   * null=普通聊天消息。UI 只许据 meta 的真实 backend 记录表示「已查看」。 */
+  meta?: AgentMessageMeta | null;
+}
+/** AI-7D D1：Agent assistant 消息携带的 unified_turn 真相（落盘，刷新可恢复）。 */
+export interface AgentMessageMeta {
+  intent: 'conversation' | 'project_inquiry' | 'runtime_query';
+  evidence_refs: AgentEvidenceRef[];
+  events: AgentTurnEvent[];
+  linked_task_ids: string[];
+  linked_change_session_id: string | null;
+}
+export interface AgentEvidenceRef {
+  module: string; entity_type: string; entity_id: string;
+  revision_id?: string; artifact_type?: string; artifact_id?: string; label?: string;
+}
+/** AI-7D D1：Direct Chat turn 的真后台事件（非模型叙述）。 */
+export interface AgentTurnEvent {
+  kind: string; summary: string; refs?: AgentEvidenceRef[];
+}
+/** AI-7D D1 · 统一 Direct Chat turn 结果（POST /turn）。assistant_message 是用户唯一所见。 */
+export interface AgentTurnResult {
+  turn_id: string; session_id: string; agent_id: string;
+  intent: 'conversation' | 'project_inquiry' | 'runtime_query';
+  assistant_message: string;
+  events: AgentTurnEvent[];
+  linked_task_ids: string[];
+  linked_change_session_id: string | null;
+  evidence_refs: AgentEvidenceRef[];
+  /** 落盘的 assistant AgentMessage（/messages wrapper 等价返回它）。 */
+  message: AgentMessage;
 }
 export interface AgentSession {
   session_id: string; project: string; agent_id: string;
@@ -1730,6 +1761,14 @@ class ApiClient {
       body: JSON.stringify({ content }),
     });
   }
+  /** AI-7D D1 · 统一 Direct Chat turn。返回 AgentTurnResult（intent + assistant_message +
+   * events + evidence_refs）。assistant_message 是用户唯一所见；events 是真后台事件。 */
+  async agentTurn(projectName: string, sid: string, content: string): Promise<AgentTurnResult> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/agents/sessions/${encodeURIComponent(sid)}/turn`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    });
+  }
 
   // ============ AI-7A Team Group Chat（polling-first，不新增 realtime bus）============
   async getTeamThread(projectName: string): Promise<TeamThreadData> {
@@ -1773,7 +1812,8 @@ class ApiClient {
       sourceMessageId?: string, options?: {
         sourceAgentId?: string; sourceSessionId?: string;
         contextScope?: { sceneId?: string; shotId?: string; characterName?: string };
-      }): Promise<{ session: ChangeSession; request: ChangeRequest }> {
+        clientRequestId?: string;
+      }): Promise<{ session: ChangeSession; request: ChangeRequest; idempotent?: boolean }> {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/change-sessions`, {
       method: 'POST',
       body: JSON.stringify({
@@ -1785,6 +1825,7 @@ class ApiClient {
           shot_id: options.contextScope.shotId,
           character_name: options.contextScope.characterName,
         } : undefined,
+        client_request_id: options?.clientRequestId,
       }),
     });
   }

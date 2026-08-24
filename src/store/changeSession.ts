@@ -8,7 +8,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { apiClient } from '@/api';
-import type { ChangeSession, UnifiedChangePlan, PlanPreviewArtifact, ChangeDecisionRequest, ChangeExecution, ProductionExecutionManifest } from '@/api';
+import type { ChangeSession, UnifiedChangePlan, PlanPreviewArtifact, ChangeDecisionRequest, ChangeExecution, ProductionExecutionManifest, AgentMessage } from '@/api';
 import { useProjectStore } from '@/store';
 
 const POLL_MS = 2000;
@@ -86,6 +86,7 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
     sourceAgentId?: string;
     sourceSessionId?: string;
     contextScope?: { sceneId?: string; shotId?: string; characterName?: string };
+    clientRequestId?: string;
   }) {
     const p = projectStore.projectName;
     const text = requestText.trim();
@@ -97,6 +98,7 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
           sourceAgentId: options?.sourceAgentId,
           sourceSessionId: options?.sourceSessionId,
           contextScope: options?.contextScope,
+          clientRequestId: options?.clientRequestId,
         });
       lastRequestText.value = text;
       // AI-7C-H §十：新会话与旧 execution 解绑（restart 场景旧 cancelled execution 不残留显示）
@@ -399,6 +401,109 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
     eligibility.value = null;
     error.value = '';
     lastRequestText.value = '';
+    // AI-7D D2：重置 Direct Chat change-bridge 状态
+    pendingChangeChoice.value = null;
+    pendingChangeOpts.value = null;
+    _queuedChangeRequests.value = [];
+    preferredExecMode.value = 'affected_production';
+  }
+
+  // ============ AI-7D D2 · Direct Chat change 桥接（共享：Floating Bar + Agent Center）============
+  // 镜像 agentUi._bridgeChangeIntent + resolveChangeChoice，逻辑集中到 store。返回 assistant
+  // 消息数组供调用方 push 到各自消息列表；活跃执行时置 pendingChangeChoice 供 UI 渲染二选一。
+  const pendingChangeChoice = ref<string | null>(null);
+  const pendingChangeOpts = ref<{ source?: 'team_chat' | 'floating_bar' | 'direct_agent_chat'; sourceAgentId?: string; sourceSessionId?: string; contextScope?: { sceneId?: string; shotId?: string; characterName?: string } } | null>(null);
+  const _queuedChangeRequests = ref<string[]>([]);
+  let _creqCounter = 0;
+  // AI-7D D2：检测"只…其它不改"语义 → execute 默认 creative_only（只提交创作，不级联生产/视频）。
+  const preferredExecMode = ref<'affected_production' | 'creative_only'>('affected_production');
+  const CREATIVE_ONLY_RE = /(只|仅)[^，。]{0,15}(改|拓展|扩写|修改|动)|(其它|其他|别的|别的)(不|勿|别碰)|不要.{0,4}(改|碰)?(其它|其他|别的)/;
+
+  function _msg(role: string, content: string, status: string | null = null): AgentMessage {
+    return { role, content, status, created_at: Date.now() / 1000 };
+  }
+
+  /** §23/§24：写意图桥接进真实 ChangeSession（durable）。返回 assistant 消息（调用方 push）。 */
+  async function bridgeFromDirectChat(text: string, opts: {
+    source?: 'team_chat' | 'floating_bar' | 'direct_agent_chat'; sourceAgentId?: string; sourceSessionId?: string;
+    contextScope?: { sceneId?: string; shotId?: string; characterName?: string };
+  }): Promise<AgentMessage[]> {
+    const out: AgentMessage[] = [];
+    // §15：活跃执行 + 新变更请求 → 确定性二选一，不静默改已批准计划
+    if (executionActive.value) {
+      pendingChangeChoice.value = text;
+      pendingChangeOpts.value = opts;
+      out.push(_msg('assistant',
+        '当前计划正在执行（' + (execution.value?.stage || '') +
+        '）。这条新修改请求如何处理？请在下方选择：等当前任务完成后处理，或停止当前任务并重新规划。'));
+      return out;
+    }
+    const sessionAlive = !!session.value &&
+      !['rejected', 'stale', 'failed', 'cancelled'].includes(session.value.status);
+    if (sessionAlive) {
+      // 提案阶段活跃会话：新请求作为修改反馈并入同一会话（不开第二条并行变更流）
+      await requestChanges(text);
+      out.push(_msg('assistant',
+        '已把这条请求并入当前变更会话 ' + (session.value?.session_id || '') +
+        '，作为修改反馈重新整理方案。进度见下方运行卡。'));
+      return out;
+    }
+    // 新变更流：Direct Chat 来源（floating_bar/direct_agent_chat）；client_request_id 幂等
+    preferredExecMode.value = CREATIVE_ONLY_RE.test(text) ? 'creative_only' : 'affected_production';
+    _creqCounter += 1;
+    await create(text, undefined, {
+      source: opts.source || 'direct_agent_chat',
+      sourceAgentId: opts.sourceAgentId,
+      sourceSessionId: opts.sourceSessionId,
+      contextScope: opts.contextScope,
+      clientRequestId: 'creq_' + Date.now().toString(36) + '_' + _creqCounter,
+    });
+    if (session.value) {
+      out.push(_msg('assistant',
+        '正在由制作团队整理修改方案（变更会话 ' + session.value.session_id +
+        '）。完成后会在这里呈现方案供你审查。'));
+    } else if (error.value) {
+      out.push(_msg('assistant', '创建变更会话失败：' + error.value, 'failed'));
+    }
+    return out;
+  }
+
+  /** §15 选择：queue（暂存待执行后）/ restart（停止当前 + 重新规划）。返回 assistant 消息。 */
+  async function resolveChangeChoice(choice: 'queue' | 'restart'): Promise<AgentMessage[]> {
+    const text = pendingChangeChoice.value;
+    const opts = pendingChangeOpts.value;
+    pendingChangeChoice.value = null;
+    pendingChangeOpts.value = null;
+    const out: AgentMessage[] = [];
+    if (!text) return out;
+    if (choice === 'restart') {
+      out.push(_msg('assistant', '正在停止当前任务…'));
+      await cancelExecution();
+      const stopped = await waitForExecutionStopped(240000);
+      if (!stopped) {
+        out.push(_msg('assistant',
+          '旧任务仍在停止中（生产任务收尾需要一点时间）。这条修改请求已暂存，请稍后重试或手动恢复。',
+          'failed'));
+        _queuedChangeRequests.value.push(text);
+        return out;
+      }
+      preferredExecMode.value = CREATIVE_ONLY_RE.test(text) ? 'creative_only' : 'affected_production';
+      _creqCounter += 1;
+      await create(text, undefined, {
+        source: opts?.source || 'direct_agent_chat',
+        sourceAgentId: opts?.sourceAgentId,
+        sourceSessionId: opts?.sourceSessionId,
+        contextScope: opts?.contextScope,
+        clientRequestId: 'creq_' + Date.now().toString(36) + '_' + _creqCounter,
+      });
+      out.push(_msg('assistant',
+        '已停止当前任务，基于这条请求重新规划（新会话 ' + (session.value?.session_id || '') + '）。'));
+    } else {
+      out.push(_msg('assistant',
+        '好的：当前任务继续执行，这条修改请求将在其完成后处理（已记录）。'));
+      _queuedChangeRequests.value.push(text);
+    }
+    return out;
   }
 
   return {
@@ -408,5 +513,8 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
     create, resume, loadPlan, submitDecision, approve, requestChanges, reject,
     execute, loadExecution, resumeExecution, cancelExecution, waitForExecutionStopped,
     restoreActive, onProjectChange, stopPoll,
+    // AI-7D D2
+    pendingChangeChoice, queuedChangeRequests: _queuedChangeRequests,
+    preferredExecMode, bridgeFromDirectChat, resolveChangeChoice,
   };
 });

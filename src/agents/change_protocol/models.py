@@ -52,6 +52,9 @@ class ChangeRequest:
     source_agent_id: Optional[str] = None
     source_session_id: Optional[str] = None
     source_message_id: Optional[str] = None
+    # AI-7D D2.5：客户端幂等键（Direct Chat 双击/retry/F5 不造重复 ChangeSession）。
+    # create_session 据此查重：同 client_request_id 已存在则返回既有 session。
+    client_request_id: Optional[str] = None
     original_user_request: str = ""
     primary_module: Optional[str] = None
     suspected_modules: List[str] = field(default_factory=list)
@@ -65,6 +68,7 @@ class ChangeRequest:
                 "source": self.source, "source_agent_id": self.source_agent_id,
                 "source_session_id": self.source_session_id,
                 "source_message_id": self.source_message_id,
+                "client_request_id": self.client_request_id,
                 "original_user_request": self.original_user_request,
                 "primary_module": self.primary_module,
                 "suspected_modules": list(self.suspected_modules),
