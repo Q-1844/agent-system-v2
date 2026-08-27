@@ -104,6 +104,29 @@
                 <div class="receipts-head">本轮改动</div>
                 <div v-for="(r, ri) in realReceipts(m.meta)" :key="ri" class="receipt-item">✓ {{ receiptLabel(r) }}</div>
               </div>
+              <!-- AI-7D-R：完成后执行过程折叠保留（事后可展开查 reasoning/tool 流程） -->
+              <div v-if="m.role === 'assistant' && processItemsOf(m).length" class="process-toggle"
+                   @click="toggleProcessOf(m)">
+                <span class="chevron" :class="{ open: processExpandedOf(m) }">▸</span>
+                执行过程 · 完成 {{ completedStepCount(processItemsOf(m)) }} 步
+              </div>
+              <div v-if="m.role === 'assistant' && processExpandedOf(m) && processItemsOf(m).length"
+                   class="process-timeline">
+                <div v-for="(p, pi) in processItemsOf(m)" :key="pi" class="process-item" :class="p.kind">
+                  <template v-if="p.kind === 'reasoning' && p.reasoningText">
+                    <div class="pi-reasoning-head">思考过程<span v-if="p.reasoningMs"> · {{ (p.reasoningMs / 1000).toFixed(1) }}s</span></div>
+                    <div class="pi-reasoning-text">{{ p.reasoningText }}</div>
+                  </template>
+                  <template v-else-if="p.kind === 'tool'">
+                    <div class="pi-tool-head">
+                      <span class="pi-mark" :class="p.status">{{ p.status === 'done' ? '✓' : p.status === 'failed' ? '!' : '◌' }}</span>
+                      <span class="pi-label">{{ p.label }}</span>
+                    </div>
+                    <div v-if="p.summary" class="pi-summary">{{ p.summary }}</div>
+                    <div v-if="p.error" class="pi-error">! {{ p.error }}</div>
+                  </template>
+                </div>
+              </div>
             </div>
             <!-- AI-7D-R：流式执行过程（当前 turn）。默认只突出当前 activity + 折叠入口。 -->
             <div v-if="sending && selectedId === 'script_writer'" class="stream-area">
@@ -302,6 +325,16 @@ function realReceipts(meta: any): ScriptWriterReceipt[] {
   return meta.receipts.filter((r: ScriptWriterReceipt) => r.ok && r.verified && !r.unchanged);
 }
 
+// AI-7D-R：完成后执行过程附在 message 上保留（折叠态），事后可展开查看。
+// reasoning 文本不持久化（spec §一），刷新后丢失；tool 顺序可从 meta.trace 重建但这里
+// 直接挂前端字段（同会话内可看，够用于"事后查流程发现问题"）。
+function processItemsOf(m: any): ProcessItem[] { return m._processItems || []; }
+function processExpandedOf(m: any): boolean { return !!m._processExpanded; }
+function toggleProcessOf(m: any) { m._processExpanded = !m._processExpanded; }
+function completedStepCount(items: ProcessItem[]): number {
+  return items.filter(p => p.kind === 'tool' && p.status !== 'running').length;
+}
+
 const store = useProjectStore();
 const projectName = computed(() => store.projectName);
 const cs = useChangeSessionStore();
@@ -459,8 +492,11 @@ async function send() {
           onEvent: onStreamEvent,
           signal: turnAbort.signal,
         });
-        // 最终持久化消息（turn.completed.result.message，含 meta receipts/trace）
-        session.value.messages.push(result.message);
+        // 最终持久化消息（turn.completed.result.message，含 meta receipts/trace）。
+        // 把本轮执行过程 timeline 附上（前端字段，不持久化），完成后折叠保留可事后展开。
+        const finalMsg = { ...result.message,
+          _processItems: JSON.parse(JSON.stringify(processItems.value)) };
+        session.value.messages.push(finalMsg);
         assistantStreaming.value = '';   // 已被正式 message 取代
         // 用户未主动展开 → 完成时折叠（§十二）；已展开则保持
         if (!processExpanded.value) processExpanded.value = false;
