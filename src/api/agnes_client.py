@@ -12,7 +12,7 @@
 # （角色接口改 size_tier/ratio + result["url"]），垫片3（understand_text）随③-b 删，
 # 垫片4/5（generate_video / edge_tts.synthesize）早已删。
 from __future__ import annotations
-import asyncio, logging, random
+import asyncio, json, logging, random
 from typing import Any, Dict, List, Optional
 import httpx
 
@@ -61,6 +61,67 @@ def snap_num_frames(target_frames: int,
     if width and height:
         cap = min(cap, max_frames_for(width, height))
     return max(81, min(cap, v))
+
+
+# ---------- OpenAI 兼容 SSE 流式解析（Agnes agnes-2.5-flash 实测格式） ----------
+# 纯 async 解析器：输入 async line iterable（httpx r.aiter_lines() 或测试用假流），
+# 产出 provider 事件 dict：
+#   {"kind":"content_delta","delta":str}           —— delta.content，逐块给 UI
+#   {"kind":"reasoning_delta","delta":str}         —— delta.reasoning_content（DeepSeek 风格）
+#   {"kind":"finish","reason":"stop"|"tool_calls","content":str|None,
+#    "tool_calls":list|None,"usage":dict|None}     —— 终结，聚合完整消息（与非流式 chat_completion
+#                                                    返回形状一致，供 tool-loop 执行）
+# tool_calls 按 index 内部聚合（id/name 只首片，arguments 顺序拼接），【不】暴露原始
+# argument delta（§六：聚合完整后再交给 tool-loop）。
+async def _parse_sse_events(alines):
+    content_buf: List[str] = []
+    tool_aggs: Dict[int, Dict[str, str]] = {}
+    finish_reason: Optional[str] = None
+    usage: Optional[dict] = None
+    async for line in alines:
+        if not line or not line.startswith("data:"):
+            continue
+        payload = line[5:].strip()
+        if payload == "[DONE]":
+            continue
+        try:
+            ch = json.loads(payload)
+        except Exception:
+            # 畸形/半截 JSON 行：跳过，不中断整条流
+            continue
+        if ch.get("usage"):
+            usage = ch["usage"]
+        for choice in ch.get("choices") or []:
+            fr = choice.get("finish_reason")
+            if fr:
+                finish_reason = fr
+            d = choice.get("delta") or {}
+            # delta.content 空串 "" 不当 delta（首块 role 标记常带 content:""）
+            if d.get("content"):
+                content_buf.append(d["content"])
+                yield {"kind": "content_delta", "delta": d["content"]}
+            if d.get("reasoning_content"):
+                yield {"kind": "reasoning_delta", "delta": d["reasoning_content"]}
+            for frag in d.get("tool_calls") or []:
+                idx = frag.get("index", 0)
+                a = tool_aggs.setdefault(idx, {"id": "", "name": "", "args": ""})
+                if frag.get("id"):
+                    a["id"] += frag["id"]
+                fn = frag.get("function") or {}
+                if fn.get("name"):
+                    a["name"] += fn["name"]
+                if fn.get("arguments"):
+                    a["args"] += fn["arguments"]
+    final_content = "".join(content_buf) if content_buf else None
+    final_tool_calls = None
+    if tool_aggs:
+        final_tool_calls = [
+            {"id": a["id"] or f"call_stream_{i}", "type": "function",
+             "function": {"name": a["name"], "arguments": a["args"]}}
+            for i, a in sorted(tool_aggs.items())
+        ]
+    yield {"kind": "finish", "reason": finish_reason or "stop",
+           "content": final_content, "tool_calls": final_tool_calls, "usage": usage}
 
 
 class AgnesError(Exception):
@@ -187,6 +248,48 @@ class AgnesClient:
             "tool_calls": msg.get("tool_calls"),
             "role": msg.get("role", "assistant"),
         }
+
+    async def chat_completion_stream(self, messages: List[dict], *, temperature=0.7,
+                                      max_tokens=2048, thinking=False,
+                                      tools: Optional[List[dict]] = None,
+                                      tool_choice: Optional[Any] = None):
+        """OpenAI 兼容 streaming chat completion（原生 function-calling + reasoning）。
+
+        异步生成 provider 事件 dict（与 _parse_sse_events 相同）：
+          {"kind":"content_delta","delta":str}
+          {"kind":"reasoning_delta","delta":str}
+          {"kind":"finish","reason":"stop"|"tool_calls","content":str|None,
+           "tool_calls":list|None,"usage":dict|None}
+        tool_calls 内部按 index 聚合（id/name 只首片，arguments 顺序拼接），finish 时给
+        完整 list——与非流式 chat_completion 返回形状一致，供 tool-loop 执行；不暴露原始
+        argument delta（§六）。不影响非流式 chat_completion。"""
+        if self.quota:
+            ok, why = self.quota.can("text_calls", 1)
+            if not ok: raise AgnesError(why)
+        body: Dict[str, Any] = {"model": self.models["text"], "messages": messages,
+                                "temperature": temperature, "max_tokens": max_tokens,
+                                "stream": True}
+        if thinking:
+            body["chat_template_kwargs"] = {"enable_thinking": True}
+        if tools:
+            body["tools"] = tools
+            if tool_choice is not None:
+                body["tool_choice"] = tool_choice
+        headers = {"Authorization": f"Bearer {self.api_key}",
+                   "Content-Type": "application/json"}
+        async with httpx.AsyncClient(
+                base_url=self.base_url, headers=headers,
+                timeout=httpx.Timeout(connect=30, read=120, write=30, pool=30),
+                proxy=self.proxy, follow_redirects=True,
+                transport=self.transport) as c:
+            async with c.stream("POST", "/v1/chat/completions", json=body) as r:
+                if r.status_code != 200:
+                    body_txt = (await r.aread()).decode("utf-8", "replace")[:400]
+                    raise AgnesError(f"Agnes stream 错误 {r.status_code}: {body_txt}",
+                                     r.status_code, body_txt)
+                async for ev in _parse_sse_events(r.aiter_lines()):
+                    yield ev
+        if self.quota: self.quota.consume("text_calls", 1)
 
     # ---------- 图片 ----------
     async def generate_image(self, prompt: str, *,
