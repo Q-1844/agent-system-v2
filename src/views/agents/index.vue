@@ -99,6 +99,40 @@
               <span class="msg-role">{{ m.role }}</span>
               <span class="msg-content">{{ m.content }}</span>
               <span v-if="m.status" class="msg-status" :class="'ms-' + m.status">{{ m.status }}</span>
+              <!-- AI-7D-R §十五：本轮改动（只信 meta.receipts，不解析正文） -->
+              <div v-if="realReceipts(m.meta).length" class="receipts">
+                <div class="receipts-head">本轮改动</div>
+                <div v-for="(r, ri) in realReceipts(m.meta)" :key="ri" class="receipt-item">✓ {{ receiptLabel(r) }}</div>
+              </div>
+            </div>
+            <!-- AI-7D-R：流式执行过程（当前 turn）。默认只突出当前 activity + 折叠入口。 -->
+            <div v-if="sending && selectedId === 'script_writer'" class="stream-area">
+              <div v-if="currentActivity" class="activity">
+                <span class="spinner">◌</span>{{ currentActivity.label }}
+              </div>
+              <div v-if="assistantStreaming" class="msg assistant streaming">
+                <span class="msg-content">{{ assistantStreaming }}</span>
+              </div>
+              <div v-if="processItems.length" class="process-toggle" @click="onToggleProcess">
+                <span class="chevron" :class="{ open: processExpanded }">▸</span>
+                执行过程 · 已完成 {{ completedSteps }} 步
+              </div>
+              <div v-if="processItems.length && processExpanded" class="process-timeline">
+                <div v-for="(p, pi) in processItems" :key="pi" class="process-item" :class="p.kind">
+                  <template v-if="p.kind === 'reasoning' && p.reasoningText">
+                    <div class="pi-reasoning-head">思考过程<span v-if="p.reasoningMs"> · {{ (p.reasoningMs / 1000).toFixed(1) }}s</span></div>
+                    <div class="pi-reasoning-text">{{ p.reasoningText }}</div>
+                  </template>
+                  <template v-else-if="p.kind === 'tool'">
+                    <div class="pi-tool-head">
+                      <span class="pi-mark" :class="p.status">{{ p.status === 'done' ? '✓' : p.status === 'failed' ? '!' : '◌' }}</span>
+                      <span class="pi-label">{{ p.label }}</span>
+                    </div>
+                    <div v-if="p.summary" class="pi-summary">{{ p.summary }}</div>
+                    <div v-if="p.error" class="pi-error">! {{ p.error }}</div>
+                  </template>
+                </div>
+              </div>
             </div>
             <!-- AI-7D：变更会话审查移到 toolbar 弹窗（showReviewModal），不再内联在对话流。
                  queue/restart 二选一仍内联（执行中 + 新请求时）。 -->
@@ -111,6 +145,12 @@
             </div>
           </div>
           <div class="composer">
+            <!-- AI-7D-R §三：思考开关（发送瞬间 snapshot） -->
+            <label v-if="selectedId === 'script_writer'" class="thinking-toggle" :class="{ on: thinkingToggle }"
+                   :title="thinkingToggle ? '思考已开启（本次发送起生效）' : '思考已关闭'">
+              <input type="checkbox" v-model="thinkingToggle" />
+              <span>思考</span>
+            </label>
             <input v-model="draft" class="input" placeholder="输入消息…"
                    @keyup.enter="send" :disabled="sending" />
             <button class="btn btn-primary" :disabled="sending || !draft.trim()" @click="send">
@@ -150,16 +190,115 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { apiClient } from '@/api';
-import type { AgentInfo, AgentCapability, AgentSession, AgentTask } from '@/api';
+import type { AgentInfo, AgentCapability, AgentSession, AgentTask, AgentStreamEvent, ScriptWriterReceipt } from '@/api';
 import { useProjectStore } from '@/store';
 import { useChangeSessionStore } from '@/store/changeSession';
 import { useStickToBottom } from '@/composables/useStickToBottom';
+import { streamAgentTurn } from '@/composables/useAgentTurnStream';
 import TeamChatPanel from '@/components/agent/TeamChatPanel.vue';
 import ChangePlanReview from '@/components/agent/ChangePlanReview.vue';
 import ScriptWriterTestModal from '@/components/agent/ScriptWriterTestModal.vue';
 import DirectorTestModal from '@/components/agent/DirectorTestModal.vue';
+
+// ============ AI-7D-R 流式 Direct Chat：执行过程 UI 状态 ============
+// 思考开关（发送瞬间 snapshot 固定，运行中切换不影响当前 turn）
+const thinkingToggle = ref(false);
+// 当前 turn 的执行过程（一个折叠 timeline；多 turn 互不干扰，仅当前 turn 活跃）
+interface ProcessItem {
+  kind: 'reasoning' | 'tool';
+  step_id: number;
+  // reasoning
+  reasoningText?: string;
+  reasoningMs?: number;
+  // tool
+  call_id?: string;
+  name?: string;
+  label?: string;
+  status?: 'running' | 'done' | 'failed';
+  summary?: string;
+  error?: string;
+}
+const processItems = ref<ProcessItem[]>([]);
+const processExpanded = ref(false);   // 用户是否主动展开（完成时：未展开→自动折叠；已展开→保持）
+const currentActivity = ref<{ type: 'thinking' | 'tool'; label: string } | null>(null);
+const assistantStreaming = ref<string>('');   // assistant.delta 逐块累积（当前回复）
+let turnAbort: AbortController | null = null;
+
+function resetTurnUI() {
+  processItems.value = [];
+  processExpanded.value = false;
+  currentActivity.value = null;
+  assistantStreaming.value = '';
+}
+
+function onStreamEvent(ev: AgentStreamEvent) {
+  switch (ev.type) {
+    case 'turn.started':
+      resetTurnUI();
+      currentActivity.value = { type: 'thinking', label: '思考中…' };
+      break;
+    case 'reasoning.started':
+      currentActivity.value = { type: 'thinking', label: '思考中…' };
+      processItems.value.push({ kind: 'reasoning', step_id: ev.step_id, reasoningText: '' });
+      break;
+    case 'reasoning.delta': {
+      const it = processItems.value.find(p => p.kind === 'reasoning' && p.step_id === ev.step_id);
+      if (it) it.reasoningText = (it.reasoningText || '') + ev.delta;
+      break;
+    }
+    case 'reasoning.completed': {
+      const it = processItems.value.find(p => p.kind === 'reasoning' && p.step_id === ev.step_id);
+      if (it) it.reasoningMs = ev.duration_ms;
+      break;
+    }
+    case 'tool.started':
+      currentActivity.value = { type: 'tool', label: `正在${ev.label}…` };
+      processItems.value.push({ kind: 'tool', step_id: ev.step_id, call_id: ev.call_id,
+        name: ev.name, label: ev.label, status: 'running' });
+      break;
+    case 'tool.completed': {
+      const it = processItems.value.find(p => p.kind === 'tool' && p.call_id === ev.call_id);
+      if (it) { it.status = ev.ok ? 'done' : 'failed'; it.summary = ev.summary; }
+      break;
+    }
+    case 'tool.failed': {
+      const it = processItems.value.find(p => p.kind === 'tool' && p.call_id === ev.call_id);
+      if (it) { it.status = 'failed'; it.error = ev.error; }
+      break;
+    }
+    case 'assistant.delta':
+      assistantStreaming.value += ev.delta;
+      currentActivity.value = null;   // 最终回复流出 → 无 activity
+      break;
+    case 'turn.completed':
+    case 'turn.failed':
+      currentActivity.value = null;
+      break;
+  }
+}
+
+// 完成 N 步计数（含 reasoning + tool）
+const completedSteps = computed(() =>
+  processItems.value.filter(p => p.kind === 'tool' && (p.status === 'done' || p.status === 'failed')).length);
+// 默认完成时折叠，除非用户手动展开过
+function onToggleProcess() { processExpanded.value = !processExpanded.value; }
+
+// receipts → 「本轮改动」轻量渲染（只信结构化 receipts，不解析正文）
+function receiptLabel(r: ScriptWriterReceipt): string {
+  const op = r.operation || '';
+  if (op === 'story.create') return `创建 ${r.scene_id || ''}`.trim();
+  if (op === 'story.move') return `移动 ${r.scene_id || ''}`.trim();
+  if (op === 'story.update') return `修改 ${r.scene_id || ''}`.trim();
+  if (op === 'story.delete') return `删除 ${r.scene_id || ''}`.trim();
+  if (op === 'script.update') return '更新剧本正文';
+  return op;
+}
+function realReceipts(meta: any): ScriptWriterReceipt[] {
+  if (!meta || !Array.isArray(meta.receipts)) return [];
+  return meta.receipts.filter((r: ScriptWriterReceipt) => r.ok && r.verified && !r.unchanged);
+}
 
 const store = useProjectStore();
 const projectName = computed(() => store.projectName);
@@ -305,6 +444,30 @@ async function send() {
         sourceSessionId: session.value.session_id,
       });
       session.value.messages.push(...msgs);
+    } else if (isDirectEdit) {
+      // AI-7D-R 流式：script_writer 走 /turn/stream。发送瞬间 snapshot 固定 thinking。
+      const thinkingSnapshot = thinkingToggle.value;
+      resetTurnUI();
+      turnAbort = new AbortController();
+      try {
+        const result = await streamAgentTurn({
+          projectName: projectName.value,
+          sessionId: session.value.session_id,
+          content, thinking: thinkingSnapshot,
+          onEvent: onStreamEvent,
+          signal: turnAbort.signal,
+        });
+        // 最终持久化消息（turn.completed.result.message，含 meta receipts/trace）
+        session.value.messages.push(result.message);
+        assistantStreaming.value = '';   // 已被正式 message 取代
+        // 用户未主动展开 → 完成时折叠（§十二）；已展开则保持
+        if (!processExpanded.value) processExpanded.value = false;
+      } catch (e: any) {
+        if (e.name === 'AbortError') { /* 用户取消，静默 */ }
+        else throw e;
+      } finally {
+        turnAbort = null;
+      }
     } else {
       const result = await apiClient.agentTurn(projectName.value, session.value.session_id, content);
       session.value.messages.push(result.message);   // assistant AgentMessage（含 meta）
@@ -315,6 +478,7 @@ async function send() {
     chatError.value = '发送失败: ' + (e.message || e);
   } finally {
     sending.value = false;
+    currentActivity.value = null;   // 无论如何结束 loading（§二十一）
   }
 }
 
@@ -371,6 +535,11 @@ onMounted(async () => {
   loadAgents();
   // AI-7D D2：恢复进行中的变更会话（F5 不丢真 ChangeSession 真相）
   if (projectName.value) { await cs.restoreActive(); }
+});
+
+// AI-7D-R：离开页面/组件卸载时取消进行中的流式 turn
+onUnmounted(() => {
+  if (turnAbort) { try { turnAbort.abort(); } catch (e) {} turnAbort = null; }
 });
 </script>
 
@@ -432,9 +601,42 @@ onMounted(async () => {
 .msg-status { font-size: 10px; margin-top: 2px; }
 .ms-not_configured { color: #fbbf24; }
 .ms-failed { color: #f87171; }
-.composer { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--border); }
+.composer { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--border); align-items: center; }
 .composer .input { flex: 1; }
 .chat-err { color: #f87171; font-size: 11px; padding: 0 10px 8px; }
+
+/* AI-7D-R · 思考开关（§二十五：克制视觉） */
+.thinking-toggle { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-secondary, #9399b2); cursor: pointer; user-select: none; padding: 0 4px; }
+.thinking-toggle.on { color: var(--text-primary, #cdd6f4); }
+.thinking-toggle input { accent-color: #60a5fa; }
+
+/* AI-7D-R · 流式执行过程 UI */
+.stream-area { margin: 6px 0; }
+.activity { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary, #9399b2); padding: 4px 2px; }
+.spinner { display: inline-block; animation: sw-spin 1s linear infinite; }
+@keyframes sw-spin { to { transform: rotate(360deg); } }
+.msg.streaming { align-self: flex-start; background: rgba(255,255,255,.05); }
+.process-toggle { font-size: 11px; color: var(--text-secondary, #9399b2); cursor: pointer; padding: 4px 2px; user-select: none; }
+.process-toggle:hover { color: var(--text-primary, #cdd6f4); }
+.chevron { display: inline-block; transition: transform .15s; }
+.chevron.open { transform: rotate(90deg); }
+.process-timeline { margin: 4px 0 8px; padding: 8px 10px; border-left: 2px solid var(--border, rgba(255,255,255,.08)); display: flex; flex-direction: column; gap: 10px; }
+.process-item { font-size: 12px; }
+.pi-reasoning-head { color: var(--text-secondary, #9399b2); font-size: 11px; margin-bottom: 2px; }
+.pi-reasoning-text { white-space: pre-wrap; word-break: break-word; line-height: 1.5; color: var(--text-secondary, #9399b2); font-size: 12px; padding: 2px 0; }
+.pi-tool-head { display: flex; align-items: center; gap: 6px; }
+.pi-mark { font-size: 12px; }
+.pi-mark.done { color: #4ade80; }
+.pi-mark.failed { color: #f87171; }
+.pi-mark.running { color: var(--text-secondary, #9399b2); }
+.pi-label { color: var(--text-primary, #cdd6f4); }
+.pi-summary { font-size: 11px; color: var(--text-secondary, #9399b2); padding-left: 18px; }
+.pi-error { font-size: 11px; color: #f87171; padding-left: 18px; }
+
+/* AI-7D-R · 本轮改动（receipts 结构化） */
+.receipts { margin-top: 6px; padding: 6px 8px; border-left: 2px solid #4ade80; background: rgba(74,222,128,.06); border-radius: 0 6px 6px 0; }
+.receipts-head { font-size: 11px; color: #4ade80; margin-bottom: 2px; }
+.receipt-item { font-size: 11px; color: var(--text-secondary, #9399b2); }
 
 .change-choice { margin: 8px 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-surface); }
 .cc-q { font-size: 12px; color: var(--text-primary); margin-bottom: 6px; }
