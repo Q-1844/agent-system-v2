@@ -11,8 +11,10 @@ composition root：本文件是唯一 import routers.production_planner 的地�
 """
 from typing import List, Optional
 import asyncio
+import json
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 import deps
@@ -137,6 +139,11 @@ class SendMessageReq(BaseModel):
     content: str
 
 
+class StreamTurnReq(BaseModel):
+    content: str
+    thinking: bool = False
+
+
 class DelegateReq(BaseModel):
     requester_agent: str = "producer"
     target_agent: str
@@ -228,6 +235,77 @@ async def agent_turn(project_name: str, sid: str, req: SendMessageReq):
         return await get_agent_runtime().unified_turn(project_name, sid, req.content)
     except AgentError as e:
         _raise(e)
+
+
+@router.post("/api/project/{project_name}/agents/sessions/{sid}/turn/stream")
+async def agent_turn_stream(project_name: str, sid: str, req: StreamTurnReq):
+    """AI-7D-R · Script Writer 流式 Direct Chat turn（/turn 不动，新接口）。
+
+    发送瞬间把 req.thinking snapshot 固定为本 turn 配置，整个 tool-loop 所有 LLM sub-call
+    用同一个值（运行中前端切换开关不影响当前 turn）。逐 AgentStreamEvent SSE forward：
+      turn.started → reasoning.* / tool.* / assistant.delta → turn.completed(完整结果) /
+      turn.failed。turn.completed.result 仍是现有 script_writer_turn 16 键最终结构（与 /turn
+      等价），持久化语义不变（一条 user + 一条 assistant+meta）。原 /turn 行为零变化。"""
+    rt = get_agent_runtime()
+    # 与 unified_turn 同源的前置校验（仅 script_writer project scope 走流式）
+    store = rt._session_store(project_name)
+    session = store.load(sid)
+    if session is None:
+        _raise(AgentError("unknown_scope", f"session 不存在: {sid}"))
+    if session.agent_id != "script_writer":
+        _raise(AgentError("permission_denied",
+                          "流式 turn 当前仅支持 Script Writer 会话"))
+    from src.agents.script_writer import script_writer_turn
+    from src.core.models import ScopeType
+    if session.scope_type != ScopeType.PROJECT.value:
+        _raise(AgentError("unsupported_scope", "流式 turn 仅支持 project scope"))
+
+    thinking_fixed = bool(req.thinking)   # snapshot：本 turn 全程不变
+
+    async def event_gen():
+        import asyncio as _aio
+        loop = _aio.get_running_loop()
+        q: _aio.Queue = _aio.Queue()
+        SENTINEL = object()
+
+        def _cb(ev):
+            try:
+                loop.call_soon_threadsafe(q.put_nowait, ev)
+            except RuntimeError:
+                pass
+
+        async def _run():
+            try:
+                result = await script_writer_turn(
+                    rt, project_name, sid, req.content,
+                    thinking=thinking_fixed, event_cb=_cb)
+                await _aio.to_thread(q.put_nowait, {"type": "turn.completed", "result": result})
+            except AgentError as e:
+                await _aio.to_thread(q.put_nowait, {"type": "turn.failed", "error": e.message})
+            except Exception as e:
+                await _aio.to_thread(q.put_nowait, {"type": "turn.failed", "error": str(e)[:300]})
+            finally:
+                await _aio.to_thread(q.put_nowait, SENTINEL)
+
+        task = _aio.ensure_future(_run())
+        # turn.started（thinking snapshot 在这里固定宣告）
+        yield "data: " + json.dumps({"type": "turn.started", "thinking": thinking_fixed},
+                                    ensure_ascii=False) + "\n\n"
+        try:
+            while True:
+                ev = await q.get()
+                if ev is SENTINEL:
+                    break
+                yield "data: " + json.dumps(ev, ensure_ascii=False) + "\n\n"
+        finally:
+            if not task.done():
+                task.cancel()
+                try:
+                    await task
+                except Exception:
+                    pass
+
+    return StreamingResponse(event_gen(), media_type="text/event-stream")
 
 
 # ==================== Tasks（Producer delegation）====================

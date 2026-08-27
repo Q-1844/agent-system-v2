@@ -26,6 +26,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import time
 from typing import Any, Optional
 
 from src.core.store import ProjectStore
@@ -67,6 +68,32 @@ def _trace_entry(step: int, name: str, args: str, obs: dict) -> dict:
                   else (obs.get("error") or obs.get("code"))),
         "ok": bool(obs.get("ok")),
     }
+
+# AI-7D-R 流式 UI：工具事件的确定性人类可读 label / summary（复用 _op_human，不让前端
+# 重新解释 JSON）。只读工具给通用描述；写工具用 _op_human 的真实回执描述。
+_TOOL_LABELS = {
+    "script.read": "读取剧本", "script.update": "更新剧本",
+    "story.list": "读取故事段", "story.read": "读取故事段",
+    "story.create": "创建故事段", "story.move": "移动故事段",
+    "story.update": "修改故事段", "story.delete": "删除故事段",
+}
+
+
+def _tool_label(name: str) -> str:
+    return _TOOL_LABELS.get(name, name)
+
+
+def _tool_summary(name: str, obs: dict) -> str:
+    """tool.completed 的 summary：成功用 _op_human 真实描述，失败给原因。"""
+    if obs.get("ok"):
+        if obs.get("operation"):
+            return _op_human(obs)
+        return f"{_tool_label(name)}完成"
+    why = obs.get("error") or obs.get("code") or "失败"
+    if obs.get("stale"):
+        why = "版本过期，已拒绝"
+    return f"{_tool_label(name)}未完成：{why}"
+
 
 # 写工具集合（只有这些可能产生 canonical 变更，需要回执 + 落盘校验）。
 WRITE_OPERATIONS = {"script.update", "story.create", "story.move",
@@ -972,10 +999,13 @@ async def _maybe_auto_confirm_deletes(rt: AgentRuntime, project: str,
 
 # ============ 主 turn ============
 async def script_writer_turn(rt: AgentRuntime, project: str, session_id: str,
-                             content: str) -> dict:
+                             content: str, *, thinking: bool = False,
+                             event_cb=None) -> dict:
     """Script Writer 原生 tool-loop turn。
 
-    返回 {assistant_message, edited, created, moved, events, message, ...}。"""
+    返回 {assistant_message, edited, created, moved, events, message, ...}。
+    thinking/event_cb 仅流式端点 /turn/stream 传入（snapshot 固定）；默认值时行为与
+    既有 /turn 完全一致（非流式 chat_completion + 无事件）。"""
     store = rt._session_store(project)
     session = store.load(session_id)
     if session is None:
@@ -1045,7 +1075,8 @@ async def script_writer_turn(rt: AgentRuntime, project: str, session_id: str,
                 messages.append({"role": "assistant", "content": note})
 
         try:
-            final = await _run_tool_loop(rt, client, project, messages, content, user_msg.message_id)
+            final = await _run_tool_loop(rt, client, project, messages, content, user_msg.message_id,
+                                         thinking=thinking, event_cb=event_cb)
             assistant_text = final["text"]
             edited = final["edited"]
             created = final["created"]
@@ -1322,7 +1353,9 @@ def _append_fact_summary(rt: AgentRuntime, project: str, text: str, receipts: li
 async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                          messages: list, instruction: str,
                          message_id: Optional[str],
-                         max_steps: int = DEFAULT_MAX_TOOL_STEPS) -> dict:
+                         max_steps: int = DEFAULT_MAX_TOOL_STEPS,
+                         thinking: bool = False,
+                         event_cb=None) -> dict:
     """原生 function-calling 循环 + 执行真实性收口（结构性，非提示词）。
 
     每轮：
@@ -1349,12 +1382,45 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
     last_fail_sig = None         # (tool, error/code) 去重签名
 
     for step in range(max_steps):
-        resp = await client.chat_completion(
-            messages, temperature=0.7, max_tokens=65536,
-            tools=SCRIPT_WRITER_TOOLS, tool_choice="auto")
-
-        tool_calls = resp.get("tool_calls")
-        content = resp.get("content")
+        # AI-7D-R 流式：event_cb 存在时走 chat_completion_stream，实时 forward
+        # reasoning_delta；content 缓冲到 step 末，仅最终回复（无 tool_calls）才作
+        # assistant.delta 流出——与持久化（只存最终 step content）严格一致。无 event_cb
+        # 时走原非流式 chat_completion，行为零变化。
+        content = None
+        tool_calls = None
+        if event_cb:
+            step_reasoning_started = False
+            step_reason_t0 = 0.0
+            step_content_buf: list[str] = []
+            async for ev in client.chat_completion_stream(
+                    messages, temperature=0.7, max_tokens=65536,
+                    thinking=thinking, tools=SCRIPT_WRITER_TOOLS,
+                    tool_choice="auto"):
+                k = ev["kind"]
+                if k == "content_delta":
+                    step_content_buf.append(ev["delta"])
+                elif k == "reasoning_delta":
+                    if not step_reasoning_started:
+                        step_reasoning_started = True
+                        step_reason_t0 = time.perf_counter()
+                        event_cb({"type": "reasoning.started", "step_id": step})
+                    event_cb({"type": "reasoning.delta", "step_id": step,
+                              "delta": ev["delta"]})
+                elif k == "finish":
+                    content = ev["content"]
+                    tool_calls = ev["tool_calls"]
+            if step_reasoning_started:
+                event_cb({"type": "reasoning.completed", "step_id": step,
+                          "duration_ms": int((time.perf_counter() - step_reason_t0) * 1000)})
+            if not tool_calls and step_content_buf:
+                for d in step_content_buf:
+                    event_cb({"type": "assistant.delta", "delta": d})
+        else:
+            resp = await client.chat_completion(
+                messages, temperature=0.7, max_tokens=65536,
+                tools=SCRIPT_WRITER_TOOLS, tool_choice="auto")
+            tool_calls = resp.get("tool_calls")
+            content = resp.get("content")
 
         if not tool_calls:
             text = (content or "").strip()
@@ -1432,6 +1498,11 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
             args = fn.get("arguments") or "{}"
             call_id = tc.get("id") or name
 
+            # AI-7D-R 流式：tool.started（执行/拒绝前）
+            if event_cb:
+                event_cb({"type": "tool.started", "step_id": step, "call_id": call_id,
+                          "name": name, "label": _tool_label(name)})
+
             # 思路①：写工具串行。同一步若模型一次发多个写工具，只执行第1个，
             # 第2个起直接拒绝（ok=false），要求等前一个写完成拿最新 revision 再发下一个。
             # 只读工具（script.read/story.list/story.read）可批量。这从根上消除
@@ -1448,19 +1519,26 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                 messages.append({"role": "tool", "tool_call_id": call_id,
                                  "content": json.dumps(obs, ensure_ascii=False)})
                 trace.append(_trace_entry(step, name, args, obs))
+                if event_cb:
+                    event_cb({"type": "tool.completed", "step_id": step,
+                              "call_id": call_id, "name": name, "ok": False,
+                              "summary": "本步写工具串行，已跳过"})
                 continue
 
             executor = TOOL_EXECUTORS.get(name)
+            exc_msg = None   # AI-7D-R 流式：异常→tool.failed，否则→tool.completed
             if executor is None:
                 obs = {"ok": False, "error": f"未知工具：{name}", "operation": name}
             else:
                 try:
                     obs = executor(rt, project, args, instruction, message_id)
                 except AgentError as e:
+                    exc_msg = e.message
                     obs = {"ok": False, "error": e.message, "code": e.code,
                            "operation": name}
                 except Exception as e:
-                    obs = {"ok": False, "error": f"工具执行异常：{str(e)[:200]}",
+                    exc_msg = f"工具执行异常：{str(e)[:200]}"
+                    obs = {"ok": False, "error": exc_msg,
                            "operation": name}
 
             # —— 防失控（需求 #11）：连续同一工具同一失败签名 → 诚实停止，不无限重试 ——
@@ -1489,6 +1567,14 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                     messages.append({"role": "user", "content": nudge})
                     trace.append(_trace_entry(step, name, args, obs))
                     _refresh_system(messages, rt, project)
+                    if event_cb:
+                        if exc_msg:
+                            event_cb({"type": "tool.failed", "step_id": step, "call_id": call_id,
+                                      "name": name, "error": exc_msg})
+                        else:
+                            event_cb({"type": "tool.completed", "step_id": step, "call_id": call_id,
+                                      "name": name, "ok": False,
+                                      "summary": _tool_summary(name, obs)})
                     break   # 跳出 tool_calls 循环，回到 step 循环让模型重新决定
 
             # 写域调用：记入账本（含已知写工具 + 看似写工具但未知/拼错的，如 story.insert）。
@@ -1542,6 +1628,15 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                                    "scene_id": obs["scene_id"], "summary": s})
                     summary = s
 
+            # AI-7D-R 流式：tool.completed / tool.failed（据真实 obs/exc_msg，非模型叙述）
+            if event_cb:
+                if exc_msg:
+                    event_cb({"type": "tool.failed", "step_id": step, "call_id": call_id,
+                              "name": name, "error": exc_msg})
+                else:
+                    event_cb({"type": "tool.completed", "step_id": step, "call_id": call_id,
+                              "name": name, "ok": bool(obs.get("ok")),
+                              "summary": _tool_summary(name, obs)})
             messages.append({"role": "tool", "tool_call_id": call_id,
                              "content": json.dumps(obs, ensure_ascii=False)})
 
