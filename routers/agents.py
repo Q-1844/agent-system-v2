@@ -256,7 +256,7 @@ async def agent_turn_stream(project_name: str, sid: str, req: StreamTurnReq):
         _raise(AgentError("permission_denied",
                           "流式 turn 当前仅支持 Script Writer 会话"))
     from src.agents.script_writer import script_writer_turn
-    from src.core.models import ScopeType
+    from src.agents.models import ScopeType
     if session.scope_type != ScopeType.PROJECT.value:
         _raise(AgentError("unsupported_scope", "流式 turn 仅支持 project scope"))
 
