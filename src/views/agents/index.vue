@@ -145,11 +145,13 @@
             </div>
           </div>
           <div class="composer">
-            <!-- AI-7D-R §三：思考开关（发送瞬间 snapshot） -->
+            <!-- AI-7D-R §三：思考开关（发送瞬间 snapshot）。滑动 toggle，视觉非 checkbox。 -->
             <label v-if="selectedId === 'script_writer'" class="thinking-toggle" :class="{ on: thinkingToggle }"
                    :title="thinkingToggle ? '思考已开启（本次发送起生效）' : '思考已关闭'">
-              <input type="checkbox" v-model="thinkingToggle" />
-              <span>思考</span>
+              <input type="checkbox" v-model="thinkingToggle" class="tt-sr-only" role="switch"
+                     :aria-checked="thinkingToggle" aria-label="思考模式" />
+              <span class="tt-label">思考</span>
+              <span class="tt-track"><span class="tt-thumb"></span></span>
             </label>
             <input v-model="draft" class="input" placeholder="输入消息…"
                    @keyup.enter="send" :disabled="sending" />
@@ -605,10 +607,15 @@ onUnmounted(() => {
 .composer .input { flex: 1; }
 .chat-err { color: #f87171; font-size: 11px; padding: 0 10px 8px; }
 
-/* AI-7D-R · 思考开关（§二十五：克制视觉） */
-.thinking-toggle { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-secondary, #9399b2); cursor: pointer; user-select: none; padding: 0 4px; }
+/* AI-7D-R · 思考滑动 toggle（§二十五：克制视觉；纯样式，逻辑仍 checkbox+v-model） */
+.thinking-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary, #9399b2); cursor: pointer; user-select: none; padding: 0 2px; }
 .thinking-toggle.on { color: var(--text-primary, #cdd6f4); }
-.thinking-toggle input { accent-color: #60a5fa; }
+.tt-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.tt-track { position: relative; width: 30px; height: 16px; border-radius: 8px; background: rgba(255,255,255,.16); transition: background .18s ease; flex-shrink: 0; }
+.thinking-toggle.on .tt-track { background: #60a5fa; }
+.tt-thumb { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; transition: transform .18s ease; }
+.thinking-toggle.on .tt-thumb { transform: translateX(14px); }
+.thinking-toggle:focus-within .tt-track { outline: 2px solid rgba(96,165,250,.4); outline-offset: 1px; }
 
 /* AI-7D-R · 流式执行过程 UI */
 .stream-area { margin: 6px 0; }
