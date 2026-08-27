@@ -68,10 +68,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAgentUiStore } from '@/store/agentUi';
 import { useChangeSessionStore } from '@/store/changeSession';
+import { useStickToBottom } from '@/composables/useStickToBottom';
 import AgentContextChips from './AgentContextChips.vue';
 
 const store = useAgentUiStore();
@@ -180,14 +181,21 @@ function statusLabel(s: string) {
   return s;
 }
 
-// 新消息自动滚到底
-watch(() => store.messages.length, async () => {
-  await nextTick();
-  if (listEl.value) listEl.value.scrollTop = listEl.value.scrollHeight;
-}, { flush: 'post' });
-
-onMounted(() => window.addEventListener('resize', onResize));
-onBeforeUnmount(() => window.removeEventListener('resize', onResize));
+// 智能贴底：打开会话跳最新；新消息时仅当用户原本贴底才跟随（查看历史时不强拉）。
+const stick = useStickToBottom(listEl);
+onMounted(() => {
+  window.addEventListener('resize', onResize);
+  stick.bind();
+  if (store.conversationOpen) stick.pinToBottom();
+});
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', onResize);
+  stick.unbind();
+});
+// 展开会话（含切换/载入历史消息）→ 定位最新。
+watch(() => store.conversationOpen, (open) => { if (open) stick.pinToBottom(); });
+// 新消息到达 → 贴底才跟随，不打断用户查看历史。
+watch(() => store.messages.length, () => { stick.followIfStuck(); });
 </script>
 
 <style lang="scss" scoped>
@@ -304,6 +312,8 @@ onBeforeUnmount(() => window.removeEventListener('resize', onResize));
   &.assistant { align-self: flex-start; background: var(--bg-hover); color: var(--text-primary); }
 }
 .acs-msg-status { font-size: 10px; margin-top: 1px; }
+/* 复用测试弹窗的正文渲染：保留换行、长词折行；不引入 v-html/markdown 解析，不改消息正文。 */
+.acs-msg-content { white-space: pre-wrap; word-break: break-word; }
 .ms-not_configured { color: var(--warning); }
 .ms-failed { color: var(--error); }
 

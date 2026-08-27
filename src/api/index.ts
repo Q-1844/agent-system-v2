@@ -1770,6 +1770,37 @@ class ApiClient {
     });
   }
 
+  // ============ AI-7D-R · Script Writer 最小测试弹窗（隔离，单工具 edit_story_text）============
+  async scriptWriterTestTurn(projectName: string, content: string): Promise<{
+    assistant_message: string; edited: boolean; new_story_text?: string | null;
+    old_story_text?: string | null; message: AgentMessage;
+  }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/agents/script-writer-test/turn`, {
+      method: 'POST', body: JSON.stringify({ content }),
+    });
+  }
+  async scriptWriterTestSession(projectName: string): Promise<AgentSession> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/agents/script-writer-test/session`);
+  }
+
+  // ============ AI-7D-R · Director 最小测试弹窗（隔离，增/删/改故事段与镜头）============
+  async directorTestTurn(projectName: string, content: string): Promise<{
+    assistant_message: string; edited: boolean;
+    added_scenes?: any[] | null; added_shots?: any[] | null;
+    updated_scenes?: any[] | null; updated_shots?: any[] | null;
+    deleted_scenes?: string[] | null; deleted_shots?: string[] | null;
+    deleted_preview?: any | null;
+    removed_files?: number | null; plan_removed?: boolean | null;
+    message: AgentMessage;
+  }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/agents/director-test/turn`, {
+      method: 'POST', body: JSON.stringify({ content }),
+    });
+  }
+  async directorTestSession(projectName: string): Promise<AgentSession> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/agents/director-test/session`);
+  }
+
   // ============ AI-7A Team Group Chat（polling-first，不新增 realtime bus）============
   async getTeamThread(projectName: string): Promise<TeamThreadData> {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/team-chat/thread`);

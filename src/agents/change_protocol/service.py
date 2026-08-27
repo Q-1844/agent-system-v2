@@ -25,7 +25,7 @@ from ..runtime import AgentRuntime, AgentError
 from ..inquiry import classify_request, _pack_text
 from .models import (ChangeRequest, ChangeSession, UnifiedChangePlan, PlanApproval,
                       ChangeDecisionRequest, ChangeDecisionOption, ModuleProposal,
-                      ModuleProposalItem, SESSION_TERMINAL)
+                      ModuleProposalItem, SESSION_TERMINAL, SESSION_SETTLED)
 # AI-7D D3：EXEC_TERMINAL 用于 active_workflow_snapshot 的 execution 终态过滤
 #（execution_models 仅 stdlib import，无循环依赖）。
 from .execution_models import EXEC_TERMINAL
@@ -244,13 +244,19 @@ def _has_completed_proposal(store: ChangeProtocolStore, session_id: str,
                for p in store.list_proposals(session_id))
 
 
-def _classification_with_scope(request_text: str, proj, change_request) -> dict:
+def _classification_with_scope(request_text: str, proj, change_request,
+                                session: Optional[ChangeSession] = None) -> dict:
     """H3 §9：classify_request + 持久化 context_scope（entity_refs）合并。
     页面上下文（选中 Scene/Shot/Character）自动解析指向，Agent 不反问 Which Scene/Character。
     文本里显式写出的 ref 优先（去重合并），scope 仅补齐缺失。
     模块补充**只看 scope**（entity_refs）：文本提及角色名只是叙事引用（如「让 Aran 离开城市」
-    是剧本变更），不代表要改角色设定——不据此加 character_designer（回归测试锚定该语义）。"""
-    classification = dict(classify_request(request_text, proj))
+    是剧本变更），不代表要改角色设定——不据此加 character_designer（回归测试锚定该语义）。
+
+    AI-7D-R §11：修订反馈（session.latest_feedback）拼入分类文本，使反馈真正影响路由。"""
+    effective_text = request_text
+    if session is not None and getattr(session, "latest_feedback", None):
+        effective_text = request_text + "\n[用户对方案的修订反馈] " + session.latest_feedback
+    classification = dict(classify_request(effective_text, proj))
     scope_chars, scope_scenes, scope_shots = [], [], []
     for ref in (change_request.entity_refs or []):
         et, eid = ref.get("entity_type"), ref.get("entity_id")
@@ -288,25 +294,34 @@ async def _run_first_round_proposals(rt: AgentRuntime, project: str,
     intel = rt.project_intelligence(project)
     proj = intel._project()
     classification = _classification_with_scope(
-        change_request.original_user_request, proj, change_request)
+        change_request.original_user_request, proj, change_request, session=session)
     modules = classification.get("modules") or []
     store = _store(rt, project)
     sig = session.source_snapshot_signature
     scene_refs = classification.get("scene_refs", [])
+    # AI-7D-R §11：修订反馈必须真实到达 agent。用 effective_request（原文+反馈）替换传入
+    # proposal runtime 的不可变 original_user_request（不修改持久化的 ChangeRequest）。
+    import dataclasses as _dc
+    effective_request = change_request
+    if getattr(session, "latest_feedback", None):
+        effective_request = _dc.replace(
+            change_request,
+            original_user_request=(change_request.original_user_request
+                                   + "\n[用户对方案的修订反馈] " + session.latest_feedback))
     coros = []
     for agent_id in modules:
         if _has_completed_proposal(store, session.session_id, agent_id, 1):
             continue   # §25：已完成不重跑
         if agent_id == "script_writer":
             coros.append(run_script_proposal(rt, project, session.session_id,
-                                              change_request, sig, round=1, client=client))
+                                              effective_request, sig, round=1, client=client))
         elif agent_id == "character_designer":
             coros.append(run_character_proposal(rt, project, session.session_id,
-                                                change_request, sig, round=1, client=client))
+                                                effective_request, sig, round=1, client=client))
         elif agent_id == "director" and scene_refs:
             # Director scene-scoped：首轮取第一个命中场景；无 scene scope → 延后 round 2（§26）
             coros.append(run_storyboard_proposal(rt, project, session.session_id,
-                                                  change_request, sig, "scene",
+                                                  effective_request, sig, "scene",
                                                   scene_refs[0], round=1, client=client))
     if not coros:
         return []
@@ -413,6 +428,37 @@ async def _run_director_round2(rt, project: str, session: ChangeSession,
 
 
 # ============ 分析 + 编译 + 校验（§23/§27/§28/§33/§41）============
+def _terminate_no_action(rt: AgentRuntime, project: str, session: ChangeSession,
+                          completed: List[ModuleProposal], request: ChangeRequest,
+                          store: ChangeProtocolStore) -> dict:
+    """AI-7D-R §10：所有 specialist 都确认没有可执行改动，也无真实待决问题 → 终态 no_action。
+    不伪造 A/B 方案、不声称已修改。把诚实结论写回来源直聊会话（耐久，非前端合成），
+    并记录共享工作记忆。"""
+    summaries = [p.summary for p in completed if p.summary]
+    reason = summaries[0] if summaries else "已检视当前项目，这条请求无需产生实际修改。"
+    session.status = "no_action"
+    session.no_action_reason = reason
+    session.error = None
+    store.save_session(session)
+    # 写回来源直聊会话（best-effort），让“刚才那个不要”等在转录里有真实耐久记录
+    if request.source_session_id:
+        try:
+            rt.append_session_message(
+                project, request.source_session_id, "assistant",
+                f"我核对了当前项目状态：{reason} 没有产生项目修改。",
+                linked_work_ids=[session.session_id])
+        except Exception:
+            pass
+    try:
+        rt.record_work(project, "change", reason or "无可执行改动",
+                       participants=[p.owner_agent_id for p in completed],
+                       references={"change_session_id": session.session_id},
+                       affected_domains=[], status="no_action")
+    except Exception:
+        pass
+    return session.to_dict()
+
+
 async def _analyze_and_compile(rt: AgentRuntime, project: str, session: ChangeSession) -> dict:
     """7B-3：proposals 完成后 → 依赖/impact/冲突 → 创作决策 → 定向 round 2 → 编译 plan → 校验。
     终态：awaiting_user_decision（有 blocking 决策）/ blocked（硬冲突或校验失败）/ validating_plan
@@ -450,6 +496,12 @@ async def _analyze_and_compile(rt: AgentRuntime, project: str, session: ChangeSe
         store.save_session(session)
         return session.to_dict()
     answered_decision_ids = [d.decision_id for d in decisions if d.status == "answered"]
+
+    # AI-7D-R §10：所有提案都没有任何可执行 item，也没有真实待决问题 → 诚实的 no_action
+    # 终态（不伪造 A/B 方案、不假装修改）。前端/对话据此自然回复“无需改动”。
+    any_items = any((p.items or []) for p in completed)
+    if not any_items and not answered_decision_ids:
+        return _terminate_no_action(rt, project, session, completed, request, store)
 
     # §27/§28/§33：确定性事实
     dep_facts = build_dependency_facts(completed, intel)
@@ -731,14 +783,23 @@ def reject_plan(rt: AgentRuntime, project: str, session_id: str,
     return {"rejected": True, "session_id": session_id, "plan_id": plan_id}
 
 
-# ============ request_changes（§78：版本链，不覆写历史）============
+# ============ request_changes（§78 版本链 + AI-7D-R §7/§11 真实反馈）============
 def request_changes(rt: AgentRuntime, project: str, session_id: str,
                     feedback_message: str, plan_id: Optional[str] = None) -> dict:
-    """用户请求修改 → plan version+1（§78/§79）。旧 plan=superseded（保留）；新 plan=draft
-    （parent_plan_id 指向旧）。仅受影响咨询重跑在 7B-2..4；7B-1 只做版本骨架。"""
+    """用户对**仍开放的**方案请求修改 → plan version+1（§78/§79），旧 plan=superseded。
+
+    AI-7D-R 纠正（根因 #1）：
+    - 已落定/blocked 的会话**不接受**新反馈——新变更必须基于最新 canonical 新建会话
+      （SESSION_SETTLED 含 approved_for_execution/rejected/stale/failed/cancelled/no_action/blocked）。
+      抛 CHANGE_SESSION_SETTLED，前端据此走新建路径，不再吞消息/撞 PLAN_SOURCE_STALE。
+    - 反馈是真实修订指令：写入 session.latest_feedback，并把已有 completed 提案标记 superseded，
+      使下一轮 resume 真正重跑 agent（不再“跳过已完成提案→从旧提案重编”，让反馈到达 LLM）。"""
     store = _store(rt, project)
     session = _load_session(rt, project, session_id)
     _guard_legacy(session)
+    if session.status in SESSION_SETTLED:
+        raise AgentError("CHANGE_SESSION_SETTLED",
+                         "该变更会话已落定，新修改请基于当前项目版本新建会话")
     cur_sig = _current_signature(rt, project)
     if session.source_snapshot_signature and cur_sig != session.source_snapshot_signature:
         session.status = "stale"
@@ -751,6 +812,12 @@ def request_changes(rt: AgentRuntime, project: str, session_id: str,
             raise AgentError("PLAN_NOT_READY", "plan 不存在或不属于该 session")
         old_plan.status = "superseded"
         store.save_plan(old_plan)
+    # AI-7D-R：把旧 round 的 completed 提案标 superseded，_has_completed_proposal 即不再跳过，
+    # resume → _run_first_round_proposals 会用含 latest_feedback 的请求真实重跑各 agent。
+    for prop in store.list_proposals(session_id):
+        if prop.status == "completed":
+            prop.status = "superseded"
+            store.save_proposal(prop)
     new_version = (old_plan.version + 1) if old_plan else (session.plan_version + 1)
     new_plan = UnifiedChangePlan(
         plan_id=_new_id("plan"), change_session_id=session_id,
@@ -761,7 +828,10 @@ def request_changes(rt: AgentRuntime, project: str, session_id: str,
     store.save_plan(new_plan)
     session.active_plan_id = new_plan.plan_id
     session.plan_version = new_version
-    session.status = "routing"   # 重新进入推进（7B-2..4 触发定向再咨询）
+    session.latest_feedback = (feedback_message or "").strip() or None
+    session.consultation_round = 1
+    session.status = "routing"   # 重新进入推进（真实重跑受影响 agent）
+    session.error = None
     store.save_session(session)
     return {"plan": new_plan.to_dict(), "superseded_plan_id": old_plan.plan_id if old_plan else None}
 

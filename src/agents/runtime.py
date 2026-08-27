@@ -24,6 +24,8 @@ from .capabilities import CapabilityContext, dispatch as dispatch_capability
 from .context import build_context
 from .sessions import AgentSessionStore
 from .tasks import AgentTaskStore
+from .work_memory import WorkMemoryStore
+from .preferences import PreferenceStore, looks_like_preference
 from .proposal_store import ProposalStore
 from .project_intelligence import ProjectIntelligenceService
 from .director_proposal import (
@@ -114,6 +116,51 @@ class AgentRuntime:
     def _task_store(self, project: str) -> AgentTaskStore:
         return AgentTaskStore(self._resolve_project_dir(project), project)
 
+    # AI-7D-R §10：共享工作记忆 + 显式偏好记忆（均项目级、耐久、轻量）
+    def work_memory(self, project: str) -> WorkMemoryStore:
+        return WorkMemoryStore(self._resolve_project_dir(project), project)
+
+    def preference_store(self, project: str) -> PreferenceStore:
+        return PreferenceStore(self._resolve_project_dir(project), project)
+
+    def _memory_supplement(self, project: str, agent_id: str) -> str:
+        """AI-7D-R §39：组装共享工作记忆 + 偏好记忆的上下文片段（不暴露隐藏推理）。
+        canonical 真值优先级高于此处内容（§11）——由调用方把 canonical 放在更前面。"""
+        sections = []
+        try:
+            wm = self.work_memory(project).render_for_context(limit=6)
+            if wm:
+                sections.append(wm)
+        except Exception:
+            pass
+        try:
+            pf = self.preference_store(project).render_for_context(limit=6)
+            if pf:
+                sections.append(pf)
+        except Exception:
+            pass
+        return "\n\n".join(sections)
+
+    def record_work(self, project: str, entry_type: str, summary: str, **kwargs) -> None:
+        """best-effort 记录一条共享工作记忆（失败不阻断主流程）。"""
+        try:
+            self.work_memory(project).add(entry_type, summary, **kwargs)
+        except Exception:
+            pass
+
+    def _maybe_capture_preference(self, project: str, content: str,
+                                   message_id: Optional[str]) -> None:
+        """AI-7D-R §10.3：保守捕获显式偏好（只在明确长期信号时，宁漏不误）。"""
+        try:
+            if not looks_like_preference(content):
+                return
+            key = content.strip()[:80]
+            self.preference_store(project).add(
+                key=key, value=content.strip(), scope="project",
+                source_message_id=message_id)
+        except Exception:
+            pass
+
     def _project_loader(self, project: str) -> Callable[[], "Project"]:   # type: ignore[name-defined]
         pd = self._resolve_project_dir(project)
         return lambda: ProjectStore(pd).load()
@@ -193,8 +240,29 @@ class AgentRuntime:
         a = self._resolve_agent(agent_id)
         if not self._is_enabled(agent_id):
             raise AgentError("disabled_agent", f"Agent 已禁用: {a.name}")
-        s = self._session_store(project).get_or_create(agent_id, scope_type, scope_id)
+        # AI-7D-R §9：Direct Chat 用长存 (project, agent) Conversation；project scope 直接
+        # 走稳定 conversation（迁移最近旧 project 会话，保留历史）。非 project scope 保留旧逻辑。
+        if scope_type == ScopeType.PROJECT.value:
+            s = self._session_store(project).get_or_create_conversation(agent_id)
+        else:
+            s = self._session_store(project).get_or_create(agent_id, scope_type, scope_id)
         return s.to_dict()
+
+    def append_session_message(self, project: str, session_id: str,
+                                role: str, content: str, *,
+                                status: Optional[str] = None,
+                                linked_change_session_id: Optional[str] = None,
+                                linked_execution_id: Optional[str] = None,
+                                linked_work_ids: Optional[List[str]] = None,
+                                meta: Optional[dict] = None) -> Optional[dict]:
+        """AI-7D-R §10.1：向会话追加一条带链接的耐久消息（供变更桥接把真实工作事件写回转录，
+        不再只在前端合成）。失败/会话不存在返回 None。"""
+        msg = AgentMessage(role=role, content=content, status=status, meta=meta,
+                           linked_change_session_id=linked_change_session_id,
+                           linked_execution_id=linked_execution_id,
+                           linked_work_ids=list(linked_work_ids or []))
+        s = self._session_store(project).append_message(session_id, msg)
+        return s.to_dict() if s else None
 
     def get_session(self, project: str, sid: str) -> Optional[dict]:
         s = self._session_store(project).load(sid)
@@ -221,6 +289,10 @@ class AgentRuntime:
                              + _json.dumps(wf, ensure_ascii=False))
         except Exception:
             pass
+        # AI-7D-R §39：共享工作记忆 + 显式偏好（建议性；canonical 与当前指令优先）
+        mem = self._memory_supplement(project, agent_id)
+        if mem:
+            ctx_text += "\n\n" + mem
         messages = [{"role": "system",
                      "content": agent_system_prompt(agent_id) + "\n\n" + ctx_text}]
         for m in session.messages:
@@ -289,14 +361,25 @@ class AgentRuntime:
         if not self._is_enabled(agent_id):
             raise AgentError("disabled_agent", f"Agent 已禁用: {a.name}")
 
+        # AI-7D-R：Script Writer 项目级 Direct Chat 走原生 function-calling tool-loop
+        #（自己持久化消息、自己循环，不经过 inquiry/change 路径）。在 unified_turn 持久化 user
+        # 之前委派，避免重复落盘。仅 project scope：tool-loop 编辑全局 story_text，语义属项目级；
+        # scene/shot 级会话保留 D1 specialist read-answer 路径。
+        if agent_id == "script_writer" and scope_type == ScopeType.PROJECT.value:
+            from .script_writer import script_writer_turn
+            return await script_writer_turn(self, project, sid, content)
+
         # 捕获对话历史（append 当前 user 之前的 messages）供 inquiry 路径多轮承接（D1.3 / Bug B）。
         # conversation 路径（_produce_chat_reply）自己读 session.messages 含历史；inquiry 路径需显式注入。
         history = [{"role": m.role, "content": m.content}
                    for m in session.messages
                    if m.role in ("user", "assistant") and m.content and m.status is None]
 
-        # 1. 持久化 user 消息（一次）
-        store.append_message(sid, AgentMessage(role="user", content=content))
+        # 1. 持久化 user 消息（一次）。AI-7D-R §10.1：append 时生成 message_id 并回填链接字段。
+        user_msg = AgentMessage(role="user", content=content)
+        store.append_message(sid, user_msg)
+        # AI-7D-R §10.3：保守捕获显式偏好（best-effort，拿 source message_id）
+        self._maybe_capture_preference(project, content, user_msg.message_id)
         session = store.load(sid)   # 重读含 user 消息，供 chat history / 不影响 inquiry pack
 
         # 2. 分类意图（lazy import 防循环：inquiry 顶部 import runtime）

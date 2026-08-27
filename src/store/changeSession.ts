@@ -27,6 +27,18 @@ const EXECUTION_TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled']
 // 刷新时需恢复其 plan/execution（H2/F-Extra1）。与 TERMINAL_STATUSES（含 approved，表"提议已定"语义）分离：
 // approved 既是 proposal-settled（isTerminal 仍 true）又是 restorable（恢复 execution）。两概念不可混用（§7.1）。
 const SESSION_NOT_RESTORABLE = new Set(['rejected', 'stale', 'failed', 'cancelled']);
+// AI-7D-R §7/§8：已“落定”的会话——历史事务，不得捕获后续新变更。新请求一律基于最新 canonical
+// 新建会话。与后端 SESSION_SETTLED 对齐（含 blocked 僵尸态与 no_action 诚实终态）。
+const SESSION_SETTLED = new Set([
+  'approved_for_execution', 'rejected', 'stale', 'failed', 'cancelled',
+  'no_action', 'blocked',
+]);
+// 仍开放、可接收修订反馈的会话状态（用户正在审查/决策，新消息作为对该方案的 revise）。
+const SESSION_OPEN_FOR_FEEDBACK = new Set([
+  'awaiting_user_decision', 'ready_for_review',
+  'routing', 'consulting', 'analyzing_dependencies', 'resolving_conflicts',
+  'synthesizing_plan', 'validating_plan', 'building_preview',
+]);
 
 export const useChangeSessionStore = defineStore('changeSession', () => {
   const projectStore = useProjectStore();
@@ -58,6 +70,14 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
     !!execution.value && execution.value.status === 'running' && !!execution.value.cancel_requested);
   const creativeCommitted = computed(() => !!execution.value?.canonical_commit && execution.value.canonical_commit.status === 'committed');
   const needsExecute = computed(() => approved.value && !execution.value);  // 已批准 + 无 execution -> 可 Execute
+  // AI-7D-R §10：诚实的“无需改动”终态（不伪造 A/B 方案）
+  const noAction = computed(() => session.value?.status === 'no_action');
+  const noActionReason = computed(() => {
+    const s = session.value as any;
+    return (s?.no_action_reason) || '';
+  });
+  // AI-7D-R §7：会话是否已落定（历史事务，后续新变更须新建会话）
+  const settled = computed(() => !!session.value && SESSION_SETTLED.has(session.value.status));
 
   // §7.1/§7.2：轮询存活取决于 (proposal 活跃) OR (approved 且 execution 活跃)。
   // 关键修复 H1：approved_for_execution 期间后端不改 session 状态，故 session 非 ACTIVE；
@@ -214,12 +234,31 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
     const p = projectStore.projectName;
     const sid = session.value?.session_id;
     const eid = execution.value?.execution_id;
-    if (!p || !sid || !eid) return;
+    if (!p || !sid || !eid || !execution.value) return;
+    const wasActive = EXECUTION_ACTIVE_STATUSES.has(execution.value.status);
     try {
       execution.value = await apiClient.getChangeExecution(p, sid, eid);
       // AI-7C-H §28：manifest（受影响 char/scene 分母）一次加载——运行卡真实计数用
       await loadManifest();
     } catch { /* 静默 */ }
+    // AI-7D-R §7：执行收敛到终态 → 该会话已落定。停止把它当作新变更的目标，并处理排队请求。
+    if (wasActive && execution.value && EXECUTION_TERMINAL_STATUSES.has(execution.value.status)) {
+      stopPoll();
+      // 给 UI 一点时间显示完成态后释放（历史事务不再捕获后续变更）。
+      const queued = [..._queuedChangeRequests.value];
+      _queuedChangeRequests.value = [];
+      setTimeout(() => {
+        if (session.value?.status === 'approved_for_execution'
+            && execution.value && EXECUTION_TERMINAL_STATUSES.has(execution.value.status)) {
+          session.value = null; plan.value = null; execution.value = null;
+          manifest.value = null; eligibility.value = null;
+        }
+      }, 1500);
+      // 排队中的变更请求：执行已结束 → 基于最新 canonical 新建会话处理
+      for (const text of queued) {
+        try { await _startFreshSession(text, { source: 'floating_bar' }); } catch { /* ignore */ }
+      }
+    }
   }
 
   /** §28：execution 的 production manifest（分母真相）。每个 execution_id 只取一次。 */
@@ -340,6 +379,7 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
       await resume();
     } catch (e: any) {
       error.value = '请求修改失败: ' + (e.message || e);
+      throw e;   // AI-7D-R：让桥接方能据此回退到“新建会话”路径
     } finally {
       busy.value = false;
     }
@@ -361,33 +401,51 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
     }
   }
 
-  /** 刷新恢复（§87/§89）：重载 persisted active session + 其 execution（如有）。TeamChatPanel mount 调用。 */
+  /** 刷新恢复（§87/§89 / AI-7D-R §7）：重载仍在推进中或仍可执行/在执行的会话 + 其 execution。
+   * 已彻底落定（blocked、no_action、rejected/stale/failed/cancelled、执行已完成的 approved）
+   * 是历史事务，不在刷新时重新领养——否则会捕获后续新变更（根因 #1）。
+   * 注意：approved 但**尚未执行或执行仍在进行**的会话仍恢复（保留 AI-7C F5 恢复待执行/在执行
+   * 计划的能力）；只是对“新变更”而言它算 settled（bridge 会另开新会话）。 */
   async function restoreActive() {
     const p = projectStore.projectName;
     if (!p) return;
     try {
       const sessions = await apiClient.listChangeSessions(p);
-      // H2：不再用 TERMINAL_STATUSES 过滤（它含 approved_for_execution → 误滤掉 approved 会话 →
-      // 下方 approved 分支成死代码、execution 不恢复）。改用 SESSION_NOT_RESTORABLE：approved 可恢复。
-      const active = sessions.find(s => !SESSION_NOT_RESTORABLE.has(s.status));
+      // 1. 构建中/待审查/待决策的会话 → 恢复
+      const active = sessions.find(s => SESSION_OPEN_FOR_FEEDBACK.has(s.status)
+        || ACTIVE_STATUSES.has(s.status));
       if (active) {
         _set(active);
-        if (active.status === 'ready_for_review') await loadPlan();
-        // AI-7C §89：approved session 恢复 plan + 可能挂的 execution（H2 + F-Extra1）
-        if (active.status === 'approved_for_execution') {
-          // F-Extra1：approved 亦需 plan，否则 execute() 因 !pl 静默 early-return（按钮显但点了没用）
+        if (active.status === 'ready_for_review' || active.status === 'awaiting_user_decision') {
           await loadPlan();
-          try {
-            const exs = await apiClient.listChangeExecutions(p, active.session_id);
-            if (exs.length) {
-              execution.value = exs[0];
-              await loadManifest();   // §28：恢复执行进度时带出真实计数分母
-            }
-          } catch { /* 无 execution */ }
-          // H1：approved + execution 活跃 → 继续轮询（shouldPoll 统一判定，不再被 session 非 ACTIVE 杀掉）
-          if (shouldPoll()) startPoll();
         }
-      } else { session.value = null; plan.value = null; execution.value = null; manifest.value = null; }
+        return;
+      }
+      // 2. approved：若尚无 execution 或 execution 仍活跃 → 恢复（待执行/执行中）；
+      //    执行已终态 → 不恢复（历史事务）。
+      const approved = sessions.find(s => s.status === 'approved_for_execution');
+      if (approved) {
+        let running: ChangeExecution | null = null;
+        try {
+          const exs = await apiClient.listChangeExecutions(p, approved.session_id);
+          running = exs.find(e => EXECUTION_ACTIVE_STATUSES.has(e.status)) || null;
+          if (!running && exs.length === 0) {
+            // 已批准但还没启动执行 → 恢复待执行卡
+            _set(approved);
+            await loadPlan();
+            return;
+          }
+        } catch { /* 无 execution */ }
+        if (running) {
+          _set(approved);
+          await loadPlan();
+          execution.value = running;
+          await loadManifest();
+          if (shouldPoll()) startPoll();
+          return;
+        }
+      }
+      session.value = null; plan.value = null; execution.value = null; manifest.value = null;
     } catch { /* 无会话或项目未选 */ }
   }
 
@@ -423,7 +481,33 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
     return { role, content, status, created_at: Date.now() / 1000 };
   }
 
-  /** §23/§24：写意图桥接进真实 ChangeSession（durable）。返回 assistant 消息（调用方 push）。 */
+  /** AI-7D-R §7/§8：基于最新 canonical 开启全新变更会话（不复用旧会话/旧 plan）。 */
+  async function _startFreshSession(text: string, opts: {
+    source?: 'team_chat' | 'floating_bar' | 'direct_agent_chat'; sourceAgentId?: string; sourceSessionId?: string;
+    contextScope?: { sceneId?: string; shotId?: string; characterName?: string };
+  }): Promise<void> {
+    // 清掉已落定的旧会话引用，确保新会话不携带旧 plan/execution
+    session.value = null; plan.value = null; decisions.value = [];
+    execution.value = null; manifest.value = null; eligibility.value = null;
+    error.value = '';
+    preferredExecMode.value = CREATIVE_ONLY_RE.test(text) ? 'creative_only' : 'affected_production';
+    _creqCounter += 1;
+    await create(text, undefined, {
+      source: opts.source || 'direct_agent_chat',
+      sourceAgentId: opts.sourceAgentId,
+      sourceSessionId: opts.sourceSessionId,
+      contextScope: opts.contextScope,
+      clientRequestId: 'creq_' + Date.now().toString(36) + '_' + _creqCounter,
+    });
+  }
+
+  /** §23/§24：写意图桥接进真实 ChangeSession（durable）。返回 assistant 消息（调用方 push）。
+   *
+   * AI-7D-R §7/§8 纠正（根因 #1）：
+   * - 已落定（approved/blocked/no_action/rejected/stale/failed/cancelled）的会话**不再捕获**
+   *   后续新变更——一律基于最新 canonical 新建会话，不再撞 PLAN_SOURCE_STALE、不吞消息。
+   * - 仅对仍开放、正在审查/构建中的方案，把新文本作为真实修订反馈并入（后端会真重跑 agent）。
+   * - requestChanges 若被告知会话已落定/过期，自动回退为新建会话。 */
   async function bridgeFromDirectChat(text: string, opts: {
     source?: 'team_chat' | 'floating_bar' | 'direct_agent_chat'; sourceAgentId?: string; sourceSessionId?: string;
     contextScope?: { sceneId?: string; shotId?: string; characterName?: string };
@@ -438,27 +522,30 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
         '）。这条新修改请求如何处理？请在下方选择：等当前任务完成后处理，或停止当前任务并重新规划。'));
       return out;
     }
-    const sessionAlive = !!session.value &&
-      !['rejected', 'stale', 'failed', 'cancelled'].includes(session.value.status);
-    if (sessionAlive) {
-      // 提案阶段活跃会话：新请求作为修改反馈并入同一会话（不开第二条并行变更流）
-      await requestChanges(text);
-      out.push(_msg('assistant',
-        '已把这条请求并入当前变更会话 ' + (session.value?.session_id || '') +
-        '，作为修改反馈重新整理方案。进度见下方运行卡。'));
-      return out;
+    const cur = session.value;
+    // 开放中的方案（构建中或待审/待决）→ 真实修订反馈；落定/无会话 → 新建。
+    const isOpen = !!cur && SESSION_OPEN_FOR_FEEDBACK.has(cur.status) && !SESSION_SETTLED.has(cur.status);
+    if (isOpen) {
+      try {
+        await requestChanges(text);
+        out.push(_msg('assistant',
+          '已把这条修订反馈并入当前变更会话，正在重新整理方案。进度见下方运行卡。'));
+        return out;
+      } catch (e: any) {
+        // 后端判定会话已落定/过期（CHANGE_SESSION_SETTLED / PLAN_SOURCE_STALE）→ 落到下方新建
+        const code = e?.code || e?.message || '';
+        if (!/SETTLED|STALE/i.test(String(code))) {
+          throw e;
+        }
+        // 落到新建分支
+      }
     }
-    // 新变更流：Direct Chat 来源（floating_bar/direct_agent_chat）；client_request_id 幂等
-    preferredExecMode.value = CREATIVE_ONLY_RE.test(text) ? 'creative_only' : 'affected_production';
-    _creqCounter += 1;
-    await create(text, undefined, {
-      source: opts.source || 'direct_agent_chat',
-      sourceAgentId: opts.sourceAgentId,
-      sourceSessionId: opts.sourceSessionId,
-      contextScope: opts.contextScope,
-      clientRequestId: 'creq_' + Date.now().toString(36) + '_' + _creqCounter,
-    });
-    if (session.value) {
+    // 新变更流：基于最新 canonical 的全新会话
+    await _startFreshSession(text, opts);
+    if (noAction.value) {
+      out.push(_msg('assistant',
+        '我核对了当前项目：' + (noActionReason.value || '这条请求无需产生实际修改。')));
+    } else if (session.value) {
       out.push(_msg('assistant',
         '正在由制作团队整理修改方案（变更会话 ' + session.value.session_id +
         '）。完成后会在这里呈现方案供你审查。'));
@@ -510,10 +597,11 @@ export const useChangeSessionStore = defineStore('changeSession', () => {
     session, plan, decisions, execution, manifest, eligibility, busy, error, lastRequestText,
     isActive, isTerminal, readyForReview, needsDecision,
     approved, executionActive, executionBlocked, executionDone, executionStopping, creativeCommitted, needsExecute,
+    noAction, noActionReason, settled,
     create, resume, loadPlan, submitDecision, approve, requestChanges, reject,
     execute, loadExecution, resumeExecution, cancelExecution, waitForExecutionStopped,
     restoreActive, onProjectChange, stopPoll,
-    // AI-7D D2
+    // AI-7D D2 / R
     pendingChangeChoice, queuedChangeRequests: _queuedChangeRequests,
     preferredExecMode, bridgeFromDirectChat, resolveChangeChoice,
   };

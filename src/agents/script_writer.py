@@ -1,0 +1,1526 @@
+# src/agents/script_writer.py
+# Script Writer 正式 Agent（原生 function-calling tool-loop）。
+#
+# 职责：剧本正文（story_text）+ 故事段结构（Scene 的增/插/排序）。
+#       故事段之下的镜头（Shot）由 Director 负责，SW 不创建/修改镜头。
+#
+# 工具（按需读取，不把完整 story_text/scenes 长期塞进 system）：
+#   读：script.read / story.list / story.read
+#   写：script.update / story.create / story.move
+# 循环：LLM → tool_calls → 执行 → observation 喂回 → LLM … → 无 tool_call 即最终回复。
+#
+# 三层薄约束（对齐 OpenAI Agents SDK tool guardrail，不替 Agent 规划）：
+#   工具前：权限（仅 script_writer）+ 参数校验 + 目标（项目存在）。
+#   工具执行：乐观并发校验 → 中性层结构操作 → 原子写 canonical project.json + audit。
+#   工具后：返回真实结果/错误，让 Agent 自己判断是否继续。
+#
+# 乐观并发（optimistic concurrency，工具自身正确性保护，非协议仪式）：
+#   两个独立的内容指纹令牌，字段级作用域（模块边界）：
+#   - story_text 指纹：script.update 校验 expected_revision。
+#   - scenes 结构指纹（sha256 over scene_id 有序列表 前 8 位）：story.create / story.move
+#     校验 expected_scenes_revision。增/删/重排会变；段内 summary/characters 改动不影响。
+#   令牌由 read 工具和写工具的成功 observation 返回；system 不长期注入完整内容。
+#   stale → 拒绝写入（不落盘/不分配 ID/不审计），把最新版 + 新指纹返回 Agent 重新判断。
+#   每轮工具调用后无条件刷新 system（项目元信息/计数）。
+from __future__ import annotations
+import hashlib
+import json
+import re
+from typing import Any, Optional
+
+from src.core.store import ProjectStore
+from src.storyboard.structure_service import (
+    StructureError, insert_scenes, move_scene,
+)
+
+from .models import AgentMessage, ResultStatus
+from .runtime import AgentRuntime, AgentError
+from .revision_audit import DirectEditAuditStore
+
+
+# AI-7D-R：Runner 执行预算 = LLM 循环步数（每步可能含多个 tool_call），【仅用于防死循环】，
+# 不是业务数量限制——不规定"最多创建 N 个故事段"。整篇剧本拆分（read+list+N×create+
+# list+final）可能远超旧值 8，故默认放宽，且可由调用方按任务覆盖。
+DEFAULT_MAX_TOOL_STEPS = 32
+# AI-7D-R 真实性收口：最终回复纠偏最多 1 次；仍不实则 Runtime 确定性覆写（非提示词保证）。
+MAX_CORRECTIVE_ROUNDS = 1
+# 防失控（需求 #11）：连续同一工具同一失败签名达此阈值 → 诚实停止重复，要求换思路。
+MAX_REPEAT_FAIL = 3
+
+
+def _trace_entry(step: int, name: str, args: str, obs: dict) -> dict:
+    """执行轨迹单条（需求 #7）：turn→tool→target→result→revision。
+    target 取最能标识操作对象的字段（scene_id/shot_id/story_text）；无则 None。
+    result 用 ok/error/stale/unchanged 分类。revision 取回执里的结构或内容指纹。"""
+    target = (obs.get("scene_id") or obs.get("shot_id")
+              or (obs.get("target") if obs.get("ok") else None))
+    if name == "script.update":
+        target = "story_text"
+    result = ("stale" if obs.get("stale")
+              else "unchanged" if obs.get("unchanged")
+              else "ok" if obs.get("ok")
+              else "error")
+    return {
+        "step": step, "tool": name, "target": target, "result": result,
+        "revision": obs.get("revision") or obs.get("scenes_revision"),
+        "error": (None if result in ("ok", "unchanged")
+                  else (obs.get("error") or obs.get("code"))),
+        "ok": bool(obs.get("ok")),
+    }
+
+# 写工具集合（只有这些可能产生 canonical 变更，需要回执 + 落盘校验）。
+WRITE_OPERATIONS = {"script.update", "story.create", "story.move",
+                    "story.update", "story.delete"}
+
+
+def _story_token(text: str) -> str:
+    """story_text 的内容指纹（sha256 前 8 位）。空串也有稳定指纹。"""
+    return hashlib.sha256((text or "").encode("utf-8")).hexdigest()[:8]
+
+
+def _scenes_token(scenes) -> str:
+    """故事段集合的结构指纹（sha256 前 8 位）。哈希对象 = scene_id 的有序列表：
+    增/删/重排会变；story_text 编辑、段内 summary/characters 改动不影响（字段级作用域）。"""
+    payload = json.dumps([s.scene_id for s in (scenes or [])], ensure_ascii=False)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:8]
+
+
+# story.update 允许修改的故事段【自身内容】字段白名单。
+# 明确排除：scene_id（身份）、shots（分镜，归 Director）。
+# 项目级 story_text 归 script.update，不在这里。
+SCENE_UPDATABLE_FIELDS = ("title", "location", "time_of_day", "summary", "characters")
+
+
+def _scene_token(scene) -> str:
+    """单个故事段的内容指纹（sha256 前 8 位）。哈希对象 = 该段【可变内容字段】的有序映射：
+    title/location/time_of_day/summary/characters。段内这些内容改动会变；
+    scene_id、段内 shots、以及其它段的改动都不影响（字段级/段级作用域）。
+    与 _scenes_token（集合结构指纹）相互独立——段内内容修改不误触结构令牌。"""
+    if scene is None:
+        return hashlib.sha256(b"").hexdigest()[:8]
+    payload = json.dumps(
+        {k: (list(getattr(scene, k, []) or []) if k == "characters"
+             else (getattr(scene, k, "") or ""))
+         for k in SCENE_UPDATABLE_FIELDS},
+        ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:8]
+
+
+def _build_system(proj) -> str:
+    """精简 system：只放职责、权限、工具说明、项目元信息（名称/字数/段数）。
+    不注入完整 story_text 或 scenes 列表——Agent 需要时用 read/list 工具按需取。"""
+    return SCRIPT_WRITER_SYSTEM.format(
+        project_name=proj.name or "（未命名）",
+        story_len=len(proj.story_text or ""),
+        scenes_count=len(proj.scenes or []),
+    )
+
+
+SCRIPT_WRITER_SYSTEM = """你是 AGNES 的 Script Writer，负责项目的【剧本正文】与【故事段结构】（故事段 Scene 的增删与排序）。
+故事段之下的镜头（Shot）由 Director 负责，你不创建或修改镜头。
+
+项目：{project_name}（剧本正文 {story_len} 字，{scenes_count} 个故事段）。
+
+你有这些工具：
+- script.read()：读取当前剧本正文全文 + 剧本版本指纹。
+- script.update(new_story_text, expected_revision)：用【完整】新正文覆盖剧本正文。
+- story.list()：列出所有故事段（id/摘要/角色/镜头数/顺序）+ 故事段版本指纹。
+- story.read(scene_id)：读取一个已有故事段的完整内容（标题/地点/时段/摘要/角色/镜头数）+ 该段【内容指纹】。
+- story.create(summary, characters?, before_scene_id?, after_scene_id?, expected_scenes_revision)：创建一个故事段并插到指定位置；省略 before/after 即追加末尾。id 由后端分配，你不能指定 id 或数字序号。
+- story.update(scene_id, expected_revision, summary?, title?, location?, time_of_day?, characters?)：修改一个【已有】故事段的自身内容。只传要改的字段；必须先 story.read 拿到该段 expected_revision 原样回传。不能改 scene_id、不能改镜头、不能改项目剧本正文。要连续改多个段，就 read→update 一个、再 read→update 下一个。
+- story.delete(scene_id)：删除一个已有故事段（会连带删掉该段下的镜头和生成资产）。用户明确要求删除某段时，直接调用本工具删除即可——不需要先预览再问用户确认。删完后用 story.list 核对真实结果并向用户总结删除了什么、当前剩余几段。
+- story.move(scene_id, before_scene_id?, after_scene_id?, expected_scenes_revision)：把已有故事段移动到某段之前/之后；省略 before/after 即移到末尾。
+
+🔴 最重要的铁律（违反即失败）：
+- 你只有通过【真正发起工具调用】（function/tool_calls）才能读/写数据。在回复里用自然语言说「我已创建/已移动/已插入/切换成功」但没有真正调用对应工具，等于什么都没做——这是严重错误。
+- 要创建就必须真正调用 story.create；要移动就必须真正调用 story.move；要修改故事段内容就必须真正调用 story.update；要删除就必须真正调用 story.delete；要改正文就必须真正调用 script.update；要知道当前有哪些段/正文内容就必须真正调用 story.list / script.read。
+- 工具调用成功后，工具会返回结果（含 ok、scene_id、order、最新版本指纹等）。你只能依据工具【真实返回】的结果向用户汇报；没看到工具返回的 ok=true，就不能声称成功。
+- 不要编造或猜测版本指纹、scene_id、段数；这些值必须来自 story.list / script.read / 工具返回值。
+- 如果你不确定当前状态，先调用 story.list / script.read 读取，再决定。不要凭记忆或假设操作。
+
+工作方式：
+1. 改/续写/重写/压缩剧本正文 → 先 script.read() 拿到正文和 expected_revision，再 script.update 传【完整】新正文 + 指纹。
+2. 新建故事段 → 先 story.list() 拿到现有段和 expected_scenes_revision，确定插入位置（用某个已有段的 scene_id 作 before/after 锚点，或省略追加末尾），再 story.create。
+3. 调整故事段顺序 → 先 story.list() 拿指纹，再 story.move（用 scene_id 指定移动谁、用 before/after_scene_id 指定位置，不要自己算数字序号）。
+4. 修改已有故事段的摘要/标题/地点/时段/角色 → 先 story.read(scene_id) 拿该段内容和 expected_revision，再 story.update 只传要改的字段 + 指纹；改多个段就逐段 read→update，不要试图一次批量改。
+5. 删除故事段 → 用户明确要删某段就直接 story.delete(scene_id) 删除（不需要先预览问确认），删完用 story.list 核对并据事实总结。
+6. 需要某段全文细节再 story.read(scene_id)。
+7. 任一写工具返回 stale=true → 你读取后内容被改动过、未写入；用返回的最新版和刷新后的指纹重新判断，再用新指纹调用。
+8. 用户只是提问、闲聊，或你判断不需要改时，直接自然语言回复，不调用工具。
+
+【自主执行与询问】
+1. 默认自主完成用户要求。只要能根据用户表达、上下文或当前故事状态合理确定意图，就直接执行，不要为了追求完全明确而询问用户。
+2. 如果只是轻微歧义，选择最符合上下文和用户目标的合理解释继续执行，不要停下来询问。
+3. 如果不确定的是当前故事状态、段落位置或已有内容，优先使用读取工具（story.list / script.read / story.read）确认，而不是询问用户本可由工具获得的信息。
+4. 只有当存在两个或以上明显合理的理解，并且不同理解会导致明显不同的修改结果，同时又无法通过读取当前故事消除歧义时，才暂停并询问用户。
+5. 询问时只询问完成任务所缺少的最关键一点，不要连续追问，也不要要求用户提供不必要的细节。
+
+【写工具必须一个一个来】（重要）：
+- 写工具（script.update / story.create / story.update / story.move / story.delete）必须【一个一个执行】：每发一个写工具调用，等它返回最新状态/revision 后，再发下一个。不要在同一次回复里批量发多个写工具——它们会用旧 revision 导致 stale。
+- 只读工具（story.list / script.read / story.read）可以一次发多个，它们不碰数据、不冲突。
+- 这条是硬约束：同一次回复里发了多个写工具时，系统只执行第1个，其余会被拒绝。
+
+【复杂操作要分解成多步】（按场景）：
+- 互换两条故事段（如"第1条和最后一条互换"）：不能一步完成。分两步 story.move：先 move 一条到目标位置，再【用最新 revision】move 另一条。每步看结果再继续。
+- 批量重排（如"把这几条按某顺序排"）：多次 story.move，每次一个、用最新 revision。
+- 批量改内容（如"把这3段的摘要都改一下"）：逐段 story.read→story.update，一个一个来。
+- 批量删（如"删掉这3条"）：逐个 story.delete，每删一个 revision 变了，下一个继续用（delete 不需要 expected_revision，但仍建议一个一个来核对结果）。
+- 用户说的「第N条」= story.list 返回里 position=N 的那条；找到它的 scene_id 再操作，不要用 scene_id 的数字猜位置（删除后 id 会跳号，但 position 始终连续）。
+
+【整篇剧本拆分成故事段】（连续创建，不生成计划、不经审查流）：
+a. 先 script.read() 读完整剧本正文，理解故事脉络。
+b. 再 story.list() 读已有故事段——【不要假设当前为空】。已有段一律保留，本阶段不擅自 delete/update/move 已有段。
+c. 从剧本正文里一段一段地 story.create 追加（summary=该段故事文本，characters=出场角色）。
+   每一次 story.create 成功后，工具会返回【新的 scenes_revision】；下一次 story.create 必须用这个新返回的 revision 作为 expected_scenes_revision，不要复用上上次的旧指纹，否则会 stale。
+   id 由后端顺序分配（s01、s02…），你不要自己指定 id 或试图跳号。
+d. 每创建一段都看工具真实返回的 ok=true 与分配的 scene_id，确认落盘后再继续下一段。
+e. 全部创建完后，最后再 story.list() 读一次真实当前列表。
+f. 最终回复里，故事段的数量、id、顺序必须以【最后这次 story.list 的真实返回】为准，不要凭自己之前写的文字记忆声称"已拆分完成 N 段"。
+- 如果中途某次 create 返回 stale 或 error：用返回的最新列表/指纹重新判断，【不要重复创建已经成功的那一段】（已成功的段在 canonical 里真实存在，story.list 能看到）。
+- 本阶段拆分任务中，专注连续 story.create；update/delete/move 虽可用，但不要在拆分过程中自主混用，除非用户另外明确要求。
+
+要求：
+- new_story_text / summary 必须是中文正文本身，不要 markdown 标题、解释或代码块。
+- characters 是出场角色名数组（来自当前项目角色，可空）。
+- 版本指纹必须原样回传 read/list/写工具返回值里的 8 位十六进制串，不要编造。
+- before_scene_id 与 after_scene_id 不能同时给。
+- 一次只做用户要求的修改，不顺手改无关内容。
+"""
+
+
+# ============ 工具 schema（标准 OpenAI function 格式）============
+SCRIPT_UPDATE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "script.update",
+        "description": "用新的完整剧本正文覆盖当前剧本正文。用于修改、续写、扩写、重写、压缩剧本。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "new_story_text": {
+                    "type": "string",
+                    "description": "修改后的【完整】剧本正文（中文正文，不要 markdown/解释/代码块）。",
+                },
+                "expected_revision": {
+                    "type": "string",
+                    "description": "你最近一次 script.read 看到的剧本版本指纹（8 位十六进制）。用于乐观并发：若期间剧本被改动，写入会被拒绝并返回最新版。",
+                },
+            },
+            "required": ["new_story_text", "expected_revision"],
+        },
+    },
+}
+
+SCRIPT_READ_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "script.read",
+        "description": "读取当前剧本正文全文及其版本指纹。在调用 script.update 前应先调用本工具拿到正文和 expected_revision。",
+        "parameters": {"type": "object", "properties": {}},
+    },
+}
+
+STORY_CREATE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "story.create",
+        "description": "创建一个新的故事段（Scene），插到 before_scene_id 之前或 after_scene_id 之后（都省略则追加末尾）。id 与最终顺序由后端分配，你不能指定。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "summary": {
+                    "type": "string",
+                    "description": "该故事段的故事文本（中文正文，不要 markdown/解释/代码块）。",
+                },
+                "characters": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "出场角色名数组（来自当前项目角色，可空）。",
+                },
+                "before_scene_id": {
+                    "type": "string",
+                    "description": "插到该故事段之前（可选，与 after_scene_id 二选一）。",
+                },
+                "after_scene_id": {
+                    "type": "string",
+                    "description": "插到该故事段之后（可选，与 before_scene_id 二选一）。省略且无 before 则追加末尾。",
+                },
+                "expected_scenes_revision": {
+                    "type": "string",
+                    "description": "你最近一次 story.list 看到的故事段版本指纹（8 位十六进制）。用于乐观并发。",
+                },
+            },
+            "required": ["summary", "expected_scenes_revision"],
+        },
+    },
+}
+
+STORY_LIST_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "story.list",
+        "description": "列出所有故事段，每段含 position（第几条，1-based）、scene_id（身份ID）、摘要、出场角色、镜头数，及结构版本指纹。用户说「第N条」时，position=N 对应的就是那条的 scene_id——删除后 scene_id 可能跳号但 position 始终连续，用 position 定位不要用 scene_id 的数字。在写操作前先调用拿现有段和 expected_scenes_revision。",
+        "parameters": {"type": "object", "properties": {}},
+    },
+}
+
+STORY_READ_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "story.read",
+        "description": "读取一个故事段的完整内容（摘要全文、出场角色、镜头数）。需要某段细节时调用。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "scene_id": {"type": "string", "description": "要读取的故事段 id（如 s01）。"},
+            },
+            "required": ["scene_id"],
+        },
+    },
+}
+
+STORY_MOVE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "story.move",
+        "description": "把一个已存在的故事段移动到某段之前或之后（都省略则移到末尾）。用稳定 scene_id 指定，不改变任何 id，不影响段内镜头。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "scene_id": {"type": "string", "description": "要移动的故事段 id。"},
+                "before_scene_id": {
+                    "type": "string",
+                    "description": "移到该故事段之前（可选，与 after_scene_id 二选一）。",
+                },
+                "after_scene_id": {
+                    "type": "string",
+                    "description": "移到该故事段之后（可选，与 before_scene_id 二选一）。省略且无 before 则移到末尾。",
+                },
+                "expected_scenes_revision": {
+                    "type": "string",
+                    "description": "你最近一次 story.list 看到的故事段版本指纹（8 位十六进制）。用于乐观并发。",
+                },
+            },
+            "required": ["scene_id", "expected_scenes_revision"],
+        },
+    },
+}
+
+STORY_UPDATE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "story.update",
+        "description": (
+            "修改一个【已存在】故事段的自身内容字段（summary/title/location/time_of_day/"
+            "characters 中的任意一个或多个，只传要改的字段）。必须先 story.read(scene_id) 拿"
+            "到该段内容指纹 expected_revision 并原样回传。不能改 scene_id、不能改分镜(shots)、"
+            "不能改项目剧本正文。只传不改动的字段不会有副作用，但不要传 scene_id/shots 等禁止字段。"
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "scene_id": {"type": "string", "description": "要修改的故事段 id（如 s02）。"},
+                "expected_revision": {
+                    "type": "string",
+                    "description": "你最近一次 story.read(scene_id) 看到的该段内容指纹（8 位十六进制）。用于乐观并发：期间该段被改动会拒绝写入并返回最新内容。",
+                },
+                "summary": {"type": "string", "description": "新的故事文本（中文正文，不要 markdown/解释/代码块）。"},
+                "title": {"type": "string", "description": "段标题（可选）。"},
+                "location": {"type": "string", "description": "地点（可选）。"},
+                "time_of_day": {"type": "string", "description": "时段，如 日/夜/清晨（可选）。"},
+                "characters": {
+                    "type": "array", "items": {"type": "string"},
+                    "description": "新的出场角色名数组（来自当前项目角色）。这是整体覆盖而非追加。",
+                },
+            },
+            "required": ["scene_id", "expected_revision"],
+        },
+    },
+}
+
+STORY_DELETE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "story.delete",
+        "description": (
+            "删除一个【已存在】的故事段（会连带删掉该段下的镜头和生成资产）。用户明确要求"
+            "删除某段时，直接传 scene_id 调用本工具执行删除即可——不需要先预览再问用户确认。"
+            "删完后用 story.list 核对真实结果。删除是级联的，会移除整个故事段及其镜头。"
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "scene_id": {"type": "string", "description": "要删除的故事段 id（如 s03）。"},
+                "confirmed": {
+                    "type": "boolean",
+                    "description": "可选。省略或 true=直接执行级联删除（默认）；false=仅返回删除预览不删（一般不需要）。",
+                },
+            },
+            "required": ["scene_id"],
+        },
+    },
+}
+
+SCRIPT_WRITER_TOOLS = [
+    SCRIPT_UPDATE_TOOL, SCRIPT_READ_TOOL,
+    STORY_CREATE_TOOL, STORY_LIST_TOOL, STORY_READ_TOOL, STORY_MOVE_TOOL,
+    STORY_UPDATE_TOOL, STORY_DELETE_TOOL,
+]
+
+
+# ============ 工具执行 ============
+def _parse_args(arguments: str) -> dict:
+    try:
+        return json.loads(arguments) if arguments else {}
+    except Exception as e:
+        raise AgentError("bad_arguments", f"工具参数不是合法 JSON：{e}")
+
+
+def _load_proj(rt: AgentRuntime, project: str):
+    pdir = rt._resolve_project_dir(project)
+    return pdir, ProjectStore(pdir), ProjectStore(pdir).load()
+
+
+def _reload(rt: AgentRuntime, project: str):
+    """从 canonical（磁盘）重新读取项目——写后校验只用这份，绝不用内存对象。"""
+    pdir = rt._resolve_project_dir(project)
+    return ProjectStore(pdir).load()
+
+
+def _base_receipt(operation: str, *, ok: bool, target: Any = None,
+                  before: Any = None, after: Any = None,
+                  revision: Optional[str] = None, verified: bool = False,
+                  error: Optional[str] = None, **extra) -> dict:
+    """统一执行回执（execution receipt）。Runtime 据此判断本轮真实成功/失败，
+    不依赖模型自报。extra 携带操作相关字段（scene_id/order/...）供 observation。"""
+    rec = {"ok": ok, "operation": operation, "target": target,
+           "before": before, "after": after, "revision": revision,
+           "verified": verified, "error": error}
+    rec.update(extra)
+    return rec
+
+
+def _execute_script_read(rt: AgentRuntime, project: str, arguments: str,
+                         instruction, message_id) -> dict:
+    """读取剧本正文全文 + 版本指纹。只读，不写盘/不审计。"""
+    _, _, proj = _load_proj(rt, project)
+    text = proj.story_text or ""
+    return {"ok": True, "text": text, "length": len(text),
+            "revision": _story_token(text)}
+
+
+def _execute_script_update(rt: AgentRuntime, project: str, arguments: str,
+                           instruction: str, message_id: Optional[str]) -> dict:
+    """执行 script.update。参数校验 → 乐观并发（story_text 域）→ 原子写 + audit →
+    【重新读取 canonical 验证确实落盘】→ 返回统一回执。任何未落盘情形 ok=False。"""
+    args = _parse_args(arguments)
+    new_text = args.get("new_story_text")
+    expected_rev = args.get("expected_revision")
+    if not isinstance(new_text, str) or not new_text.strip():
+        raise AgentError("edit_empty", "new_story_text 不能为空")
+    new_text = new_text.strip()
+    if not isinstance(expected_rev, str) or not expected_rev.strip():
+        raise AgentError("bad_arguments", "缺少 expected_revision（应先 script.read 拿到版本指纹再传回）")
+
+    pdir, pstore, proj = _load_proj(rt, project)
+    old = proj.story_text or ""
+    current_rev = _story_token(old)
+
+    if expected_rev != current_rev:
+        return _base_receipt(
+            "script.update", ok=False, target="story_text",
+            before=len(old), after=len(old), revision=current_rev, verified=False,
+            error="stale_revision", stale=True,
+            expected_revision=expected_rev, current_revision=current_rev,
+            current_head=old[:80],
+            current_tail=old[-80:] if len(old) > 80 else "",
+            old_len=len(old),
+            note="你读取的版本已过期（期间剧本被改动），未写入。上面是当前最新版。请基于最新内容重新判断，再用新的 expected_revision 调用 script.update。")
+
+    if new_text == old:
+        return _base_receipt(
+            "script.update", ok=True, target="story_text",
+            before=len(old), after=len(old), revision=current_rev, verified=True,
+            unchanged=True, old_len=len(old), new_len=len(new_text),
+            note="新正文与当前剧本完全一致，未产生变化。")
+
+    proj.story_text = new_text
+    pstore.save(proj)
+
+    # 写后重新读取 canonical 验证——绝不据内存对象判定成功。
+    on_disk = _reload(rt, project)
+    disk_text = on_disk.story_text or ""
+    if disk_text != new_text:
+        return _base_receipt(
+            "script.update", ok=False, target="story_text",
+            before=len(old), after=len(disk_text),
+            revision=_story_token(disk_text), verified=False,
+            error="verify_failed",
+            note="写入后重新读取发现内容与预期不一致，未确认更新。请用 script.read 读取当前最新版后重试。")
+
+    DirectEditAuditStore(pdir, project).record(
+        agent_id="script_writer", field="story_text", before=old, after=new_text,
+        instruction=instruction, message_id=message_id)
+    rt.record_work(project, "change", "Script Writer 修改了剧本正文",
+                   participants=["script_writer"], affected_domains=["script"],
+                   references={}, status="completed")
+    new_rev = _story_token(new_text)
+    return _base_receipt(
+        "script.update", ok=True, target="story_text",
+        before=len(old), after=len(new_text), revision=new_rev, verified=True,
+        unchanged=False, old_len=len(old), new_len=len(new_text),
+        head=new_text[:80], tail=new_text[-80:] if len(new_text) > 80 else "",
+        note="剧本已更新。请确认结果后用一句话回复用户改了什么。")
+
+
+def _execute_story_list(rt: AgentRuntime, project: str, arguments: str,
+                        instruction, message_id) -> dict:
+    """列出所有故事段 + 结构版本指纹。只读。每个段带 position（第几条，从1开始），
+    让 Agent 不用自己数「第N条对应哪个 scene_id」——尤其删除后 ID 跳号、序号与ID脱节时。"""
+    _, _, proj = _load_proj(rt, project)
+    scenes = [
+        {"position": idx,                 # 第几条（位置序号，1-based；删除后自动重算）
+         "scene_id": s.scene_id,          # 身份 ID（删除不回收、不重排，可能与位置序号脱节）
+         "summary": (s.summary or "")[:120],
+         "characters": list(s.characters or []),
+         "shot_count": len(s.shots or [])}
+        for idx, s in enumerate(proj.scenes, start=1)
+    ]
+    return {"ok": True, "count": len(scenes),
+            "revision": _scenes_token(proj.scenes), "scenes": scenes}
+
+
+def _execute_story_read(rt: AgentRuntime, project: str, arguments: str,
+                        instruction, message_id) -> dict:
+    """读取单个故事段全文 + 该段内容指纹（供 story.update 乐观并发用）。只读。
+    段级 revision 只覆盖段内可变内容字段，与 scenes 结构令牌相互独立。"""
+    args = _parse_args(arguments)
+    scene_id = (args.get("scene_id") or "").strip()
+    if not scene_id:
+        raise AgentError("bad_arguments", "缺少 scene_id")
+    _, _, proj = _load_proj(rt, project)
+    scene = next((s for s in proj.scenes if s.scene_id == scene_id), None)
+    if scene is None:
+        raise AgentError("not_found", f"故事段不存在: {scene_id}")
+    return {"ok": True,
+            "revision": _scene_token(scene),
+            "scene": {"scene_id": scene.scene_id,
+                      "title": scene.title or "",
+                      "location": scene.location or "",
+                      "time_of_day": scene.time_of_day or "",
+                      "summary": scene.summary or "",
+                      "characters": list(scene.characters or []),
+                      "shot_count": len(scene.shots or [])}}
+
+
+def _anchor_args(args: dict) -> tuple[Optional[str], Optional[str]]:
+    """从参数解析 before/after 锚点（去除空白，空串视为 None）。"""
+    before = (args.get("before_scene_id") or "").strip() or None
+    after = (args.get("after_scene_id") or "").strip() or None
+    return before, after
+
+
+def _execute_story_create(rt: AgentRuntime, project: str, arguments: str,
+                          instruction: str, message_id: Optional[str]) -> dict:
+    """执行 story.create：参数校验 → 乐观并发（scenes 域）→ 中性层插入 → 原子写 + audit。
+    支持 before/after_scene_id 任意位置插入（都省略 → 追加末尾）。"""
+    args = _parse_args(arguments)
+    summary = args.get("summary")
+    expected_rev = args.get("expected_scenes_revision")
+    characters = args.get("characters", [])
+    before, after = _anchor_args(args)
+
+    if not isinstance(summary, str) or not summary.strip():
+        raise AgentError("bad_arguments", "summary 不能为空（该故事段的故事文本）")
+    summary = summary.strip()
+    if characters is None:
+        characters = []
+    if not isinstance(characters, list):
+        raise AgentError("bad_arguments", "characters 必须是字符串数组")
+    characters = [str(c) for c in characters]
+    if not isinstance(expected_rev, str) or not expected_rev.strip():
+        raise AgentError("bad_arguments", "缺少 expected_scenes_revision（应先 story.list 拿到版本指纹再传回）")
+
+    pdir, pstore, proj = _load_proj(rt, project)
+    current_rev = _scenes_token(proj.scenes)
+    if expected_rev != current_rev:
+        current_scenes = [{"scene_id": s.scene_id, "summary": (s.summary or "")[:80]}
+                          for s in proj.scenes]
+        return _base_receipt(
+            "story.create", ok=False, target="scenes",
+            before=len(proj.scenes), after=len(proj.scenes),
+            revision=current_rev, verified=False, error="stale_revision", stale=True,
+            expected_revision=expected_rev, current_revision=current_rev,
+            current_scenes=current_scenes,
+            note="你读取的故事段列表已过期（期间被改动），未创建。上面是当前最新列表。请基于最新列表重新判断，再用新的 expected_scenes_revision 调用 story.create。")
+
+    before_ids = [s.scene_id for s in proj.scenes]
+    try:
+        new_scenes = insert_scenes(
+            proj, before=before, after=after,
+            specs=[{"summary": summary, "characters": characters}])
+    except StructureError as e:
+        raise AgentError(e.code, e.message)
+    new_scene = new_scenes[0]
+    new_id = new_scene.scene_id
+    pstore.save(proj)
+
+    # 写后重新读取 canonical 验证：新段确实在磁盘上、且字段一致、顺序对。
+    on_disk = _reload(rt, project)
+    disk_ids = [s.scene_id for s in on_disk.scenes]
+    disk_scene = next((s for s in on_disk.scenes if s.scene_id == new_id), None)
+    if disk_scene is None or disk_scene.summary != summary \
+            or list(disk_scene.characters or []) != characters:
+        return _base_receipt(
+            "story.create", ok=False, target="scenes",
+            before=len(before_ids), after=len(disk_ids),
+            revision=_scenes_token(on_disk.scenes), verified=False,
+            error="verify_failed",
+            note="创建后重新读取未在 canonical 中找到一致的新故事段，未确认创建。请用 story.list 读取当前列表后重试。")
+
+    DirectEditAuditStore(pdir, project).record(
+        agent_id="script_writer", field="scenes",
+        before=before_ids, after=disk_scene.to_dict(),
+        instruction=instruction, message_id=message_id)
+    rt.record_work(project, "change", f"Script Writer 创建故事段 {new_id}",
+                   participants=["script_writer"], affected_domains=["storyboard"],
+                   references={"scene_id": new_id}, status="completed")
+
+    order = disk_ids.index(new_id) + 1
+    new_rev = _scenes_token(on_disk.scenes)
+    return _base_receipt(
+        "story.create", ok=True, target="scenes",
+        before=len(before_ids), after=len(disk_ids), revision=new_rev, verified=True,
+        scene_id=new_id, order=order, scene=disk_scene.to_dict(),
+        scenes_revision=new_rev,
+        note=f"故事段 {new_id} 已创建（第 {order} 段）。请确认结果后用一句话回复用户。")
+
+
+def _execute_story_move(rt: AgentRuntime, project: str, arguments: str,
+                        instruction: str, message_id: Optional[str]) -> dict:
+    """执行 story.move：参数校验 → 乐观并发（scenes 域）→ 中性层移动 → 原子写 + audit。"""
+    args = _parse_args(arguments)
+    scene_id = (args.get("scene_id") or "").strip()
+    expected_rev = args.get("expected_scenes_revision")
+    before, after = _anchor_args(args)
+
+    if not scene_id:
+        raise AgentError("bad_arguments", "缺少 scene_id（要移动的故事段）")
+    if not isinstance(expected_rev, str) or not expected_rev.strip():
+        raise AgentError("bad_arguments", "缺少 expected_scenes_revision（应先 story.list 拿到版本指纹再传回）")
+
+    pdir, pstore, proj = _load_proj(rt, project)
+    current_rev = _scenes_token(proj.scenes)
+    if expected_rev != current_rev:
+        current_scenes = [{"scene_id": s.scene_id, "summary": (s.summary or "")[:80]}
+                          for s in proj.scenes]
+        return _base_receipt(
+            "story.move", ok=False, target="scenes",
+            before=len(proj.scenes), after=len(proj.scenes),
+            revision=current_rev, verified=False, error="stale_revision", stale=True,
+            expected_revision=expected_rev, current_revision=current_rev,
+            current_scenes=current_scenes,
+            note="你读取的故事段列表已过期（期间被改动），未移动。上面是当前最新列表。请用新的 expected_scenes_revision 重新调用 story.move。")
+
+    before_ids = [s.scene_id for s in proj.scenes]
+    try:
+        moved = move_scene(proj, scene_id, before=before, after=after)
+    except StructureError as e:
+        raise AgentError(e.code, e.message)
+    expected_order = [s.scene_id for s in proj.scenes]
+    expected_pos = expected_order.index(scene_id) + 1
+    pstore.save(proj)
+
+    # 写后重新读取 canonical 验证：顺序确实按预期落盘。
+    on_disk = _reload(rt, project)
+    new_order = [s.scene_id for s in on_disk.scenes]
+    if new_order != expected_order:
+        return _base_receipt(
+            "story.move", ok=False, target="scenes",
+            before=before_ids, after=new_order,
+            revision=_scenes_token(on_disk.scenes), verified=False,
+            error="verify_failed",
+            note="移动后重新读取发现顺序与预期不一致，未确认移动。请用 story.list 读取当前列表后重试。")
+
+    DirectEditAuditStore(pdir, project).record(
+        agent_id="script_writer", field="scenes",
+        before=before_ids, after=new_order,
+        instruction=instruction, message_id=message_id)
+    rt.record_work(project, "change", f"Script Writer 移动故事段 {scene_id}",
+                   participants=["script_writer"], affected_domains=["storyboard"],
+                   references={"scene_id": scene_id}, status="completed")
+
+    new_rev = _scenes_token(on_disk.scenes)
+    return _base_receipt(
+        "story.move", ok=True, target="scenes",
+        before=before_ids, after=new_order, revision=new_rev, verified=True,
+        scene_id=scene_id, order=expected_pos,
+        scenes_order=new_order, scenes_revision=new_rev,
+        note=f"故事段 {scene_id} 已移到第 {expected_pos} 位。请确认结果后用一句话回复用户。")
+
+
+def _execute_story_update(rt: AgentRuntime, project: str, arguments: str,
+                          instruction: str, message_id: Optional[str]) -> dict:
+    """执行 story.update：修改【单个已有故事段】的自身内容字段（白名单）。
+
+    流程：参数校验（scene_id + expected_revision + 仅白名单字段）→ 乐观并发（段级内容指纹）
+    → 无实际变更 no-op（不写盘/不审计）→ 内存改字段 → 原子写 →【重读 canonical 校验每个字段
+    确实落盘】→ audit + 工作记忆 → 统一回执。
+
+    边界：不改 scene_id（身份）、不改 shots（分镜归 Director）、不改项目级 story_text/角色定义。
+    段内内容修改只变段级 _scene_token，不变 _scenes_token 结构指纹（增/删/移动才变）。"""
+    args = _parse_args(arguments)
+    scene_id = (args.get("scene_id") or "").strip()
+    expected_rev = args.get("expected_revision")
+    if not scene_id:
+        raise AgentError("bad_arguments", "缺少 scene_id")
+    if not isinstance(expected_rev, str) or not expected_rev.strip():
+        raise AgentError("bad_arguments",
+                        "缺少 expected_revision（应先 story.read(scene_id) 拿到该段内容指纹再传回）")
+
+    # 字段白名单：只接受 SCENE_UPDATABLE_FIELDS；其余（scene_id/shots/story_text...）一律拒绝，
+    # 不静默忽略，避免模型误以为改了其实没改。
+    unknown = [k for k in args.keys()
+               if k not in SCENE_UPDATABLE_FIELDS
+               and k not in ("scene_id", "expected_revision")]
+    if unknown:
+        raise AgentError(
+            "bad_arguments",
+            f"不允许修改字段：{', '.join(unknown)}。story.update 只能改 "
+            f"{', '.join(SCENE_UPDATABLE_FIELDS)}；不能改 scene_id、分镜(shots)、项目剧"
+            f"本正文或角色定义。")
+
+    # 收集本次要改的字段（已校验类型）；characters 必须是字符串数组。
+    changes: dict = {}
+    for field in SCENE_UPDATABLE_FIELDS:
+        if field not in args or args.get(field) is None:
+            continue
+        val = args.get(field)
+        if field == "characters":
+            if not isinstance(val, list):
+                raise AgentError("bad_arguments", "characters 必须是字符串数组")
+            changes[field] = [str(c).strip() for c in val if str(c).strip()]
+        else:
+            if not isinstance(val, str):
+                raise AgentError("bad_arguments", f"{field} 必须是字符串")
+            changes[field] = val.strip()
+
+    pdir, pstore, proj = _load_proj(rt, project)
+    scene = next((s for s in proj.scenes if s.scene_id == scene_id), None)
+    if scene is None:
+        raise AgentError("not_found", f"故事段不存在: {scene_id}")
+
+    before_token = _scene_token(scene)
+    if expected_rev != before_token:
+        current_scene = {k: (list(getattr(scene, k, []) or []) if k == "characters"
+                             else (getattr(scene, k, "") or ""))
+                         for k in SCENE_UPDATABLE_FIELDS}
+        return _base_receipt(
+            "story.update", ok=False, target=f"scene:{scene_id}",
+            before=current_scene, after=current_scene,
+            revision=before_token, verified=False, error="stale_revision", stale=True,
+            scene_id=scene_id, expected_revision=expected_rev,
+            current_revision=before_token, current_scene=current_scene,
+            note="你读取的该故事段内容已过期（期间被改动），未修改。上面是当前最新内容。"
+                 "请基于最新内容重新判断，再用新的 expected_revision 调用 story.update。")
+
+    # 无实际变更（没给任何可改字段，或给的值与现值完全一致）→ no-op，不写盘/不审计。
+    real_diff = {}
+    for f, v in changes.items():
+        cur = list(getattr(scene, f, []) or []) if f == "characters" \
+            else (getattr(scene, f, "") or "")
+        if cur != v:
+            real_diff[f] = v
+    if not real_diff:
+        current_scene = {k: (list(getattr(scene, k, []) or []) if k == "characters"
+                             else (getattr(scene, k, "") or ""))
+                         for k in SCENE_UPDATABLE_FIELDS}
+        return _base_receipt(
+            "story.update", ok=True, target=f"scene:{scene_id}",
+            before=current_scene, after=current_scene,
+            revision=before_token, verified=True, unchanged=True, scene_id=scene_id,
+            changed=[],
+            note="提供的内容与该故事段当前内容完全一致，未产生变化。")
+
+    before_scene = {k: (list(getattr(scene, k, []) or []) if k == "characters"
+                        else (getattr(scene, k, "") or ""))
+                    for k in SCENE_UPDATABLE_FIELDS}
+    before_order = [s.scene_id for s in proj.scenes]
+
+    # 应用到内存对象（逐字段 set）。
+    for f, v in real_diff.items():
+        setattr(scene, f, v)
+    pstore.save(proj)
+
+    # 写后重读 canonical 校验：目标段每个变更字段确实落盘，且段身份/顺序未受影响。
+    on_disk = _reload(rt, project)
+    disk_scene = next((s for s in on_disk.scenes if s.scene_id == scene_id), None)
+    after_order = [s.scene_id for s in on_disk.scenes]
+    verified = (disk_scene is not None and after_order == before_order
+                and all(
+                    (list(getattr(disk_scene, f, []) or []) if f == "characters"
+                     else (getattr(disk_scene, f, "") or "")) == v
+                    for f, v in real_diff.items()))
+    after_scene = None
+    if disk_scene is not None:
+        after_scene = {k: (list(getattr(disk_scene, k, []) or []) if k == "characters"
+                           else (getattr(disk_scene, k, "") or ""))
+                       for k in SCENE_UPDATABLE_FIELDS}
+    if not verified:
+        return _base_receipt(
+            "story.update", ok=False, target=f"scene:{scene_id}",
+            before=before_scene, after=after_scene,
+            revision=_scene_token(disk_scene), verified=False,
+            error="verify_failed", scene_id=scene_id,
+            note="修改后重新读取发现内容与预期不一致，未确认修改。请用 story.read 读取该段最新内容后重试。")
+
+    DirectEditAuditStore(pdir, project).record(
+        agent_id="script_writer", field="scene",
+        before={"scene_id": scene_id, **before_scene},
+        after={"scene_id": scene_id, **after_scene},
+        instruction=instruction, message_id=message_id)
+    changed_summary = "、".join(
+        ("出场角色" if f == "characters" else f) for f in real_diff.keys())
+    rt.record_work(project, "change",
+                   f"Script Writer 修改故事段 {scene_id}（{changed_summary}）",
+                   participants=["script_writer"], affected_domains=["storyboard"],
+                   references={"scene_id": scene_id}, status="completed")
+
+    new_rev = _scene_token(disk_scene)
+    return _base_receipt(
+        "story.update", ok=True, target=f"scene:{scene_id}",
+        before=before_scene, after=after_scene, revision=new_rev, verified=True,
+        unchanged=False, scene_id=scene_id, changed=list(real_diff.keys()),
+        note=f"故事段 {scene_id} 已更新（{changed_summary}）。请确认结果后用一句话回复用户改了什么。")
+
+
+def _active_production_reason(project: str) -> Optional[str]:
+    """该项目有正在跑的生产流/视频 job 时返回原因串，否则 None（复用 Director 同护栏：
+    删正在生成的镜头会让 worker 写回空镜头）。best-effort，测试环境无生产模块→None。"""
+    try:
+        from src.agents.change_protocol.execution_service import _active_production
+        return _active_production(project)
+    except Exception:
+        return None
+
+
+def _execute_story_delete(rt: AgentRuntime, project: str, arguments: str,
+                          instruction: str, message_id: Optional[str]) -> dict:
+    """执行 story.delete(scene_id)：单阶段直接级联删除（方案 B：用户明确要删就直接删，
+    不再两阶段预览，避免 Agent「用文字假装预览却没发工具调用」导致的确认后无法删除）。
+
+    直接执行：活跃生产护栏 + execute_delete 级联删（原子写 canonical + 取消孤儿
+    job + 清理资产文件）→ 重读 canonical 验证段确实消失 → audit + 工作记忆 → 回执。
+    confirmed 参数保留兼容（显式传 false 才预览，不传/传 true 都直接删）。
+
+    复用 Director 同款公用服务 src/storyboard/delete_service，不重复造轮子。
+    边界：SW 只删故事段（scene）；段内镜头由 delete_service 确定性级联（不能留孤儿镜头），
+    但 SW 不提供单独 delete_shot（那归 Director）。scene_id 不存在由服务返回 found=False，
+    转 not_found 错误。"""
+    args = _parse_args(arguments)
+    scene_id = (args.get("scene_id") or "").strip()
+    if not scene_id:
+        raise AgentError("bad_arguments", "缺少 scene_id")
+    # 方案 B：默认直接删（confirmed 不传或 true 都删）。仅显式 confirmed=false 才走预览（兼容）。
+    confirmed = args.get("confirmed", True)
+    confirmed = (confirmed is True or
+                 (isinstance(confirmed, str) and confirmed.lower() == "true"))
+
+    from src.storyboard.delete_service import preview_delete, execute_delete, DeleteError
+    pdir, pstore, proj = _load_proj(rt, project)
+
+    # ---- 预览分支（仅显式 confirmed=false；兼容旧两阶段调用）----
+    prev = preview_delete(proj, "scene", scene_id)
+    if not prev.get("found", True):
+        raise AgentError("not_found", f"故事段不存在: {scene_id}")
+
+    if not confirmed:
+        reason = _active_production_reason(project)
+        if reason:
+            prev = dict(prev)
+            prev["active_production"] = reason
+        wd = prev.get("will_delete", {}) or {}
+        return _base_receipt(
+            "story.delete", ok=True, target=f"scene:{scene_id}",
+            before={"scenes": wd.get("scenes", []), "shots": wd.get("shots", [])},
+            after=None, revision=None, verified=False,
+            confirmed=False, preview=prev,
+            will_delete=wd,
+            protected_characters=prev.get("protected_characters", []),
+            other_scenes_untouched=prev.get("other_scenes_untouched", []),
+            note="这是删除预览（尚未删除，仅 confirmed=false 时返回）。")
+
+    # ---- 直接删除（默认）----
+    reason = _active_production_reason(project)
+    if reason:
+        raise AgentError("production_active",
+                         f"当前项目有正在进行的视频生成（{reason}），等生成结束后再删除")
+
+    before_ids = [s.scene_id for s in proj.scenes]
+    before_struct_rev = _scenes_token(proj.scenes)
+    try:
+        res = execute_delete(pdir, proj, "scene", scene_id)
+    except DeleteError as e:
+        raise AgentError(e.code, e.message)
+
+    deleted = res["deleted"]
+    # 写后重读 canonical 验证：目标段确实消失，其余段保留。
+    on_disk = _reload(rt, project)
+    after_ids = [s.scene_id for s in on_disk.scenes]
+    gone = scene_id not in after_ids and scene_id in deleted.get("scenes", [])
+    if not gone:
+        return _base_receipt(
+            "story.delete", ok=False, target=f"scene:{scene_id}",
+            before=before_ids, after=after_ids,
+            revision=_scenes_token(on_disk.scenes), verified=False,
+            confirmed=True, error="verify_failed",
+            note="删除后重新读取发现故事段仍在，未确认删除。请用 story.list 确认当前列表后重试。")
+
+    DirectEditAuditStore(pdir, project).record(
+        agent_id="script_writer", field=f"delete_scene:{scene_id}",
+        before={"scenes": deleted.get("scenes", []), "shots": deleted.get("shots", []),
+                "plans": deleted.get("plans", []), "removed_files": res["removed_files"]},
+        after=[], instruction=instruction, message_id=message_id)
+    n_scenes = len(deleted.get("scenes", []))
+    n_shots = len(deleted.get("shots", []))
+    rt.record_work(project, "change",
+                   f"Script Writer 删除了 {n_scenes} 个故事段、{n_shots} 个镜头",
+                   participants=["script_writer"], affected_domains=["storyboard"],
+                   references={"scene_id": scene_id}, status="completed")
+
+    new_rev = _scenes_token(on_disk.scenes)
+    parts = [f"故事段 {'、'.join(deleted.get('scenes', []))}"]
+    if deleted.get("shots"):
+        parts.append(f"镜头 {'、'.join(deleted['shots'])}")
+    return _base_receipt(
+        "story.delete", ok=True, target=f"scene:{scene_id}",
+        before=before_ids, after=after_ids, revision=new_rev, verified=True,
+        confirmed=True, scene_id=scene_id,
+        deleted=deleted, removed_files=res["removed_files"],
+        plan_removed=res.get("plan_removed", False),
+        scenes_revision=new_rev,
+        note=f"已删除{'、'.join(parts)}"
+             + (f"，清理 {res['removed_files']} 个生成资产文件" if res["removed_files"] else "")
+             + "。请用一句话回复用户删除了什么。")
+
+
+TOOL_EXECUTORS = {
+    "script.read": _execute_script_read,
+    "script.update": _execute_script_update,
+    "story.list": _execute_story_list,
+    "story.read": _execute_story_read,
+    "story.create": _execute_story_create,
+    "story.move": _execute_story_move,
+    "story.update": _execute_story_update,
+    "story.delete": _execute_story_delete,
+}
+
+
+# 用户确认意图的措辞（肯定删除/继续删除）。否定（"先别删/取消"）不匹配。
+_CONFIRM_DELETE_RE = re.compile(
+    r"确认|确定|删吧|删除|可以|好的|继续|执行|同意|yes|ok|确认删除|确定删除", re.IGNORECASE)
+_NEGATE_DELETE_RE = re.compile(r"先别|不要|取消|不删|算了|放弃|undo|cancel", re.IGNORECASE)
+
+
+async def _maybe_auto_confirm_deletes(rt: AgentRuntime, project: str,
+                                       session, user_content: str,
+                                       message_id: Optional[str]):
+    """删除两阶段兜底：若上一条 assistant 带有 pending_delete_scenes（预览未确认），
+    且本轮用户内容是确认（非取消），则由 Runtime 直接执行 confirmed=true 的级联删除。
+
+    返回 (receipts, trace, any_deleted)。无待确认/非确认 → ([], [], False)。
+    这是结构性兜底：模型在收到「确定删除」后常常不发 confirmed=true 工具调用（空转），
+    导致「确认了却没删」。用户的明确确认已存在，Runtime 兑现它，不依赖模型自主补发。"""
+    msgs = session.messages if hasattr(session, "messages") else []
+    # 找上一条 assistant（带 meta.pending_delete_scenes）
+    pending: list = []
+    for m in reversed(msgs[:-1] if msgs else []):
+        if m.role == "assistant":
+            meta = m.meta or {}
+            pending = list(meta.get("pending_delete_scenes") or [])
+            break
+        if m.role == "user":
+            break   # 连续两条 user（不该发生），保守退出
+    if not pending:
+        return [], [], False
+    # 用户内容必须是确认、且非取消
+    if _NEGATE_DELETE_RE.search(user_content):
+        return [], [], False
+    if not _CONFIRM_DELETE_RE.search(user_content):
+        return [], [], False
+
+    # 执行已确认删除：逐个 confirmed=true（复用 _execute_story_delete）。
+    receipts: list = []
+    trace: list = []
+    any_deleted = False
+    for i, sid in enumerate(pending):
+        args = json.dumps({"scene_id": sid, "confirmed": True}, ensure_ascii=False)
+        try:
+            obs = _execute_story_delete(rt, project, args, user_content, message_id)
+        except AgentError as e:
+            obs = {"ok": False, "error": e.message, "code": e.code,
+                   "operation": "story.delete", "scene_id": sid, "verified": False}
+        else:
+            obs.setdefault("scene_id", sid)
+        obs.setdefault("operation", "story.delete")
+        receipts.append(obs)
+        trace.append(_trace_entry(i, "story.delete", args, obs))
+        if obs.get("ok") and obs.get("verified"):
+            any_deleted = True
+    return receipts, trace, any_deleted
+
+
+# ============ 主 turn ============
+async def script_writer_turn(rt: AgentRuntime, project: str, session_id: str,
+                             content: str) -> dict:
+    """Script Writer 原生 tool-loop turn。
+
+    返回 {assistant_message, edited, created, moved, events, message, ...}。"""
+    store = rt._session_store(project)
+    session = store.load(session_id)
+    if session is None:
+        raise AgentError("unknown_scope", f"session 不存在: {session_id}")
+    if session.agent_id != "script_writer":
+        raise AgentError("permission_denied", "该会话仅限 Script Writer")
+    if not rt._is_enabled("script_writer"):
+        raise AgentError("disabled_agent", "Script Writer 已禁用")
+
+    user_msg = AgentMessage(role="user", content=content)
+    store.append_message(session_id, user_msg)
+    rt._maybe_capture_preference(project, content, user_msg.message_id)
+    session = store.load(session_id)
+
+    pdir = rt._resolve_project_dir(project)
+    history = [{"role": m.role, "content": m.content}
+               for m in session.messages[:-1]
+               if m.role in ("user", "assistant") and m.content and m.status is None]
+
+    client = rt._resolve_client_or_none()
+    assistant_text: str
+    status: Optional[str] = None
+    edited = created = moved = scene_updated = deleted = False
+    events: list = []
+    receipts: list = []
+    trace: list = []
+
+    if client is None:
+        assistant_text = "[chat 未配置：Agnes 推理模型不可用，无法修改剧本。请在设置中配置 API Key。]"
+        status = ResultStatus.NOT_CONFIGURED.value
+    else:
+        proj = ProjectStore(pdir).load()
+        system = _build_system(proj)
+        mem = rt._memory_supplement(project, "script_writer")
+        if mem:
+            system += "\n\n" + mem
+        messages: list[dict] = [{"role": "system", "content": system}]
+        messages += history
+        messages.append({"role": "user", "content": content})
+
+        # —— 删除两阶段：用户已确认但模型上轮没发 confirmed=true 的兜底 ——
+        # 上一条 assistant 若有 pending_delete_scenes（预览未确认），且本轮 user 内容像确认，
+        # 则【由 Runtime 直接执行已确认的删除】（兑现用户已给的明确确认，不依赖模型自主补发）。
+        pre_exec_receipts: list = []
+        if client is not None:
+            pre_exec_receipts, pre_trace, pre_deleted = await _maybe_auto_confirm_deletes(
+                rt, project, session, content, user_msg.message_id)
+            if pre_exec_receipts:
+                receipts.extend(pre_exec_receipts)
+                trace.extend(pre_trace)
+                if pre_deleted:
+                    deleted = True
+                # 把执行结果作为 system 说明喂给模型，让它据此总结（而非自己声称已删）
+                done_ids = [r.get("scene_id") for r in pre_exec_receipts
+                            if r.get("ok") and r.get("verified")]
+                fail_ids = [f"{r.get('scene_id')}({r.get('error')})"
+                            for r in pre_exec_receipts if not r.get("ok")]
+                note = ("用户已确认删除，系统已直接执行确认删除。真实结果："
+                        + (f"成功删除 {', '.join(done_ids)}。" if done_ids else "")
+                        + (f"失败：{', '.join(fail_ids)}。" if fail_ids else "")
+                        + "请据此向用户如实总结，不要重复调用删除工具。")
+                messages.append({"role": "tool", "tool_call_id": "auto_confirm_delete",
+                                 "content": json.dumps({"ok": True, "auto_executed": True,
+                                                        "deleted_scenes": done_ids,
+                                                        "failed": fail_ids,
+                                                        "note": note}, ensure_ascii=False)})
+                messages.append({"role": "assistant", "content": note})
+
+        try:
+            final = await _run_tool_loop(rt, client, project, messages, content, user_msg.message_id)
+            assistant_text = final["text"]
+            edited = final["edited"]
+            created = final["created"]
+            moved = final["moved"]
+            scene_updated = final.get("scene_updated", False)
+            # 合并预执行删除结果与 tool-loop 结果
+            if final.get("deleted"):
+                deleted = True
+            events = final["events"]
+            receipts = pre_exec_receipts + final.get("receipts", []) if pre_exec_receipts else final.get("receipts", [])
+            trace = (pre_trace + final.get("trace", [])) if pre_trace else final.get("trace", [])
+        except Exception as e:
+            assistant_text = f"[执行失败: {str(e)[:200]}]"
+            status = ResultStatus.FAILED.value
+            trace = []
+
+    if created:
+        intent = "story_create"
+    elif moved:
+        intent = "story_move"
+    elif scene_updated:
+        intent = "story_update"
+    elif deleted:
+        intent = "story_delete"
+    elif edited:
+        intent = "script_update"
+    else:
+        intent = "conversation"
+
+    # AI-7D-R 真实性收口：meta 带本轮写工具真实回执（成功/失败分类），供上层/前端核对，
+    # 不依赖 assistant 自然语言。write_success 只算 verified=true（删除预览 ok=true 但
+    # verified=false 不算真实变更）。pending_delete_scenes 携带本轮【预览但未确认】的
+    # 删除目标，供下一轮检测「用户确认后自动执行」。
+    receipts_meta = []
+    pending_delete_scenes: list = []
+    for r in receipts:
+        is_pending_delete = (r.get("operation") == "story.delete"
+                             and r.get("ok") and not r.get("verified")
+                             and not r.get("confirmed"))
+        if is_pending_delete:
+            wd = r.get("will_delete") or {}
+            for sid in (wd.get("scenes") or []):
+                if sid and sid not in pending_delete_scenes:
+                    pending_delete_scenes.append(sid)
+        receipts_meta.append({
+            "operation": r.get("operation"), "ok": bool(r.get("ok")),
+            "verified": bool(r.get("verified")), "stale": bool(r.get("stale")),
+            "unchanged": bool(r.get("unchanged")),
+            "confirmed": bool(r.get("confirmed")),
+            "error": r.get("error"),
+            "scene_id": r.get("scene_id"), "order": r.get("order"),
+            "revision": r.get("revision"),
+        })
+    meta = {"intent": intent, "events": events, "evidence_refs": [],
+            "receipts": receipts_meta,
+            "write_attempts": len(receipts_meta),
+            "write_success": sum(1 for r in receipts_meta
+                                 if r["ok"] and r["verified"] and not r["unchanged"]),
+            "trace": trace,   # 执行轨迹（需求 #7）：每步 tool→target→result→revision
+            "pending_delete_scenes": pending_delete_scenes}   # 本轮预览未确认的删除目标
+    asst = AgentMessage(role="assistant", content=assistant_text, status=status, meta=meta)
+    store.append_message(session_id, asst)
+
+    return {"assistant_message": assistant_text, "edited": edited,
+            "created": created, "moved": moved, "scene_updated": scene_updated,
+            "deleted": deleted,
+            "events": events, "message": asst.to_dict(),
+            "intent": intent, "receipts": receipts_meta, "trace": trace,
+            "evidence_refs": [], "linked_task_ids": [],
+            "linked_change_session_id": None, "session_id": session_id,
+            "agent_id": "script_writer"}
+
+
+# 「已完成」措辞检测：匹配过去/完成态（已创建、插入了、移到最前面了、移动完成、成功更新…），
+# 不匹配提议/将来态（「我可以帮你创建」），避免对纯对话误触发。
+# 动词与「了/完成」之间允许最多 12 字（如「移到最前面了」「把 s03 移动到第一位了」）。
+_VERBS = (r"创建|新建|插入|添加|加好|移动|移到|移至|更新|调整|"
+          r"修改|改写|改正|改好|改到|重写|续写|删除|删掉|拆分|拆成|拆好|拆完|划分|分段")
+_SUCCESS_CLAIM_RE = re.compile(
+    rf"(已(经)?\s*(在|把|将)?[^。！？\n]{{0,8}}?({_VERBS})|"
+    rf"({_VERBS})[^。！？\n]{{0,12}}了|"
+    rf"({_VERBS})?\s*完成|"
+    rf"成功\s*({_VERBS})|"
+    rf"(created|inserted|moved|updated|added|done|complete[dw]?)\b)",
+    re.IGNORECASE)
+
+# 否定式：诚实回答「没有/未/并未 创建/移动/完成」不应被当成声称成功。
+_NEGATION_RE = re.compile(
+    r"(没有|没|并未|并没有|尚未|未|未能|无法|不能)\s*"
+    rf"({_VERBS}|完成|成功)?",
+)
+
+
+def _claims_success(text: str) -> bool:
+    """仅当存在完成态声称、且该声称不在否定语境中才判定为「声称成功」。
+    用最近的一次匹配向前查找否定词，避免「我没移动，但我创建了」这类被全句否定误伤。"""
+    if not text:
+        return False
+    for m in _SUCCESS_CLAIM_RE.finditer(text):
+        start = m.start()
+        window = text[max(0, start - 6):start]
+        if _NEGATION_RE.search(window):
+            continue
+        return True
+    return False
+
+
+def _claimed_count_mismatch(text: str, real_count: int) -> Optional[int]:
+    """检测文本里「本次创建/拆分了 N 段」的 N 是否与真实成功创建数不符。
+    返回文本里第一个与 real_count 不一致的数量（用于纠偏）；一致或无→None。
+
+    抠两种计数表述：
+      (1) 动词在前：「已创建 3 段 / 拆成 3 段 / 建了 3 个故事段」
+      (2) 数字在前 + 创建完成态：「3 段都建好了 / 3 段创建完成」
+    不抠「现共 4 段/现有 4 段」这类【总数】——总数≠本次新建数，属正常表述。"""
+    t = text or ""
+    # (1) 动词→数字→段
+    m = re.search(r"(?:创建|新建|拆成|拆分|建|新增)[^0-9]{0,6}?(\d+)\s*(?:个)?\s*(?:故事)?段", t)
+    if m:
+        v = int(m.group(1))
+        if v != real_count:
+            return v
+    # (2) N 段…（建好/创建/完成）
+    m = re.search(r"(\d+)\s*(?:个)?\s*(?:故事)?段[^。！？\n]{0,8}?(?:建好|创建|建成|完成|都建)",
+                  t)
+    if m:
+        v = int(m.group(1))
+        if v != real_count:
+            return v
+    return None
+
+
+def _refresh_system(messages: list, rt: AgentRuntime, project: str) -> None:
+    try:
+        pdir = rt._resolve_project_dir(project)
+        proj = ProjectStore(pdir).load()
+        messages[0] = {"role": "system", "content": _build_system(proj)}
+    except Exception:
+        pass
+
+
+def _ledger_brief(receipts: list) -> str:
+    """把本轮真实写工具结果渲染成给模型看的账本（确定性，来自回执而非模型叙述）。"""
+    if not receipts:
+        return ("本轮没有任何写工具被真正调用（没有 script.update / story.create / "
+                "story.move 的工具调用记录）。")
+    lines = []
+    for r in receipts:
+        op = r.get("operation")
+        if r.get("ok"):
+            if r.get("unchanged"):
+                lines.append(f"- {op}：ok=true，但内容无变化（unchanged），canonical 未改动。")
+            else:
+                extra = ""
+                if r.get("scene_id"):
+                    extra = f"（{r['scene_id']}，第 {r.get('order')} 位）"
+                elif r.get("new_len") is not None:
+                    extra = f"（{r.get('old_len')}→{r.get('new_len')} 字）"
+                lines.append(f"- {op}：ok=true{extra}，已重新读取 canonical 确认落盘。")
+        else:
+            why = r.get("error") or "未知错误"
+            if r.get("stale"):
+                why = "stale（版本过期，被拒绝，未写入）"
+            lines.append(f"- {op}：ok=false，原因：{why}。canonical 未被该调用改动。")
+    return "\n".join(lines)
+
+
+def _op_human(r: dict) -> str:
+    """把一条真实回执渲染成人类可读的操作描述（确定性，来自回执而非模型叙述）。"""
+    op = r.get("operation")
+    sid = r.get("scene_id")
+    if op == "story.create":
+        return f"创建故事段 {sid}（第 {r.get('order')} 位）"
+    if op == "story.move":
+        return f"移动故事段 {sid} 到第 {r.get('order')} 位"
+    if op == "story.update":
+        ch = r.get("changed") or []
+        return f"修改故事段 {sid}（{'、'.join(ch) or '内容'}）"
+    if op == "story.delete":
+        d = r.get("deleted") or {}
+        extra = f"及 {len(d.get('shots', []))} 个镜头" if d.get("shots") else ""
+        return f"删除故事段 {sid}{extra}"
+    if op == "script.update":
+        return f"更新剧本正文（{r.get('old_len')}→{r.get('new_len')} 字）"
+    return f"{op}({sid or ''})"
+
+
+def _honest_fallback(receipts: list) -> str:
+    """纠偏后模型仍谎称成功时的确定性兜底文案——纯由真实回执生成，绝不采信模型自述。"""
+    real_changes = [r for r in receipts if r.get("ok") and r.get("verified") and not r.get("unchanged")]
+    if real_changes:
+        return "已完成的修改：" + "；".join(_op_human(r) for r in real_changes) + "。"
+    if receipts:
+        reasons = []
+        for r in receipts:
+            if r.get("stale"):
+                reasons.append("内容版本已过期")
+            elif r.get("error") == "verify_failed":
+                reasons.append("写入后校验未通过")
+            else:
+                reasons.append(r.get("error") or "工具执行失败")
+        uniq = "、".join(dict.fromkeys(reasons))
+        return (f"这次修改没有真正生效（{uniq}）。项目内容保持原样。"
+                f"可以让我重试，或先让我读取当前最新内容再改。")
+    return "这次我没有真正执行修改（没有发出对应的工具调用）。请再说一次你的需求，我会实际操作。"
+
+
+def _append_fact_summary(rt: AgentRuntime, project: str, text: str, receipts: list) -> str:
+    """有真实变更时，在模型回复后追加【确定性事实摘要】——由真实 receipts + 当前
+    canonical 生成，不信模型叙述。彻底解决：
+      - 模型说"改了A"实际改了B（描述不符）
+      - 模型说"没改"实际改了（[129]→[131] 场景）
+      - 用户/下一轮无法核对真实结果
+
+    纯追加，不删改模型原文；若模型已诚实且准确，摘要是冗余但无害的确认。"""
+    real_changes = [r for r in receipts if r.get("ok") and r.get("verified") and not r.get("unchanged")]
+    if not real_changes:
+        return text
+    try:
+        proj = _reload(rt, project)
+        scenes = proj.scenes or []
+        scene_list = [s.scene_id for s in scenes]
+        lines = ["\n\n---\n【实际执行记录】（系统据真实回执生成，非模型叙述）"]
+        for r in real_changes:
+            ok = "✓" if r.get("ok") else "✗"
+            lines.append(f"{ok} {_op_human(r)}")
+        lines.append(f"\n当前故事段共 {len(scenes)} 个：{', '.join(scene_list) if scene_list else '（空）'}")
+        return text + "\n".join(lines)
+    except Exception:
+        return text
+
+
+async def _run_tool_loop(rt: AgentRuntime, client, project: str,
+                         messages: list, instruction: str,
+                         message_id: Optional[str],
+                         max_steps: int = DEFAULT_MAX_TOOL_STEPS) -> dict:
+    """原生 function-calling 循环 + 执行真实性收口（结构性，非提示词）。
+
+    每轮：
+      1. 执行模型发起的 tool_calls，每个写工具返回统一回执（写后重读 canonical 校验）。
+      2. 维护本轮 receipts 账本（区分 success/unchanged/stale/error/verify_failed/not_called）。
+      3. 模型无 tool_call 给出最终文本时，做真相闸门：若文本声称「已创建/移动/更新」但账本里
+         没有任何 ok=true 真实变更回执，则把真实账本作为纠正消息喂回，要求模型基于真实 tool
+         result 重答（可重试工具），最多 MAX_CORRECTIVE_ROUNDS 次；仍谎称则 Runtime 确定性覆写。
+
+    max_steps 仅防死循环（LLM 循环步数），非业务数量限制；批量拆分等长任务由调用方上调。
+    """
+    edited = created = moved = scene_updated = deleted = False
+    summary = ""
+    events: list = []
+    receipts: list = []          # 本轮所有写工具调用的真实回执（成功与失败都记）
+    write_attempts = 0           # 写工具被调用的次数（含失败）
+    corrective_round = 0
+    # 执行轨迹（需求 #7）：每个工具调用（读+写）一条 {step,tool,target,result,revision}。
+    # 供调试「为什么移动三次才成/为什么多建一段」——只随 turn 结果返回，不进 system prompt。
+    trace: list = []
+    last_read_after_write = -1   # 最后一次只读调用所在的 step（用于最终完成判定）
+    # 防失控（需求 #11）：连续同一工具同一失败的次数；超阈值则诚实停止，不无限重试。
+    repeat_fail_streak = 0
+    last_fail_sig = None         # (tool, error/code) 去重签名
+
+    for step in range(max_steps):
+        resp = await client.chat_completion(
+            messages, temperature=0.7, max_tokens=65536,
+            tools=SCRIPT_WRITER_TOOLS, tool_choice="auto")
+
+        tool_calls = resp.get("tool_calls")
+        content = resp.get("content")
+
+        if not tool_calls:
+            text = (content or "").strip()
+            # ---- 真相闸门 ----
+            real_changes = [r for r in receipts if r.get("ok") and r.get("verified") and not r.get("unchanged")]
+            # (a) 声称成功但 0 真实变更 → 谎称
+            false_claim = _claims_success(text) and not real_changes
+            # (b) 声称拆分了 N 段，但真实成功创建数与 N 不符 → 夸大（用户需求 #3：
+            #     最终数量必须以真实 receipt 为准，不许凭文字记忆谎称）
+            real_create_count = sum(1 for r in real_changes
+                                    if r.get("operation") == "story.create")
+            over_claim_n = (_claimed_count_mismatch(text, real_create_count)
+                            if real_changes and real_create_count else None)
+            # (c) 完成判定（需求 #4）：本轮发生过 mutation 且文本声称完成、且回复涉及
+            #     数量/顺序总结（批量/多步任务），但最后一次只读发生在最后一次写【之前】
+            #     （或从没读过）→ 没有以最新真实状态收尾，要求补读。
+            #     只读任务或单次简单修改+简短回复不触发，避免无谓往返。
+            last_write_step = max((t["step"] for t in trace
+                                   if t["tool"] in WRITE_OPERATIONS), default=-1)
+            reply_summarizes = bool(re.search(r"\d+\s*(个|段)|第.{1,4}位|顺序|顺序是|共\d+",
+                                              text or ""))
+            needs_final_read = (real_changes and _claims_success(text)
+                                and reply_summarizes
+                                and last_read_after_write < last_write_step)
+            if false_claim or over_claim_n is not None or needs_final_read:
+                if corrective_round < MAX_CORRECTIVE_ROUNDS:
+                    corrective_round += 1
+                    messages.append({"role": "assistant", "content": text or ""})
+                    brief = _ledger_brief(receipts)
+                    if needs_final_read:
+                        nudge = (
+                            "你做了一些修改并声称完成，但最后一次真实读取发生在最后一次写入【之前】"
+                            "（或本轮还没读过最终状态）。收尾前必须先读取与任务有关的最新真实状态"
+                            "（故事段任务用 story.list，需要核对具体内容再 story.read；剧本正文任务"
+                            "用 script.read），然后【以这次读取的真实结果】总结你创建/修改/删除了"
+                            "什么、当前数量与顺序。不要凭自己之前写的文字记忆声称完成。")
+                    elif over_claim_n is not None:
+                        nudge = (
+                            f"你上面说拆成了 {over_claim_n} 段，但工具的真实成功创建回执只有 "
+                            f"{real_create_count} 次（{brief}）。数量必须以工具真实返回为准，"
+                            "不许凭文字记忆声称。请基于真实回执重新回答：要么如实说已创建几个"
+                            "（并给出真实 id），要么继续调用 story.create 把剩余的段真正创建出来。")
+                    elif write_attempts == 0:
+                        nudge = (
+                            "你上面声称已经创建/移动/更新了内容，但本轮你【根本没有发起对应的"
+                            "工具调用】。光用文字说「已完成」不会改动任何东西。\n"
+                            + brief + "\n请要么真正调用对应工具（script.update/story.create/"
+                            "story.move）完成修改，要么如实告诉用户你没有改动、需要怎么做。")
+                    else:
+                        nudge = (
+                            "你上面声称已经完成，但工具的真实返回显示没有任何一次写入成功确认：\n"
+                            + brief + "\n请只依据上面真实的工具返回结果回答。可以用最新数据重新调用"
+                            "工具重试；如果不打算重试，就如实告诉用户这次没有改动成功。")
+                    messages.append({"role": "user", "content": nudge})
+                    _refresh_system(messages, rt, project)
+                    continue   # 回到循环顶部，让模型重答/重试
+                # 纠偏额度用尽 → 确定性兜底，绝不把不实文本交给用户
+                text = _honest_fallback(receipts)
+            # 有真实变更时，追加【确定性事实摘要】——由 receipts + 当前 canonical 生成，
+            # 不信模型叙述。彻底解决「模型说改了A实际改了B」「说没改其实改了」。
+            text = _append_fact_summary(rt, project, text, receipts)
+            return {"text": text or "已完成。",
+                    "edited": edited, "created": created, "moved": moved, "scene_updated": scene_updated, "deleted": deleted,
+                    "summary": summary, "events": events, "receipts": receipts, "trace": trace}
+
+        messages.append({"role": "assistant", "content": content or "",
+                         "tool_calls": tool_calls})
+
+        write_done_this_step = False   # 思路①：写工具强制串行——一步只执行一个写操作
+        for tc in tool_calls:
+            fn = tc.get("function") or {}
+            name = fn.get("name") or ""
+            args = fn.get("arguments") or "{}"
+            call_id = tc.get("id") or name
+
+            # 思路①：写工具串行。同一步若模型一次发多个写工具，只执行第1个，
+            # 第2个起直接拒绝（ok=false），要求等前一个写完成拿最新 revision 再发下一个。
+            # 只读工具（script.read/story.list/story.read）可批量。这从根上消除
+            # 「批量发起用同一旧 revision → 后续 stale」的低效与混乱。
+            is_write_tool = (name in WRITE_OPERATIONS)
+            if is_write_tool and write_done_this_step:
+                obs = {
+                    "ok": False, "operation": name,
+                    "error": "本步已执行过一个写操作。写工具必须一个一个来：等前一个完成、"
+                             "拿到返回的最新 revision/状态后，再发下一个写工具调用。"
+                             "不要在同一次回复里批量发多个写工具（会用旧 revision 导致 stale）。"
+                             "只读工具（story.list/script.read/story.read）可以一次多个。",
+                }
+                messages.append({"role": "tool", "tool_call_id": call_id,
+                                 "content": json.dumps(obs, ensure_ascii=False)})
+                trace.append(_trace_entry(step, name, args, obs))
+                continue
+
+            executor = TOOL_EXECUTORS.get(name)
+            if executor is None:
+                obs = {"ok": False, "error": f"未知工具：{name}", "operation": name}
+            else:
+                try:
+                    obs = executor(rt, project, args, instruction, message_id)
+                except AgentError as e:
+                    obs = {"ok": False, "error": e.message, "code": e.code,
+                           "operation": name}
+                except Exception as e:
+                    obs = {"ok": False, "error": f"工具执行异常：{str(e)[:200]}",
+                           "operation": name}
+
+            # —— 防失控（需求 #11）：连续同一工具同一失败签名 → 诚实停止，不无限重试 ——
+            ok_now = bool(obs.get("ok"))
+            if ok_now:
+                repeat_fail_streak = 0
+                last_fail_sig = None
+            else:
+                sig = (name, obs.get("code") or obs.get("error") or "err")
+                if sig == last_fail_sig:
+                    repeat_fail_streak += 1
+                else:
+                    repeat_fail_streak = 1
+                    last_fail_sig = sig
+                if repeat_fail_streak >= MAX_REPEAT_FAIL:
+                    # 连续 N 次同样的失败：把真实账本交给模型并要求它换思路或如实告知，
+                    # 而非继续重复无效操作。
+                    messages.append({"role": "tool", "tool_call_id": call_id,
+                                     "content": json.dumps(obs, ensure_ascii=False)})
+                    _refresh_system(messages, rt, project)
+                    nudge = (f"「{name}」已连续 {repeat_fail_streak} 次以同样方式失败"
+                             f"（{obs.get('error') or obs.get('code')}）。继续重复同样调用不会成功。"
+                             "请改用只读工具（story.list/script.read）确认当前真实状态，换个参数或"
+                             "换种做法，或如实告诉用户当前遇到的问题、哪些已成功完成。")
+                    messages.append({"role": "assistant", "content": content or ""})
+                    messages.append({"role": "user", "content": nudge})
+                    trace.append(_trace_entry(step, name, args, obs))
+                    _refresh_system(messages, rt, project)
+                    break   # 跳出 tool_calls 循环，回到 step 循环让模型重新决定
+
+            # 写域调用：记入账本（含已知写工具 + 看似写工具但未知/拼错的，如 story.insert）。
+            # 后者 obs 是 ok=false 的未知工具错误，也要算作「有写尝试但失败」，不能误判为
+            # 「根本没调用工具」——这样兜底文案才准确。只读工具不记账本。
+            is_write_domain = name in WRITE_OPERATIONS or name.startswith(("script.", "story."))
+            if is_write_domain and name not in ("script.read", "story.list", "story.read"):
+                write_attempts += 1
+                obs.setdefault("operation", name)
+                receipts.append(obs)
+                write_done_this_step = True   # 思路①：本步写槽已占用，后续写工具拒绝
+            else:
+                # 只读工具成功 → 记录其 step，供最终完成判定「最后是否读过真实状态」
+                if ok_now:
+                    last_read_after_write = step
+
+            # 据【真实回执】（而非模型叙述）设置 mutated 标志。
+            # 必须 verified=true：删除预览(confirmed=false)虽 ok=true 但 verified=false，
+            # 不算真实变更——否则模型只 preview 就会被当成「已删除」。
+            if (name in WRITE_OPERATIONS and obs.get("ok")
+                    and obs.get("verified") and not obs.get("unchanged")):
+                if name == "script.update":
+                    edited = True
+                    summary = f"剧本正文 {obs.get('old_len')}→{obs.get('new_len')} 字"
+                    events.append({"kind": "story_update", "summary": summary})
+                elif name == "story.create":
+                    created = True
+                    s = f"创建故事段 {obs['scene_id']}"
+                    events.append({"kind": "story_create",
+                                   "scene_id": obs["scene_id"], "summary": s})
+                    summary = s
+                elif name == "story.move":
+                    moved = True
+                    s = f"移动故事段 {obs['scene_id']} 到第 {obs['order']} 位"
+                    events.append({"kind": "story_move",
+                                   "scene_id": obs["scene_id"], "summary": s})
+                    summary = s
+                elif name == "story.update":
+                    scene_updated = True
+                    changed = "、".join(obs.get("changed") or []) or "内容"
+                    s = f"修改故事段 {obs['scene_id']}（{changed}）"
+                    events.append({"kind": "story_scene_update",
+                                   "scene_id": obs["scene_id"], "summary": s})
+                    summary = s
+                elif name == "story.delete":
+                    deleted = True
+                    d = obs.get("deleted", {}) or {}
+                    n_shots = len(d.get("shots", []))
+                    s = f"删除故事段 {obs['scene_id']}" + (f"及 {n_shots} 个镜头" if n_shots else "")
+                    events.append({"kind": "story_delete",
+                                   "scene_id": obs["scene_id"], "summary": s})
+                    summary = s
+
+            messages.append({"role": "tool", "tool_call_id": call_id,
+                             "content": json.dumps(obs, ensure_ascii=False)})
+
+            # 执行轨迹（需求 #7）：每个工具调用一条，供调试真实执行顺序/结果。
+            trace.append(_trace_entry(step, name, args, obs))
+
+        # 无条件刷新 system（项目元信息/计数）。成功/stale/no-op/错误都需 Agent 基于最新状态继续。
+        _refresh_system(messages, rt, project)
+
+    # 预算耗尽（防死循环）：诚实告知已完成的真实工作 + 剩余须用户续做，绝不谎称全部完成。
+    done = [r for r in receipts if r.get("ok") and r.get("verified") and not r.get("unchanged")]
+    if created or done:
+        created_ids = [r.get("scene_id") for r in receipts
+                       if r.get("operation") == "story.create"
+                       and r.get("ok") and r.get("verified")]
+        tail = (f"已真实创建故事段：{', '.join(created_ids)}。" if created_ids
+                else f"已完成部分工作（{len(done)} 次成功写入）。")
+        text = (f"（已达到执行预算上限 {max_steps} 步，本轮停止——这是防死循环的保护，不是"
+                f"业务数量限制。{tail}还有未完成的部分，请告诉我继续，或把剩余需求拆小一些。）")
+    else:
+        text = (f"（已达到执行预算上限 {max_steps} 步，本轮停止——这是防死循环的保护。"
+                f"本轮没有任何成功写入。请把需求拆小一些再试。）")
+    return {"text": text,
+            "edited": edited, "created": created, "moved": moved, "scene_updated": scene_updated, "deleted": deleted,
+            "summary": summary, "events": events, "receipts": receipts, "trace": trace}

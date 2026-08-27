@@ -158,6 +158,36 @@ class AgnesClient:
             return text.strip()
         return text
 
+    async def chat_completion(self, messages: List[dict], *, temperature=0.7,
+                              max_tokens=2048, thinking=False,
+                              tools: Optional[List[dict]] = None,
+                              tool_choice: Optional[Any] = None) -> dict:
+        """OpenAI 兼容的 chat completion（支持原生 function-calling）。
+
+        返回 message dict：{"content": str|None, "tool_calls": list|None, "role": "assistant"}。
+        tool_calls 元素为 {"id","type":"function","function":{"name","arguments"(str)}}，
+        与 OpenAI Chat Completions 格式一致。tools 为标准 OpenAI tools 数组。
+        不做 response_format/json_mode 处理（agent 工具调用走结构化 tool_calls，不需要）。"""
+        if self.quota:
+            ok, why = self.quota.can("text_calls", 1)
+            if not ok: raise AgnesError(why)
+        body: Dict[str, Any] = {"model": self.models["text"], "messages": messages,
+                                "temperature": temperature, "max_tokens": max_tokens}
+        if thinking:
+            body["chat_template_kwargs"] = {"enable_thinking": True}
+        if tools:
+            body["tools"] = tools
+            if tool_choice is not None:
+                body["tool_choice"] = tool_choice
+        r = await self._request("POST", "/v1/chat/completions", "text", json=body)
+        if self.quota: self.quota.consume("text_calls", 1)
+        msg = r.json()["choices"][0]["message"]
+        return {
+            "content": msg.get("content"),
+            "tool_calls": msg.get("tool_calls"),
+            "role": msg.get("role", "assistant"),
+        }
+
     # ---------- 图片 ----------
     async def generate_image(self, prompt: str, *,
                              image_refs: Optional[List[str]] = None,

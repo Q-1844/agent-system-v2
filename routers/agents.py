@@ -732,3 +732,66 @@ async def get_execution_eligibility(project_name: str, session_id: str,
                                              plan_id, plan_version)
     except AgentError as e:
         _raise(e)
+
+
+# ==================== AI-7D-R · Script Writer 最小测试弹窗（隔离，一个工具）====================
+# 目的：在独立弹窗里验证“LLM → 一个工具 → 真实落盘 → 诚实回复”最小闭环，不走 ChangeSession
+# /提案/审查流水线。验证稳定后再逐步加回规则。§16 Level-1 直接编辑（受控+原子+审计）。
+class ScriptWriterTestReq(BaseModel):
+    content: str
+
+
+@router.post("/api/project/{project_name}/agents/script-writer-test/turn")
+async def script_writer_test_turn(project_name: str, req: ScriptWriterTestReq):
+    """Script Writer 测试弹窗：单工具 edit_story_text 的最小 agent 循环。
+    自动取/建 script_writer 的长存 project 会话。返回 {assistant_message, edited, new_story_text?}。"""
+    from src.agents.script_writer_min import script_writer_turn
+    rt = get_agent_runtime()
+    try:
+        sid = rt.get_or_create_session(project_name, "script_writer",
+                                       "project", project_name)["session_id"]
+        return await script_writer_turn(rt, project_name, sid, req.content)
+    except AgentError as e:
+        _raise(e)
+
+
+@router.get("/api/project/{project_name}/agents/script-writer-test/session")
+async def script_writer_test_session(project_name: str):
+    """取 Script Writer 测试弹窗的长存会话（含历史消息，F5 恢复用）。"""
+    rt = get_agent_runtime()
+    try:
+        return rt.get_or_create_session(project_name, "script_writer",
+                                        "project", project_name)
+    except AgentError as e:
+        _raise(e)
+
+
+# ==================== AI-7D-R · Director 最小测试弹窗（隔离，增/删故事段与镜头）====================
+class DirectorTestReq(BaseModel):
+    content: str
+
+
+@router.post("/api/project/{project_name}/agents/director-test/turn")
+async def director_test_turn(project_name: str, req: DirectorTestReq):
+    """Director 测试弹窗：add_scenes/add_shots（追加，add-only）+ delete_scene/delete_shot
+    （依赖感知级联删除，confirmed 两阶段：先返回依赖说明，用户确认后执行）。"""
+    from src.agents.director_min import director_turn
+    rt = get_agent_runtime()
+    try:
+        sid = rt.get_or_create_session(project_name, "director",
+                                       "project", project_name)["session_id"]
+        return await director_turn(rt, project_name, sid, req.content)
+    except AgentError as e:
+        _raise(e)
+
+
+@router.get("/api/project/{project_name}/agents/director-test/session")
+async def director_test_session(project_name: str):
+    """取 Director 测试弹窗的长存会话（含历史消息，F5 恢复用）。"""
+    rt = get_agent_runtime()
+    try:
+        return rt.get_or_create_session(project_name, "director",
+                                        "project", project_name)
+    except AgentError as e:
+        _raise(e)
+

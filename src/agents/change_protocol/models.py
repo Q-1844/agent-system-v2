@@ -17,13 +17,20 @@ from typing import Any, Dict, List, Optional
 
 # ============ 枚举常量（字符串字面量，避免 import cycle）============
 # ChangeSession.status（§11）
+# AI-7D-R：新增 no_action（终态）——请求经分析确认无可执行改动时的诚实结果，
+# 不再伪造 A/B 方案（§10）。settled 状态对后续新变更“不可见”，新请求一律新建会话（§7/§8）。
 SESSION_STATUSES = (
     "routing", "consulting", "analyzing_dependencies", "resolving_conflicts",
     "awaiting_user_decision", "synthesizing_plan", "validating_plan",
     "building_preview", "ready_for_review", "approved_for_execution",
-    "rejected", "stale", "blocked", "failed", "cancelled",
+    "rejected", "stale", "blocked", "failed", "cancelled", "no_action",
 )
-SESSION_TERMINAL = ("approved_for_execution", "rejected", "stale", "failed", "cancelled")
+SESSION_TERMINAL = ("approved_for_execution", "rejected", "stale", "failed",
+                    "cancelled", "no_action")
+# AI-7D-R §7：已“落定”的会话——后续新变更不得并入，必须基于最新 canonical 新建会话。
+# blocked 也算：它是不可继续的僵尸态，新请求应开新会话而非灌进旧会话。
+SESSION_SETTLED = ("approved_for_execution", "rejected", "stale", "failed",
+                   "cancelled", "no_action", "blocked")
 
 # UnifiedChangePlan.status（§36）
 PLAN_STATUSES = (
@@ -103,6 +110,11 @@ class ChangeSession:
     legacy_analysis_only: bool = False
     created_at: float = 0.0
     updated_at: float = 0.0
+    # AI-7D-R §11：用户对当前方案的最新反馈（真实传给重跑的 agent，不再塞进名不副实的
+    # user_feedback_message_id 字段、也不被 original_user_request 不可变挡掉）。
+    latest_feedback: Optional[str] = None
+    # AI-7D-R §10：no_action 终态的自然语言原因（给用户/前端展示）。
+    no_action_reason: Optional[str] = None
 
     def to_dict(self) -> dict:
         return {"session_id": self.session_id, "project_name": self.project_name,
@@ -117,7 +129,9 @@ class ChangeSession:
                 "pending_decision_ids": list(self.pending_decision_ids),
                 "error": self.error, "schema_version": self.schema_version,
                 "legacy_analysis_only": self.legacy_analysis_only,
-                "created_at": self.created_at, "updated_at": self.updated_at}
+                "created_at": self.created_at, "updated_at": self.updated_at,
+                "latest_feedback": self.latest_feedback,
+                "no_action_reason": self.no_action_reason}
 
     @classmethod
     def from_dict(cls, d: dict) -> "ChangeSession":

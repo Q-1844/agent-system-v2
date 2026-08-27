@@ -212,10 +212,10 @@ async def run_script_proposal(rt, project: str, session_id: str,
 
     proposal.summary = parsed["summary"]
     proposal.items = [it.to_dict() for it in parsed["items"]]
-    # 未产出任何 item 但也未报错 → 标记无需剧本改动（非失败）
+    # AI-7D-R §10：未产出任何 item 但也未报错 → 诚实的 completed 空提案（非失败、不伪造
+    # “剧本无需改动”A/B 决策）。service._analyze_and_compile 据此终态化为 no_action。
     proposal.status = "completed"
-    if not proposal.items:
-        proposal.user_decisions_needed = [] if parsed["summary"] else ["剧本无需改动"]
+    proposal.user_decisions_needed = list(parsed.get("user_decisions_needed") or [])
     cp_store.save_proposal(proposal)
     settle_proposal_task(rt, project, task, proposal, failed=False)
     return proposal

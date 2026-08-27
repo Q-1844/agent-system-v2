@@ -58,17 +58,19 @@
     <div class="tc-aionly-hint">AI 制作团队协作记录 · 与某位 Agent 沟通请打开其私聊</div>
     <div v-if="store.error" class="chat-err">{{ store.error }}</div>
 
-    <!-- 活跃 change-session 时显示方案（观察；批准在 Direct Chat 进行）-->
-    <ChangePlanReview v-if="cs.session" />
+    <!-- 活跃 change-session 时显示方案（观察；批准在 Direct Chat 进行）。
+         AI-7D-R：no_action/已落定会话不再显示审查卡（历史事务，不捕获后续）。-->
+    <ChangePlanReview v-if="cs.session && !cs.noAction && (!cs.settled || cs.executionActive)" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useTeamChatStore } from '@/store/teamChat';
 import { useChangeSessionStore } from '@/store/changeSession';
 import { useProjectStore } from '@/store';
 import type { TeamMessage } from '@/api';
+import { useStickToBottom } from '@/composables/useStickToBottom';
 import ChangePlanReview from '@/components/agent/ChangePlanReview.vue';
 
 const store = useTeamChatStore();
@@ -78,6 +80,7 @@ const projectName = computed(() => projectStore.projectName);
 
 const draft = ref('');
 const el = ref<HTMLElement | null>(null);
+const stick = useStickToBottom(el);
 
 const placeholder = '问 Producer（如：Xiaoyu 出现在哪些场景？/ 把 Xiaoyu 头发改长）';
 
@@ -98,31 +101,29 @@ async function send() {
   if (/改|修改|换成|变成|删除|删掉|去掉|调整|替换|重写|续写|make|change|remove|turn/i.test(text) && !cs.session) {
     await cs.create(text);
   }
-  await nextTick();
-  if (el.value) el.value.scrollTop = el.value.scrollHeight;
+  // 用户主动发送 → 贴底跟随。
+  stick.pinToBottom();
 }
 
-async function scrollToBottom() {
-  await nextTick();
-  if (el.value) el.value.scrollTop = el.value.scrollHeight;
-}
-
-watch(() => store.messages.length, scrollToBottom);
+// 新消息（轮询/异步到达）→ 仅在用户原本贴底时跟随，看历史时不强拉。
+watch(() => store.messages.length, () => stick.followIfStuck());
 // 项目切换：清状态 + 重载（§23/§79）
 watch(projectName, async (n, o) => {
   if (n !== o) {
     store.onProjectChange();
     cs.onProjectChange();
-    if (n) { await store.load(); await cs.restoreActive(); }
+    if (n) { await store.load(); await cs.restoreActive(); stick.pinToBottom(); }
   }
 });
 
 onMounted(async () => {
+  stick.bind();
   // K3：先等项目身份恢复完成（F5 后正确项目），再恢复后端持久化的会话/执行真相
   await projectStore.identityReady;
   if (projectName.value) { await store.load(); await cs.restoreActive(); }
+  stick.pinToBottom();
 });
-onBeforeUnmount(() => { store.stopPoll(); cs.stopPoll(); });
+onBeforeUnmount(() => { stick.unbind(); store.stopPoll(); cs.stopPoll(); });
 </script>
 
 <style lang="scss" scoped>

@@ -183,7 +183,7 @@ class ModelProfile:
         )
 
 
-# ============ AgentMessage（§8）============
+# ============ AgentMessage（§8 / AI-7D-R §10.1）============
 @dataclass
 class AgentMessage:
     """一条对话消息。status 承载 not_configured / not_implemented 等结构化状态（§21 软失败）。
@@ -191,31 +191,62 @@ class AgentMessage:
     AI-7D D1：meta 承载 unified_turn 的结构化真相（intent/evidence_refs/events/
     linked_task_ids/linked_change_session_id）。None=普通聊天消息（向后兼容旧持久化）。
     UI 只许据 meta 的真实 backend 记录表示「已查看/正在查看」（D1.4：模型说"我应 inspect"
-    ≠ inspect 发生；只有 meta.evidence_refs/events 存在才算真查看）。"""
+    ≠ inspect 发生；只有 meta.evidence_refs/events 存在才算真查看）。
+
+    AI-7D-R §10.1：消息成为长存 Conversation 的一等记录——message_id 服务端生成，
+    conversation_id/agent_id 标识归属，linked_* 把消息与真实工作对象关联（不再只塞 meta）。
+    旧持久化消息（无这些字段）from_dict 时回填，向后兼容。"""
     role: str                                # user / assistant / system
     content: str
     status: Optional[str] = None             # None=正常；not_configured / not_implemented
     created_at: float = field(default_factory=time.time)
     meta: Optional[Dict[str, Any]] = None    # AI-7D D1：unified_turn 结构化真相
+    # AI-7D-R §10.1：Conversation 一等字段
+    message_id: Optional[str] = None
+    conversation_id: Optional[str] = None
+    agent_id: Optional[str] = None           # 消息归属的 agent（user 消息也记录当前对话 agent）
+    linked_work_ids: List[str] = field(default_factory=list)
+    linked_change_session_id: Optional[str] = None
+    linked_execution_id: Optional[str] = None
 
     def to_dict(self) -> dict:
         return {"role": self.role, "content": self.content,
                 "status": self.status, "created_at": self.created_at,
-                "meta": self.meta}
+                "meta": self.meta,
+                "message_id": self.message_id, "conversation_id": self.conversation_id,
+                "agent_id": self.agent_id,
+                "linked_work_ids": list(self.linked_work_ids),
+                "linked_change_session_id": self.linked_change_session_id,
+                "linked_execution_id": self.linked_execution_id}
 
     @classmethod
     def from_dict(cls, d: dict) -> "AgentMessage":
         d = d or {}
+        meta = d.get("meta")
+        # 向后兼容：旧消息的 linked_change_session_id 只在 meta 里 → 提到一等字段
+        linked_cs = d.get("linked_change_session_id")
+        if linked_cs is None and isinstance(meta, dict):
+            linked_cs = meta.get("linked_change_session_id")
         return cls(role=d.get("role", "user"), content=d.get("content", ""),
                    status=d.get("status"), created_at=d.get("created_at", time.time()),
-                   meta=d.get("meta"))
+                   meta=meta,
+                   message_id=d.get("message_id"),
+                   conversation_id=d.get("conversation_id"),
+                   agent_id=d.get("agent_id"),
+                   linked_work_ids=list(d.get("linked_work_ids") or []),
+                   linked_change_session_id=linked_cs,
+                   linked_execution_id=d.get("linked_execution_id"))
 
 
-# ============ AgentSession（§8/§9）============
+# ============ AgentSession（§8/§9 / AI-7D-R §9 长存 Conversation）============
 @dataclass
 class AgentSession:
-    """一个 Agent 的独立对话会话。按 (agent_id, scope_type, scope_id) 隔离，
-    不同 Agent 的聊天历史互不混在一起（§9）。"""
+    """一个 Agent 的独立对话会话。
+
+    AI-7D-R §9：Direct Conversation 长存于 (project, agent_id)，不再随页面 scope 切换而重建。
+    conversation_id 标识该长存对话（同 project 同 agent 唯一）；scope_type/scope_id 保留为
+    PROJECT 级（页面/选中实体上下文是 per-turn 元数据，不再是会话身份）。旧会话按 (agent,scope)
+    键控，sessions.get_or_create_conversation 会迁移最近一条到长存 conversation。"""
     session_id: str
     project: str
     agent_id: str
@@ -224,6 +255,7 @@ class AgentSession:
     messages: List[AgentMessage] = field(default_factory=list)
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
+    conversation_id: Optional[str] = None    # AI-7D-R §9：长存对话标识
 
     def to_dict(self) -> dict:
         return {
@@ -232,6 +264,7 @@ class AgentSession:
             "scope_id": self.scope_id,
             "messages": [m.to_dict() for m in self.messages],
             "created_at": self.created_at, "updated_at": self.updated_at,
+            "conversation_id": self.conversation_id,
         }
 
     @classmethod
@@ -246,6 +279,7 @@ class AgentSession:
             messages=msgs,
             created_at=d.get("created_at", time.time()),
             updated_at=d.get("updated_at", time.time()),
+            conversation_id=d.get("conversation_id"),
         )
 
 

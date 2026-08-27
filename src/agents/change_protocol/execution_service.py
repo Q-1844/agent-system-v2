@@ -632,6 +632,20 @@ async def commit_canonical(rt: AgentRuntime, project: str,
         else:
             ex.stage = "character_sync"; ex.status = "running"
         store.save_execution(ex)
+    # AI-7D-R §10.2：创作变更已真正落定 canonical → 记录共享工作记忆（best-effort，
+    # 不阻断提交流程）。让后续轮次/其它 agent 知道这次工作真的发生过（修根因 #4）。
+    try:
+        domains = sorted({getattr(s, "module", "") for s in (plan.steps or []) if getattr(s, "module", "")})
+        rt.record_work(
+            project, "change",
+            f"已提交创作变更（{', '.join(domains) or '项目'}；"
+            + ("仅创作，未触发生成" if ex.production_mode == "creative_only" else "将继续受影响制作") + "）",
+            participants=["producer"],
+            references={"change_session_id": ex.change_session_id, "execution_id": ex.execution_id},
+            affected_domains=domains,
+            status=("completed" if ex.production_mode == "creative_only" else "in_progress"))
+    except Exception:
+        pass
     return {"execution": ex.to_dict(), "committed": True, "idempotent": False}
 
 

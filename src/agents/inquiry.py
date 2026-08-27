@@ -635,9 +635,10 @@ async def _producer_answer(rt: AgentRuntime, project: str, request: str,
     from .registry import agent_system_prompt
     if client is None:
         return "[chat 未配置：Agnes 推理模型不可用，无法综合答案。检视数据已就绪。]"
+    mem = rt._memory_supplement(project, "producer")
     messages = [
         {"role": "system", "content": agent_system_prompt("producer") + "\n\n" + PRODUCER_INQUIRY_SYSTEM
-         + "\n\n" + _pack_text(pack)},
+         + "\n\n" + _pack_text(pack) + ("\n\n" + mem if mem else "")},
     ]
     # AI-7D D1 Bug B 修复：注入对话历史，使多轮 inquiry 有上下文承接（D1.3）。
     if history:
@@ -894,9 +895,11 @@ async def run_specialist_read_answer(rt: "AgentRuntime", project: str, agent_id:
                 "evidence_refs": ev, "inspection_calls": obs_calls,
                 "status": ResultStatus.NOT_CONFIGURED.value}
     from .registry import agent_system_prompt
+    mem = rt._memory_supplement(project, agent_id)
     messages = [
         {"role": "system",
          "content": agent_system_prompt(agent_id) + "\n\n" + _pack_text(pack)
+         + ("\n\n" + mem if mem else "")
          + "\n\n🔴 系统已为你检视好以上项目上下文，你直接基于此回答。不能也不需要调用工具去"
            "再查看。绝不输出工具调用语法（<function=...>、{\"function\":...}）。不要说"
            "'我来查看'然后停下——直接给完整最终答案。结合对话历史保持多轮上下文承接。"},

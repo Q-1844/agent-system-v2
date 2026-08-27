@@ -1,0 +1,408 @@
+# src/storyboard/structure_service.py
+# AI-7D-R · 分镜结构操作（中性，与 delete_service 同级；router 与 agents 均可 import）。
+#
+# 纯内存操作：调用方负责 ProjectStore.save。不 import router/deps。
+# 顺序模型：段无顺序字段，权威顺序 = project.scenes 数组位置；镜头权威顺序 = scene.shots
+# 数组位置，Shot.index 只是显示号（任何位置变动后 renumber）。id 是身份证号：插入中间不
+# 重排已有 id，新实体取下一个单调序号，删除不回收。参照 src/revision/changeset.py 的
+# INSERT_SCENE/INSERT_SHOT/REORDER_SHOTS/UPDATE_* 逻辑。
+from __future__ import annotations
+
+from typing import Any, Optional
+
+from src.core.models import Project, Scene, Shot
+
+
+class StructureError(Exception):
+    """结构操作确定性错误。code: not_found / invalid。"""
+    def __init__(self, code: str, message: str):
+        self.code = code
+        self.message = message
+        super().__init__(f"[{code}] {message}")
+
+
+def renumber_shot_indices(scene: Scene) -> None:
+    """把段内镜头 index 按数组当前顺序重排为 1..N 连续。不改变任何 shot_id。"""
+    for i, sh in enumerate(scene.shots, start=1):
+        sh.index = i
+
+
+def allocate_scene_id(project: Project) -> str:
+    """分配下一个故事段 id（s{NN:02d}）。防御性重算 next_scene_seq（历史项目/手动改过导致
+    水位偏低时取 max+1），删除不回收。会自增 project.next_scene_seq。"""
+    used = []
+    for sc in project.scenes:
+        sid = sc.scene_id or ""
+        if sid.startswith("s"):
+            try:
+                used.append(int(sid[1:]))
+            except ValueError:
+                pass
+    project.next_scene_seq = max(project.next_scene_seq, (max(used) + 1) if used else 1)
+    sid = f"s{project.next_scene_seq:02d}"
+    project.next_scene_seq += 1
+    return sid
+
+
+def allocate_shot_id(scene: Scene, extra_used: Optional[set[int]] = None) -> str:
+    """分配段内下一个镜头 id（{scene_id}_c{NN:02d}）。按已用最大 _cNN+1，删除不回收。
+    extra_used: 本批刚分配但还没插入 scene.shots 的号（批量插入时防同批撞号）。"""
+    used = list(extra_used or [])
+    for sh in scene.shots:
+        s = sh.shot_id or ""
+        if "_c" in s:
+            try:
+                used.append(int(s.split("_c")[-1]))
+            except ValueError:
+                pass
+    nxt = (max(used) + 1) if used else 1
+    return f"{scene.scene_id}_c{nxt:02d}"
+
+
+def _coerce_duration(v: Any) -> float:
+    try:
+        d = float(v)
+        return d if d > 0 else 5.0
+    except Exception:
+        return 5.0
+
+
+def _build_and_insert(project: Project, insert_at: int,
+                      specs: list[dict]) -> list[Scene]:
+    """在指定下标处构造并插入若干故事段（分配 id）。调用方负责解析 insert_at。"""
+    new_scenes = []
+    for spec in specs or []:
+        sid = allocate_scene_id(project)
+        sc = Scene(scene_id=sid, title="",
+                   summary=str(spec.get("summary") or ""),
+                   characters=list(spec.get("characters") or []), shots=[])
+        new_scenes.append(sc)
+    project.scenes[insert_at:insert_at] = new_scenes
+    return new_scenes
+
+
+def _resolve_anchor_index(project: Project, before: Optional[str],
+                          after: Optional[str]) -> int:
+    """把 before/after 锚点解析为插入下标。before=在锚点前；after=在锚点后；
+    都空=末尾。before/after 同时给抛 invalid；锚点不存在抛 not_found。"""
+    if before and after:
+        raise StructureError("invalid", "只能指定 before_scene_id 或 after_scene_id 之一")
+    anchor = before or after
+    if not anchor:
+        return len(project.scenes)
+    idx = next((i for i, s in enumerate(project.scenes)
+                if s.scene_id == anchor), None)
+    if idx is None:
+        raise StructureError("not_found", f"锚点故事段不存在: {anchor}")
+    return idx if before else idx + 1
+
+
+def insert_scenes_after(project: Project, after_scene_id: Optional[str],
+                        specs: list[dict]) -> list[Scene]:
+    """在 after_scene_id 之后一次性插入若干故事段（保持 specs 顺序）。
+    after_scene_id 为 None/空 → 追加末尾。锚点不存在抛 StructureError(not_found)。
+    返回新建 Scene 列表（已进入 project.scenes，id 已分配）。"""
+    if after_scene_id:
+        idx = next((i for i, s in enumerate(project.scenes)
+                    if s.scene_id == after_scene_id), None)
+        if idx is None:
+            raise StructureError("not_found", f"after_scene_id {after_scene_id} 不存在")
+        insert_at = idx + 1
+    else:
+        insert_at = len(project.scenes)
+    return _build_and_insert(project, insert_at, specs)
+
+
+def insert_scenes(project: Project, *, before: Optional[str] = None,
+                  after: Optional[str] = None,
+                  specs: Optional[list[dict]] = None) -> list[Scene]:
+    """在 before 之前 / after 之后插入若干故事段；都不指定 → 追加末尾。
+    before/after 同时给抛 invalid；锚点不存在抛 not_found。返回新建 Scene 列表。
+    比 insert_scenes_after 多支持「插到最前」（before=第一个段）。"""
+    insert_at = _resolve_anchor_index(project, before, after)
+    return _build_and_insert(project, insert_at, specs or [])
+
+
+def move_scene(project: Project, scene_id: str, *,
+               before: Optional[str] = None,
+               after: Optional[str] = None) -> Scene:
+    """把已存在的故事段移动到 before 之前 / after 之后（都不指定 → 移到末尾）。
+    不改 scene_id、不重排段内镜头、不分配新 ID。
+    段/锚点不存在抛 not_found；before/after 同时给或指向自身抛 invalid。
+    返回被移动的 Scene（同一对象，已在新位置）。"""
+    if before and after:
+        raise StructureError("invalid", "只能指定 before_scene_id 或 after_scene_id 之一")
+    if scene_id and scene_id in (before, after):
+        raise StructureError("invalid", "不能把故事段移动到自身前后")
+    cur_idx = next((i for i, s in enumerate(project.scenes)
+                    if s.scene_id == scene_id), None)
+    if cur_idx is None:
+        raise StructureError("not_found", f"故事段不存在: {scene_id}")
+
+    anchor = before or after
+    if anchor:
+        a_idx = next((i for i, s in enumerate(project.scenes)
+                      if s.scene_id == anchor), None)
+        if a_idx is None:
+            raise StructureError("not_found", f"锚点故事段不存在: {anchor}")
+        target = a_idx if before else a_idx + 1
+    else:
+        target = len(project.scenes)
+
+    scene = project.scenes.pop(cur_idx)
+    # pop 后，若锚点原本在被移段之后，其下标左移 1
+    if anchor and target > cur_idx:
+        target -= 1
+    elif not anchor:
+        target = len(project.scenes)   # 移到末尾：pop 后末尾下标
+    project.scenes.insert(target, scene)
+    return scene
+
+
+def insert_shots_after(project: Project, scene_id: str, after_shot_id: Optional[str],
+                       specs: list[dict]) -> list[Shot]:
+    """在 scene_id 段内、after_shot_id 之后一次性插入若干镜头。after_shot_id 为 None/空
+    → 追加段尾。段/锚点不存在抛 not_found。返回新建 Shot 列表（已进入 scene.shots，index
+    已按新顺序重排）。"""
+    scene = next((s for s in project.scenes if s.scene_id == scene_id), None)
+    if scene is None:
+        raise StructureError("not_found", f"故事段 {scene_id} 不存在")
+    if after_shot_id:
+        idx = next((i for i, sh in enumerate(scene.shots)
+                    if sh.shot_id == after_shot_id), None)
+        if idx is None:
+            raise StructureError("not_found", f"after_shot_id {after_shot_id} 不存在")
+        # 接力约束：若 anchor 的紧随后继正接力 anchor（source_shot_id 指向它），
+        # 不能在二者之间插入——新镜头会打断"后继的上一镜是 anchor"。段尾（无后继）可插。
+        if idx + 1 < len(scene.shots):
+            successor = scene.shots[idx + 1]
+            if successor.source_shot_id == after_shot_id:
+                raise StructureError(
+                    "dependency_block",
+                    f"镜头 {successor.shot_id} 正接力 {after_shot_id}，不能在它俩之间插入"
+                    f"（会打断接力）。可改在 {successor.shot_id} 之后插入，或先解除接力关系。")
+        insert_at = idx + 1
+    else:
+        insert_at = len(scene.shots)
+
+    new_shots = []
+    used_nums: set[int] = set()   # 本批已分配的 c 号（切片插入前还没进 scene.shots）
+    for spec in (specs or []):
+        sid = allocate_shot_id(scene, extra_used=used_nums)
+        try:
+            used_nums.add(int(sid.split("_c")[-1]))
+        except ValueError:
+            pass
+        sh = Shot(shot_id=sid, scene_id=scene_id, index=0,
+                  description=str(spec.get("description") or ""),
+                  characters=list(spec.get("characters") or []),
+                  target_duration_s=_coerce_duration(spec.get("target_duration_s")))
+        new_shots.append(sh)
+    scene.shots[insert_at:insert_at] = new_shots
+    renumber_shot_indices(scene)
+    return new_shots
+
+
+def update_scene_fields(project: Project, scene_id: str, *,
+                        summary: Optional[str] = None,
+                        characters: Optional[list] = None) -> dict:
+    """原地改故事段字段。只改非 None 字段。返回 {scene_id, changed:[...]}。"""
+    scene = next((s for s in project.scenes if s.scene_id == scene_id), None)
+    if scene is None:
+        raise StructureError("not_found", f"故事段 {scene_id} 不存在")
+    changed = []
+    if summary is not None:
+        scene.summary = summary
+        changed.append("summary")
+    if characters is not None:
+        scene.characters = list(characters)
+        changed.append("characters")
+    return {"scene_id": scene_id, "changed": changed}
+
+
+# 可通过 update_shot_fields 写入的结构化字段白名单（创作字段，不含产物/接力/状态）。
+# 这些字段都被 src/core/prompt_builder.py 消费，最终决定生成画面。
+_SHOT_WRITABLE_FIELDS = (
+    "description", "characters", "target_duration_s",
+    "shot_size", "camera", "camera_angle", "camera_movement",
+    "composition", "lighting", "motion", "motion_pace",
+    "environment_motion", "action_sequence",
+    "opening_state", "important_details", "required_elements",
+    "last_frame_description", "end_state", "frame_change",
+    "add_elements", "remove_elements", "end_composition",
+    "preserve_elements", "preserve_custom", "transition_description",
+    "video_preserve_elements", "video_preserve_custom",
+    "note",
+)
+
+# 哪些结构化字段影响哪个生成 prompt（与 prompt_builder 消费的字段对齐）。
+# 改了这些字段 → 对应 *_prompt_en 若存在且无手动 override，就清空，让下次生成按新字段重拼。
+_FIRST_FRAME_FIELDS = frozenset({
+    "description", "characters", "shot_size", "camera_angle", "lighting",
+    "composition", "important_details", "required_elements", "opening_state",
+})
+_LAST_FRAME_FIELDS = frozenset({
+    "motion", "frame_change", "last_frame_description", "end_state",
+    "add_elements", "remove_elements", "end_composition",
+    "preserve_elements", "preserve_custom", "characters",
+})
+_VIDEO_FIELDS = frozenset({
+    "motion", "camera", "camera_movement", "motion_pace",
+    "environment_motion", "action_sequence", "transition_description",
+    "video_preserve_elements", "video_preserve_custom", "characters",
+})
+
+
+def _invalidate_stale_prompts(shot, changed: list[str]) -> dict:
+    """改了影响画面的字段后，让旧的自动英文 prompt 失效（下次生成按新字段重拼）。
+    - 有手动 *_prompt_override 的：不清（用户刻意手动覆盖），标记 manual_override。
+    - 有 *_prompt_en 的：清空，标记 cleared（旧 prompt 不再代表新字段）。
+    - 都没有：无需处理（本就走字段拼接）。
+    不删已生成的图片/视频文件（用户可能要对比）。返回 {first_frame,last_frame,video} 的动作。"""
+    actions = {}
+    changed_set = set(changed)
+    mapping = [
+        # 首帧自动 prompt 字段是 prompt_en（兼容字段），无 first_frame_prompt_en
+        ("first_frame", _FIRST_FRAME_FIELDS,
+         "prompt_en", "first_frame_prompt_override",
+         "first_frame_prompt_sig"),
+        ("last_frame", _LAST_FRAME_FIELDS,
+         "last_frame_prompt_en", "last_frame_prompt_override",
+         "last_frame_prompt_sig"),
+        ("video", _VIDEO_FIELDS,
+         "video_prompt_en", "video_prompt_override", "video_prompt_sig"),
+    ]
+    for label, field_set, en_attr, ov_attr, sig_attr in mapping:
+        if not (changed_set & field_set):
+            continue
+        if getattr(shot, ov_attr, None):
+            actions[label] = "manual_override"
+            continue
+        if getattr(shot, en_attr, None):
+            setattr(shot, en_attr, "")
+            setattr(shot, sig_attr, "")
+            actions[label] = "cleared"
+    return actions
+
+
+def update_shot_fields(project: Project, shot_id: str, fields: Optional[dict] = None,
+                       **kwargs) -> dict:
+    """原地改镜头字段。只改白名单内且调用方提供（非 None）的字段。
+    - fields: 字段字典（批量/结构化更新用）；**kwargs 兼容旧调用（description/characters/
+      target_duration_s）。两者合并，kwargs 优先。
+    - duration 非法/≤0 兜底 5；characters/list 字段拷贝成 list。
+    - 改了影响首帧/尾帧/视频的字段时，自动让旧的自动 prompt 失效（见 _invalidate_stale_prompts），
+      但保留手动 override，不删已生成资产。
+    - 未知字段直接忽略（不报错，避免 LLM 多吐字段导致整轮失败）。
+    返回 {shot_id, changed:[...], prompts_invalidated:{...}}。"""
+    shot = project.get_shot(shot_id)
+    if shot is None:
+        raise StructureError("not_found", f"镜头 {shot_id} 不存在")
+    merged: dict = {}
+    if fields:
+        merged.update(fields)
+    merged.update({k: v for k, v in kwargs.items() if v is not None})
+
+    changed = []
+    for key, val in merged.items():
+        if key not in _SHOT_WRITABLE_FIELDS or val is None:
+            continue
+        if key == "target_duration_s":
+            setattr(shot, key, _coerce_duration(val))
+        elif key in ("characters", "required_elements", "preserve_elements",
+                     "video_preserve_elements"):
+            setattr(shot, key, list(val) if isinstance(val, (list, tuple)) else [val])
+        else:
+            setattr(shot, key, str(val))
+        changed.append(key)
+    prompts_invalidated = _invalidate_stale_prompts(shot, changed) if changed else {}
+    return {"shot_id": shot_id, "changed": changed,
+            "prompts_invalidated": prompts_invalidated}
+
+
+def update_shots_batch(project: Project, scene_id: str,
+                       shots: list[dict]) -> dict:
+    """批量更新一个段内的多个镜头（每个 shot 带 shot_id + 要改的字段）。
+    段不存在 / 某镜头不在该段 → StructureError(not_found)。全部在内存改完后返回，调用方 save。
+    返回 {scene_id, results:[...], count, prompts_invalidated:{shot_id: actions}}。"""
+    scene = next((s for s in project.scenes if s.scene_id == scene_id), None)
+    if scene is None:
+        raise StructureError("not_found", f"故事段 {scene_id} 不存在")
+    in_scene = {sh.shot_id for sh in scene.shots}
+    results = []
+    invalidated = {}
+    for item in shots or []:
+        if not isinstance(item, dict):
+            continue
+        sid = item.get("shot_id")
+        if not sid or sid not in in_scene:
+            raise StructureError("not_found",
+                                 f"镜头 {sid} 不在故事段 {scene_id}")
+        fields = {k: v for k, v in item.items() if k != "shot_id"}
+        r = update_shot_fields(project, sid, fields)
+        results.append(r)
+        if r.get("prompts_invalidated"):
+            invalidated[sid] = r["prompts_invalidated"]
+    return {"scene_id": scene_id, "results": results,
+            "count": len(results), "prompts_invalidated": invalidated}
+
+
+# ============ 只读查询（供 agent 主动读取完整参数）============
+# 镜头创作字段（不含产物/批次/内部签名/prompt_en 等内部字段），给 agent 看的完整视图。
+_SHOT_READ_FIELDS = (
+    "shot_id", "scene_id", "index", "description", "characters",
+    "target_duration_s", "shot_size", "camera", "camera_angle", "camera_movement",
+    "composition", "lighting", "motion", "motion_pace", "environment_motion",
+    "action_sequence", "opening_state", "important_details", "required_elements",
+    "last_frame_description", "end_state", "frame_change", "transition_description",
+    "opening_source", "source_shot_id", "link_mode", "note",
+)
+
+
+def read_shot(project: Project, shot_id: str) -> dict:
+    """返回一个镜头的完整创作参数（白名单字段，不含产物/内部字段）。镜头不存在抛 not_found。"""
+    shot = project.get_shot(shot_id)
+    if shot is None:
+        raise StructureError("not_found", f"镜头 {shot_id} 不存在")
+    return {k: getattr(shot, k) for k in _SHOT_READ_FIELDS if hasattr(shot, k)}
+
+
+def read_scene(project: Project, scene_id: str) -> dict:
+    """返回一个故事段及其镜头的完整创作参数（不含产物）。段不存在抛 not_found。"""
+    scene = next((s for s in project.scenes if s.scene_id == scene_id), None)
+    if scene is None:
+        raise StructureError("not_found", f"故事段 {scene_id} 不存在")
+    return {
+        "scene_id": scene.scene_id,
+        "summary": scene.summary,
+        "characters": list(scene.characters),
+        "shots": [read_shot(project, sh.shot_id) for sh in scene.shots],
+    }
+
+
+def read_script(project: Project) -> dict:
+    """返回剧本正文（完整、实时）。供 Director 等不拥有剧本的 agent 按需读取，
+    避免把长剧本整段塞进 system prompt。"""
+    text = project.story_text or ""
+    return {"length": len(text), "text": text}
+
+
+def list_scenes(project: Project) -> dict:
+    """列出所有故事段及其镜头的结构化信息（比系统目录更完整的机器可读视图）。
+    供 agent 在做多段对比/增删建议时一次性获取全貌。不含产物字段。"""
+    return {
+        "count": len(project.scenes),
+        "scenes": [
+            {"scene_id": s.scene_id, "summary": s.summary,
+             "characters": list(s.characters),
+             "shot_count": len(s.shots),
+             "shots": [{"shot_id": sh.shot_id, "index": sh.index,
+                        "description": sh.description,
+                        "characters": list(sh.characters),
+                        "target_duration_s": sh.target_duration_s,
+                        "opening_source": sh.opening_source,
+                        "source_shot_id": sh.source_shot_id}
+                       for sh in s.shots]}
+            for s in project.scenes
+        ],
+    }

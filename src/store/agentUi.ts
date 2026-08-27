@@ -8,7 +8,7 @@
  * （src/api/index.ts:1528-1588）。ScopeType 仅 project/scene/shot（src/agents/models.py:27-30）。
  */
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { apiClient } from '@/api';
 import type { AgentMessage, AgentInfo } from '@/api';
 import { useProjectStore } from '@/store';
@@ -165,13 +165,17 @@ export const useAgentUiStore = defineStore('agentUi', () => {
     catch { /* 服务未就绪时静默，UI 仍可用 */ }
   }
 
-  /** 按 (agent, scope) get_or_create 复用 session（§29）。失败软提示，不抛。 */
+  /**
+   * AI-7D-R §9：解析该 agent 的长存 Direct Conversation（project 级，稳定 conversation_id）。
+   * 页面 context（scene/shot/character）是 per-turn 元数据，用于变更范围定位（_contextScope），
+   * 不再作为会话身份键——切换页面/选中实体不再重建、不再清空对话历史。
+   * 失败软提示，不抛。
+   */
   async function ensureSession(): Promise<string | null> {
     const p = projectStore.projectName;
     if (!p) { chatError.value = '请先选择项目'; return null; }
     try {
-      const { scope_type, scope_id } = currentScope.value;
-      const s = await apiClient.createAgentSession(p, activeAgentId.value, scope_type, scope_id);
+      const s = await apiClient.createAgentSession(p, activeAgentId.value, 'project', p);
       activeSessionId.value = s.session_id;
       messages.value = s.messages || [];
       chatError.value = '';
@@ -185,37 +189,34 @@ export const useAgentUiStore = defineStore('agentUi', () => {
   async function setAgent(id: string) {
     if (activeAgentId.value === id) return;
     activeAgentId.value = id;
-    activeSessionId.value = null;                        // 换 agent 重建会话
+    activeSessionId.value = null;                        // 换 agent 换成长存会话
     messages.value = [];
     await ensureSession();
   }
 
-  /** 业务现场注入 context（§9/§15）。切 context 重建会话。 */
+  /** 业务现场注入 context（§9/§15）。AI-7D-R：只更新 per-turn 上下文，不重建会话。 */
   async function setContext(ctx: AgentUiContext) {
     currentContext.value = ctx;
     contextAttachedToWorkspace.value = true;
-    activeSessionId.value = null;
-    messages.value = [];
-    await ensureSession();
+    if (!activeSessionId.value) await ensureSession();
   }
 
-  /** 一次设 agent + context，只建一个 session（toolbar/Story-Director 用，避免两次 ensureSession）。 */
+  /** 一次设 agent + context（toolbar/Story-Director 用）。会话仍按 agent 长存。 */
   async function setAgentContext(agentId: string, ctx: AgentUiContext) {
     activeAgentId.value = agentId;
     currentContext.value = ctx;
     contextAttachedToWorkspace.value = true;
-    activeSessionId.value = null;
-    messages.value = [];
-    await ensureSession();
+    if (!activeSessionId.value) {
+      messages.value = [];
+      await ensureSession();
+    }
   }
 
-  /** §17：清除 context（回退到项目级 scope，不伪造业务上下文）。 */
+  /** §17：清除 context（回退到项目级，不伪造业务上下文）。不清空对话。 */
   async function clearContext() {
     currentContext.value = null;
     contextAttachedToWorkspace.value = false;
-    activeSessionId.value = null;
-    messages.value = [];
-    await ensureSession();
+    if (!activeSessionId.value) await ensureSession();
   }
 
   /** 当前 UI context → ChangeSession context_scope（§9：页面上下文即解析指向）。
@@ -259,12 +260,15 @@ export const useAgentUiStore = defineStore('agentUi', () => {
     messages.value.push(...msgs);
   }
 
-  /** 发送消息（§5 路由）：变更意图 → ChangeSession 桥接；只读问题 → 普通 Agent 会话。 */
+  /** 发送消息（§5 路由）：变更意图 → ChangeSession 桥接；只读问题 → 普通 Agent 会话。
+   *  AI-7D-R：具备直接编辑工具的 Agent（script_writer 等）不走 ChangeSession 方案审核，
+   *  直接发 /turn 由 agent 自己的 tool-loop 完成修改（LLM→tool→observation→回复）。 */
+  const DIRECT_EDIT_AGENTS = new Set(['script_writer']);
   async function send(content: string) {
     const p = projectStore.projectName;
     const text = content.trim();
     if (!text || sending.value) return;
-    if (CHANGE_INTENT_RE.test(text)) {
+    if (CHANGE_INTENT_RE.test(text) && !DIRECT_EDIT_AGENTS.has(activeAgentId.value)) {
       await _bridgeChangeIntent(text);
       return;
     }
@@ -299,6 +303,21 @@ export const useAgentUiStore = defineStore('agentUi', () => {
     chatError.value = '';
     // pendingChangeChoice/queuedChangeRequests 由 csStore.onProjectChange 重置（D2 搬到 csStore）
   }
+
+  // AI-7D-R §10：变更会话收敛到 no_action 时，把诚实结论补进对话流（轮询异步到达，
+  // 非 bridge 同步返回）。按 session_id 去重，避免重复追加。
+  let lastNoActionSid = '';
+  watch(() => csStore.session?.status, (s) => {
+    if (s === 'no_action' && csStore.session && csStore.session.session_id !== lastNoActionSid) {
+      lastNoActionSid = csStore.session.session_id;
+      const reason = (csStore.session as any).no_action_reason || '我核对了当前项目，这条请求无需产生实际修改。';
+      messages.value.push({
+        role: 'assistant', content: '我核对了当前项目：' + reason,
+        status: null, created_at: Date.now() / 1000,
+      });
+    }
+    if (s && s !== 'no_action') lastNoActionSid = '';
+  });
 
   return {
     // state

@@ -5,10 +5,13 @@
       <span class="hint">当前项目：{{ projectName || '未选择' }}</span>
       <!-- AI-7D：变更会话状态 chip（点击开审查弹窗；blocked/ready/awaiting/approved 自动弹出）。
            之前审查卡内联在对话流且 blocked 态无拒绝按钮，会话卡死无逃生口。 -->
-      <button v-if="cs.session" class="cs-chip" :class="'csst-' + cs.session.status"
+      <button v-if="cs.session && !cs.noAction" class="cs-chip" :class="'csst-' + cs.session.status"
               :title="cs.session.error || ''" @click="showReviewModal = true">
         变更方案 · {{ csStatusText }}
       </button>
+      <!-- AI-7D-R · Script Writer 最小测试弹窗（隔离，单工具，不走审查流）-->
+      <button class="swt-btn" @click="showSwTestModal = true">🧪 Script Writer 直接编辑测试</button>
+      <button class="swt-btn" @click="showDirTestModal = true">🎬 Director 分镜测试</button>
     </div>
 
     <div class="body">
@@ -138,36 +141,59 @@
         </div>
       </div>
     </Teleport>
+
+    <!-- AI-7D-R · Script Writer 最小测试弹窗 -->
+    <ScriptWriterTestModal :open="showSwTestModal" @close="showSwTestModal = false" />
+    <!-- AI-7D-R · Director 分镜测试弹窗 -->
+    <DirectorTestModal :open="showDirTestModal" @close="showDirTestModal = false" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick, watch } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { apiClient } from '@/api';
 import type { AgentInfo, AgentCapability, AgentSession, AgentTask } from '@/api';
 import { useProjectStore } from '@/store';
 import { useChangeSessionStore } from '@/store/changeSession';
+import { useStickToBottom } from '@/composables/useStickToBottom';
 import TeamChatPanel from '@/components/agent/TeamChatPanel.vue';
 import ChangePlanReview from '@/components/agent/ChangePlanReview.vue';
+import ScriptWriterTestModal from '@/components/agent/ScriptWriterTestModal.vue';
+import DirectorTestModal from '@/components/agent/DirectorTestModal.vue';
 
 const store = useProjectStore();
 const projectName = computed(() => store.projectName);
 const cs = useChangeSessionStore();
 // AI-7D：变更方案审查弹窗。状态变 blocked/ready/awaiting/approved 时自动弹出（让用户立刻可见可操作）。
 const showReviewModal = ref(false);
+const showSwTestModal = ref(false);
+const showDirTestModal = ref(false);
 const csStatusText = computed(() => {
   const map: Record<string, string> = {
     routing: '路由中', consulting: '咨询中', analyzing_dependencies: '分析依赖',
     awaiting_user_decision: '需决策', synthesizing_plan: '综合计划', validating_plan: '校验中',
     building_preview: '构建预览', ready_for_review: '待审查', approved_for_execution: '已批准',
     blocked: '阻塞', rejected: '已拒绝', stale: '已过期', failed: '失败', cancelled: '已取消',
+    no_action: '无需改动',
   };
   return map[cs.session?.status || ''] || cs.session?.status || '';
 });
+let lastNoActionSid = '';
 watch(() => cs.session?.status, (s) => {
+  // AI-7D-R：no_action 是诚实终态，不弹审查卡；其余需用户注意的状态才弹
   if (s && ['blocked', 'ready_for_review', 'awaiting_user_decision', 'approved_for_execution'].includes(s)) {
     showReviewModal.value = true;
   }
+  // AI-7D-R §10：no_action 异步到达时把诚实结论补进本会话转录（去重）
+  if (s === 'no_action' && cs.session && cs.session.session_id !== lastNoActionSid) {
+    lastNoActionSid = cs.session.session_id;
+    const reason = (cs.session as any).no_action_reason || '我核对了当前项目，这条请求无需产生实际修改。';
+    session.value?.messages.push({
+      role: 'assistant', content: '我核对了当前项目：' + reason,
+      status: null, created_at: Date.now() / 1000,
+    });
+  }
+  if (s && s !== 'no_action') lastNoActionSid = '';
 });
 // AI-7D D2：change 意图检测（与 agentUi.CHANGE_INTENT_RE 同词表）
 const CHANGE_INTENT_RE = /改|修改|换成|变成|变得|变为|删除|删掉|去掉|调整|替换|重写|续写|换回|恢复到|恢复成|让.{1,20}更|加(强|快|深)|增强|弱化|放大|缩小|拓展|扩写|扩充|扩展|补充|补全|加场|加戏|make\b|change\b|remove\b|turn\b/i;
@@ -183,6 +209,12 @@ const draft = ref('');
 const sending = ref(false);
 const chatError = ref('');
 const messagesEl = ref<HTMLElement | null>(null);
+// 智能贴底：打开会话跳最新；新消息时仅当用户原本贴底才跟随（查看历史时不强拉）。
+const stick = useStickToBottom(messagesEl);
+// messages 面板随选中 agent 切换而挂载；挂载后绑定 scroll 监听并跳到最新消息。
+watch(messagesEl, (el) => { if (el) { stick.bind(); stick.pinToBottom(); } });
+// 外部异步到达的消息（如变更结论 no_action 补录）：仅在用户贴底时跟随，看历史时不强拉。
+watch(() => session.value?.messages?.length, () => { stick.followIfStuck(); });
 
 // 委派
 const tasks = ref<AgentTask[]>([]);
@@ -211,8 +243,10 @@ async function loadAgents() {
 
 async function selectAgent(id: string) {
   selectedId.value = id;
-  scopeType.value = id === 'producer' ? 'project' : 'scene';
-  scopeId.value = id === 'producer' ? (projectName.value || '') : 's01';
+  // AI-7D-R §9：Direct Conversation 默认长存于 project 级（不随页面 scope 重建/碎片化）。
+  // 用户仍可用上方 scope 选择器显式切到 scene/shot 会话。
+  scopeType.value = 'project';
+  scopeId.value = projectName.value || '';
   session.value = null;
   chatError.value = '';
   if (id === 'producer') loadTasks();
@@ -242,6 +276,8 @@ async function openSession() {
   try {
     const sid = scopeId.value || projectName.value;
     session.value = await apiClient.createAgentSession(projectName.value, selectedId.value, scopeType.value, sid);
+    // 打开会话 → 无条件定位到最新消息。
+    stick.pinToBottom();
   } catch (e: any) {
     chatError.value = '打开会话失败: ' + (e.message || e);
   }
@@ -258,7 +294,11 @@ async function send() {
   try {
     // AI-7D D2：变更意图 → 真 ChangeSession 桥接（复用 csStore.bridgeFromDirectChat，与
     // Floating Bar 同语义）；否则只读/对话 → 统一 /turn runtime（D1 真 inspect 接地）。
-    if (CHANGE_INTENT_RE.test(content)) {
+    // AI-7D-R：script_writer 等具备直接编辑工具的 Agent 跳过 ChangeSession 方案审核，
+    // 直接发 /turn 由 agent 自己的 tool-loop 完成修改（LLM→tool→observation→回复）。
+    const DIRECT_EDIT_AGENTS = new Set(['script_writer']);
+    const isDirectEdit = DIRECT_EDIT_AGENTS.has(selectedId.value);
+    if (CHANGE_INTENT_RE.test(content) && !isDirectEdit) {
       const msgs = await cs.bridgeFromDirectChat(content, {
         source: 'direct_agent_chat',
         sourceAgentId: selectedId.value,
@@ -269,8 +309,8 @@ async function send() {
       const result = await apiClient.agentTurn(projectName.value, session.value.session_id, content);
       session.value.messages.push(result.message);   // assistant AgentMessage（含 meta）
     }
-    await nextTick();
-    if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight;
+    // 用户主动发消息 → 视为贴底，跟随到最新。
+    stick.pinToBottom();
   } catch (e: any) {
     chatError.value = '发送失败: ' + (e.message || e);
   } finally {
@@ -319,8 +359,7 @@ async function onResolveChoice(choice: 'queue' | 'restart') {
   try {
     const msgs = await cs.resolveChangeChoice(choice);
     session.value?.messages.push(...msgs);
-    await nextTick();
-    if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight;
+    stick.pinToBottom();
   } catch (e: any) {
     chatError.value = '处理失败: ' + (e.message || e);
   } finally {
@@ -387,6 +426,9 @@ onMounted(async () => {
 .msg.user { align-self: flex-end; background: var(--accent, #3b82f6); color: #fff; }
 .msg.assistant { align-self: flex-start; background: var(--bg-hover); color: var(--text-primary); }
 .msg-role { font-size: 10px; opacity: .7; }
+/* 复用 ScriptWriterTestModal 的正文渲染：保留换行、长词折行，不引入 v-html/markdown 解析。
+   不修改消息正文，只修渲染。 */
+.msg-content { white-space: pre-wrap; word-break: break-word; line-height: 1.55; }
 .msg-status { font-size: 10px; margin-top: 2px; }
 .ms-not_configured { color: #fbbf24; }
 .ms-failed { color: #f87171; }
@@ -425,4 +467,6 @@ onMounted(async () => {
 .cpr-modal-x { background: none; border: none; color: var(--text-muted); font-size: 18px; cursor: pointer; padding: 4px 8px; border-radius: 4px; }
 .cpr-modal-x:hover { background: var(--bg-hover); color: var(--text-primary); }
 .cpr-modal-body { padding: 16px; overflow-y: auto; }
+.swt-btn { margin-left: 8px; padding: 4px 12px; font-size: 12px; border-radius: 10px; border: 1px solid rgba(74,222,128,.5); color: #4ade80; background: rgba(74,222,128,.08); cursor: pointer; }
+.swt-btn:hover { background: rgba(74,222,128,.16); }
 </style>

@@ -182,16 +182,18 @@ def test_creative_decision_flow(tmp_path):
     assert dec.decision_id in plan.user_decision_ids
 
 
-# ============ ⑥ 覆盖失败（提案 items 空）→ blocked (PLAN_REQUEST_NOT_COVERED) ============
-def test_coverage_failure_blocked(tmp_path):
+# ============ ⑥ 覆盖为空（提案 items 空）→ AI-7D-R §10 诚实 no_action ============
+# R1 之前：空提案 → blocked + PLAN_REQUEST_NOT_COVERED，进而伪造 A/B 方案让用户批准空计划。
+# R1 起：所有 specialist 确认无可执行改动且无真实待决问题 → 终态 no_action（不伪造、不声称修改）。
+def test_coverage_empty_terminates_no_action(tmp_path):
     ProjectStore(tmp_path).save(_proj())
     client = ScriptedProposalClient(script={"title": "空", "summary": "无需改动", "items": []})
     rt = _rt(tmp_path, client=client)
     sid = _make(rt, "demo", "修改结局")
     _resume(rt, "demo", sid)
     s = _resume(rt, "demo", sid)
-    assert s["status"] == "blocked"
-    assert "PLAN_REQUEST_NOT_COVERED" in (s["error"] or "")
+    assert s["status"] == "no_action"
+    assert s.get("no_action_reason")   # 有诚实原因，非空错误/伪造方案
 
 
 # ============ ⑦ ownership 失败（validator 直测）============
