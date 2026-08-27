@@ -647,6 +647,58 @@ export interface AgentTurnResult {
   /** 落盘的 assistant AgentMessage（/messages wrapper 等价返回它）。 */
   message: AgentMessage;
 }
+
+// ============ AI-7D-R Script Writer /turn 结果（16 字段，与 backend script_writer_turn 对齐） ============
+/** backend script_writer_turn 实际返回结构。/turn 的 JSON 即此形状。 */
+export interface ScriptWriterTurnResult {
+  assistant_message: string;
+  edited: boolean; created: boolean; moved: boolean;
+  scene_updated: boolean; deleted: boolean;
+  events: AgentTurnEvent[];
+  /** 落盘的 assistant AgentMessage（含 meta：receipts/trace/write_attempts/...）。 */
+  message: AgentMessage;
+  intent: ScriptWriterIntent;
+  receipts: ScriptWriterReceipt[];
+  trace: ScriptWriterTraceEntry[];
+  evidence_refs: AgentEvidenceRef[];
+  linked_task_ids: string[];
+  linked_change_session_id: string | null;
+  session_id: string;
+  agent_id: string;
+}
+export type ScriptWriterIntent =
+  | 'story_create' | 'story_move' | 'story_update' | 'story_delete'
+  | 'script_update' | 'conversation';
+/** meta.receipts 单条回执（写工具真实结果，UI「本轮改动」只信它）。 */
+export interface ScriptWriterReceipt {
+  operation: string; ok: boolean; verified: boolean; stale: boolean;
+  unchanged: boolean; confirmed: boolean;
+  error: string | null;
+  scene_id: string | null; order: number | null; revision: string | null;
+}
+/** meta.trace 单条执行轨迹（step→tool→target→result→revision）。 */
+export interface ScriptWriterTraceEntry {
+  step: number; tool: string; target: string | null;
+  result: string; revision: string | null;
+  error: string | null; ok: boolean;
+}
+
+// ============ AI-7D-R /turn/stream 流式事件（discriminated union） ============
+export interface TurnStartedEvent { type: 'turn.started'; thinking: boolean }
+export interface ReasoningStartedEvent { type: 'reasoning.started'; step_id: number }
+export interface ReasoningDeltaEvent { type: 'reasoning.delta'; step_id: number; delta: string }
+export interface ReasoningCompletedEvent { type: 'reasoning.completed'; step_id: number; duration_ms: number }
+export interface ToolStartedEvent { type: 'tool.started'; step_id: number; call_id: string; name: string; label: string }
+export interface ToolCompletedEvent { type: 'tool.completed'; step_id: number; call_id: string; name: string; ok: boolean; summary: string }
+export interface ToolFailedEvent { type: 'tool.failed'; step_id: number; call_id: string; name: string; error: string }
+export interface AssistantDeltaEvent { type: 'assistant.delta'; delta: string }
+export interface TurnCompletedEvent { type: 'turn.completed'; result: ScriptWriterTurnResult }
+export interface TurnFailedEvent { type: 'turn.failed'; error: string }
+/** 前端据 event.type 安全分支处理。turn.completed.result 仍是现有完整最终结构。 */
+export type AgentStreamEvent =
+  | TurnStartedEvent | ReasoningStartedEvent | ReasoningDeltaEvent
+  | ReasoningCompletedEvent | ToolStartedEvent | ToolCompletedEvent
+  | ToolFailedEvent | AssistantDeltaEvent | TurnCompletedEvent | TurnFailedEvent;
 export interface AgentSession {
   session_id: string; project: string; agent_id: string;
   scope_type: string; scope_id: string;

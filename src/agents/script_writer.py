@@ -1253,6 +1253,47 @@ def _honest_fallback(receipts: list) -> str:
     return "这次我没有真正执行修改（没有发出对应的工具调用）。请再说一次你的需求，我会实际操作。"
 
 
+_FACT_SUMMARY_MARK = "【实际执行记录】"
+
+
+def strip_reserved_fact_blocks(text: str) -> str:
+    """删除模型仿写的系统保留【实际执行记录】块（在 _append_fact_summary 追加真实
+    记录【之前】调用）。
+
+    真实块由 _append_fact_summary 在本函数之后追加，故此刻 text 中任何含
+    【实际执行记录】标记的块都是模型伪造（模型甚至可能抄走"（系统据真实回执
+    生成，非模型叙述）"声明）。确定性删除以防：
+      - UI 出现"模型伪造 + 系统真实"重复块；
+      - 模型冒充系统声明；
+      - 假记录进入下一轮 history 污染上下文。
+
+    保留块结构 = 可选 --- 分隔符 + 标题行 + 若干 ✓/✗/当前故事段 内容行。
+    模型若在伪造块【之后】写了正常正文，该正文保留。"""
+    if not text or _FACT_SUMMARY_MARK not in text:
+        return text
+    lines = text.split("\n")
+    out: list[str] = []
+    i = 0
+    while i < len(lines):
+        if _FACT_SUMMARY_MARK in lines[i]:
+            # 去掉紧邻的前导 --- 分隔符（若有）
+            if out and out[-1].strip() == "---":
+                out.pop()
+            i += 1  # 跳过标题行
+            # 跳过后续事实块内容行（空行 / ✓ / ✗ / ● / 当前故事段）
+            while i < len(lines):
+                s = lines[i].strip()
+                if (s == "" or s.startswith(("✓", "✗", "✘", "●"))
+                        or s.startswith("当前故事段")):
+                    i += 1
+                else:
+                    break
+            continue
+        out.append(lines[i])
+        i += 1
+    return "\n".join(out)
+
+
 def _append_fact_summary(rt: AgentRuntime, project: str, text: str, receipts: list) -> str:
     """有真实变更时，在模型回复后追加【确定性事实摘要】——由真实 receipts + 当前
     canonical 生成，不信模型叙述。彻底解决：
@@ -1374,6 +1415,8 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                 text = _honest_fallback(receipts)
             # 有真实变更时，追加【确定性事实摘要】——由 receipts + 当前 canonical 生成，
             # 不信模型叙述。彻底解决「模型说改了A实际改了B」「说没改其实改了」。
+            # 先删模型仿写的保留块（模型无权生成【实际执行记录】），再追加唯一权威块。
+            text = strip_reserved_fact_blocks(text)
             text = _append_fact_summary(rt, project, text, receipts)
             return {"text": text or "已完成。",
                     "edited": edited, "created": created, "moved": moved, "scene_updated": scene_updated, "deleted": deleted,
