@@ -264,28 +264,28 @@ async def agent_turn_stream(project_name: str, sid: str, req: StreamTurnReq):
 
     async def event_gen():
         import asyncio as _aio
-        loop = _aio.get_running_loop()
         q: _aio.Queue = _aio.Queue()
         SENTINEL = object()
 
         def _cb(ev):
-            try:
-                loop.call_soon_threadsafe(q.put_nowait, ev)
-            except RuntimeError:
-                pass
+            # 同 loop 同线程同步 put（script_writer_turn 与 consumer 共享同一事件循环）。
+            # 🔴 不要用 call_soon_threadsafe / to_thread：asyncio.Queue 跨线程 put_nowait
+            # 不唤醒 loop 里的 await q.get()，会导致终结事件(turn.completed/SENTINEL)
+            # 永不送达 consumer → 流卡死 → ASGI returned without completing response。
+            q.put_nowait(ev)
 
         async def _run():
             try:
                 result = await script_writer_turn(
                     rt, project_name, sid, req.content,
                     thinking=thinking_fixed, event_cb=_cb)
-                await _aio.to_thread(q.put_nowait, {"type": "turn.completed", "result": result})
+                q.put_nowait({"type": "turn.completed", "result": result})
             except AgentError as e:
-                await _aio.to_thread(q.put_nowait, {"type": "turn.failed", "error": e.message})
+                q.put_nowait({"type": "turn.failed", "error": e.message})
             except Exception as e:
-                await _aio.to_thread(q.put_nowait, {"type": "turn.failed", "error": str(e)[:300]})
+                q.put_nowait({"type": "turn.failed", "error": str(e)[:300]})
             finally:
-                await _aio.to_thread(q.put_nowait, SENTINEL)
+                q.put_nowait(SENTINEL)
 
         task = _aio.ensure_future(_run())
         # turn.started（thinking snapshot 在这里固定宣告）
@@ -301,7 +301,7 @@ async def agent_turn_stream(project_name: str, sid: str, req: StreamTurnReq):
             if not task.done():
                 task.cancel()
                 try:
-                    await task
+                    await _aio.wait_for(task, timeout=2)
                 except Exception:
                     pass
 
