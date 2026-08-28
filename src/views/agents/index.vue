@@ -97,14 +97,8 @@
             <div v-for="(m, i) in session?.messages || []" :key="i"
                  class="msg" :class="m.role">
               <span class="msg-role">{{ m.role }}</span>
-              <span class="msg-content">{{ m.content }}</span>
-              <span v-if="m.status" class="msg-status" :class="'ms-' + m.status">{{ m.status }}</span>
-              <!-- AI-7D-R §十五：本轮改动（只信 meta.receipts，不解析正文） -->
-              <div v-if="realReceipts(m.meta).length" class="receipts">
-                <div class="receipts-head">本轮改动</div>
-                <div v-for="(r, ri) in realReceipts(m.meta)" :key="ri" class="receipt-item">✓ {{ receiptLabel(r) }}</div>
-              </div>
-              <!-- AI-7D-R：完成后执行过程折叠保留（事后可展开查 reasoning/tool 流程） -->
+              <!-- AI-7D-R：完成后执行过程折叠保留——置于正文【上方】（先有工具执行后有回复，
+                   与 ChatGPT/Claude 的 thinking/工具折叠位置惯例一致） -->
               <div v-if="m.role === 'assistant' && processItemsOf(m).length" class="process-toggle"
                    @click="toggleProcessOf(m)">
                 <span class="chevron" :class="{ open: processExpandedOf(m) }">▸</span>
@@ -127,15 +121,20 @@
                   </template>
                 </div>
               </div>
+              <span class="msg-content">{{ m.content }}</span>
+              <span v-if="m.status" class="msg-status" :class="'ms-' + m.status">{{ m.status }}</span>
+              <!-- AI-7D-R §十五：本轮改动（只信 meta.receipts，不解析正文） -->
+              <div v-if="realReceipts(m.meta).length" class="receipts">
+                <div class="receipts-head">本轮改动</div>
+                <div v-for="(r, ri) in realReceipts(m.meta)" :key="ri" class="receipt-item">✓ {{ receiptLabel(r) }}</div>
+              </div>
             </div>
             <!-- AI-7D-R：流式执行过程（当前 turn）。默认只突出当前 activity + 折叠入口。 -->
             <div v-if="sending && selectedId === 'script_writer'" class="stream-area">
               <div v-if="currentActivity" class="activity">
                 <span class="spinner">◌</span>{{ currentActivity.label }}
               </div>
-              <div v-if="assistantStreaming" class="msg assistant streaming">
-                <span class="msg-content">{{ assistantStreaming }}</span>
-              </div>
+              <!-- 折叠入口与 timeline 置于流式正文【上方】，与完成后消息内位置一致（完成瞬间不跳位） -->
               <div v-if="processItems.length" class="process-toggle" @click="onToggleProcess">
                 <span class="chevron" :class="{ open: processExpanded }">▸</span>
                 执行过程 · 已完成 {{ completedSteps }} 步
@@ -155,6 +154,9 @@
                     <div v-if="p.error" class="pi-error">! {{ p.error }}</div>
                   </template>
                 </div>
+              </div>
+              <div v-if="assistantStreaming" class="msg assistant streaming">
+                <span class="msg-content">{{ assistantStreaming }}</span>
               </div>
             </div>
             <!-- AI-7D：变更会话审查移到 toolbar 弹窗（showReviewModal），不再内联在对话流。
