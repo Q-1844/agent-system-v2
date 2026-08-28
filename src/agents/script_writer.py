@@ -224,10 +224,10 @@ SCRIPT_WRITER_SYSTEM = """你是 AGNES 的 Script Writer，负责项目的【剧
 项目：{project_name}（剧本正文 {story_len} 字，{scenes_count} 个故事段）。
 
 你有这些工具：
-- script.read()：读取当前剧本正文全文 + 剧本版本指纹。
+- script.read()：读取【剧本正文全文】+ 剧本版本指纹。仅在这些场景调用：①要 script.update 修改/续写/重写正文前；②整体节奏/全篇逻辑/人物弧光等全局分析；③用户明确要求通读全文。【故事段（Scene）的新增/插入/续写/重写/段内修改/删除/排序都不需要读全文】。
 - script.update(new_story_text, expected_revision)：用【完整】新正文覆盖剧本正文。
-- story.list()：列出所有故事段（id/摘要/角色/镜头数/顺序）+ 故事段版本指纹。
-- story.read(scene_id)：读取一个已有故事段的完整内容（标题/地点/时段/摘要/角色/镜头数）+ 该段【内容指纹】。
+- story.list()：故事段任务的【第一步】——轻量全局地图：列出所有故事段（position/id/120字摘要/角色/镜头数）+ 结构指纹与内容指纹。不返回正文全文，开销很小。
+- story.read(scene_id)：读取一个已有故事段的完整内容（标题/地点/时段/摘要全文/角色/镜头数）+ 该段【内容指纹】。局部任务读目标段 + 前后相邻约 2~4 段即可；信息不足再继续扩大读取范围。
 - story.create(summary, characters?, before_scene_id?, after_scene_id?, expected_scenes_revision)：创建一个故事段并插到指定位置；省略 before/after 即追加末尾。id 由后端分配，你不能指定 id 或数字序号。【要一次创建多段时优先用 story.create_many，不要连续多次调 story.create】
 - story.create_many(scenes[], before_scene_id?, after_scene_id?, expected_scenes_revision)：一次创建多个故事段，scenes 数组顺序即创建后相对顺序；整批一次乐观并发+一次原子写入，全部合法才写。一次创建 ≥2 段时【优先】用本工具。
 - story.insert_many(inserts[], expected_scenes_revision)：一次在【多个不同锚点】前/后插入新故事段。inserts 每项含 before_scene_id 或 after_scene_id（二选一）+ scenes[]（该锚点处连续插入 1 段或多段，数组顺序即相对顺序）。先 story.list 把用户说的「第N段」解析成稳定 scene_id 锚点再调用；所有锚点按调用前快照解释，后端不会按插入后的新位置解释后续锚点。同一批每个锚点只能出现一次（同一锚点插多段就合并到该项 scenes 里）。整批一次乐观并发+一次原子写入，任一非法整批不写。【只在同一个锚点附近插多段用 story.create_many；同一请求有多个不同插入位置才用本工具】。
@@ -241,23 +241,35 @@ SCRIPT_WRITER_SYSTEM = """你是 AGNES 的 Script Writer，负责项目的【剧
 - 你只有通过【真正发起工具调用】（function/tool_calls）才能读/写数据。在回复里用自然语言说「我已创建/已移动/已插入/切换成功」但没有真正调用对应工具，等于什么都没做——这是严重错误。
 - 要创建就必须真正调用 story.create（多段用 story.create_many / story.insert_many）；要移动就必须真正调用 story.move；要修改故事段内容就必须真正调用 story.update（多段用 story.update_many）；要删除就必须真正调用 story.delete（多段用 story.delete_many）；要改正文就必须真正调用 script.update；要知道当前有哪些段/正文内容就必须真正调用 story.list / script.read。
 - 工具调用成功后，工具会返回结果（含 ok、scene_id、order、最新版本指纹等）。你只能依据工具【真实返回】的结果向用户汇报；没看到工具返回的 ok=true，就不能声称成功。
-- 不要编造或猜测版本指纹、scene_id、段数；这些值必须来自 story.list / script.read / 工具返回值。
-- 如果你不确定当前状态，先调用 story.list / script.read 读取，再决定。不要凭记忆或假设操作。
+- 不要编造或猜测版本指纹、scene_id、段数；这些值必须来自 story.list / story.read / script.read / 工具返回值。
+- 如果你不确定当前状态，用读取工具确认再决定，不要凭记忆或假设操作：不确定【有哪些段/位置/id/段数】→ story.list；不确定【某段的具体内容】→ story.read(scene_id)；只有操作【剧本正文】或做全篇分析时才 script.read。
+
+【聊天与探讨（用户没让你改东西时）】
+- 用户在提问、征求看法、讨论方案、解释原因、回顾你做过什么时（如「你觉得这里有什么问题」「为什么你刚才这么改」「这个角色这样设计合适吗」「如果后面加个转折怎么样」「你觉得这几段节奏快不快」「刚才为什么没成功」「先不要修改，我们讨论一下」）：直接用自然语言回答，长度按问题自然决定。
+- 这类轮次【不调用写工具】；讨论中提到的改动想法不要自动执行，除非用户明确提出修改要求。也【不要】输出「我没有真正执行修改/请再说一次你的需求」之类的话——用户本来就没让你改。
+- 回答需要事实依据时（用户问到具体某几段的内容、当前段数、最新状态，而这些不在你的上下文里），才按需调用只读工具 story.list / story.read 取事实，然后继续讨论；凭当前上下文就能回答的就直接回答。
+- 不要在讨论中复述完整剧本正文或整段故事段内容；必要时引用一两句即可。
+
+【读取策略：最小充分上下文，按需扩大】
+- 故事段任务（新增/插入/续写/重写某段/修改段内容/局部剧情调整/删除/移动/排序）【不要一上来就 script.read 全文】——故事段与剧本正文是两份独立内容，段的增删改不依赖正文全文：
+  1) 先 story.list() 拿轻量全局地图（position/scene_id/摘要/角色/指纹）；
+  2) 再 story.read 只读任务相关的局部段落：目标段本身 + 前后相邻约 2~4 段（末尾续写/新增 → 读结尾附近 2~4 段；中间插入 → 读锚点前后 2~4 段；重写某段 → 读该段 + 前后各 1~2 段看衔接）；
+  3) 局部读完先判断上下文是否充分：人物动机来自更早剧情、伏笔在更前面、因果无法判断、或用户要求更强一致性时，继续 story.read 扩大范围；
+  4) 多次局部读取仍不够、或任务本身是全局性的（整体节奏分析、全篇逻辑一致性检查、人物完整弧光、整篇重构、用户明确要求通读全文），才 script.read 读全文。
+- 只有操作【剧本正文本身】（story_text：修改/扩写/重写/压缩正文）才走 script.read() 拿正文和 expected_revision，再 script.update 传【完整】新正文 + 指纹。
+- 注意区分：「续写一个故事段」「末尾再加一段」「续一段收尾」是在故事段列表里新增 Scene，属于上面的故事段任务——读结尾附近 2~4 段即可，不要因为"续写"两个字就 script.read 全文。即使是收尾段，人物归宿、伏笔回收、结尾节奏也都在最后几段里；先读局部，确实不够再扩大，最后才读全文。
 
 工作方式：
-1. 改/续写/重写/压缩剧本正文 → 先 script.read() 拿到正文和 expected_revision，再 script.update 传【完整】新正文 + 指纹。
-2. 新建故事段 → 先 story.list() 拿到现有段和 expected_scenes_revision，确定插入位置（用某个已有段的 scene_id 作 before/after 锚点，或省略追加末尾）。创建 1 段用 story.create；在【同一个锚点】一次创建 ≥2 段（或末尾批量追加）用 story.create_many；要在【多个不同位置】分别插入（如「第2段后插一段、第5段前插两段」）→ 先用一次 story.list 把所有「第N段」解析成锚点 scene_id，再一次 story.insert_many（inserts 每项一个锚点+scenes 数组），不要插一次 list 一次地循环。
-3. 调整故事段顺序 → 先 story.list() 拿指纹，再 story.move（用 scene_id 指定移动谁、用 before/after_scene_id 指定位置，不要自己算数字序号）。
-4. 修改已有故事段的摘要/标题/地点/时段/角色 → 改 1 段：先 story.read(scene_id) 拿该段内容和 expected_revision，再 story.update 只传要改的字段+指纹。改 ≥2 段且互相独立：先 story.list 拿 scenes_content_revision，再 story.update_many（每项 scene_id+要改字段，同段多字段合并到一项）。若修改存在前后依赖仍逐步 story.update。
-5. 删除故事段 → 用户明确要删就直接删（不需要先预览问确认）。删 1 段用 story.delete(scene_id)；一次删 ≥2 段：先用一次 story.list 把所有「第N段」解析成 scene_id，再一次 story.delete_many（整批一起，不要删一个 list 一次地循环），删完用 story.list 核对并据事实总结。
-6. 需要某段全文细节再 story.read(scene_id)。
-7. 任一写工具返回 stale=true → 你读取后内容被改动过、未写入；用返回的最新版和刷新后的指纹重新判断，再用新指纹调用。
-8. 用户只是提问、闲聊，或你判断不需要改时，直接自然语言回复，不调用工具。
+1. 新建故事段 → 先 story.list() 拿到现有段和 expected_scenes_revision，确定插入位置（用某个已有段的 scene_id 作 before/after 锚点，或省略追加末尾）；按【读取策略】读结尾/锚点附近 2~4 段找承接。创建 1 段用 story.create；在【同一个锚点】一次创建 ≥2 段（或末尾批量追加）用 story.create_many；要在【多个不同位置】分别插入（如「第2段后插一段、第5段前插两段」）→ 先用一次 story.list 把所有「第N段」解析成锚点 scene_id，再一次 story.insert_many（inserts 每项一个锚点+scenes 数组），不要插一次 list 一次地循环。
+2. 调整故事段顺序 → 先 story.list() 拿指纹，再 story.move（用 scene_id 指定移动谁、用 before/after_scene_id 指定位置，不要自己算数字序号）。
+3. 修改已有故事段的摘要/标题/地点/时段/角色 → 改 1 段：先 story.read(scene_id) 拿该段内容和 expected_revision（需要衔接时按【读取策略】读相邻段），再 story.update 只传要改的字段+指纹。改 ≥2 段且互相独立：先 story.list 拿 scenes_content_revision，再 story.update_many（每项 scene_id+要改字段，同段多字段合并到一项）。若修改存在前后依赖仍逐步 story.update。
+4. 删除故事段 → 用户明确要删就直接删（不需要先预览问确认）。删 1 段用 story.delete(scene_id)；一次删 ≥2 段：先用一次 story.list 把所有「第N段」解析成 scene_id，再一次 story.delete_many（整批一起，不要删一个 list 一次地循环），删完用 story.list 核对并据事实总结。
+5. 任一写工具返回 stale=true → 你读取后内容被改动过、未写入；用返回的最新版和刷新后的指纹重新判断，再用新指纹调用。
 
 【自主执行与询问】
 1. 默认自主完成用户要求。只要能根据用户表达、上下文或当前故事状态合理确定意图，就直接执行，不要为了追求完全明确而询问用户。
 2. 如果只是轻微歧义，选择最符合上下文和用户目标的合理解释继续执行，不要停下来询问。
-3. 如果不确定的是当前故事状态、段落位置或已有内容，优先使用读取工具（story.list / script.read / story.read）确认，而不是询问用户本可由工具获得的信息。
+3. 如果不确定的是当前故事状态、段落位置或已有内容，优先使用读取工具确认（段的情况用 story.list / story.read，按【读取策略】来；只有涉及剧本正文或全篇分析才 script.read），而不是询问用户本可由工具获得的信息。
 4. 只有当存在两个或以上明显合理的理解，并且不同理解会导致明显不同的修改结果，同时又无法通过读取当前故事消除歧义时，才暂停并询问用户。
 5. 询问时只询问完成任务所缺少的最关键一点，不要连续追问，也不要要求用户提供不必要的细节。
 
@@ -323,7 +335,10 @@ SCRIPT_READ_TOOL = {
     "type": "function",
     "function": {
         "name": "script.read",
-        "description": "读取当前剧本正文全文及其版本指纹。在调用 script.update 前应先调用本工具拿到正文和 expected_revision。",
+        "description": ("读取当前剧本正文全文及其版本指纹。【仅在这些情况调用】①调用 script.update "
+                        "修改/续写/重写正文前；②整体节奏、全篇逻辑、人物弧光等全局分析；③用户明确要求"
+                        "通读全文。故事段（Scene）的新增/插入/续写/重写/段内修改/删除/排序【不需要】"
+                        "读本工具——那些先 story.list 拿地图、再按需 story.read 局部段落即可。"),
         "parameters": {"type": "object", "properties": {}},
     },
 }
@@ -332,7 +347,10 @@ STORY_CREATE_TOOL = {
     "type": "function",
     "function": {
         "name": "story.create",
-        "description": "创建一个新的故事段（Scene），插到 before_scene_id 之前或 after_scene_id 之后（都省略则追加末尾）。id 与最终顺序由后端分配，你不能指定。",
+        "description": ("创建一个新的故事段（Scene），插到 before_scene_id 之前或 after_scene_id 之后"
+                        "（都省略则追加末尾）。id 与最终顺序由后端分配，你不能指定。【创建前的读取】"
+                        "先 story.list 定位，再 story.read 读插入点/结尾附近 2~4 段获取承接上下文即可，"
+                        "不要先 script.read 全文——局部信息不够再扩大，最后才考虑全文（全局性任务除外）。"),
         "parameters": {
             "type": "object",
             "properties": {
@@ -367,7 +385,12 @@ STORY_LIST_TOOL = {
     "type": "function",
     "function": {
         "name": "story.list",
-        "description": "列出所有故事段，每段含 position（第几条，1-based）、scene_id（身份ID）、摘要、出场角色、镜头数，及结构版本指纹。用户说「第N条」时，position=N 对应的就是那条的 scene_id——删除后 scene_id 可能跳号但 position 始终连续，用 position 定位不要用 scene_id 的数字。在写操作前先调用拿现有段和 expected_scenes_revision。",
+        "description": ("故事段相关任务（新增/插入/续写/重写/段内修改/删除/移动/局部调整）的【第一步】："
+                        "列出所有故事段，每段含 position（第几条，1-based）、scene_id（身份ID）、摘要"
+                        "（前120字）、出场角色、镜头数，及结构版本指纹与内容指纹。这是轻量全局地图，"
+                        "不返回正文全文。用户说「第N条」时，position=N 对应的就是那条的 scene_id——"
+                        "删除后 scene_id 可能跳号但 position 始终连续，用 position 定位不要用 scene_id "
+                        "的数字。拿到地图后按需 story.read 局部段落，不要默认 script.read 全文。"),
         "parameters": {"type": "object", "properties": {}},
     },
 }
@@ -376,7 +399,9 @@ STORY_READ_TOOL = {
     "type": "function",
     "function": {
         "name": "story.read",
-        "description": "读取一个故事段的完整内容（摘要全文、出场角色、镜头数）。需要某段细节时调用。",
+        "description": ("读取一个故事段的完整内容（摘要全文、标题/地点/时段、出场角色、镜头数）及该段"
+                        "内容指纹。局部创作/修改时，读目标段本身 + 前后相邻约 2~4 段获取衔接上下文即可；"
+                        "若伏笔/动机涉及更早剧情，再继续 story.read 扩大范围，不要直接 script.read 全文。"),
         "parameters": {
             "type": "object",
             "properties": {
@@ -1963,6 +1988,22 @@ _NEGATION_RE = re.compile(
 )
 
 
+# 聊天/探讨语气标记（AI-7D-R 交互路由）：【仅】用于真相闸门是否「上膛」，不参与任何
+# 路由或分类。用户本轮在提问/征求看法/讨论/回顾时，助手对【过往轮次】工作的完成态描述
+# （如「我上一轮把 s08 改了」）不是「本轮谎报」——本轮本来就没有修改请求。此时不发
+# 「请调用工具」纠正 nudge、不覆写兜底文案。编辑请求（把/给/帮我 + 动作、无探讨标记）
+# 不受影响，闸门照常捕获假成功。标记宁窄勿宽：拿不准是否聊天时一律按编辑轮处理。
+_CHAT_TURN_RE = re.compile(
+    r"为什么|怎么看|怎么样|怎么办|好不好|看法|觉得|认为|讨论|聊聊|聊一下|说说|"
+    r"解释|原因|什么问题|有没有问题|合适吗|行不行|可以吗|好吗|快不快|慢不慢|"
+    r"对吗|是吗|是这样吗|如何|做了什么|干了什么|是什么|有什么|不用修改|不要修改|先别改")
+
+
+def _is_chat_turn(instruction: str) -> bool:
+    """用户本轮消息是否为探讨/提问语气（仅用于闸门上膛保护，宁窄勿宽）。"""
+    return bool(_CHAT_TURN_RE.search(instruction or ""))
+
+
 def _claims_success(text: str) -> bool:
     """仅当存在完成态声称、且该声称不在否定语境中才判定为「声称成功」。
     用最近的一次匹配向前查找否定词，避免「我没移动，但我创建了」这类被全句否定误伤。"""
@@ -2286,8 +2327,12 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
             text = (content or "").strip()
             # ---- 真相闸门 ----
             real_changes = [r for r in receipts if r.get("ok") and r.get("verified") and not r.get("unchanged")]
-            # (a) 声称成功但 0 真实变更 → 谎称
-            false_claim = _claims_success(text) and not real_changes
+            # (a) 声称成功但 0 真实变更 → 谎称。
+            # 聊天/探讨轮保护：本轮零写尝试且用户消息是提问/探讨语气时，助手对【过往轮次】
+            # 工作的完成态回顾不是本轮谎报（本轮本无修改请求），不触发纠正/兜底覆写。
+            # 编辑请求轮（有写尝试，或用户明确要求修改）的闸门逻辑完全不变。
+            chat_turn = (write_attempts == 0 and _is_chat_turn(instruction))
+            false_claim = _claims_success(text) and not real_changes and not chat_turn
             # (b) 声称拆分了 N 段，但真实成功创建数与 N 不符 → 夸大（用户需求 #3：
             #     最终数量必须以真实 receipt 为准，不许凭文字记忆谎称）
             real_create_count = sum(1 for r in real_changes
