@@ -238,15 +238,39 @@ async def agent_turn(project_name: str, sid: str, req: SendMessageReq):
         _raise(e)
 
 
+# AI-7D-R：活跃流式 turn 注册表（进程内）。key=f"{project}::{sid}" → cancel_event。
+# 用途：①同一会话 turn 串行互斥（并发请求 409）；②后台续跑时的停止端点置位 cancel_event。
+# turn 任务在客户端断开后仍继续跑完（消息持久化、资源事件走总线），故这里必须独立于连接。
+_ACTIVE_TURN_EVENTS: dict = {}
+
+
+def _turn_key(project_name: str, sid: str) -> str:
+    return f"{project_name}::{sid}"
+
+
+@router.post("/api/project/{project_name}/agents/sessions/{sid}/turn/cancel")
+async def cancel_agent_turn(project_name: str, sid: str):
+    """协作式停止进行中的流式 turn：置位 cancel_event，agent 在步骤边界安全停下
+    （已完成的写保留，未完成不执行），turn 按 STOPPED 诚实收尾并发 resource.unlocked。"""
+    ev = _ACTIVE_TURN_EVENTS.get(_turn_key(project_name, sid))
+    if ev is None:
+        return {"stopped": False, "message": "没有正在执行的任务"}
+    ev.set()
+    return {"stopped": True}
+
+
 @router.post("/api/project/{project_name}/agents/sessions/{sid}/turn/stream")
 async def agent_turn_stream(project_name: str, sid: str, req: StreamTurnReq):
     """AI-7D-R · Script Writer 流式 Direct Chat turn（/turn 不动，新接口）。
 
-    发送瞬间把 req.thinking snapshot 固定为本 turn 配置，整个 tool-loop 所有 LLM sub-call
-    用同一个值（运行中前端切换开关不影响当前 turn）。逐 AgentStreamEvent SSE forward：
+    发送瞬间把 req.thinking snapshot 固定为本 turn 配置。逐 AgentStreamEvent SSE forward：
       turn.started → reasoning.* / tool.* / assistant.delta → turn.completed(完整结果) /
-      turn.failed。turn.completed.result 仍是现有 script_writer_turn 16 键最终结构（与 /turn
-      等价），持久化语义不变（一条 user + 一条 assistant+meta）。原 /turn 行为零变化。"""
+      turn.failed。持久化语义不变（一条 user + 一条 assistant+meta）。
+
+    AI-7D-R 后台续跑：客户端断开（切走/关页/刷新）【不取消】turn 任务——agent 继续在
+    后台跑完，消息照常持久化。细粒度流式事件仅在有观看连接时入队（断开后不堆积）；
+    资源事件（resource.locked/story.changed/resource.unlocked）始终发项目总线，让任何
+    打开该项目的页面（如剧本模块）实时看到锁与内容变化。"""
     rt = get_agent_runtime()
     # 与 unified_turn 同源的前置校验（仅 script_writer project scope 走流式）
     store = rt._session_store(project_name)
@@ -256,39 +280,73 @@ async def agent_turn_stream(project_name: str, sid: str, req: StreamTurnReq):
     if session.agent_id != "script_writer":
         _raise(AgentError("permission_denied",
                           "流式 turn 当前仅支持 Script Writer 会话"))
-    from src.agents.script_writer import script_writer_turn
+    from src.agents.script_writer import script_writer_turn, WRITE_OPERATIONS
     from src.agents.models import ScopeType
+    from src.agents.project_events import get_project_bus, RESOURCE_STORY
     if session.scope_type != ScopeType.PROJECT.value:
         _raise(AgentError("unsupported_scope", "流式 turn 仅支持 project scope"))
 
+    # 同会话互斥：上一个 turn 还在跑（含后台续跑）→ 409，不并发改同一项目
+    key = _turn_key(project_name, sid)
+    if key in _ACTIVE_TURN_EVENTS:
+        raise HTTPException(status_code=409,
+                            detail="该会话已有任务正在执行，请等待完成或先停止")
+    cancel_event = asyncio.Event()
+    _ACTIVE_TURN_EVENTS[key] = cancel_event
+
     thinking_fixed = bool(req.thinking)   # snapshot：本 turn 全程不变
+    bus = get_project_bus()
 
     async def event_gen():
-        import asyncio as _aio
-        q: _aio.Queue = _aio.Queue()
+        q: asyncio.Queue = asyncio.Queue(maxsize=512)
         SENTINEL = object()
+        state = {"connected": True, "locked": False}
 
         def _cb(ev):
-            # 同 loop 同线程同步 put（script_writer_turn 与 consumer 共享同一事件循环）。
-            # 🔴 不要用 call_soon_threadsafe / to_thread：asyncio.Queue 跨线程 put_nowait
-            # 不唤醒 loop 里的 await q.get()，会导致终结事件(turn.completed/SENTINEL)
-            # 永不送达 consumer → 流卡死 → ASGI returned without completing response。
-            q.put_nowait(ev)
+            # 同 loop 同线程同步操作（script_writer_turn 与 consumer 共享同一事件循环）。
+            t = ev.get("type")
+            name = ev.get("name") or ""
+            # 资源事件 → 项目总线（始终发，后台跑也要让其它页面看到锁/变更）
+            if t == "tool.started" and name in WRITE_OPERATIONS and not state["locked"]:
+                bus.lock(project_name, RESOURCE_STORY, by="script_writer", session_id=sid)
+                state["locked"] = True
+            elif t == "tool.completed" and name in WRITE_OPERATIONS and ev.get("ok"):
+                bus.emit_story_changed(project_name, by="script_writer",
+                                       session_id=sid, operation=name)
+            # 细粒度流式事件 → 仅在有观看连接时入队（断开后后台跑不堆积）
+            if state["connected"]:
+                try:
+                    q.put_nowait(ev)
+                except asyncio.QueueFull:
+                    try:
+                        q.get_nowait()
+                        q.put_nowait(ev)
+                    except Exception:
+                        pass
 
         async def _run():
             try:
                 result = await script_writer_turn(
                     rt, project_name, sid, req.content,
-                    thinking=thinking_fixed, event_cb=_cb)
-                q.put_nowait({"type": "turn.completed", "result": result})
+                    thinking=thinking_fixed, event_cb=_cb, cancel_event=cancel_event)
+                if state["connected"]:
+                    q.put_nowait({"type": "turn.completed", "result": result})
             except AgentError as e:
-                q.put_nowait({"type": "turn.failed", "error": e.message})
+                if state["connected"]:
+                    q.put_nowait({"type": "turn.failed", "error": e.message})
             except Exception as e:
-                q.put_nowait({"type": "turn.failed", "error": str(e)[:300]})
+                if state["connected"]:
+                    q.put_nowait({"type": "turn.failed", "error": str(e)[:300]})
             finally:
-                q.put_nowait(SENTINEL)
+                # 资源锁释放（成功/失败/停止/断开都要释放）
+                if state["locked"]:
+                    bus.unlock(project_name, RESOURCE_STORY)
+                    state["locked"] = False
+                _ACTIVE_TURN_EVENTS.pop(key, None)
+                if state["connected"]:
+                    q.put_nowait(SENTINEL)
 
-        task = _aio.ensure_future(_run())
+        task = asyncio.ensure_future(_run())
         # turn.started（thinking snapshot 在这里固定宣告）
         yield "data: " + json.dumps({"type": "turn.started", "thinking": thinking_fixed},
                                     ensure_ascii=False) + "\n\n"
@@ -299,12 +357,11 @@ async def agent_turn_stream(project_name: str, sid: str, req: StreamTurnReq):
                     break
                 yield "data: " + json.dumps(ev, ensure_ascii=False) + "\n\n"
         finally:
-            if not task.done():
-                task.cancel()
-                try:
-                    await _aio.wait_for(task, timeout=2)
-                except Exception:
-                    pass
+            # 客户端断开：标记不再观看，但【不取消】task——turn 在后台继续跑完，
+            # 资源事件继续走总线，消息照常持久化。task 由事件循环持有直到完成。
+            state["connected"] = False
+            if task.done():
+                return
 
     return StreamingResponse(event_gen(), media_type="text/event-stream")
 

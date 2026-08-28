@@ -50,6 +50,13 @@ MAX_TIMEOUT_RETRIES = 2
 _BATCH_DOWNGRADE = {5: 2, 2: 1, 1: 1}   # 5 → 2 → 1（到 1 不再降）
 
 
+class _TurnStopped(Exception):
+    """AI-7D-R：turn 被协作式取消（用户点停止）。在工具循环【步骤边界】检测到
+    cancel_event 后抛出——当前正在进行的单次 LLM 调用/原子写不会被中途打断，
+    已完成的写全部保留，未完成部分不执行。由 script_writer_turn 捕获并诚实收尾。"""
+    pass
+
+
 def _committed_scene_ids(receipts: list) -> list:
     """从已成功落盘的写回执里提取 scene_id 列表（checkpoint，供超时恢复 nudge
     告知 Agent 已提交项）。覆盖单写与批量工具的 obs 结构差异。"""
@@ -1409,12 +1416,14 @@ async def _maybe_auto_confirm_deletes(rt: AgentRuntime, project: str,
 # ============ 主 turn ============
 async def script_writer_turn(rt: AgentRuntime, project: str, session_id: str,
                              content: str, *, thinking: bool = False,
-                             event_cb=None) -> dict:
+                             event_cb=None, cancel_event=None) -> dict:
     """Script Writer 原生 tool-loop turn。
 
     返回 {assistant_message, edited, created, moved, events, message, ...}。
     thinking/event_cb 仅流式端点 /turn/stream 传入（snapshot 固定）；默认值时行为与
-    既有 /turn 完全一致（非流式 chat_completion + 无事件）。"""
+    既有 /turn 完全一致（非流式 chat_completion + 无事件）。
+    cancel_event（可选 asyncio.Event）：协作式停止——置位后在工具循环【步骤边界】
+    安全中断（不打断当前单次调用/原子写），已完成的写保留，按 STOPPED 诚实收尾。"""
     store = rt._session_store(project)
     session = store.load(session_id)
     if session is None:
@@ -1487,7 +1496,7 @@ async def script_writer_turn(rt: AgentRuntime, project: str, session_id: str,
         try:
             final = await _run_tool_loop(rt, client, project, messages, content, user_msg.message_id,
                                          thinking=thinking, event_cb=event_cb,
-                                         state=loop_state)
+                                         state=loop_state, cancel_event=cancel_event)
             assistant_text = final["text"]
             edited = final["edited"]
             created = final["created"]
@@ -1499,6 +1508,17 @@ async def script_writer_turn(rt: AgentRuntime, project: str, session_id: str,
             events = final["events"]
             receipts = pre_exec_receipts + final.get("receipts", []) if pre_exec_receipts else final.get("receipts", [])
             trace = (pre_trace + final.get("trace", [])) if pre_trace else final.get("trace", [])
+        except _TurnStopped:
+            # 协作式停止（用户点停止）：在步骤边界安全中断。已完成的写全部真实落盘，
+            # 未完成部分不执行。诚实收尾，账本来自 loop_state（与失败路径同样保留）。
+            log.info("script_writer_turn 被停止（project=%s session=%s）", project, session_id)
+            done = _committed_scene_ids(loop_state.get("receipts", []))
+            done_str = ("已完成：" + "、".join(done)) if done else "本次没有已完成的修改"
+            assistant_text = f"[任务已停止] {done_str}；其余未完成部分未执行。"[:300]
+            status = ResultStatus.STOPPED.value
+            events = loop_state.get("events", [])
+            receipts = pre_exec_receipts + loop_state.get("receipts", [])
+            trace = (pre_trace + loop_state.get("trace", [])) if pre_trace else loop_state.get("trace", [])
         except Exception as e:
             # 可观测性：完整 traceback 进日志（定位网络断/服务端错误的真实身份）；
             # str(e) 可能为空（如 TimeoutError），文本带异常类型名保证用户可见失败原因。
@@ -1782,7 +1802,8 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                          max_steps: int = DEFAULT_MAX_TOOL_STEPS,
                          thinking: bool = False,
                          event_cb=None,
-                         state: Optional[dict] = None) -> dict:
+                         state: Optional[dict] = None,
+                         cancel_event=None) -> dict:
     """原生 function-calling 循环 + 执行真实性收口（结构性，非提示词）。
 
     每轮：
@@ -1841,6 +1862,10 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
         return True
 
     for step in range(max_steps):
+        # AI-7D-R 协作式停止：每步开始前检查取消信号（安全停在步骤边界，不打断
+        # 当前单次 LLM 调用/原子写）。由 script_writer_turn 捕获 _TurnStopped 收尾。
+        if cancel_event is not None and cancel_event.is_set():
+            raise _TurnStopped()
         # AI-7D-R 流式：event_cb 存在时走 chat_completion_stream，实时 forward
         # reasoning_delta；content 缓冲到 step 末，仅最终回复（无 tool_calls）才作
         # assistant.delta 流出——与持久化（只存最终 step content）严格一致。无 event_cb

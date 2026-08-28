@@ -60,6 +60,7 @@ class ResultStatus(str, Enum):
     NOT_CONFIGURED   = "not_configured"     # chat 未配置 Agnes（v1 软失败）
     NOT_IMPLEMENTED  = "not_implemented"    # 能力注册权限但 v1 未接通
     FAILED           = "failed"
+    STOPPED          = "stopped"      # AI-7D-R：turn 被用户/系统中途停止（已完成的写保留）
     # AI-6F.0：长执行能力（shot.first_frame/last_frame/video）提交 durable Job 后的「已启动、未结算」
     # 信号。仅用于 AgentStructuredResult.status 透传给 delegate（§4：HTTP 先返回，task 保持 running，
     # 由 settlement bridge 在 Job 终态后结算）。**不**是 AgentTask.status（§9：task 持久状态仍
