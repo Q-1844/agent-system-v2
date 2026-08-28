@@ -30,6 +30,8 @@ import re
 import time
 from typing import Any, Optional
 
+import httpx
+
 from src.core.store import ProjectStore
 from src.storyboard.structure_service import (
     StructureError, insert_scenes, move_scene,
@@ -40,6 +42,37 @@ from .runtime import AgentRuntime, AgentError
 from .revision_audit import DirectEditAuditStore
 
 log = logging.getLogger("agents.script_writer")
+
+# AI-7D-R 超时恢复（长批量生成）：单次 LLM read timeout=360s（agnes_client），
+# 超时后不原样重发大请求，而是降级当前 turn 的推荐 batch 大小，用 user nudge
+# 反馈结构化恢复信息，让 Agent 以更小批次继续剩余任务。最多恢复 2 次。
+MAX_TIMEOUT_RETRIES = 2
+_BATCH_DOWNGRADE = {5: 2, 2: 1, 1: 1}   # 5 → 2 → 1（到 1 不再降）
+
+
+def _committed_scene_ids(receipts: list) -> list:
+    """从已成功落盘的写回执里提取 scene_id 列表（checkpoint，供超时恢复 nudge
+    告知 Agent 已提交项）。覆盖单写与批量工具的 obs 结构差异。"""
+    out = []
+    for r in receipts:
+        if not (r.get("ok") and r.get("verified") and not r.get("unchanged")):
+            continue
+        op = r.get("operation")
+        if op in ("story.create", "story.update", "story.move"):
+            sid = r.get("scene_id")
+            if sid and sid not in out:
+                out.append(sid)
+        elif op == "story.create_many":
+            for c in (r.get("created") or []):
+                sid = c.get("scene_id")
+                if sid and sid not in out:
+                    out.append(sid)
+        elif op == "story.update_many":
+            for c in (r.get("results") or []):
+                sid = c.get("scene_id")
+                if sid and sid not in out:
+                    out.append(sid)
+    return out
 
 
 # AI-7D-R：Runner 执行预算 = LLM 循环步数（每步可能含多个 tool_call），【仅用于防死循环】，
@@ -1758,6 +1791,34 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
     repeat_fail_streak = 0
     last_fail_sig = None         # (tool, error/code) 去重签名
 
+    # AI-7D-R 超时恢复（长批量生成）：turn 级状态，turn 结束即清零。
+    # ReadTimeout 发生在 LLM 响应尚未形成完整 tool_call 时，无真实 tool_call_id，
+    # 故不构造假 tool message，而是用 user nudge 把结构化恢复信息反馈给下一轮模型。
+    timeout_retries = 0
+    max_batch_hint = 5           # 5 → 2 → 1
+
+    def _on_read_timeout() -> bool:
+        """LLM ReadTimeout 命中：降级 batch hint + 注入结构化恢复 nudge。
+        返回 True=可继续重试（额度未用尽），False=恢复额度用尽（应 re-raise 走失败路径）。"""
+        nonlocal timeout_retries, max_batch_hint
+        if timeout_retries >= MAX_TIMEOUT_RETRIES:
+            return False
+        timeout_retries += 1
+        max_batch_hint = _BATCH_DOWNGRADE.get(max_batch_hint, 1)
+        committed = _committed_scene_ids(receipts)
+        committed_str = ", ".join(committed) if committed else "（无）"
+        nudge = (
+            f"[系统恢复提示 MODEL_READ_TIMEOUT] 上一次批量生成因模型响应超时被中断"
+            f"（read timeout，第 {timeout_retries}/{MAX_TIMEOUT_RETRIES} 次）。"
+            f"本次没有形成完整工具调用、没有新增任何提交。"
+            f"已成功提交的项：{committed_str}。"
+            f"请【只继续尚未完成的部分，不要重做已提交项】；"
+            f"用更小的批次（建议每批 ≤{max_batch_hint} 项）重新发起，避免再次超时。"
+        )
+        messages.append({"role": "user", "content": nudge})
+        _refresh_system(messages, rt, project)
+        return True
+
     for step in range(max_steps):
         # AI-7D-R 流式：event_cb 存在时走 chat_completion_stream，实时 forward
         # reasoning_delta；content 缓冲到 step 末，仅最终回复（无 tool_calls）才作
@@ -1765,39 +1826,47 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
         # 时走原非流式 chat_completion，行为零变化。
         content = None
         tool_calls = None
-        if event_cb:
-            step_reasoning_started = False
-            step_reason_t0 = 0.0
-            step_content_buf: list[str] = []
-            async for ev in client.chat_completion_stream(
+        try:
+            if event_cb:
+                step_reasoning_started = False
+                step_reason_t0 = 0.0
+                step_content_buf: list[str] = []
+                async for ev in client.chat_completion_stream(
+                        messages, temperature=0.7, max_tokens=65536,
+                        thinking=thinking, tools=SCRIPT_WRITER_TOOLS,
+                        tool_choice="auto"):
+                    k = ev["kind"]
+                    if k == "content_delta":
+                        step_content_buf.append(ev["delta"])
+                    elif k == "reasoning_delta":
+                        if not step_reasoning_started:
+                            step_reasoning_started = True
+                            step_reason_t0 = time.perf_counter()
+                            event_cb({"type": "reasoning.started", "step_id": step})
+                        event_cb({"type": "reasoning.delta", "step_id": step,
+                                  "delta": ev["delta"]})
+                    elif k == "finish":
+                        content = ev["content"]
+                        tool_calls = ev["tool_calls"]
+                if step_reasoning_started:
+                    event_cb({"type": "reasoning.completed", "step_id": step,
+                              "duration_ms": int((time.perf_counter() - step_reason_t0) * 1000)})
+                if not tool_calls and step_content_buf:
+                    for d in step_content_buf:
+                        event_cb({"type": "assistant.delta", "delta": d})
+            else:
+                resp = await client.chat_completion(
                     messages, temperature=0.7, max_tokens=65536,
-                    thinking=thinking, tools=SCRIPT_WRITER_TOOLS,
-                    tool_choice="auto"):
-                k = ev["kind"]
-                if k == "content_delta":
-                    step_content_buf.append(ev["delta"])
-                elif k == "reasoning_delta":
-                    if not step_reasoning_started:
-                        step_reasoning_started = True
-                        step_reason_t0 = time.perf_counter()
-                        event_cb({"type": "reasoning.started", "step_id": step})
-                    event_cb({"type": "reasoning.delta", "step_id": step,
-                              "delta": ev["delta"]})
-                elif k == "finish":
-                    content = ev["content"]
-                    tool_calls = ev["tool_calls"]
-            if step_reasoning_started:
-                event_cb({"type": "reasoning.completed", "step_id": step,
-                          "duration_ms": int((time.perf_counter() - step_reason_t0) * 1000)})
-            if not tool_calls and step_content_buf:
-                for d in step_content_buf:
-                    event_cb({"type": "assistant.delta", "delta": d})
-        else:
-            resp = await client.chat_completion(
-                messages, temperature=0.7, max_tokens=65536,
-                tools=SCRIPT_WRITER_TOOLS, tool_choice="auto")
-            tool_calls = resp.get("tool_calls")
-            content = resp.get("content")
+                    tools=SCRIPT_WRITER_TOOLS, tool_choice="auto")
+                tool_calls = resp.get("tool_calls")
+                content = resp.get("content")
+        except httpx.ReadTimeout:
+            # AI-7D-R 超时恢复：仅 LLM/network ReadTimeout 走降级重试（规则 6）。
+            # 超时发生在响应尚未形成完整 tool_call 时，无任何新内容落盘，
+            # 已成功批次作为 checkpoint 保留（committed_items 反馈给 Agent）。
+            if not _on_read_timeout():
+                raise   # 恢复额度用尽（2 次），走 script_writer_turn except 诚实结束
+            continue   # 回循环顶，Agent 基于降级 nudge 用更小批次重发
 
         if not tool_calls:
             text = (content or "").strip()
