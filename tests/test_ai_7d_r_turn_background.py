@@ -198,3 +198,37 @@ def test_concurrent_turn_mutex_409(http_ctx):
     r = client.post(f"/api/project/{project}/agents/sessions/{sid}/turn/stream",
                     json={"content": "又来一个", "thinking": False})
     assert r.status_code == 409
+
+
+def test_resource_locks_endpoint_authoritative(http_ctx):
+    """GET /resource-locks 返回总线此刻真实持有的锁（SSE 对账兜底）：
+    无 turn 时空；锁定时返回 story；解锁后回空。"""
+    client, project, sid, bus, published = http_ctx
+    # 无活跃锁
+    r = client.get(f"/api/project/{project}/resource-locks")
+    assert r.status_code == 200
+    assert [l.get("resource") for l in r.json()["locks"]] == []
+
+    # 手动置锁（模拟 Agent 写工具进行中）
+    bus.lock(project, RESOURCE_STORY, by="script_writer", session_id=sid)
+    r = client.get(f"/api/project/{project}/resource-locks")
+    locks = r.json()["locks"]
+    assert [l.get("resource") for l in locks] == [RESOURCE_STORY]
+    assert locks[0]["by"] == "script_writer"
+
+    # 解锁后回空（即前端对账看到的“真相”：SSE unlock 事件丢了也能据此清锁）
+    bus.unlock(project, RESOURCE_STORY)
+    r = client.get(f"/api/project/{project}/resource-locks")
+    assert [l.get("resource") for l in r.json()["locks"]] == []
+
+
+def test_resource_locks_empty_after_turn(http_ctx):
+    """完整跑一个写 turn 后，权威锁状态必须为空（前端对账兜底的最终态）。"""
+    client, project, sid, bus, published = http_ctx
+    with client.stream("POST",
+                       f"/api/project/{project}/agents/sessions/{sid}/turn/stream",
+                       json={"content": "加一段", "thinking": False}) as resp:
+        b"".join(resp.iter_bytes())
+    r = client.get(f"/api/project/{project}/resource-locks")
+    assert r.status_code == 200
+    assert r.json()["locks"] == []

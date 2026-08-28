@@ -399,6 +399,18 @@ async def project_events(request: Request, project_name: str):
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
+@router.get("/api/project/{project_name}/resource-locks")
+async def project_resource_locks(project_name: str):
+    """AI-7D-R · 资源锁【权威状态】只读查询（SSE 对账兜底）。
+
+    SSE 是一次一事件的推送通道，个别 resource.unlocked 事件可能因连接静默中断/
+    后端重启/半开连接而丢失，导致前端卡在旧的锁定态。前端在锁定期定时（+回前台）
+    拉本接口对账：返回的是后端总线里【此刻真实持有】的锁（与 SSE 首帧 snapshot 同源），
+    以此为准——空 locks 即解锁，不依赖那条可能已丢的 unlock 事件。"""
+    bus = get_project_bus()
+    return {"locks": bus.snapshot(project_name)}
+
+
 # ==================== Tasks（Producer delegation）====================
 @router.get("/api/project/{project_name}/agents/tasks")
 async def list_tasks(project_name: str,

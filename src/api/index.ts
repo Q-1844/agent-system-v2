@@ -1828,6 +1828,10 @@ class ApiClient {
       method: 'POST',
     });
   }
+  /** AI-7D-R：查询后端此刻真实持有的资源锁（SSE unlock 事件丢失/半开连接时对账兜底）。 */
+  async getResourceLocks(projectName: string): Promise<{ locks: any[] }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/resource-locks`);
+  }
 
   // ============ AI-7D-R · Script Writer 最小测试弹窗（隔离，单工具 edit_story_text）============
   async scriptWriterTestTurn(projectName: string, content: string): Promise<{
