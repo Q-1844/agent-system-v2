@@ -303,3 +303,65 @@ def test_e2e_create_many_one_call(tmp_path):
     assert not any(e.get("type") == "tool.completed" and e.get("ok") is False for e in events)
     scenes = [s.scene_id for s in ProjectStore(tmp_path).load().scenes]
     assert scenes[-3:] == ["s05", "s06", "s07"]
+
+
+# ============ 8. provider 把嵌套数组/对象 stringify 的容错（实测 Agnes 大参数怪癖） ============
+# 真 Agnes 在大段中文+引号时，会把 scenes/updates 发成 "[{...}]" 这种 JSON 字符串而非数组，
+# 导致 isinstance(list) 失败、整批被拒（"scenes 必须是非空数组"）。executor 需宽容还原。
+
+def test_create_many_stringified_scenes_array(tmp_path):
+    """scenes 整体是 JSON 字符串（模型怪癖）→ json.loads 还原后正常创建。"""
+    _save(tmp_path, 4)
+    rt = _runtime(tmp_path)
+    rev = _rev_scenes(["s01", "s02", "s03", "s04"])
+    specs = [{"summary": f"串化段{x}", "characters": []} for x in (1, 2)]
+    # 注意：scenes 的值是 json.dumps(specs) 得到的【字符串】，不是 list
+    raw = json.dumps({"scenes": json.dumps(specs, ensure_ascii=False),
+                      "expected_scenes_revision": rev})
+    obs = _execute_story_create_many(rt, "demo", raw, "instr", "m1")
+    assert obs["ok"] and obs["verified"]
+    assert obs["count"] == 2
+    scenes = ProjectStore(tmp_path).load().scenes
+    assert [s.summary for s in scenes[-2:]] == ["串化段1", "串化段2"]
+
+
+def test_create_many_stringified_items_and_characters(tmp_path):
+    """scenes 数组项被 stringify、characters 也被 stringify → 逐项还原。"""
+    _save(tmp_path, 2)
+    rt = _runtime(tmp_path)
+    rev = _rev_scenes(["s01", "s02"])
+    item_str = json.dumps({"summary": "项也串化", "characters": json.dumps(["LinXia"])},
+                          ensure_ascii=False)
+    raw = json.dumps({"scenes": [item_str], "expected_scenes_revision": rev})
+    obs = _execute_story_create_many(rt, "demo", raw, "instr", "m1")
+    assert obs["ok"] and obs["verified"]
+    new = ProjectStore(tmp_path).load().scenes[-1]
+    assert new.summary == "项也串化"
+    assert new.characters == ["LinXia"]
+
+
+def test_update_many_stringified_updates(tmp_path):
+    """updates 整体是 JSON 字符串 → 还原后正常修改。"""
+    _save(tmp_path, 3)
+    rt = _runtime(tmp_path)
+    rev = _scenes_content_token(ProjectStore(tmp_path).load().scenes)
+    updates = [{"scene_id": "s01", "summary": "改后内容"}]
+    raw = json.dumps({"updates": json.dumps(updates, ensure_ascii=False),
+                      "expected_revision": rev})
+    obs = _execute_story_update_many(rt, "demo", raw, "instr", "m1")
+    assert obs["ok"] and obs["verified"]
+    assert ProjectStore(tmp_path).load().scenes[0].summary == "改后内容"
+
+
+def test_create_many_unparseable_string_rejected(tmp_path):
+    """scenes 是无法解析的非 JSON 字符串 → 仍报准确的 bad_arguments，不写盘。"""
+    import pytest
+    _save(tmp_path, 2)
+    rt = _runtime(tmp_path)
+    rev = _rev_scenes(["s01", "s02"])
+    raw = json.dumps({"scenes": "这不是json也不是数组", "expected_scenes_revision": rev})
+    with pytest.raises(AgentError) as ei:
+        _execute_story_create_many(rt, "demo", raw, "instr", "m1")
+    assert "scenes 必须是非空数组" in str(ei.value)
+    # 未写盘
+    assert len(ProjectStore(tmp_path).load().scenes) == 2

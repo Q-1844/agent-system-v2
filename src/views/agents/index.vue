@@ -280,6 +280,11 @@ function onStreamEvent(ev: AgentStreamEvent) {
       if (it) it.reasoningMs = ev.duration_ms;
       break;
     }
+    case 'tool.pending':
+      // 工具名已出现、参数仍在流式生成（大参数阶段最耗时）：提前显示工具名，
+      // 不再笼统显示"思考中"。tool.started（真正执行落盘）会随后覆盖。
+      currentActivity.value = { type: 'tool', label: `正在调用 · ${ev.label}…` };
+      break;
     case 'tool.started':
       currentActivity.value = { type: 'tool', label: `正在${ev.label}…` };
       processItems.value.push({ kind: 'tool', step_id: ev.step_id, call_id: ev.call_id,

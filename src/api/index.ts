@@ -688,6 +688,7 @@ export interface TurnStartedEvent { type: 'turn.started'; thinking: boolean }
 export interface ReasoningStartedEvent { type: 'reasoning.started'; step_id: number }
 export interface ReasoningDeltaEvent { type: 'reasoning.delta'; step_id: number; delta: string }
 export interface ReasoningCompletedEvent { type: 'reasoning.completed'; step_id: number; duration_ms: number }
+export interface ToolPendingEvent { type: 'tool.pending'; step_id: number; name: string; label: string }
 export interface ToolStartedEvent { type: 'tool.started'; step_id: number; call_id: string; name: string; label: string }
 export interface ToolCompletedEvent { type: 'tool.completed'; step_id: number; call_id: string; name: string; ok: boolean; summary: string }
 export interface ToolFailedEvent { type: 'tool.failed'; step_id: number; call_id: string; name: string; error: string }
@@ -697,7 +698,7 @@ export interface TurnFailedEvent { type: 'turn.failed'; error: string }
 /** 前端据 event.type 安全分支处理。turn.completed.result 仍是现有完整最终结构。 */
 export type AgentStreamEvent =
   | TurnStartedEvent | ReasoningStartedEvent | ReasoningDeltaEvent
-  | ReasoningCompletedEvent | ToolStartedEvent | ToolCompletedEvent
+  | ReasoningCompletedEvent | ToolPendingEvent | ToolStartedEvent | ToolCompletedEvent
   | ToolFailedEvent | AssistantDeltaEvent | TurnCompletedEvent | TurnFailedEvent;
 export interface AgentSession {
   session_id: string; project: string; agent_id: string;

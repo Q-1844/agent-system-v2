@@ -538,6 +538,22 @@ def _parse_args(arguments: str) -> dict:
         raise AgentError("bad_arguments", f"工具参数不是合法 JSON：{e}")
 
 
+def _loose_json(value):
+    """LLM tool-call 宽容反序列化：实测 Agnes 在【大参数 + 中文引号】时会把嵌套的
+    array/object 序列化成 JSON 字符串再塞进参数（scenes 发成 "[{\\"summary\\":...}]"
+    这种 str 而非 list），导致 isinstance(list) 判定失败、整批被拒。str 且看起来像
+    JSON（[ 或 { 开头）时尝试 json.loads 还原；还原失败或非 str 原样返回，交给后续
+    类型校验报准确错误。"""
+    if isinstance(value, str):
+        s = value.strip()
+        if s[:1] in ("[", "{"):
+            try:
+                return json.loads(s)
+            except Exception:
+                pass
+    return value
+
+
 def _load_proj(rt: AgentRuntime, project: str):
     pdir = rt._resolve_project_dir(project)
     return pdir, ProjectStore(pdir), ProjectStore(pdir).load()
@@ -967,7 +983,8 @@ def _execute_story_create_many(rt: AgentRuntime, project: str, arguments: str,
     数组顺序、连续分配 id。写后重读 canonical 校验所有新段落盘 + 顺序连续 + 字段一致。
     单写串行 fence：本工具整体算一个写操作（WRITE_OPERATIONS）。"""
     args = _parse_args(arguments)
-    scenes_arr = args.get("scenes")
+    # 宽容反序列化：provider 偶发把嵌套数组/对象序列化成 JSON 字符串（见 _loose_json）
+    scenes_arr = _loose_json(args.get("scenes"))
     expected_rev = args.get("expected_scenes_revision")
     before, after = _anchor_args(args)
 
@@ -979,13 +996,14 @@ def _execute_story_create_many(rt: AgentRuntime, project: str, arguments: str,
 
     # atomic：先校验所有 spec，任一非法整批不写
     specs = []
-    for i, sc in enumerate(scenes_arr):
+    for i, sc0 in enumerate(scenes_arr):
+        sc = _loose_json(sc0)   # 数组项也可能被 stringify
         if not isinstance(sc, dict):
             raise AgentError("bad_arguments", f"scenes[{i}] 必须是对象")
         summary = sc.get("summary")
         if not isinstance(summary, str) or not summary.strip():
             raise AgentError("bad_arguments", f"scenes[{i}].summary 不能为空")
-        chars = sc.get("characters") or []
+        chars = _loose_json(sc.get("characters") or [])
         if not isinstance(chars, list):
             raise AgentError("bad_arguments", f"scenes[{i}].characters 必须是字符串数组")
         specs.append({"summary": summary.strip(),
@@ -1070,7 +1088,8 @@ def _execute_story_update_many(rt: AgentRuntime, project: str, arguments: str,
     任一非法抛 AgentError 不写。无实际变更 no-op。写后重读校验所有变更段落盘 + 顺序未变。
     禁止 move/delete/create/order（不接受相关字段；只接受 SCENE_UPDATABLE_FIELDS）。"""
     args = _parse_args(arguments)
-    updates_arr = args.get("updates")
+    # 宽容反序列化：provider 偶发把嵌套数组/对象序列化成 JSON 字符串（见 _loose_json）
+    updates_arr = _loose_json(args.get("updates"))
     expected_rev = args.get("expected_revision")
 
     if not isinstance(updates_arr, list) or not updates_arr:
@@ -1082,7 +1101,8 @@ def _execute_story_update_many(rt: AgentRuntime, project: str, arguments: str,
     # atomic：先校验所有项合法
     seen_ids: set = set()
     parsed: list = []   # [(scene_id, changes_dict)]
-    for i, it in enumerate(updates_arr):
+    for i, it0 in enumerate(updates_arr):
+        it = _loose_json(it0)   # 数组项也可能被 stringify
         if not isinstance(it, dict):
             raise AgentError("bad_arguments", f"updates[{i}] 必须是对象")
         sid = (it.get("scene_id") or "").strip()
@@ -1107,6 +1127,7 @@ def _execute_story_update_many(rt: AgentRuntime, project: str, arguments: str,
                 continue
             val = it.get(field)
             if field == "characters":
+                val = _loose_json(val)   # 角色数组也可能被 stringify
                 if not isinstance(val, list):
                     raise AgentError("bad_arguments", f"updates[{i}].characters 必须是字符串数组")
                 changes[field] = [str(c).strip() for c in val if str(c).strip()]
@@ -1845,6 +1866,11 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                             event_cb({"type": "reasoning.started", "step_id": step})
                         event_cb({"type": "reasoning.delta", "step_id": step,
                                   "delta": ev["delta"]})
+                    elif k == "tool_call_pending":
+                        # 工具名已出现、参数还在流式生成（大参数阶段最耗时）：
+                        # 提前 emit，让前端显示"正在调用某工具"而非笼统"思考中"。
+                        event_cb({"type": "tool.pending", "step_id": step,
+                                  "name": ev["name"], "label": _tool_label(ev["name"])})
                     elif k == "finish":
                         content = ev["content"]
                         tool_calls = ev["tool_calls"]

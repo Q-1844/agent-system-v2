@@ -76,6 +76,7 @@ def snap_num_frames(target_frames: int,
 async def _parse_sse_events(alines):
     content_buf: List[str] = []
     tool_aggs: Dict[int, Dict[str, str]] = {}
+    tool_pending_emitted: set = set()   # 已发过 tool_call_pending 的 index
     finish_reason: Optional[str] = None
     usage: Optional[dict] = None
     async for line in alines:
@@ -109,7 +110,13 @@ async def _parse_sse_events(alines):
                     a["id"] += frag["id"]
                 fn = frag.get("function") or {}
                 if fn.get("name"):
+                    had_name = bool(a["name"])
                     a["name"] += fn["name"]
+                    # 工具名一出现就提前通知（参数还在流式生成中）：大参数 tool_call
+                    # 的 arguments 生成可能耗时几十秒，期间前端不应只显示"思考中"。
+                    if not had_name and a["name"] and idx not in tool_pending_emitted:
+                        tool_pending_emitted.add(idx)
+                        yield {"kind": "tool_call_pending", "index": idx, "name": a["name"]}
                 if fn.get("arguments"):
                     a["args"] += fn["arguments"]
     final_content = "".join(content_buf) if content_buf else None

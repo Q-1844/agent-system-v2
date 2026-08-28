@@ -280,3 +280,46 @@ def test_chat_completion_stream_reasoning_via_mock():
     asyncio.run(run())
     assert [e["delta"] for e in out if e["kind"] == "reasoning_delta"] == ["想", "一下"]
     assert out[-1]["content"] == "ok"
+
+
+# ============ 9. tool_call_pending：工具名一出现就提前通知（参数仍在生成） ============
+def test_parser_tool_call_pending_on_first_name_fragment():
+    """分片流：name 在首片出现即发 tool_call_pending，且每个 index 只发一次。"""
+    lines = [
+        _line({"choices": [{"index": 0, "delta": {"tool_calls": [
+            {"id": "call_1", "function": {"arguments": "", "name": "story.create_many"},
+             "type": "function", "index": 0}]}}]}),
+        _line({"choices": [{"index": 0, "delta": {"tool_calls": [
+            {"function": {"arguments": "{\"scenes\":"}, "type": "function", "index": 0}]}}]}),
+        _line({"choices": [{"index": 0, "delta": {"tool_calls": [
+            {"function": {"arguments": "[{\"summary\":\"x\"}]}"}, "type": "function", "index": 0}]}}]}),
+        _line({"choices": [{"index": 0, "delta": {}, "finish_reason": "tool_calls"}]}),
+        "data: [DONE]",
+    ]
+    evs = _events(lines)
+    pending = [e for e in evs if e["kind"] == "tool_call_pending"]
+    assert len(pending) == 1            # 同名 index 只发一次
+    assert pending[0]["name"] == "story.create_many"
+    assert pending[0]["index"] == 0
+    # pending 出现在 finish 之前
+    assert evs.index(pending[0]) < evs.index([e for e in evs if e["kind"] == "finish"][0])
+    # finish 的聚合结果不受影响
+    finish = evs[-1]
+    assert finish["tool_calls"][0]["function"]["name"] == "story.create_many"
+
+
+def test_parser_tool_call_pending_single_chunk_and_multi_index():
+    """单块完整 tool_calls 也发 pending；一步多工具各发一次（按 index）。"""
+    lines = [
+        _line({"choices": [{"index": 0, "delta": {"content": "", "role": "assistant",
+            "tool_calls": [
+                {"id": "c1", "function": {"arguments": "{}", "name": "story.list"},
+                 "type": "function", "index": 0},
+                {"id": "c2", "function": {"arguments": "{}", "name": "script.read"},
+                 "type": "function", "index": 1}]}}]}),
+        _line({"choices": [{"index": 0, "delta": {}, "finish_reason": "tool_calls"}]}),
+        "data: [DONE]",
+    ]
+    evs = _events(lines)
+    pending = sorted((e["index"], e["name"]) for e in evs if e["kind"] == "tool_call_pending")
+    assert pending == [(0, "story.list"), (1, "script.read")]
