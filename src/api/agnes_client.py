@@ -277,9 +277,13 @@ class AgnesClient:
                 body["tool_choice"] = tool_choice
         headers = {"Authorization": f"Bearer {self.api_key}",
                    "Content-Type": "application/json"}
+        # 🔴 read=360 对齐非流式 _request（360）：流式 turn 的大生成（10 段 x300 字
+        # update_many 等大参数 tool_call）Agnes 服务端可能长时间不发首块/响应头
+        # （实测 httpx.ReadTimeout str 为空 -> "[执行失败: ]" 黑盒，2026-08-28）。
+        # 120s 对"等响应头"不够。流式 chunk 间隔实际很短，360s 是安全上限。
         async with httpx.AsyncClient(
                 base_url=self.base_url, headers=headers,
-                timeout=httpx.Timeout(connect=30, read=120, write=30, pool=30),
+                timeout=httpx.Timeout(connect=30, read=360, write=30, pool=30),
                 proxy=self.proxy, follow_redirects=True,
                 transport=self.transport) as c:
             async with c.stream("POST", "/v1/chat/completions", json=body) as r:
