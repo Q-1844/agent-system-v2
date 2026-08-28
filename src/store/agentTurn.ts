@@ -48,6 +48,13 @@ export const useAgentTurnStore = defineStore('agentTurn', () => {
   const error = ref('');
   /** turn 完成后挂账：agents 页可见时取走追加到会话（切走期间完成也不丢） */
   const pendingMessage = ref<PendingMessage | null>(null);
+  /**
+   * 执行过程按 message_id 留存（app 级，路由切换/组件卸载不丢）。
+   * 关键：_processItems 是纯前端字段、不持久化，切页面回来 openSession 从后端重载
+   * 消息时会丢。这里以 message_id 为 key 单独留存，消息（无论挂账 push 还是后端重载）
+   * 只要 id 一致就能渲染折叠条，不依赖消息对象身份。刷新页面才丢（与 reasoning 不持久化一致）。
+   */
+  const processItemsByMid = ref<Record<string, ProcessItem[]>>({});
 
   const completedSteps = computed(() =>
     processItems.value.filter(p => p.kind === 'tool' && (p.status === 'done' || p.status === 'failed')).length);
@@ -126,10 +133,15 @@ export const useAgentTurnStore = defineStore('agentTurn', () => {
         onEvent,
       });
       // 最终消息挂账 + 附本轮执行过程（前端字段，不持久化）
+      const itemsSnapshot = JSON.parse(JSON.stringify(processItems.value)) as ProcessItem[];
       pendingMessage.value = {
         message: result.message,
-        processItems: JSON.parse(JSON.stringify(processItems.value)),
+        processItems: itemsSnapshot,
       };
+      // 按 message_id 留存执行过程：切页面回来消息从后端重载（无 _processItems）时，
+      // 渲染层据此 id 找回过程折叠条。
+      const mid = (result.message as any)?.message_id;
+      if (mid) processItemsByMid.value[mid] = itemsSnapshot;
       streamingText.value = '';
     } catch (e: any) {
       if (e?.name === 'AbortError') { /* 用户取消本地流（非后台停止），静默 */ }
@@ -157,11 +169,16 @@ export const useAgentTurnStore = defineStore('agentTurn', () => {
     return p;
   }
 
+  /** 按 message_id 取本轮留存的执行过程（消息从后端重载后仍能找回折叠条）。 */
+  function processItemsFor(mid: string): ProcessItem[] {
+    return (mid && processItemsByMid.value[mid]) || [];
+  }
+
   function toggleProcess() { processExpanded.value = !processExpanded.value; }
 
   return {
     running, activeProject, activeSessionId, processItems, processExpanded,
     streamingText, currentActivity, error, pendingMessage, completedSteps,
-    resetTurn, runTurn, cancelTurn, consumePending, toggleProcess, onEvent,
+    resetTurn, runTurn, cancelTurn, consumePending, processItemsFor, toggleProcess, onEvent,
   };
 });

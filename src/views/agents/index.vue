@@ -283,9 +283,14 @@ function realReceipts(meta: any): ScriptWriterReceipt[] {
 }
 
 // AI-7D-R：完成后执行过程附在 message 上保留（折叠态），事后可展开查看。
-// reasoning 文本不持久化（spec §一），刷新后丢失；tool 顺序可从 meta.trace 重建但这里
-// 直接挂前端字段（同会话内可看，够用于"事后查流程发现问题"）。
-function processItemsOf(m: any): ProcessItem[] { return m._processItems || []; }
+// reasoning 文本不持久化（spec §一），刷新后丢失。两处来源：
+//   1) m._processItems：不切页面时 consumePending 即时挂到消息上；
+//   2) turn.processItemsFor(message_id)：切页面回来消息由 openSession 从后端重载（
+//      无 _processItems 前端字段），按 message_id 从 app 级 store 找回（路由切换不丢）。
+function processItemsOf(m: any): ProcessItem[] {
+  if (m._processItems && m._processItems.length) return m._processItems;
+  return m.message_id ? turn.processItemsFor(m.message_id) : [];
+}
 function processExpandedOf(m: any): boolean { return !!m._processExpanded; }
 function toggleProcessOf(m: any) { m._processExpanded = !m._processExpanded; }
 function completedStepCount(items: ProcessItem[]): number {
