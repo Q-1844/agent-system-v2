@@ -13,13 +13,14 @@ from typing import List, Optional
 import asyncio
 import json
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 import deps
 from deps import get_project_manager, JOB_HANDLERS
 from src.agents.runtime import get_agent_runtime, AgentError
+from src.agents.project_events import get_project_bus
 from src.agents.fake_shot_handlers import all_fake_handlers
 from src.agents.team_chat import (TeamChatStore, TeamMessage,
                                    run_team_inquiry_and_persist)
@@ -306,6 +307,39 @@ async def agent_turn_stream(project_name: str, sid: str, req: StreamTurnReq):
                     pass
 
     return StreamingResponse(event_gen(), media_type="text/event-stream")
+
+
+@router.get("/api/project/{project_name}/events")
+async def project_events(request: Request, project_name: str):
+    """AI-7D-R · 项目级实时事件 SSE（EventSource 友好，GET）。
+
+    一条连接推送该项目的资源锁与内容变更事件，供任意页面订阅（Agent 后台跑任务时
+    用户切到剧本/其它模块也能实时看到）：
+      连接首帧 snapshot {type:"snapshot", locks:[...]} —— 当前已锁资源 replay
+        （打开页面时 turn 可能已在跑）；随后逐帧 resource.locked / resource.unlocked
+        / story.changed。15s 心跳 `: keepalive` 防代理超时断流。
+    Agent 写入路径只 publish 到总线、绝不等待前端，前端断开不影响后台任务。"""
+    bus = get_project_bus()
+    sub = bus.subscribe(project_name)
+
+    async def gen():
+        try:
+            snap = {"type": "snapshot", "locks": bus.snapshot(project_name)}
+            yield "data: " + json.dumps(snap, ensure_ascii=False) + "\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    payload = await asyncio.wait_for(sub.get(), timeout=15)
+                    yield "data: " + json.dumps(payload, ensure_ascii=False) + "\n\n"
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"   # 注释帧：EventSource 自动忽略
+        finally:
+            bus.unsubscribe(project_name, sub)
+
+    return StreamingResponse(
+        gen(), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 # ==================== Tasks（Producer delegation）====================
