@@ -272,6 +272,8 @@ function receiptLabel(r: ScriptWriterReceipt): string {
   if (op === 'story.move') return `移动 ${r.scene_id || ''}`.trim();
   if (op === 'story.update') return `修改 ${r.scene_id || ''}`.trim();
   if (op === 'story.delete') return `删除 ${r.scene_id || ''}`.trim();
+  if (op === 'story.insert_many') return '批量插入故事段';
+  if (op === 'story.delete_many') return '批量删除故事段';
   if (op === 'script.update') return '更新剧本正文';
   return op;
 }

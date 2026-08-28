@@ -6,7 +6,9 @@
 #
 # 工具（按需读取，不把完整 story_text/scenes 长期塞进 system）：
 #   读：script.read / story.list / story.read
-#   写：script.update / story.create / story.move
+#   写：script.update / story.create / story.move / story.update / story.delete
+#   批量写（各占一个单写槽，整批一次 OCC + 一次原子写）：
+#        story.create_many / story.update_many / story.insert_many / story.delete_many
 # 循环：LLM → tool_calls → 执行 → observation 喂回 → LLM … → 无 tool_call 即最终回复。
 #
 # 三层薄约束（对齐 OpenAI Agents SDK tool guardrail，不替 Agent 规划）：
@@ -34,7 +36,7 @@ import httpx
 
 from src.core.store import ProjectStore
 from src.storyboard.structure_service import (
-    StructureError, insert_scenes, move_scene,
+    StructureError, insert_scenes, insert_scenes_at_anchors, move_scene,
 )
 
 from .models import AgentMessage, ResultStatus
@@ -74,8 +76,18 @@ def _committed_scene_ids(receipts: list) -> list:
                 sid = c.get("scene_id")
                 if sid and sid not in out:
                     out.append(sid)
+        elif op == "story.insert_many":
+            for c in (r.get("inserted") or []):
+                sid = c.get("scene_id")
+                if sid and sid not in out:
+                    out.append(sid)
         elif op == "story.update_many":
             for c in (r.get("results") or []):
+                sid = c.get("scene_id")
+                if sid and sid not in out:
+                    out.append(sid)
+        elif op == "story.delete_many":
+            for c in (r.get("deleted") or []):
                 sid = c.get("scene_id")
                 if sid and sid not in out:
                     out.append(sid)
@@ -120,6 +132,7 @@ _TOOL_LABELS = {
     "story.create": "创建故事段", "story.move": "移动故事段",
     "story.update": "修改故事段", "story.delete": "删除故事段",
     "story.create_many": "批量创建故事段", "story.update_many": "批量修改故事段",
+    "story.delete_many": "批量删除故事段", "story.insert_many": "批量插入故事段",
 }
 
 
@@ -140,9 +153,11 @@ def _tool_summary(name: str, obs: dict) -> str:
 
 
 # 写工具集合（只有这些可能产生 canonical 变更，需要回执 + 落盘校验）。
+# 批量工具（create_many/update_many/delete_many/insert_many）整体各占一个单写槽。
 WRITE_OPERATIONS = {"script.update", "story.create", "story.move",
                     "story.update", "story.delete",
-                    "story.create_many", "story.update_many"}
+                    "story.create_many", "story.update_many",
+                    "story.delete_many", "story.insert_many"}
 
 
 def _story_token(text: str) -> str:
@@ -215,24 +230,26 @@ SCRIPT_WRITER_SYSTEM = """你是 AGNES 的 Script Writer，负责项目的【剧
 - story.read(scene_id)：读取一个已有故事段的完整内容（标题/地点/时段/摘要/角色/镜头数）+ 该段【内容指纹】。
 - story.create(summary, characters?, before_scene_id?, after_scene_id?, expected_scenes_revision)：创建一个故事段并插到指定位置；省略 before/after 即追加末尾。id 由后端分配，你不能指定 id 或数字序号。【要一次创建多段时优先用 story.create_many，不要连续多次调 story.create】
 - story.create_many(scenes[], before_scene_id?, after_scene_id?, expected_scenes_revision)：一次创建多个故事段，scenes 数组顺序即创建后相对顺序；整批一次乐观并发+一次原子写入，全部合法才写。一次创建 ≥2 段时【优先】用本工具。
+- story.insert_many(inserts[], expected_scenes_revision)：一次在【多个不同锚点】前/后插入新故事段。inserts 每项含 before_scene_id 或 after_scene_id（二选一）+ scenes[]（该锚点处连续插入 1 段或多段，数组顺序即相对顺序）。先 story.list 把用户说的「第N段」解析成稳定 scene_id 锚点再调用；所有锚点按调用前快照解释，后端不会按插入后的新位置解释后续锚点。同一批每个锚点只能出现一次（同一锚点插多段就合并到该项 scenes 里）。整批一次乐观并发+一次原子写入，任一非法整批不写。【只在同一个锚点附近插多段用 story.create_many；同一请求有多个不同插入位置才用本工具】。
 - story.update(scene_id, expected_revision, summary?, title?, location?, time_of_day?, characters?)：修改一个【已有】故事段的自身内容。只传要改的字段；必须先 story.read 拿到该段 expected_revision 原样回传。不能改 scene_id、不能改镜头、不能改项目剧本正文。
 - story.update_many(updates[], expected_revision)：一次修改多个【互相独立、已存在】的故事段。每项 scene_id 必填+要改的字段，同段多字段合并到一项、同 scene_id 一批只出现一次。expected_revision 用 story.list 返回的 scenes_content_revision（内容指纹，非结构 revision）。一次修改 ≥2 段独立内容时【优先】用本工具；但若修改存在前后依赖（后一个依赖前一个改后的状态），仍逐步 story.update。
 - story.delete(scene_id)：删除一个已有故事段（会连带删掉该段下的镜头和生成资产）。用户明确要求删除某段时，直接调用本工具删除即可——不需要先预览再问用户确认。删完后用 story.list 核对真实结果并向用户总结删除了什么、当前剩余几段。
+- story.delete_many(scene_ids[], expected_scenes_revision)：一次删除多个故事段（用户一次要求删 ≥2 段时【优先】用本工具，不要连续多次调 story.delete）。只接受稳定 scene_id、不接受 position 数字：先 story.list 把用户说的「第N段」全部解析成 scene_id，再一次传入。整批一次乐观并发+一次原子级联删除（含各段镜头与生成资产），任一 scene_id 不存在/重复/revision 过期则整批不删。删完后用 story.list 核对真实结果并总结。
 - story.move(scene_id, before_scene_id?, after_scene_id?, expected_scenes_revision)：把已有故事段移动到某段之前/之后；省略 before/after 即移到末尾。
 
 🔴 最重要的铁律（违反即失败）：
 - 你只有通过【真正发起工具调用】（function/tool_calls）才能读/写数据。在回复里用自然语言说「我已创建/已移动/已插入/切换成功」但没有真正调用对应工具，等于什么都没做——这是严重错误。
-- 要创建就必须真正调用 story.create；要移动就必须真正调用 story.move；要修改故事段内容就必须真正调用 story.update；要删除就必须真正调用 story.delete；要改正文就必须真正调用 script.update；要知道当前有哪些段/正文内容就必须真正调用 story.list / script.read。
+- 要创建就必须真正调用 story.create（多段用 story.create_many / story.insert_many）；要移动就必须真正调用 story.move；要修改故事段内容就必须真正调用 story.update（多段用 story.update_many）；要删除就必须真正调用 story.delete（多段用 story.delete_many）；要改正文就必须真正调用 script.update；要知道当前有哪些段/正文内容就必须真正调用 story.list / script.read。
 - 工具调用成功后，工具会返回结果（含 ok、scene_id、order、最新版本指纹等）。你只能依据工具【真实返回】的结果向用户汇报；没看到工具返回的 ok=true，就不能声称成功。
 - 不要编造或猜测版本指纹、scene_id、段数；这些值必须来自 story.list / script.read / 工具返回值。
 - 如果你不确定当前状态，先调用 story.list / script.read 读取，再决定。不要凭记忆或假设操作。
 
 工作方式：
 1. 改/续写/重写/压缩剧本正文 → 先 script.read() 拿到正文和 expected_revision，再 script.update 传【完整】新正文 + 指纹。
-2. 新建故事段 → 先 story.list() 拿到现有段和 expected_scenes_revision，确定插入位置（用某个已有段的 scene_id 作 before/after 锚点，或省略追加末尾）。要创建 1 段用 story.create；要一次创建 ≥2 段用 story.create_many（整批一起，不要连续多次 create）。
+2. 新建故事段 → 先 story.list() 拿到现有段和 expected_scenes_revision，确定插入位置（用某个已有段的 scene_id 作 before/after 锚点，或省略追加末尾）。创建 1 段用 story.create；在【同一个锚点】一次创建 ≥2 段（或末尾批量追加）用 story.create_many；要在【多个不同位置】分别插入（如「第2段后插一段、第5段前插两段」）→ 先用一次 story.list 把所有「第N段」解析成锚点 scene_id，再一次 story.insert_many（inserts 每项一个锚点+scenes 数组），不要插一次 list 一次地循环。
 3. 调整故事段顺序 → 先 story.list() 拿指纹，再 story.move（用 scene_id 指定移动谁、用 before/after_scene_id 指定位置，不要自己算数字序号）。
 4. 修改已有故事段的摘要/标题/地点/时段/角色 → 改 1 段：先 story.read(scene_id) 拿该段内容和 expected_revision，再 story.update 只传要改的字段+指纹。改 ≥2 段且互相独立：先 story.list 拿 scenes_content_revision，再 story.update_many（每项 scene_id+要改字段，同段多字段合并到一项）。若修改存在前后依赖仍逐步 story.update。
-5. 删除故事段 → 用户明确要删某段就直接 story.delete(scene_id) 删除（不需要先预览问确认），删完用 story.list 核对并据事实总结。
+5. 删除故事段 → 用户明确要删就直接删（不需要先预览问确认）。删 1 段用 story.delete(scene_id)；一次删 ≥2 段：先用一次 story.list 把所有「第N段」解析成 scene_id，再一次 story.delete_many（整批一起，不要删一个 list 一次地循环），删完用 story.list 核对并据事实总结。
 6. 需要某段全文细节再 story.read(scene_id)。
 7. 任一写工具返回 stale=true → 你读取后内容被改动过、未写入；用返回的最新版和刷新后的指纹重新判断，再用新指纹调用。
 8. 用户只是提问、闲聊，或你判断不需要改时，直接自然语言回复，不调用工具。
@@ -245,15 +262,17 @@ SCRIPT_WRITER_SYSTEM = """你是 AGNES 的 Script Writer，负责项目的【剧
 5. 询问时只询问完成任务所缺少的最关键一点，不要连续追问，也不要要求用户提供不必要的细节。
 
 【写工具必须一个一个来】（重要）：
-- 写工具（script.update / story.create / story.update / story.move / story.delete）必须【一个一个执行】：每发一个写工具调用，等它返回最新状态/revision 后，再发下一个。不要在同一次回复里批量发多个写工具——它们会用旧 revision 导致 stale。
+- 写工具（script.update / story.create / story.update / story.move / story.delete，及批量工具 story.create_many / story.update_many / story.insert_many / story.delete_many）必须【一个一个执行】：每发一个写工具调用，等它返回最新状态/revision 后，再发下一个。不要在同一次回复里批量发多个写工具——它们会用旧 revision 导致 stale。
+- 批量工具本身【一次调用就完成整批】（内部一次乐观并发+一次原子写入），它整体只占一个写槽：要删多段就把 scene_ids 一次放进 story.delete_many，要在多个位置插入就把 inserts 一次放进 story.insert_many——不要把一批拆成多个批量工具调用，也不要在同一次回复里混发多个写工具。
 - 只读工具（story.list / script.read / story.read）可以一次发多个，它们不碰数据、不冲突。
 - 这条是硬约束：同一次回复里发了多个写工具时，系统只执行第1个，其余会被拒绝。
 
 【复杂操作要分解成多步】（按场景）：
 - 互换两条故事段（如"第1条和最后一条互换"）：不能一步完成。分两步 story.move：先 move 一条到目标位置，再【用最新 revision】move 另一条。每步看结果再继续。
 - 批量重排（如"把这几条按某顺序排"）：多次 story.move，每次一个、用最新 revision。
-- 批量改内容（如"把这3段的摘要都改一下"）：逐段 story.read→story.update，一个一个来。
-- 批量删（如"删掉这3条"）：逐个 story.delete，每删一个 revision 变了，下一个继续用（delete 不需要 expected_revision，但仍建议一个一个来核对结果）。
+- 批量改内容（如"把这3段的摘要都改一下"）：互相独立的多段内容修改用一次 story.list 拿 scenes_content_revision 后调 story.update_many；存在前后依赖时仍逐段 story.read→story.update。
+- 批量删（如"删掉第1、5、7、9段"）：先一次 story.list 把这些 position 全部解析成 scene_id，再【一次】story.delete_many（整批一次 revision 校验+原子级联删）。不要删一个再 list 再删——delete_many 就是为消除这个循环。
+- 多点插入（如"第2段后插A、第5段前插B和C、第8段后插D"）：先一次 story.list 把第2/5/8段解析成锚点 scene_id，再【一次】story.insert_many（inserts 三项，锚点都按这次 list 的快照解释）。不要插一个再 list 再插。仅同一锚点连续插多段时用 story.create_many。
 - 用户说的「第N条」= story.list 返回里 position=N 的那条；找到它的 scene_id 再操作，不要用 scene_id 的数字猜位置（删除后 id 会跳号，但 position 始终连续）。
 
 【整篇剧本拆分成故事段】（连续创建，不生成计划、不经审查流）：
@@ -529,11 +548,93 @@ STORY_UPDATE_MANY_TOOL = {
     },
 }
 
+STORY_DELETE_MANY_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "story.delete_many",
+        "description": (
+            "一次删除多个【已存在】的故事段（同一请求里要删 ≥2 段时优先用本工具，不要连续"
+            "多次调 story.delete）。只接受稳定 scene_id、不接受 position 数字：先 story.list "
+            "把用户说的「第N段」全部解析成 scene_id，再把 scene_ids 一次传入。整批只做一次"
+            "乐观并发校验、一次原子级联删除（各段下的镜头和生成资产一并清理），任一 scene_id "
+            "不存在/重复/revision 过期则整批不删（不留半删除）。删除是级联的、不可恢复。"
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "scene_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "要删除的故事段 scene_id 数组（如 [\"s01\", \"s05\"]）。必须来自 story.list 的真实 id，不能用数字序号；同一 id 不能重复。",
+                },
+                "expected_scenes_revision": {
+                    "type": "string",
+                    "description": "你最近一次 story.list 返回的结构版本指纹（revision 字段，8 位十六进制）。用于乐观并发。",
+                },
+            },
+            "required": ["scene_ids", "expected_scenes_revision"],
+        },
+    },
+}
+
+STORY_INSERT_MANY_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "story.insert_many",
+        "description": (
+            "一次在【多个不同锚点】前/后插入新故事段（同一请求里要在 ≥2 个不同位置插入时用"
+            "本工具）。先 story.list 把用户说的「第N段」全部解析成稳定 scene_id 锚点，再把 "
+            "inserts 一次传入——所有锚点都按这次调用前的快照解释，后端不会按插入后的新位置"
+            "解释后续锚点。每个 insert 项 = before_scene_id / after_scene_id 二选一 + scenes "
+            "数组（在该锚点处连续插入 1 段或多段，scenes 顺序即相对顺序）。同一批每个锚点"
+            "只能出现一次：同一锚点要插多段就合并到该项 scenes 里。整批一次乐观并发校验、"
+            "一次原子写入，任一锚点不存在/重复/参数非法则整批不写入。id 与最终顺序由后端"
+            "分配。【只在同一个锚点附近连续创建多段（或末尾追加）仍用 story.create_many；"
+            "本工具负责多个不同插入位置】。"
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "inserts": {
+                    "type": "array",
+                    "description": "插入项数组，每项指定一个锚点和要在该锚点处插入的 scenes。各项锚点按同一调用前快照解释。",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "before_scene_id": {"type": "string", "description": "插到该故事段之前（与 after_scene_id 二选一）。"},
+                            "after_scene_id": {"type": "string", "description": "插到该故事段之后（与 before_scene_id 二选一）。"},
+                            "scenes": {
+                                "type": "array",
+                                "description": "在该锚点处连续插入的故事段数组，顺序即相对顺序。每项含 summary（必填，中文正文）与 characters（可选，角色名数组）。",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "summary": {"type": "string", "description": "该段故事文本（中文正文，不要 markdown/解释/代码块）。"},
+                                        "characters": {"type": "array", "items": {"type": "string"}, "description": "出场角色名数组（可空）。"},
+                                    },
+                                    "required": ["summary"],
+                                },
+                            },
+                        },
+                        "required": ["scenes"],
+                    },
+                },
+                "expected_scenes_revision": {
+                    "type": "string",
+                    "description": "你最近一次 story.list 返回的结构版本指纹（revision 字段，8 位十六进制）。用于乐观并发。",
+                },
+            },
+            "required": ["inserts", "expected_scenes_revision"],
+        },
+    },
+}
+
 SCRIPT_WRITER_TOOLS = [
     SCRIPT_UPDATE_TOOL, SCRIPT_READ_TOOL,
     STORY_CREATE_TOOL, STORY_LIST_TOOL, STORY_READ_TOOL, STORY_MOVE_TOOL,
     STORY_UPDATE_TOOL, STORY_DELETE_TOOL,
     STORY_CREATE_MANY_TOOL, STORY_UPDATE_MANY_TOOL,
+    STORY_DELETE_MANY_TOOL, STORY_INSERT_MANY_TOOL,
 ]
 
 
@@ -1345,6 +1446,256 @@ def _execute_story_delete(rt: AgentRuntime, project: str, arguments: str,
              + "。请用一句话回复用户删除了什么。")
 
 
+def _execute_story_delete_many(rt: AgentRuntime, project: str, arguments: str,
+                               instruction: str, message_id: Optional[str]) -> dict:
+    """执行 story.delete_many：一次删除多个已锁定的故事段（整批一次 OCC + 一次原子写）。
+
+    只接受稳定 scene_id（不接受 position——Agent 应先 story.list 把「第N段」解析成 id）。
+    atomic：参数解析阶段拒绝空/重复 id；OCC 用 _scenes_token（结构指纹）；中性层
+    apply_delete_scenes_many_to_memory 先校验所有 id 存在（任一不存在整批不删），再一次性
+    级联删（段+镜头+制作计划+资产文件聚合），一次 save、一次 cancel/commit、一次重读验证。
+    单写串行 fence：本工具整体算一个写操作。"""
+    args = _parse_args(arguments)
+    # 宽容反序列化：provider 偶发把嵌套数组序列化成 JSON 字符串（见 _loose_json）
+    ids_raw = _loose_json(args.get("scene_ids"))
+    expected_rev = args.get("expected_scenes_revision")
+
+    if not isinstance(ids_raw, list) or not ids_raw:
+        raise AgentError("bad_arguments",
+                         "scene_ids 必须是非空数组（稳定 scene_id；不要传 position 数字，"
+                         "先 story.list 把「第N段」解析成 scene_id）")
+    scene_ids: list = []
+    seen: set = set()
+    for i, v in enumerate(ids_raw):
+        if not isinstance(v, str) or not v.strip():
+            raise AgentError("bad_arguments", f"scene_ids[{i}] 必须是非空 scene_id 字符串")
+        sid = v.strip()
+        if sid in seen:
+            raise AgentError("bad_arguments",
+                             f"scene_ids 含重复 scene_id：{sid}（同一批中同一段只能出现一次）")
+        seen.add(sid)
+        scene_ids.append(sid)
+    if not isinstance(expected_rev, str) or not expected_rev.strip():
+        raise AgentError("bad_arguments",
+                        "缺少 expected_scenes_revision（应先 story.list 拿到版本指纹再传回）")
+
+    from src.storyboard.delete_service import (
+        apply_delete_scenes_many_to_memory, commit_disk_effects,
+        cancel_orphan_jobs, DeleteError)
+
+    pdir, pstore, proj = _load_proj(rt, project)
+    current_rev = _scenes_token(proj.scenes)
+    if expected_rev != current_rev:
+        current_scenes = [{"scene_id": s.scene_id, "summary": (s.summary or "")[:80]}
+                          for s in proj.scenes]
+        return _base_receipt(
+            "story.delete_many", ok=False, target="scenes",
+            before=len(proj.scenes), after=len(proj.scenes),
+            revision=current_rev, verified=False, error="stale_revision", stale=True,
+            expected_revision=expected_rev, current_revision=current_rev,
+            current_scenes=current_scenes,
+            note="你读取的故事段列表已过期（期间被改动），未删除。上面是当前最新列表。"
+                 "请基于最新列表重新解析要删的 scene_id，再用新的 expected_scenes_revision "
+                 "调用 story.delete_many。")
+
+    # 活跃生产护栏（与单删同款：删正在生成的镜头会让 worker 写回空镜头）
+    reason = _active_production_reason(project)
+    if reason:
+        raise AgentError("production_active",
+                         f"当前项目有正在进行的视频生成（{reason}），等生成结束后再删除")
+
+    before_ids = [s.scene_id for s in proj.scenes]
+    shots_by_scene = {s.scene_id: [sh.shot_id for sh in (s.shots or [])]
+                      for s in proj.scenes}
+
+    try:
+        plan = apply_delete_scenes_many_to_memory(proj, scene_ids)
+    except DeleteError as e:
+        raise AgentError(e.code, e.message)
+    pstore.save(proj)
+
+    # 写后重读 canonical 验证：目标段全部消失、幸存段顺序与快照一致（无半删除）。
+    on_disk = _reload(rt, project)
+    after_ids = [s.scene_id for s in on_disk.scenes]
+    target_set = set(scene_ids)
+    expected_survivors = [sid for sid in before_ids if sid not in target_set]
+    if after_ids != expected_survivors or any(sid in after_ids for sid in scene_ids):
+        return _base_receipt(
+            "story.delete_many", ok=False, target="scenes",
+            before=before_ids, after=after_ids,
+            revision=_scenes_token(on_disk.scenes), verified=False,
+            error="verify_failed",
+            deleted=[{"scene_id": sid} for sid in scene_ids],
+            note="批量删除后重新读取发现结果与预期不一致，未确认删除。"
+                 "请用 story.list 读取当前列表后重试。")
+
+    # 磁盘副作用（整批一次）：取消孤儿 job + 删资产文件 + 制作计划
+    cancel_orphan_jobs(getattr(on_disk, "name", "") or project,
+                       {sh.shot_id for sh in on_disk.all_shots()})
+    fx = commit_disk_effects(pdir, plan["plan_keys"], plan["asset_files"],
+                             log_ctx=f"delete_many:{len(scene_ids)}")
+
+    deleted_items = [{"scene_id": sid, "shots": shots_by_scene.get(sid, [])}
+                     for sid in scene_ids]
+    DirectEditAuditStore(pdir, project).record(
+        agent_id="script_writer", field="delete_scenes_many",
+        before={"scenes": plan["deleted"]["scenes"], "shots": plan["deleted"]["shots"],
+                "plans": plan["plan_keys"], "removed_files": fx["removed_files"]},
+        after=[], instruction=instruction, message_id=message_id)
+    n_shots = len(plan["deleted"]["shots"])
+    rt.record_work(project, "change",
+                   f"Script Writer 批量删除了 {len(scene_ids)} 个故事段、{n_shots} 个镜头",
+                   participants=["script_writer"], affected_domains=["storyboard"],
+                   references={"scene_ids": scene_ids}, status="completed")
+
+    new_rev = _scenes_token(on_disk.scenes)
+    return _base_receipt(
+        "story.delete_many", ok=True, target="scenes",
+        before=before_ids, after=after_ids, revision=new_rev, verified=True,
+        deleted=deleted_items, count=len(deleted_items),
+        deleted_scenes=plan["deleted"]["scenes"], deleted_shots=plan["deleted"]["shots"],
+        removed_files=fx["removed_files"], plan_removed=fx["plan_removed"],
+        scenes_revision=new_rev,
+        note=f"已批量删除 {len(scene_ids)} 段（{'、'.join(scene_ids)}）"
+             + (f"及 {n_shots} 个镜头" if n_shots else "")
+             + (f"，清理 {fx['removed_files']} 个生成资产文件" if fx["removed_files"] else "")
+             + "。请用 story.list 核对后用一句话回复用户删除了什么。")
+
+
+def _execute_story_insert_many(rt: AgentRuntime, project: str, arguments: str,
+                               instruction: str, message_id: Optional[str]) -> dict:
+    """执行 story.insert_many：一次在多个不同锚点前/后插入新故事段（整批一次 OCC + 一次
+    原子写）。
+
+    快照语义：所有锚点由 Agent 从同一次 story.list 解析为稳定 scene_id；中性层
+    insert_scenes_at_anchors 对调用前快照线性走查算出唯一最终顺序，不按「插一个后的新
+    位置」解释后续锚点。atomic：先校验所有 insert 项（before/after 二选一、锚点不重复、
+    scenes 非空、spec 合法），任一非法抛 AgentError 不写；OCC 用 _scenes_token；锚点不存在
+    由中性层抛 not_found。写后重读校验最终顺序与每个新段字段。单写串行 fence：整批一个
+    写槽。与 create_many 边界：单锚点连续创建/末尾追加走 create_many，本工具负责多锚点。"""
+    args = _parse_args(arguments)
+    inserts_raw = _loose_json(args.get("inserts"))
+    expected_rev = args.get("expected_scenes_revision")
+
+    if not isinstance(inserts_raw, list) or not inserts_raw:
+        raise AgentError("bad_arguments", "inserts 必须是非空数组")
+    if not isinstance(expected_rev, str) or not expected_rev.strip():
+        raise AgentError("bad_arguments",
+                        "缺少 expected_scenes_revision（应先 story.list 拿到版本指纹再传回）")
+
+    # atomic：先校验所有 insert 项与所有 spec，任一非法整批不写
+    parsed: list = []
+    seen_anchors: set = set()
+    for i, it0 in enumerate(inserts_raw):
+        it = _loose_json(it0)   # 数组项也可能被 stringify
+        if not isinstance(it, dict):
+            raise AgentError("bad_arguments", f"inserts[{i}] 必须是对象")
+        before = (it.get("before_scene_id") or "").strip() or None
+        after = (it.get("after_scene_id") or "").strip() or None
+        if bool(before) == bool(after):
+            raise AgentError(
+                "bad_arguments",
+                f"inserts[{i}] 必须且只能指定 before_scene_id / after_scene_id 之一")
+        anchor = before or after
+        if anchor in seen_anchors:
+            raise AgentError(
+                "bad_arguments",
+                f"inserts[{i}] 锚点 {anchor} 在本批重复：同一批每个锚点只能出现一次"
+                "（同一锚点要插多段，请合并到该项的 scenes 数组里按顺序给出）")
+        seen_anchors.add(anchor)
+        scenes_arr = _loose_json(it.get("scenes"))
+        if not isinstance(scenes_arr, list) or not scenes_arr:
+            raise AgentError("bad_arguments", f"inserts[{i}].scenes 必须是非空数组")
+        specs = []
+        for j, sc0 in enumerate(scenes_arr):
+            sc = _loose_json(sc0)
+            if not isinstance(sc, dict):
+                raise AgentError("bad_arguments",
+                                 f"inserts[{i}].scenes[{j}] 必须是对象")
+            summary = sc.get("summary")
+            if not isinstance(summary, str) or not summary.strip():
+                raise AgentError("bad_arguments",
+                                 f"inserts[{i}].scenes[{j}].summary 不能为空")
+            chars = _loose_json(sc.get("characters") or [])
+            if not isinstance(chars, list):
+                raise AgentError("bad_arguments",
+                                 f"inserts[{i}].scenes[{j}].characters 必须是字符串数组")
+            specs.append({"summary": summary.strip(),
+                          "characters": [str(c).strip() for c in chars if str(c).strip()]})
+        parsed.append({"before": before, "after": after, "specs": specs})
+
+    pdir, pstore, proj = _load_proj(rt, project)
+    current_rev = _scenes_token(proj.scenes)
+    if expected_rev != current_rev:
+        current_scenes = [{"scene_id": s.scene_id, "summary": (s.summary or "")[:80]}
+                          for s in proj.scenes]
+        return _base_receipt(
+            "story.insert_many", ok=False, target="scenes",
+            before=len(proj.scenes), after=len(proj.scenes),
+            revision=current_rev, verified=False, error="stale_revision", stale=True,
+            expected_revision=expected_rev, current_revision=current_rev,
+            current_scenes=current_scenes,
+            note="你读取的故事段列表已过期（期间被改动），未插入。上面是当前最新列表。"
+                 "请基于最新列表重新解析锚点 scene_id，再用新的 expected_scenes_revision "
+                 "调用 story.insert_many。")
+
+    before_ids = [s.scene_id for s in proj.scenes]
+    try:
+        result = insert_scenes_at_anchors(proj, parsed)
+    except StructureError as e:
+        raise AgentError(e.code, e.message)
+    new_scenes = result["new_scenes"]
+    placements = result["placements"]
+    new_ids = [sc.scene_id for sc in new_scenes]
+    expected_final = result["final_order"]
+    pstore.save(proj)
+
+    # 写后重读 canonical 校验：最终顺序与快照语义一致 + 每个新段字段落盘
+    on_disk = _reload(rt, project)
+    disk_ids = [s.scene_id for s in on_disk.scenes]
+    disk_by_id = {s.scene_id: s for s in on_disk.scenes}
+    verified = disk_ids == expected_final
+    if verified:
+        for built in new_scenes:
+            ds = disk_by_id.get(built.scene_id)
+            if ds is None or ds.summary != built.summary \
+                    or list(ds.characters or []) != list(built.characters or []):
+                verified = False
+                break
+    if not verified:
+        return _base_receipt(
+            "story.insert_many", ok=False, target="scenes",
+            before=len(before_ids), after=len(disk_ids),
+            revision=_scenes_token(on_disk.scenes), verified=False,
+            error="verify_failed",
+            inserted=[{"scene_id": nid} for nid in new_ids],
+            note="批量插入后重新读取未在 canonical 中确认最终顺序与新段一致落盘，未确认。"
+                 "请用 story.list 读取当前列表后重试。")
+
+    DirectEditAuditStore(pdir, project).record(
+        agent_id="script_writer", field="scenes",
+        before=before_ids,
+        after=[{"scene_id": p["scene_id"], "anchor": p["anchor"], "side": p["side"]}
+               for p in placements],
+        instruction=instruction, message_id=message_id)
+    rt.record_work(project, "change",
+                   f"Script Writer 在 {len(parsed)} 个锚点批量插入 {len(new_ids)} 个故事段",
+                   participants=["script_writer"], affected_domains=["storyboard"],
+                   references={"scene_ids": new_ids}, status="completed")
+
+    new_rev = _scenes_token(on_disk.scenes)
+    inserted = [{"scene_id": p["scene_id"],
+                 "order": disk_ids.index(p["scene_id"]) + 1,
+                 "anchor": p["anchor"], "anchor_side": p["side"]}
+                for p in placements]
+    return _base_receipt(
+        "story.insert_many", ok=True, target="scenes",
+        before=len(before_ids), after=len(disk_ids), revision=new_rev, verified=True,
+        inserted=inserted, count=len(inserted), scenes_revision=new_rev,
+        note=f"已在 {len(parsed)} 个锚点插入 {len(inserted)} 段：{', '.join(new_ids)}。"
+             "请确认结果后用一句话回复用户。")
+
+
 TOOL_EXECUTORS = {
     "script.read": _execute_script_read,
     "script.update": _execute_script_update,
@@ -1356,6 +1707,8 @@ TOOL_EXECUTORS = {
     "story.delete": _execute_story_delete,
     "story.create_many": _execute_story_create_many,
     "story.update_many": _execute_story_update_many,
+    "story.delete_many": _execute_story_delete_many,
+    "story.insert_many": _execute_story_insert_many,
 }
 
 
@@ -1698,9 +2051,19 @@ def _op_human(r: dict) -> str:
     if op == "story.create_many":
         ids = [c.get("scene_id") for c in (r.get("created") or []) if c.get("scene_id")]
         return f"批量创建 {len(ids)} 段故事段（{', '.join(ids)}）" if ids else "批量创建故事段"
+    if op == "story.insert_many":
+        ids = [c.get("scene_id") for c in (r.get("inserted") or []) if c.get("scene_id")]
+        return f"多锚点批量插入 {len(ids)} 段故事段（{', '.join(ids)}）" if ids else "批量插入故事段"
     if op == "story.update_many":
         n = len(r.get("results") or [])
         return f"批量修改 {n} 段故事段"
+    if op == "story.delete_many":
+        items = r.get("deleted") or []
+        ids = [c.get("scene_id") for c in items if c.get("scene_id")]
+        n_shots = sum(len(c.get("shots") or []) for c in items)
+        extra = f"及 {n_shots} 个镜头" if n_shots else ""
+        return (f"批量删除 {len(ids)} 段故事段（{', '.join(ids)}）{extra}"
+                if ids else "批量删除故事段")
     if op == "story.delete":
         d = r.get("deleted") or {}
         extra = f"及 {len(d.get('shots', []))} 个镜头" if d.get("shots") else ""
@@ -2124,11 +2487,26 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                     events.append({"kind": "story_delete",
                                    "scene_id": obs["scene_id"], "summary": s})
                     summary = s
+                elif name == "story.delete_many":
+                    deleted = True
+                    items = obs.get("deleted") or []
+                    ids = [c.get("scene_id") for c in items if c.get("scene_id")]
+                    n_shots = sum(len(c.get("shots") or []) for c in items)
+                    s = f"批量删除 {len(ids)} 段" + (f"及 {n_shots} 个镜头" if n_shots else "")
+                    events.append({"kind": "story_delete_many",
+                                   "scene_ids": ids, "summary": s})
+                    summary = s
                 elif name == "story.create_many":
                     created = True
                     ids = [c.get("scene_id") for c in (obs.get("created") or []) if c.get("scene_id")]
                     s = f"批量创建 {len(ids)} 段：{', '.join(ids)}" if ids else "批量创建故事段"
                     events.append({"kind": "story_create_many", "scene_ids": ids, "summary": s})
+                    summary = s
+                elif name == "story.insert_many":
+                    created = True
+                    ids = [c.get("scene_id") for c in (obs.get("inserted") or []) if c.get("scene_id")]
+                    s = f"多锚点批量插入 {len(ids)} 段：{', '.join(ids)}" if ids else "批量插入故事段"
+                    events.append({"kind": "story_insert_many", "scene_ids": ids, "summary": s})
                     summary = s
                 elif name == "story.update_many":
                     scene_updated = True

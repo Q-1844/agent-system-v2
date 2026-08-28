@@ -330,6 +330,52 @@ def apply_delete_to_memory(project: Project, entity_type: str, entity_id: str) -
     }
 
 
+def apply_delete_scenes_many_to_memory(project: Project,
+                                       scene_ids: list[str]) -> dict:
+    """纯内存：一次性级联删除【多个故事段】（story.delete_many 的中性层）。
+
+    原子性：先一次性校验所有 scene_id 都存在（任一不存在抛 DeleteError(not_found)，
+    一个都不删），再逐个 apply 到同一 project 对象。整段删除互相独立——镜头随段走、
+    source_shot_id 按构造只在段内，幸存段不会留下悬空指针——故顺序不影响结果。
+    产物文件 / 制作计划聚合后由调用方【一次】 commit_disk_effects 落盘。
+
+    scene_ids 重复项防御性去重（保持首次出现顺序）；agent 层应先把重复参数拒掉。
+    返回 {deleted:{scenes,shots,plans}, asset_files, plan_keys}。"""
+    ids: list[str] = []
+    for raw in scene_ids or []:
+        sid = (raw or "").strip()
+        if not sid:
+            raise DeleteError("invalid", "scene_ids 含空值")
+        if sid not in ids:
+            ids.append(sid)
+    if not ids:
+        raise DeleteError("invalid", "scene_ids 不能为空")
+
+    existing = {s.scene_id for s in project.scenes}
+    missing = [sid for sid in ids if sid not in existing]
+    if missing:
+        raise DeleteError("not_found", f"故事段不存在: {', '.join(missing)}")
+
+    asset_files: list[str] = []
+    seen_files: set[str] = set()
+    plan_keys: list[str] = []
+    deleted_shots: list[str] = []
+    for sid in ids:
+        plan = apply_delete_to_memory(project, "scene", sid)
+        for p in plan["asset_files"]:
+            if p not in seen_files:
+                seen_files.add(p)
+                asset_files.append(p)
+        plan_keys.extend(plan["plan_keys"])
+        deleted_shots.extend(plan["deleted"]["shots"])
+
+    return {
+        "deleted": {"scenes": list(ids), "shots": deleted_shots, "plans": plan_keys},
+        "asset_files": asset_files,
+        "plan_keys": plan_keys,
+    }
+
+
 # ============ 磁盘副作用 commit（写 plans / 删文件 / 取消 job）============
 def commit_disk_effects(project_dir, plan_keys: list, asset_files: list,
                         base_dir: Optional[Path] = None,

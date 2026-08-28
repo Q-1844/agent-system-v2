@@ -67,16 +67,18 @@ def _coerce_duration(v: Any) -> float:
         return 5.0
 
 
+def _build_scene(project: Project, spec: dict) -> Scene:
+    """构造一个新故事段并分配 id（不插入数组，调用方决定位置）。"""
+    sid = allocate_scene_id(project)
+    return Scene(scene_id=sid, title="",
+                 summary=str(spec.get("summary") or ""),
+                 characters=list(spec.get("characters") or []), shots=[])
+
+
 def _build_and_insert(project: Project, insert_at: int,
                       specs: list[dict]) -> list[Scene]:
     """在指定下标处构造并插入若干故事段（分配 id）。调用方负责解析 insert_at。"""
-    new_scenes = []
-    for spec in specs or []:
-        sid = allocate_scene_id(project)
-        sc = Scene(scene_id=sid, title="",
-                   summary=str(spec.get("summary") or ""),
-                   characters=list(spec.get("characters") or []), shots=[])
-        new_scenes.append(sc)
+    new_scenes = [_build_scene(project, spec) for spec in (specs or [])]
     project.scenes[insert_at:insert_at] = new_scenes
     return new_scenes
 
@@ -121,6 +123,79 @@ def insert_scenes(project: Project, *, before: Optional[str] = None,
     比 insert_scenes_after 多支持「插到最前」（before=第一个段）。"""
     insert_at = _resolve_anchor_index(project, before, after)
     return _build_and_insert(project, insert_at, specs or [])
+
+
+def insert_scenes_at_anchors(project: Project, inserts: list[dict]) -> dict:
+    """一次在【多个不同锚点】前/后插入新故事段（story.insert_many 的中性层）。
+
+    inserts: [{"before": sid|None, "after": sid|None, "specs": [{summary, characters}, ...]}]
+    每项 before/after 必须且只能给一个；scenes(specs) 非空，数组顺序即该锚点处的相对顺序。
+
+    快照语义（核心）：所有锚点都按【调用前快照】解释——先对快照线性走查算出唯一的最终
+    顺序，再一次性替换 project.scenes，绝不按「插一个之后的新位置」解释后续锚点。
+    走查规则：按快照顺序逐段 S，先放 before=S 的块，再放 S，再放 after=S 的块。
+    因此相邻锚点落同一间隙时（after X 与 before Y，X、Y 在快照中相邻）顺序确定：
+    X → [after X 块] → [before Y 块] → Y。
+
+    id 分配按最终顺序递增（走查到哪个块就分配哪个块），新 id 与最终位置单调一致。
+    同一锚点在一批中出现多次（before/after 都算）→ invalid；锚点不存在 → not_found；
+    before/after 同给或都不给 → invalid。任一非法整批不写（纯内存，调用方负责 save）。
+
+    返回 {"new_scenes": [Scene...最终顺序], "placements": [{scene_id, anchor, side}],
+          "final_order": [scene_id...]}。"""
+    if not isinstance(inserts, list) or not inserts:
+        raise StructureError("invalid", "inserts 必须是非空数组")
+    existing_ids = [s.scene_id for s in project.scenes]
+    existing_set = set(existing_ids)
+
+    parsed: list[tuple[Optional[str], Optional[str], str, list[dict]]] = []
+    seen_anchors: set[str] = set()
+    for i, it in enumerate(inserts):
+        if not isinstance(it, dict):
+            raise StructureError("invalid", f"inserts[{i}] 必须是对象")
+        before = (it.get("before") or "").strip() or None
+        after = (it.get("after") or "").strip() or None
+        if bool(before) == bool(after):
+            raise StructureError(
+                "invalid",
+                f"inserts[{i}] 必须且只能指定 before_scene_id / after_scene_id 之一")
+        anchor = before or after
+        if anchor not in existing_set:
+            raise StructureError("not_found", f"锚点故事段不存在: {anchor}")
+        if anchor in seen_anchors:
+            raise StructureError(
+                "invalid",
+                f"inserts[{i}] 锚点 {anchor} 在本批重复：同一批中每个锚点只能出现一次"
+                "（同一锚点要插多段，请合并到该项的 scenes 数组里按顺序给出）")
+        seen_anchors.add(anchor)
+        specs = it.get("specs")
+        if not isinstance(specs, list) or not specs:
+            raise StructureError("invalid", f"inserts[{i}].scenes 必须是非空数组")
+        parsed.append((before, after, anchor, specs))
+
+    before_blocks = {b: specs for (b, a, _anchor, specs) in parsed if b}
+    after_blocks = {a: specs for (b, a, _anchor, specs) in parsed if a}
+
+    new_scenes: list[Scene] = []
+    placements: list[dict] = []
+    final_scenes: list = []
+    for s in project.scenes:
+        for spec in before_blocks.get(s.scene_id, []):
+            sc = _build_scene(project, spec)
+            new_scenes.append(sc)
+            placements.append({"scene_id": sc.scene_id,
+                               "anchor": s.scene_id, "side": "before"})
+            final_scenes.append(sc)
+        final_scenes.append(s)
+        for spec in after_blocks.get(s.scene_id, []):
+            sc = _build_scene(project, spec)
+            new_scenes.append(sc)
+            placements.append({"scene_id": sc.scene_id,
+                               "anchor": s.scene_id, "side": "after"})
+            final_scenes.append(sc)
+    project.scenes = final_scenes
+    return {"new_scenes": new_scenes, "placements": placements,
+            "final_order": [s.scene_id for s in final_scenes]}
 
 
 def move_scene(project: Project, scene_id: str, *,
