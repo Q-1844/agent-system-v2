@@ -109,6 +109,7 @@ import { useProjectStore } from '@/store';
 import { apiClient } from '@/api';
 import { useTaskStream } from '@/composables/useTaskStream';
 import { useJobStream } from '@/composables/useJobStream';
+import { useProjectEvents } from '@/composables/useProjectEvents';
 import { useJobStore } from '@/store/jobs';
 import QueuePanel from '@/components/QueuePanel.vue';
 import OrchestrateModal from '@/components/OrchestrateModal.vue';
@@ -139,6 +140,8 @@ const queueShow = ref(false);
 const orchestrateShow = ref(false);
 const runningCount = computed(() => jobStore.queue.running);
 useJobStream(projectName);
+// AI-7D-R：项目级资源锁/内容变更 SSE（app 级，切页面不断线；剧本页据此锁定/刷新）
+useProjectEvents(projectName);
 
 async function handleExport() {
   if (exporting.value) return;

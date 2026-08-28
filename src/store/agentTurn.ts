@@ -1,0 +1,167 @@
+/**
+ * Script Writer 流式 turn 的 app 级状态（Pinia）。
+ *
+ * 关键：turn 的流式连接与累积状态归【store】持有，不归 agents 页组件持有。
+ * 这样用户在 Agent 回复中途切到剧本/其它模块（组件卸载），fetch 流不会中断，
+ * Agent 在后台继续跑；切回来时 processItems / 流式正文 / 最终结果都还在。
+ *
+ * 生命周期：
+ *   runTurn() → running=true，累积 activity/processItems/streamingText；
+ *   turn.completed/failed → pendingMessage（含最终消息 + 执行过程快照），running=false；
+ *   组件（agents 页）在可见时消费 pendingMessage 追加到会话并清除。
+ * 停止：cancelTurn() 调后端 /turn/cancel（协作式，步骤边界停下），本地流保持连接
+ *   接收 stopped 收尾消息，不本地 abort。
+ */
+import { defineStore } from 'pinia';
+import { ref, computed } from 'vue';
+import { apiClient } from '@/api';
+import type { AgentStreamEvent, ScriptWriterTurnResult } from '@/api';
+import { streamAgentTurn } from '@/composables/useAgentTurnStream';
+
+export interface ProcessItem {
+  kind: 'reasoning' | 'tool';
+  step_id: number;
+  reasoningText?: string;
+  reasoningMs?: number;
+  call_id?: string;
+  name?: string;
+  label?: string;
+  status?: 'running' | 'done' | 'failed';
+  summary?: string;
+  error?: string;
+}
+
+/** 完成时交给组件的挂账消息（最终 assistant 消息 + 本轮执行过程快照） */
+export interface PendingMessage {
+  message: any;
+  processItems: ProcessItem[];
+}
+
+export const useAgentTurnStore = defineStore('agentTurn', () => {
+  const running = ref(false);
+  const activeProject = ref('');
+  const activeSessionId = ref('');
+  const processItems = ref<ProcessItem[]>([]);
+  const processExpanded = ref(false);
+  const streamingText = ref('');
+  const currentActivity = ref<{ type: string; label: string } | null>(null);
+  const error = ref('');
+  /** turn 完成后挂账：agents 页可见时取走追加到会话（切走期间完成也不丢） */
+  const pendingMessage = ref<PendingMessage | null>(null);
+
+  const completedSteps = computed(() =>
+    processItems.value.filter(p => p.kind === 'tool' && (p.status === 'done' || p.status === 'failed')).length);
+
+  function resetTurn() {
+    processItems.value = [];
+    processExpanded.value = false;
+    streamingText.value = '';
+    currentActivity.value = null;
+    error.value = '';
+  }
+
+  function onEvent(ev: AgentStreamEvent) {
+    switch (ev.type) {
+      case 'turn.started':
+        resetTurn();
+        currentActivity.value = { type: 'thinking', label: '思考中…' };
+        break;
+      case 'reasoning.started':
+        currentActivity.value = { type: 'thinking', label: '思考中…' };
+        processItems.value.push({ kind: 'reasoning', step_id: ev.step_id, reasoningText: '' });
+        break;
+      case 'reasoning.delta': {
+        const it = processItems.value.find(p => p.kind === 'reasoning' && p.step_id === ev.step_id);
+        if (it) it.reasoningText = (it.reasoningText || '') + ev.delta;
+        break;
+      }
+      case 'reasoning.completed': {
+        const it = processItems.value.find(p => p.kind === 'reasoning' && p.step_id === ev.step_id);
+        if (it) it.reasoningMs = ev.duration_ms;
+        break;
+      }
+      case 'tool.pending':
+        currentActivity.value = { type: 'tool', label: `正在调用 · ${ev.label}…` };
+        break;
+      case 'tool.started':
+        currentActivity.value = { type: 'tool', label: `正在${ev.label}…` };
+        processItems.value.push({ kind: 'tool', step_id: ev.step_id, call_id: ev.call_id,
+          name: ev.name, label: ev.label, status: 'running' });
+        break;
+      case 'tool.completed': {
+        const it = processItems.value.find(p => p.kind === 'tool' && p.call_id === ev.call_id);
+        if (it) { it.status = ev.ok ? 'done' : 'failed'; it.summary = ev.summary; }
+        break;
+      }
+      case 'tool.failed': {
+        const it = processItems.value.find(p => p.kind === 'tool' && p.call_id === ev.call_id);
+        if (it) { it.status = 'failed'; it.error = ev.error; }
+        break;
+      }
+      case 'assistant.delta':
+        streamingText.value += ev.delta;
+        currentActivity.value = null;
+        break;
+      case 'turn.completed':
+      case 'turn.failed':
+        currentActivity.value = null;
+        break;
+    }
+  }
+
+  async function runTurn(opts: {
+    projectName: string; sessionId: string; content: string; thinking: boolean;
+  }): Promise<void> {
+    if (running.value) return;   // 互斥：同一时刻只跑一个 turn
+    running.value = true;
+    activeProject.value = opts.projectName;
+    activeSessionId.value = opts.sessionId;
+    resetTurn();
+    try {
+      const result: ScriptWriterTurnResult = await streamAgentTurn({
+        projectName: opts.projectName,
+        sessionId: opts.sessionId,
+        content: opts.content,
+        thinking: opts.thinking,
+        onEvent,
+      });
+      // 最终消息挂账 + 附本轮执行过程（前端字段，不持久化）
+      pendingMessage.value = {
+        message: result.message,
+        processItems: JSON.parse(JSON.stringify(processItems.value)),
+      };
+      streamingText.value = '';
+    } catch (e: any) {
+      if (e?.name === 'AbortError') { /* 用户取消本地流（非后台停止），静默 */ }
+      else error.value = e?.message || String(e);
+    } finally {
+      running.value = false;
+      currentActivity.value = null;
+    }
+  }
+
+  /** 协作式停止：通知后端在步骤边界停下；本地流保持连接接收 stopped 收尾。 */
+  async function cancelTurn(): Promise<void> {
+    if (!running.value) return;
+    try {
+      await apiClient.cancelAgentTurn(activeProject.value, activeSessionId.value);
+    } catch (e: any) {
+      error.value = '停止失败: ' + (e?.message || e);
+    }
+  }
+
+  /** 组件取走挂账消息后清除 */
+  function consumePending(): PendingMessage | null {
+    const p = pendingMessage.value;
+    pendingMessage.value = null;
+    return p;
+  }
+
+  function toggleProcess() { processExpanded.value = !processExpanded.value; }
+
+  return {
+    running, activeProject, activeSessionId, processItems, processExpanded,
+    streamingText, currentActivity, error, pendingMessage, completedSteps,
+    resetTurn, runTurn, cancelTurn, consumePending, toggleProcess, onEvent,
+  };
+});

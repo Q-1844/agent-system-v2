@@ -1822,6 +1822,12 @@ class ApiClient {
       body: JSON.stringify({ content }),
     });
   }
+  /** AI-7D-R：协作式停止进行中的流式 turn（步骤边界安全停下）。 */
+  async cancelAgentTurn(projectName: string, sid: string): Promise<{ stopped: boolean; message?: string }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/agents/sessions/${encodeURIComponent(sid)}/turn/cancel`, {
+      method: 'POST',
+    });
+  }
 
   // ============ AI-7D-R · Script Writer 最小测试弹窗（隔离，单工具 edit_story_text）============
   async scriptWriterTestTurn(projectName: string, content: string): Promise<{

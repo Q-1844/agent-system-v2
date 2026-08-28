@@ -129,10 +129,17 @@
                 <div v-for="(r, ri) in realReceipts(m.meta)" :key="ri" class="receipt-item">✓ {{ receiptLabel(r) }}</div>
               </div>
             </div>
-            <!-- AI-7D-R：流式执行过程（当前 turn）。默认只突出当前 activity + 折叠入口。 -->
-            <div v-if="sending && selectedId === 'script_writer'" class="stream-area">
-              <div v-if="currentActivity" class="activity">
-                <span class="spinner">◌</span>{{ currentActivity.label }}
+            <!-- AI-7D-R：流式执行过程（当前 turn）。状态归 app store，切走页面不丢；
+                 仅当活跃 turn 属于当前会话时显示。 -->
+            <div v-if="turn.running && selectedId === 'script_writer' && turn.activeSessionId === session?.session_id"
+                 class="stream-area">
+              <div class="stream-head">
+                <div v-if="currentActivity" class="activity">
+                  <span class="spinner">◌</span>{{ currentActivity.label }}
+                </div>
+                <button class="btn btn-ghost stop-btn" @click="turn.cancelTurn()" title="在步骤边界安全停止，已完成的修改保留">
+                  ■ 停止
+                </button>
               </div>
               <!-- 折叠入口与 timeline 置于流式正文【上方】，与完成后消息内位置一致（完成瞬间不跳位） -->
               <div v-if="processItems.length" class="process-toggle" @click="onToggleProcess">
@@ -178,11 +185,18 @@
               <span class="tt-label">思考</span>
               <span class="tt-track"><span class="tt-thumb"></span></span>
             </label>
-            <input v-model="draft" class="input" placeholder="输入消息…"
-                   @keyup.enter="send" :disabled="sending" />
-            <button class="btn btn-primary" :disabled="sending || !draft.trim()" @click="send">
-              {{ sending ? '…' : '发送' }}
+            <input v-model="draft" class="input"
+                   :placeholder="composerPlaceholder"
+                   @keyup.enter="send" :disabled="composerDisabled" />
+            <button class="btn btn-primary" :disabled="composerDisabled || !draft.trim()" @click="send">
+              {{ busy ? '…' : '发送' }}
             </button>
+          </div>
+          <div v-if="turn.running && selectedId === 'script_writer'" class="lock-hint">
+            ◌ Agent 正在后台处理，可切换到其它模块，完成后这里会自动显示结果
+          </div>
+          <div v-else-if="pev.storyLocked && !turn.running" class="lock-hint">
+            🔒 Agent 正在修改本项目剧本，输入暂时锁定
           </div>
           <div v-if="chatError" class="chat-err">{{ chatError }}</div>
         </div>
@@ -222,100 +236,34 @@ import { apiClient } from '@/api';
 import type { AgentInfo, AgentCapability, AgentSession, AgentTask, AgentStreamEvent, ScriptWriterReceipt } from '@/api';
 import { useProjectStore } from '@/store';
 import { useChangeSessionStore } from '@/store/changeSession';
+import { useAgentTurnStore, type ProcessItem } from '@/store/agentTurn';
+import { useProjectEventsStore } from '@/store/projectEvents';
 import { useStickToBottom } from '@/composables/useStickToBottom';
-import { streamAgentTurn } from '@/composables/useAgentTurnStream';
 import TeamChatPanel from '@/components/agent/TeamChatPanel.vue';
 import ChangePlanReview from '@/components/agent/ChangePlanReview.vue';
 import ScriptWriterTestModal from '@/components/agent/ScriptWriterTestModal.vue';
 import DirectorTestModal from '@/components/agent/DirectorTestModal.vue';
 
-// ============ AI-7D-R 流式 Direct Chat：执行过程 UI 状态 ============
+// ============ AI-7D-R 流式 Direct Chat：turn 状态归 app 级 store（切页面不丢） ============
 // 思考开关（发送瞬间 snapshot 固定，运行中切换不影响当前 turn）
 const thinkingToggle = ref(false);
-// 当前 turn 的执行过程（一个折叠 timeline；多 turn 互不干扰，仅当前 turn 活跃）
-interface ProcessItem {
-  kind: 'reasoning' | 'tool';
-  step_id: number;
-  // reasoning
-  reasoningText?: string;
-  reasoningMs?: number;
-  // tool
-  call_id?: string;
-  name?: string;
-  label?: string;
-  status?: 'running' | 'done' | 'failed';
-  summary?: string;
-  error?: string;
-}
-const processItems = ref<ProcessItem[]>([]);
-const processExpanded = ref(false);   // 用户是否主动展开（完成时：未展开→自动折叠；已展开→保持）
-const currentActivity = ref<{ type: 'thinking' | 'tool'; label: string } | null>(null);
-const assistantStreaming = ref<string>('');   // assistant.delta 逐块累积（当前回复）
-let turnAbort: AbortController | null = null;
-
-function resetTurnUI() {
-  processItems.value = [];
-  processExpanded.value = false;
-  currentActivity.value = null;
-  assistantStreaming.value = '';
-}
-
-function onStreamEvent(ev: AgentStreamEvent) {
-  switch (ev.type) {
-    case 'turn.started':
-      resetTurnUI();
-      currentActivity.value = { type: 'thinking', label: '思考中…' };
-      break;
-    case 'reasoning.started':
-      currentActivity.value = { type: 'thinking', label: '思考中…' };
-      processItems.value.push({ kind: 'reasoning', step_id: ev.step_id, reasoningText: '' });
-      break;
-    case 'reasoning.delta': {
-      const it = processItems.value.find(p => p.kind === 'reasoning' && p.step_id === ev.step_id);
-      if (it) it.reasoningText = (it.reasoningText || '') + ev.delta;
-      break;
-    }
-    case 'reasoning.completed': {
-      const it = processItems.value.find(p => p.kind === 'reasoning' && p.step_id === ev.step_id);
-      if (it) it.reasoningMs = ev.duration_ms;
-      break;
-    }
-    case 'tool.pending':
-      // 工具名已出现、参数仍在流式生成（大参数阶段最耗时）：提前显示工具名，
-      // 不再笼统显示"思考中"。tool.started（真正执行落盘）会随后覆盖。
-      currentActivity.value = { type: 'tool', label: `正在调用 · ${ev.label}…` };
-      break;
-    case 'tool.started':
-      currentActivity.value = { type: 'tool', label: `正在${ev.label}…` };
-      processItems.value.push({ kind: 'tool', step_id: ev.step_id, call_id: ev.call_id,
-        name: ev.name, label: ev.label, status: 'running' });
-      break;
-    case 'tool.completed': {
-      const it = processItems.value.find(p => p.kind === 'tool' && p.call_id === ev.call_id);
-      if (it) { it.status = ev.ok ? 'done' : 'failed'; it.summary = ev.summary; }
-      break;
-    }
-    case 'tool.failed': {
-      const it = processItems.value.find(p => p.kind === 'tool' && p.call_id === ev.call_id);
-      if (it) { it.status = 'failed'; it.error = ev.error; }
-      break;
-    }
-    case 'assistant.delta':
-      assistantStreaming.value += ev.delta;
-      currentActivity.value = null;   // 最终回复流出 → 无 activity
-      break;
-    case 'turn.completed':
-    case 'turn.failed':
-      currentActivity.value = null;
-      break;
-  }
-}
-
-// 完成 N 步计数（含 reasoning + tool）
-const completedSteps = computed(() =>
-  processItems.value.filter(p => p.kind === 'tool' && (p.status === 'done' || p.status === 'failed')).length);
-// 默认完成时折叠，除非用户手动展开过
-function onToggleProcess() { processExpanded.value = !processExpanded.value; }
+// turn 流式连接/累积状态由 store 持有：组件卸载（切到剧本等模块）不中断后台 Agent，
+// 切回来时执行过程/流式正文/最终结果都还在。
+const turn = useAgentTurnStore();
+const pev = useProjectEventsStore();
+// 模板别名（store 的 processItems 是当前 turn 的执行过程 timeline）
+const processItems = computed(() => turn.processItems);
+const processExpanded = computed(() => turn.processExpanded);
+const currentActivity = computed(() => turn.currentActivity);
+const assistantStreaming = computed(() => turn.streamingText);
+const completedSteps = computed(() => turn.completedSteps);
+function onToggleProcess() { turn.toggleProcess(); }
+// 工作中 = 本地 legacy 路径忙，或 script_writer 流式 turn 在跑（含后台续跑）
+const busy = computed(() => sending.value || turn.running);
+// 输入禁用：本地忙 / 流式 turn 在跑 / 剧本资源被 Agent 锁（含其它客户端）
+const composerDisabled = computed(() => busy.value || pev.storyLocked);
+const composerPlaceholder = computed(() =>
+  pev.storyLocked ? '🔒 Agent 正在修改剧本，请稍候…' : '输入消息…');
 
 // receipts → 「本轮改动」轻量渲染（只信结构化 receipts，不解析正文）
 function receiptLabel(r: ScriptWriterReceipt): string {
@@ -487,32 +435,16 @@ async function send() {
       });
       session.value.messages.push(...msgs);
     } else if (isDirectEdit) {
-      // AI-7D-R 流式：script_writer 走 /turn/stream。发送瞬间 snapshot 固定 thinking。
-      const thinkingSnapshot = thinkingToggle.value;
-      resetTurnUI();
-      turnAbort = new AbortController();
-      try {
-        const result = await streamAgentTurn({
-          projectName: projectName.value,
-          sessionId: session.value.session_id,
-          content, thinking: thinkingSnapshot,
-          onEvent: onStreamEvent,
-          signal: turnAbort.signal,
-        });
-        // 最终持久化消息（turn.completed.result.message，含 meta receipts/trace）。
-        // 把本轮执行过程 timeline 附上（前端字段，不持久化），完成后折叠保留可事后展开。
-        const finalMsg = { ...result.message,
-          _processItems: JSON.parse(JSON.stringify(processItems.value)) };
-        session.value.messages.push(finalMsg);
-        assistantStreaming.value = '';   // 已被正式 message 取代
-        // 用户未主动展开 → 完成时折叠（§十二）；已展开则保持
-        if (!processExpanded.value) processExpanded.value = false;
-      } catch (e: any) {
-        if (e.name === 'AbortError') { /* 用户取消，静默 */ }
-        else throw e;
-      } finally {
-        turnAbort = null;
-      }
+      // AI-7D-R 流式：script_writer 走 /turn/stream，由 app 级 store 持有连接与状态
+      // （切走页面不中断后台 Agent）。发送瞬间 snapshot 固定 thinking。
+      const sid0 = session.value.session_id;
+      await turn.runTurn({
+        projectName: projectName.value,
+        sessionId: sid0,
+        content, thinking: thinkingToggle.value,
+      });
+      // 最终消息挂账在 store；取出追加到会话（附本轮执行过程，前端字段不持久化）
+      consumePendingIntoSession();
     } else {
       const result = await apiClient.agentTurn(projectName.value, session.value.session_id, content);
       session.value.messages.push(result.message);   // assistant AgentMessage（含 meta）
@@ -523,8 +455,24 @@ async function send() {
     chatError.value = '发送失败: ' + (e.message || e);
   } finally {
     sending.value = false;
-    currentActivity.value = null;   // 无论如何结束 loading（§二十一）
   }
+}
+
+/**
+ * 把 store 挂账的最终消息追加到当前会话（去重）。
+ * 既在 send() await 后调用，也在组件 onMounted / turn 结束 watcher 里调用——
+ * 覆盖"回复中途切走，完成后切回来"的场景。
+ */
+function consumePendingIntoSession() {
+  const p = turn.consumePending();
+  if (!p || !p.message) return;
+  if (!session.value) return;
+  const mid = p.message.message_id;
+  const exists = mid && session.value.messages.some((m: any) => m.message_id === mid);
+  if (!exists) {
+    session.value.messages.push({ ...p.message, _processItems: p.processItems });
+  }
+  stick.pinToBottom();
 }
 
 async function loadTasks() {
@@ -580,11 +528,18 @@ onMounted(async () => {
   loadAgents();
   // AI-7D D2：恢复进行中的变更会话（F5 不丢真 ChangeSession 真相）
   if (projectName.value) { await cs.restoreActive(); }
+  // AI-7D-R：若上一个 turn 在切走期间完成，把挂账最终消息补进会话
+  consumePendingIntoSession();
 });
 
-// AI-7D-R：离开页面/组件卸载时取消进行中的流式 turn
+// AI-7D-R：turn 由 app 级 store 持有，组件卸载【不取消】后台 Agent（任务继续跑、
+// 消息照常持久化）。这里只在 turn 结束瞬间把挂账消息补进会话（页面可见时）。
+watch(() => turn.running, (r, old) => {
+  if (old && !r) consumePendingIntoSession();
+});
+
 onUnmounted(() => {
-  if (turnAbort) { try { turnAbort.abort(); } catch (e) {} turnAbort = null; }
+  // 无本地 turn 资源要清理：stream/abort 归 store（切走不断流）。
 });
 </script>
 
@@ -662,6 +617,10 @@ onUnmounted(() => {
 
 /* AI-7D-R · 流式执行过程 UI */
 .stream-area { margin: 6px 0; }
+.stream-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.stop-btn { font-size: 11px; padding: 2px 10px; flex: none; color: var(--text-secondary, #f87171); }
+.stop-btn:hover { color: #f87171; border-color: rgba(248,113,113,.4); }
+.lock-hint { font-size: 11px; color: var(--text-secondary, #9399b2); padding: 4px 10px; }
 .activity { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary, #9399b2); padding: 4px 2px; }
 .spinner { display: inline-block; animation: sw-spin 1s linear infinite; }
 @keyframes sw-spin { to { transform: rotate(360deg); } }
