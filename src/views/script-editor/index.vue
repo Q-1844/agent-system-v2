@@ -7,6 +7,11 @@
     </div>
 
     <template v-else>
+      <!-- AI-7D-R：Agent 正在后台修改剧本 → 只读锁横幅 -->
+      <div v-if="pev.storyLocked" class="lock-banner">
+        <span class="lock-spinner">◌</span>
+        AI 助手正在修改剧本，编辑器已临时锁定为只读，改动会实时同步…
+      </div>
       <!-- 顶栏：项目名(只读) + 计数 + 保存状态（不提供项目切换，统一去 Dashboard） -->
       <div class="topbar">
         <span class="proj-name">{{ projectName }}</span>
@@ -164,6 +169,9 @@
         @close="onContinuationClose"
         @applied="onContinuationApplied"
       />
+
+      <!-- AI-7D-R：锁定遮罩——Agent 修改剧本期间盖住编辑区，任何编辑/拖拽/AI 按钮均不可点 -->
+      <div v-if="pev.storyLocked" class="lock-overlay"></div>
     </template>
   </div>
 </template>
@@ -172,6 +180,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { useProjectStore } from '@/store';
+import { useProjectEventsStore } from '@/store/projectEvents';
 import { apiClient } from '@/api';
 import { getImageUrl } from '@/utils/media';
 import dayjs from 'dayjs';
@@ -181,6 +190,23 @@ import StoryContinuation from '@/components/StoryContinuation.vue';
 const store = useProjectStore();
 const router = useRouter();
 const projectName = computed(() => store.projectName);
+
+// AI-7D-R：Agent 后台改剧本时的只读锁 + 实时刷新（事件由 app 级 useProjectEvents 喂）
+const pev = useProjectEventsStore();
+// 锁定瞬间：同步基线数据（遮罩此时盖住编辑器，用户无法再编辑）
+watch(() => pev.storyLocked, (locked) => {
+  if (!projectName.value) return;
+  if (locked) {
+    if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }   // 放弃未落盘的本地编辑（被锁覆盖）
+    load();
+  } else {
+    load();   // 解锁：拉最终态
+  }
+});
+// Agent 每次落盘：静默刷新（锁定期用户无法编辑，覆盖本地是安全的）
+watch(() => pev.storyVersion, () => {
+  if (projectName.value && pev.storyLocked) load();
+});
 
 interface LocalScene {
   uid: number;
@@ -388,7 +414,24 @@ onUnmounted(() => { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; 
 </script>
 
 <style lang="scss" scoped>
-.scene-editor { width: 100%; }
+.scene-editor { width: 100%; position: relative; }
+
+/* AI-7D-R：Agent 修改剧本期间的只读锁 */
+.lock-banner {
+  position: sticky; top: 0; z-index: 30;
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px; margin-bottom: 8px;
+  background: rgba(96, 165, 250, .14);
+  border: 1px solid rgba(96, 165, 250, .4);
+  border-radius: 8px; color: var(--text-primary, #cdd6f4); font-size: 13px;
+}
+.lock-spinner { display: inline-block; animation: lock-spin 1s linear infinite; color: #60a5fa; }
+@keyframes lock-spin { to { transform: rotate(360deg); } }
+/* 遮罩：盖住整个编辑区（top 让出横幅高度），吞掉所有指针事件 = 只读 */
+.lock-overlay {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 20; background: rgba(0, 0, 0, 0); cursor: not-allowed;
+}
 
 .no-project {
   text-align: center; padding: 80px 20px; color: var(--text-muted);
