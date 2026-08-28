@@ -25,6 +25,7 @@
 from __future__ import annotations
 import hashlib
 import json
+import logging
 import re
 import time
 from typing import Any, Optional
@@ -37,6 +38,8 @@ from src.storyboard.structure_service import (
 from .models import AgentMessage, ResultStatus
 from .runtime import AgentRuntime, AgentError
 from .revision_audit import DirectEditAuditStore
+
+log = logging.getLogger("agents.script_writer")
 
 
 # AI-7D-R：Runner 执行预算 = LLM 循环步数（每步可能含多个 tool_call），【仅用于防死循环】，
@@ -1426,9 +1429,11 @@ async def script_writer_turn(rt: AgentRuntime, project: str, session_id: str,
                                                         "note": note}, ensure_ascii=False)})
                 messages.append({"role": "assistant", "content": note})
 
+        loop_state: dict = {}   # 异常时仍可取回已执行的 trace/receipts/events（可观测性）
         try:
             final = await _run_tool_loop(rt, client, project, messages, content, user_msg.message_id,
-                                         thinking=thinking, event_cb=event_cb)
+                                         thinking=thinking, event_cb=event_cb,
+                                         state=loop_state)
             assistant_text = final["text"]
             edited = final["edited"]
             created = final["created"]
@@ -1441,9 +1446,18 @@ async def script_writer_turn(rt: AgentRuntime, project: str, session_id: str,
             receipts = pre_exec_receipts + final.get("receipts", []) if pre_exec_receipts else final.get("receipts", [])
             trace = (pre_trace + final.get("trace", [])) if pre_trace else final.get("trace", [])
         except Exception as e:
-            assistant_text = f"[执行失败: {str(e)[:200]}]"
+            # 可观测性：完整 traceback 进日志（定位网络断/服务端错误的真实身份）；
+            # str(e) 可能为空（如 TimeoutError），文本带异常类型名保证用户可见失败原因。
+            log.exception("script_writer_turn 工具循环异常（project=%s session=%s）",
+                          project, session_id)
+            e_desc = str(e).strip()
+            assistant_text = f"[执行失败: {type(e).__name__}: {e_desc}]"[:300]
             status = ResultStatus.FAILED.value
-            trace = []
+            # 保留已执行的部分（哪些写已真实落盘），不再清空成黑盒；
+            # bool 标志保持 False（intent 退回 conversation，失败态下不猜测变更类别）。
+            events = loop_state.get("events", [])
+            receipts = pre_exec_receipts + loop_state.get("receipts", [])
+            trace = (pre_trace + loop_state.get("trace", [])) if pre_trace else loop_state.get("trace", [])
 
     if created:
         intent = "story_create"
@@ -1713,7 +1727,8 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                          message_id: Optional[str],
                          max_steps: int = DEFAULT_MAX_TOOL_STEPS,
                          thinking: bool = False,
-                         event_cb=None) -> dict:
+                         event_cb=None,
+                         state: Optional[dict] = None) -> dict:
     """原生 function-calling 循环 + 执行真实性收口（结构性，非提示词）。
 
     每轮：
@@ -1727,13 +1742,17 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
     """
     edited = created = moved = scene_updated = deleted = False
     summary = ""
-    events: list = []
-    receipts: list = []          # 本轮所有写工具调用的真实回执（成功与失败都记）
+    # 共享容器：state 为空 dict 时也是真容器（空 dict falsy，不能用 or 短路，
+    # 否则 setdefault 会写进临时 dict、调用方永远拿不到）。
+    if state is None:
+        state = {}
+    events: list = state.setdefault("events", [])
+    receipts: list = state.setdefault("receipts", [])   # 本轮所有写工具调用的真实回执（成功与失败都记）
     write_attempts = 0           # 写工具被调用的次数（含失败）
     corrective_round = 0
     # 执行轨迹（需求 #7）：每个工具调用（读+写）一条 {step,tool,target,result,revision}。
     # 供调试「为什么移动三次才成/为什么多建一段」——只随 turn 结果返回，不进 system prompt。
-    trace: list = []
+    trace: list = state.setdefault("trace", [])
     last_read_after_write = -1   # 最后一次只读调用所在的 step（用于最终完成判定）
     # 防失控（需求 #11）：连续同一工具同一失败的次数；超阈值则诚实停止，不无限重试。
     repeat_fail_streak = 0
