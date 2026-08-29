@@ -515,7 +515,8 @@ STORY_CREATE_MANY_TOOL = {
             "properties": {
                 "scenes": {
                     "type": "array",
-                    "description": "要创建的故事段数组，顺序即创建后相对顺序。每项含 summary（必填，中文正文）与 characters（可选，角色名数组）。",
+                    "minItems": 2,
+                    "description": "要创建的故事段数组（至少 2 项；只创建 1 段请用 story.create），顺序即创建后相对顺序。每项含 summary（必填，中文正文）与 characters（可选，角色名数组）。",
                     "items": {
                         "type": "object",
                         "properties": {
@@ -555,7 +556,8 @@ STORY_UPDATE_MANY_TOOL = {
             "properties": {
                 "updates": {
                     "type": "array",
-                    "description": "要修改的故事段数组。每项 scene_id 必填 + 要改的字段（只传改的）。同 scene_id 一批只能一项。",
+                    "minItems": 2,
+                    "description": "要修改的故事段数组（至少 2 项；只改 1 段请用 story.update）。每项 scene_id 必填 + 要改的字段（只传改的）。同 scene_id 一批只能一项。",
                     "items": {
                         "type": "object",
                         "properties": {
@@ -595,8 +597,9 @@ STORY_DELETE_MANY_TOOL = {
             "properties": {
                 "scene_ids": {
                     "type": "array",
+                    "minItems": 2,
                     "items": {"type": "string"},
-                    "description": "要删除的故事段 scene_id 数组（如 [\"s01\", \"s05\"]）。必须来自 story.list 的真实 id，不能用数字序号；同一 id 不能重复。",
+                    "description": "要删除的故事段 scene_id 数组（至少 2 项，如 [\"s01\", \"s05\"]；只删 1 段请用 story.delete）。必须来自 story.list 的真实 id，不能用数字序号；同一 id 不能重复。",
                 },
                 "expected_scenes_revision": {
                     "type": "string",
@@ -628,7 +631,8 @@ STORY_INSERT_MANY_TOOL = {
             "properties": {
                 "inserts": {
                     "type": "array",
-                    "description": "插入项数组，每项指定一个锚点和要在该锚点处插入的 scenes。各项锚点按同一调用前快照解释。",
+                    "minItems": 2,
+                    "description": "插入项数组（至少 2 个不同锚点；只有一个插入位置/末尾追加请用 story.create_many）。每项指定一个锚点和要在该锚点处插入的 scenes。各项锚点按同一调用前快照解释。",
                     "items": {
                         "type": "object",
                         "properties": {
