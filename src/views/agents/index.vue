@@ -412,6 +412,17 @@ async function openSession() {
   try {
     const sid = scopeId.value || projectName.value;
     session.value = await apiClient.createAgentSession(projectName.value, selectedId.value, scopeType.value, sid);
+    // 刷新/重载后执行过程折叠条会丢（_processItems 不持久化、pinia 清空）。
+    // 后端 meta.trace 是落盘的，用它重建 tool 步骤折叠条（reasoning 不持久化无法重建）。
+    // 仅 script_writer 的 message 带 trace。
+    if (selectedId.value === 'script_writer' && session.value?.messages) {
+      for (const m of session.value.messages) {
+        const meta = (m as any).meta;
+        if (m.role === 'assistant' && (m as any).message_id && meta?.trace?.length) {
+          turn.hydrateProcessItemsFromTrace((m as any).message_id, meta.trace);
+        }
+      }
+    }
     // 打开会话 → 无条件定位到最新消息。
     stick.pinToBottom();
   } catch (e: any) {

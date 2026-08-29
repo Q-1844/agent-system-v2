@@ -174,11 +174,42 @@ export const useAgentTurnStore = defineStore('agentTurn', () => {
     return (mid && processItemsByMid.value[mid]) || [];
   }
 
+  // 工具名→人类可读 label（与后端 _TOOL_LABELS 一致；trace 重建折叠条用）。
+  const TOOL_LABELS: Record<string, string> = {
+    'script.read': '读取剧本', 'script.update': '更新剧本',
+    'story.list': '读取故事段', 'story.read': '读取故事段',
+    'story.create': '创建故事段', 'story.move': '移动故事段',
+    'story.update': '修改故事段', 'story.delete': '删除故事段',
+    'story.create_many': '批量创建故事段', 'story.update_many': '批量修改故事段',
+    'story.delete_many': '批量删除故事段', 'story.insert_many': '批量插入故事段',
+  };
+
+  /**
+   * 从后端持久化的 meta.trace 重建执行过程折叠条（刷新页面后 pinia 清空、实时快照丢失，
+   * 但 trace 是落盘的，用它恢复 tool 步骤；reasoning 不持久化无法重建，符合既定设计）。
+   * 已有实时快照（含 reasoning）时优先保留，不覆盖。 */
+  function hydrateProcessItemsFromTrace(mid: string, trace: any[]): void {
+    if (!mid) return;
+    if (processItemsByMid.value[mid]) return;        // 实时快照优先（含 reasoning）
+    if (!Array.isArray(trace) || !trace.length) return;
+    const items: ProcessItem[] = trace.map((t: any) => {
+      const label = TOOL_LABELS[t.tool] || t.tool;
+      const failed = !t.ok || t.result === 'stale' || t.result === 'error';
+      return {
+        kind: 'tool', step_id: t.step ?? 0, name: t.tool, label,
+        status: failed ? 'failed' : 'done',
+        summary: t.target ? `${label} · ${t.target}` : label,
+        error: failed ? (t.error || undefined) : undefined,
+      } as ProcessItem;
+    });
+    processItemsByMid.value[mid] = items;
+  }
+
   function toggleProcess() { processExpanded.value = !processExpanded.value; }
 
   return {
     running, activeProject, activeSessionId, processItems, processExpanded,
     streamingText, currentActivity, error, pendingMessage, completedSteps,
-    resetTurn, runTurn, cancelTurn, consumePending, processItemsFor, toggleProcess, onEvent,
+    resetTurn, runTurn, cancelTurn, consumePending, processItemsFor, hydrateProcessItemsFromTrace, toggleProcess, onEvent,
   };
 });
