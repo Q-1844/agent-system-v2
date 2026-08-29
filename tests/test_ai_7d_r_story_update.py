@@ -332,8 +332,10 @@ def test_turn_false_claim_without_update_gets_fallback(tmp_path):
     client = ScriptedClient([
         # 直接谎称已修改，没有任何 tool_call
         ("我已经把 s02 的内容改好了。", None),
-        # 纠偏后仍嘴硬
+        # zero-write recovery（明确修改请求但零写尝试）后仍嘴硬
         ("是的，s02 已经修改完成。", None),
+        # 既有真相闸门纠偏后还嘴硬 → 诚实兜底
+        ("s02 确实已经修改完成。", None),
     ])
     rt = _runtime(tmp_path, client)
     sid = rt.get_or_create_session("demo", "script_writer", "project", "demo")["session_id"]

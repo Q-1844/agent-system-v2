@@ -98,9 +98,10 @@ def test_no_tool_claim_create_then_corrective_real_call(tmp_path):
     assert res["receipts"] and res["receipts"][-1]["ok"] is True
     # 发了 3 次 LLM（撒谎 → 纠偏 → 真实工具+最终回复跨 2 次：tool 一次、final 一次）
     assert len(client.calls) == 3
-    # 纠偏消息确实被注入（指出没真正调用工具）
+    # 纠偏/恢复消息确实被注入（指出没真正调用工具；现在走 zero-write recovery 文案）
     joined = " ".join(m.get("content", "") for c in client.calls for m in c["messages"])
-    assert "没有发起对应的工具调用" in joined or "根本没有发起" in joined
+    assert ("没有发起对应的工具调用" in joined or "根本没有发起" in joined
+            or "还没有发起任何写工具" in joined)
 
 
 # ============ A2. 工具没调用，声称移动，纠偏后仍只嘴硬 → 确定性兜底，canonical 不变 ============
@@ -109,8 +110,10 @@ def test_no_tool_claim_move_persists_lie_gets_honest_fallback(tmp_path):
     before_ids = [s.scene_id for s in ProjectStore(tmp_path).load().scenes]
     client = ScriptedClient([
         ("我已经把 s03 移到最前面了。", None),
-        # 纠偏后再次嘴硬，仍不调用工具
+        # zero-write recovery 后仍嘴硬
         ("是的，s03 已经在第一位了，移动完成。", None),
+        # 真相闸门纠偏后还嘴硬 → 诚实兜底
+        ("s03 确实已经移动完成。", None),
     ])
     rt = _runtime(tmp_path, client)
     sid = rt.get_or_create_session("demo", "script_writer", "project", "demo")["session_id"]
@@ -250,18 +253,19 @@ def test_genuine_success_honest_reply_not_flagged(tmp_path):
 def test_conversation_offer_not_flagged_as_success(tmp_path):
     _save(tmp_path)
     before = (tmp_path / "output" / "project.json").read_bytes()
+    # 明确写入请求（加一段）模型只澄清/提议、零写尝试 → zero-write recovery 一次；
+    # 恢复后仍澄清（未声称成功）→ 放行，零落盘。
     client = ScriptedClient([
-        # 用「我可以帮你创建」——是提议/将来态，不是完成态
         ("你想加什么内容的故事段？我可以帮你创建并放到合适的位置。", None),
+        ("你还没说要什么内容，告诉我主题我就帮你创建。", None),
     ])
     rt = _runtime(tmp_path, client)
     sid = rt.get_or_create_session("demo", "script_writer", "project", "demo")["session_id"]
     res = _run(script_writer_turn(rt, "demo", sid, "我想加一段"))
 
     assert res["created"] is False
-    assert "我可以帮你创建" in res["assistant_message"]
     assert (tmp_path / "output" / "project.json").read_bytes() == before
-    assert len(client.calls) == 1   # 无纠偏
+    assert len(client.calls) == 2   # 澄清 + recovery 后再澄清（恢复仅此一次）
 
 
 # ============ 写工具回执统一结构 ============

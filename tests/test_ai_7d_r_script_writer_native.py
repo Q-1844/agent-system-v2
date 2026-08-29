@@ -533,7 +533,12 @@ def test_story_create_conversation_no_mutation(tmp_path):
     _save_proj(tmp_path)
     before = (tmp_path / "output" / "project.json").read_bytes()
     before_proj = ProjectStore(tmp_path).load()
-    client = ScriptedClient([("你想创建什么样的故事段？告诉我内容。", None)])
+    # 明确写入请求（加一段）但模型只反问澄清、零写尝试 → zero-write recovery 触发一次；
+    # 恢复后模型仍澄清（未声称成功）→ 按设计放行澄清回复，全程零落盘。
+    client = ScriptedClient([
+        ("你想创建什么样的故事段？告诉我内容。", None),
+        ("你还没告诉我具体内容，想加什么故事？", None),
+    ])
     rt = _runtime(tmp_path, client=client)
     sid = rt.get_or_create_session("demo", "script_writer", "project", "demo")["session_id"]
     res = _run(script_writer_turn(rt, "demo", sid, "我想加一段"))
@@ -544,7 +549,7 @@ def test_story_create_conversation_no_mutation(tmp_path):
     after_proj = ProjectStore(tmp_path).load()
     assert len(after_proj.scenes) == len(before_proj.scenes)
     assert after_proj.story_text == before_proj.story_text
-    assert len(client.calls) == 1
+    assert len(client.calls) == 2   # 原始澄清 + recovery 后再澄清（恢复仅此一次）
 
 
 # ============ 8. 回归守卫：工具集注册表 ============

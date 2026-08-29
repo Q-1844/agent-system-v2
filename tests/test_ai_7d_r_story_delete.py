@@ -229,8 +229,10 @@ def test_turn_false_claim_without_delete_gets_fallback(tmp_path):
     client = ScriptedClient([
         # 没发任何 story.delete，却谎称删了
         ("s03 已经删除了。", None),
-        # 纠偏后仍嘴硬
+        # zero-write recovery（明确删除请求但零写尝试）后仍嘴硬
         ("已经删掉了。", None),
+        # 既有真相闸门纠偏后还嘴硬 → 诚实兜底
+        ("s03 确实已经删除完成。", None),
     ])
     rt = _runtime(tmp_path, client)
     sid = rt.get_or_create_session("demo", "script_writer", "project", "demo")["session_id"]

@@ -303,6 +303,8 @@ def test_no_create_but_false_claim_split_gets_fallback(tmp_path):
         ("我已经把剧本拆成 3 个故事段了。", None),
         # 纠偏后仍嘴硬
         ("是的，已经拆分完成了。", None),
+        # 真相闸门纠偏后仍嘴硬（前序 recovery/纠偏各一次）→ 诚实兜底
+        ("是的，3 个故事段确实已经拆分完成。", None),
     ])
     rt = _runtime(tmp_path, client)
     sid = rt.get_or_create_session("demo", "script_writer", "project", "demo")["session_id"]

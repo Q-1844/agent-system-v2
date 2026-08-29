@@ -2004,6 +2004,57 @@ def _is_chat_turn(instruction: str) -> bool:
     return bool(_CHAT_TURN_RE.search(instruction or ""))
 
 
+# zero-write recovery（极窄兜底）专用：判定用户本轮是否【明确要求实际写入/修改】。
+# 不做 LLM 分类、不看模型回复措辞（「已修改」动词正则永远补不全——假成功与纯讨论
+# 都会漏），只看用户消息本身：探讨/提问语气优先排除（宁漏勿误，不破坏聊天）；
+# 强祈使结构（把…/给…+动作、只改/直接改/按你说的做）即使带「你觉得」也算写入请求，
+# 如「把你觉得最平淡的那句润色一下，只改第2段」——但整句以问号结尾时仍按探讨处理。
+_DISCUSSION_RE = re.compile(
+    r"为什么|怎么看|怎么样|怎么办|好不好|看法|觉得|认为|讨论|聊聊|聊一下|说说|"
+    r"解释|原因|什么问题|有没有问题|合适吗|行不行|可以吗|好吗|快不快|慢不慢|"
+    r"对吗|是吗|是这样吗|要不要|是不是|需不需要|该不该|能不能|会不会|是否|如何|"
+    r"做了什么|干了什么|做了哪些|干了哪些|哪些|是什么|有什么|"
+    r"总结一下|总结下|回顾一下|说说|不用修改|不要修改|先别改|先不要|先别")
+
+_STRONG_IMPERATIVE_RE = re.compile(
+    r"把[^。？?！!]{0,40}(改|润色|重写|续写|扩写|设|加|添|删|移|挪|换|拆|调|压缩)|"
+    r"给[^。？?！!]{0,20}(加|添|改|删|设)|"
+    r"只改|直接改|帮我改|帮我把|改吧|就这么改|按你说的做|按你说的改|开始改|动手改")
+
+_WRITE_REQUEST_RE = re.compile(
+    r"改成|改为|改一下|改下|改写|修改|润色|重写|续写|扩写|压缩|"
+    r"新增|增加|添加|加上|加个|加一?段|加一?[个句名点些]|添一?段|插入|创建|新建|建一?段|"
+    r"删除|删掉|删了|移除|去掉|"
+    r"移动|移到|移至|挪到|互换|交换|调换|换一下|"
+    r"设为|设置成|设成|"
+    r"拆分|拆成|分段|分成[两三1-9]段|"
+    r"调整|改吧|就这么改|按你说的做|按你说的改")
+
+
+def _is_explicit_write_request(instruction: str) -> bool:
+    """用户本轮是否明确要求实际写入/修改项目（zero-write recovery 专用，宁漏勿误）。"""
+    t = (instruction or "").strip()
+    if not t:
+        return False
+    if _DISCUSSION_RE.search(t):
+        # 探讨语气默认排除；但强祈使且整句非问句（无问号）时仍算写入请求
+        if "?" not in t and "？" not in t and _STRONG_IMPERATIVE_RE.search(t):
+            return True
+        return False
+    return bool(_WRITE_REQUEST_RE.search(t))
+
+
+_ZERO_WRITE_RECOVERY_NUDGE = (
+    "【系统提示】用户本轮明确要求实际修改项目内容，但你到目前为止【还没有发起任何写工具"
+    "调用】——在回复里用自然语言描述修改不等于完成修改。请立即：①先用只读工具"
+    "（story.list / story.read；正文任务用 script.read）确认当前真实状态；②真正发起对应"
+    "的写工具（story.create / story.update / story.move / story.delete / story.create_many / "
+    "story.update_many / story.insert_many / story.delete_many / script.update）完成用户要求，"
+    "等工具真实返回 ok=true 后再汇报结果；写工具一个一个来，每次用上一次返回的最新版本指纹。"
+    "如果你确实无法执行（需求不清楚、目标不存在等），就明确告诉用户原因，【不要】在没有"
+    "工具真实返回的情况下声称已经修改完成。")
+
+
 def _claims_success(text: str) -> bool:
     """仅当存在完成态声称、且该声称不在否定语境中才判定为「声称成功」。
     用最近的一次匹配向前查找否定词，避免「我没移动，但我创建了」这类被全句否定误伤。"""
@@ -2229,6 +2280,11 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
     receipts: list = state.setdefault("receipts", [])   # 本轮所有写工具调用的真实回执（成功与失败都记）
     write_attempts = 0           # 写工具被调用的次数（含失败）
     corrective_round = 0
+    # zero-write recovery（极窄兜底）：用户明确要求写入但本轮零写尝试时，注入一次恢复
+    # 提示。turn-local 一次性，不持久化、不占 MAX_CORRECTIVE_ROUNDS 预算（恢复成功后
+    # 不应误伤既有 needs_final_read 等纠偏）。只管「根本没尝试写」，write_attempts>0
+    # 的 stale/error/失败一律走既有路径。
+    zero_write_recovery_used = False
     # 执行轨迹（需求 #7）：每个工具调用（读+写）一条 {step,tool,target,result,revision}。
     # 供调试「为什么移动三次才成/为什么多建一段」——只随 turn 结果返回，不进 system prompt。
     trace: list = state.setdefault("trace", [])
@@ -2350,6 +2406,18 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
             needs_final_read = (real_changes and _claims_success(text)
                                 and reply_summarizes
                                 and last_read_after_write < last_write_step)
+            # ---- zero-write recovery（极窄兜底，独立一次性额度）----
+            # 用户明确要求实际写入，但本轮【根本没尝试任何写工具】→ 注入一次恢复提示
+            # 让模型真正执行；恢复后仍零写工具则不重复触发，交给既有闸门/诚实逻辑收尾。
+            if (not zero_write_recovery_used
+                    and write_attempts == 0 and not real_changes
+                    and _is_explicit_write_request(instruction)):
+                zero_write_recovery_used = True
+                log.info("zero-write recovery 触发（project=%s）：明确写入请求但零写尝试", project)
+                messages.append({"role": "assistant", "content": text or ""})
+                messages.append({"role": "user", "content": _ZERO_WRITE_RECOVERY_NUDGE})
+                _refresh_system(messages, rt, project)
+                continue
             if false_claim or over_claim_n is not None or needs_final_read:
                 if corrective_round < MAX_CORRECTIVE_ROUNDS:
                     corrective_round += 1
