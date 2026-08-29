@@ -185,24 +185,55 @@ export const useAgentTurnStore = defineStore('agentTurn', () => {
   };
 
   /**
-   * 从后端持久化的 meta.trace 重建执行过程折叠条（刷新页面后 pinia 清空、实时快照丢失，
-   * 但 trace 是落盘的，用它恢复 tool 步骤；reasoning 不持久化无法重建，符合既定设计）。
-   * 已有实时快照（含 reasoning）时优先保留，不覆盖。 */
-  function hydrateProcessItemsFromTrace(mid: string, trace: any[]): void {
+   * 从后端持久化的 meta 重建执行过程折叠条（刷新页面后 pinia 清空、实时快照丢失，但
+   * meta.trace（tool 轨迹）和 meta.reasonings（每步思考文本）都是落盘的）。
+   * tool 从 trace 重建、reasoning 从 reasonings 重建，按 step 交错；
+   * 实时快照（含 reasoning.delta 流式细节）优先保留，不覆盖。 */
+  function hydrateProcessItemsFromMeta(mid: string, meta: any): void {
     if (!mid) return;
-    if (processItemsByMid.value[mid]) return;        // 实时快照优先（含 reasoning）
-    if (!Array.isArray(trace) || !trace.length) return;
-    const items: ProcessItem[] = trace.map((t: any) => {
-      const label = TOOL_LABELS[t.tool] || t.tool;
-      const failed = !t.ok || t.result === 'stale' || t.result === 'error';
-      return {
-        kind: 'tool', step_id: t.step ?? 0, name: t.tool, label,
-        status: failed ? 'failed' : 'done',
-        summary: t.target ? `${label} · ${t.target}` : label,
-        error: failed ? (t.error || undefined) : undefined,
-      } as ProcessItem;
-    });
+    if (processItemsByMid.value[mid]) return;        // 实时快照优先
+    const trace: any[] = Array.isArray(meta?.trace) ? meta.trace : [];
+    const reasonings: any[] = Array.isArray(meta?.reasonings) ? meta.reasonings : [];
+    if (!trace.length && !reasonings.length) return;
+    // 按 step 交错：同 step 的 reasoning 在前（先思考后调工具）
+    const byStep = new Map<number, { reasoning?: any; tools: any[] }>();
+    for (const r of reasonings) {
+      const s = r.step ?? 0;
+      const entry = byStep.get(s) || { tools: [] };
+      entry.reasoning = r;
+      byStep.set(s, entry);
+    }
+    for (const t of trace) {
+      const s = t.step ?? 0;
+      const entry = byStep.get(s) || { tools: [] };
+      entry.tools.push(t);
+      byStep.set(s, entry);
+    }
+    const items: ProcessItem[] = [];
+    for (const step of [...byStep.keys()].sort((a, b) => a - b)) {
+      const entry = byStep.get(step)!;
+      if (entry.reasoning?.text) {
+        items.push({ kind: 'reasoning', step_id: step,
+          reasoningText: entry.reasoning.text,
+          reasoningMs: entry.reasoning.duration_ms });
+      }
+      for (const t of entry.tools) {
+        const label = TOOL_LABELS[t.tool] || t.tool;
+        const failed = !t.ok || t.result === 'stale' || t.result === 'error';
+        items.push({
+          kind: 'tool', step_id: step, name: t.tool, label,
+          status: failed ? 'failed' : 'done',
+          summary: t.target ? `${label} · ${t.target}` : label,
+          error: failed ? (t.error || undefined) : undefined,
+        });
+      }
+    }
     processItemsByMid.value[mid] = items;
+  }
+
+  /** 兼容旧名（meta.trace 重建）。 */
+  function hydrateProcessItemsFromTrace(mid: string, trace: any[]): void {
+    hydrateProcessItemsFromMeta(mid, { trace });
   }
 
   function toggleProcess() { processExpanded.value = !processExpanded.value; }
@@ -210,6 +241,6 @@ export const useAgentTurnStore = defineStore('agentTurn', () => {
   return {
     running, activeProject, activeSessionId, processItems, processExpanded,
     streamingText, currentActivity, error, pendingMessage, completedSteps,
-    resetTurn, runTurn, cancelTurn, consumePending, processItemsFor, hydrateProcessItemsFromTrace, toggleProcess, onEvent,
+    resetTurn, runTurn, cancelTurn, consumePending, processItemsFor, hydrateProcessItemsFromMeta, hydrateProcessItemsFromTrace, toggleProcess, onEvent,
   };
 });

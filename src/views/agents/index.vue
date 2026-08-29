@@ -413,13 +413,14 @@ async function openSession() {
     const sid = scopeId.value || projectName.value;
     session.value = await apiClient.createAgentSession(projectName.value, selectedId.value, scopeType.value, sid);
     // 刷新/重载后执行过程折叠条会丢（_processItems 不持久化、pinia 清空）。
-    // 后端 meta.trace 是落盘的，用它重建 tool 步骤折叠条（reasoning 不持久化无法重建）。
-    // 仅 script_writer 的 message 带 trace。
+    // 后端 meta.trace（tool 轨迹）+ meta.reasonings（每步思考文本）都是落盘的，
+    // 用它们重建折叠条（tool 步骤 + reasoning 思考内容交错）。仅 script_writer 带 meta。
     if (selectedId.value === 'script_writer' && session.value?.messages) {
       for (const m of session.value.messages) {
         const meta = (m as any).meta;
-        if (m.role === 'assistant' && (m as any).message_id && meta?.trace?.length) {
-          turn.hydrateProcessItemsFromTrace((m as any).message_id, meta.trace);
+        if (m.role === 'assistant' && (m as any).message_id
+            && (meta?.trace?.length || meta?.reasonings?.length)) {
+          turn.hydrateProcessItemsFromMeta((m as any).message_id, meta);
         }
       }
     }

@@ -1833,6 +1833,7 @@ async def script_writer_turn(rt: AgentRuntime, project: str, session_id: str,
     edited = created = moved = scene_updated = deleted = False
     events: list = []
     receipts: list = []
+    reasoning: list = []
     trace: list = []
 
     if client is None:
@@ -1892,6 +1893,7 @@ async def script_writer_turn(rt: AgentRuntime, project: str, session_id: str,
             events = final["events"]
             receipts = pre_exec_receipts + final.get("receipts", []) if pre_exec_receipts else final.get("receipts", [])
             trace = (pre_trace + final.get("trace", [])) if pre_trace else final.get("trace", [])
+            reasoning = final.get("reasonings", [])
         except _TurnStopped:
             # 协作式停止（用户点停止）：在步骤边界安全中断。已完成的写全部真实落盘，
             # 未完成部分不执行。诚实收尾，账本来自 loop_state（与失败路径同样保留）。
@@ -1903,6 +1905,7 @@ async def script_writer_turn(rt: AgentRuntime, project: str, session_id: str,
             events = loop_state.get("events", [])
             receipts = pre_exec_receipts + loop_state.get("receipts", [])
             trace = (pre_trace + loop_state.get("trace", [])) if pre_trace else loop_state.get("trace", [])
+            reasoning = loop_state.get("reasonings", [])
         except Exception as e:
             # 可观测性：完整 traceback 进日志（定位网络断/服务端错误的真实身份）；
             # str(e) 可能为空（如 TimeoutError），文本带异常类型名保证用户可见失败原因。
@@ -1916,6 +1919,7 @@ async def script_writer_turn(rt: AgentRuntime, project: str, session_id: str,
             events = loop_state.get("events", [])
             receipts = pre_exec_receipts + loop_state.get("receipts", [])
             trace = (pre_trace + loop_state.get("trace", [])) if pre_trace else loop_state.get("trace", [])
+            reasoning = loop_state.get("reasonings", [])
 
     if created:
         intent = "story_create"
@@ -1960,6 +1964,7 @@ async def script_writer_turn(rt: AgentRuntime, project: str, session_id: str,
             "write_success": sum(1 for r in receipts_meta
                                  if r["ok"] and r["verified"] and not r["unchanged"]),
             "trace": trace,   # 执行轨迹（需求 #7）：每步 tool→target→result→revision
+            "reasonings": reasoning,   # 每步思考文本（持久化，前端刷新后重建折叠条 reasoning）
             "pending_delete_scenes": pending_delete_scenes}   # 本轮预览未确认的删除目标
     asst = AgentMessage(role="assistant", content=assistant_text, status=status, meta=meta)
     store.append_message(session_id, asst)
@@ -2294,6 +2299,9 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
     # 执行轨迹（需求 #7）：每个工具调用（读+写）一条 {step,tool,target,result,revision}。
     # 供调试「为什么移动三次才成/为什么多建一段」——只随 turn 结果返回，不进 system prompt。
     trace: list = state.setdefault("trace", [])
+    # AI-7D-R reasoning 持久化：每个 step 的思考文本累积，turn 结束随 meta 落盘，
+    # 供前端刷新后重建执行过程折叠条的 reasoning 部分（tool 从 trace 重建、reasoning 从此重建）。
+    reasonings: list = state.setdefault("reasonings", [])
     last_read_after_write = -1   # 最后一次只读调用所在的 step（用于最终完成判定）
     # 防失控（需求 #11）：连续同一工具同一失败的次数；超阈值则诚实停止，不无限重试。
     repeat_fail_streak = 0
@@ -2342,6 +2350,7 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
             if event_cb:
                 step_reasoning_started = False
                 step_reason_t0 = 0.0
+                step_reasoning_buf: list[str] = []   # 累积本步 reasoning 文本（持久化用，不进 system）
                 step_content_buf: list[str] = []
                 async for ev in client.chat_completion_stream(
                         messages, temperature=0.7, max_tokens=65536,
@@ -2355,6 +2364,7 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                             step_reasoning_started = True
                             step_reason_t0 = time.perf_counter()
                             event_cb({"type": "reasoning.started", "step_id": step})
+                        step_reasoning_buf.append(ev["delta"])
                         event_cb({"type": "reasoning.delta", "step_id": step,
                                   "delta": ev["delta"]})
                     elif k == "tool_call_pending":
@@ -2366,8 +2376,12 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                         content = ev["content"]
                         tool_calls = ev["tool_calls"]
                 if step_reasoning_started:
+                    rtext = "".join(step_reasoning_buf)
+                    rdur = int((time.perf_counter() - step_reason_t0) * 1000)
                     event_cb({"type": "reasoning.completed", "step_id": step,
-                              "duration_ms": int((time.perf_counter() - step_reason_t0) * 1000)})
+                              "duration_ms": rdur})
+                    if rtext:
+                        reasonings.append({"step": step, "text": rtext, "duration_ms": rdur})
                 if not tool_calls and step_content_buf:
                     for d in step_content_buf:
                         event_cb({"type": "assistant.delta", "delta": d})
@@ -2465,7 +2479,8 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
             text = _append_fact_summary(rt, project, text, receipts)
             return {"text": text or "已完成。",
                     "edited": edited, "created": created, "moved": moved, "scene_updated": scene_updated, "deleted": deleted,
-                    "summary": summary, "events": events, "receipts": receipts, "trace": trace}
+                    "summary": summary, "events": events, "receipts": receipts, "trace": trace,
+                    "reasonings": reasonings}
 
         messages.append({"role": "assistant", "content": content or "",
                          "tool_calls": tool_calls})
@@ -2667,4 +2682,5 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                 f"本轮没有任何成功写入。请把需求拆小一些再试。）")
     return {"text": text,
             "edited": edited, "created": created, "moved": moved, "scene_updated": scene_updated, "deleted": deleted,
-            "summary": summary, "events": events, "receipts": receipts, "trace": trace}
+            "summary": summary, "events": events, "receipts": receipts, "trace": trace,
+            "reasonings": reasonings}
