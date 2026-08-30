@@ -105,20 +105,33 @@ def _build_agents() -> List[AgentDefinition]:
 
 # ============ ModelProfile 默认值（从 config 派生，保证与配置一致）============
 _agnes_models = ((_APP_CFG.get("agnes") or {}).get("models") or {})
-KNOWN_MODEL_IDS = {v for v in _agnes_models.values() if v}   # 文本/图片/视频模型 id 集合
+_sn_models = ((_APP_CFG.get("sensenova") or {}).get("models") or {})
+KNOWN_MODEL_IDS = ({v for v in _agnes_models.values() if v}
+                   | {v for v in _sn_models.values() if v})   # 文本/图片/视频模型 id 集合
 
 
 def _default_profiles() -> List[ModelProfile]:
+    """文本模型档案（2026-08-29 Agent 模型切换）：
+    - text_default = Agnes（默认；Agent 未绑定/绑定它都用 Agnes 文本客户端）
+    - text_sensenova_68fl = SenseNova 6.8 Flash Lite（Agent 输入区滑动开关绑定；
+      u1-fast 接口暂不可调用，不提供 UI 档案，配置与代码保留）
+    text_provider 字段供 runtime 按 Agent 选择文本客户端；图片/视频模型不受影响。"""
     t = _agnes_models.get("text")
+    sn_text = _sn_models.get("text")
     im = _agnes_models.get("image")
     vi = _agnes_models.get("video")
     return [
-        ModelProfile(id="text_default", name="文本默认", reasoning_model=t),
-        ModelProfile(id="producer_profile", name="Producer 默认", reasoning_model=t),
+        ModelProfile(id="text_default", name="Agnes（默认）", reasoning_model=t,
+                     text_provider="agnes"),
+        ModelProfile(id="text_sensenova_68fl", name="SenseNova 6.8 Flash Lite",
+                     reasoning_model=sn_text, text_provider="sensenova"),
+        ModelProfile(id="producer_profile", name="Producer 默认", reasoning_model=t,
+                     text_provider="agnes"),
         ModelProfile(id="character_profile", name="角色设计默认",
-                     reasoning_model=t, image_model=im),
+                     reasoning_model=t, image_model=im, text_provider="agnes"),
         ModelProfile(id="shot_producer_profile", name="镜头制作默认",
-                     reasoning_model=t, image_model=im, video_model=vi),
+                     reasoning_model=t, image_model=im, video_model=vi,
+                     text_provider="agnes"),
     ]
 
 

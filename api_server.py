@@ -117,6 +117,8 @@ async def startup():
         # 构造逻辑（config 加载 + ${AGNES_API_KEY} 环境变量替换 + 实例化）仍留在
         # PipelineController，本轮不动；controller 容器整体删除留待垫片1/2 清理轮。
         deps.agnes_client = deps.pipeline_controller.agnes_client
+        # SenseNova 文本客户端（Agent 模型切换用；sensenova 块不完整时为 None，运行时回落 Agnes）
+        deps.sensenova_text_client = deps.pipeline_controller.sensenova_text_client
         deps.project_manager = deps.pipeline_controller.project_manager
         logger.info("API服务器已启动")
     except Exception as e:

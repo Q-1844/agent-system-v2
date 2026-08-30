@@ -12,7 +12,8 @@
 # （角色接口改 size_tier/ratio + result["url"]），垫片3（understand_text）随③-b 删，
 # 垫片4/5（generate_video / edge_tts.synthesize）早已删。
 from __future__ import annotations
-import asyncio, json, logging, random
+import asyncio, json, logging, os, random
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 import httpx
 
@@ -67,7 +68,9 @@ def snap_num_frames(target_frames: int,
 # 纯 async 解析器：输入 async line iterable（httpx r.aiter_lines() 或测试用假流），
 # 产出 provider 事件 dict：
 #   {"kind":"content_delta","delta":str}           —— delta.content，逐块给 UI
-#   {"kind":"reasoning_delta","delta":str}         —— delta.reasoning_content（DeepSeek 风格）
+#   {"kind":"reasoning_delta","delta":str}         —— delta.reasoning_content（DeepSeek/Agnes 风格）
+#                                                     或 delta.reasoning（SenseNova 实测字段），
+#                                                     统一转成 reasoning_delta，业务层无感
 #   {"kind":"finish","reason":"stop"|"tool_calls","content":str|None,
 #    "tool_calls":list|None,"usage":dict|None}     —— 终结，聚合完整消息（与非流式 chat_completion
 #                                                    返回形状一致，供 tool-loop 执行）
@@ -101,8 +104,12 @@ async def _parse_sse_events(alines):
             if d.get("content"):
                 content_buf.append(d["content"])
                 yield {"kind": "content_delta", "delta": d["content"]}
-            if d.get("reasoning_content"):
-                yield {"kind": "reasoning_delta", "delta": d["reasoning_content"]}
+            # reasoning 字段容错：Agnes 用 reasoning_content，SenseNova 6.8 实测用 reasoning
+            # （2026-08-29 probe results/03_flash_stream_scan.json delta_keys={'reasoning':70}）。
+            # 在解析器层统一，不改下游事件契约。
+            rc = d.get("reasoning_content") or d.get("reasoning")
+            if rc:
+                yield {"kind": "reasoning_delta", "delta": rc}
             for frag in d.get("tool_calls") or []:
                 idx = frag.get("index", 0)
                 a = tool_aggs.setdefault(idx, {"id": "", "name": "", "args": ""})
@@ -142,9 +149,26 @@ class PollTransientError(AgnesError):
     与「服务端明确返回 failed / video_id 404」的永久失败区分。"""
 
 
+def _resolve_hotswap_key(configured_key: str) -> str:
+    """SenseNova key 热切换：读切换按钮写入的 key 文件，存在且非空则优先于配置 key。
+    路径：环境变量 SENSENOVA_KEY_FILE 优先，否则 ~/.sensenova/active_key.txt。
+    文件不存在/为空/读失败 -> 用配置 key（.env 的 SENSENOVA_API_KEY），行为不变。
+    每次请求现读（文件极小，相对 LLM 延迟可忽略）——切换即生效，无需重启后端。"""
+    kf = os.environ.get("SENSENOVA_KEY_FILE") or str(
+        Path.home() / ".sensenova" / "active_key.txt")
+    try:
+        v = Path(kf).read_text(encoding="utf-8").strip()
+        if v:
+            return v
+    except OSError:
+        pass
+    return configured_key
+
+
 class AgnesClient:
     def __init__(self, config: dict, quota: QuotaLedger | None = None,
-                 transport: Optional[httpx.BaseTransport] = None):
+                 transport: Optional[httpx.BaseTransport] = None,
+                 text_endpoint: Optional[dict] = None):
         self.cfg      = config
         self.base_url = config["base_url"].rstrip("/")
         self.api_key  = config["api_key"]
@@ -159,6 +183,35 @@ class AgnesClient:
         # 生产路径（api_server.startup 构造 AgnesClient）不传 transport，初始化行为不变。
         # 传了 transport 时 httpx 忽略 proxy（MockTransport 不走网络）。
         self.transport = transport
+        # SenseNova 接入（2026-08-29）：文本调用可独立于主 endpoint。text_endpoint 非 None 时
+        # chat/chat_completion/chat_completion_stream 走该 OpenAI-compatible endpoint
+        # （{base_url, api_key, model, provider}，由 controller 按 config.text_provider 注入），
+        # 图片/视频仍走主 endpoint。None = 文本与主 endpoint 相同（纯 Agnes，原有行为零变化）。
+        self._text_ep = dict(text_endpoint) if text_endpoint else None
+        self._text_client: Optional[httpx.AsyncClient] = None
+
+    # ---------- 文本 endpoint 解析 ----------
+    def _text_cfg(self):
+        """文本请求的 (base_url, api_key, model, provider)。
+        text_endpoint 注入时（SenseNova）支持 key 文件热切换（见 _resolve_hotswap_key）。"""
+        if not self._text_ep:
+            return self.base_url, self.api_key, self.models["text"], "agnes"
+        ep = self._text_ep
+        return ep["base_url"], _resolve_hotswap_key(ep["api_key"]), \
+            ep["model"], ep.get("provider", "sensenova")
+
+    @staticmethod
+    def _thinking_body(thinking: bool, provider: str) -> Dict[str, Any]:
+        """provider 层 thinking 参数适配（业务层只传 bool，语义与 Agnes 一致）。
+        agnes:     True -> chat_template_kwargs.enable_thinking（原样）；False -> 不传（原样）。
+        sensenova: 实测默认开启思考（2026-08-29 probe results/20_off_default.json），
+                   必须显式开关。thinking.type 合法值 enabled/disabled/adaptive
+                   （probe 400 报错原文给出）。True -> enabled；False -> disabled。"""
+        if provider == "sensenova":
+            return {"thinking": {"type": "enabled" if thinking else "disabled"}}
+        if thinking:
+            return {"chat_template_kwargs": {"enable_thinking": True}}
+        return {}
 
     # ---------- 连接池 ----------
     async def client(self) -> httpx.AsyncClient:
@@ -173,18 +226,41 @@ class AgnesClient:
                 transport=self.transport)
         return self._client
 
+    async def _text_http(self) -> httpx.AsyncClient:
+        """文本 endpoint 专用连接池（base_url 与主 endpoint 不同时用）。
+        Authorization 不烘进 client——key 文件热切换要求每次请求现算（见 _request）。"""
+        base_url, _, _, _ = self._text_cfg()
+        if self._text_client is None or self._text_client.is_closed:
+            self._text_client = httpx.AsyncClient(
+                base_url=base_url,
+                headers={"Content-Type": "application/json"},
+                timeout=httpx.Timeout(connect=30, read=360, write=60, pool=30),
+                limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+                proxy=self.proxy, follow_redirects=True,
+                transport=self.transport)
+        return self._text_client
+
     async def aclose(self):
         if self._client and not self._client.is_closed:
             await self._client.aclose()
+        if self._text_client and not self._text_client.is_closed:
+            await self._text_client.aclose()
 
     # ---------- 带退避的请求 ----------
     async def _request(self, method: str, url: str, bucket: str,
-                       max_attempts: int = 5, **kw) -> httpx.Response:
+                       max_attempts: int = 5, *, text_ep: bool = False,
+                       **kw) -> httpx.Response:
+        label = "SenseNova" if text_ep else "Agnes"
         last = None
         for attempt in range(max_attempts):
             async with self.limiter.slot(bucket):
                 try:
-                    c = await self.client()
+                    c = await (self._text_http() if text_ep else self.client())
+                    if text_ep:
+                        # key 每次请求现算（热切换），不能烘进连接池 client 的默认头
+                        _, key, _, _ = self._text_cfg()
+                        kw["headers"] = {**(kw.get("headers") or {}),
+                                         "Authorization": f"Bearer {key}"}
                     r = await c.request(method, url, **kw)
                 except (httpx.TimeoutException, httpx.TransportError) as e:
                     last = e
@@ -195,7 +271,7 @@ class AgnesClient:
                         return r
                     if r.status_code not in RETRYABLE:
                         raise AgnesError(
-                            f"Agnes API 错误 {r.status_code}: {r.text[:400]}",
+                            f"{label} API 错误 {r.status_code}: {r.text[:400]}",
                             r.status_code, r.text)
                     last = AgnesError(f"{r.status_code}: {r.text[:200]}", r.status_code, r.text)
                     log.warning("[%s] 可重试错误 %d（第 %d/%d 次）", bucket,
@@ -211,11 +287,13 @@ class AgnesClient:
         if self.quota:
             ok, why = self.quota.can("text_calls", 1)
             if not ok: raise AgnesError(why)
-        body: Dict[str, Any] = {"model": self.models["text"], "messages": messages,
+        _, _, model, provider = self._text_cfg()
+        log.info("[text] provider=%s model=%s", provider, model)
+        body: Dict[str, Any] = {"model": model, "messages": messages,
                                 "temperature": temperature, "max_tokens": max_tokens}
-        if thinking:
-            body["chat_template_kwargs"] = {"enable_thinking": True}
-        r = await self._request("POST", "/v1/chat/completions", "text", json=body)
+        body.update(self._thinking_body(thinking, provider))
+        r = await self._request("POST", "/v1/chat/completions", "text",
+                                text_ep=bool(self._text_ep), json=body)
         if self.quota: self.quota.consume("text_calls", 1)
         text = r.json()["choices"][0]["message"]["content"]
         if json_mode:
@@ -239,15 +317,17 @@ class AgnesClient:
         if self.quota:
             ok, why = self.quota.can("text_calls", 1)
             if not ok: raise AgnesError(why)
-        body: Dict[str, Any] = {"model": self.models["text"], "messages": messages,
+        _, _, model, provider = self._text_cfg()
+        log.info("[text] provider=%s model=%s", provider, model)
+        body: Dict[str, Any] = {"model": model, "messages": messages,
                                 "temperature": temperature, "max_tokens": max_tokens}
-        if thinking:
-            body["chat_template_kwargs"] = {"enable_thinking": True}
+        body.update(self._thinking_body(thinking, provider))
         if tools:
             body["tools"] = tools
             if tool_choice is not None:
                 body["tool_choice"] = tool_choice
-        r = await self._request("POST", "/v1/chat/completions", "text", json=body)
+        r = await self._request("POST", "/v1/chat/completions", "text",
+                                text_ep=bool(self._text_ep), json=body)
         if self.quota: self.quota.consume("text_calls", 1)
         msg = r.json()["choices"][0]["message"]
         return {
@@ -273,33 +353,50 @@ class AgnesClient:
         if self.quota:
             ok, why = self.quota.can("text_calls", 1)
             if not ok: raise AgnesError(why)
-        body: Dict[str, Any] = {"model": self.models["text"], "messages": messages,
+        base_url, key, model, provider = self._text_cfg()
+        label = "SenseNova" if self._text_ep else "Agnes"
+        log.info("[text] provider=%s model=%s", provider, model)
+        body: Dict[str, Any] = {"model": model, "messages": messages,
                                 "temperature": temperature, "max_tokens": max_tokens,
                                 "stream": True}
-        if thinking:
-            body["chat_template_kwargs"] = {"enable_thinking": True}
+        body.update(self._thinking_body(thinking, provider))
         if tools:
             body["tools"] = tools
             if tool_choice is not None:
                 body["tool_choice"] = tool_choice
-        headers = {"Authorization": f"Bearer {self.api_key}",
+        headers = {"Authorization": f"Bearer {key}",
                    "Content-Type": "application/json"}
         # 🔴 read=360 对齐非流式 _request（360）：流式 turn 的大生成（10 段 x300 字
-        # update_many 等大参数 tool_call）Agnes 服务端可能长时间不发首块/响应头
+        # update_many 等大参数 tool_call）服务端可能长时间不发首块/响应头
         # （实测 httpx.ReadTimeout str 为空 -> "[执行失败: ]" 黑盒，2026-08-28）。
         # 120s 对"等响应头"不够。流式 chunk 间隔实际很短，360s 是安全上限。
-        async with httpx.AsyncClient(
-                base_url=self.base_url, headers=headers,
-                timeout=httpx.Timeout(connect=30, read=360, write=30, pool=30),
-                proxy=self.proxy, follow_redirects=True,
-                transport=self.transport) as c:
-            async with c.stream("POST", "/v1/chat/completions", json=body) as r:
-                if r.status_code != 200:
-                    body_txt = (await r.aread()).decode("utf-8", "replace")[:400]
-                    raise AgnesError(f"Agnes stream 错误 {r.status_code}: {body_txt}",
-                                     r.status_code, body_txt)
-                async for ev in _parse_sse_events(r.aiter_lines()):
-                    yield ev
+        # SenseNova 实测（2026-08-29 probe round2/3）：tool calling 偶发 500
+        # "engine is not available temporarily"（挂 60~190s 后返回，非 stream 特有）。
+        # 500 在 RETRYABLE 集合内、非流式 _request 本就自动重试；流式在【尚未产出任何
+        # 事件】时对可重试状态做有限重试（3 次尝试），不改变成功路径行为。
+        stream_attempts = 3 if self._text_ep else 1
+        for attempt in range(stream_attempts):
+            async with httpx.AsyncClient(
+                    base_url=base_url, headers=headers,
+                    timeout=httpx.Timeout(connect=30, read=360, write=30, pool=30),
+                    proxy=self.proxy, follow_redirects=True,
+                    transport=self.transport) as c:
+                async with c.stream("POST", "/v1/chat/completions", json=body) as r:
+                    if r.status_code != 200:
+                        body_txt = (await r.aread()).decode("utf-8", "replace")[:400]
+                        if (attempt + 1 < stream_attempts
+                                and r.status_code in RETRYABLE):
+                            log.warning("[%s] stream 可重试错误 %d（第 %d/%d 次）",
+                                        "text", r.status_code, attempt + 1,
+                                        stream_attempts)
+                            backoff = min(20, (2 ** attempt) * 3) + random.uniform(0, 2)
+                            await asyncio.sleep(backoff)
+                            continue
+                        raise AgnesError(f"{label} stream 错误 {r.status_code}: {body_txt}",
+                                         r.status_code, body_txt)
+                    async for ev in _parse_sse_events(r.aiter_lines()):
+                        yield ev
+                    break   # 流正常走完（或已在产出事件后结束），不再重试
         if self.quota: self.quota.consume("text_calls", 1)
 
     # ---------- 图片 ----------

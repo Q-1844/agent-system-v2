@@ -55,6 +55,8 @@ pipeline_controller = None
 # 构造逻辑（config 加载 + ${AGNES_API_KEY} 环境变量替换 + AgnesClient/ProjectManager 实例化）
 # 仍留在 controller.py，本轮只把访问点从 controller.X 改成 get_X() 依赖注入。
 agnes_client = None
+# SenseNova 文本客户端（2026-08-29 Agent 模型切换用；仅文本，startup 时赋值，可为 None）
+sensenova_text_client = None
 project_manager = None
 job_queue = None
 
@@ -77,6 +79,12 @@ def get_agnes_client():
             detail="服务未就绪，AgnesClient 初始化失败。请检查配置文件和API密钥。"
         )
     return agnes_client
+
+
+def get_sensenova_text_client():
+    """SenseNova 文本客户端（Agent 模型切换用）。未配置/未就绪返回 None（不抛 503）——
+    调用方（runtime._resolve_client_or_none）据此回落 Agnes 共享客户端。"""
+    return sensenova_text_client
 
 
 def get_project_manager():

@@ -153,7 +153,9 @@ class CapabilityDefinition:
 @dataclass
 class ModelProfile:
     """逻辑模型画像。只存逻辑模型 id / account alias；API Key 继续走环境配置（§14）。
-    Image Model / Video Model ≠ Agent，只是 Agent 可用的工具模型。"""
+    Image Model / Video Model ≠ Agent，只是 Agent 可用的工具模型。
+    text_provider（2026-08-29 Agent 模型切换）：该档案的文本 provider（agnes/sensenova），
+    runtime 据此为 Agent 选择文本客户端；None=agnes（默认，向后兼容旧持久化档案）。"""
     id: str
     name: str
     reasoning_model: Optional[str] = None
@@ -161,6 +163,7 @@ class ModelProfile:
     image_model: Optional[str] = None
     video_model: Optional[str] = None
     account_policy: str = "auto"            # auto / agnes_a / agnes_b
+    text_provider: Optional[str] = None     # agnes（默认）/ sensenova
 
     def to_dict(self) -> dict:
         return {
@@ -169,6 +172,7 @@ class ModelProfile:
             "fallback_reasoning_model": self.fallback_reasoning_model,
             "image_model": self.image_model, "video_model": self.video_model,
             "account_policy": self.account_policy,
+            "text_provider": self.text_provider,
         }
 
     @classmethod
@@ -181,6 +185,7 @@ class ModelProfile:
             image_model=d.get("image_model"),
             video_model=d.get("video_model"),
             account_policy=d.get("account_policy", "auto"),
+            text_provider=d.get("text_provider"),
         )
 
 

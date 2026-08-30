@@ -14,7 +14,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from deps import get_agnes_client, get_project_manager, get_job_queue
+from deps import (get_agnes_client, get_project_manager, get_job_queue,
+                  get_sensenova_text_client)
 from src.core.store import ProjectStore
 
 from .models import (AgentDefinition, AgentMessage, AgentSession, AgentTask,
@@ -57,6 +58,7 @@ class AgentRuntime:
     def __init__(self,
                  client: Optional[Any] = None,
                  agnes_getter: Optional[Callable[[], Any]] = None,
+                 sensenova_getter: Optional[Callable[[], Any]] = None,
                  plans_reader: Optional[Callable[[str, str], Optional[dict]]] = None,
                  settings_path: Optional[Path] = None,
                  project_dir_resolver: Optional[Callable[[str], Path]] = None,
@@ -65,6 +67,8 @@ class AgentRuntime:
                  real_shot_pipeline: bool = False):
         self._client = client
         self._agnes_getter = agnes_getter or get_agnes_client
+        # SenseNova 文本客户端 getter（2026-08-29 Agent 模型切换；未配置时返回 None）
+        self._sensenova_getter = sensenova_getter or get_sensenova_text_client
         self._plans_reader = plans_reader
         self._project_dir_resolver = project_dir_resolver or (
             lambda name: get_project_manager().get_project_dir(name))
@@ -865,10 +869,32 @@ class AgentRuntime:
             raise AgentError("permission_denied",
                              f"{a.name} 无权执行 storyboard.propose_change/execute")
 
-    def _resolve_client_or_none(self):
-        """取 Agnes client，不可用则 None（generate_proposal 会转 not_configured）。"""
+    def _agent_text_provider(self, agent_id: str) -> str:
+        """Agent 当前绑定 ModelProfile 的 text provider（agnes/sensenova）。
+        解析失败/未绑定/旧档案无该字段 -> agnes（默认，向后兼容）。"""
+        try:
+            a = self._resolve_agent(agent_id)
+            prof = self.profiles.resolve_for_agent(a, self.settings)
+            return getattr(prof, "text_provider", None) or "agnes"
+        except Exception:
+            return "agnes"
+
+    def _resolve_client_or_none(self, agent_id: Optional[str] = None):
+        """取文本 client，不可用则 None（generate_proposal 会转 not_configured）。
+
+        agent_id 传入时（2026-08-29 Agent 模型切换）：该 Agent 绑定档案的
+        text_provider=sensenova 则返回 SenseNova 文本客户端（未配置回落 Agnes）；
+        不传或 provider=agnes 走原共享 Agnes 客户端，行为不变。
+        self._client（测试注入）优先级最高，不受档案影响。"""
         if self._client is not None:
             return self._client
+        if agent_id and self._agent_text_provider(agent_id) == "sensenova":
+            try:
+                sn = self._sensenova_getter()
+                if sn is not None:
+                    return sn
+            except Exception:
+                pass    # SenseNova 未配置/未就绪 -> 回落 Agnes 共享客户端
         try:
             return self._agnes_getter()
         except Exception:

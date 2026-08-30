@@ -561,7 +561,8 @@ def test_tools_registry_includes_all():
                      "story.create", "story.list", "story.read",
                      "story.move", "story.update", "story.delete",
                      "story.create_many", "story.update_many",
-                     "story.delete_many", "story.insert_many"}
+                     "story.delete_many", "story.insert_many",
+                     "web.search"}
 
 
 # ============================================================

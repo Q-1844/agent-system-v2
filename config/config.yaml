@@ -31,6 +31,26 @@ agnes:
     polling_interval: 5   # 🔴 从 10 改为 5（官方建议）
     max_wait: 3600
 
+# ============ 文本 LLM provider 配置（SenseNova 接入，2026-08-29）============
+# 两层语义：
+#   1) text_provider = 全局文本默认路由（主客户端）。agnes = 原有行为（当前默认）；
+#      sensenova = 所有未单独选择模型的文本调用走 sensenova.models.text。
+#   2) Script Writer 的模型由 Agent 输入区滑动开关（Agent 设置 model_profile_id）运行时
+#      选择，下一次对话起生效——默认 Agnes，可切 SenseNova 6.8 Flash Lite；不影响图片/视频。
+# 原有 provider 全部保留；不做自动模型路由/按任务切换/fallback。
+text_provider: agnes         # 默认回到 Agnes（SenseNova 实测偏慢，按需在 UI 手动切）
+
+sensenova:
+  # OpenAI-compatible Chat Completions；客户端自动拼 /v1/chat/completions，此处不带 /v1
+  # （2026-08-29 实测 GET /v1/models 两个 key 均可用，模型列表含 sensenova-6.8-flash-lite / sensenova-u1-fast）
+  base_url: "https://token.sensenova.cn"
+  api_key: ${SENSENOVA_API_KEY}   # 从环境变量读取（.env）；可用独立切换按钮热切换（见 README）
+  models:
+    # UI 开关当前只提供 sensenova-6.8-flash-lite。
+    # "sensenova-u1-fast" 保留配置（改这里即切），但 2026-08-29 实测 chat 端点 404
+    # model is not found（虽在 /v1/models 列表中，疑似需控制台开通），故不作为 UI 可选项。
+    text: "sensenova-6.8-flash-lite"
+
 # ImageHost：把本地图片变成 Agnes 服务端能访问的公网 URL。
 # 🔴 默认 imgbb（2026-07-31 实测唯一可用方案：Agnes .cn 服务端能下载 imgbb URL，i2v 成功）。
 #    imgbb 上传原字节 100% 保真，URL 长期有效（吻合 project.json 持久化 + 崩溃恢复设计）。

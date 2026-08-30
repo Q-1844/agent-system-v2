@@ -18,6 +18,8 @@ deps，并发真实 Agnes 请求验证（含生成图尺寸是否符合角色页
 
 import yaml
 
+from typing import Optional
+
 from ..api.agnes_client import AgnesClient
 from ..utils.logger import setup_logger
 from ..utils.project_manager import ProjectManager
@@ -31,10 +33,44 @@ class PipelineController:
     def __init__(self, config_path: str = "./config/config.yaml"):
         self.config = self._load_config(config_path)
         self.project_manager = ProjectManager(self.config["project"]["base_dir"])
-        self.agnes_client = AgnesClient(self.config["agnes"])
+        # 文本 provider 分层（2026-08-29 Agent 模型切换）：
+        # 1) config.text_provider = 全局文本默认路由（当前 agnes），决定主客户端
+        #    agnes_client 的 text_endpoint；图片/视频不受影响。
+        # 2) sensenova 配置块完整时，常备一个独立 SenseNova 文本客户端
+        #    sensenova_text_client——runtime 按 Agent 绑定的 ModelProfile.text_provider
+        #    为 script_writer 在两者间选择（Agent 输入区开关，下一次 turn 起生效）。
+        # provider 差异均在 client 层适配，业务层/Agent 不感知；无自动路由/fallback。
+        sn_ep = self._sensenova_text_endpoint()
+        main_ep = sn_ep if self._config_text_provider() == "sensenova" else None
+        if main_ep is not None:
+            logger.info("全局文本默认 provider = SenseNova（model=%s）", main_ep["model"])
+        else:
+            logger.info("全局文本默认 provider = Agnes（model=%s）",
+                        self.config["agnes"]["models"]["text"])
+        self.agnes_client = AgnesClient(self.config["agnes"], text_endpoint=main_ep)
+        self.sensenova_text_client = (AgnesClient(self.config["agnes"],
+                                                  text_endpoint=sn_ep)
+                                      if sn_ep else None)
+
+    def _config_text_provider(self) -> str:
+        tp = str(self.config.get("text_provider") or "agnes").strip()
+        return tp if tp in ("agnes", "sensenova") else "agnes"
+
+    def _sensenova_text_endpoint(self) -> Optional[dict]:
+        """sensenova 配置块 -> 文本 endpoint 注入参数；块不完整/无 key 返回 None。
+        只看 sensenova 块本身（与全局默认 text_provider 解耦）。"""
+        sn = self.config.get("sensenova") or {}
+        api_key = str(sn.get("api_key") or "")
+        base_url, model = sn.get("base_url"), (sn.get("models") or {}).get("text")
+        if not api_key or "${" in api_key or not base_url or not model:
+            logger.warning("sensenova 配置不完整（base_url/api_key/models.text），"
+                           "SenseNova 文本客户端不可用")
+            return None
+        return {"base_url": str(base_url).rstrip("/"), "api_key": api_key,
+                "model": str(model), "provider": "sensenova"}
 
     def _load_config(self, config_path: str) -> dict:
-        """加载配置文件 + 环境变量替换（AGNES_API_KEY / MIMO_API_KEY）。"""
+        """加载配置文件 + 环境变量替换（AGNES_API_KEY / MIMO_API_KEY / SENSENOVA_API_KEY）。"""
         import os
 
         with open(config_path, "r", encoding="utf-8") as f:
@@ -53,5 +89,12 @@ class PipelineController:
                 config["mimo"]["api_key"] = api_key
             else:
                 logger.warning("未设置MIMO_API_KEY环境变量")
+
+        if "${SENSENOVA_API_KEY}" in str(config.get("sensenova", {}).get("api_key", "")):
+            api_key = os.environ.get("SENSENOVA_API_KEY", "")
+            if api_key:
+                config["sensenova"]["api_key"] = api_key
+            else:
+                logger.warning("未设置SENSENOVA_API_KEY环境变量")
 
         return config
