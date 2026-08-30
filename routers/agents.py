@@ -263,9 +263,10 @@ async def cancel_agent_turn(project_name: str, sid: str):
 async def agent_turn_stream(project_name: str, sid: str, req: StreamTurnReq):
     """AI-7D-R · Agent 流式 Direct Chat turn（/turn 不动，新接口）。
 
-    2026-08-30 起支持两个具备直接编辑工具的 Agent（各自 tool-loop，互不改写对方写入域）：
+    2026-08-30 起支持三个具备直接编辑工具的 Agent（各自 tool-loop，互不改写对方写入域）：
       script_writer        → 写 story_text/scenes，资源锁 story，变更事件 story.changed
       character_designer   → 写 characters，资源锁 character，变更事件 character.changed
+      director             → 写 scenes[].shots（分镜域），资源锁 storyboard，变更事件 storyboard.changed
 
     发送瞬间把 req.thinking snapshot 固定为本 turn 配置。逐 AgentStreamEvent SSE forward：
       turn.started → reasoning.* / tool.* / assistant.delta → turn.completed(完整结果) /
@@ -292,9 +293,14 @@ async def agent_turn_stream(project_name: str, sid: str, req: StreamTurnReq):
         from src.agents.project_events import RESOURCE_CHARACTER, emit_changed
         _turn_fn, _writes, _resource, _emit = (
             character_designer_turn, CHARACTER_WRITE_OPERATIONS, RESOURCE_CHARACTER, emit_changed)
+    elif session.agent_id == "director":
+        from src.agents.director import director_turn, DIRECTOR_WRITE_OPERATIONS
+        from src.agents.project_events import RESOURCE_STORYBOARD, emit_changed
+        _turn_fn, _writes, _resource, _emit = (
+            director_turn, DIRECTOR_WRITE_OPERATIONS, RESOURCE_STORYBOARD, emit_changed)
     else:
         _raise(AgentError("permission_denied",
-                          "流式 turn 仅支持 Script Writer / Character Designer 会话"))
+                          "流式 turn 仅支持 Script Writer / Character Designer / Director 会话"))
     from src.agents.models import ScopeType
     from src.agents.project_events import get_project_bus
     if session.scope_type != ScopeType.PROJECT.value:

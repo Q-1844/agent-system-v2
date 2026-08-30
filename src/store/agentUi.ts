@@ -261,9 +261,10 @@ export const useAgentUiStore = defineStore('agentUi', () => {
   }
 
   /** 发送消息（§5 路由）：变更意图 → ChangeSession 桥接；只读问题 → 普通 Agent 会话。
-   *  AI-7D-R：具备直接编辑工具的 Agent（script_writer 等）不走 ChangeSession 方案审核，
-   *  直接发 /turn 由 agent 自己的 tool-loop 完成修改（LLM→tool→observation→回复）。 */
-  const DIRECT_EDIT_AGENTS = new Set(['script_writer']);
+   *  AI-7D-R：具备直接编辑工具的 Agent（script_writer / character_designer / director）
+   *  不走 ChangeSession 方案审核，直接发 /turn 由 agent 自己的 tool-loop 完成修改
+   *  （LLM→tool→observation→回复）。 */
+  const DIRECT_EDIT_AGENTS = new Set(['script_writer', 'character_designer', 'director']);
   async function send(content: string) {
     const p = projectStore.projectName;
     const text = content.trim();

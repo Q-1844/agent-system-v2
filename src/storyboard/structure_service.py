@@ -234,6 +234,47 @@ def move_scene(project: Project, scene_id: str, *,
     return scene
 
 
+def move_shot(project: Project, shot_id: str, *,
+              before: Optional[str] = None,
+              after: Optional[str] = None) -> Shot:
+    """把已存在的镜头在同一故事段内移动到 before 之前 / after 之后（都不指定 → 移到段尾）。
+    不改 shot_id、不重排其它段、不分配新 ID；移动后本段 index 重排连续。
+    段/镜头/锚点不存在抛 not_found；before/after 同时给或指向自身抛 invalid；
+    锚点属于其它段抛 invalid（第一版只支持同段内移动：shot_id 身份含段前缀，跨段移动
+    会让身份与归属脱节，属后续需求）。返回被移动的 Shot（同一对象，已在新位置）。"""
+    if before and after:
+        raise StructureError("invalid", "只能指定 before_shot_id 或 after_shot_id 之一")
+    if shot_id and shot_id in (before, after):
+        raise StructureError("invalid", "不能把镜头移动到自身前/后")
+    scene = next((s for s in project.scenes
+                  if any(sh.shot_id == shot_id for sh in s.shots)), None)
+    if scene is None:
+        raise StructureError("not_found", f"镜头不存在: {shot_id}")
+    cur_idx = next(i for i, sh in enumerate(scene.shots) if sh.shot_id == shot_id)
+
+    anchor = before or after
+    if anchor:
+        a_idx = next((i for i, sh in enumerate(scene.shots)
+                      if sh.shot_id == anchor), None)
+        if a_idx is None:
+            raise StructureError(
+                "not_found",
+                f"锚点镜头 {anchor} 不在同一故事段 {scene.scene_id} 内（第一版只支持同段内移动）")
+        target = a_idx if before else a_idx + 1
+    else:
+        target = len(scene.shots)
+
+    shot = scene.shots.pop(cur_idx)
+    # pop 后，若锚点原本在被移镜头之后，其下标左移 1
+    if anchor and target > cur_idx:
+        target -= 1
+    elif not anchor:
+        target = len(scene.shots)   # 移到段尾：pop 后末尾下标
+    scene.shots.insert(target, shot)
+    renumber_shot_indices(scene)
+    return shot
+
+
 def insert_shots_after(project: Project, scene_id: str, after_shot_id: Optional[str],
                        specs: list[dict]) -> list[Shot]:
     """在 scene_id 段内、after_shot_id 之后一次性插入若干镜头。after_shot_id 为 None/空
@@ -297,8 +338,10 @@ def update_scene_fields(project: Project, scene_id: str, *,
 
 # 可通过 update_shot_fields 写入的结构化字段白名单（创作字段，不含产物/接力/状态）。
 # 这些字段都被 src/core/prompt_builder.py 消费，最终决定生成画面。
+# dialogue（对白文本）是 TTS 配音（routers/shots.py audio）的创作输入，同样是镜头
+# canonical 创作字段——不进图片 prompt，但归属镜头创作数据，故列在白名单内。
 _SHOT_WRITABLE_FIELDS = (
-    "description", "characters", "target_duration_s",
+    "description", "characters", "target_duration_s", "dialogue",
     "shot_size", "camera", "camera_angle", "camera_movement",
     "composition", "lighting", "motion", "motion_pace",
     "environment_motion", "action_sequence",
@@ -425,7 +468,7 @@ def update_shots_batch(project: Project, scene_id: str,
 # ============ 只读查询（供 agent 主动读取完整参数）============
 # 镜头创作字段（不含产物/批次/内部签名/prompt_en 等内部字段），给 agent 看的完整视图。
 _SHOT_READ_FIELDS = (
-    "shot_id", "scene_id", "index", "description", "characters",
+    "shot_id", "scene_id", "index", "description", "characters", "dialogue",
     "target_duration_s", "shot_size", "camera", "camera_angle", "camera_movement",
     "composition", "lighting", "motion", "motion_pace", "environment_motion",
     "action_sequence", "opening_state", "important_details", "required_elements",

@@ -27,6 +27,7 @@ from typing import Optional
 # 资源名
 RESOURCE_STORY = "story"   # 剧本域：story_text（正文）+ scenes（故事段）
 RESOURCE_CHARACTER = "character"   # 角色域：project.json 的 characters（Character Designer 写入域）
+RESOURCE_STORYBOARD = "storyboard"   # 分镜域：scenes[].shots[]（Director 写入域）
 
 _MAX_QUEUE = 256
 
@@ -79,6 +80,12 @@ class ProjectEventBus:
         self.publish(project, {"type": "character.changed", "by": by,
                                "session_id": session_id, "operation": operation})
 
+    def emit_storyboard_changed(self, project: str, *, by: str = "",
+                                session_id: str = "", operation: str = "") -> None:
+        """分镜域内容已落盘（Director 写路径发布；分镜页订阅静默刷新）。"""
+        self.publish(project, {"type": "storyboard.changed", "by": by,
+                               "session_id": session_id, "operation": operation})
+
     # ---------- 资源锁 ----------
     def lock(self, project: str, resource: str, *, by: str = "",
              session_id: str = "") -> bool:
@@ -112,9 +119,11 @@ class ProjectEventBus:
 def emit_changed(bus, project: str, resource: str, *, by: str = "",
                  session_id: str = "", operation: str = "") -> None:
     """按资源名分发内容变更事件（Agent 流式端点用；资源 → 事件类型映射的唯一入口）。
-    story → story.changed；character → character.changed；未知资源发通用 resource.changed。"""
+    story → story.changed；character → character.changed；storyboard → storyboard.changed；
+    未知资源发通用 resource.changed。"""
     type_by_resource = {RESOURCE_STORY: "story.changed",
-                        RESOURCE_CHARACTER: "character.changed"}
+                        RESOURCE_CHARACTER: "character.changed",
+                        RESOURCE_STORYBOARD: "storyboard.changed"}
     bus.publish(project, {"type": type_by_resource.get(resource, "resource.changed"),
                           "resource": resource, "by": by,
                           "session_id": session_id, "operation": operation})

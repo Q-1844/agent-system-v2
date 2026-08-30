@@ -1,0 +1,2029 @@
+# src/agents/director.py
+# Director 正式 Agent（原生 function-calling tool-loop，2026-08-30）。
+#
+# 职责：分镜模块的完整控制权——把故事段转换成可用于动画制作的 Shot 结构，
+#       并持续创建/修改/删除/排序这些镜头。像导演一样工作：镜头数量、景别、
+#       机位、运镜、节奏由模型按剧情自主判断，本文件只定边界与工具，不写僵化的
+#       分镜公式（不规定"每段固定 N 镜"或固定景别序列）。
+#
+# 写入域：只有镜头 canonical（project.json 的 scenes[].shots[] 创作字段）。
+#   故事段结构/剧本正文（story_text/scenes 内容）归 Script Writer、角色归
+#   Character Designer——它们是 Director 的【参考资料】（读工具按需取），绝不是写入对象；
+#   Director 也没有任何 story.*/character.* 写工具（工具层天然挡掉，非提示词约束）。
+#   分镜图/视频生成（first_frame/video pipeline）本阶段不接——先做稳文本导演能力。
+#
+# 工具（按需读取，最小充分上下文）：
+#   读：shot.list / shot.read / story.list / story.read / script.read /
+#       character.list / character.read / web.search
+#   写：shot.create / shot.update / shot.delete / shot.move
+#   批量写（各占一个单写槽，整批一次 OCC + 一次原子写）：
+#        shot.create_many / shot.update_many
+#   一个故事段天然拆成多个 Shot 且单 Shot 内容短，成组创建/修改是主工作流，
+#   batch 上限按 Shot schema 大小与 tool-call 稳定性取 10（update 12）。
+#
+# 复用 Script Writer / Character Designer 已验证的基础设施（import 共享，不改其文件）：
+#   web.search 执行器 + 预算/重复查询拦截、story.list/story.read/script.read 只读执行器、
+#   character.list/character.read 只读执行器、统一回执骨架 _base_receipt、
+#   宽容反序列化 _loose_json/_parse_args、真相闸门正则（_claims_success /
+#   _is_explicit_write_request / _is_chat_turn）、【实际执行记录】保留块清除、
+#   _TurnStopped 协作式停止、活跃生产护栏 _active_production_reason。
+#   tool-loop 机制（单写串行/回执账本/zero-write recovery/重复失败护栏/超时恢复/
+#   流式事件/取消）按分镜域镜像实现——不改冻结的 script_writer.py。
+#
+# 乐观并发（optimistic concurrency，工具自身正确性保护，字段级作用域）：
+#   - _shots_token：全项目镜头【结构】指纹（sha256 over 各段 shot_id 有序列表前 8 位）。
+#     shot.create / shot.create_many / shot.delete / shot.move 校验 expected_shots_revision。
+#     镜头增/删/移动会变；镜头内容修改、故事段内容修改、剧本正文修改都不影响。
+#     （SW 的 story.delete 会级联删镜头 → 指纹变化 → Director 旧指纹被正确拒绝。）
+#   - _shot_token：单个镜头【内容】指纹（白名单可写创作字段的有序映射）。
+#     shot.update 校验 expected_revision（镜头级指纹）。
+#   - _shots_content_token：全项目镜头【内容】指纹（每镜可写内容字段序列）。
+#     shot.update_many 校验 expected_revision（集合级指纹）。
+#   stale → 拒绝写入（不落盘/不分配 ID/不审计），返回最新内容 + 新指纹供 Agent 重新判断。
+#   每次写后无条件重读 canonical 验证确实落盘，receipts 是唯一权威执行事实。
+#
+# 顺序模型（structure_service）：镜头权威顺序 = scene.shots 数组位置，Shot.index 只是
+#   显示号（任何位置变动后 renumber）。shot_id 是身份证号：插入/移动不重排已有 id，
+#   新镜头取段内下一个 _cNN 单调序号，删除不回收。move 只支持同段内单步移动（第一版
+#   不做 move_many/reorder——镜头顺序是状态依赖操作，前一次结构变化会改变下一次
+#   position 语义；多镜重排走多次 shot.move，每步用最新指纹）。
+from __future__ import annotations
+import asyncio
+import hashlib
+import json
+import logging
+import re
+import time
+from typing import Any, Optional
+
+import httpx
+
+from src.core.models import Project, Shot
+from src.core.store import ProjectStore
+from src.storyboard.structure_service import (
+    StructureError, insert_shots_after, move_shot,
+    update_shot_fields, read_shot, renumber_shot_indices,
+)
+
+from .models import AgentMessage, ResultStatus
+from .runtime import AgentRuntime, AgentError
+from .revision_audit import DirectEditAuditStore
+# —— Script Writer 共享基础设施（直接 import 复用，不改其文件）——
+from .script_writer import (
+    MAX_WEB_SEARCH,
+    _TurnStopped,
+    _active_production_reason,
+    _base_receipt,
+    _claims_search_success,
+    _claims_success,
+    _execute_script_read,
+    _execute_story_list,
+    _execute_story_read,
+    _execute_web_search,
+    _is_chat_turn,
+    _is_explicit_write_request,
+    _loose_json,
+    _normalized_search_query,
+    _parse_args,
+    strip_reserved_fact_blocks,
+)
+# —— Character Designer 只读执行器（角色参考资料）——
+from .character_designer import _execute_character_list, _execute_character_read
+
+log = logging.getLogger("agents.director")
+
+# 防死循环（LLM 循环步数），非业务数量限制——一个故事段整组分镜
+# （story.list + story.read + character.read + shot.list + create_many + shot.list 收尾）
+# 远小于此值；整片级任务可由调用方覆盖。
+DEFAULT_MAX_TOOL_STEPS = 32
+# 真相收口：最终回复纠偏最多 1 次；仍不实则 Runtime 确定性覆写。
+MAX_CORRECTIVE_ROUNDS = 1
+# 防失控：连续同一工具同一失败签名达此阈值 → 诚实停止。
+MAX_REPEAT_FAIL = 3
+# 超时恢复：LLM read timeout 最多恢复重试次数。
+MAX_TIMEOUT_RETRIES = 2
+# 批量工具上限（tool-call JSON 长度/稳定性平衡；Shot 单项含拍摄字段比故事段短，
+# 10 镜一批的参数量约为 story.create_many 5 段的 1~1.5 倍）。超时降级链 10→5→2→1。
+MAX_CREATE_BATCH = 10
+MAX_UPDATE_BATCH = 12
+_BATCH_DOWNGRADE = {10: 5, 5: 2, 2: 1, 1: 1}
+
+# 写工具集合（只有这些可能产生 canonical 变更，需要回执 + 落盘校验 + 单写串行 + 资源锁）。
+# 批量工具各占一个单写槽。
+DIRECTOR_WRITE_OPERATIONS = {"shot.create", "shot.create_many", "shot.update",
+                             "shot.update_many", "shot.delete", "shot.move"}
+# 只读工具（不占写槽、可一次多个；用于「写后重读最终状态」的收尾判定）。
+DIRECTOR_READ_TOOLS = {"shot.list", "shot.read", "story.list", "story.read",
+                       "script.read", "character.list", "character.read"}
+
+
+# ============ 乐观并发指纹（分镜域，字段级作用域）============
+def _shots_token(scenes) -> str:
+    """全项目镜头【结构】指纹（sha256 前 8 位）。哈希对象 = 各段 shot_id 的有序列表
+    （段间含空段占位）：镜头增/删/移动会变；镜头内容修改、故事段内容修改、剧本正文
+    修改都不影响。供 shot.create / shot.delete / shot.move 乐观并发。"""
+    payload = json.dumps([[sh.shot_id for sh in (sc.shots or [])]
+                          for sc in (scenes or [])], ensure_ascii=False)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:8]
+
+
+# shot.update 允许修改的镜头【创作内容】字段（与 structure_service 白名单一致；
+# 明确排除：shot_id/scene_id（身份）、index（顺序由结构操作决定）、产物/批次/接力/状态字段）。
+SHOT_UPDATABLE_FIELDS = (
+    "description", "characters", "target_duration_s", "dialogue",
+    "shot_size", "camera", "camera_angle", "camera_movement",
+    "composition", "lighting", "motion", "motion_pace",
+    "environment_motion", "action_sequence",
+    "opening_state", "important_details", "required_elements",
+    "last_frame_description", "end_state", "frame_change",
+    "add_elements", "remove_elements", "end_composition",
+    "preserve_elements", "preserve_custom", "transition_description",
+    "video_preserve_elements", "video_preserve_custom",
+    "note",
+)
+_LIST_FIELDS = ("characters", "required_elements", "preserve_elements",
+                "video_preserve_elements")
+
+
+def _shot_view(shot: Shot) -> dict:
+    """单个镜头【可写内容字段】的有序视图（与 SHOT_UPDATABLE_FIELDS 对齐，stale 时
+    返回给 Agent 对比用）。"""
+    return {k: (list(getattr(shot, k, []) or []) if k in _LIST_FIELDS
+                else getattr(shot, k))
+            for k in SHOT_UPDATABLE_FIELDS}
+
+
+def _shot_token(shot: Shot) -> str:
+    """单个镜头的内容指纹（sha256 前 8 位）。哈希对象 = 该镜头【可写内容字段】的有序
+    映射。段内这些内容改动会变；shot_id/顺序变化、其它镜头改动、故事段内容改动都不影响
+    （字段级/镜头级作用域）。与 _shots_token（结构指纹）相互独立。"""
+    payload = json.dumps(_shot_view(shot), ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:8]
+
+
+def _shots_content_token(scenes) -> str:
+    """全项目镜头【内容】指纹（sha256 前 8 位）。任一镜头的可写内容改动都会变；
+    与 _shots_token（结构指纹）相互独立——增/删/移动会同时变两者，但内容改动只在本
+    令牌体现。供 shot.update_many 一次性校验多镜内容基线。"""
+    payload = json.dumps([_shot_view(sh) for sc in (scenes or [])
+                          for sh in (sc.shots or [])],
+                         ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:8]
+
+
+# ============ system ============
+def _build_system(proj) -> str:
+    """精简 system：只放职责、权限、工具说明、项目元信息（名称/段数/镜头数）。
+    不注入完整 story_text / scenes / shots 列表——Agent 需要时用读工具按需取。"""
+    n_shots = sum(len(sc.shots or []) for sc in (proj.scenes or []))
+    return DIRECTOR_SYSTEM.format(
+        project_name=proj.name or "（未命名）",
+        scenes_count=len(proj.scenes or []),
+        shots_count=n_shots,
+        max_create_batch=MAX_CREATE_BATCH,
+        max_update_batch=MAX_UPDATE_BATCH,
+    )
+
+
+DIRECTOR_SYSTEM = """你是 AGNES 的 Director（导演/分镜设计者），负责项目的【分镜模块】——把每个故事段的剧情转换成可用于动画制作的镜头（Shot）结构，并持续创建、修改、删除、排序这些镜头，维护镜头的拍摄方案（景别/机位/运镜/构图/光线/动作/节奏）。
+镜头数量、景别变化、机位与运镜、节奏与信息释放由你按剧情需要做专业判断：像真正的导演那样设计，而不是机械地把故事文本切成等长的句子。项目里已有的镜头结构、拍摄方案、风格基调是你的创作基础，用户没有要求改变的部分尽量保留。
+
+项目：{project_name}（{scenes_count} 个故事段，共 {shots_count} 个镜头）。
+
+权限边界（硬约束）：
+- 你【只】写镜头 canonical：创建/修改/删除/移动镜头及其拍摄字段。
+- 故事段（剧情文本）与剧本正文归 Script Writer、角色设定归 Character Designer——你可以【读】它们做导演依据，但【没有】任何修改它们的工具。如果发现故事段本身有剧情问题（不适合拍、逻辑断裂、信息缺失），直接告诉用户你的判断和建议，不要试图绕过去修改故事。
+
+你有这些工具：
+【读（不落盘，可一次发多个）】
+- story.list()：故事段地图（position 第几段/scene_id/摘要/角色/镜头数）。用户说「第8段」时用它把 position=8 解析成稳定 scene_id。做分镜任务的第一步。
+- story.read(scene_id)：读一个故事段的完整剧情文本。局部任务读目标段 + 前后相邻约 2~4 段即可（看剧情衔接/情绪延续）；信息不足再继续扩大，不要默认通读全文。
+- script.read()：剧本正文全文。仅在全片分镜检查、整体节奏分析、用户明确要求通读时用；单段落分镜不需要。
+- character.list()：角色名单（一句话描述/是否有三视图）。
+- character.read(character_name)：读一个角色的完整设定（外貌/身份/服装/气质）。给某段设计分镜前，把该段出场的角色读一遍，让画面设计符合角色形象。角色三视图资产状态仅供参考（是否有图）；你从文本设定理解角色，不假装看到了图片内容。
+- shot.list(scene_id?)：镜头地图。不带参数列所有故事段（含每段镜头 id 列表）；带 scene_id 列该段镜头的轻量信息（顺序/一句话描述/角色/时长/景别/是否有首帧/接力关系）。判断「这组镜头现状」用它，不要凭记忆。
+- shot.read(shot_id)：读一个镜头的完整拍摄方案 + 该镜头内容指纹。改某个镜头前先读它。
+- web.search(query)：搜索现实世界资料（真实职业动作/历史时期场景/摄影术语/设备与空间/地点参考）。仅当这些现实知识明显影响分镜可信度，或用户明确要求参考时使用；普通分镜设计不搜索。每轮最多 3 次。
+
+【写（必须一个一个来，每次用返回的最新指纹）】
+- shot.create(scene_id, description, …, after_shot_id?, expected_shots_revision)：给故事段补 1 个镜头（after_shot_id 省略则追加段尾）。只补 1 镜时用本工具。
+- shot.create_many(scene_id, shots[], after_shot_id?, expected_shots_revision)：一次创建一组镜头（≥2 镜；只补 1 镜用 shot.create）。【给一个故事段从无到有设计整组分镜，用本工具一次提交】；shots 数组顺序即镜头顺序。整批一次校验+一次原子写入，任一非法整批不写。
+- shot.update(shot_id, expected_revision, …)：精准修改一个镜头的任意拍摄字段（只传要改的）。用户说「第3镜改成近景」这类单镜要求时用本工具，不要重建整组。
+- shot.update_many(updates[], expected_revision)：一次修改 ≥{max_update_batch_prev} 个互相独立的镜头（「这组镜头整体重新设计得更有张力」）。每项 shot_id + 要改的字段；同镜多字段合并到一项。整批一次校验+一次原子写入。
+- shot.delete(shot_id)：删除一个镜头（系统会级联删除接力依赖它的下游镜头，并保留已生成文件）。用户明确要求删除时直接调用。
+- shot.move(shot_id, before_shot_id?/after_shot_id?, expected_shots_revision)：把一个镜头在同段内移到某镜之前/之后（都省略则移到段尾）。镜头顺序是状态依赖操作：多个移动必须一步一步来，每步用最新指纹，不要试图一次重排整组。
+
+🔴 最重要的铁律（违反即失败）：
+- 你只有通过【真正发起工具调用】（function/tool_calls）才能读/写数据。在回复里说「我已创建/已修改」但没有真正调用对应工具，等于什么都没做——这是严重错误。
+- 工具调用成功后，你只能依据工具【真实返回】的结果汇报；没看到 ok=true 与真实分配的 shot_id/顺序，就不能声称成功。
+- 不要编造 shot_id、scene_id、镜头数、指纹；这些值必须来自工具返回。
+- 版本指纹（expected_shots_revision / expected_revision）必须取自【本轮】工具返回值——历史对话里出现过的指纹一律视为过期，哪怕你记得很清楚。写工具返回 stale 时，直接用它回执里标注的正确指纹值重试。
+- 不确定当前状态时先用读取工具确认：定位故事段 → story.list；看某段已有镜头 → shot.list(scene_id=...)；看某镜现状 → shot.read(shot_id)。
+
+【给一个故事段设计分镜的标准工作流】（镜头数量、景别、节奏由你决定）：
+1. story.list() 把用户说的「第N段」定位成 scene_id；
+2. story.read 目标段 + 前后相邻 2~4 段，理解剧情、情绪与衔接；
+3. character.read 该段出场角色（不认识的角色先读设定）；
+4. shot.list(scene_id=...) 看该段是否已有镜头（有则考虑保留/修改，不要假设为空）；
+5. 按你的导演判断设计整组镜头，一次 shot.create_many 提交；
+6. 收尾用 shot.list 重新核对真实结果（数量/顺序/id），以工具返回为准向用户总结。
+
+【读取策略：最小充分上下文，按需扩大】
+- 单段分镜/单镜修改：读目标段及邻近段落 + 出场角色设定即可，不要 script.read 全文。
+- 全片分镜检查、整体节奏分析、用户明确要求通读：才 script.read。
+- 信息不足（伏笔/动机在更早剧情）时继续 story.read 扩大范围，而不是猜测。
+
+【镜头字段怎么填】（写给画面生成与制作协作的人看）：
+- description（必填）：这一镜的画面内容——谁在哪里做什么、视觉重点。中文，具体、可视化，不要抽象概括。
+- characters：出场角色名数组（来自 character.list 的真实名字，不认识的不要编）。
+- dialogue：本镜对白文本（配音 TTS 的输入，原样一句或几句；无对白留空）。
+- target_duration_s：目标时长秒数，按镜头内容定（短特写可以 2~3 秒，动作段 5~8 秒），不要机械统一。
+- 景别 shot_size 用英文值：extreme wide shot / wide shot / full shot / medium shot / medium close-up / close-up / extreme close-up。
+- camera_angle 机位角度（如 eye level / low angle / high angle / dutch angle）、camera_movement 运镜（如 static / slow push in / pan left / handheld follow）、composition 构图、lighting 光线、motion 画面里什么在动、motion_pace 动作节奏、opening_state 主体起始状态、important_details 重要细节/情绪氛围——这些字段直接决定画面生成，把你的导演意图写具体；没有明确意图就留空，不要塞占位词。
+- 改了影响画面的字段后，旧的自动提示词会被系统清空（下次生成按新方案重拼）；有手动 override 的会保留并在回执里说明。
+
+【聊天与探讨（用户没让你改东西时）】
+- 用户在提问、征求看法、讨论方案时（如「你觉得这段适合长镜头还是快剪」「这组镜头节奏怎么样」「低机位会不会更好」）：直接用自然语言回答，给出你的专业判断、方案比较和推荐。这类轮次【不调用写工具】；讨论中提到的改法不要自动执行，除非用户明确说改。
+- 回答需要事实依据时（某段已有镜头、某镜现状）才按需调用只读工具，然后继续讨论。
+- 用户认可方案并说「就这么改」之后，才真正执行写工具。
+
+【回复规范（只汇报本轮改动）】
+- 执行完写工具后，回复里【只汇报本轮真实执行的操作】：创建了哪些镜头（真实 shot_id 与一句话内容）、改了哪镜的哪些字段、删/移了什么。一两句到一小段即可，简述你的导演意图让用户理解思路。
+- 【不要】复述之前轮次已经做过的历史改动；【不要】凭记忆声称镜头数量/顺序——以最后那次 shot.list 的真实返回为准。
+- 简短回复不用罗列全部字段，挑关键变化说。
+
+【自主执行与询问】
+1. 默认自主完成。能根据用户表达、剧情或当前镜头状态合理确定意图，就直接执行，不要停下来问。
+2. 轻微歧义选最符合上下文和用户目标的解释继续。
+3. 不确定当前镜头/故事状态时，用读取工具确认，而不是问用户本可由工具获得的信息。
+4. 只有两个以上明显合理的理解且结果明显不同、又无法通过读取消除歧义时，才询问用户最关键的一点。
+
+【写工具必须一个一个来】（重要）：
+- 写工具必须【一个一个执行】：每发一个写工具调用，等它返回最新状态/指纹后再发下一个。同一次回复里发多个写工具时，系统只执行第 1 个，其余被拒绝。
+- 批量工具本身【一次调用完成整批】：整组创建一次放进 shot.create_many；多镜独立修改一次放进 shot.update_many——不要拆成多个调用，也不要混发多个写工具。
+- 只读工具可以一次发多个。
+
+【复杂操作要分解成多步】：
+- 多镜重排：多次 shot.move，每次移动一个、用最新指纹，每步看结果再继续。
+- 重构整组（用户明确说推倒重做）：先一次 shot.delete 删掉旧镜（或逐个删），再一次 shot.create_many 创建新组；用户没说推倒重做时【优先 update/update_many 保留可用的镜头】，不要默认全部删除重建。
+- 有接力关系的两个镜头（source_shot_id）之间不能插入新镜头——系统会拒绝并说明；可在接力链末端之后插入。
+- 用户说的「第N镜」指某段内 index=N 的镜头（或全局唯一时该镜头）；先 shot.list 确认 shot_id 再操作，不要用 _c 编号猜顺序（删除后编号跳号）。
+
+要求：
+- description/对白必须是中文内容本身，不要 markdown 标题、解释或代码块。
+- 版本指纹（8 位十六进制）必须原样回传 read/list/写工具返回值里的，不要编造。
+- after_shot_id 与 before_shot_id 不能同时给。
+- 一次只做用户要求的修改，不顺手改无关镜头；保留用户没有要求改变的有效部分。
+"""
+
+# 模板里不能用嵌套花括号引用其它占位符，这里手动替换批量上限的「上一个/本值」描述
+DIRECTOR_SYSTEM = DIRECTOR_SYSTEM.replace("{max_create_batch_prev}", str(MAX_CREATE_BATCH)) \
+                                 .replace("{max_update_batch_prev}", str(MAX_UPDATE_BATCH))
+
+
+# ============ 工具 schema（标准 OpenAI function 格式）============
+# 单镜拍摄字段（Director 核心导演字段；schema 之外的白名单字段由执行器兼容，
+# 见 SHOT_UPDATABLE_FIELDS）。description 是画面核心；shot_size 用英文景别值。
+_SHOT_FIELDS_PROPS = {
+    "description": {"type": "string",
+                    "description": "这一镜的画面内容：谁在哪里做什么、视觉重点。中文、具体、可视化，不要抽象概括。"},
+    "characters": {"type": "array", "items": {"type": "string"},
+                   "description": "出场角色名数组（来自 character.list 的真实名字）。"},
+    "dialogue": {"type": "string",
+                 "description": "本镜对白文本（配音 TTS 输入；无对白省略）。"},
+    "target_duration_s": {"type": "number",
+                          "description": "目标时长（秒）。按镜头内容定，不要机械统一。"},
+    "shot_size": {"type": "string",
+                  "description": "景别（英文值）：extreme wide shot / wide shot / full shot / medium shot / medium close-up / close-up / extreme close-up。"},
+    "camera_angle": {"type": "string",
+                     "description": "机位角度：eye level / low angle / high angle / dutch angle 等。"},
+    "camera_movement": {"type": "string",
+                        "description": "运镜：static / slow push in / pan left / handheld follow 等。"},
+    "composition": {"type": "string", "description": "构图要点。"},
+    "lighting": {"type": "string", "description": "光线设计。"},
+    "motion": {"type": "string", "description": "画面里什么在动（主体动作/环境运动）。"},
+    "motion_pace": {"type": "string", "description": "动作节奏（如 缓慢 / 急促）。"},
+    "opening_state": {"type": "string",
+                      "description": "主体起始状态（姿态/朝向/表情）。"},
+    "important_details": {"type": "string",
+                          "description": "重要细节/情绪氛围/质感。"},
+}
+
+_SHOT_CREATE_ITEMS_SCHEMA = {
+    "type": "object",
+    "properties": dict(_SHOT_FIELDS_PROPS),
+    "required": ["description"],
+}
+
+SHOT_CREATE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "shot.create",
+        "description": ("给一个故事段创建 1 个镜头，插到 after_shot_id 之后（省略则追加段尾）。"
+                        "只补单个镜头时用；给一个段从无到有设计整组分镜用 shot.create_many。"
+                        "创建前先 story.list/story.read 理解剧情、shot.list 看该段已有镜头，"
+                        "不要凭假设操作。id 与顺序由后端分配。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "scene_id": {"type": "string", "description": "目标故事段 id（如 s08）。"},
+                "after_shot_id": {"type": "string",
+                                  "description": "插到该镜头之后（可选，须同段；省略则追加段尾）。"},
+                "expected_shots_revision": {
+                    "type": "string",
+                    "description": "你最近一次 shot.list 看到的镜头结构版本指纹（revision，8 位十六进制）。用于乐观并发。",
+                },
+                **_SHOT_FIELDS_PROPS,
+            },
+            "required": ["scene_id", "description", "expected_shots_revision"],
+        },
+    },
+}
+
+SHOT_CREATE_MANY_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "shot.create_many",
+        "description": (
+            "一次创建一组镜头（同一故事段要新建 ≥2 镜时优先用本工具，【给一个故事段设计整组"
+            "分镜就用它一次提交】，不要连续多次调 shot.create）。shots 数组顺序 = 创建后的"
+            "镜头顺序（追加到段尾或 after_shot_id 之后）。整批只做一次乐观并发校验、一次原子"
+            "写入；任一镜头非法则整批不写入（不留半成功）。id 由后端分配，你不能指定。"
+            f"单批建议不超过 {MAX_CREATE_BATCH} 镜——镜头很多时分多批提交，每批之间用"
+            "工具返回的最新指纹。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "scene_id": {"type": "string", "description": "目标故事段 id（如 s08）。"},
+                "shots": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": MAX_CREATE_BATCH,
+                    "description": f"要创建的镜头数组（{2}~{MAX_CREATE_BATCH} 项；只创建 1 镜请用 shot.create），数组顺序即镜头顺序。",
+                    "items": _SHOT_CREATE_ITEMS_SCHEMA,
+                },
+                "after_shot_id": {"type": "string",
+                                  "description": "整批插到该镜头之后（可选，须同段；省略则追加段尾）。"},
+                "expected_shots_revision": {
+                    "type": "string",
+                    "description": "你最近一次 shot.list 返回的镜头结构版本指纹（revision 字段，8 位十六进制）。用于乐观并发。",
+                },
+            },
+            "required": ["scene_id", "shots", "expected_shots_revision"],
+        },
+    },
+}
+
+SHOT_UPDATE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "shot.update",
+        "description": (
+            "精准修改【一个】镜头的拍摄字段（只传要改的字段）。必须先 shot.read(shot_id) 拿到"
+            "该镜头内容指纹 expected_revision 并原样回传。用户只要求改某一镜（如「第3镜改成"
+            "近景」）时用本工具，不要重建整组镜头。不能改 shot_id/scene_id/顺序；产物、接力"
+            "来源（opening_source/source_shot_id）不在本工具范围。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "shot_id": {"type": "string", "description": "要修改的镜头 id（如 s08_c03）。"},
+                "expected_revision": {
+                    "type": "string",
+                    "description": "你最近一次 shot.read(shot_id) 看到的该镜头内容指纹（revision，8 位十六进制）。期间该镜头被改动会拒绝写入并返回最新内容。",
+                },
+                **_SHOT_FIELDS_PROPS,
+            },
+            "required": ["shot_id", "expected_revision"],
+        },
+    },
+}
+
+SHOT_UPDATE_MANY_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "shot.update_many",
+        "description": (
+            "一次修改多个【互相独立、已存在】的镜头（用户对整组镜头不满意、要大面积调整时"
+            "优先用本工具，不要逐个 shot.update 循环）。每个 update 项用稳定 shot_id 指定目标"
+            "+ 只传要改的字段；同一镜头的多字段合并到一项、同一 shot_id 一批只出现一次。"
+            "整批一次乐观并发校验、一次原子写入，任一 shot_id 不存在/重复则整批不写入。"
+            "可以跨故事段选镜头。expected_revision 用 shot.list 返回的 shots_content_revision"
+            "（内容指纹，非结构指纹）。用户没有要求改变的镜头【不要】放进 updates。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "updates": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": MAX_UPDATE_BATCH,
+                    "description": f"要修改的镜头数组（{2}~{MAX_UPDATE_BATCH} 项；只改 1 镜请用 shot.update）。",
+                    "items": {
+                        "type": "object",
+                        "properties": {"shot_id": {"type": "string"},
+                                       **_SHOT_FIELDS_PROPS},
+                        "required": ["shot_id"],
+                    },
+                },
+                "expected_revision": {
+                    "type": "string",
+                    "description": "你最近一次 shot.list 返回的 shots_content_revision（内容版本指纹，8 位十六进制）。期间任一镜头内容被改动会拒绝写入并返回最新。",
+                },
+            },
+            "required": ["updates", "expected_revision"],
+        },
+    },
+}
+
+SHOT_DELETE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "shot.delete",
+        "description": (
+            "删除一个【已存在】的镜头。系统会级联删除以它为接力来源（source_shot_id）的下游"
+            "镜头，回执里会列出实际删了哪些。用户明确要求删除某镜时直接调用本工具，不需要"
+            "先预览再确认。删完后用 shot.list 核对真实结果。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "shot_id": {"type": "string", "description": "要删除的镜头 id（如 s08_c02）。"},
+            },
+            "required": ["shot_id"],
+        },
+    },
+}
+
+SHOT_MOVE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "shot.move",
+        "description": (
+            "把一个镜头移动到同一故事段内某镜之前/之后（都省略则移到段尾）。不改 shot_id。"
+            "镜头顺序是状态依赖操作：【多个移动必须一步一步来】，每次移动后用工具返回的最新"
+            "指纹发下一步，不要试图一次提交整组重排（没有批量 move 工具）。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "shot_id": {"type": "string", "description": "要移动的镜头 id。"},
+                "before_shot_id": {"type": "string",
+                                   "description": "移到该镜头之前（可选，须同段，与 after 二选一）。"},
+                "after_shot_id": {"type": "string",
+                                  "description": "移到该镜头之后（可选，须同段，与 before 二选一）。省略且无 before 则移到段尾。"},
+                "expected_shots_revision": {
+                    "type": "string",
+                    "description": "你最近一次 shot.list 看到的镜头结构版本指纹（8 位十六进制）。用于乐观并发。",
+                },
+            },
+            "required": ["shot_id", "expected_shots_revision"],
+        },
+    },
+}
+
+SHOT_LIST_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "shot.list",
+        "description": (
+            "镜头地图（轻量，不返回完整拍摄方案）。不带参数：列所有故事段（position/scene_id/"
+            "摘要/角色/镜头数/各段镜头 id 列表）+ 镜头结构指纹 revision 与内容指纹 "
+            "shots_content_revision。带 scene_id：列该段镜头的顺序/一句话描述/角色/时长/景别/"
+            "是否有首帧/接力关系。分镜任务【第一步】用它看现状；改镜头前先定位 shot_id。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "scene_id": {"type": "string",
+                             "description": "可选。只看这个故事段的镜头（如 s08）。"},
+            },
+        },
+    },
+}
+
+SHOT_READ_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "shot.read",
+        "description": (
+            "读取一个镜头的完整拍摄方案（描述/角色/对白/时长/景别/机位/运镜/构图/光线/动作/"
+            "接力关系/生成状态）+ 该镜头内容指纹 expected_revision（shot.update 要用）。"
+            "修改某个镜头前先读它。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "shot_id": {"type": "string", "description": "镜头 id（如 s08_c03）。"},
+            },
+            "required": ["shot_id"],
+        },
+    },
+}
+
+STORY_LIST_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "story.list",
+        "description": ("故事段地图：列出所有故事段（position 第几段/scene_id/摘要/出场角色/"
+                        "镜头数）。用户说「第N段」时用它解析成稳定 scene_id；做分镜任务的第一步。"
+                        "只读，不返回剧情全文。"),
+        "parameters": {"type": "object", "properties": {}},
+    },
+}
+
+STORY_READ_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "story.read",
+        "description": ("读取一个故事段的完整剧情文本（分镜创作的剧本依据）。局部任务读目标段"
+                        "+ 前后相邻约 2~4 段；剧情信息不足再扩大读取范围，不要默认通读全文。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "scene_id": {"type": "string", "description": "故事段 id（如 s08）。"},
+            },
+            "required": ["scene_id"],
+        },
+    },
+}
+
+SCRIPT_READ_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "script.read",
+        "description": ("读取剧本正文全文。仅在全片分镜检查、整体节奏/风格分析、用户明确要求"
+                        "通读时使用；单个故事段的分镜设计不需要读全文（用 story.list/story.read）。"),
+        "parameters": {"type": "object", "properties": {}},
+    },
+}
+
+CHARACTER_LIST_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "character.list",
+        "description": "角色名单（名字/一句话描述/是否有三视图）。分镜任务里先看有哪些角色可用。",
+        "parameters": {"type": "object", "properties": {}},
+    },
+}
+
+CHARACTER_READ_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "character.read",
+        "description": ("读取一个角色的完整文本设定（外貌/身份/服装/气质）与其出场故事段。"
+                        "给某段设计分镜前，把该段出场的角色读一遍，让画面符合角色形象。"
+                        "三视图资产状态仅供参考；从文本设定理解角色。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "character_name": {"type": "string", "description": "角色名。"},
+            },
+            "required": ["character_name"],
+        },
+    },
+}
+
+WEB_SEARCH_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "web.search",
+        "description": ("搜索现实世界资料，返回约 3 条「标题+摘要+链接」。仅在两种情况使用："
+                        "①用户明确要求搜索/参考某种真实资料；②分镜涉及现实知识明显影响可信度"
+                        "（特殊职业真实动作、历史时期场景、摄影/导演术语、真实设备与空间、地点"
+                        "参考、特殊运动方式）。普通分镜设计不搜索。每轮最多 3 次。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string",
+                          "description": "简洁、聚焦一个具体问题的中文搜索词。"},
+            },
+            "required": ["query"],
+        },
+    },
+}
+
+DIRECTOR_TOOLS = [
+    SHOT_LIST_TOOL, SHOT_READ_TOOL, SHOT_CREATE_TOOL, SHOT_CREATE_MANY_TOOL,
+    SHOT_UPDATE_TOOL, SHOT_UPDATE_MANY_TOOL, SHOT_DELETE_TOOL, SHOT_MOVE_TOOL,
+    STORY_LIST_TOOL, STORY_READ_TOOL, SCRIPT_READ_TOOL,
+    CHARACTER_LIST_TOOL, CHARACTER_READ_TOOL,
+    WEB_SEARCH_TOOL,
+]
+
+
+# ============ 工具执行 ============
+def _load_proj(rt: AgentRuntime, project: str):
+    pdir = rt._resolve_project_dir(project)
+    return pdir, ProjectStore(pdir), ProjectStore(pdir).load()
+
+
+def _reload(rt: AgentRuntime, project: str):
+    """从 canonical（磁盘）重新读取项目——写后校验只用这份，绝不用内存对象。"""
+    pdir = rt._resolve_project_dir(project)
+    return ProjectStore(pdir).load()
+
+
+def _find_scene(proj: Project, scene_id: str):
+    return next((s for s in proj.scenes if s.scene_id == scene_id), None)
+
+
+def _find_shot(proj: Project, shot_id: str):
+    return proj.get_shot(shot_id)
+
+
+def _shot_scene_of(proj: Project, shot_id: str):
+    """镜头所在 (Scene, Shot)；找不到镜头返回 (None, None)。"""
+    for sc in proj.scenes:
+        for sh in sc.shots:
+            if sh.shot_id == shot_id:
+                return sc, sh
+    return None, None
+
+
+def _clean_shot_fields(fields: dict, valid_chars: set) -> tuple[dict, list]:
+    """把 LLM 给的镜头字段清洗成结构服务可写的形式。返回 (cleaned, dropped_characters)：
+    - 白名单外/None 字段剔除（schema 已约束，仍防御）；
+    - characters 按项目已有角色过滤，被剔除的名字单独返回（让 Agent 知情而非静默丢失）；
+    - 字符串字段 strip；其余原样透传（类型/兜底由 update_shot_fields 负责）。"""
+    out: dict = {}
+    dropped: list = []
+    for k, v in (fields or {}).items():
+        if v is None or k not in SHOT_UPDATABLE_FIELDS:
+            continue
+        if k == "characters":
+            names = [str(x).strip() for x in (v if isinstance(v, list) else [v])
+                     if str(x).strip()]
+            kept = [n for n in names if not valid_chars or n in valid_chars]
+            dropped.extend(n for n in names if n not in kept)
+            out[k] = kept
+        elif isinstance(v, str):
+            out[k] = v.strip()
+        else:
+            out[k] = v
+    return out, dropped
+
+
+def _split_spec(cleaned: dict) -> tuple[dict, dict]:
+    """把清洗后的字段拆成 insert_shots_after 的 spec（description/characters/
+    target_duration_s）与其余拍摄字段（插入后用 update_shot_fields 补齐）。"""
+    base = {}
+    for k in ("description", "characters", "target_duration_s"):
+        if k in cleaned:
+            base[k] = cleaned.pop(k)
+    return base, cleaned
+
+
+def _shot_light_view(shot: Shot) -> dict:
+    """shot.list(scene_id) 用的轻量镜头视图。"""
+    return {"index": shot.index, "shot_id": shot.shot_id,
+            "description": (shot.description or "")[:80],
+            "characters": list(shot.characters or []),
+            "target_duration_s": shot.target_duration_s,
+            "shot_size": shot.shot_size or "",
+            "has_first_frame": bool(shot.first_frame and shot.first_frame.ready),
+            "has_video": bool(shot.video and shot.video.local),
+            "opening_source": shot.opening_source or "",
+            "source_shot_id": shot.source_shot_id}
+
+
+def _execute_shot_list(rt: AgentRuntime, project: str, arguments: str,
+                       instruction, message_id) -> dict:
+    """镜头地图（轻量）。无 scene_id：所有段（position/scene_id/摘要/角色/镜头数/
+    镜头 id 列表）；有 scene_id：该段镜头轻量列表。都返回结构指纹 revision + 内容指纹
+    shots_content_revision（写工具乐观并发令牌）。只读。"""
+    args = _parse_args(arguments) if arguments else {}
+    scene_id = (args.get("scene_id") or "").strip()
+    _, _, proj = _load_proj(rt, project)
+
+    if scene_id:
+        scene = _find_scene(proj, scene_id)
+        if scene is None:
+            raise AgentError("not_found", f"故事段不存在: {scene_id}")
+        return {"ok": True, "scene_id": scene_id,
+                "scene_summary": (scene.summary or "")[:120],
+                "shot_count": len(scene.shots or []),
+                "shots": [_shot_light_view(sh) for sh in scene.shots],
+                "revision": _shots_token(proj.scenes),
+                "shots_content_revision": _shots_content_token(proj.scenes)}
+    scenes = [{"position": idx, "scene_id": sc.scene_id,
+               "summary": (sc.summary or "")[:120],
+               "characters": list(sc.characters or []),
+               "shot_count": len(sc.shots or []),
+               "shot_ids": [sh.shot_id for sh in sc.shots]}
+              for idx, sc in enumerate(proj.scenes, start=1)]
+    return {"ok": True, "count": len(scenes), "scenes": scenes,
+            "revision": _shots_token(proj.scenes),
+            "shots_content_revision": _shots_content_token(proj.scenes)}
+
+
+def _execute_shot_read(rt: AgentRuntime, project: str, arguments: str,
+                       instruction, message_id) -> dict:
+    """读取一个镜头完整创作参数（structure_service.read_shot 白名单）+ 生成资产状态
+    + 该镜头内容指纹（供 shot.update 乐观并发）。只读。"""
+    args = _parse_args(arguments)
+    shot_id = (args.get("shot_id") or "").strip()
+    if not shot_id:
+        raise AgentError("bad_arguments", "缺少 shot_id")
+    _, _, proj = _load_proj(rt, project)
+    shot = _find_shot(proj, shot_id)
+    if shot is None:
+        raise AgentError("not_found", f"镜头不存在: {shot_id}")
+    data = read_shot(proj, shot_id)
+    data["has_first_frame"] = bool(shot.first_frame and shot.first_frame.ready)
+    data["has_video"] = bool(shot.video and shot.video.local)
+    return {"ok": True, "shot_id": shot_id, "revision": _shot_token(shot),
+            "shot": data}
+
+
+def _create_shots_impl(rt: AgentRuntime, project: str, arguments: str,
+                       instruction: str, message_id: Optional[str],
+                       *, expect_many: bool) -> dict:
+    """shot.create / shot.create_many 共同实现：
+    OCC（结构指纹）→ 整批预检（任一非法整批不写）→ 插入分配 id → 补拍摄字段 →
+    一次原子写 → 重读 canonical 验证 → 统一回执。"""
+    args = _parse_args(arguments)
+    scene_id = (args.get("scene_id") or "").strip()
+    expected_rev = args.get("expected_shots_revision")
+    after_shot_id = (args.get("after_shot_id") or "").strip() or None
+    if not scene_id:
+        raise AgentError("bad_arguments", "缺少 scene_id")
+    if not isinstance(expected_rev, str) or not expected_rev.strip():
+        raise AgentError("bad_arguments",
+                         "缺少 expected_shots_revision（应先 shot.list 拿到镜头结构指纹再传回）")
+
+    if expect_many:
+        raw_specs = _loose_json(args.get("shots"))
+        if not isinstance(raw_specs, list) or len(raw_specs) < 2:
+            raise AgentError("bad_arguments",
+                             "shots 必须是至少 2 项的数组（只创建 1 镜请用 shot.create）")
+        if len(raw_specs) > MAX_CREATE_BATCH:
+            raise AgentError("bad_arguments",
+                             f"单批最多 {MAX_CREATE_BATCH} 个镜头（收到 {len(raw_specs)}）。"
+                             "镜头很多时分多批提交，每批之间用工具返回的最新指纹。")
+    else:
+        raw_specs = [args]
+
+    op = "shot.create_many" if expect_many else "shot.create"
+    pdir, pstore, proj = _load_proj(rt, project)
+    scene = _find_scene(proj, scene_id)
+    if scene is None:
+        raise AgentError("not_found", f"故事段不存在: {scene_id}")
+
+    # OCC：结构指纹（镜头增删/移动会变；内容修改不影响）
+    before_rev = _shots_token(proj.scenes)
+    if expected_rev != before_rev:
+        return _base_receipt(
+            op, ok=False, target=f"scene:{scene_id}",
+            revision=before_rev, verified=False, error="stale_revision", stale=True,
+            scene_id=scene_id,
+            expected_revision=expected_rev, current_revision=before_rev,
+            current_shots=[[sh.shot_id for sh in sc.shots] for sc in proj.scenes],
+            note=f"stale：你传的 expected_shots_revision={expected_rev} 不是当前值"
+                 f"（可能是历史对话里出现过的旧指纹）。当前正确的指纹是 "
+                 f"expected_shots_revision=\"{before_rev}\"——直接把它原样填进去重新调用"
+                 f"本工具即可；不要用历史消息里出现过的任何指纹，也不要用 "
+                 f"shots_content_revision 或 story.list 返回的 revision。")
+
+    # 整批预检：description 必填、characters 过滤，任一非法整批不写
+    valid_chars = {c.name for c in proj.characters}
+    cleaned_specs: list[dict] = []
+    all_dropped: list[str] = []
+    for i, raw in enumerate(raw_specs):
+        if not isinstance(raw, dict):
+            raise AgentError("bad_arguments", f"shots[{i}] 必须是对象")
+        desc = str(raw.get("description") or "").strip()
+        if not desc:
+            raise AgentError("bad_arguments",
+                             f"shots[{i}].description 不能为空（每个镜头都要有画面描述）")
+        cleaned, dropped = _clean_shot_fields(raw, valid_chars)
+        cleaned["description"] = desc
+        all_dropped.extend(dropped)
+        cleaned_specs.append(cleaned)
+    if after_shot_id and not any(sh.shot_id == after_shot_id for sh in scene.shots):
+        raise AgentError("not_found",
+                         f"after_shot_id {after_shot_id} 不在故事段 {scene_id} 内")
+    before_order = [[sh.shot_id for sh in sc.shots] for sc in proj.scenes]
+
+    # 插入（分配 id / index 重排）→ 每镜补齐拍摄字段 → 一次原子写
+    insert_specs, extras = [], []
+    for cleaned in cleaned_specs:
+        base, extra = _split_spec(dict(cleaned))
+        insert_specs.append(base)
+        extras.append(extra)
+    try:
+        new_shots = insert_shots_after(proj, scene_id, after_shot_id, insert_specs)
+    except StructureError as e:
+        raise AgentError(e.code, e.message)
+    for sh, extra in zip(new_shots, extras):
+        if extra:
+            try:
+                update_shot_fields(proj, sh.shot_id, extra)
+            except StructureError:
+                pass   # 刚插入的镜头必然存在，防御性忽略
+    pstore.save(proj)
+
+    # 写后重读 canonical 校验：每个新镜头确实落盘且描述一致，其余段结构未受影响
+    on_disk = _reload(rt, project)
+    disk_scene = _find_scene(on_disk, scene_id)
+    after_order = [[sh.shot_id for sh in sc.shots] for sc in on_disk.scenes]
+    created: list[dict] = []
+    verified = disk_scene is not None and after_order != before_order
+    if verified:
+        for spec, sh in zip(cleaned_specs, new_shots):
+            d = _find_shot(on_disk, sh.shot_id)
+            if d is None or (d.description or "") != spec["description"]:
+                verified = False
+                break
+            created.append({"shot_id": d.shot_id, "index": d.index,
+                            "description": d.description,
+                            "characters": list(d.characters or []),
+                            "target_duration_s": d.target_duration_s,
+                            "shot_size": d.shot_size or ""})
+    if not verified:
+        return _base_receipt(
+            op, ok=False, target=f"scene:{scene_id}", scene_id=scene_id,
+            revision=_shots_token(on_disk.scenes), verified=False,
+            error="verify_failed",
+            note="写入后重新读取发现结果与预期不一致，未确认创建。请用 shot.list 读取"
+                 "最新镜头列表后重试。")
+
+    DirectEditAuditStore(pdir, project).record(
+        agent_id="director", field=f"create_shots:{scene_id}", before=before_order,
+        after=after_order, instruction=instruction, message_id=message_id)
+    ids = [c["shot_id"] for c in created]
+    rt.record_work(project, "change",
+                   f"Director 在故事段 {scene_id} 创建了 {len(created)} 个镜头"
+                   f"（{', '.join(ids)}）",
+                   participants=["director"], affected_domains=["storyboard"],
+                   references={"scene_id": scene_id}, status="completed")
+    note = (f"已在故事段 {scene_id} 创建 {len(created)} 个镜头（{', '.join(ids)}），"
+            "顺序即提交顺序。请用 shot.list 核对后向用户总结。")
+    if all_dropped:
+        note += (f" 注意：characters 里这些名字不在项目角色中，已被忽略："
+                 f"{', '.join(sorted(set(all_dropped)))}。")
+    return _base_receipt(
+        op, ok=True, target=f"scene:{scene_id}",
+        before=before_order, after=after_order,
+        revision=_shots_token(on_disk.scenes), verified=True, unchanged=False,
+        scene_id=scene_id, created=created, count=len(created),
+        shots_revision=_shots_token(on_disk.scenes),
+        shots_content_revision=_shots_content_token(on_disk.scenes),
+        note=note)
+
+
+def _execute_shot_create(rt: AgentRuntime, project: str, arguments: str,
+                         instruction, message_id) -> dict:
+    """shot.create：给故事段补 1 个镜头（含完整拍摄字段）。"""
+    return _create_shots_impl(rt, project, arguments, instruction, message_id,
+                              expect_many=False)
+
+
+def _execute_shot_create_many(rt: AgentRuntime, project: str, arguments: str,
+                              instruction, message_id) -> dict:
+    """shot.create_many：一次创建一组镜头（≥2）。整批一次 OCC + 一次原子写入。"""
+    return _create_shots_impl(rt, project, arguments, instruction, message_id,
+                              expect_many=True)
+
+
+def _execute_shot_update(rt: AgentRuntime, project: str, arguments: str,
+                         instruction, message_id) -> dict:
+    """shot.update：精准修改一个镜头的拍摄字段。OCC（镜头级内容指纹）→ 无实际变更
+    no-op → 内存改 → 原子写 → 重读 canonical 验证 → 回执。"""
+    args = _parse_args(arguments)
+    shot_id = (args.get("shot_id") or "").strip()
+    expected_rev = args.get("expected_revision")
+    if not shot_id:
+        raise AgentError("bad_arguments", "缺少 shot_id")
+    if not isinstance(expected_rev, str) or not expected_rev.strip():
+        raise AgentError("bad_arguments",
+                         "缺少 expected_revision（应先 shot.read(shot_id) 拿到该镜头内容指纹再传回）")
+
+    pdir, pstore, proj = _load_proj(rt, project)
+    scene, shot = _shot_scene_of(proj, shot_id)
+    if shot is None:
+        raise AgentError("not_found", f"镜头不存在: {shot_id}")
+
+    before_token = _shot_token(shot)
+    if expected_rev != before_token:
+        return _base_receipt(
+            "shot.update", ok=False, target=shot_id,
+            revision=before_token, verified=False, error="stale_revision", stale=True,
+            shot_id=shot_id, scene_id=scene.scene_id,
+            expected_revision=expected_rev, current_revision=before_token,
+            current_shot=_shot_view(shot),
+            note=f"stale：你传的 expected_revision={expected_rev} 不是当前值"
+                 f"（可能是历史对话里出现过的旧指纹）。当前正确的指纹是 "
+                 f"expected_revision=\"{before_token}\"——直接把它原样填进去重新调用"
+                 f"本工具即可；不要用历史消息里出现过的任何指纹。")
+
+    valid_chars = {c.name for c in proj.characters}
+    cleaned, dropped = _clean_shot_fields(args, valid_chars)
+    cleaned.pop("shot_id", None)
+    if not cleaned:
+        return _base_receipt(
+            "shot.update", ok=True, target=shot_id, shot_id=shot_id,
+            scene_id=scene.scene_id, revision=before_token, verified=True,
+            unchanged=True, changed=[],
+            note="没有提供任何要修改的字段（或提供的值均为空），镜头未改动。")
+    # 无实际变更（给的值与现值完全一致）→ no-op
+    real_diff = {k: v for k, v in cleaned.items() if _shot_view(shot).get(k) != v}
+    if not real_diff:
+        return _base_receipt(
+            "shot.update", ok=True, target=shot_id, shot_id=shot_id,
+            scene_id=scene.scene_id, revision=before_token, verified=True,
+            unchanged=True, changed=[],
+            note="提供的字段值与镜头当前内容完全一致，未产生变化。")
+
+    before_view = _shot_view(shot)
+    try:
+        res = update_shot_fields(proj, shot_id, real_diff)
+    except StructureError as e:
+        raise AgentError(e.code, e.message)
+    after_values = {k: _shot_view(shot).get(k) for k in real_diff}
+    pstore.save(proj)
+
+    # 写后重读 canonical 验证：变更字段确实落盘
+    on_disk = _reload(rt, project)
+    disk_shot = _find_shot(on_disk, shot_id)
+    verified = disk_shot is not None and all(
+        _shot_view(disk_shot).get(k) == v for k, v in after_values.items())
+    if not verified:
+        return _base_receipt(
+            "shot.update", ok=False, target=shot_id, shot_id=shot_id,
+            scene_id=scene.scene_id,
+            revision=(_shot_token(disk_shot) if disk_shot else ""), verified=False,
+            error="verify_failed",
+            note="修改后重新读取发现内容与预期不一致，未确认修改。请用 shot.read 读取"
+                 "该镜头最新内容后重试。")
+
+    DirectEditAuditStore(pdir, project).record(
+        agent_id="director", field=f"update_shot:{shot_id}",
+        before={k: before_view.get(k) for k in real_diff},
+        after=after_values, instruction=instruction, message_id=message_id)
+    changed_zh = "、".join(res["changed"])
+    rt.record_work(project, "change",
+                   f"Director 修改了镜头 {shot_id}（{changed_zh}）",
+                   participants=["director"], affected_domains=["storyboard"],
+                   references={"shot_id": shot_id}, status="completed")
+    note = f"镜头 {shot_id} 已更新（{changed_zh}）。"
+    if dropped:
+        note += (f" characters 里这些名字不在项目角色中，已被忽略："
+                 f"{', '.join(sorted(set(dropped)))}。")
+    inval = res.get("prompts_invalidated") or {}
+    if any(v == "cleared" for v in inval.values()):
+        note += " 旧自动提示词已清空，下次生成按新方案重拼。"
+    if any(v == "manual_override" for v in inval.values()):
+        note += " 该镜有手动提示词 override，已保留。"
+    return _base_receipt(
+        "shot.update", ok=True, target=shot_id,
+        before={k: before_view.get(k) for k in real_diff}, after=after_values,
+        revision=_shot_token(disk_shot), verified=True, unchanged=False,
+        shot_id=shot_id, scene_id=scene.scene_id, changed=list(real_diff.keys()),
+        prompts_invalidated=inval,
+        shots_content_revision=_shots_content_token(on_disk.scenes),
+        note=note)
+
+
+def _execute_shot_update_many(rt: AgentRuntime, project: str, arguments: str,
+                              instruction, message_id) -> dict:
+    """shot.update_many：一次修改多个互相独立的镜头（可跨段）。整批一次 OCC
+    （全项目镜头内容指纹）+ 预检 + 一次原子写入 + 重读验证。"""
+    args = _parse_args(arguments)
+    expected_rev = args.get("expected_revision")
+    raw_updates = _loose_json(args.get("updates"))
+    if not isinstance(raw_updates, list) or len(raw_updates) < 2:
+        raise AgentError("bad_arguments",
+                         "updates 必须是至少 2 项的数组（只改 1 镜请用 shot.update）")
+    if len(raw_updates) > MAX_UPDATE_BATCH:
+        raise AgentError("bad_arguments",
+                         f"单批最多 {MAX_UPDATE_BATCH} 个镜头更新（收到 {len(raw_updates)}）。"
+                         "分多批提交，每批之间用工具返回的最新指纹。")
+
+    pdir, pstore, proj = _load_proj(rt, project)
+
+    before_token = _shots_content_token(proj.scenes)
+    if (not isinstance(expected_rev, str)
+            or expected_rev.strip() != before_token):
+        return _base_receipt(
+            "shot.update_many", ok=False, target=None,
+            revision=before_token, verified=False, error="stale_revision", stale=True,
+            expected_revision=expected_rev, current_revision=before_token,
+            note=f"stale：你传的 expected_revision={expected_rev} 不是当前值"
+                 f"（可能是历史对话里出现过的旧指纹）。当前正确的指纹是 "
+                 f"expected_revision=\"{before_token}\"（shots_content_revision）——直接把它"
+                 f"原样填进去重新调用本工具即可；不要用历史消息里出现过的任何指纹，也不要用"
+                 f" shot.list 返回的 revision（那是结构指纹）。")
+
+    # 整批预检：shot_id 存在、不重复、有真实字段变更；任一非法整批不写
+    valid_chars = {c.name for c in proj.characters}
+    prepared: list[tuple[Any, str, dict]] = []   # (shot, shot_id, real_diff)
+    all_dropped: list[str] = []
+    seen_ids: set = set()
+    for i, item in enumerate(raw_updates):
+        if not isinstance(item, dict) or not str(item.get("shot_id") or "").strip():
+            raise AgentError("bad_arguments", f"updates[{i}] 缺少 shot_id")
+        sid = str(item["shot_id"]).strip()
+        if sid in seen_ids:
+            raise AgentError("bad_arguments",
+                             f"updates[{i}] 的 shot_id {sid} 在本批重复：同一镜头的多个"
+                             "字段要合并到一项。")
+        seen_ids.add(sid)
+        shot = _find_shot(proj, sid)
+        if shot is None:
+            raise AgentError("not_found", f"镜头 {sid} 不存在（整批未写入）")
+        cleaned, dropped = _clean_shot_fields(
+            {k: v for k, v in item.items() if k != "shot_id"}, valid_chars)
+        all_dropped.extend(dropped)
+        if not cleaned:
+            raise AgentError("bad_arguments",
+                             f"updates[{i}]（{sid}）没有提供任何要修改的字段（整批未写入）")
+        real_diff = {k: v for k, v in cleaned.items() if _shot_view(shot).get(k) != v}
+        prepared.append((shot, sid, real_diff))
+    prepared = [(sh, sid, d) for (sh, sid, d) in prepared if d]
+
+    if not prepared:
+        return _base_receipt(
+            "shot.update_many", ok=True, target=None, revision=before_token,
+            verified=True, unchanged=True, results=[],
+            note="提供的字段值与各镜头当前内容完全一致，未产生变化。")
+
+    # 内存逐镜应用（沿用 update_shot_fields 的类型兜底/prompt 失效），一次原子写
+    results = []
+    for shot, sid, real_diff in prepared:
+        res = update_shot_fields(proj, sid, real_diff)
+        results.append({"shot_id": sid, "changed": res["changed"],
+                        "prompts_invalidated": res.get("prompts_invalidated", {}),
+                        "scene_id": shot.scene_id})
+    pstore.save(proj)
+
+    # 写后重读 canonical 验证
+    on_disk = _reload(rt, project)
+    verified = True
+    for shot, sid, real_diff in prepared:
+        d = _find_shot(on_disk, sid)
+        if d is None or any(_shot_view(d).get(k) != v for k, v in real_diff.items()):
+            verified = False
+            break
+    if not verified:
+        return _base_receipt(
+            "shot.update_many", ok=False, target=None,
+            revision=_shots_content_token(on_disk.scenes), verified=False,
+            error="verify_failed",
+            note="写入后重新读取发现结果与预期不一致，未确认修改。请用 shot.list 读取"
+                 "最新镜头内容后重试。")
+
+    DirectEditAuditStore(pdir, project).record(
+        agent_id="director", field="update_shots_many", before=None,
+        after=[r["shot_id"] for r in results],
+        instruction=instruction, message_id=message_id)
+    rt.record_work(project, "change",
+                   f"Director 批量修改了 {len(results)} 个镜头",
+                   participants=["director"], affected_domains=["storyboard"],
+                   references={}, status="completed")
+    note = (f"已批量修改 {len(results)} 个镜头"
+            f"（{', '.join(r['shot_id'] for r in results)}）。请用 shot.list 核对后向用户总结。")
+    if all_dropped:
+        note += (f" characters 里这些名字不在项目角色中，已被忽略："
+                 f"{', '.join(sorted(set(all_dropped)))}。")
+    return _base_receipt(
+        "shot.update_many", ok=True, target=None,
+        revision=_shots_content_token(on_disk.scenes), verified=True, unchanged=False,
+        results=results, count=len(results),
+        shots_content_revision=_shots_content_token(on_disk.scenes),
+        shots_revision=_shots_token(on_disk.scenes),
+        note=note)
+
+
+def _execute_shot_delete(rt: AgentRuntime, project: str, arguments: str,
+                         instruction, message_id) -> dict:
+    """shot.delete：级联删除一个镜头（含接力下游）。活跃生产护栏 → delete_service
+    确定性级联（依赖由代码算，不由 LLM）→ 重读验证 → 回执。"""
+    from src.storyboard.delete_service import execute_delete, DeleteError
+    args = _parse_args(arguments)
+    shot_id = (args.get("shot_id") or "").strip()
+    if not shot_id:
+        raise AgentError("bad_arguments", "缺少 shot_id")
+    pdir, _, proj = _load_proj(rt, project)
+    scene, shot = _shot_scene_of(proj, shot_id)
+    if shot is None:
+        raise AgentError("not_found", f"镜头不存在: {shot_id}")
+
+    reason = _active_production_reason(project)
+    if reason:
+        raise AgentError("production_active",
+                         f"当前项目有正在进行的生成任务（{reason}），等生成结束后再删除")
+
+    before_order = [[sh.shot_id for sh in sc.shots] for sc in proj.scenes]
+    try:
+        res = execute_delete(pdir, proj, "shot", shot_id)
+    except DeleteError as e:
+        raise AgentError(e.code, e.message)
+    deleted = res["deleted"]
+
+    DirectEditAuditStore(pdir, project).record(
+        agent_id="director", field=f"delete_shot:{shot_id}",
+        before={"shots": deleted.get("shots", []),
+                "removed_files": res.get("removed_files", 0)},
+        after=[], instruction=instruction, message_id=message_id)
+    on_disk = _reload(rt, project)
+    gone = _find_shot(on_disk, shot_id) is None
+    if not gone:
+        return _base_receipt(
+            "shot.delete", ok=False, target=shot_id, shot_id=shot_id,
+            verified=False, error="verify_failed",
+            note="删除后重新读取发现镜头仍存在，未确认删除。请用 shot.list 核对后重试。")
+    n_downstream = max(0, len(deleted.get("shots") or []) - 1)
+    rt.record_work(project, "change",
+                   f"Director 删除了镜头 {shot_id}"
+                   + (f" 及 {n_downstream} 个下游接力镜头" if n_downstream else ""),
+                   participants=["director"], affected_domains=["storyboard"],
+                   references={"shot_id": shot_id}, status="completed")
+    downstream = [s for s in (deleted.get("shots") or []) if s != shot_id]
+    note = f"已删除镜头 {shot_id}"
+    note += (f"，并级联删除了以它为接力来源的下游镜头：{', '.join(downstream)}。"
+             if downstream else "。")
+    if res.get("removed_files"):
+        note += f"清理了 {res['removed_files']} 个生成资产文件。"
+    note += "请用 shot.list 核对后向用户总结。"
+    return _base_receipt(
+        "shot.delete", ok=True, target=shot_id, shot_id=shot_id,
+        scene_id=scene.scene_id if scene else None,
+        before=before_order,
+        after=[[sh.shot_id for sh in sc.shots] for sc in on_disk.scenes],
+        revision=_shots_token(on_disk.scenes), verified=True, unchanged=False,
+        deleted=deleted, removed_files=res.get("removed_files", 0),
+        shots_revision=_shots_token(on_disk.scenes),
+        shots_content_revision=_shots_content_token(on_disk.scenes),
+        note=note)
+
+
+def _execute_shot_move(rt: AgentRuntime, project: str, arguments: str,
+                       instruction, message_id) -> dict:
+    """shot.move：同段内单步移动（before/after 二选一，都省略移到段尾）。
+    OCC（结构指纹）→ move_shot 中性层 → 原子写 → 重读验证新顺序 → 回执。"""
+    args = _parse_args(arguments)
+    shot_id = (args.get("shot_id") or "").strip()
+    before_id = (args.get("before_shot_id") or "").strip() or None
+    after_id = (args.get("after_shot_id") or "").strip() or None
+    expected_rev = args.get("expected_shots_revision")
+    if not shot_id:
+        raise AgentError("bad_arguments", "缺少 shot_id")
+    if not isinstance(expected_rev, str) or not expected_rev.strip():
+        raise AgentError("bad_arguments",
+                         "缺少 expected_shots_revision（应先 shot.list 拿到镜头结构指纹再传回）")
+
+    pdir, pstore, proj = _load_proj(rt, project)
+    scene, shot = _shot_scene_of(proj, shot_id)
+    if shot is None:
+        raise AgentError("not_found", f"镜头不存在: {shot_id}")
+
+    before_rev = _shots_token(proj.scenes)
+    if expected_rev != before_rev:
+        return _base_receipt(
+            "shot.move", ok=False, target=shot_id,
+            revision=before_rev, verified=False, error="stale_revision", stale=True,
+            shot_id=shot_id,
+            expected_revision=expected_rev, current_revision=before_rev,
+            current_shots=[[sh.shot_id for sh in sc.shots] for sc in proj.scenes],
+            note=f"stale：你传的 expected_shots_revision={expected_rev} 不是当前值"
+                 f"（可能是历史对话里出现过的旧指纹）。当前正确的指纹是 "
+                 f"expected_shots_revision=\"{before_rev}\"——直接把它原样填进去重新调用"
+                 f"本工具即可（多个移动要一步一步来）。")
+
+    before_order = [[sh.shot_id for sh in sc.shots] for sc in proj.scenes]
+    try:
+        moved = move_shot(proj, shot_id, before=before_id, after=after_id)
+    except StructureError as e:
+        raise AgentError(e.code, e.message)
+    after_order_mem = [[sh.shot_id for sh in sc.shots] for sc in proj.scenes]
+    if after_order_mem == before_order:
+        # 幂等移动（目标位置即当前位置）：不写盘、不审计，如实返回 unchanged。
+        return _base_receipt(
+            "shot.move", ok=True, target=shot_id, shot_id=shot_id,
+            scene_id=scene.scene_id, index=moved.index, order=moved.index,
+            before=before_order, after=after_order_mem,
+            revision=before_rev, verified=True, unchanged=True,
+            shots_revision=before_rev,
+            shots_content_revision=_shots_content_token(proj.scenes),
+            note=f"镜头 {shot_id} 已在目标位置（第 {moved.index} 位），未产生变化。")
+    pstore.save(proj)
+
+    on_disk = _reload(rt, project)
+    after_order = [[sh.shot_id for sh in sc.shots] for sc in on_disk.scenes]
+    disk_scene, disk_shot = _shot_scene_of(on_disk, shot_id)
+    verified = (disk_shot is not None
+                and after_order != before_order
+                and disk_shot.index == moved.index)
+    if not verified:
+        return _base_receipt(
+            "shot.move", ok=False, target=shot_id, shot_id=shot_id,
+            revision=_shots_token(on_disk.scenes), verified=False,
+            error="verify_failed",
+            note="移动后重新读取发现顺序与预期不一致，未确认移动。请用 shot.list 读取"
+                 "最新顺序后重试。")
+    DirectEditAuditStore(pdir, project).record(
+        agent_id="director", field=f"move_shot:{shot_id}", before=before_order,
+        after=after_order, instruction=instruction, message_id=message_id)
+    rt.record_work(project, "change",
+                   f"Director 把镜头 {shot_id} 移到第 {moved.index} 位",
+                   participants=["director"], affected_domains=["storyboard"],
+                   references={"shot_id": shot_id}, status="completed")
+    return _base_receipt(
+        "shot.move", ok=True, target=shot_id, shot_id=shot_id,
+        scene_id=disk_scene.scene_id, index=moved.index, order=moved.index,
+        before=before_order, after=after_order,
+        revision=_shots_token(on_disk.scenes), verified=True, unchanged=False,
+        shots_revision=_shots_token(on_disk.scenes),
+        shots_content_revision=_shots_content_token(on_disk.scenes),
+        note=f"镜头 {shot_id} 已移到故事段 {disk_scene.scene_id} 的第 {moved.index} 位。"
+             "请用 shot.list 核对后向用户总结。")
+
+
+TOOL_EXECUTORS = {
+    "shot.list": _execute_shot_list,
+    "shot.read": _execute_shot_read,
+    "shot.create": _execute_shot_create,
+    "shot.create_many": _execute_shot_create_many,
+    "shot.update": _execute_shot_update,
+    "shot.update_many": _execute_shot_update_many,
+    "shot.delete": _execute_shot_delete,
+    "shot.move": _execute_shot_move,
+    "story.list": _execute_story_list,
+    "story.read": _execute_story_read,
+    "script.read": _execute_script_read,
+    "character.list": _execute_character_list,
+    "character.read": _execute_character_read,
+    "web.search": _execute_web_search,
+}
+
+
+# ============ 回执渲染 / 真相收口（分镜域措辞）============
+_TOOL_LABELS = {
+    "shot.list": "读取分镜", "shot.read": "读取镜头",
+    "shot.create": "创建镜头", "shot.create_many": "批量创建镜头",
+    "shot.update": "修改镜头", "shot.update_many": "批量修改镜头",
+    "shot.delete": "删除镜头", "shot.move": "移动镜头",
+    "story.list": "读取故事段", "story.read": "读取故事段",
+    "script.read": "读取剧本", "character.list": "读取角色列表",
+    "character.read": "读取角色", "web.search": "搜索资料",
+}
+
+
+def _tool_label(name: str) -> str:
+    return _TOOL_LABELS.get(name, name)
+
+
+def _op_human(r: dict) -> str:
+    """把一条真实回执渲染成人类可读的操作描述（确定性，来自回执而非模型叙述）。"""
+    op = r.get("operation")
+    sid = r.get("shot_id")
+    if op == "shot.create":
+        return f"创建镜头 {sid}"
+    if op == "shot.update":
+        ch = r.get("changed") or []
+        return f"修改镜头 {sid}（{'、'.join(ch) or '内容'}）"
+    if op == "shot.delete":
+        n = len((r.get("deleted") or {}).get("shots") or [])
+        return f"删除镜头 {sid}" + (f"及 {n - 1} 个下游镜头" if n > 1 else "")
+    if op == "shot.move":
+        return f"移动镜头 {sid} 到第 {r.get('order')} 位"
+    if op == "shot.create_many":
+        ids = [c.get("shot_id") for c in (r.get("created") or []) if c.get("shot_id")]
+        return f"批量创建 {len(ids)} 个镜头（{', '.join(ids)}）" if ids else "批量创建镜头"
+    if op == "shot.update_many":
+        n = len(r.get("results") or [])
+        return f"批量修改 {n} 个镜头"
+    return f"{op}({sid or ''})"
+
+
+def _tool_summary(name: str, obs: dict) -> str:
+    """tool.completed 的 summary：成功用 _op_human 真实描述，失败给原因。"""
+    if name == "web.search":
+        if obs.get("ok"):
+            n = obs.get("n_results", 0)
+            return f"找到 {n} 个参考来源" if n else "没有找到相关资料"
+        if obs.get("code") == "search_budget_exhausted":
+            return "本轮搜索次数已达上限"
+        return f"搜索未完成：{obs.get('error') or obs.get('code') or '失败'}"
+    if obs.get("ok"):
+        if obs.get("operation"):
+            return _op_human(obs)
+        return f"{_tool_label(name)}完成"
+    why = obs.get("error") or obs.get("code") or "失败"
+    if obs.get("stale"):
+        why = "版本过期，已拒绝"
+    return f"{_tool_label(name)}未完成：{why}"
+
+
+def _trace_entry(step: int, name: str, args: str, obs: dict) -> dict:
+    """执行轨迹单条：turn→tool→target→result→revision。target 取最能标识操作对象的
+    字段（shot_id/scene_id）；web.search 用搜索词。"""
+    target = (obs.get("shot_id") or obs.get("scene_id")
+              or (obs.get("target") if obs.get("ok") else None))
+    if name == "web.search":
+        target = obs.get("target")
+    result = ("stale" if obs.get("stale")
+              else "unchanged" if obs.get("unchanged")
+              else "ok" if obs.get("ok")
+              else "error")
+    return {"step": step, "tool": name, "target": target, "result": result,
+            "revision": (obs.get("revision") or obs.get("shots_revision")
+                         or obs.get("shots_content_revision")),
+            "error": (None if result in ("ok", "unchanged")
+                      else (obs.get("error") or obs.get("code"))),
+            "ok": bool(obs.get("ok"))}
+
+
+def _ledger_brief(receipts: list) -> str:
+    """本轮真实写工具结果渲染成给模型看的账本（确定性，来自回执而非模型叙述）。"""
+    if not receipts:
+        return "本轮没有任何写工具被真正调用（没有 shot.create/update/delete/move 的工具调用记录）。"
+    lines = []
+    for r in receipts:
+        op = r.get("operation")
+        if r.get("ok"):
+            if r.get("unchanged"):
+                lines.append(f"- {op}：ok=true，但内容无变化（unchanged），canonical 未改动。")
+            else:
+                lines.append(f"- {op}：ok=true（{_op_human(r)}），已重新读取 canonical 确认落盘。")
+        else:
+            why = r.get("error") or "未知错误"
+            if r.get("stale"):
+                why = "stale（版本过期，被拒绝，未写入）"
+            lines.append(f"- {op}：ok=false，原因：{why}。canonical 未被该调用改动。")
+    return "\n".join(lines)
+
+
+def _honest_fallback(receipts: list) -> str:
+    """纠偏后模型仍谎称成功时的确定性兜底文案——纯由真实回执生成。"""
+    real_changes = [r for r in receipts
+                    if r.get("ok") and r.get("verified") and not r.get("unchanged")]
+    if real_changes:
+        return "已完成的修改：" + "；".join(_op_human(r) for r in real_changes) + "。"
+    if receipts:
+        reasons = []
+        for r in receipts:
+            if r.get("stale"):
+                reasons.append("镜头版本已过期")
+            elif r.get("error") == "verify_failed":
+                reasons.append("写入后校验未通过")
+            else:
+                reasons.append(r.get("error") or "工具执行失败")
+        uniq = "、".join(dict.fromkeys(reasons))
+        return (f"这次修改没有真正生效（{uniq}）。分镜保持原样。"
+                "可以让我重试，或先让我读取当前最新分镜再改。")
+    return "这次我没有真正执行修改（没有发出对应的工具调用）。请再说一次你的需求，我会实际操作。"
+
+
+def _committed_shot_ids(receipts: list) -> list:
+    """从已成功落盘的写回执里提取 shot_id 列表（checkpoint，供超时恢复 nudge）。"""
+    out = []
+    for r in receipts:
+        if not (r.get("ok") and r.get("verified") and not r.get("unchanged")):
+            continue
+        op = r.get("operation")
+        if op in ("shot.create", "shot.update", "shot.delete", "shot.move"):
+            sid = r.get("shot_id")
+            if sid and sid not in out:
+                out.append(sid)
+        elif op == "shot.create_many":
+            for c in (r.get("created") or []):
+                sid = c.get("shot_id")
+                if sid and sid not in out:
+                    out.append(sid)
+        elif op == "shot.update_many":
+            for c in (r.get("results") or []):
+                sid = c.get("shot_id")
+                if sid and sid not in out:
+                    out.append(sid)
+    return out
+
+
+# 声称「本次创建了 N 个镜头」的计数表述（供夸大检测；宁漏勿误）。
+def _claimed_shot_count_mismatch(text: str, real_count: int) -> Optional[int]:
+    """文本里「创建/拆成 N 个镜头」的 N 与真实成功创建数不符时返回 N。"""
+    t = text or ""
+    m = re.search(r"(?:创建|新增|拆成|拆分|建|生成|设计)[^0-9]{0,6}?(\d+)\s*(?:个)?\s*(?:镜头|分镜|镜)", t)
+    if m:
+        v = int(m.group(1))
+        if v != real_count:
+            return v
+    m = re.search(r"(\d+)\s*(?:个)?\s*(?:镜头|分镜|镜)[^。！？\n]{0,8}?(?:建好|创建|完成|都建|设计好)", t)
+    if m:
+        v = int(m.group(1))
+        if v != real_count:
+            return v
+    return None
+
+
+# zero-write recovery 的分镜域补充措辞（「设计分镜/做分镜/出分镜」是明确写入请求，
+# 通用正则只部分覆盖）。与 _is_explicit_write_request 取并集，宁窄勿误。
+_DIRECTOR_WRITE_EXTRA_RE = re.compile(
+    r"设计分镜|做分镜|做成分镜|分镜设计|生成分镜|出分镜|拆成分镜|拆成镜头|分镜拆分|"
+    r"补一?个?镜头|加一?个?镜头|新建镜头")
+
+
+def _is_director_write_request(instruction: str) -> bool:
+    """用户本轮是否明确要求实际写入分镜（zero-write recovery 专用）。"""
+    if _is_explicit_write_request(instruction):
+        return True
+    t = (instruction or "").strip()
+    if not t or ("?" in t or "？" in t):
+        return False
+    if _is_chat_turn(t):
+        return False
+    return bool(_DIRECTOR_WRITE_EXTRA_RE.search(t))
+
+
+# —— Director 域假成功补强（真机 2026-08-30 实测漏网）——
+# 通用 _claims_success 依赖「已…动词」「动词…了/完成」「成功+动词」三种形态；分镜域
+# 子弹式冒号体例（"**删除**：原第2段全部5个镜头"、"**重新创建**：5个新镜头"）与
+# 「重新设计了这组镜头」这类措辞三种形态皆无，实测模型零工具调用编造整组重做未被拦截。
+# 此处补分镜域判定，与通用判定取并集；否定窗口（不要/没/先别）与聊天轮保护不变。
+_DIRECTOR_CLAIM_RE = re.compile(
+    r"(删除|创建|新建|重建|重做|修改|更新|移动|调整|拆分|替换)\s*[*：:*]\s*"
+    r"|(重新?设计|重做|重建|重构|推翻)[^。！？\n]{0,16}(了|完成|好)"
+    r"|(重新)?(设计|创建|新建|拆分|拆成|生成)\s*(了)?\s*\d+\s*(个|组)?\s*(新?镜头|分镜)",
+    re.IGNORECASE)
+_DIRECTOR_CLAIM_NEGATION_RE = re.compile(r"(没有|没|并未|并没有|尚未|未|未能|无法|不能|不要|先别|别)")
+
+
+def _director_claims_success(text: str) -> bool:
+    """分镜域补强版「声称成功」：通用判定 ∪ 子弹式/重设计措辞（带否定窗口）。"""
+    if _claims_success(text):
+        return True
+    if not text:
+        return False
+    for m in _DIRECTOR_CLAIM_RE.finditer(text):
+        window = text[max(0, m.start() - 6):m.start()]
+        if _DIRECTOR_CLAIM_NEGATION_RE.search(window):
+            continue
+        return True
+    return False
+
+
+_ZERO_WRITE_RECOVERY_NUDGE = (
+    "【系统提示】用户本轮明确要求实际修改分镜，但你到目前为止【还没有发起任何写工具"
+    "调用】——在回复里用自然语言描述修改不等于完成修改。请立即：①先用只读工具"
+    "（story.list / story.read / shot.list / shot.read / character.read）确认当前真实状态；"
+    "②真正发起对应的写工具（shot.create / shot.create_many / shot.update / shot.update_many"
+    " / shot.delete / shot.move）完成用户要求，等工具真实返回 ok=true 后再汇报结果；"
+    "写工具一个一个来，每次用上一次返回的最新版本指纹。如果你确实无法执行（需求不清楚、"
+    "目标不存在等），就明确告诉用户原因，【不要】在没有工具真实返回的情况下声称已经修改完成。")
+
+
+def _refresh_system(messages: list, rt: AgentRuntime, project: str) -> None:
+    """每轮工具调用后无条件刷新 system（项目元信息/计数）。"""
+    try:
+        pdir = rt._resolve_project_dir(project)
+        proj = ProjectStore(pdir).load()
+        messages[0] = {"role": "system", "content": _build_system(proj)}
+    except Exception:
+        pass
+
+
+_FACT_SUMMARY_MARK = "【实际执行记录】"
+
+
+def _append_fact_summary(rt: AgentRuntime, project: str, text: str, receipts: list) -> str:
+    """有真实变更时，在模型回复后追加【确定性事实摘要】——由真实 receipts + 当前
+    canonical 生成，不信模型叙述。纯追加，不删改模型原文。"""
+    real_changes = [r for r in receipts
+                    if r.get("ok") and r.get("verified") and not r.get("unchanged")]
+    if not real_changes:
+        return text
+    try:
+        proj = _reload(rt, project)
+        n_shots = sum(len(sc.shots or []) for sc in (proj.scenes or []))
+        lines = ["\n\n---\n【实际执行记录】（系统据真实回执生成，非模型叙述）"]
+        for r in real_changes:
+            lines.append(f"✓ {_op_human(r)}")
+        lines.append(f"\n当前分镜共 {n_shots} 个镜头。")
+        return text + "\n".join(lines)
+    except Exception:
+        return text
+
+
+# ============ 主循环（镜像 Script Writer 机制：单写串行 / 真相闸门 / zero-write
+# recovery / 搜索预算 / 防失控 / 超时恢复 / 协作取消 / 流式事件）============
+async def _run_tool_loop(rt: AgentRuntime, client, project: str,
+                         messages: list, instruction: str,
+                         message_id: Optional[str],
+                         max_steps: int = DEFAULT_MAX_TOOL_STEPS,
+                         thinking: bool = False,
+                         event_cb=None,
+                         state: Optional[dict] = None,
+                         cancel_event=None) -> dict:
+    """原生 function-calling 循环 + 执行真实性收口（结构性，非提示词）。"""
+    created = updated = deleted = moved = False
+    if state is None:
+        state = {}
+    events: list = state.setdefault("events", [])
+    receipts: list = state.setdefault("receipts", [])
+    write_attempts = 0
+    corrective_round = 0
+    zero_write_recovery_used = False
+    trace: list = state.setdefault("trace", [])
+    reasonings: list = state.setdefault("reasonings", [])
+    last_read_after_write = -1
+    search_count = 0
+    search_sources: list = state.setdefault("search_sources", [])
+    search_queries_seen: set = state.setdefault("search_queries_seen", set())
+    repeat_fail_streak = 0
+    last_fail_sig = None
+    timeout_retries = 0
+    max_batch_hint = MAX_CREATE_BATCH   # 10 → 5 → 2 → 1
+
+    def _on_read_timeout() -> bool:
+        nonlocal timeout_retries, max_batch_hint
+        if timeout_retries >= MAX_TIMEOUT_RETRIES:
+            return False
+        timeout_retries += 1
+        max_batch_hint = _BATCH_DOWNGRADE.get(max_batch_hint, 1)
+        committed = _committed_shot_ids(receipts)
+        committed_str = ", ".join(committed) if committed else "（无）"
+        nudge = (
+            f"[系统恢复提示 MODEL_READ_TIMEOUT] 上一次批量生成因模型响应超时被中断"
+            f"（read timeout，第 {timeout_retries}/{MAX_TIMEOUT_RETRIES} 次）。"
+            f"本次没有形成完整工具调用、没有新增任何提交。"
+            f"已成功提交的镜头：{committed_str}。"
+            f"请【只继续尚未完成的部分，不要重做已提交项】；"
+            f"用更小的批次（建议每批 ≤{max_batch_hint} 项）重新发起，避免再次超时。"
+        )
+        messages.append({"role": "user", "content": nudge})
+        _refresh_system(messages, rt, project)
+        return True
+
+    for step in range(max_steps):
+        if cancel_event is not None and cancel_event.is_set():
+            raise _TurnStopped()
+        content = None
+        tool_calls = None
+        try:
+            if event_cb:
+                step_reasoning_started = False
+                step_reason_t0 = 0.0
+                step_reasoning_buf: list[str] = []
+                step_content_buf: list[str] = []
+                async for ev in client.chat_completion_stream(
+                        messages, temperature=0.7, max_tokens=65536,
+                        thinking=thinking, tools=DIRECTOR_TOOLS,
+                        tool_choice="auto"):
+                    k = ev["kind"]
+                    if k == "content_delta":
+                        step_content_buf.append(ev["delta"])
+                    elif k == "reasoning_delta":
+                        if not step_reasoning_started:
+                            step_reasoning_started = True
+                            step_reason_t0 = time.perf_counter()
+                            event_cb({"type": "reasoning.started", "step_id": step})
+                        step_reasoning_buf.append(ev["delta"])
+                        event_cb({"type": "reasoning.delta", "step_id": step,
+                                  "delta": ev["delta"]})
+                    elif k == "tool_call_pending":
+                        event_cb({"type": "tool.pending", "step_id": step,
+                                  "name": ev["name"], "label": _tool_label(ev["name"])})
+                    elif k == "finish":
+                        content = ev["content"]
+                        tool_calls = ev["tool_calls"]
+                if step_reasoning_started:
+                    rtext = "".join(step_reasoning_buf)
+                    rdur = int((time.perf_counter() - step_reason_t0) * 1000)
+                    event_cb({"type": "reasoning.completed", "step_id": step,
+                              "duration_ms": rdur})
+                    if rtext:
+                        reasonings.append({"step": step, "text": rtext, "duration_ms": rdur})
+                if not tool_calls and step_content_buf:
+                    for d in step_content_buf:
+                        event_cb({"type": "assistant.delta", "delta": d})
+            else:
+                resp = await client.chat_completion(
+                    messages, temperature=0.7, max_tokens=65536,
+                    tools=DIRECTOR_TOOLS, tool_choice="auto")
+                tool_calls = resp.get("tool_calls")
+                content = resp.get("content")
+        except httpx.ReadTimeout:
+            if not _on_read_timeout():
+                raise
+            continue
+
+        if not tool_calls:
+            text = (content or "").strip()
+            # ---- 真相闸门 ----
+            real_changes = [r for r in receipts
+                            if r.get("ok") and r.get("verified") and not r.get("unchanged")]
+            chat_turn = (write_attempts == 0 and _is_chat_turn(instruction))
+            false_claim = (_director_claims_success(text) and not real_changes
+                           and not chat_turn)
+            real_searches = [t for t in trace if t["tool"] == "web.search" and t.get("ok")]
+            search_false_claim = (_claims_search_success(text) and not real_searches
+                                  and not chat_turn)
+            real_create_count = sum(
+                1 for r in real_changes if r.get("operation") == "shot.create")
+            real_create_count += sum(
+                len(r.get("created") or []) for r in real_changes
+                if r.get("operation") == "shot.create_many")
+            over_claim_n = (_claimed_shot_count_mismatch(text, real_create_count)
+                            if real_changes and real_create_count else None)
+            last_write_step = max((t["step"] for t in trace
+                                   if t["tool"] in DIRECTOR_WRITE_OPERATIONS), default=-1)
+            reply_summarizes = bool(re.search(r"\d+\s*个?(镜头|分镜|镜)|第.{1,4}镜|共\d+", text or ""))
+            needs_final_read = (real_changes and _claims_success(text)
+                                and reply_summarizes
+                                and last_read_after_write < last_write_step)
+            if (not zero_write_recovery_used
+                    and write_attempts == 0 and not real_changes
+                    and _is_director_write_request(instruction)):
+                zero_write_recovery_used = True
+                log.info("director zero-write recovery 触发（project=%s）", project)
+                messages.append({"role": "assistant", "content": text or ""})
+                messages.append({"role": "user", "content": _ZERO_WRITE_RECOVERY_NUDGE})
+                _refresh_system(messages, rt, project)
+                continue
+            if false_claim or over_claim_n is not None or needs_final_read or search_false_claim:
+                if corrective_round < MAX_CORRECTIVE_ROUNDS:
+                    corrective_round += 1
+                    messages.append({"role": "assistant", "content": text or ""})
+                    brief = _ledger_brief(receipts)
+                    if search_false_claim:
+                        nudge = (
+                            "你上面的回复声称做过搜索/给出了搜索结果，但本轮【没有任何一次真实成功的 "
+                            "web.search 工具调用】。光用文字编造搜索结果是不允许的。请要么现在真正调用 "
+                            "web.search（注意每轮最多 3 次），要么如实告诉用户：本轮没有搜索，或搜索失败、"
+                            "资料不足，并基于已有知识继续。")
+                    elif needs_final_read:
+                        nudge = (
+                            "你做了一些修改并声称完成，但最后一次真实读取发生在最后一次写入【之前】。"
+                            "收尾前请先用 shot.list 读取最新镜头列表（关注任务相关段落），然后【以这次"
+                            "读取的真实结果】总结你创建/修改/删除了什么、当前镜头数量与顺序。"
+                            "不要凭自己之前写的文字记忆声称完成。")
+                    elif over_claim_n is not None:
+                        nudge = (
+                            f"你上面说创建/拆成了 {over_claim_n} 个镜头，但工具的真实成功创建回执只有 "
+                            f"{real_create_count} 个（{brief}）。数量必须以工具真实返回为准。"
+                            "请基于真实回执重新回答：要么如实说已创建几个（给出真实 shot_id），"
+                            "要么继续调用 shot.create / shot.create_many 把剩余镜头真正创建出来。")
+                    elif write_attempts == 0:
+                        nudge = (
+                            "你上面声称已经创建/修改/删除了镜头，但本轮你【根本没有发起对应的"
+                            "工具调用】。光用文字说「已完成」不会改动任何东西。\n"
+                            + brief + "\n请要么真正调用对应写工具完成修改，要么如实告诉用户"
+                            "你没有改动、需要怎么做。")
+                    else:
+                        nudge = (
+                            "你上面声称已经完成，但工具的真实返回显示没有任何一次写入成功确认：\n"
+                            + brief + "\n请只依据上面真实的工具返回结果回答。可以用最新数据重新调用"
+                            "工具重试；如果不打算重试，就如实告诉用户这次没有改动成功。")
+                    messages.append({"role": "user", "content": nudge})
+                    _refresh_system(messages, rt, project)
+                    continue
+                text = _honest_fallback(receipts)
+            text = strip_reserved_fact_blocks(text)
+            text = _append_fact_summary(rt, project, text, receipts)
+            return {"text": text or "已完成。",
+                    "created": created, "updated": updated, "deleted": deleted,
+                    "moved": moved,
+                    "events": events, "receipts": receipts, "trace": trace,
+                    "reasonings": reasonings, "search_sources": search_sources}
+
+        messages.append({"role": "assistant", "content": content or "",
+                         "tool_calls": tool_calls})
+
+        write_done_this_step = False   # 单写串行：一步只执行一个写操作
+        for tc in tool_calls:
+            fn = tc.get("function") or {}
+            name = fn.get("name") or ""
+            args = fn.get("arguments") or "{}"
+            call_id = tc.get("id") or name
+
+            if event_cb:
+                event_cb({"type": "tool.started", "step_id": step, "call_id": call_id,
+                          "name": name, "label": _tool_label(name)})
+
+            is_write_tool = (name in DIRECTOR_WRITE_OPERATIONS)
+            if is_write_tool and write_done_this_step:
+                obs = {
+                    "ok": False, "operation": name,
+                    "error": "本步已执行过一个写操作。写工具必须一个一个来：等前一个完成、"
+                             "拿到返回的最新 revision/状态后，再发下一个写工具调用。"
+                             "不要在同一次回复里批量发多个写工具（会用旧 revision 导致 stale）。"
+                             "只读工具（shot.list/shot.read/story.list/story.read/script.read/"
+                             "character.list/character.read/web.search）可以一次多个。",
+                }
+                messages.append({"role": "tool", "tool_call_id": call_id,
+                                 "content": json.dumps(obs, ensure_ascii=False)})
+                trace.append(_trace_entry(step, name, args, obs))
+                if event_cb:
+                    event_cb({"type": "tool.completed", "step_id": step,
+                              "call_id": call_id, "name": name, "ok": False,
+                              "summary": "本步写工具串行，已跳过"})
+                continue
+
+            executor = TOOL_EXECUTORS.get(name)
+            exc_msg = None
+            if (executor is not None and name == "web.search"
+                    and search_count >= MAX_WEB_SEARCH):
+                obs = {"ok": False, "operation": "web.search",
+                       "code": "search_budget_exhausted",
+                       "error": ("本轮搜索次数已达上限（3 次）。请基于已有信息与已获取的"
+                                 "搜索结果完成任务，或如实告知用户资料不足。")}
+            elif (executor is not None and name == "web.search"
+                    and _normalized_search_query(args)
+                    and _normalized_search_query(args) in search_queries_seen):
+                obs = {"ok": False, "operation": "web.search",
+                       "code": "duplicate_query",
+                       "error": ("本 turn 已用完全相同的查询词搜索过。请换一个更具体或不同角度的"
+                                 "查询词，或基于已获取的结果继续，不要重发同一查询。")}
+            elif executor is None:
+                obs = {"ok": False, "error": f"未知工具：{name}", "operation": name}
+            else:
+                if name == "web.search":
+                    search_count += 1
+                    _q_norm = _normalized_search_query(args)
+                    if _q_norm:
+                        search_queries_seen.add(_q_norm)
+                try:
+                    if asyncio.iscoroutinefunction(executor):
+                        obs = await executor(rt, project, args, instruction, message_id)
+                    else:
+                        obs = executor(rt, project, args, instruction, message_id)
+                except AgentError as e:
+                    exc_msg = e.message
+                    obs = {"ok": False, "error": e.message, "code": e.code,
+                           "operation": name}
+                except Exception as e:
+                    exc_msg = f"工具执行异常：{str(e)[:200]}"
+                    obs = {"ok": False, "error": exc_msg,
+                           "operation": name}
+
+            ok_now = bool(obs.get("ok"))
+            # 防失控（需求 #11）：同一工具连续以同样方式失败 → 诚实停止。计数【按工具】
+            # （交叉的成功只读调用不重置该工具的失败连击——真机 2026-08-30 实测模型会
+            # 「create_many stale → shot.list → create_many stale」循环 9 次绕过连击护栏）。
+            if ok_now and name == (last_fail_sig or ("", ""))[0]:
+                repeat_fail_streak = 0
+                last_fail_sig = None
+            if not ok_now:
+                sig = (name, obs.get("code") or obs.get("error") or "err")
+                if sig == last_fail_sig:
+                    repeat_fail_streak += 1
+                else:
+                    repeat_fail_streak = 1
+                    last_fail_sig = sig
+                if repeat_fail_streak >= MAX_REPEAT_FAIL:
+                    messages.append({"role": "tool", "tool_call_id": call_id,
+                                     "content": json.dumps(obs, ensure_ascii=False)})
+                    _refresh_system(messages, rt, project)
+                    stale_hint = ""
+                    if obs.get("stale") and obs.get("current_revision"):
+                        stale_hint = (f"当前正确的指纹值是 \"{obs['current_revision']}\"，"
+                                      "把它原样填进 expected 参数即可。")
+                    nudge = (f"「{name}」已连续 {repeat_fail_streak} 次以同样方式失败"
+                             f"（{obs.get('error') or obs.get('code')}）。继续重复同样调用不会成功。"
+                             + stale_hint +
+                             " 请先停止重试：核对失败回执里的 note 与 current_revision/"
+                             "current_shot，修正参数后再试一次；若仍失败，如实告诉用户当前"
+                             "遇到的问题、哪些已成功完成。")
+                    messages.append({"role": "assistant", "content": content or ""})
+                    messages.append({"role": "user", "content": nudge})
+                    trace.append(_trace_entry(step, name, args, obs))
+                    _refresh_system(messages, rt, project)
+                    if event_cb:
+                        if exc_msg:
+                            event_cb({"type": "tool.failed", "step_id": step, "call_id": call_id,
+                                      "name": name, "error": exc_msg})
+                        else:
+                            event_cb({"type": "tool.completed", "step_id": step, "call_id": call_id,
+                                      "name": name, "ok": False,
+                                      "summary": _tool_summary(name, obs)})
+                    break
+
+            # 写域调用记入账本（含拼错的 shot.* 未知工具：也算写尝试失败）。
+            is_write_domain = (name in DIRECTOR_WRITE_OPERATIONS
+                               or name.startswith("shot."))
+            if is_write_domain and name not in ("shot.list", "shot.read"):
+                write_attempts += 1
+                obs.setdefault("operation", name)
+                receipts.append(obs)
+                write_done_this_step = True
+            else:
+                if ok_now and name != "web.search":
+                    last_read_after_write = step
+                if name == "web.search" and obs.get("ok") and obs.get("sources"):
+                    for s in obs["sources"]:
+                        if s and (s.get("url") or s.get("title")) \
+                                and s not in search_sources:
+                            search_sources.append({"title": s.get("title") or "",
+                                                   "url": s.get("url") or ""})
+
+            # 据【真实回执】（而非模型叙述）设置 mutated 标志 + 事件。
+            if (name in DIRECTOR_WRITE_OPERATIONS and obs.get("ok")
+                    and obs.get("verified") and not obs.get("unchanged")):
+                sid = obs.get("shot_id")
+                if name == "shot.create":
+                    created = True
+                    s = f"创建镜头 {sid}"
+                    events.append({"kind": "shot_create", "shot_id": sid, "summary": s})
+                elif name == "shot.create_many":
+                    created = True
+                    ids = [c.get("shot_id") for c in (obs.get("created") or [])
+                           if c.get("shot_id")]
+                    s = f"批量创建 {len(ids)} 个镜头：{', '.join(ids)}"
+                    events.append({"kind": "shot_create_many",
+                                   "scene_id": obs.get("scene_id"),
+                                   "shot_ids": ids, "summary": s})
+                elif name == "shot.update":
+                    updated = True
+                    changed = "、".join(obs.get("changed") or []) or "内容"
+                    s = f"修改镜头 {sid}（{changed}）"
+                    events.append({"kind": "shot_update", "shot_id": sid, "summary": s})
+                elif name == "shot.update_many":
+                    updated = True
+                    res = obs.get("results") or []
+                    s = f"批量修改 {len(res)} 个镜头"
+                    events.append({"kind": "shot_update_many", "results": res, "summary": s})
+                elif name == "shot.delete":
+                    deleted = True
+                    d = obs.get("deleted") or {}
+                    n = len(d.get("shots") or [])
+                    s = f"删除镜头 {sid}" + (f"及 {n - 1} 个下游镜头" if n > 1 else "")
+                    events.append({"kind": "shot_delete", "shot_id": sid, "summary": s})
+                elif name == "shot.move":
+                    moved = True
+                    s = f"移动镜头 {sid} 到第 {obs.get('order')} 位"
+                    events.append({"kind": "shot_move", "shot_id": sid, "summary": s})
+
+            if event_cb:
+                if exc_msg:
+                    event_cb({"type": "tool.failed", "step_id": step, "call_id": call_id,
+                              "name": name, "error": exc_msg})
+                else:
+                    event_cb({"type": "tool.completed", "step_id": step, "call_id": call_id,
+                              "name": name, "ok": bool(obs.get("ok")),
+                              "summary": _tool_summary(name, obs)})
+            messages.append({"role": "tool", "tool_call_id": call_id,
+                             "content": json.dumps(obs, ensure_ascii=False)})
+            trace.append(_trace_entry(step, name, args, obs))
+
+        _refresh_system(messages, rt, project)
+
+    # 预算耗尽（防死循环）：诚实告知已完成的真实工作。
+    done = [r for r in receipts if r.get("ok") and r.get("verified") and not r.get("unchanged")]
+    if done:
+        ids = _committed_shot_ids(receipts)
+        tail = (f"已真实完成：{', '.join(_op_human(r) for r in done)}。" if ids
+                else f"已完成部分工作（{len(done)} 次成功写入）。")
+        text = (f"（已达到执行预算上限 {max_steps} 步，本轮停止——这是防死循环的保护，不是"
+                f"业务数量限制。{tail}还有未完成的部分，请告诉我继续，或把剩余需求拆小一些。）")
+    else:
+        text = (f"（已达到执行预算上限 {max_steps} 步，本轮停止——这是防死循环的保护。"
+                f"本轮没有任何成功写入。请把需求拆小一些再试。）")
+    return {"text": text,
+            "created": created, "updated": updated, "deleted": deleted,
+            "moved": moved,
+            "events": events, "receipts": receipts, "trace": trace,
+            "reasonings": reasonings, "search_sources": search_sources}
+
+
+# ============ 主 turn ============
+async def director_turn(rt: AgentRuntime, project: str, session_id: str,
+                        content: str, *, thinking: bool = False,
+                        event_cb=None, cancel_event=None) -> dict:
+    """Director 原生 tool-loop turn。
+
+    返回 {assistant_message, created, updated, deleted, moved, events, message, intent,
+    receipts, trace, search_sources, session_id, agent_id}。语义与 script_writer_turn /
+    character_designer_turn 对齐：thinking/event_cb 仅流式端点传入；cancel_event 协作式
+    停止（步骤边界安全中断）。"""
+    store = rt._session_store(project)
+    session = store.load(session_id)
+    if session is None:
+        raise AgentError("unknown_scope", f"session 不存在: {session_id}")
+    if session.agent_id != "director":
+        raise AgentError("permission_denied", "该会话仅限 Director")
+    if not rt._is_enabled("director"):
+        raise AgentError("disabled_agent", "Director 已禁用")
+
+    user_msg = AgentMessage(role="user", content=content)
+    store.append_message(session_id, user_msg)
+    rt._maybe_capture_preference(project, content, user_msg.message_id)
+    session = store.load(session_id)
+
+    pdir = rt._resolve_project_dir(project)
+    history = [{"role": m.role, "content": m.content}
+               for m in session.messages[:-1]
+               if m.role in ("user", "assistant") and m.content and m.status is None]
+
+    client = rt._resolve_client_or_none(agent_id="director")
+    assistant_text: str
+    status: Optional[str] = None
+    created = updated = deleted = moved = False
+    events: list = []
+    receipts: list = []
+    reasoning: list = []
+    trace: list = []
+    search_sources: list = []
+
+    if client is None:
+        assistant_text = "[chat 未配置：Agnes 推理模型不可用，无法修改分镜。请在设置中配置 API Key。]"
+        status = ResultStatus.NOT_CONFIGURED.value
+    else:
+        proj = ProjectStore(pdir).load()
+        system = _build_system(proj)
+        mem = rt._memory_supplement(project, "director")
+        if mem:
+            system += "\n\n" + mem
+        messages: list[dict] = [{"role": "system", "content": system}]
+        messages += history
+        messages.append({"role": "user", "content": content})
+
+        loop_state: dict = {}
+        try:
+            final = await _run_tool_loop(rt, client, project, messages, content,
+                                         user_msg.message_id,
+                                         thinking=thinking, event_cb=event_cb,
+                                         state=loop_state, cancel_event=cancel_event)
+            assistant_text = final["text"]
+            created = final["created"]
+            updated = final["updated"]
+            deleted = final["deleted"]
+            moved = final["moved"]
+            events = final["events"]
+            receipts = final.get("receipts", [])
+            trace = final.get("trace", [])
+            reasoning = final.get("reasonings", [])
+            search_sources = final.get("search_sources", [])
+        except _TurnStopped:
+            log.info("director_turn 被停止（project=%s session=%s）", project, session_id)
+            done = _committed_shot_ids(loop_state.get("receipts", []))
+            done_str = ("已完成：" + "、".join(done)) if done else "本次没有已完成的修改"
+            assistant_text = f"[任务已停止] {done_str}；其余未完成部分未执行。"[:300]
+            status = ResultStatus.STOPPED.value
+            events = loop_state.get("events", [])
+            receipts = loop_state.get("receipts", [])
+            trace = loop_state.get("trace", [])
+            reasoning = loop_state.get("reasonings", [])
+            search_sources = loop_state.get("search_sources", [])
+        except Exception as e:
+            log.exception("director_turn 工具循环异常（project=%s session=%s）",
+                          project, session_id)
+            e_desc = str(e).strip()
+            assistant_text = f"[执行失败: {type(e).__name__}: {e_desc}]"[:300]
+            status = ResultStatus.FAILED.value
+            events = loop_state.get("events", [])
+            receipts = loop_state.get("receipts", [])
+            trace = loop_state.get("trace", [])
+            reasoning = loop_state.get("reasonings", [])
+            search_sources = loop_state.get("search_sources", [])
+
+    if created:
+        intent = "shot_create"
+    elif updated:
+        intent = "shot_update"
+    elif deleted:
+        intent = "shot_delete"
+    elif moved:
+        intent = "shot_move"
+    else:
+        intent = "conversation"
+
+    receipts_meta = []
+    for r in receipts:
+        receipts_meta.append({
+            "operation": r.get("operation"), "ok": bool(r.get("ok")),
+            "verified": bool(r.get("verified")), "stale": bool(r.get("stale")),
+            "unchanged": bool(r.get("unchanged")),
+            "error": r.get("error"),
+            "shot_id": r.get("shot_id"),
+            "scene_id": r.get("scene_id"),
+            "order": r.get("order"), "index": r.get("index"),
+            "changed": r.get("changed"),
+            "count": r.get("count"),
+            "created": r.get("created"),
+            "results": r.get("results"),
+            "revision": r.get("revision"),
+            # stale 时返回的最新状态 / 删除时的清理明细（供上层与测试核对）
+            "expected_revision": r.get("expected_revision"),
+            "current_revision": r.get("current_revision"),
+            "current_shot": r.get("current_shot"),
+            "current_shots": r.get("current_shots"),
+            "deleted": r.get("deleted"),
+            "removed_files": r.get("removed_files"),
+        })
+    meta = {"intent": intent, "events": events, "evidence_refs": [],
+            "receipts": receipts_meta,
+            "write_attempts": len(receipts_meta),
+            "write_success": sum(1 for r in receipts_meta
+                                 if r["ok"] and r["verified"] and not r["unchanged"]),
+            "trace": trace,
+            "reasonings": reasoning,
+            "search_sources": search_sources,
+            "pending_delete_scenes": []}
+    asst = AgentMessage(role="assistant", content=assistant_text, status=status, meta=meta)
+    store.append_message(session_id, asst)
+
+    return {"assistant_message": assistant_text,
+            "created": created, "updated": updated, "deleted": deleted, "moved": moved,
+            "events": events, "message": asst.to_dict(),
+            "intent": intent, "receipts": receipts_meta, "trace": trace,
+            "search_sources": search_sources,
+            "evidence_refs": [], "linked_task_ids": [],
+            "linked_change_session_id": None, "session_id": session_id,
+            "agent_id": "director"}
+
+

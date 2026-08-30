@@ -326,12 +326,15 @@ const currentActivity = computed(() => turn.currentActivity);
 const assistantStreaming = computed(() => turn.streamingText);
 const completedSteps = computed(() => turn.completedSteps);
 function onToggleProcess() { turn.toggleProcess(); }
-// AI-7D-R：具备直接编辑工具、走流式 tool-loop 的 Agent（2026-08-30 加入 Character Designer）
-const STREAMED_AGENTS = new Set(['script_writer', 'character_designer']);
+// AI-7D-R：具备直接编辑工具、走流式 tool-loop 的 Agent（2026-08-30 加入 Character Designer、Director）
+const STREAMED_AGENTS = new Set(['script_writer', 'character_designer', 'director']);
 const isStreamed = computed(() => STREAMED_AGENTS.has(selectedId.value));
-// 输入锁定按 Agent 写入域区分：Script Writer 写剧本域（story 锁），Character Designer 写角色域（character 锁）
+// 输入锁定按 Agent 写入域区分：Script Writer 写剧本域（story 锁），Character Designer 写角色域
+// （character 锁），Director 写分镜域（storyboard 锁）
 const currentLocked = computed(() =>
-  selectedId.value === 'character_designer' ? pev.charactersLocked : pev.storyLocked);
+  selectedId.value === 'character_designer' ? pev.charactersLocked
+  : selectedId.value === 'director' ? pev.storyboardLocked
+  : pev.storyLocked);
 // 工作中 = 本地 legacy 路径忙，或流式 turn 在跑（含后台续跑）
 const busy = computed(() => sending.value || turn.running);
 // 输入禁用：本地忙 / 流式 turn 在跑 / 本 Agent 写入域被 Agent 锁（含其它客户端）
@@ -339,7 +342,10 @@ const composerDisabled = computed(() => busy.value || currentLocked.value);
 const composerPlaceholder = computed(() =>
   currentLocked.value
     ? (selectedId.value === 'character_designer'
-        ? '🔒 Agent 正在修改角色，请稍候…' : '🔒 Agent 正在修改剧本，请稍候…')
+        ? '🔒 Agent 正在修改角色，请稍候…'
+        : selectedId.value === 'director'
+          ? '🔒 Agent 正在修改分镜，请稍候…'
+          : '🔒 Agent 正在修改剧本，请稍候…')
     : '输入消息…');
 
 // receipts → 「本轮改动」轻量渲染（只信结构化 receipts，不解析正文）
@@ -354,6 +360,13 @@ function receiptLabel(r: ScriptWriterReceipt): string {
     const total = r.character_names?.length || 0;
     return `生成三视图（${n}/${total} 个角色完成）`;
   }
+  // Director 回执（操作对象是 shot_id；批量看 count）
+  if (op === 'shot.create') return `创建镜头 ${r.shot_id || ''}`.trim();
+  if (op === 'shot.update') return `修改镜头 ${r.shot_id || ''}`.trim();
+  if (op === 'shot.delete') return `删除镜头 ${r.shot_id || ''}`.trim();
+  if (op === 'shot.move') return `移动镜头 ${r.shot_id || ''}`.trim();
+  if (op === 'shot.create_many') return `批量创建镜头（${r.count ?? r.created?.length ?? 0} 个）`;
+  if (op === 'shot.update_many') return `批量修改镜头（${r.count ?? r.results?.length ?? 0} 个）`;
   if (op === 'story.create') return `创建 ${r.scene_id || ''}`.trim();
   if (op === 'story.move') return `移动 ${r.scene_id || ''}`.trim();
   if (op === 'story.update') return `修改 ${r.scene_id || ''}`.trim();

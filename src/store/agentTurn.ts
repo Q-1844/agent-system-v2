@@ -193,6 +193,11 @@ export const useAgentTurnStore = defineStore('agentTurn', () => {
     'character.list': '读取角色列表', 'character.read': '读取角色',
     'character.create': '创建角色', 'character.update': '修改角色',
     'character.delete': '删除角色', 'character.generate_views': '生成角色三视图',
+    // Director（2026-08-30）：分镜工具
+    'shot.list': '读取分镜', 'shot.read': '读取镜头',
+    'shot.create': '创建镜头', 'shot.create_many': '批量创建镜头',
+    'shot.update': '修改镜头', 'shot.update_many': '批量修改镜头',
+    'shot.delete': '删除镜头', 'shot.move': '移动镜头',
     'web.search': '搜索资料',
   };
 

@@ -85,8 +85,8 @@ export function useProjectEvents(projectRef: Ref<string>) {
   }
 
   // 锁定 → 开始权威对账轮询；解锁 → 停止（锁定期才轮询，零空闲开销）。
-  // 2026-08-30：剧本域（story）与角色域（character，Character Designer）都参与对账。
-  watch(() => store.storyLocked || store.charactersLocked, (locked) => {
+  // 2026-08-30：剧本域（story）、角色域（character）与分镜域（storyboard，Director）都参与对账。
+  watch(() => store.storyLocked || store.charactersLocked || store.storyboardLocked, (locked) => {
     clearResync();
     if (locked) {
       void resyncLocks();                       // 立即先对一次

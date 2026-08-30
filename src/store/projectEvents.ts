@@ -11,6 +11,7 @@ import { ref, computed } from 'vue';
 
 export const RESOURCE_STORY = 'story';
 export const RESOURCE_CHARACTER = 'character';
+export const RESOURCE_STORYBOARD = 'storyboard';
 
 export interface ProjectEvent {
   type: string;
@@ -33,9 +34,12 @@ export const useProjectEventsStore = defineStore('projectEvents', () => {
   const lastStoryChange = ref<ProjectEvent | null>(null);
   /** character.changed 自增版本号（角色域内容变化信号，Character Designer 写入后 +1） */
   const charactersVersion = ref(0);
+  /** storyboard.changed 自增版本号（分镜域内容变化信号，Director 写入后 +1） */
+  const storyboardVersion = ref(0);
 
   const storyLocked = computed(() => !!lockedResources.value[RESOURCE_STORY]);
   const charactersLocked = computed(() => !!lockedResources.value[RESOURCE_CHARACTER]);
+  const storyboardLocked = computed(() => !!lockedResources.value[RESOURCE_STORYBOARD]);
 
   function setProject(p: string) {
     if (currentProject.value !== p) {
@@ -68,12 +72,14 @@ export const useProjectEventsStore = defineStore('projectEvents', () => {
       lastStoryChange.value = ev;
     } else if (ev.type === 'character.changed') {
       charactersVersion.value += 1;
+    } else if (ev.type === 'storyboard.changed') {
+      storyboardVersion.value += 1;
     }
   }
 
   return {
     currentProject, connected, lockedResources, storyVersion, lastStoryChange,
-    charactersVersion, storyLocked, charactersLocked,
+    charactersVersion, storyboardVersion, storyLocked, charactersLocked, storyboardLocked,
     setProject, setConnected, applySnapshot, applyEvent,
   };
 });

@@ -674,7 +674,9 @@ export type ScriptWriterIntent =
   | 'script_update' | 'conversation'
   // Character Designer（2026-08-30）：同结构 turn 结果，intent 值不同
   | 'character_create' | 'character_update' | 'character_delete'
-  | 'character_views';
+  | 'character_views'
+  // Director（2026-08-30）：分镜域写操作
+  | 'shot_create' | 'shot_update' | 'shot_delete' | 'shot_move';
 /** meta.receipts 单条回执（写工具真实结果，UI「本轮改动」只信它）。 */
 export interface ScriptWriterReceipt {
   operation: string; ok: boolean; verified: boolean; stale: boolean;
@@ -687,6 +689,13 @@ export interface ScriptWriterReceipt {
   generated?: { character_name: string; views: Record<string, string> }[];
   character_names?: string[];
   elapsed_s?: number;
+  /** Director 回执：操作对象是镜头 id（shot 域）。 */
+  shot_id?: string | null;
+  changed?: string[] | null;
+  index?: number | null;
+  count?: number | null;
+  created?: { shot_id: string; index: number; description: string }[];
+  results?: { shot_id: string; changed: string[]; scene_id?: string }[];
 }
 /** meta.trace 单条执行轨迹（step→tool→target→result→revision）。 */
 export interface ScriptWriterTraceEntry {
