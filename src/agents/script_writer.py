@@ -2101,7 +2101,11 @@ async def script_writer_turn(rt: AgentRuntime, project: str, session_id: str,
 # 不匹配提议/将来态（「我可以帮你创建」），避免对纯对话误触发。
 # 动词与「了/完成」之间允许最多 12 字（如「移到最前面了」「把 s03 移动到第一位了」）。
 _VERBS = (r"创建|新建|插入|添加|追加|加好|移动|移到|移至|更新|调整|"
-          r"修改|改写|改正|改好|改到|重写|续写|删除|删掉|拆分|拆成|拆好|拆完|划分|分段")
+          r"修改|改写|改正|改好|改到|重写|续写|删除|删掉|拆分|拆成|拆好|拆完|划分|分段|"
+          # 2026-08-30 真机补词（Character Designer R2 假成功漏网）：「已将X改为Y」「换成/设成/加上」
+          # 同样是完成态声称，此前不在动词表导致真相闸门漏拦。对既有路径纯增强：闸门只对
+          # 「声称成功但零真实变更」触发，聊天轮保护不变。
+          r"改为|改成|换为|换成|设为|设成|加上")
 _SUCCESS_CLAIM_RE = re.compile(
     rf"(已(经)?\s*(在|把|将)?[^。！？\n]{{0,8}}?({_VERBS})|"
     rf"({_VERBS})[^。！？\n]{{0,12}}了|"
@@ -2174,6 +2178,9 @@ _DISCUSSION_RE = re.compile(
 _STRONG_IMPERATIVE_RE = re.compile(
     r"把[^。？?！!]{0,40}(改|润色|重写|续写|扩写|设|加|添|删|移|挪|换|拆|调|压缩)|"
     r"给[^。？?！!]{0,20}(加|添|改|删|设)|"
+    # 2026-08-30 真机补词：「让X更Y一些。」（无问号）是明确的修改请求（Character Designer
+    # R2 案例），此前零写 recovery 不上膛。问句仍被 _DISCUSSION_RE 保护（探讨语气优先）。
+    r"让[^。？?！!]{0,20}(更|变得|改为|改成|换成|设为|设成)|"
     r"只改|直接改|帮我改|帮我把|改吧|就这么改|按你说的做|按你说的改|开始改|动手改")
 
 _WRITE_REQUEST_RE = re.compile(
@@ -2183,7 +2190,10 @@ _WRITE_REQUEST_RE = re.compile(
     r"移动|移到|移至|挪到|互换|交换|调换|换一下|"
     r"设为|设置成|设成|"
     r"拆分|拆成|分段|分成[两三1-9]段|"
-    r"调整|改吧|就这么改|按你说的做|按你说的改")
+    # 2026-08-30 真机补词（Character Designer：「给林远生成三视图」被误判为讨论）：
+    # 生成/绘制/出图同样是明确执行请求。
+    r"调整|改吧|就这么改|按你说的做|按你说的改|"
+    r"生成|绘制|出图|画(出|一张|一?个)")
 
 
 def _is_explicit_write_request(instruction: str) -> bool:
@@ -2191,9 +2201,15 @@ def _is_explicit_write_request(instruction: str) -> bool:
     t = (instruction or "").strip()
     if not t:
         return False
+    is_question = ("?" in t or "？" in t)
+    # 2026-08-30：强祈使（把/给/让…+动作）提前判定——此前只在内含探讨词时才检查，
+    # 「让他的眼神更锐利一些」这类不含常规写动词的祈使句会漏判（真机 R2 案例）。
+    # 问句仍不算（探讨语气保护不变）。
+    if not is_question and _STRONG_IMPERATIVE_RE.search(t):
+        return True
     if _DISCUSSION_RE.search(t):
-        # 探讨语气默认排除；但强祈使且整句非问句（无问号）时仍算写入请求
-        if "?" not in t and "？" not in t and _STRONG_IMPERATIVE_RE.search(t):
+        # 探讨语气默认排除；强祈使且整句非问句（无问号）时仍算写入请求
+        if not is_question and _STRONG_IMPERATIVE_RE.search(t):
             return True
         return False
     return bool(_WRITE_REQUEST_RE.search(t))

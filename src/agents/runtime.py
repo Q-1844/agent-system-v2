@@ -373,6 +373,12 @@ class AgentRuntime:
             from .script_writer import script_writer_turn
             return await script_writer_turn(self, project, sid, content)
 
+        # 2026-08-30：Character Designer 项目级 Direct Chat 同走原生 tool-loop（只写角色
+        # canonical；story/script 只读参考）。与 script_writer 同语义：在持久化 user 之前委派。
+        if agent_id == "character_designer" and scope_type == ScopeType.PROJECT.value:
+            from .character_designer import character_designer_turn
+            return await character_designer_turn(self, project, sid, content)
+
         # 捕获对话历史（append 当前 user 之前的 messages）供 inquiry 路径多轮承接（D1.3 / Bug B）。
         # conversation 路径（_produce_chat_reply）自己读 session.messages 含历史；inquiry 路径需显式注入。
         history = [{"role": m.role, "content": m.content}

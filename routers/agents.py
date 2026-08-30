@@ -261,7 +261,11 @@ async def cancel_agent_turn(project_name: str, sid: str):
 
 @router.post("/api/project/{project_name}/agents/sessions/{sid}/turn/stream")
 async def agent_turn_stream(project_name: str, sid: str, req: StreamTurnReq):
-    """AI-7D-R · Script Writer 流式 Direct Chat turn（/turn 不动，新接口）。
+    """AI-7D-R · Agent 流式 Direct Chat turn（/turn 不动，新接口）。
+
+    2026-08-30 起支持两个具备直接编辑工具的 Agent（各自 tool-loop，互不改写对方写入域）：
+      script_writer        → 写 story_text/scenes，资源锁 story，变更事件 story.changed
+      character_designer   → 写 characters，资源锁 character，变更事件 character.changed
 
     发送瞬间把 req.thinking snapshot 固定为本 turn 配置。逐 AgentStreamEvent SSE forward：
       turn.started → reasoning.* / tool.* / assistant.delta → turn.completed(完整结果) /
@@ -269,22 +273,33 @@ async def agent_turn_stream(project_name: str, sid: str, req: StreamTurnReq):
 
     AI-7D-R 后台续跑：客户端断开（切走/关页/刷新）【不取消】turn 任务——agent 继续在
     后台跑完，消息照常持久化。细粒度流式事件仅在有观看连接时入队（断开后不堆积）；
-    资源事件（resource.locked/story.changed/resource.unlocked）始终发项目总线，让任何
-    打开该项目的页面（如剧本模块）实时看到锁与内容变化。"""
+    资源事件（resource.locked/*.changed/resource.unlocked）始终发项目总线，让任何
+    打开该项目的页面（如剧本/角色模块）实时看到锁与内容变化。"""
     rt = get_agent_runtime()
-    # 与 unified_turn 同源的前置校验（仅 script_writer project scope 走流式）
     store = rt._session_store(project_name)
     session = store.load(sid)
     if session is None:
         _raise(AgentError("unknown_scope", f"session 不存在: {sid}"))
-    if session.agent_id != "script_writer":
+    # 每个 Agent 的流式配置：turn 函数（lazy import）+ 写工具集合 + 锁资源 + 变更事件发射器
+    if session.agent_id == "script_writer":
+        from src.agents.script_writer import script_writer_turn, WRITE_OPERATIONS
+        from src.agents.project_events import RESOURCE_STORY, emit_changed
+        _turn_fn, _writes, _resource, _emit = (
+            script_writer_turn, WRITE_OPERATIONS, RESOURCE_STORY, emit_changed)
+    elif session.agent_id == "character_designer":
+        from src.agents.character_designer import (character_designer_turn,
+                                                   CHARACTER_WRITE_OPERATIONS)
+        from src.agents.project_events import RESOURCE_CHARACTER, emit_changed
+        _turn_fn, _writes, _resource, _emit = (
+            character_designer_turn, CHARACTER_WRITE_OPERATIONS, RESOURCE_CHARACTER, emit_changed)
+    else:
         _raise(AgentError("permission_denied",
-                          "流式 turn 当前仅支持 Script Writer 会话"))
-    from src.agents.script_writer import script_writer_turn, WRITE_OPERATIONS
+                          "流式 turn 仅支持 Script Writer / Character Designer 会话"))
     from src.agents.models import ScopeType
-    from src.agents.project_events import get_project_bus, RESOURCE_STORY
+    from src.agents.project_events import get_project_bus
     if session.scope_type != ScopeType.PROJECT.value:
         _raise(AgentError("unsupported_scope", "流式 turn 仅支持 project scope"))
+    agent_id = session.agent_id
 
     # 同会话互斥：上一个 turn 还在跑（含后台续跑）→ 409，不并发改同一项目
     key = _turn_key(project_name, sid)
@@ -303,16 +318,16 @@ async def agent_turn_stream(project_name: str, sid: str, req: StreamTurnReq):
         state = {"connected": True, "locked": False}
 
         def _cb(ev):
-            # 同 loop 同线程同步操作（script_writer_turn 与 consumer 共享同一事件循环）。
+            # 同 loop 同线程同步操作（agent turn 与 consumer 共享同一事件循环）。
             t = ev.get("type")
             name = ev.get("name") or ""
             # 资源事件 → 项目总线（始终发，后台跑也要让其它页面看到锁/变更）
-            if t == "tool.started" and name in WRITE_OPERATIONS and not state["locked"]:
-                bus.lock(project_name, RESOURCE_STORY, by="script_writer", session_id=sid)
+            if t == "tool.started" and name in _writes and not state["locked"]:
+                bus.lock(project_name, _resource, by=agent_id, session_id=sid)
                 state["locked"] = True
-            elif t == "tool.completed" and name in WRITE_OPERATIONS and ev.get("ok"):
-                bus.emit_story_changed(project_name, by="script_writer",
-                                       session_id=sid, operation=name)
+            elif t == "tool.completed" and name in _writes and ev.get("ok"):
+                _emit(bus, project_name, _resource, by=agent_id,
+                      session_id=sid, operation=name)
             # 细粒度流式事件 → 仅在有观看连接时入队（断开后后台跑不堆积）
             if state["connected"]:
                 try:
@@ -326,7 +341,7 @@ async def agent_turn_stream(project_name: str, sid: str, req: StreamTurnReq):
 
         async def _run():
             try:
-                result = await script_writer_turn(
+                result = await _turn_fn(
                     rt, project_name, sid, req.content,
                     thinking=thinking_fixed, event_cb=_cb, cancel_event=cancel_event)
                 if state["connected"]:
@@ -338,9 +353,12 @@ async def agent_turn_stream(project_name: str, sid: str, req: StreamTurnReq):
                 if state["connected"]:
                     q.put_nowait({"type": "turn.failed", "error": str(e)[:300]})
             finally:
-                # 资源锁释放（成功/失败/停止/断开都要释放）
+                # 资源锁释放（成功/失败/停止/断开都要释放）。
+                # 🔴 用 _resource（当前 Agent 的写入域资源），不能用任何分支里的局部 import 名
+                #（character_designer 分支没有 RESOURCE_STORY 绑定，闭包会 NameError →
+                # 锁泄漏 + SSE 流不收尾）。
                 if state["locked"]:
-                    bus.unlock(project_name, RESOURCE_STORY)
+                    bus.unlock(project_name, _resource)
                     state["locked"] = False
                 _ACTIVE_TURN_EVENTS.pop(key, None)
                 if state["connected"]:

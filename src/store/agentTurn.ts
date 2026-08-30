@@ -109,6 +109,13 @@ export const useAgentTurnStore = defineStore('agentTurn', () => {
         streamingText.value += ev.delta;
         currentActivity.value = null;
         break;
+      case 'views.progress':
+        // Character Designer 三视图长任务进度（6-20 分钟级）
+        currentActivity.value = {
+          type: 'tool',
+          label: `正在生成 ${ev.character_name} 三视图 · ${ev.view}${ev.pct ? ` (${ev.pct}%)` : ''}…`,
+        };
+        break;
       case 'turn.completed':
       case 'turn.failed':
         currentActivity.value = null;
@@ -175,6 +182,7 @@ export const useAgentTurnStore = defineStore('agentTurn', () => {
   }
 
   // 工具名→人类可读 label（与后端 _TOOL_LABELS 一致；trace 重建折叠条用）。
+  // 2026-08-30：加入 Character Designer 的角色工具。
   const TOOL_LABELS: Record<string, string> = {
     'script.read': '读取剧本', 'script.update': '更新剧本',
     'story.list': '读取故事段', 'story.read': '读取故事段',
@@ -182,6 +190,9 @@ export const useAgentTurnStore = defineStore('agentTurn', () => {
     'story.update': '修改故事段', 'story.delete': '删除故事段',
     'story.create_many': '批量创建故事段', 'story.update_many': '批量修改故事段',
     'story.delete_many': '批量删除故事段', 'story.insert_many': '批量插入故事段',
+    'character.list': '读取角色列表', 'character.read': '读取角色',
+    'character.create': '创建角色', 'character.update': '修改角色',
+    'character.delete': '删除角色', 'character.generate_views': '生成角色三视图',
     'web.search': '搜索资料',
   };
 

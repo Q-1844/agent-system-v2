@@ -1,5 +1,9 @@
 <template>
   <div class="characters-page">
+    <!-- 2026-08-30：Character Designer 运行期只读提示（角色域资源锁） -->
+    <div v-if="charactersLocked" class="agent-lock-banner">
+      <span class="lock-spinner">◌</span> AI 正在修改角色设定，编辑暂时锁定，完成后自动恢复
+    </div>
     <!-- 左侧角色列表 -->
     <aside class="char-list" :class="{ collapsed: listCollapsed }">
       <!-- 列表头部：标题 + ＋新建 + 收起 -->
@@ -172,6 +176,7 @@ import { ref, computed, onMounted, nextTick, watch, defineAsyncComponent } from 
 import { storeToRefs } from 'pinia';
 import { useProjectStore } from '@/store';
 import { useAgentUiStore } from '@/store/agentUi';
+import { useProjectEventsStore } from '@/store/projectEvents';
 import { apiClient } from '@/api';
 import { useRoute } from 'vue-router';
 import CharacterDesignStudio from '@/components/CharacterDesignStudio.vue';
@@ -246,6 +251,7 @@ function selectChar(char: any) {
 }
 
 async function addCharacter() {
+  if (charactersLocked.value) { store.showNotification('Agent 正在修改角色，请稍候', 'info'); return; }
   if (!newCharName.value.trim()) { store.showNotification('请输入角色名称', 'error'); return; }
   if (!newCharDesc.value.trim()) { store.showNotification('请输入角色描述', 'error'); return; }
   const name = newCharName.value.trim();
@@ -280,6 +286,7 @@ function confirmDeleteChar(char: any) {
 
 async function deleteChar() {
   if (!deleteTarget.value) return;
+  if (charactersLocked.value) { store.showNotification('Agent 正在修改角色，请稍候', 'info'); showDeleteConfirm.value = false; return; }
   const target = deleteTarget.value;
   try {
     await apiClient.deleteProjectCharacter(projectName.value, target.name);
@@ -331,6 +338,7 @@ function formatDate(dateStr: string) {
 }
 
 function startEditName() {
+  if (charactersLocked.value) { store.showNotification('Agent 正在修改角色，请稍候', 'info'); return; }
   editNameValue.value = selected.value.name;
   editingName.value = true;
   nextTick(() => nameInput.value?.focus());
@@ -339,6 +347,7 @@ async function saveName() {
   const newName = editNameValue.value.trim();
   editingName.value = false;
   if (!newName || newName === selected.value.name) return;
+  if (charactersLocked.value) return;   // 锁定期不落盘（本地编辑已随锁定刷新被覆盖）
   const oldName = selected.value.name;
   selected.value.name = newName;   // 本地立即更新
   try {
@@ -350,6 +359,7 @@ async function saveName() {
 function cancelEditName() { editingName.value = false; }
 
 function startEditDesc() {
+  if (charactersLocked.value) { store.showNotification('Agent 正在修改角色，请稍候', 'info'); return; }
   editDescValue.value = selected.value.description;
   editingDesc.value = true;
   nextTick(() => descInput.value?.focus());
@@ -358,6 +368,7 @@ async function saveDesc() {
   const newDesc = editDescValue.value.trim();
   editingDesc.value = false;
   if (!newDesc) return;
+  if (charactersLocked.value) return;   // 锁定期不落盘
   selected.value.description = newDesc;   // 本地立即更新
   try {
     await apiClient.updateProjectCharacter(projectName.value, selected.value.name, { description: newDesc });
@@ -392,6 +403,24 @@ watch(projectName, () => {
   store.loadProjectCharacters(projectName.value);
 });
 
+// ---- 2026-08-30：Character Designer 运行期的角色域只读锁 + 实时刷新 ----
+// 事件由 app 级 useProjectEvents（MainLayout 挂载）喂进 store；本页只消费状态。
+// 锁定/解锁瞬间同步基线数据并退出本地编辑态（锁定期用户不可编辑，覆盖安全）；
+// Agent 每次落盘（character.changed）且仍在锁定期 → 静默刷新列表与选中角色。
+const pev = useProjectEventsStore();
+const charactersLocked = computed(() => pev.charactersLocked);
+watch(charactersLocked, (locked) => {
+  if (!projectName.value) return;
+  if (locked) {
+    editingName.value = false;
+    editingDesc.value = false;
+  }
+  store.loadProjectCharacters(projectName.value);
+});
+watch(() => pev.charactersVersion, () => {
+  if (projectName.value && pev.charactersLocked) store.loadProjectCharacters(projectName.value);
+});
+
 // ---- AI 角色设计（Phase AI-2）----
 function openDesignStudio(char: any) {
   designInitialName.value = char?.name || null;
@@ -413,6 +442,27 @@ watch(showAddDialog, (v) => { if (v) nextTick(() => addNameInput.value?.focus())
   height: calc(100vh - 88px);
   position: relative;
 }
+
+// 2026-08-30：Character Designer 运行期只读横幅（顶部居中，不挡操作只提示状态）
+.agent-lock-banner {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px;
+  border-radius: 14px;
+  font-size: 12px;
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.4);
+  pointer-events: none;
+  .lock-spinner { display: inline-block; animation: char-lock-spin 1s linear infinite; }
+}
+@keyframes char-lock-spin { to { transform: rotate(360deg); } }
 
 // ===== 左侧角色列表 =====
 .char-list {

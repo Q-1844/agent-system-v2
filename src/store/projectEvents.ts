@@ -10,6 +10,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 
 export const RESOURCE_STORY = 'story';
+export const RESOURCE_CHARACTER = 'character';
 
 export interface ProjectEvent {
   type: string;
@@ -30,14 +31,18 @@ export const useProjectEventsStore = defineStore('projectEvents', () => {
   const storyVersion = ref(0);
   /** 最近一次变更事件（供需要时取 operation 等） */
   const lastStoryChange = ref<ProjectEvent | null>(null);
+  /** character.changed 自增版本号（角色域内容变化信号，Character Designer 写入后 +1） */
+  const charactersVersion = ref(0);
 
   const storyLocked = computed(() => !!lockedResources.value[RESOURCE_STORY]);
+  const charactersLocked = computed(() => !!lockedResources.value[RESOURCE_CHARACTER]);
 
   function setProject(p: string) {
     if (currentProject.value !== p) {
       currentProject.value = p;
       lockedResources.value = {};
       lastStoryChange.value = null;
+      charactersVersion.value = 0;
     }
   }
   function setConnected(c: boolean) { connected.value = c; }
@@ -61,12 +66,14 @@ export const useProjectEventsStore = defineStore('projectEvents', () => {
     } else if (ev.type === 'story.changed') {
       storyVersion.value += 1;
       lastStoryChange.value = ev;
+    } else if (ev.type === 'character.changed') {
+      charactersVersion.value += 1;
     }
   }
 
   return {
     currentProject, connected, lockedResources, storyVersion, lastStoryChange,
-    storyLocked,
+    charactersVersion, storyLocked, charactersLocked,
     setProject, setConnected, applySnapshot, applyEvent,
   };
 });

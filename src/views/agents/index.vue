@@ -128,6 +128,16 @@
                 <div class="receipts-head">本轮改动</div>
                 <div v-for="(r, ri) in realReceipts(m.meta)" :key="ri" class="receipt-item">✓ {{ receiptLabel(r) }}</div>
               </div>
+              <!-- 2026-08-30：本轮真实生成的角色三视图（图片不进模型上下文，窗口渲染给用户） -->
+              <div v-for="grp in groupGeneratedViews(m.meta)" :key="'gv-' + i + grp.name"
+                   class="gen-views">
+                <div class="gv-name">{{ grp.name }} · 三视图</div>
+                <div class="gv-grid">
+                  <img v-for="v in grp.items" :key="v.view" class="gv-img"
+                       :src="getImageUrl(v.path)" :alt="grp.name + ' ' + v.view"
+                       loading="lazy" />
+                </div>
+              </div>
               <!-- Web Search：资料来源折叠区（仅 title+url 链接，来自 meta.search_sources；不展示 snippet） -->
               <div v-if="searchSources(m.meta).length" class="sources">
                 <div class="sources-head" @click="toggleSourcesOf(m)">
@@ -142,7 +152,7 @@
             </div>
             <!-- AI-7D-R：流式执行过程（当前 turn）。状态归 app store，切走页面不丢；
                  仅当活跃 turn 属于当前会话时显示。 -->
-            <div v-if="turn.running && selectedId === 'script_writer' && turn.activeSessionId === session?.session_id"
+            <div v-if="turn.running && isStreamed && turn.activeSessionId === session?.session_id"
                  class="stream-area">
               <div class="stream-head">
                 <div v-if="currentActivity" class="activity">
@@ -188,8 +198,9 @@
             </div>
           </div>
           <div class="composer">
-            <!-- AI-7D-R §三：思考开关（发送瞬间 snapshot）。滑动 toggle，视觉非 checkbox。 -->
-            <label v-if="selectedId === 'script_writer'" class="thinking-toggle" :class="{ on: thinkingToggle }"
+            <!-- AI-7D-R §三：思考开关（发送瞬间 snapshot）。滑动 toggle，视觉非 checkbox。
+                 2026-08-30：流式 Agent（Script Writer / Character Designer）通用。 -->
+            <label v-if="isStreamed" class="thinking-toggle" :class="{ on: thinkingToggle }"
                    :title="thinkingToggle ? '思考已开启（本次发送起生效）' : '思考已关闭'">
               <input type="checkbox" v-model="thinkingToggle" class="tt-sr-only" role="switch"
                      :aria-checked="thinkingToggle" aria-label="思考模式" />
@@ -218,11 +229,11 @@
               {{ busy ? '…' : '发送' }}
             </button>
           </div>
-          <div v-if="turn.running && selectedId === 'script_writer'" class="lock-hint">
+          <div v-if="turn.running && isStreamed" class="lock-hint">
             ◌ Agent 正在后台处理，可切换到其它模块，完成后这里会自动显示结果
           </div>
-          <div v-else-if="pev.storyLocked && !turn.running" class="lock-hint">
-            🔒 Agent 正在修改本项目剧本，输入暂时锁定
+          <div v-else-if="currentLocked && !turn.running" class="lock-hint">
+            🔒 {{ selectedId === 'character_designer' ? 'Agent 正在修改本项目角色，输入暂时锁定' : 'Agent 正在修改本项目剧本，输入暂时锁定' }}
           </div>
           <div v-if="chatError" class="chat-err">{{ chatError }}</div>
         </div>
@@ -265,6 +276,7 @@ import { useChangeSessionStore } from '@/store/changeSession';
 import { useAgentTurnStore, type ProcessItem } from '@/store/agentTurn';
 import { useProjectEventsStore } from '@/store/projectEvents';
 import { useStickToBottom } from '@/composables/useStickToBottom';
+import { getImageUrl } from '@/utils/media';
 import TeamChatPanel from '@/components/agent/TeamChatPanel.vue';
 import ChangePlanReview from '@/components/agent/ChangePlanReview.vue';
 import ScriptWriterTestModal from '@/components/agent/ScriptWriterTestModal.vue';
@@ -314,16 +326,34 @@ const currentActivity = computed(() => turn.currentActivity);
 const assistantStreaming = computed(() => turn.streamingText);
 const completedSteps = computed(() => turn.completedSteps);
 function onToggleProcess() { turn.toggleProcess(); }
-// 工作中 = 本地 legacy 路径忙，或 script_writer 流式 turn 在跑（含后台续跑）
+// AI-7D-R：具备直接编辑工具、走流式 tool-loop 的 Agent（2026-08-30 加入 Character Designer）
+const STREAMED_AGENTS = new Set(['script_writer', 'character_designer']);
+const isStreamed = computed(() => STREAMED_AGENTS.has(selectedId.value));
+// 输入锁定按 Agent 写入域区分：Script Writer 写剧本域（story 锁），Character Designer 写角色域（character 锁）
+const currentLocked = computed(() =>
+  selectedId.value === 'character_designer' ? pev.charactersLocked : pev.storyLocked);
+// 工作中 = 本地 legacy 路径忙，或流式 turn 在跑（含后台续跑）
 const busy = computed(() => sending.value || turn.running);
-// 输入禁用：本地忙 / 流式 turn 在跑 / 剧本资源被 Agent 锁（含其它客户端）
-const composerDisabled = computed(() => busy.value || pev.storyLocked);
+// 输入禁用：本地忙 / 流式 turn 在跑 / 本 Agent 写入域被 Agent 锁（含其它客户端）
+const composerDisabled = computed(() => busy.value || currentLocked.value);
 const composerPlaceholder = computed(() =>
-  pev.storyLocked ? '🔒 Agent 正在修改剧本，请稍候…' : '输入消息…');
+  currentLocked.value
+    ? (selectedId.value === 'character_designer'
+        ? '🔒 Agent 正在修改角色，请稍候…' : '🔒 Agent 正在修改剧本，请稍候…')
+    : '输入消息…');
 
 // receipts → 「本轮改动」轻量渲染（只信结构化 receipts，不解析正文）
 function receiptLabel(r: ScriptWriterReceipt): string {
   const op = r.operation || '';
+  // Character Designer 回执（操作对象是 character_name）
+  if (op === 'character.create') return `创建角色 ${r.character_name || ''}`.trim();
+  if (op === 'character.update') return `修改角色 ${r.character_name || ''}`.trim();
+  if (op === 'character.delete') return `删除角色 ${r.character_name || ''}`.trim();
+  if (op === 'character.generate_views') {
+    const n = r.generated?.length || 0;
+    const total = r.character_names?.length || 0;
+    return `生成三视图（${n}/${total} 个角色完成）`;
+  }
   if (op === 'story.create') return `创建 ${r.scene_id || ''}`.trim();
   if (op === 'story.move') return `移动 ${r.scene_id || ''}`.trim();
   if (op === 'story.update') return `修改 ${r.scene_id || ''}`.trim();
@@ -345,6 +375,23 @@ function searchSources(meta: any): ScriptWriterSearchSource[] {
 }
 function sourcesExpandedOf(m: any): boolean { return !!m._sourcesExpanded; }
 function toggleSourcesOf(m: any) { m._sourcesExpanded = !m._sourcesExpanded; }
+
+// 2026-08-30：本轮真实生成的角色三视图（meta.generated_views，local 路径）→ 图片网格。
+// 按 character_name 分组，视图固定 front/side/back 顺序；图片不进模型上下文，仅窗口展示。
+const VIEW_ORDER: Record<string, number> = { front: 0, side: 1, back: 2 };
+function groupGeneratedViews(meta: any): { name: string; items: { view: string; path: string }[] }[] {
+  const list: any[] = Array.isArray(meta?.generated_views) ? meta.generated_views : [];
+  const byName = new Map<string, { view: string; path: string }[]>();
+  for (const g of list) {
+    if (!g || !g.character_name || !g.path) continue;
+    if (!byName.has(g.character_name)) byName.set(g.character_name, []);
+    byName.get(g.character_name)!.push({ view: g.view, path: g.path });
+  }
+  return [...byName.entries()].map(([name, items]) => ({
+    name,
+    items: items.sort((a, b) => (VIEW_ORDER[a.view] ?? 9) - (VIEW_ORDER[b.view] ?? 9)),
+  }));
+}
 
 // AI-7D-R：完成后执行过程附在 message 上保留（折叠态），事后可展开查看。
 // reasoning 文本不持久化（spec §一），刷新后丢失。两处来源：
@@ -479,8 +526,8 @@ async function openSession() {
     session.value = await apiClient.createAgentSession(projectName.value, selectedId.value, scopeType.value, sid);
     // 刷新/重载后执行过程折叠条会丢（_processItems 不持久化、pinia 清空）。
     // 后端 meta.trace（tool 轨迹）+ meta.reasonings（每步思考文本）都是落盘的，
-    // 用它们重建折叠条（tool 步骤 + reasoning 思考内容交错）。仅 script_writer 带 meta。
-    if (selectedId.value === 'script_writer' && session.value?.messages) {
+    // 用它们重建折叠条（tool 步骤 + reasoning 思考内容交错）。流式 Agent 均带 meta。
+    if (STREAMED_AGENTS.has(selectedId.value) && session.value?.messages) {
       for (const m of session.value.messages) {
         const meta = (m as any).meta;
         if (m.role === 'assistant' && (m as any).message_id
@@ -507,9 +554,9 @@ async function send() {
   try {
     // AI-7D D2：变更意图 → 真 ChangeSession 桥接（复用 csStore.bridgeFromDirectChat，与
     // Floating Bar 同语义）；否则只读/对话 → 统一 /turn runtime（D1 真 inspect 接地）。
-    // AI-7D-R：script_writer 等具备直接编辑工具的 Agent 跳过 ChangeSession 方案审核，
-    // 直接发 /turn 由 agent 自己的 tool-loop 完成修改（LLM→tool→observation→回复）。
-    const DIRECT_EDIT_AGENTS = new Set(['script_writer']);
+    // AI-7D-R：script_writer / character_designer 具备直接编辑工具，跳过 ChangeSession
+    // 方案审核，走 /turn/stream 由各自 tool-loop 完成修改（LLM→tool→observation→回复）。
+    const DIRECT_EDIT_AGENTS = STREAMED_AGENTS;
     const isDirectEdit = DIRECT_EDIT_AGENTS.has(selectedId.value);
     if (CHANGE_INTENT_RE.test(content) && !isDirectEdit) {
       const msgs = await cs.bridgeFromDirectChat(content, {
@@ -736,6 +783,12 @@ onUnmounted(() => {
 .receipts { margin-top: 6px; padding: 6px 8px; border-left: 2px solid #4ade80; background: rgba(74,222,128,.06); border-radius: 0 6px 6px 0; }
 .receipts-head { font-size: 11px; color: #4ade80; margin-bottom: 2px; }
 .receipt-item { font-size: 11px; color: var(--text-secondary, #9399b2); }
+/* 2026-08-30 · 本轮生成的角色三视图图片网格 */
+.gen-views { margin-top: 6px; padding: 6px 8px; border-left: 2px solid #4ade80; background: rgba(74,222,128,.04); border-radius: 0 6px 6px 0; }
+.gv-name { font-size: 11px; color: #4ade80; margin-bottom: 4px; }
+.gv-grid { display: flex; gap: 6px; flex-wrap: wrap; }
+.gv-img { width: 72px; height: 108px; object-fit: cover; border-radius: 4px; background: rgba(255,255,255,.06); border: 1px solid var(--border); cursor: pointer; }
+.gv-img:hover { border-color: var(--accent); }
 /* Web Search 资料来源折叠区（与 receipts 同级同风格） */
 .sources { margin-top: 6px; padding: 6px 8px; border-left: 2px solid #60a5fa; background: rgba(96,165,250,.06); border-radius: 0 6px 6px 0; }
 .sources-head { font-size: 11px; color: #60a5fa; cursor: pointer; user-select: none; }

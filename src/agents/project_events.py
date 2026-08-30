@@ -26,6 +26,7 @@ from typing import Optional
 
 # 资源名
 RESOURCE_STORY = "story"   # 剧本域：story_text（正文）+ scenes（故事段）
+RESOURCE_CHARACTER = "character"   # 角色域：project.json 的 characters（Character Designer 写入域）
 
 _MAX_QUEUE = 256
 
@@ -72,6 +73,12 @@ class ProjectEventBus:
         self.publish(project, {"type": "story.changed", "by": by,
                                "session_id": session_id, "operation": operation})
 
+    def emit_characters_changed(self, project: str, *, by: str = "",
+                                session_id: str = "", operation: str = "") -> None:
+        """角色域内容已落盘（Character Designer 写路径发布；角色页订阅静默刷新）。"""
+        self.publish(project, {"type": "character.changed", "by": by,
+                               "session_id": session_id, "operation": operation})
+
     # ---------- 资源锁 ----------
     def lock(self, project: str, resource: str, *, by: str = "",
              session_id: str = "") -> bool:
@@ -100,6 +107,17 @@ class ProjectEventBus:
         if resource is None:
             return bool(locks)
         return resource in locks
+
+
+def emit_changed(bus, project: str, resource: str, *, by: str = "",
+                 session_id: str = "", operation: str = "") -> None:
+    """按资源名分发内容变更事件（Agent 流式端点用；资源 → 事件类型映射的唯一入口）。
+    story → story.changed；character → character.changed；未知资源发通用 resource.changed。"""
+    type_by_resource = {RESOURCE_STORY: "story.changed",
+                        RESOURCE_CHARACTER: "character.changed"}
+    bus.publish(project, {"type": type_by_resource.get(resource, "resource.changed"),
+                          "resource": resource, "by": by,
+                          "session_id": session_id, "operation": operation})
 
 
 _bus: Optional[ProjectEventBus] = None

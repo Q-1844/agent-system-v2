@@ -671,13 +671,22 @@ export interface ScriptWriterTurnResult {
 }
 export type ScriptWriterIntent =
   | 'story_create' | 'story_move' | 'story_update' | 'story_delete'
-  | 'script_update' | 'conversation';
+  | 'script_update' | 'conversation'
+  // Character Designer（2026-08-30）：同结构 turn 结果，intent 值不同
+  | 'character_create' | 'character_update' | 'character_delete'
+  | 'character_views';
 /** meta.receipts 单条回执（写工具真实结果，UI「本轮改动」只信它）。 */
 export interface ScriptWriterReceipt {
   operation: string; ok: boolean; verified: boolean; stale: boolean;
   unchanged: boolean; confirmed: boolean;
   error: string | null;
   scene_id: string | null; order: number | null; revision: string | null;
+  /** Character Designer 回执：操作对象是角色名（scene_id 为 null）。 */
+  character_name?: string | null;
+  /** character.generate_views：真实生成的三视图（local 路径）。 */
+  generated?: { character_name: string; views: Record<string, string> }[];
+  character_names?: string[];
+  elapsed_s?: number;
 }
 /** meta.trace 单条执行轨迹（step→tool→target→result→revision）。 */
 export interface ScriptWriterTraceEntry {
@@ -704,13 +713,19 @@ export interface ToolStartedEvent { type: 'tool.started'; step_id: number; call_
 export interface ToolCompletedEvent { type: 'tool.completed'; step_id: number; call_id: string; name: string; ok: boolean; summary: string }
 export interface ToolFailedEvent { type: 'tool.failed'; step_id: number; call_id: string; name: string; error: string }
 export interface AssistantDeltaEvent { type: 'assistant.delta'; delta: string }
+/** Character Designer 三视图生成进度（长任务，百分比推进）。 */
+export interface ViewsProgressEvent {
+  type: 'views.progress'; character_name: string; view: string;
+  message: string; pct: number;
+}
 export interface TurnCompletedEvent { type: 'turn.completed'; result: ScriptWriterTurnResult }
 export interface TurnFailedEvent { type: 'turn.failed'; error: string }
 /** 前端据 event.type 安全分支处理。turn.completed.result 仍是现有完整最终结构。 */
 export type AgentStreamEvent =
   | TurnStartedEvent | ReasoningStartedEvent | ReasoningDeltaEvent
   | ReasoningCompletedEvent | ToolPendingEvent | ToolStartedEvent | ToolCompletedEvent
-  | ToolFailedEvent | AssistantDeltaEvent | TurnCompletedEvent | TurnFailedEvent;
+  | ToolFailedEvent | AssistantDeltaEvent | ViewsProgressEvent
+  | TurnCompletedEvent | TurnFailedEvent;
 export interface AgentSession {
   session_id: string; project: string; agent_id: string;
   scope_type: string; scope_id: string;
