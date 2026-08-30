@@ -182,6 +182,7 @@ export const useAgentTurnStore = defineStore('agentTurn', () => {
     'story.update': '修改故事段', 'story.delete': '删除故事段',
     'story.create_many': '批量创建故事段', 'story.update_many': '批量修改故事段',
     'story.delete_many': '批量删除故事段', 'story.insert_many': '批量插入故事段',
+    'web.search': '搜索资料',
   };
 
   /**

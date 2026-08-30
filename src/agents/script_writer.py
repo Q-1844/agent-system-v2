@@ -25,6 +25,7 @@
 #   stale → 拒绝写入（不落盘/不分配 ID/不审计），把最新版 + 新指纹返回 Agent 重新判断。
 #   每轮工具调用后无条件刷新 system（项目元信息/计数）。
 from __future__ import annotations
+import asyncio
 import hashlib
 import json
 import logging
@@ -34,6 +35,7 @@ from typing import Any, Optional
 
 import httpx
 
+from src.api.tavily_hub_client import TavilyHubClient
 from src.core.store import ProjectStore
 from src.storyboard.structure_service import (
     StructureError, insert_scenes, insert_scenes_at_anchors, move_scene,
@@ -50,6 +52,21 @@ log = logging.getLogger("agents.script_writer")
 # 反馈结构化恢复信息，让 Agent 以更小批次继续剩余任务。最多恢复 2 次。
 MAX_TIMEOUT_RETRIES = 2
 _BATCH_DOWNGRADE = {5: 2, 2: 1, 1: 1}   # 5 → 2 → 1（到 1 不再降）
+
+# Web Search（第一版，Tavily Hub）：每个 user turn 硬上限 3 次真实搜索。
+# Runtime 计数（loop-local，turn 结束随循环销毁自动重置），不依赖 prompt 自觉。
+# 超限直接拒绝（不调 Provider），返回结构化 tool error 让 Agent 用已有信息收尾。
+MAX_WEB_SEARCH = 3
+
+# web.search Provider 客户端（进程级单例，无状态；测试用 _get_web_search_client 替换）。
+_WEB_SEARCH_CLIENT: Optional[TavilyHubClient] = None
+
+
+def _get_web_search_client() -> TavilyHubClient:
+    global _WEB_SEARCH_CLIENT
+    if _WEB_SEARCH_CLIENT is None:
+        _WEB_SEARCH_CLIENT = TavilyHubClient()
+    return _WEB_SEARCH_CLIENT
 
 
 class _TurnStopped(Exception):
@@ -112,6 +129,8 @@ def _trace_entry(step: int, name: str, args: str, obs: dict) -> dict:
               or (obs.get("target") if obs.get("ok") else None))
     if name == "script.update":
         target = "story_text"
+    if name == "web.search":
+        target = obs.get("target")   # 搜索词（executor 已截断）；成功/失败都展示，不含 snippet
     result = ("stale" if obs.get("stale")
               else "unchanged" if obs.get("unchanged")
               else "ok" if obs.get("ok")
@@ -133,6 +152,7 @@ _TOOL_LABELS = {
     "story.update": "修改故事段", "story.delete": "删除故事段",
     "story.create_many": "批量创建故事段", "story.update_many": "批量修改故事段",
     "story.delete_many": "批量删除故事段", "story.insert_many": "批量插入故事段",
+    "web.search": "搜索资料",
 }
 
 
@@ -142,6 +162,13 @@ def _tool_label(name: str) -> str:
 
 def _tool_summary(name: str, obs: dict) -> str:
     """tool.completed 的 summary：成功用 _op_human 真实描述，失败给原因。"""
+    if name == "web.search":
+        if obs.get("ok"):
+            n = obs.get("n_results", 0)
+            return f"找到 {n} 个参考来源" if n else "没有找到相关资料"
+        if obs.get("code") == "search_budget_exhausted":
+            return "本轮搜索次数已达上限"
+        return f"搜索未完成：{obs.get('error') or obs.get('code') or '失败'}"
     if obs.get("ok"):
         if obs.get("operation"):
             return _op_human(obs)
@@ -236,6 +263,7 @@ SCRIPT_WRITER_SYSTEM = """你是 AGNES 的 Script Writer，负责项目的【剧
 - story.delete(scene_id)：删除一个已有故事段（会连带删掉该段下的镜头和生成资产）。用户明确要求删除某段时，直接调用本工具删除即可——不需要先预览再问用户确认。删完后用 story.list 核对真实结果并向用户总结删除了什么、当前剩余几段。
 - story.delete_many(scene_ids[], expected_scenes_revision)：一次删除多个故事段（用户一次要求删 ≥2 段时【优先】用本工具，不要连续多次调 story.delete）。只接受稳定 scene_id、不接受 position 数字：先 story.list 把用户说的「第N段」全部解析成 scene_id，再一次传入。整批一次乐观并发+一次原子级联删除（含各段镜头与生成资产），任一 scene_id 不存在/重复/revision 过期则整批不删。删完后用 story.list 核对真实结果并总结。
 - story.move(scene_id, before_scene_id?, after_scene_id?, expected_scenes_revision)：把已有故事段移动到某段之前/之后；省略 before/after 即移到末尾。
+- web.search(query)：搜索现实世界资料，返回约 3 条「标题+摘要+链接」。仅当用户明确要求搜索，或正在创作且现实世界知识明显影响剧本可信度（历史时期、医疗、法律/刑侦、军事、职业流程、城市/地域、文化习俗、真实科技、新闻/现实背景）时使用。普通润色、情绪、对白语气、结构调整、纯虚构创作不搜索。每轮最多 3 次，超限会被系统拒绝。
 
 🔴 最重要的铁律（违反即失败）：
 - 你只有通过【真正发起工具调用】（function/tool_calls）才能读/写数据。在回复里用自然语言说「我已创建/已移动/已插入/切换成功」但没有真正调用对应工具，等于什么都没做——这是严重错误。
@@ -248,6 +276,7 @@ SCRIPT_WRITER_SYSTEM = """你是 AGNES 的 Script Writer，负责项目的【剧
 - 用户在提问、征求看法、讨论方案、解释原因、回顾你做过什么时（如「你觉得这里有什么问题」「为什么你刚才这么改」「这个角色这样设计合适吗」「如果后面加个转折怎么样」「你觉得这几段节奏快不快」「刚才为什么没成功」「先不要修改，我们讨论一下」）：直接用自然语言回答，长度按问题自然决定。
 - 这类轮次【不调用写工具】；讨论中提到的改动想法不要自动执行，除非用户明确提出修改要求。也【不要】输出「我没有真正执行修改/请再说一次你的需求」之类的话——用户本来就没让你改。
 - 回答需要事实依据时（用户问到具体某几段的内容、当前段数、最新状态，而这些不在你的上下文里），才按需调用只读工具 story.list / story.read 取事实，然后继续讨论；凭当前上下文就能回答的就直接回答。
+- 聊天/讨论轮同样【不自动搜索】：用户问到现实世界事实而你缺乏可靠知识时（如「你觉得这个1940年代上海场景真实吗」），可以先 web.search 再回答；上下文或常识足够就直接回答。
 - 不要在讨论中复述完整剧本正文或整段故事段内容；必要时引用一两句即可。
 
 【回复规范（只汇报本轮改动）】
@@ -282,7 +311,7 @@ SCRIPT_WRITER_SYSTEM = """你是 AGNES 的 Script Writer，负责项目的【剧
 【写工具必须一个一个来】（重要）：
 - 写工具（script.update / story.create / story.update / story.move / story.delete，及批量工具 story.create_many / story.update_many / story.insert_many / story.delete_many）必须【一个一个执行】：每发一个写工具调用，等它返回最新状态/revision 后，再发下一个。不要在同一次回复里批量发多个写工具——它们会用旧 revision 导致 stale。
 - 批量工具本身【一次调用就完成整批】（内部一次乐观并发+一次原子写入），它整体只占一个写槽：要删多段就把 scene_ids 一次放进 story.delete_many，要在多个位置插入就把 inserts 一次放进 story.insert_many——不要把一批拆成多个批量工具调用，也不要在同一次回复里混发多个写工具。
-- 只读工具（story.list / script.read / story.read）可以一次发多个，它们不碰数据、不冲突。
+- 只读工具（story.list / script.read / story.read / web.search）可以一次发多个，它们不碰数据、不冲突。
 - 这条是硬约束：同一次回复里发了多个写工具时，系统只执行第1个，其余会被拒绝。
 
 【复杂操作要分解成多步】（按场景）：
@@ -292,6 +321,13 @@ SCRIPT_WRITER_SYSTEM = """你是 AGNES 的 Script Writer，负责项目的【剧
 - 批量删（如"删掉第1、5、7、9段"）：先一次 story.list 把这些 position 全部解析成 scene_id，再【一次】story.delete_many（整批一次 revision 校验+原子级联删）。不要删一个再 list 再删——delete_many 就是为消除这个循环。
 - 多点插入（如"第2段后插A、第5段前插B和C、第8段后插D"）：先一次 story.list 把第2/5/8段解析成锚点 scene_id，再【一次】story.insert_many（inserts 三项，锚点都按这次 list 的快照解释）。不要插一个再 list 再插。仅同一锚点连续插多段时用 story.create_many。
 - 用户说的「第N条」= story.list 返回里 position=N 的那条；找到它的 scene_id 再操作，不要用 scene_id 的数字猜位置（删除后 id 会跳号，但 position 始终连续）。
+
+【资料搜索（web.search）】
+- 搜索是辅助研究能力，不是每次对话的默认步骤：已有上下文足够回答或创作时，不要搜索。
+- 允许主动搜索的两种情况：①用户明确要求（搜一下/查一下/联网看看/找资料/根据真实资料写）；②正在实际创作且现实世界知识明显影响可信度（历史时期、医疗、法律/刑侦、军事、职业流程、城市/地域、文化习俗、真实科技、新闻/现代现实背景）。
+- 每轮最多 3 次；每次查询保持简洁、聚焦一个具体问题，复杂问题拆成最多 3 次独立查询，不要塞超长查询词。
+- 搜索失败（超时/限流/无结果）时可换一个更聚焦的查询词再试一次，或改用已有知识继续，或如实告知用户没有搜索到足够资料；不要反复重试同一查询。
+- 搜索结果只是参考素材：由你分析消化后自己创作，不要照抄网页正文；正文必须是你自己的创作。
 
 【整篇剧本拆分成故事段】（连续创建，不生成计划、不经审查流）：
 a. 先 script.read() 读完整剧本正文，理解故事脉络。
@@ -664,12 +700,32 @@ STORY_INSERT_MANY_TOOL = {
     },
 }
 
+# Web Search（第一版）：模型只见 query 单参数；搜索深度/结果数/超时全部由 Runtime 固定。
+WEB_SEARCH_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "web.search",
+        "description": "搜索现实世界资料，返回约 3 条「标题+摘要+链接」。仅在两种情况使用：①用户明确要求搜索（搜一下/查一下/找资料/根据真实资料写）；②正在创作且现实世界知识明显影响剧本可信度（历史时期、医疗、法律/刑侦、军事、职业流程、城市/地域、文化习俗、真实科技、新闻/现实背景）。普通润色、情绪、对白语气、结构调整、纯虚构创作不要搜索。每轮最多 3 次（超过会被系统拒绝）。查询词保持简洁、聚焦一个具体问题；复杂问题拆成最多 3 次独立查询。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "简洁、聚焦一个具体问题的中文搜索词，如「1940年代上海租界 生活状况」",
+                },
+            },
+            "required": ["query"],
+        },
+    },
+}
+
 SCRIPT_WRITER_TOOLS = [
     SCRIPT_UPDATE_TOOL, SCRIPT_READ_TOOL,
     STORY_CREATE_TOOL, STORY_LIST_TOOL, STORY_READ_TOOL, STORY_MOVE_TOOL,
     STORY_UPDATE_TOOL, STORY_DELETE_TOOL,
     STORY_CREATE_MANY_TOOL, STORY_UPDATE_MANY_TOOL,
     STORY_DELETE_MANY_TOOL, STORY_INSERT_MANY_TOOL,
+    WEB_SEARCH_TOOL,
 ]
 
 
@@ -1731,6 +1787,55 @@ def _execute_story_insert_many(rt: AgentRuntime, project: str, arguments: str,
              "请确认结果后用一句话回复用户。")
 
 
+# ============ Web Search（Tavily Hub，Runtime 受控）============
+def _normalized_search_query(arguments: str) -> str:
+    """web.search query 的轻量标准化（仅用于本 turn 重复检测）：
+    解析失败/缺 query 返回 ""；否则去除全部空白、小写（中文查询里的空格是无意义填充）。
+    只做完全相同/标准化相同的字面判断，不做任何语义相似判断。"""
+    try:
+        q = str((_parse_args(arguments) or {}).get("query") or "")
+    except AgentError:
+        return ""
+    return re.sub(r"\s+", "", q).lower()
+
+
+async def _execute_web_search(rt: AgentRuntime, project: str, arguments: str,
+                              instruction: str = "", message_id: Optional[str] = None) -> dict:
+    """web.search(query)：搜索现实世界资料（第一版 Provider：Tavily Hub 国内代理）。
+
+    预算（每 user turn 最多 3 次真实搜索）由 _run_tool_loop 在 dispatch 前拦截计数；
+    本 executor 只负责参数校验 + 调 Provider + 压缩 obs。Provider 的 timeout/429/5xx/
+    网络失败/零结果一律映射为结构化 obs（绝不抛异常让 turn 崩溃）；obs 只含
+    title/url/content(≤600字)/score，不含 raw_content/图片/完整原始 JSON/AI answer。
+    """
+    try:
+        args = _parse_args(arguments)
+    except AgentError as e:
+        return {"ok": False, "operation": "web.search", "code": e.code,
+                "error": e.message, "target": ""}
+    query = str(args.get("query") or "").strip()
+    if not query:
+        return {"ok": False, "operation": "web.search", "code": "bad_arguments",
+                "error": "query 不能为空，请给一个聚焦的搜索词", "target": ""}
+    if len(query) > 200:
+        return {"ok": False, "operation": "web.search", "code": "bad_arguments",
+                "error": "query 过长（>200 字），请拆成更聚焦的查询", "target": query[:60]}
+    res = await _get_web_search_client().search(query)
+    if not res.get("ok"):
+        return {"ok": False, "operation": "web.search",
+                "code": res.get("code", "network_error"),
+                "error": res.get("error", "搜索失败"), "target": query[:60]}
+    n = res.get("n_results", 0)
+    obs = {"ok": True, "operation": "web.search", "target": query[:60],
+           "query": query, "n_results": n,
+           "results": res.get("results", []),
+           "sources": res.get("sources", [])}
+    if n == 0:
+        obs["note"] = ("没有找到相关资料。可换一个更聚焦的查询词重试（注意每轮搜索次数上限），"
+                       "或基于已有知识继续。")
+    return obs
+
+
 TOOL_EXECUTORS = {
     "script.read": _execute_script_read,
     "script.update": _execute_script_update,
@@ -1744,6 +1849,7 @@ TOOL_EXECUTORS = {
     "story.update_many": _execute_story_update_many,
     "story.delete_many": _execute_story_delete_many,
     "story.insert_many": _execute_story_insert_many,
+    "web.search": _execute_web_search,
 }
 
 
@@ -1831,7 +1937,9 @@ async def script_writer_turn(rt: AgentRuntime, project: str, session_id: str,
                for m in session.messages[:-1]
                if m.role in ("user", "assistant") and m.content and m.status is None]
 
-    client = rt._resolve_client_or_none()
+    # 模型切换（2026-08-29）：按 script_writer 绑定的 ModelProfile 选择文本客户端
+    # （默认 Agnes；输入区开关绑定 SenseNova 档案后，下一次 turn 起走 SenseNova）
+    client = rt._resolve_client_or_none(agent_id="script_writer")
     assistant_text: str
     status: Optional[str] = None
     edited = created = moved = scene_updated = deleted = False
@@ -1839,6 +1947,7 @@ async def script_writer_turn(rt: AgentRuntime, project: str, session_id: str,
     receipts: list = []
     reasoning: list = []
     trace: list = []
+    search_sources: list = []   # 本轮 web.search 的轻量来源（title+url，无正文）
 
     if client is None:
         assistant_text = "[chat 未配置：Agnes 推理模型不可用，无法修改剧本。请在设置中配置 API Key。]"
@@ -1898,6 +2007,7 @@ async def script_writer_turn(rt: AgentRuntime, project: str, session_id: str,
             receipts = pre_exec_receipts + final.get("receipts", []) if pre_exec_receipts else final.get("receipts", [])
             trace = (pre_trace + final.get("trace", [])) if pre_trace else final.get("trace", [])
             reasoning = final.get("reasonings", [])
+            search_sources = final.get("search_sources", [])
         except _TurnStopped:
             # 协作式停止（用户点停止）：在步骤边界安全中断。已完成的写全部真实落盘，
             # 未完成部分不执行。诚实收尾，账本来自 loop_state（与失败路径同样保留）。
@@ -1910,6 +2020,7 @@ async def script_writer_turn(rt: AgentRuntime, project: str, session_id: str,
             receipts = pre_exec_receipts + loop_state.get("receipts", [])
             trace = (pre_trace + loop_state.get("trace", [])) if pre_trace else loop_state.get("trace", [])
             reasoning = loop_state.get("reasonings", [])
+            search_sources = loop_state.get("search_sources", [])
         except Exception as e:
             # 可观测性：完整 traceback 进日志（定位网络断/服务端错误的真实身份）；
             # str(e) 可能为空（如 TimeoutError），文本带异常类型名保证用户可见失败原因。
@@ -1924,6 +2035,7 @@ async def script_writer_turn(rt: AgentRuntime, project: str, session_id: str,
             receipts = pre_exec_receipts + loop_state.get("receipts", [])
             trace = (pre_trace + loop_state.get("trace", [])) if pre_trace else loop_state.get("trace", [])
             reasoning = loop_state.get("reasonings", [])
+            search_sources = loop_state.get("search_sources", [])
 
     if created:
         intent = "story_create"
@@ -1969,6 +2081,7 @@ async def script_writer_turn(rt: AgentRuntime, project: str, session_id: str,
                                  if r["ok"] and r["verified"] and not r["unchanged"]),
             "trace": trace,   # 执行轨迹（需求 #7）：每步 tool→target→result→revision
             "reasonings": reasoning,   # 每步思考文本（持久化，前端刷新后重建折叠条 reasoning）
+            "search_sources": search_sources,   # web.search 轻量来源（title+url，供 UI 展示；无正文）
             "pending_delete_scenes": pending_delete_scenes}   # 本轮预览未确认的删除目标
     asst = AgentMessage(role="assistant", content=assistant_text, status=status, meta=meta)
     store.append_message(session_id, asst)
@@ -1978,6 +2091,7 @@ async def script_writer_turn(rt: AgentRuntime, project: str, session_id: str,
             "deleted": deleted,
             "events": events, "message": asst.to_dict(),
             "intent": intent, "receipts": receipts_meta, "trace": trace,
+            "search_sources": search_sources,
             "evidence_refs": [], "linked_task_ids": [],
             "linked_change_session_id": None, "session_id": session_id,
             "agent_id": "script_writer"}
@@ -1986,7 +2100,7 @@ async def script_writer_turn(rt: AgentRuntime, project: str, session_id: str,
 # 「已完成」措辞检测：匹配过去/完成态（已创建、插入了、移到最前面了、移动完成、成功更新…），
 # 不匹配提议/将来态（「我可以帮你创建」），避免对纯对话误触发。
 # 动词与「了/完成」之间允许最多 12 字（如「移到最前面了」「把 s03 移动到第一位了」）。
-_VERBS = (r"创建|新建|插入|添加|加好|移动|移到|移至|更新|调整|"
+_VERBS = (r"创建|新建|插入|添加|追加|加好|移动|移到|移至|更新|调整|"
           r"修改|改写|改正|改好|改到|重写|续写|删除|删掉|拆分|拆成|拆好|拆完|划分|分段")
 _SUCCESS_CLAIM_RE = re.compile(
     rf"(已(经)?\s*(在|把|将)?[^。！？\n]{{0,8}}?({_VERBS})|"
@@ -2017,6 +2131,32 @@ _CHAT_TURN_RE = re.compile(
 def _is_chat_turn(instruction: str) -> bool:
     """用户本轮消息是否为探讨/提问语气（仅用于闸门上膛保护，宁窄勿宽）。"""
     return bool(_CHAT_TURN_RE.search(instruction or ""))
+
+
+# —— 搜索谎报检测（web.search 真实性收口）——
+# 模型可能不调用 web.search 却在回复里编造「搜索结果/已搜索/查到N条」（真机验收 F 场景
+# 实测两次）。闸门动词表（_VERBS）只覆盖写操作，这里单独识别「声称搜索成功/有搜索结果」，
+# 由 _run_tool_loop 对照本轮真实 web.search trace 收口。先定点剔除否定/失败搭配（「没有
+# 搜索到」「搜索失败」是诚实表述；只删否定词与搜索词的紧邻搭配，不动整句），再匹配肯定式声明。
+_SEARCH_CLAIM_STRIP_RE = re.compile(
+    r"(没有|没|并未|并没有|尚未|未|未能|无法|不能)\s*(发起了?|完成了?|执行了?|使用了?)?\s*(了)?\s*"
+    r"(web\.?search|搜索|查询|检索|联网查)[^。！？\n]{0,20}"
+    r"|(搜索|查询|检索|联网)(失败|未完成|不完整|受限|超时|被拒|出错|错误)[^。！？\n]{0,20}"
+    r"|(因|由于)[^。！？\n]{0,16}(不足|超限|失败|耗尽)[^。！？\n]{0,20}",
+    re.IGNORECASE)
+_SEARCH_CLAIM_RE = re.compile(
+    r"已(经)?\s*(发起|完成|执行|使用)?\s*(了)?\s*(web\.?search|搜索|查询|检索|联网查)|"
+    r"(搜索|查询|检索)(了|完成|成功)|"
+    r"(搜|查)(到|出)了|"
+    r"(找到|查到)\s*\d+\s*(个|条|篇)|"
+    r"(web\.?search|搜索).{0,8}(结果|来源|资料)(如下|汇报|：)",
+    re.IGNORECASE)
+
+
+def _claims_search_success(text: str) -> bool:
+    """回复是否声称本轮发生过真实搜索（剔除否定/失败句段后仍命中肯定式声明）。"""
+    stripped = _SEARCH_CLAIM_STRIP_RE.sub("", text or "")
+    return bool(_SEARCH_CLAIM_RE.search(stripped))
 
 
 # zero-write recovery（极窄兜底）专用：判定用户本轮是否【明确要求实际写入/修改】。
@@ -2307,6 +2447,16 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
     # 供前端刷新后重建执行过程折叠条的 reasoning 部分（tool 从 trace 重建、reasoning 从此重建）。
     reasonings: list = state.setdefault("reasonings", [])
     last_read_after_write = -1   # 最后一次只读调用所在的 step（用于最终完成判定）
+    # Web Search（第一版）：loop-local 搜索计数（每 user turn 随循环销毁自动重置），
+    # 硬上限 MAX_WEB_SEARCH 由 Runtime 在 dispatch 前拦截，不依赖 prompt 自觉。
+    # search_sources 只收 title+url（随 turn 落盘 meta.search_sources 供 UI 展示来源），
+    # snippet/网页正文绝不进 trace/meta——搜索内容只在当前 tool-loop 的 tool message
+    # 里存在，下一轮 LLM history 重建时不含它们（不长期污染 context）。
+    search_count = 0
+    search_sources: list = state.setdefault("search_sources", [])
+    # 本 turn 已发起过的搜索词（标准化后）。Hub 对完全相同 query 会返回空结果（缓存缺陷），
+    # 重复搜索纯属浪费预算：完全相同/标准化相同直接拒绝，不计数、不调 Provider。
+    search_queries_seen: set = state.setdefault("search_queries_seen", set())
     # 防失控（需求 #11）：连续同一工具同一失败的次数；超阈值则诚实停止，不无限重试。
     repeat_fail_streak = 0
     last_fail_sig = None         # (tool, error/code) 去重签名
@@ -2413,6 +2563,12 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
             # 编辑请求轮（有写尝试，或用户明确要求修改）的闸门逻辑完全不变。
             chat_turn = (write_attempts == 0 and _is_chat_turn(instruction))
             false_claim = _claims_success(text) and not real_changes and not chat_turn
+            # 搜索谎报：声称搜索成功/给出搜索结果，但本轮没有任何一次真实成功的
+            # web.search 调用（trace 为准，budget 拒绝/失败/未调用都算无）。与写谎报
+            # 同一收口机制：纠正 nudge → 模型真调工具或如实承认；聊天轮不上膛。
+            real_searches = [t for t in trace if t["tool"] == "web.search" and t.get("ok")]
+            search_false_claim = (_claims_search_success(text) and not real_searches
+                                  and not chat_turn)
             # (b) 声称拆分了 N 段，但真实成功创建数与 N 不符 → 夸大（用户需求 #3：
             #     最终数量必须以真实 receipt 为准，不许凭文字记忆谎称）
             real_create_count = sum(1 for r in real_changes
@@ -2442,12 +2598,19 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                 messages.append({"role": "user", "content": _ZERO_WRITE_RECOVERY_NUDGE})
                 _refresh_system(messages, rt, project)
                 continue
-            if false_claim or over_claim_n is not None or needs_final_read:
+            if false_claim or over_claim_n is not None or needs_final_read or search_false_claim:
                 if corrective_round < MAX_CORRECTIVE_ROUNDS:
                     corrective_round += 1
                     messages.append({"role": "assistant", "content": text or ""})
                     brief = _ledger_brief(receipts)
-                    if needs_final_read:
+                    if search_false_claim:
+                        nudge = (
+                            "你上面的回复声称做过搜索/给出了搜索结果，但本轮【没有任何一次真实成功的 "
+                            "web.search 工具调用】（真实记录里要么没调用、要么全部失败）。"
+                            "光用文字编造搜索结果是不允许的。请要么现在真正调用 web.search 搜索"
+                            "（注意每轮最多 3 次），要么如实告诉用户：本轮没有搜索，或搜索失败、"
+                            "资料不足，并基于已有知识继续。")
+                    elif needs_final_read:
                         nudge = (
                             "你做了一些修改并声称完成，但最后一次真实读取发生在最后一次写入【之前】"
                             "（或本轮还没读过最终状态）。收尾前必须先读取与任务有关的最新真实状态"
@@ -2484,7 +2647,7 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
             return {"text": text or "已完成。",
                     "edited": edited, "created": created, "moved": moved, "scene_updated": scene_updated, "deleted": deleted,
                     "summary": summary, "events": events, "receipts": receipts, "trace": trace,
-                    "reasonings": reasonings}
+                    "reasonings": reasonings, "search_sources": search_sources}
 
         messages.append({"role": "assistant", "content": content or "",
                          "tool_calls": tool_calls})
@@ -2512,7 +2675,7 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                     "error": "本步已执行过一个写操作。写工具必须一个一个来：等前一个完成、"
                              "拿到返回的最新 revision/状态后，再发下一个写工具调用。"
                              "不要在同一次回复里批量发多个写工具（会用旧 revision 导致 stale）。"
-                             "只读工具（story.list/script.read/story.read）可以一次多个。",
+                             "只读工具（story.list/script.read/story.read/web.search）可以一次多个。",
                 }
                 messages.append({"role": "tool", "tool_call_id": call_id,
                                  "content": json.dumps(obs, ensure_ascii=False)})
@@ -2525,11 +2688,36 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
 
             executor = TOOL_EXECUTORS.get(name)
             exc_msg = None   # AI-7D-R 流式：异常→tool.failed，否则→tool.completed
-            if executor is None:
+            # Web Search 预算拦截（Runtime 硬上限，不依赖 prompt）：本 turn 已满
+            # MAX_WEB_SEARCH 次时不再调 Provider，直接结构化拒绝，让 Agent 用已有
+            # 信息完成任务。拒绝同样走标准 obs→tool message→trace→tool.completed 路径。
+            if (executor is not None and name == "web.search"
+                    and search_count >= MAX_WEB_SEARCH):
+                obs = {"ok": False, "operation": "web.search",
+                       "code": "search_budget_exhausted",
+                       "error": ("本轮搜索次数已达上限（3 次）。请基于已有信息与已获取的"
+                                 "搜索结果完成任务，或如实告知用户资料不足。")}
+            elif (executor is not None and name == "web.search"
+                    and _normalized_search_query(args)
+                    and _normalized_search_query(args) in search_queries_seen):
+                obs = {"ok": False, "operation": "web.search",
+                       "code": "duplicate_query",
+                       "error": ("本 turn 已用完全相同的查询词搜索过（Hub 对重复查询只会返回"
+                                 "同样的结果）。请换一个更具体或不同角度的查询词，或基于已获取"
+                                 "的结果继续，不要重发同一查询。")}
+            elif executor is None:
                 obs = {"ok": False, "error": f"未知工具：{name}", "operation": name}
             else:
+                if name == "web.search":
+                    search_count += 1   # 仅真实调 Provider 的次数计入预算
+                    _q_norm = _normalized_search_query(args)
+                    if _q_norm:
+                        search_queries_seen.add(_q_norm)
                 try:
-                    obs = executor(rt, project, args, instruction, message_id)
+                    if asyncio.iscoroutinefunction(executor):
+                        obs = await executor(rt, project, args, instruction, message_id)
+                    else:
+                        obs = executor(rt, project, args, instruction, message_id)
                 except AgentError as e:
                     exc_msg = e.message
                     obs = {"ok": False, "error": e.message, "code": e.code,
@@ -2585,9 +2773,19 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                 receipts.append(obs)
                 write_done_this_step = True   # 思路①：本步写槽已占用，后续写工具拒绝
             else:
-                # 只读工具成功 → 记录其 step，供最终完成判定「最后是否读过真实状态」
-                if ok_now:
+                # 只读工具成功 → 记录其 step，供最终完成判定「最后是否读过真实状态」。
+                # web.search 除外：它读的是外部资料而非故事状态，不应参与该判定
+                # （否则搜索发生在写之后会误跳过「写后重读最终状态」的收尾纠偏）。
+                if ok_now and name != "web.search":
                     last_read_after_write = step
+                # Web Search 轻量来源（仅 title+url）：随 turn 落盘 meta.search_sources
+                # 供 UI「资料来源」折叠区展示；snippet/网页正文不进 meta（不跨轮持久化）。
+                if name == "web.search" and obs.get("ok") and obs.get("sources"):
+                    for s in obs["sources"]:
+                        if s and (s.get("url") or s.get("title")) \
+                                and s not in search_sources:
+                            search_sources.append({"title": s.get("title") or "",
+                                                   "url": s.get("url") or ""})
 
             # 据【真实回执】（而非模型叙述）设置 mutated 标志。
             # 必须 verified=true：删除预览(confirmed=false)虽 ok=true 但 verified=false，
@@ -2687,4 +2885,4 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
     return {"text": text,
             "edited": edited, "created": created, "moved": moved, "scene_updated": scene_updated, "deleted": deleted,
             "summary": summary, "events": events, "receipts": receipts, "trace": trace,
-            "reasonings": reasonings}
+            "reasonings": reasonings, "search_sources": search_sources}

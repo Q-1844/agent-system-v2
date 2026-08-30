@@ -25,12 +25,12 @@ pip install -r requirements.txt
 
 ```bash
 # Windows
-set AGNES_API_KEY=sk-jC7GlV9A7qxcFvPqRPqeowwE6NUaS1U4RXUm3pcQu9TipTDq
-set MIMO_API_KEY=tp-cgt4i1mb3elsi1zsa7olev1zia9xqbdkha0d4c85pvtqqmwf
+set AGNES_API_KEY=<你的-AGNES_API_KEY>
+set MIMO_API_KEY=<你的-MIMO_API_KEY>
 
 # Linux/Mac
-export AGNES_API_KEY=sk-jC7GlV9A7qxcFvPqRPqeowwE6NUaS1U4RXUm3pcQu9TipTDq
-export MIMO_API_KEY=tp-cgt4i1mb3elsi1zsa7olev1zia9xqbdkha0d4c85pvtqqmwf
+export AGNES_API_KEY=<你的-AGNES_API_KEY>
+export MIMO_API_KEY=<你的-MIMO_API_KEY>
 ```
 
 或者在 `config/config.yaml` 中直接填写。

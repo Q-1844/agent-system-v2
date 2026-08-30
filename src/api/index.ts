@@ -661,6 +661,8 @@ export interface ScriptWriterTurnResult {
   receipts: ScriptWriterReceipt[];
   trace: ScriptWriterTraceEntry[];
   reasonings?: ScriptWriterReasoningEntry[];
+  /** 本轮 web.search 轻量来源（title+url；无 snippet）。 */
+  search_sources?: ScriptWriterSearchSource[];
   evidence_refs: AgentEvidenceRef[];
   linked_task_ids: string[];
   linked_change_session_id: string | null;
@@ -686,6 +688,10 @@ export interface ScriptWriterTraceEntry {
 /** meta.reasonings 单条思考记录（每个 LLM step 的推理文本，持久化用于刷新后重建折叠条）。 */
 export interface ScriptWriterReasoningEntry {
   step: number; text: string; duration_ms?: number;
+}
+/** meta.search_sources 单条轻量搜索来源（仅 title+url；snippet/正文不跨轮持久化）。 */
+export interface ScriptWriterSearchSource {
+  title: string; url: string;
 }
 
 // ============ AI-7D-R /turn/stream 流式事件（discriminated union） ============

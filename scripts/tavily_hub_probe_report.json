@@ -1,0 +1,256 @@
+{
+  "ts": "2026-08-30T10:19:58.966328",
+  "endpoint": "https://tavily.sharyuke.com/api/proxy/search",
+  "basic": {
+    "total": 8,
+    "success": 8,
+    "success_rate": 1.0,
+    "errors": [],
+    "p50_ms": 1868,
+    "p95_ms": 6403,
+    "max_ms": 6403,
+    "avg_results": 0,
+    "avg_chars": 2,
+    "domains": []
+  },
+  "advanced": {
+    "total": 6,
+    "success": 6,
+    "success_rate": 1.0,
+    "errors": [],
+    "p50_ms": 4187,
+    "p95_ms": 4764,
+    "max_ms": 4764,
+    "avg_results": 0,
+    "avg_chars": 2,
+    "domains": []
+  },
+  "details": [
+    {
+      "query": "1940年代上海租界 生活状况",
+      "depth": "basic",
+      "status": 200,
+      "ms": 2407,
+      "n_results": 0,
+      "chars": 2,
+      "domains": [],
+      "titles": [],
+      "response_time_field": null
+    },
+    {
+      "query": "明朝科举考试 流程",
+      "depth": "basic",
+      "status": 200,
+      "ms": 2229,
+      "n_results": 0,
+      "chars": 2,
+      "domains": [],
+      "titles": [],
+      "response_time_field": null
+    },
+    {
+      "query": "重庆火锅店 市井生活",
+      "depth": "basic",
+      "status": 200,
+      "ms": 1268,
+      "n_results": 0,
+      "chars": 2,
+      "domains": [],
+      "titles": [],
+      "response_time_field": null
+    },
+    {
+      "query": "急诊室抢救流程 心肺复苏",
+      "depth": "basic",
+      "status": 200,
+      "ms": 1045,
+      "n_results": 0,
+      "chars": 2,
+      "domains": [],
+      "titles": [],
+      "response_time_field": null
+    },
+    {
+      "query": "中国医院 ICU 探视制度",
+      "depth": "basic",
+      "status": 200,
+      "ms": 1497,
+      "n_results": 0,
+      "chars": 2,
+      "domains": [],
+      "titles": [],
+      "response_time_field": null
+    },
+    {
+      "query": "中国刑事警察 办案流程",
+      "depth": "basic",
+      "status": 200,
+      "ms": 6403,
+      "n_results": 0,
+      "chars": 2,
+      "domains": [],
+      "titles": [],
+      "response_time_field": null
+    },
+    {
+      "query": "外卖骑手 一天工作流程",
+      "depth": "basic",
+      "status": 200,
+      "ms": 1309,
+      "n_results": 0,
+      "chars": 2,
+      "domains": [],
+      "titles": [],
+      "response_time_field": null
+    },
+    {
+      "query": "潮汕 功夫茶 礼仪",
+      "depth": "basic",
+      "status": 200,
+      "ms": 1868,
+      "n_results": 0,
+      "chars": 2,
+      "domains": [],
+      "titles": [],
+      "response_time_field": null
+    },
+    {
+      "query": "中国高铁 CR400AF 技术参数",
+      "depth": "advanced",
+      "status": 200,
+      "ms": 3990,
+      "n_results": 0,
+      "chars": 2,
+      "domains": [],
+      "titles": [],
+      "response_time_field": null
+    },
+    {
+      "query": "老北京四合院 建筑格局",
+      "depth": "advanced",
+      "status": 200,
+      "ms": 4563,
+      "n_results": 0,
+      "chars": 2,
+      "domains": [],
+      "titles": [],
+      "response_time_field": null
+    },
+    {
+      "query": "中国法庭 庭审流程 顺序",
+      "depth": "advanced",
+      "status": 200,
+      "ms": 4638,
+      "n_results": 0,
+      "chars": 2,
+      "domains": [],
+      "titles": [],
+      "response_time_field": null
+    },
+    {
+      "query": "宋代夜市 商业繁荣",
+      "depth": "advanced",
+      "status": 200,
+      "ms": 4764,
+      "n_results": 0,
+      "chars": 2,
+      "domains": [],
+      "titles": [],
+      "response_time_field": null
+    },
+    {
+      "query": "远洋货轮 船员 等级职责",
+      "depth": "advanced",
+      "status": 200,
+      "ms": 3319,
+      "n_results": 0,
+      "chars": 2,
+      "domains": [],
+      "titles": [],
+      "response_time_field": null
+    },
+    {
+      "query": "法医尸检 标准程序",
+      "depth": "advanced",
+      "status": 200,
+      "ms": 4187,
+      "n_results": 0,
+      "chars": 2,
+      "domains": [],
+      "titles": [],
+      "response_time_field": null
+    }
+  ],
+  "snippets": [
+    {
+      "q": "1940年代上海租界 生活状况",
+      "d": "basic",
+      "snips": []
+    },
+    {
+      "q": "明朝科举考试 流程",
+      "d": "basic",
+      "snips": []
+    },
+    {
+      "q": "重庆火锅店 市井生活",
+      "d": "basic",
+      "snips": []
+    },
+    {
+      "q": "急诊室抢救流程 心肺复苏",
+      "d": "basic",
+      "snips": []
+    },
+    {
+      "q": "中国医院 ICU 探视制度",
+      "d": "basic",
+      "snips": []
+    },
+    {
+      "q": "中国刑事警察 办案流程",
+      "d": "basic",
+      "snips": []
+    },
+    {
+      "q": "外卖骑手 一天工作流程",
+      "d": "basic",
+      "snips": []
+    },
+    {
+      "q": "潮汕 功夫茶 礼仪",
+      "d": "basic",
+      "snips": []
+    },
+    {
+      "q": "中国高铁 CR400AF 技术参数",
+      "d": "advanced",
+      "snips": []
+    },
+    {
+      "q": "老北京四合院 建筑格局",
+      "d": "advanced",
+      "snips": []
+    },
+    {
+      "q": "中国法庭 庭审流程 顺序",
+      "d": "advanced",
+      "snips": []
+    },
+    {
+      "q": "宋代夜市 商业繁荣",
+      "d": "advanced",
+      "snips": []
+    },
+    {
+      "q": "远洋货轮 船员 等级职责",
+      "d": "advanced",
+      "snips": []
+    },
+    {
+      "q": "法医尸检 标准程序",
+      "d": "advanced",
+      "snips": []
+    }
+  ]
+}

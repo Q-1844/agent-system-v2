@@ -9,13 +9,8 @@ REM 强制UTF-8编码（解决emoji报错）
 set PYTHONIOENCODING=utf-8
 set PYTHONUTF8=1
 
-REM 设置API密钥
-if "%AGNES_API_KEY%"=="" (
-    set AGNES_API_KEY=sk-jC7GlV9A7qxcFvPqRPqeowwE6NUaS1U4RXUm3pcQu9TipTDq
-)
-if "%MIMO_API_KEY%"=="" (
-    set MIMO_API_KEY=tp-cgt4i1mb3elsi1zsa7olev1zia9xqbdkha0d4c85pvtqqmwf
-)
+REM API密钥：禁止写入本文件/Git，统一配置在项目根 .env（api_server.py 启动时自动加载）
+REM 必需：AGNES_API_KEY / MIMO_API_KEY；可选：SENSENOVA_API_KEY / TAVILY_HUB_API_KEY
 
 REM 查找Python - 优先使用 D:\Delta Force\python.exe
 set PYTHON_EXE=

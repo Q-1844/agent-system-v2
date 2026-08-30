@@ -10,10 +10,9 @@ import os
 import shutil
 
 # ============ 配置 ============
-API_KEYS = {
-    "AGNES_API_KEY": "sk-jC7GlV9A7qxcFvPqRPqeowwE6NUaS1U4RXUm3pcQu9TipTDq",
-    "MIMO_API_KEY": "tp-cgt4i1mb3elsi1zsa7olev1zia9xqbdkha0d4c85pvtqqmwf",
-}
+# API Key 禁止写入源码/Git：统一配置在项目根 .env（api_server.py 启动时自动加载）。
+# 必需：AGNES_API_KEY / MIMO_API_KEY；可选：SENSENOVA_API_KEY / TAVILY_HUB_API_KEY。
+API_KEYS = {}   # 留空 = 使用 .env / 现有环境变量，源码不再注入任何密钥
 PORT = 8000
 
 

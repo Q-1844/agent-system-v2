@@ -1,4 +1,9 @@
 # src/agents/script_writer_min.py
+# ⚠️ LEGACY（2026-08-30）：本模块已不再是任何正式入口——Script Writer 测试弹窗自即日起
+# 走真实链路 src/agents/script_writer.py（原生 tool-loop + 全部工具 + 真相闸门）。
+# 本文件仅作为历史参考与既有单测（test_ai_7d_r_script_writer_min.py）保留；
+# 【不要在新增入口/测试中引用它】，也不要把它的"JSON-in-text 伪工具"模式带到其他 Agent。
+#
 # AI-7D-R · 最小可验证 Agent 循环（§31）：Script Writer + 一个工具。
 #
 # 目的：在隔离的测试弹窗里验证“LLM → 工具调用 → 真实落盘 → 诚实回复”这条最小闭环。
@@ -159,7 +164,7 @@ async def script_writer_turn(rt: AgentRuntime, project: str, session_id: str,
                for m in session.messages[:-1]
                if m.role in ("user", "assistant") and m.content and m.status is None]
 
-    client = rt._resolve_client_or_none()
+    client = rt._resolve_client_or_none(agent_id="script_writer")
     assistant_text: str
     status: Optional[str] = None
     edited = False

@@ -915,23 +915,31 @@ async def get_execution_eligibility(project_name: str, session_id: str,
         _raise(e)
 
 
-# ==================== AI-7D-R · Script Writer 最小测试弹窗（隔离，一个工具）====================
-# 目的：在独立弹窗里验证“LLM → 一个工具 → 真实落盘 → 诚实回复”最小闭环，不走 ChangeSession
-# /提案/审查流水线。验证稳定后再逐步加回规则。§16 Level-1 直接编辑（受控+原子+审计）。
+# ==================== Script Writer 测试弹窗 ====================
+# 2026-08-30：改走【真实链路】script_writer.script_writer_turn（原生 tool-loop + 全部
+# story/web.search 工具 + 真相闸门）。此前走 script_writer_min（JSON-in-text 旧 runner），
+# 与主会话共用 session 却用不同 system prompt，测的不是真实路径、还会污染会话历史。
+# script_writer_min 保留为 legacy 参考（见其模块头标记），不再作为任何正式入口。
 class ScriptWriterTestReq(BaseModel):
     content: str
 
 
 @router.post("/api/project/{project_name}/agents/script-writer-test/turn")
 async def script_writer_test_turn(project_name: str, req: ScriptWriterTestReq):
-    """Script Writer 测试弹窗：单工具 edit_story_text 的最小 agent 循环。
-    自动取/建 script_writer 的长存 project 会话。返回 {assistant_message, edited, new_story_text?}。"""
-    from src.agents.script_writer_min import script_writer_turn
+    """Script Writer 测试弹窗：真实 tool-loop turn（与主对话完全同链路）。
+    自动取/建 script_writer 的长存 project 会话。返回 {assistant_message, edited,
+    new_story_text?, message, ...}（new_story_text 供弹窗展示改后正文，edited 时从盘读）。"""
+    from src.agents.script_writer import script_writer_turn
     rt = get_agent_runtime()
     try:
         sid = rt.get_or_create_session(project_name, "script_writer",
                                        "project", project_name)["session_id"]
-        return await script_writer_turn(rt, project_name, sid, req.content)
+        result = await script_writer_turn(rt, project_name, sid, req.content)
+        if result.get("edited"):
+            from src.core.store import ProjectStore
+            pdir = rt._resolve_project_dir(project_name)
+            result["new_story_text"] = ProjectStore(pdir).load().story_text or ""
+        return result
     except AgentError as e:
         _raise(e)
 

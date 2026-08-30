@@ -128,6 +128,17 @@
                 <div class="receipts-head">本轮改动</div>
                 <div v-for="(r, ri) in realReceipts(m.meta)" :key="ri" class="receipt-item">✓ {{ receiptLabel(r) }}</div>
               </div>
+              <!-- Web Search：资料来源折叠区（仅 title+url 链接，来自 meta.search_sources；不展示 snippet） -->
+              <div v-if="searchSources(m.meta).length" class="sources">
+                <div class="sources-head" @click="toggleSourcesOf(m)">
+                  <span class="chevron" :class="{ open: sourcesExpandedOf(m) }">▸</span>
+                  资料来源 · {{ searchSources(m.meta).length }}
+                </div>
+                <div v-if="sourcesExpandedOf(m)" class="sources-list">
+                  <a v-for="(s, si) in searchSources(m.meta)" :key="si" class="source-item"
+                     :href="s.url" target="_blank" rel="noopener noreferrer">{{ s.title || s.url }}</a>
+                </div>
+              </div>
             </div>
             <!-- AI-7D-R：流式执行过程（当前 turn）。状态归 app store，切走页面不丢；
                  仅当活跃 turn 属于当前会话时显示。 -->
@@ -185,6 +196,21 @@
               <span class="tt-label">思考</span>
               <span class="tt-track"><span class="tt-thumb"></span></span>
             </label>
+            <!-- 2026-08-29：模型滑动开关（仅 Script Writer）。状态存 Agent 设置
+                 （model_profile_id），下一次对话起生效；默认 Agnes。 -->
+            <div v-if="selectedId === 'script_writer'" class="model-switch"
+                 title="模型切换（保存在 Agent 设置，下一次对话起生效）">
+              <span class="tt-label">模型</span>
+              <span class="ms-opt" :class="{ on: !modelUseSensenova }"
+                    @click="setModelUseSensenova(false)">Agnes</span>
+              <label class="thinking-toggle ms-track" :class="{ on: modelUseSensenova }">
+                <input type="checkbox" v-model="modelUseSensenova" class="tt-sr-only" role="switch"
+                       :aria-checked="modelUseSensenova" aria-label="模型切换" @change="onModelSwitchChange" />
+                <span class="tt-track"><span class="tt-thumb"></span></span>
+              </label>
+              <span class="ms-opt" :class="{ on: modelUseSensenova }"
+                    @click="setModelUseSensenova(true)">SenseNova</span>
+            </div>
             <input v-model="draft" class="input"
                    :placeholder="composerPlaceholder"
                    @keyup.enter="send" :disabled="composerDisabled" />
@@ -233,7 +259,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { apiClient } from '@/api';
-import type { AgentInfo, AgentCapability, AgentSession, AgentTask, AgentStreamEvent, ScriptWriterReceipt } from '@/api';
+import type { AgentInfo, AgentCapability, AgentSession, AgentTask, AgentStreamEvent, ScriptWriterReceipt, ScriptWriterSearchSource } from '@/api';
 import { useProjectStore } from '@/store';
 import { useChangeSessionStore } from '@/store/changeSession';
 import { useAgentTurnStore, type ProcessItem } from '@/store/agentTurn';
@@ -247,6 +273,36 @@ import DirectorTestModal from '@/components/agent/DirectorTestModal.vue';
 // ============ AI-7D-R 流式 Direct Chat：turn 状态归 app 级 store（切页面不丢） ============
 // 思考开关（发送瞬间 snapshot 固定，运行中切换不影响当前 turn）
 const thinkingToggle = ref(false);
+// ============ 模型滑动开关（2026-08-29）：Agnes（默认）/ SenseNova 6.8 Flash Lite ============
+// 状态保存在 Agent 设置（model_profile_id: text_default | text_sensenova_68fl），
+// 从下一次 Agent turn 起生效；运行中切换不影响当前 turn；Key A/B 热切换机制不受影响。
+const MODEL_PROFILE_AGNES = 'text_default';
+const MODEL_PROFILE_SENSENOVA = 'text_sensenova_68fl';
+const modelUseSensenova = ref(false);
+async function loadModelSwitch() {
+  try {
+    const s = await apiClient.getAgentSettings();
+    modelUseSensenova.value =
+      s?.agents?.script_writer?.model_profile_id === MODEL_PROFILE_SENSENOVA;
+  } catch {
+    modelUseSensenova.value = false;   // 读取失败按默认 Agnes
+  }
+}
+async function onModelSwitchChange() {
+  const want = modelUseSensenova.value;
+  try {
+    await apiClient.updateAgentSetting('script_writer',
+      want ? MODEL_PROFILE_SENSENOVA : MODEL_PROFILE_AGNES);
+  } catch (e: any) {
+    modelUseSensenova.value = !want;   // 保存失败回滚 UI
+    chatError.value = '模型切换失败: ' + (e.message || e);
+  }
+}
+async function setModelUseSensenova(v: boolean) {
+  if (modelUseSensenova.value === v) return;
+  modelUseSensenova.value = v;
+  await onModelSwitchChange();
+}
 // turn 流式连接/累积状态由 store 持有：组件卸载（切到剧本等模块）不中断后台 Agent，
 // 切回来时执行过程/流式正文/最终结果都还在。
 const turn = useAgentTurnStore();
@@ -281,6 +337,14 @@ function realReceipts(meta: any): ScriptWriterReceipt[] {
   if (!meta || !Array.isArray(meta.receipts)) return [];
   return meta.receipts.filter((r: ScriptWriterReceipt) => r.ok && r.verified && !r.unchanged);
 }
+
+// Web Search：资料来源（meta.search_sources，仅 title+url，无 snippet）。默认折叠，点击展开。
+function searchSources(meta: any): ScriptWriterSearchSource[] {
+  if (!meta || !Array.isArray(meta.search_sources)) return [];
+  return meta.search_sources.filter((s: ScriptWriterSearchSource) => s && (s.title || s.url));
+}
+function sourcesExpandedOf(m: any): boolean { return !!m._sourcesExpanded; }
+function toggleSourcesOf(m: any) { m._sourcesExpanded = !m._sourcesExpanded; }
 
 // AI-7D-R：完成后执行过程附在 message 上保留（折叠态），事后可展开查看。
 // reasoning 文本不持久化（spec §一），刷新后丢失。两处来源：
@@ -385,6 +449,7 @@ async function selectAgent(id: string) {
   scopeId.value = projectName.value || '';
   session.value = null;
   chatError.value = '';
+  if (id === 'script_writer') loadModelSwitch();   // 模型开关初值跟随 Agent 设置
   if (id === 'producer') loadTasks();
   await openSession();
   if (id !== 'producer') await loadTargetCaps(id);
@@ -545,6 +610,7 @@ async function onResolveChoice(choice: 'queue' | 'restart') {
 
 onMounted(async () => {
   loadAgents();
+  loadModelSwitch();   // 模型开关初值（Agent 设置持久化，默认 Agnes）
   // AI-7D D2：恢复进行中的变更会话（F5 不丢真 ChangeSession 真相）
   if (projectName.value) { await cs.restoreActive(); }
   // AI-7D-R：若上一个 turn 在切走期间完成，把挂账最终消息补进会话
@@ -633,6 +699,11 @@ onUnmounted(() => {
 .tt-thumb { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; transition: transform .18s ease; }
 .thinking-toggle.on .tt-thumb { transform: translateX(14px); }
 .thinking-toggle:focus-within .tt-track { outline: 2px solid rgba(96,165,250,.4); outline-offset: 1px; }
+/* 2026-08-29：模型滑动开关（Agnes / SenseNova，仅 Script Writer，存 Agent 设置） */
+.model-switch { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary, #9399b2); user-select: none; padding: 0 2px; }
+.ms-opt { cursor: pointer; padding: 0 1px; }
+.ms-opt.on { color: var(--text-primary, #cdd6f4); font-weight: 600; }
+.ms-track { padding: 0; }
 
 /* AI-7D-R · 流式执行过程 UI */
 .stream-area { margin: 6px 0; }
@@ -665,6 +736,15 @@ onUnmounted(() => {
 .receipts { margin-top: 6px; padding: 6px 8px; border-left: 2px solid #4ade80; background: rgba(74,222,128,.06); border-radius: 0 6px 6px 0; }
 .receipts-head { font-size: 11px; color: #4ade80; margin-bottom: 2px; }
 .receipt-item { font-size: 11px; color: var(--text-secondary, #9399b2); }
+/* Web Search 资料来源折叠区（与 receipts 同级同风格） */
+.sources { margin-top: 6px; padding: 6px 8px; border-left: 2px solid #60a5fa; background: rgba(96,165,250,.06); border-radius: 0 6px 6px 0; }
+.sources-head { font-size: 11px; color: #60a5fa; cursor: pointer; user-select: none; }
+.sources-head:hover { color: #93c5fd; }
+.sources-head .chevron { display: inline-block; transition: transform .15s; }
+.sources-head .chevron.open { transform: rotate(90deg); }
+.sources-list { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+.source-item { font-size: 11px; color: #93c5fd; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.source-item:hover { text-decoration: underline; }
 
 .change-choice { margin: 8px 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-surface); }
 .cc-q { font-size: 12px; color: var(--text-primary); margin-bottom: 6px; }
