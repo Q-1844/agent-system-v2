@@ -12,7 +12,7 @@
 # （角色接口改 size_tier/ratio + result["url"]），垫片3（understand_text）随③-b 删，
 # 垫片4/5（generate_video / edge_tts.synthesize）早已删。
 from __future__ import annotations
-import asyncio, json, logging, os, random
+import asyncio, json, logging, os, random, time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import httpx
@@ -136,6 +136,31 @@ async def _parse_sse_events(alines):
         ]
     yield {"kind": "finish", "reason": finish_reason or "stop",
            "content": final_content, "tool_calls": final_tool_calls, "usage": usage}
+
+
+# ---------- 流式看门狗（keepalive 免疫，2026-08-31） ----------
+# 真机实测：上游偶发长时间只发 keepalive 字节（注释/空行），httpx read-timeout 被字节
+# 到达无限重置 → chat_completion_stream 永久挂死 → 整个 agent turn 挂死。
+# read-timeout 只能防「完全无字节」，防不了「有字节但无有效数据行」。
+# 修复语义：只有真实 SSE data: 行才重置不活跃计时；注释/空行（keepalive）不重置；
+# 超过 inactivity 秒没有 data 行（含 __anext__ 永久挂住的情形）→ 抛 AgnesError，
+# 让 turn 干净失败而不是无限等待。360s 与 httpx read=360 对齐：正常「无字节」路径
+# 行为不变（两者同时刻触发），只是补上「keepalive 空转」这个洞。
+async def _watched_lines(alines, inactivity: float = 360.0):
+    it = alines.__aiter__()
+    deadline = time.monotonic() + inactivity
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise AgnesError(
+                f"流式响应 {int(inactivity)}s 无有效数据行（仅 keepalive/静默），判定上游挂死")
+        try:
+            line = await asyncio.wait_for(it.__anext__(), timeout=remaining)
+        except StopAsyncIteration:
+            return
+        if line.startswith("data:"):
+            deadline = time.monotonic() + inactivity
+        yield line
 
 
 class AgnesError(Exception):
@@ -394,7 +419,7 @@ class AgnesClient:
                             continue
                         raise AgnesError(f"{label} stream 错误 {r.status_code}: {body_txt}",
                                          r.status_code, body_txt)
-                    async for ev in _parse_sse_events(r.aiter_lines()):
+                    async for ev in _parse_sse_events(_watched_lines(r.aiter_lines())):
                         yield ev
                     break   # 流正常走完（或已在产出事件后结束），不再重试
         if self.quota: self.quota.consume("text_calls", 1)

@@ -2404,8 +2404,14 @@ def _append_fact_summary(rt: AgentRuntime, project: str, text: str, receipts: li
       - 模型说"没改"实际改了（[129]→[131] 场景）
       - 用户/下一轮无法核对真实结果
 
+    覆盖全成功/部分成功/全失败三态：已成功资产明确列出并保留，未完成项也如实标注。
     纯追加，不删改模型原文；若模型已诚实且准确，摘要是冗余但无害的确认。"""
+    if not receipts:
+        return text
     real_changes = [r for r in receipts if r.get("ok") and r.get("verified") and not r.get("unchanged")]
+    failed = [r for r in receipts if not r.get("ok")]
+    # Script Writer 无视觉生成操作：纯 CRUD 失败且无成功变更（如删除不存在的段、stale 被拒）
+    # 不追加事实块（失败原因由错误信息/真相闸门体现）；有成功变更才列 ✓/✗ 与计数。
     if not real_changes:
         return text
     try:
@@ -2414,8 +2420,22 @@ def _append_fact_summary(rt: AgentRuntime, project: str, text: str, receipts: li
         scene_list = [s.scene_id for s in scenes]
         lines = ["\n\n---\n【实际执行记录】（系统据真实回执生成，非模型叙述）"]
         for r in real_changes:
-            ok = "✓" if r.get("ok") else "✗"
-            lines.append(f"{ok} {_op_human(r)}")
+            lines.append(f"✓ {_op_human(r)}")
+        for r in failed:
+            why = r.get("error") or r.get("code") or "失败"
+            if r.get("stale"):
+                why = "版本过期，已拒绝"
+            elif r.get("cancelled"):
+                why = "已取消"
+            sid = r.get("scene_id") or ""
+            lines.append(f"✗ {r.get('operation', '操作')}{(' ' + sid) if sid else ''}：{why}")
+        # 确定性完成情况总结行（不让模型猜）
+        if failed and not real_changes:
+            lines.append(f"\n本次没有完成生成（{len(failed)} 项未成功）。")
+        elif failed and real_changes:
+            lines.append(f"\n已完成 {len(real_changes)} 项，{len(failed)} 项未完成/取消。")
+        else:
+            lines.append(f"\n已完成 {len(real_changes)} 项。")
         lines.append(f"\n当前故事段共 {len(scenes)} 个：{', '.join(scene_list) if scene_list else '（空）'}")
         return text + "\n".join(lines)
     except Exception:

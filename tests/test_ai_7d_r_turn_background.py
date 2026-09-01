@@ -232,3 +232,54 @@ def test_resource_locks_empty_after_turn(http_ctx):
     r = client.get(f"/api/project/{project}/resource-locks")
     assert r.status_code == 200
     assert r.json()["locks"] == []
+
+
+# ============ 终端事件可靠性（QueueFull 不丢终端信号）============
+def test_put_terminal_event_drains_full_queue():
+    """队列已满时，_put_terminal_event 先清空 unconsumed 再入队——终端事件不丢。
+
+    旧 put_nowait 行为：QueueFull 静默丢 → 消费者永挂 q.get()。"""
+    q = asyncio.Queue(maxsize=2)
+    q.put_nowait({"type": "tool.progress", "message": "p1"})
+    q.put_nowait({"type": "tool.progress", "message": "p2"})   # 队列满
+    terminal = {"type": "turn.completed", "result": {"ok": True}}
+    agents_router._put_terminal_event(q, terminal)             # 不抛 QueueFull
+    drained = []
+    while not q.empty():
+        drained.append(q.get_nowait())
+    assert terminal in drained            # 终端事件存活
+    assert drained[-1] == terminal        # 且在队尾（消费者最后收到）
+
+
+def test_put_terminal_event_not_full_passthrough():
+    """队列未满时，终端事件直接入队。"""
+    q = asyncio.Queue(maxsize=4)
+    terminal = {"type": "turn.failed", "error": "boom"}
+    agents_router._put_terminal_event(q, terminal)
+    assert q.get_nowait() == terminal
+
+
+def test_turn_failed_emits_terminal(http_ctx, monkeypatch):
+    """_turn_fn 抛异常时，turn.failed 终端事件必达 + 流正常收尾 + 锁释放。
+
+    覆盖 SSE _run 的 except Exception → _put_terminal(turn.failed) 路径
+    （此前正常/取消路径已测，turn.failed 路径未测）。"""
+    client, project, sid, bus, published = http_ctx
+
+    async def _boom(*a, **kw):
+        raise RuntimeError("provider boom")
+    # SSE 端点在函数内 from src.agents.script_writer import script_writer_turn，
+    # monkeypatch 模块属性后该 import 取到 patched 版本 → _turn_fn 抛 → turn.failed
+    monkeypatch.setattr("src.agents.script_writer.script_writer_turn", _boom)
+
+    with client.stream("POST",
+                       f"/api/project/{project}/agents/sessions/{sid}/turn/stream",
+                       json={"content": "加一段", "thinking": False}) as resp:
+        body = b"".join(resp.iter_bytes())
+    text = body.decode("utf-8", "replace")
+    assert "turn.failed" in text
+    assert "provider boom" in text
+    # 流收尾：注册表注销（消费者不挂）
+    assert agents_router._turn_key(project, sid) not in agents_router._ACTIVE_TURN_EVENTS
+    # 失败路径也释放锁
+    assert bus.is_locked(project, RESOURCE_STORY) is False

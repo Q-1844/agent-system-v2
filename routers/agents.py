@@ -248,6 +248,26 @@ def _turn_key(project_name: str, sid: str) -> str:
     return f"{project_name}::{sid}"
 
 
+def _put_terminal_event(q: asyncio.Queue, ev) -> None:
+    """终端事件（turn.completed/turn.failed/SENTINEL）入队：队列满则先清空
+    unconsumed 事件再入队，保证消费者必收终端信号。否则 put_nowait 遇 QueueFull
+    静默丢失 → 消费者永挂在 q.get()、看门狗误触发、driver 漏收 turn.completed。
+    终端时刻丢弃未消费的细粒度事件（progress/assistant.delta）安全——消费者只要
+    终端信号。与 _cb 的 overflow drop 同语义但保证不丢终端。模块级以便单测。"""
+    try:
+        q.put_nowait(ev)
+    except asyncio.QueueFull:
+        try:
+            while True:
+                q.get_nowait()
+        except Exception:
+            pass
+        try:
+            q.put_nowait(ev)
+        except Exception:
+            pass
+
+
 @router.post("/api/project/{project_name}/agents/sessions/{sid}/turn/cancel")
 async def cancel_agent_turn(project_name: str, sid: str):
     """协作式停止进行中的流式 turn：置位 cancel_event，agent 在步骤边界安全停下
@@ -345,19 +365,22 @@ async def agent_turn_stream(project_name: str, sid: str, req: StreamTurnReq):
                     except Exception:
                         pass
 
+        def _put_terminal(ev):
+            _put_terminal_event(q, ev)
+
         async def _run():
             try:
                 result = await _turn_fn(
                     rt, project_name, sid, req.content,
                     thinking=thinking_fixed, event_cb=_cb, cancel_event=cancel_event)
                 if state["connected"]:
-                    q.put_nowait({"type": "turn.completed", "result": result})
+                    _put_terminal({"type": "turn.completed", "result": result})
             except AgentError as e:
                 if state["connected"]:
-                    q.put_nowait({"type": "turn.failed", "error": e.message})
+                    _put_terminal({"type": "turn.failed", "error": e.message})
             except Exception as e:
                 if state["connected"]:
-                    q.put_nowait({"type": "turn.failed", "error": str(e)[:300]})
+                    _put_terminal({"type": "turn.failed", "error": str(e)[:300]})
             finally:
                 # 资源锁释放（成功/失败/停止/断开都要释放）。
                 # 🔴 用 _resource（当前 Agent 的写入域资源），不能用任何分支里的局部 import 名
@@ -368,7 +391,7 @@ async def agent_turn_stream(project_name: str, sid: str, req: StreamTurnReq):
                     state["locked"] = False
                 _ACTIVE_TURN_EVENTS.pop(key, None)
                 if state["connected"]:
-                    q.put_nowait(SENTINEL)
+                    _put_terminal(SENTINEL)
 
         task = asyncio.ensure_future(_run())
         # turn.started（thinking snapshot 在这里固定宣告）

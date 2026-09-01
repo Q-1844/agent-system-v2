@@ -138,6 +138,21 @@
                        loading="lazy" />
                 </div>
               </div>
+              <!-- 2026-08-31：Director 本轮真实生成的分镜图/视频（meta.generated_assets，
+                   canonical 路径渲染；视频用 <video> 预览，不展示 base64） -->
+              <div v-if="generatedAssets(m.meta).length" class="gen-views">
+                <div class="gv-name">分镜视觉资产 · {{ generatedAssets(m.meta).length }} 项</div>
+                <div class="gv-grid">
+                  <template v-for="(a, ai) in generatedAssets(m.meta)" :key="'ga-' + i + ai">
+                    <video v-if="a.kind === 'video'" class="gv-img gv-video"
+                           :src="getVideoUrl(a.path)" controls preload="metadata"
+                           :title="a.shot_id + ' 视频'" />
+                    <img v-else class="gv-img gv-land" :src="getImageUrl(a.path)"
+                         :alt="a.shot_id + ' ' + a.kind" loading="lazy"
+                         :title="a.shot_id + ' ' + assetKindLabel(a.kind)" />
+                  </template>
+                </div>
+              </div>
               <!-- Web Search：资料来源折叠区（仅 title+url 链接，来自 meta.search_sources；不展示 snippet） -->
               <div v-if="searchSources(m.meta).length" class="sources">
                 <div class="sources-head" @click="toggleSourcesOf(m)">
@@ -276,7 +291,7 @@ import { useChangeSessionStore } from '@/store/changeSession';
 import { useAgentTurnStore, type ProcessItem } from '@/store/agentTurn';
 import { useProjectEventsStore } from '@/store/projectEvents';
 import { useStickToBottom } from '@/composables/useStickToBottom';
-import { getImageUrl } from '@/utils/media';
+import { getImageUrl, getVideoUrl } from '@/utils/media';
 import TeamChatPanel from '@/components/agent/TeamChatPanel.vue';
 import ChangePlanReview from '@/components/agent/ChangePlanReview.vue';
 import ScriptWriterTestModal from '@/components/agent/ScriptWriterTestModal.vue';
@@ -367,6 +382,15 @@ function receiptLabel(r: ScriptWriterReceipt): string {
   if (op === 'shot.move') return `移动镜头 ${r.shot_id || ''}`.trim();
   if (op === 'shot.create_many') return `批量创建镜头（${r.count ?? r.created?.length ?? 0} 个）`;
   if (op === 'shot.update_many') return `批量修改镜头（${r.count ?? r.results?.length ?? 0} 个）`;
+  // Director Visual Production（2026-08-31）：视觉生成分项结果
+  if (op === 'shot.generate_images') {
+    const done = (r.results || []).filter((x: any) => x.ok).length;
+    return `生成分镜图（${done}/${r.count ?? r.results?.length ?? 0} 完成）`;
+  }
+  if (op === 'shot.generate_videos') {
+    const done = (r.results || []).filter((x: any) => x.ok).length;
+    return `生成镜头视频（${done}/${r.count ?? r.results?.length ?? 0} 完成）`;
+  }
   if (op === 'story.create') return `创建 ${r.scene_id || ''}`.trim();
   if (op === 'story.move') return `移动 ${r.scene_id || ''}`.trim();
   if (op === 'story.update') return `修改 ${r.scene_id || ''}`.trim();
@@ -404,6 +428,16 @@ function groupGeneratedViews(meta: any): { name: string; items: { view: string; 
     name,
     items: items.sort((a, b) => (VIEW_ORDER[a.view] ?? 9) - (VIEW_ORDER[b.view] ?? 9)),
   }));
+}
+
+// 2026-08-31：Director 本轮真实生成的分镜图/视频（meta.generated_assets，canonical 路径）。
+// 图片走 getImageUrl（/api/image/...），视频走 getVideoUrl（/projects/... 静态挂载）。
+function generatedAssets(meta: any): { shot_id: string; kind: string; path: string }[] {
+  const list: any[] = Array.isArray(meta?.generated_assets) ? meta.generated_assets : [];
+  return list.filter((a: any) => a && a.shot_id && a.path);
+}
+function assetKindLabel(kind: string): string {
+  return kind === 'last_frame' ? '尾帧' : kind === 'video' ? '视频' : '首帧';
 }
 
 // AI-7D-R：完成后执行过程附在 message 上保留（折叠态），事后可展开查看。
@@ -802,6 +836,8 @@ onUnmounted(() => {
 .gv-grid { display: flex; gap: 6px; flex-wrap: wrap; }
 .gv-img { width: 72px; height: 108px; object-fit: cover; border-radius: 4px; background: rgba(255,255,255,.06); border: 1px solid var(--border); cursor: pointer; }
 .gv-img:hover { border-color: var(--accent); }
+.gv-video { width: 128px; height: 72px; }
+.gv-land { width: 128px; height: 72px; }   /* 分镜帧是 16:9，横版缩略避免裁切 */
 /* Web Search 资料来源折叠区（与 receipts 同级同风格） */
 .sources { margin-top: 6px; padding: 6px 8px; border-left: 2px solid #60a5fa; background: rgba(96,165,250,.06); border-radius: 0 6px 6px 0; }
 .sources-head { font-size: 11px; color: #60a5fa; cursor: pointer; user-select: none; }

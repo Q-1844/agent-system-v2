@@ -215,6 +215,11 @@ CHARACTER_DESIGNER_SYSTEM = """你是 AGNES 的 Character Designer，负责项�
 - 根据故事设计角色（「根据现在的故事设计男女主角」）：character.list（先知道已有哪些角色，避免重复创建）→ story.list 全局地图 → story.read 只读相关局部段（主角首次登场/关键剧情/人物关系/性格体现/服装时代相关段）→ 信息不足再扩大读取 → 真正需要全局理解才 script.read。不要因为「根据剧本设计人物」就每次读全文。
 - 修改已有角色：character.read 目标角色通常就够；需要结合剧情再按需读故事段。
 
+【角色创建范围（重要，先判断再建）】
+- 只为【真正在分镜画面里出镜、且需要跨镜头保持视觉一致性】的人物创建 Character canonical——即后续分镜图/三视图需要参考其固定形象的角色：主角、有连续戏份的配角。判断标准：这个人物会不会在镜头画面里出现脸/形象、并且多次出场需要长得一样？会 → 建。
+- 仅在台词/旁白/回忆/他人转述中被【提到名字】但本人不出镜的人物（已故亲人、画外音、信里/电话里提到的人、群众口中的名字），【不要】创建角色 canonical——他们不需要视觉参考图，建了只会让角色名单膨胀、让导演误读。可在文字设定/剧本里提及，但不建 Character。
+- 不确定某人物是否出镜时，读相关故事段确认；若全片只在回忆/投影中一闪而过且不要求形象一致，倾向不建，需要时再补。
+
 【工作方式】
 1. 根据故事创建角色：character.list → story.list → 按需 story.read → character.create。description_en 用英文写成可直接用于图片生成的【稳定角色描述】：外貌/发型/服装/配色/2-4 个长期识别特征；与故事明确设定一致；与项目已有角色在轮廓/颜色上可区分；不含镜头/运镜/背景故事。
 2. 用户要求修改：character.read → character.update（只改相关部分）。
@@ -1013,17 +1018,38 @@ def _honest_fallback(receipts: list) -> str:
 
 def _append_fact_summary(rt: AgentRuntime, project: str, text: str, receipts: list) -> str:
     """有真实变更时，在模型回复后追加【确定性事实摘要】——由真实 receipts + 当前
-    canonical 生成，不信模型叙述。纯追加，不删改模型原文。"""
+    canonical 生成，不信模型叙述。覆盖全成功/部分成功/全失败三态：已成功资产明确列出
+    并保留，未完成项也如实标注。纯追加，不删改模型原文。"""
+    if not receipts:
+        return text
     real_changes = [r for r in receipts if r.get("ok") and r.get("verified") and not r.get("unchanged")]
-    if not real_changes:
+    failed = [r for r in receipts if not r.get("ok")]
+    # 纯 CRUD 失败且无成功变更（如创建/删除一个不存在的角色被拒）→ 不追加事实块；
+    # 三视图生成（character.generate_views）即使部分/全部失败也追加，确定性告知完成情况。
+    has_generate = any(r.get("operation") == "character.generate_views" for r in receipts)
+    if not real_changes and not has_generate:
         return text
     try:
         proj = _reload(rt, project)
         names = [c.name for c in (proj.characters or [])]
         lines = ["\n\n---\n【实际执行记录】（系统据真实回执生成，非模型叙述）"]
         for r in real_changes:
-            ok = "✓" if r.get("ok") else "✗"
-            lines.append(f"{ok} {_op_human_char(r)}")
+            lines.append(f"✓ {_op_human_char(r)}")
+        for r in failed:
+            why = r.get("error") or r.get("code") or "失败"
+            if r.get("stale"):
+                why = "版本过期，已拒绝"
+            elif r.get("cancelled"):
+                why = "已取消"
+            nm = r.get("character_name") or ""
+            lines.append(f"✗ {r.get('operation', '操作')}{(' ' + nm) if nm else ''}：{why}")
+        # 确定性完成情况总结行（不让模型猜）
+        if failed and not real_changes:
+            lines.append(f"\n本次没有完成生成（{len(failed)} 项未成功）。")
+        elif failed and real_changes:
+            lines.append(f"\n已完成 {len(real_changes)} 项，{len(failed)} 项未完成/取消。")
+        else:
+            lines.append(f"\n已完成 {len(real_changes)} 项。")
         lines.append(f"\n当前角色共 {len(names)} 个：{', '.join(names) if names else '（空）'}")
         return text + "\n".join(lines)
     except Exception:

@@ -47,6 +47,9 @@ export const useProjectEventsStore = defineStore('projectEvents', () => {
       lockedResources.value = {};
       lastStoryChange.value = null;
       charactersVersion.value = 0;
+      // 版本号同样按项目隔离：切项目清零，避免旧项目的变化信号触发新项目页面刷新
+      storyVersion.value = 0;
+      storyboardVersion.value = 0;
     }
   }
   function setConnected(c: boolean) { connected.value = c; }

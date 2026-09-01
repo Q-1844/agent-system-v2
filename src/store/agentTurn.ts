@@ -116,6 +116,13 @@ export const useAgentTurnStore = defineStore('agentTurn', () => {
           label: `正在生成 ${ev.character_name} 三视图 · ${ev.view}${ev.pct ? ` (${ev.pct}%)` : ''}…`,
         };
         break;
+      case 'tool.progress':
+        // Director 视觉生成等长任务进度（批次计数推进，如「已完成 3/8」）
+        currentActivity.value = {
+          type: 'tool',
+          label: ev.message || `正在${ev.label ?? '执行任务'}…`,
+        };
+        break;
       case 'turn.completed':
       case 'turn.failed':
         currentActivity.value = null;
@@ -198,6 +205,8 @@ export const useAgentTurnStore = defineStore('agentTurn', () => {
     'shot.create': '创建镜头', 'shot.create_many': '批量创建镜头',
     'shot.update': '修改镜头', 'shot.update_many': '批量修改镜头',
     'shot.delete': '删除镜头', 'shot.move': '移动镜头',
+    // Director Visual Production（2026-08-31）：视觉生成长任务
+    'shot.generate_images': '生成分镜图', 'shot.generate_videos': '生成镜头视频',
     'web.search': '搜索资料',
   };
 

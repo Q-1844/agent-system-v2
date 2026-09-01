@@ -1,0 +1,466 @@
+# src/agents/director_visual.py
+# Director 视觉生产工具（2026-08-31）：shot.generate_images / shot.generate_videos。
+#
+# 定位：Agent 只负责【决定生成什么时候发生】（选哪些 shot / 首帧还是尾帧 / 是否够格
+# 生成视频），不重新实现任何图片/视频生成算法——生成本体完全复用既有成熟 JobQueue
+# 管线（routers/shots.py 的 _handler_first_frame/_handler_last_frame/_handler_video，
+# 含 prompt 拼装、角色参考图/接力参考图收集、Agnes 限流桶、每日配额、视频串行 worker、
+# 看门狗、崩溃恢复、imgbb 托管、末帧提取）。本文件只做四件事：
+#   1. 参数校验与【提交前】结构预检（锁/keyframes/首帧就绪——不达标不提交，省配额）；
+#   2. 提交 job 并等待终态（轮询 JobQueue，向 turn 流发 tool.progress 进度）；
+#   3. 响应协作取消（用户停止 → force-cancel 未完成 job，已完成资产保留在 canonical）；
+#   4. 写后重读 canonical 验证：按 origin_run_id 精确匹配本批生成的
+#      ImageBatch / VideoVersion + 本地文件存在（确定性依据，不用模型自报）。
+#
+# 长任务语义（对齐 character.generate_views 样板）：
+#   - 图片批：轻任务 worker 并发 3（image_1k 20 RPM 限流下安全），总超时 1200s；
+#   - 视频批：视频串行 worker（1 RPM 现实约束），总超时 2400s；
+#   - 部分成功：单个失败不让整批作废；receipt ok=任一成功，verified=所有【已完成】
+#     分项都经 canonical+文件验证（诚实语义，让真相闸门正确放行部分成功的如实汇报）；
+#   - 总超时不取消 job：未完成项如实标 timeout，job 留在队列继续跑完并自行落盘
+#     （与用户从 REST 提交生成完全同语义）；用户停止（cancel）才 force-cancel。
+#
+# 图片/视频内容绝不进模型上下文：obs 只含 canonical 路径与状态（前端用路径渲染）。
+from __future__ import annotations
+
+import asyncio
+import time
+import uuid
+from pathlib import Path
+from typing import Optional
+
+from ..core.store import ProjectStore
+from .revision_audit import DirectEditAuditStore
+from .runtime import AgentError, AgentRuntime
+from .script_writer import _base_receipt, _loose_json, _parse_args
+
+# 批量上限：图片批对齐文本批量规模（10 镜/批，轻任务并发 3）；视频受串行 worker +
+# 1 RPM 现实约束（每个约 70s~数分钟），一批最多 4 个。
+MAX_IMAGE_BATCH = 10
+MAX_VIDEO_BATCH = 4
+# 总超时：图片单张约 15~40s（AgnesClient 重试上限/看门狗 600s 封顶），10 张并发 3
+# 约 2~5 分钟，超时给到 20 分钟覆盖病态重试；视频串行每个约 70s~3 分钟（poll 上限
+# 3600s），4 个一批给到 40 分钟。超时后未完成 job 留队列继续跑（见文件头）。
+IMAGES_TOTAL_TIMEOUT_S = 1200
+VIDEOS_TOTAL_TIMEOUT_S = 2400
+POLL_INTERVAL_S = 2.0
+
+_FRAME_LABEL = {"first": "首帧", "last": "尾帧", "video": "视频"}
+
+
+def _progress(event_cb, message: str, *, done: int = 0, total: int = 0,
+              pct: Optional[int] = None) -> None:
+    """向 turn 流发 tool.progress（loop 侧包装器注入 step_id/call_id/name）。"""
+    if event_cb is None:
+        return
+    ev = {"type": "tool.progress", "message": message, "done": done, "total": total}
+    if pct is not None:
+        ev["pct"] = pct
+    event_cb(ev)
+
+
+def _effective_first_frame_url(proj, shot) -> str:
+    """与 routers/shots.py 同语义的 effective 首帧公网 URL（只读复制，避免 import router）。
+    inherit_previous -> 来源镜头末帧 url；其余 -> 本镜已选首帧候选 url。"""
+    from ..core.models import OpeningSource
+    if shot.opening_source == OpeningSource.INHERIT_PREVIOUS.value and shot.source_shot_id:
+        prev = proj.get_shot(shot.source_shot_id)
+        if prev and prev.video_end_frame.url_ready:
+            return prev.video_end_frame.url or ""
+        return ""
+    sel = shot.first_frame.selected
+    return (sel.url if sel else "") or ""
+
+
+def _parse_image_targets(args: dict) -> list:
+    """targets: [{shot_id, frame: first|last}]。宽容解析（_loose_json），返回规范 target 列表。"""
+    raw = _loose_json(args.get("targets"))
+    if not isinstance(raw, list) or not raw:
+        raise AgentError("bad_arguments",
+                         "targets 必须是非空数组，每项 {shot_id, frame}（frame: first|last，"
+                         "单个镜头也放进数组传一项）")
+    if len(raw) > MAX_IMAGE_BATCH:
+        raise AgentError("bad_arguments",
+                         f"单批最多 {MAX_IMAGE_BATCH} 个图片生成目标（收到 {len(raw)}）。"
+                         "分多批提交。")
+    targets = []
+    seen = set()
+    for i, item in enumerate(raw):
+        if not isinstance(item, dict) or not str(item.get("shot_id") or "").strip():
+            raise AgentError("bad_arguments", f"targets[{i}] 缺少 shot_id")
+        sid = str(item["shot_id"]).strip()
+        frame = str(item.get("frame") or "first").strip().lower()
+        if frame not in ("first", "last"):
+            raise AgentError("bad_arguments",
+                             f"targets[{i}] 的 frame 只支持 first|last（收到 {frame}）")
+        key = (sid, frame)
+        if key in seen:
+            raise AgentError("bad_arguments",
+                             f"targets 中 ({sid}, {frame}) 重复：同一镜头同一帧一批只出现一次")
+        seen.add(key)
+        targets.append({"shot_id": sid, "frame": frame})
+    return targets
+
+
+def _parse_video_targets(args: dict) -> list:
+    """shot_ids: 非空字符串数组（≤4）。"""
+    raw = _loose_json(args.get("shot_ids"))
+    if not isinstance(raw, list) or not raw:
+        raise AgentError("bad_arguments",
+                         "shot_ids 必须是非空数组（单个镜头也传一项）")
+    if len(raw) > MAX_VIDEO_BATCH:
+        raise AgentError("bad_arguments",
+                         f"单批最多 {MAX_VIDEO_BATCH} 个视频（视频串行生成，收到 {len(raw)}）。"
+                         "分多批提交，或先只做关键镜头。")
+    targets = []
+    seen = set()
+    for i, v in enumerate(raw):
+        sid = str(v or "").strip()
+        if not sid:
+            raise AgentError("bad_arguments", f"shot_ids[{i}] 为空")
+        if sid in seen:
+            raise AgentError("bad_arguments", f"shot_ids 含重复镜头：{sid}")
+        seen.add(sid)
+        targets.append({"shot_id": sid, "frame": "video"})
+    return targets
+
+
+def _precheck_targets(proj, targets: list, *, kind: str, force: bool) -> tuple[list, list]:
+    """提交前结构预检。返回 (submittable, blocked)。不达标的【不提交】（不烧配额），
+    以结构化分项返回原因，让 Director 自己决定下一步（如先生成首帧）。"""
+    submittable, blocked = [], []
+    pending_first_ids = {t["shot_id"] for t in targets if t["frame"] == "first"}
+    for t in targets:
+        shot = proj.get_shot(t["shot_id"])
+        if shot is None:
+            blocked.append({**t, "status": "not_found", "ok": False, "verified": False,
+                            "error": f"镜头 {t['shot_id']} 不存在"})
+            continue
+        if kind == "image":
+            if shot.locked and not force:
+                blocked.append({**t, "status": "locked", "ok": False, "verified": False,
+                                "error": "镜头已锁定（锁定的镜头默认跳过生成）"})
+                continue
+            if t["frame"] == "last":
+                if shot.link_mode != "keyframes":
+                    blocked.append({**t, "status": "blocked", "ok": False, "verified": False,
+                                    "error": f"仅 keyframes 模式需要尾帧（当前 {shot.link_mode}）"})
+                    continue
+                if not _effective_first_frame_url(proj, shot) and t["shot_id"] not in pending_first_ids:
+                    blocked.append({**t, "status": "blocked", "ok": False, "verified": False,
+                                    "error": "首帧未就绪：先生成并选择首帧，再生成尾帧"})
+                    continue
+        else:  # video
+            if shot.locked:
+                blocked.append({**t, "status": "locked", "ok": False, "verified": False,
+                                "error": "镜头已锁定"})
+                continue
+            if not _effective_first_frame_url(proj, shot):
+                blocked.append({**t, "status": "blocked", "ok": False, "verified": False,
+                                "error": ("开场画面未就绪：视频需要先生成并选择首帧"
+                                          "（inherit 接力镜头需来源镜头末帧就绪）")})
+                continue
+        submittable.append(t)
+    return submittable, blocked
+
+
+def _verify_one(on_disk, shot_id: str, frame: str, marker: str) -> Optional[dict]:
+    """写后重读 canonical：按 origin_run_id==marker 精确找本批生成的资产 + 本地文件存在。
+    返回 {local, url, seconds?}；未确认返回 None。"""
+    shot = on_disk.get_shot(shot_id)
+    if shot is None:
+        return None
+    if frame == "video":
+        for vv in (shot.video_versions or []):
+            if vv.origin_run_id == marker and vv.local and Path(vv.local).exists():
+                return {"local": vv.local, "url": vv.url or "",
+                        "seconds": vv.seconds_returned}
+        return None
+    kind = "first_frame" if frame == "first" else "last_frame"
+    batches = shot.first_frame_batches if kind == "first_frame" else shot.last_frame_batches
+    for b in (batches or []):
+        if b.origin_run_id != marker or b.kind != kind:
+            continue
+        for c in (b.candidates or []):
+            if c.local and Path(c.local).exists():
+                return {"local": c.local, "url": c.url or ""}
+    return None
+
+
+async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments: str,
+                              instruction: str, message_id: Optional[str],
+                              event_cb=None, cancel_event=None) -> dict:
+    """shot.generate_images / shot.generate_videos 共用实现：
+    校验 → 预检 → 提交 JobQueue → 轮询等待（进度/取消/总超时）→ 重读 canonical 验证 → 回执。"""
+    args = _parse_args(arguments)
+    is_image = op == "shot.generate_images"
+    variants = 1
+    force = False
+    if is_image:
+        targets = _parse_image_targets(args)
+        variants = max(1, min(2, int(args.get("variants") or 1)))
+        force = bool(args.get("force", False))
+        total_timeout = IMAGES_TOTAL_TIMEOUT_S
+        asset_noun = "分镜图"
+    else:
+        targets = _parse_video_targets(args)
+        total_timeout = VIDEOS_TOTAL_TIMEOUT_S
+        asset_noun = "视频"
+
+    q = rt._resolve_job_queue_or_none()
+    if q is None:
+        raise AgentError("job_queue_unavailable",
+                         "任务队列不可用（服务未就绪），无法生成视觉资产")
+
+    pdir = rt._resolve_project_dir(project)
+    proj = ProjectStore(pdir).load()
+    submittable, blocked = _precheck_targets(proj, targets,
+                                             kind="image" if is_image else "video",
+                                             force=force)
+
+    # 提交：origin_run_id = 每目标唯一 marker（ImageBatch/VideoVersion 记录同值，
+    # 写后验证按它精确匹配；JobQueue.find_by_origin 也可据此查询）。
+    jobs: list = []   # (target, job, marker)
+    for t in submittable:
+        marker = f"dgv_{uuid.uuid4().hex[:8]}"
+        kind = {"first": "first_frame", "last": "last_frame", "video": "video"}[t["frame"]]
+        extra = {"origin_run_id": marker}
+        if is_image:
+            extra.update(variants=variants, force=force)
+        job = q.submit(project, kind, t["shot_id"], **extra)
+        jobs.append((t, job, marker))
+
+    total = len(targets)
+    if not jobs:
+        return _base_receipt(
+            op, ok=False, target=",".join(t["shot_id"] for t in targets),
+            revision=None, verified=False,
+            results=blocked, count=total, done=0, failed=total,
+            cancelled=False, timed_out=False,
+            **({"variants": variants} if is_image else {}),
+            note=f"没有可提交的生成目标（{total} 项全部被预检拦截），未消耗生成额度。"
+                 "请根据各项 error 先补齐前置条件（如先生成首帧）。")
+
+    _progress(event_cb, f"已提交 {len(jobs)} 个{asset_noun}生成任务，开始等待完成…",
+              done=0, total=total, pct=0)
+
+    started = time.time()
+    deadline = started + total_timeout
+    cancelled = timed_out = False
+    while True:
+        if cancel_event is not None and cancel_event.is_set():
+            cancelled = True
+            for _, job, _m in jobs:
+                if job.state in ("queued", "running"):
+                    try:
+                        q.cancel(job.job_id, force=True)
+                    except Exception:
+                        pass
+            break
+        n_terminal = 0
+        n_running = 0
+        running_sid = ""
+        for _t, job, _m in jobs:
+            if job.state in ("done", "failed", "cancelled"):
+                n_terminal += 1
+            elif job.state == "running":
+                n_running += 1
+                running_sid = job.shot_id
+        if n_terminal >= len(jobs):
+            break
+        if time.time() > deadline:
+            timed_out = True   # 不取消：未完成 job 留队列继续跑，自行落盘
+            break
+        n_ok = sum(1 for _t, job, _m in jobs if job.state == "done")
+        pct = int(n_ok / len(jobs) * 100)
+        if is_image:
+            msg = f"正在生成分镜图… 已完成 {n_ok}/{len(jobs)}"
+            if n_running:
+                msg += f"，进行中 {n_running}"
+            _progress(event_cb, msg, done=n_ok, total=len(jobs), pct=pct)
+        else:
+            lead = (f"正在生成 {running_sid} 视频…" if running_sid
+                    else "视频排队中（串行 worker，1 RPM）…")
+            _progress(event_cb, f"{lead} 已完成 {n_ok}/{len(jobs)}",
+                      done=n_ok, total=len(jobs), pct=pct)
+        await asyncio.sleep(POLL_INTERVAL_S)
+
+    # 分项状态（job.state 是 live 对象，终态由 handler/queue 原位更新）
+    results: list = list(blocked)
+    for t, job, marker in jobs:
+        st = job.state
+        base = {**t, "job_id": job.job_id, "origin_run_id": marker, "status": st,
+                "ok": False, "verified": False, "local": None, "url": None}
+        if st == "done":
+            results.append(base)
+        elif st == "failed":
+            results.append({**base, "error": (job.error or "生成失败")[:300]})
+        else:  # cancelled / queued / running（后两者 = 超时或取消时仍未完成）
+            if cancelled:
+                results.append({**base, "status": "cancelled",
+                                "error": "已取消（用户停止），已完成的其他资产保留"})
+            elif timed_out:
+                results.append({**base, "status": "timeout",
+                                "error": (f"总超时（>{total_timeout}s）仍在后台继续，"
+                                          "完成后会自行写入分镜数据，可稍后用 shot.list 查看")})
+            else:
+                results.append({**base, "error": f"任务异常终态：{st}"})
+
+    # 写后重读 canonical：done 分项按 marker 精确验证（批次/版本存在 + 本地文件存在）
+    on_disk = ProjectStore(pdir).load()
+    for r in results:
+        if r.get("status") != "done":
+            continue
+        marker = next((m for tt, _j, m in jobs
+                       if tt["shot_id"] == r["shot_id"] and tt["frame"] == r["frame"]), None)
+        v = _verify_one(on_disk, r["shot_id"], r["frame"], marker) if marker else None
+        if v is None:
+            r["error"] = "job 已完成但重读 canonical 未确认资产落盘（文件缺失）"
+        else:
+            r["ok"] = True
+            r["verified"] = True
+            r["local"] = v["local"]
+            r["url"] = v.get("url")
+            if r["frame"] == "video":
+                r["seconds"] = v.get("seconds")
+
+    done_items = [r for r in results if r.get("ok") and r.get("verified")]
+    elapsed = round(time.time() - started, 1)
+    ok = bool(done_items)
+    # verified 语义：所有【报告完成】的分项都经 canonical+文件验证（无假 done）。
+    # 部分成功时 ok=True 且 verified=True —— 失败分项在 results/note 里如实列出。
+    verified = ok and all(r.get("verified") for r in results if r.get("status") == "done")
+
+    if done_items:
+        n_fail = total - len(done_items)
+        summary_tail = (f"，{n_fail} 个未完成" if n_fail else "")
+        DirectEditAuditStore(pdir, project).record(
+            agent_id="director",
+            field="generate_images" if is_image else "generate_videos",
+            before=None,
+            after={"targets": [{"shot_id": r["shot_id"], "frame": r["frame"]}
+                               for r in done_items]},
+            instruction=instruction, message_id=message_id)
+        rt.record_work(project, "change",
+                       f"Director 生成了 {len(done_items)} 个{asset_noun}{summary_tail}",
+                       participants=["director"], affected_domains=["storyboard"],
+                       references={"shot_ids": sorted({r["shot_id"] for r in done_items})},
+                       status="completed")
+
+    parts = []
+    for r in results:
+        tag = f"{r['shot_id']}{_FRAME_LABEL.get(r['frame'], r['frame'])}"
+        if r.get("ok"):
+            parts.append(f"{tag} ✓")
+        else:
+            parts.append(f"{tag} ✗（{r.get('error') or r.get('status')}）")
+    note = "；".join(parts) + f"。耗时 {elapsed}s。"
+    if cancelled:
+        note += " 生成已取消（用户停止），已完成资产已保留在分镜数据中。"
+    elif timed_out:
+        note += (" 已达本工具总超时，未完成项仍在后台继续（完成后会自行写入分镜数据），"
+                 "可稍后用 shot.list 查看最新状态。")
+    if is_image and done_items:
+        note += " 首帧候选已自动选中第一张（可在分镜页更换）；图片请用户在 UI 中查看验收。"
+
+    return _base_receipt(
+        op, ok=ok, target=",".join(t["shot_id"] for t in targets),
+        revision=None, verified=verified,
+        results=results, count=total, done=len(done_items),
+        failed=total - len(done_items),
+        cancelled=cancelled, timed_out=timed_out,
+        **({"variants": variants} if is_image else {}),
+        elapsed_s=elapsed, note=note)
+
+
+async def _execute_shot_generate_images(rt: AgentRuntime, project: str, arguments: str,
+                                        instruction: str, message_id: Optional[str],
+                                        event_cb=None, cancel_event=None) -> dict:
+    """shot.generate_images：批量为镜头生成首帧/尾帧图片（复用 first_frame/last_frame
+    JobQueue handler）。长任务：总超时 IMAGES_TOTAL_TIMEOUT_S，响应协作取消（已完成保留），
+    部分成功不整批作废；obs 不含图片内容，只含 canonical 路径。"""
+    return await _execute_generation(
+        "shot.generate_images", rt, project, arguments, instruction, message_id,
+        event_cb=event_cb, cancel_event=cancel_event)
+
+
+async def _execute_shot_generate_videos(rt: AgentRuntime, project: str, arguments: str,
+                                        instruction: str, message_id: Optional[str],
+                                        event_cb=None, cancel_event=None) -> dict:
+    """shot.generate_videos：批量为镜头生成视频（复用 video JobQueue handler，串行 worker）。
+    前置：effective 首帧就绪（i2v 用本镜首帧，inherit 接力用来源末帧）。长任务语义同上。"""
+    return await _execute_generation(
+        "shot.generate_videos", rt, project, arguments, instruction, message_id,
+        event_cb=event_cb, cancel_event=cancel_event)
+
+
+# ============ 工具 schema（标准 OpenAI function 格式）============
+SHOT_GENERATE_IMAGES_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "shot.generate_images",
+        "description": (
+            "批量为镜头生成分镜图（首帧/尾帧）。复用项目既有图片生成管线：自动拼提示词、"
+            "带出场角色的三视图参考图与接力参考图，生成后写入镜头数据并在分镜页展示"
+            "（图片内容不会返回给你，成功与否以工具返回的 canonical 路径为准）。"
+            "targets 每项 {shot_id, frame}：frame=first 生成首帧；frame=last 生成尾帧"
+            "（仅 keyframes 模式，且须先有就绪首帧）。单个镜头也传一项。"
+            "视频依赖首帧：要先给某镜生成视频，先把它的 frame=first 生成好。"
+            "每次调用都会生成新候选（自然 reroll）；批内并发生成、整批等待，"
+            f"单批最多 {MAX_IMAGE_BATCH} 项，很慢（每张几十秒），不要为同一镜头反复重发。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "targets": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": MAX_IMAGE_BATCH,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "shot_id": {"type": "string",
+                                        "description": "镜头 id（如 s08_c03）。"},
+                            "frame": {"type": "string", "enum": ["first", "last"],
+                                      "description": "first=首帧（默认）；last=尾帧（仅 keyframes，需首帧就绪）。"},
+                        },
+                        "required": ["shot_id"],
+                    },
+                },
+                "variants": {"type": "integer", "enum": [1, 2],
+                             "description": "每个首帧生成几个候选（默认 1；2 会多花一次生成额度，用户想挑图时才用）。"},
+                "force": {"type": "boolean",
+                          "description": "镜头被锁定时是否仍生成（默认 false）。"},
+            },
+            "required": ["targets"],
+        },
+    },
+}
+
+SHOT_GENERATE_VIDEOS_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "shot.generate_videos",
+        "description": (
+            "批量为镜头生成视频（复用项目既有视频管线：串行 worker、1 RPM，每个约 1~3 分钟）。"
+            "前置条件（不满足的项会被结构化拒绝、不消耗额度）：该镜头的有效开场画面就绪——"
+            "普通镜头用本镜已生成并选择的首帧；inherit 接力镜头用来源镜头的末帧"
+            "（不要破坏接力关系，也不要替接力镜头生成本镜首帧）。视频内容不返回给你，"
+            "成功与否以工具返回的 canonical 路径为准。单个镜头也传一项。"
+            f"单批最多 {MAX_VIDEO_BATCH} 个；keyframes 模式会自动用尾帧做双帧过渡。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "shot_ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": MAX_VIDEO_BATCH,
+                    "items": {"type": "string"},
+                    "description": f"要生成视频的镜头 id 数组（1~{MAX_VIDEO_BATCH} 个）。",
+                },
+            },
+            "required": ["shot_ids"],
+        },
+    },
+}
+
+SHOT_GENERATE_TOOL_NAMES = {"shot.generate_images", "shot.generate_videos"}

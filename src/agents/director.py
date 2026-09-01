@@ -10,7 +10,9 @@
 #   故事段结构/剧本正文（story_text/scenes 内容）归 Script Writer、角色归
 #   Character Designer——它们是 Director 的【参考资料】（读工具按需取），绝不是写入对象；
 #   Director 也没有任何 story.*/character.* 写工具（工具层天然挡掉，非提示词约束）。
-#   分镜图/视频生成（first_frame/video pipeline）本阶段不接——先做稳文本导演能力。
+#   分镜图/视频生成（2026-08-31 Director Visual Production）：shot.generate_images /
+#   shot.generate_videos（见 director_visual.py）——只决定生成何时发生，复用既有
+#   first_frame/last_frame/video JobQueue 管线，不重新实现任何生成算法。
 #
 # 工具（按需读取，最小充分上下文）：
 #   读：shot.list / shot.read / story.list / story.read / script.read /
@@ -18,6 +20,8 @@
 #   写：shot.create / shot.update / shot.delete / shot.move
 #   批量写（各占一个单写槽，整批一次 OCC + 一次原子写）：
 #        shot.create_many / shot.update_many
+#   视觉生产（长任务，占一个单写槽，锁 storyboard；部分成功语义）：
+#        shot.generate_images / shot.generate_videos
 #   一个故事段天然拆成多个 Shot 且单 Shot 内容短，成组创建/修改是主工作流，
 #   batch 上限按 Shot schema 大小与 tool-call 稳定性取 10（update 12）。
 #
@@ -68,6 +72,14 @@ from src.storyboard.structure_service import (
 from .models import AgentMessage, ResultStatus
 from .runtime import AgentRuntime, AgentError
 from .revision_audit import DirectEditAuditStore
+# —— 视觉生产工具（schema + executor，本文件只注册接线）——
+from .director_visual import (
+    SHOT_GENERATE_IMAGES_TOOL,
+    SHOT_GENERATE_TOOL_NAMES,
+    SHOT_GENERATE_VIDEOS_TOOL,
+    _execute_shot_generate_images,
+    _execute_shot_generate_videos,
+)
 # —— Script Writer 共享基础设施（直接 import 复用，不改其文件）——
 from .script_writer import (
     MAX_WEB_SEARCH,
@@ -109,9 +121,14 @@ MAX_UPDATE_BATCH = 12
 _BATCH_DOWNGRADE = {10: 5, 5: 2, 2: 1, 1: 1}
 
 # 写工具集合（只有这些可能产生 canonical 变更，需要回执 + 落盘校验 + 单写串行 + 资源锁）。
-# 批量工具各占一个单写槽。
+# 批量工具各占一个单写槽。视觉生成工具复用既有生成管线写资产 canonical（批次/视频版本），
+# 同样占单写槽 + 锁 storyboard + 发 storyboard.changed（verified 语义 = canonical+文件存在）。
 DIRECTOR_WRITE_OPERATIONS = {"shot.create", "shot.create_many", "shot.update",
-                             "shot.update_many", "shot.delete", "shot.move"}
+                             "shot.update_many", "shot.delete", "shot.move",
+                             "shot.generate_images", "shot.generate_videos"}
+# 长任务视觉工具（loop 侧额外传 event_cb/cancel_event；对生成类工具豁免「写后重读」
+# 收尾判定——executor 内部已做「重读 canonical + 文件存在」验证，强于 shot.list）。
+DIRECTOR_LONG_TASK_TOOLS = {"shot.generate_images", "shot.generate_videos"}
 # 只读工具（不占写槽、可一次多个；用于「写后重读最终状态」的收尾判定）。
 DIRECTOR_READ_TOOLS = {"shot.list", "shot.read", "story.list", "story.read",
                        "script.read", "character.list", "character.read"}
@@ -191,7 +208,8 @@ DIRECTOR_SYSTEM = """你是 AGNES 的 Director（导演/分镜设计者），负
 项目：{project_name}（{scenes_count} 个故事段，共 {shots_count} 个镜头）。
 
 权限边界（硬约束）：
-- 你【只】写镜头 canonical：创建/修改/删除/移动镜头及其拍摄字段。
+- 你【只】写镜头 canonical：创建/修改/删除/移动镜头及其拍摄字段，以及用生成工具为镜头产出分镜图/视频资产。
+- 你【不能】修改角色设定：角色三视图缺图时不要自己补角色资产，可以提示用户先在角色页完善并生成角色参考图（分镜图生成会自动引用它们保持角色一致）。
 - 故事段（剧情文本）与剧本正文归 Script Writer、角色设定归 Character Designer——你可以【读】它们做导演依据，但【没有】任何修改它们的工具。如果发现故事段本身有剧情问题（不适合拍、逻辑断裂、信息缺失），直接告诉用户你的判断和建议，不要试图绕过去修改故事。
 
 你有这些工具：
@@ -199,8 +217,8 @@ DIRECTOR_SYSTEM = """你是 AGNES 的 Director（导演/分镜设计者），负
 - story.list()：故事段地图（position 第几段/scene_id/摘要/角色/镜头数）。用户说「第8段」时用它把 position=8 解析成稳定 scene_id。做分镜任务的第一步。
 - story.read(scene_id)：读一个故事段的完整剧情文本。局部任务读目标段 + 前后相邻约 2~4 段即可（看剧情衔接/情绪延续）；信息不足再继续扩大，不要默认通读全文。
 - script.read()：剧本正文全文。仅在全片分镜检查、整体节奏分析、用户明确要求通读时用；单段落分镜不需要。
-- character.list()：角色名单（一句话描述/是否有三视图）。
-- character.read(character_name)：读一个角色的完整设定（外貌/身份/服装/气质）。给某段设计分镜前，把该段出场的角色读一遍，让画面设计符合角色形象。角色三视图资产状态仅供参考（是否有图）；你从文本设定理解角色，不假装看到了图片内容。
+- character.list()：角色 canonical 的【权威名单】（name/一句话描述/是否有三视图）。涉及角色时【先调它】确认项目里真实建立了哪些角色。
+- character.read(character_name)：读一个【已在 character.list 名单中】角色的完整设定（外貌/身份/服装/气质）。🔴 只能 read 名单里真实存在的角色：故事段 characters 列表或剧情里出现、但 character.list 名单里【没有】的名字，说明该人物没有建立角色 canonical（多半只是被提及/画外音/回忆中人物，不需要跨镜头视觉一致）——【不要】对这种名字调 character.read（会返回"角色不存在"），也【不要】把它写进镜头的 characters 字段。需要视觉一致性、能被分镜图引用三视图的，只有 canonical 名单里的角色。给某段设计分镜前：先 character.list 拿名单，再只 read 名单中在该段实际出场的角色，让画面设计符合角色形象。你从文本设定理解角色，不假装看到图片内容。
 - shot.list(scene_id?)：镜头地图。不带参数列所有故事段（含每段镜头 id 列表）；带 scene_id 列该段镜头的轻量信息（顺序/一句话描述/角色/时长/景别/是否有首帧/接力关系）。判断「这组镜头现状」用它，不要凭记忆。
 - shot.read(shot_id)：读一个镜头的完整拍摄方案 + 该镜头内容指纹。改某个镜头前先读它。
 - web.search(query)：搜索现实世界资料（真实职业动作/历史时期场景/摄影术语/设备与空间/地点参考）。仅当这些现实知识明显影响分镜可信度，或用户明确要求参考时使用；普通分镜设计不搜索。每轮最多 3 次。
@@ -213,6 +231,13 @@ DIRECTOR_SYSTEM = """你是 AGNES 的 Director（导演/分镜设计者），负
 - shot.delete(shot_id)：删除一个镜头（系统会级联删除接力依赖它的下游镜头，并保留已生成文件）。用户明确要求删除时直接调用。
 - shot.move(shot_id, before_shot_id?/after_shot_id?, expected_shots_revision)：把一个镜头在同段内移到某镜之前/之后（都省略则移到段尾）。镜头顺序是状态依赖操作：多个移动必须一步一步来，每步用最新指纹，不要试图一次重排整组。
 
+【视觉生产（分镜图/视频生成，长任务）】
+- shot.generate_images(targets[], variants?, force?)：批量为镜头生成分镜图（frame=first 首帧 / frame=last 尾帧）。复用系统既有生成管线：自动带角色三视图参考图与接力参考图保持角色一致性；生成后写入镜头数据并在分镜页展示（你看不到图片内容，成功与否以工具返回为准，【不要】向用户描述图片画面细节）。单个镜头也传一项；单批最多 {max_create_batch} 项。
+- shot.generate_videos(shot_ids[])：批量为镜头生成视频（串行生成，每个约 1~3 分钟，单批最多 4 个）。前置：该镜有效开场画面就绪——普通镜头用本镜已生成的首帧；inherit 接力镜头用来源镜头末帧（不要替接力镜头生成本镜首帧）。
+- 生成顺序不要硬编码「首帧→尾帧→视频」全套：按用户需求和镜头实际形态决定——有的镜头只要首帧（静态分镜），keyframes 镜头才需要尾帧，视频在开场画面就绪后才能生成。工具会对不满足前置条件的项返回结构化原因（如「首帧未就绪」），按提示先补齐再重试，不要盲目重发。
+- 生成前的现状确认用 shot.list(scene_id=…) 一次看清该段全部镜头（id/是否有首帧/接力关系）即可，不要逐个 shot.read 拖慢回合。
+- 生成很慢且消耗额度：用户明确要求出图/出视频时才调用；同一镜头不要反复重发（每次调用都会生成新候选=重新消耗额度）；用户说「重新生成一版/换一批」时才是有意的重生成。生成完成后提示用户到分镜页查看与挑选。
+
 🔴 最重要的铁律（违反即失败）：
 - 你只有通过【真正发起工具调用】（function/tool_calls）才能读/写数据。在回复里说「我已创建/已修改」但没有真正调用对应工具，等于什么都没做——这是严重错误。
 - 工具调用成功后，你只能依据工具【真实返回】的结果汇报；没看到 ok=true 与真实分配的 shot_id/顺序，就不能声称成功。
@@ -223,7 +248,7 @@ DIRECTOR_SYSTEM = """你是 AGNES 的 Director（导演/分镜设计者），负
 【给一个故事段设计分镜的标准工作流】（镜头数量、景别、节奏由你决定）：
 1. story.list() 把用户说的「第N段」定位成 scene_id；
 2. story.read 目标段 + 前后相邻 2~4 段，理解剧情、情绪与衔接；
-3. character.read 该段出场角色（不认识的角色先读设定）；
+3. character.list 拿真实角色名单 → 只 character.read 名单里在该段实际出场的角色（名单里没有的名字不读、也不写进镜头 characters）；
 4. shot.list(scene_id=...) 看该段是否已有镜头（有则考虑保留/修改，不要假设为空）；
 5. 按你的导演判断设计整组镜头，一次 shot.create_many 提交；
 6. 收尾用 shot.list 重新核对真实结果（数量/顺序/id），以工具返回为准向用户总结。
@@ -234,9 +259,9 @@ DIRECTOR_SYSTEM = """你是 AGNES 的 Director（导演/分镜设计者），负
 - 信息不足（伏笔/动机在更早剧情）时继续 story.read 扩大范围，而不是猜测。
 
 【镜头字段怎么填】（写给画面生成与制作协作的人看）：
-- description（必填）：这一镜的画面内容——谁在哪里做什么、视觉重点。中文，具体、可视化，不要抽象概括。
+- description（必填）：这一镜的【画面内容】——谁在哪里做什么、表情动作、视觉重点、构图氛围。中文，具体、可视化，不要抽象概括。🔴 只写能被画出来的视觉/动作/表演信息：可以写「小铃抬头对阿默说话」这种动作，但【不要】把角色实际说出的台词整句写进 description——台词一律归 dialogue 字段。
 - characters：出场角色名数组（来自 character.list 的真实名字，不认识的不要编）。
-- dialogue：本镜对白文本（配音 TTS 的输入，原样一句或几句；无对白留空）。
+- dialogue：本镜角色【实际开口说出】的台词——这是台词的【唯一归属字段】（配音 TTS 的输入）。谁说话就把那句台词原样写这里（可多句、可带说话人），例如：小铃：「奶奶说她的记忆盒能修好吗？」。🔴 不要把台词只埋在 description 里；有角色说话就必须填 dialogue。只有纯动作/空镜/无明确台词（旁白不算角色说话）才留空。
 - target_duration_s：目标时长秒数，按镜头内容定（短特写可以 2~3 秒，动作段 5~8 秒），不要机械统一。
 - 景别 shot_size 用英文值：extreme wide shot / wide shot / full shot / medium shot / medium close-up / close-up / extreme close-up。
 - camera_angle 机位角度（如 eye level / low angle / high angle / dutch angle）、camera_movement 运镜（如 static / slow push in / pan left / handheld follow）、composition 构图、lighting 光线、motion 画面里什么在动、motion_pace 动作节奏、opening_state 主体起始状态、important_details 重要细节/情绪氛围——这些字段直接决定画面生成，把你的导演意图写具体；没有明确意图就留空，不要塞占位词。
@@ -265,7 +290,8 @@ DIRECTOR_SYSTEM = """你是 AGNES 的 Director（导演/分镜设计者），负
 
 【复杂操作要分解成多步】：
 - 多镜重排：多次 shot.move，每次移动一个、用最新指纹，每步看结果再继续。
-- 重构整组（用户明确说推倒重做）：先一次 shot.delete 删掉旧镜（或逐个删），再一次 shot.create_many 创建新组；用户没说推倒重做时【优先 update/update_many 保留可用的镜头】，不要默认全部删除重建。
+- 【整体重设优先保留 shot_id】（重要）：用户说「重新设计这组镜头」「这组太平了，重做一下」「整体调整得更有张力」这类【不改变镜头结构】的重设请求时，默认用 shot.update_many 在原 shot_id 上改写拍摄方案——保留镜头身份、顺序和已生成的分镜图/视频资产。只有当你的导演判断结构确实需要变化（要增加镜头、删减镜头、镜头数量/叙事结构明显改变）才用 shot.create / shot.create_many / shot.delete。禁止用「全部删除再全部重建」来实现普通重设——已有图片/视频资产的镜头被删掉会让用户白白损失生成成果。
+- 推倒重做（用户明确说推倒重来/重做整组结构）：才先 shot.delete 删掉旧镜（或逐个删），再一次 shot.create_many 创建新组。
 - 有接力关系的两个镜头（source_shot_id）之间不能插入新镜头——系统会拒绝并说明；可在接力链末端之后插入。
 - 用户说的「第N镜」指某段内 index=N 的镜头（或全局唯一时该镜头）；先 shot.list 确认 shot_id 再操作，不要用 _c 编号猜顺序（删除后编号跳号）。
 
@@ -286,11 +312,11 @@ DIRECTOR_SYSTEM = DIRECTOR_SYSTEM.replace("{max_create_batch_prev}", str(MAX_CRE
 # 见 SHOT_UPDATABLE_FIELDS）。description 是画面核心；shot_size 用英文景别值。
 _SHOT_FIELDS_PROPS = {
     "description": {"type": "string",
-                    "description": "这一镜的画面内容：谁在哪里做什么、视觉重点。中文、具体、可视化，不要抽象概括。"},
+                    "description": "这一镜的画面内容：谁在哪里做什么、表情动作、视觉重点。中文、具体、可视化，不要抽象概括。只写画面/动作/表演信息，不要把角色实际说出的台词写进这里（台词归 dialogue）。"},
     "characters": {"type": "array", "items": {"type": "string"},
-                   "description": "出场角色名数组（来自 character.list 的真实名字）。"},
+                   "description": "出场角色名数组（来自 character.list 的真实名字；名单里没有的名字不要写）。"},
     "dialogue": {"type": "string",
-                 "description": "本镜对白文本（配音 TTS 输入；无对白省略）。"},
+                 "description": "本镜角色实际说出的台词（配音 TTS 输入，台词的唯一归属字段，可带说话人）。有角色说话必须填这里、不要只埋在 description；纯动作/空镜无台词才省略。"},
     "target_duration_s": {"type": "number",
                           "description": "目标时长（秒）。按镜头内容定，不要机械统一。"},
     "shot_size": {"type": "string",
@@ -349,8 +375,9 @@ SHOT_CREATE_MANY_TOOL = {
             "分镜就用它一次提交】，不要连续多次调 shot.create）。shots 数组顺序 = 创建后的"
             "镜头顺序（追加到段尾或 after_shot_id 之后）。整批只做一次乐观并发校验、一次原子"
             "写入；任一镜头非法则整批不写入（不留半成功）。id 由后端分配，你不能指定。"
-            f"单批建议不超过 {MAX_CREATE_BATCH} 镜——镜头很多时分多批提交，每批之间用"
-            "工具返回的最新指纹。"),
+            "注意：整体重设已有镜头组时不要用「删了重建」，优先 shot.update_many 保留原"
+            f" shot_id 与已有资产；本工具用于【新增】镜头。单批建议不超过 {MAX_CREATE_BATCH} 镜"
+            "——镜头很多时分多批提交，每批之间用工具返回的最新指纹。"),
         "parameters": {
             "type": "object",
             "properties": {
@@ -404,9 +431,12 @@ SHOT_UPDATE_MANY_TOOL = {
         "name": "shot.update_many",
         "description": (
             "一次修改多个【互相独立、已存在】的镜头（用户对整组镜头不满意、要大面积调整时"
-            "优先用本工具，不要逐个 shot.update 循环）。每个 update 项用稳定 shot_id 指定目标"
-            "+ 只传要改的字段；同一镜头的多字段合并到一项、同一 shot_id 一批只出现一次。"
-            "整批一次乐观并发校验、一次原子写入，任一 shot_id 不存在/重复则整批不写入。"
+            "优先用本工具，不要逐个 shot.update 循环）。【整体重设（重新设计这组/重做一下/"
+            "调得更有张力）必须优先用本工具在原 shot_id 上改写】——保留镜头身份、顺序与已"
+            "生成的分镜图/视频资产；只有结构确实要变（增/减镜头、镜头数量明显改变）才用"
+            " create/delete，禁止用「全删重建」实现普通重设。每个 update 项用稳定 shot_id "
+            "指定目标+ 只传要改的字段；同一镜头的多字段合并到一项、同一 shot_id 一批只出现"
+            "一次。整批一次乐观并发校验、一次原子写入，任一 shot_id 不存在/重复则整批不写入。"
             "可以跨故事段选镜头。expected_revision 用 shot.list 返回的 shots_content_revision"
             "（内容指纹，非结构指纹）。用户没有要求改变的镜头【不要】放进 updates。"),
         "parameters": {
@@ -439,9 +469,11 @@ SHOT_DELETE_TOOL = {
     "function": {
         "name": "shot.delete",
         "description": (
-            "删除一个【已存在】的镜头。系统会级联删除以它为接力来源（source_shot_id）的下游"
-            "镜头，回执里会列出实际删了哪些。用户明确要求删除某镜时直接调用本工具，不需要"
-            "先预览再确认。删完后用 shot.list 核对真实结果。"),
+            "删除一个【已存在】的镜头。仅用于用户明确要求删除、或整体重设后镜头结构确实"
+            "需要减少的情况——普通「重新设计/重做」不要删镜头（用 shot.update_many 在原"
+            "shot_id 上改写，保留已生成的分镜图/视频资产）。系统会级联删除以它为接力来源"
+            "（source_shot_id）的下游镜头，回执里会列出实际删了哪些。删完后用 shot.list 核对"
+            "真实结果。"),
         "parameters": {
             "type": "object",
             "properties": {
@@ -600,6 +632,7 @@ WEB_SEARCH_TOOL = {
 DIRECTOR_TOOLS = [
     SHOT_LIST_TOOL, SHOT_READ_TOOL, SHOT_CREATE_TOOL, SHOT_CREATE_MANY_TOOL,
     SHOT_UPDATE_TOOL, SHOT_UPDATE_MANY_TOOL, SHOT_DELETE_TOOL, SHOT_MOVE_TOOL,
+    SHOT_GENERATE_IMAGES_TOOL, SHOT_GENERATE_VIDEOS_TOOL,
     STORY_LIST_TOOL, STORY_READ_TOOL, SCRIPT_READ_TOOL,
     CHARACTER_LIST_TOOL, CHARACTER_READ_TOOL,
     WEB_SEARCH_TOOL,
@@ -1243,6 +1276,8 @@ TOOL_EXECUTORS = {
     "shot.update_many": _execute_shot_update_many,
     "shot.delete": _execute_shot_delete,
     "shot.move": _execute_shot_move,
+    "shot.generate_images": _execute_shot_generate_images,
+    "shot.generate_videos": _execute_shot_generate_videos,
     "story.list": _execute_story_list,
     "story.read": _execute_story_read,
     "script.read": _execute_script_read,
@@ -1258,6 +1293,7 @@ _TOOL_LABELS = {
     "shot.create": "创建镜头", "shot.create_many": "批量创建镜头",
     "shot.update": "修改镜头", "shot.update_many": "批量修改镜头",
     "shot.delete": "删除镜头", "shot.move": "移动镜头",
+    "shot.generate_images": "生成分镜图", "shot.generate_videos": "生成镜头视频",
     "story.list": "读取故事段", "story.read": "读取故事段",
     "script.read": "读取剧本", "character.list": "读取角色列表",
     "character.read": "读取角色", "web.search": "搜索资料",
@@ -1288,6 +1324,15 @@ def _op_human(r: dict) -> str:
     if op == "shot.update_many":
         n = len(r.get("results") or [])
         return f"批量修改 {n} 个镜头"
+    if op in ("shot.generate_images", "shot.generate_videos"):
+        noun = "图片" if op == "shot.generate_images" else "视频"
+        done = [x for x in (r.get("results") or []) if x.get("ok")]
+        if not done:
+            return f"生成{noun}（无成功项）"
+        items = ", ".join(
+            f"{x.get('shot_id')}{'首帧' if x.get('frame') == 'first' else '尾帧' if x.get('frame') == 'last' else ''}"
+            for x in done)
+        return f"为 {len(done)}/{r.get('count', len(done))} 个镜头生成{noun}（{items}）"
     return f"{op}({sid or ''})"
 
 
@@ -1312,9 +1357,12 @@ def _tool_summary(name: str, obs: dict) -> str:
 
 def _trace_entry(step: int, name: str, args: str, obs: dict) -> dict:
     """执行轨迹单条：turn→tool→target→result→revision。target 取最能标识操作对象的
-    字段（shot_id/scene_id）；web.search 用搜索词。"""
-    target = (obs.get("shot_id") or obs.get("scene_id")
-              or (obs.get("target") if obs.get("ok") else None))
+    字段（shot_id/scene_id）；web.search 与视觉生成用搜索词/目标镜头列表。"""
+    if name in SHOT_GENERATE_TOOL_NAMES:
+        target = obs.get("target")
+    else:
+        target = (obs.get("shot_id") or obs.get("scene_id")
+                  or (obs.get("target") if obs.get("ok") else None))
     if name == "web.search":
         target = obs.get("target")
     result = ("stale" if obs.get("stale")
@@ -1395,15 +1443,19 @@ def _committed_shot_ids(receipts: list) -> list:
 
 
 # 声称「本次创建了 N 个镜头」的计数表述（供夸大检测；宁漏勿误）。
+# 🔴 「镜头/分镜/镜」后带负向前瞻（图|片|视频|资产）：「生成了 5 个分镜图」是视觉生成
+# 生成计数、不是创建镜头计数——混用轮次（既建镜头又出图）不得把生成数量误判为创建夸大。
 def _claimed_shot_count_mismatch(text: str, real_count: int) -> Optional[int]:
     """文本里「创建/拆成 N 个镜头」的 N 与真实成功创建数不符时返回 N。"""
     t = text or ""
-    m = re.search(r"(?:创建|新增|拆成|拆分|建|生成|设计)[^0-9]{0,6}?(\d+)\s*(?:个)?\s*(?:镜头|分镜|镜)", t)
+    m = re.search(r"(?:创建|新增|拆成|拆分|建|生成|设计)[^0-9]{0,6}?(\d+)\s*(?:个)?\s*"
+                  r"(?:镜头|分镜|镜)(?!图|片|视频|资产)", t)
     if m:
         v = int(m.group(1))
         if v != real_count:
             return v
-    m = re.search(r"(\d+)\s*(?:个)?\s*(?:镜头|分镜|镜)[^。！？\n]{0,8}?(?:建好|创建|完成|都建|设计好)", t)
+    m = re.search(r"(\d+)\s*(?:个)?\s*(?:镜头|分镜|镜)(?!图|片|视频|资产)[^。！？\n]{0,8}?"
+                  r"(?:建好|创建|完成|都建|设计好)", t)
     if m:
         v = int(m.group(1))
         if v != real_count:
@@ -1481,11 +1533,19 @@ _FACT_SUMMARY_MARK = "【实际执行记录】"
 
 
 def _append_fact_summary(rt: AgentRuntime, project: str, text: str, receipts: list) -> str:
-    """有真实变更时，在模型回复后追加【确定性事实摘要】——由真实 receipts + 当前
-    canonical 生成，不信模型叙述。纯追加，不删改模型原文。"""
+    """在模型回复后追加【确定性事实摘要】——由真实 receipts + 当前 canonical 生成，
+    不信模型叙述。覆盖全成功/部分成功/全失败三态：已成功资产明确列出并保留，未完成项
+    也如实标注。纯追加，不删改模型原文。"""
+    if not receipts:
+        return text   # 无写工具调用，无可总结
     real_changes = [r for r in receipts
                     if r.get("ok") and r.get("verified") and not r.get("unchanged")]
-    if not real_changes:
+    failed = [r for r in receipts if not r.get("ok")]   # stale/error/cancelled
+    # 纯 CRUD 失败且无任何成功变更（如删除不存在的对象、stale 被拒）→ 不追加事实块
+    # （保持旧行为，失败原因由错误信息/真相闸门体现）。生成类操作（图/视频）即使全失败
+    # 也追加，用于确定性地告知"本次没有完成生成 / 已完成 N 项"。
+    has_generate = any(r.get("operation") in SHOT_GENERATE_TOOL_NAMES for r in receipts)
+    if not real_changes and not has_generate:
         return text
     try:
         proj = _reload(rt, project)
@@ -1493,7 +1553,22 @@ def _append_fact_summary(rt: AgentRuntime, project: str, text: str, receipts: li
         lines = ["\n\n---\n【实际执行记录】（系统据真实回执生成，非模型叙述）"]
         for r in real_changes:
             lines.append(f"✓ {_op_human(r)}")
-        lines.append(f"\n当前分镜共 {n_shots} 个镜头。")
+        for r in failed:
+            why = r.get("error") or r.get("code") or "失败"
+            if r.get("stale"):
+                why = "版本过期，已拒绝"
+            elif r.get("cancelled"):
+                why = "已取消"
+            sid = r.get("shot_id") or ""
+            lines.append(f"✗ {r.get('operation', '操作')}{(' ' + sid) if sid else ''}：{why}")
+        # 确定性完成情况总结行（不让模型猜）
+        if failed and not real_changes:
+            lines.append(f"\n本次没有完成生成（{len(failed)} 项未成功）。")
+        elif failed and real_changes:
+            lines.append(f"\n已完成 {len(real_changes)} 项，{len(failed)} 项未完成/取消。")
+        else:
+            lines.append(f"\n已完成 {len(real_changes)} 项。")
+        lines.append(f"当前分镜共 {n_shots} 个镜头。")
         return text + "\n".join(lines)
     except Exception:
         return text
@@ -1620,8 +1695,11 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                 if r.get("operation") == "shot.create_many")
             over_claim_n = (_claimed_shot_count_mismatch(text, real_create_count)
                             if real_changes and real_create_count else None)
+            # needs_final_read 的「最后一次写入」不含视觉生成工具：它们的 executor 内部
+            # 已做「重读 canonical + 文件存在」验证（强于 shot.list），不再强制收尾重读。
             last_write_step = max((t["step"] for t in trace
-                                   if t["tool"] in DIRECTOR_WRITE_OPERATIONS), default=-1)
+                                   if t["tool"] in DIRECTOR_WRITE_OPERATIONS
+                                   and t["tool"] not in DIRECTOR_LONG_TASK_TOOLS), default=-1)
             reply_summarizes = bool(re.search(r"\d+\s*个?(镜头|分镜|镜)|第.{1,4}镜|共\d+", text or ""))
             needs_final_read = (real_changes and _claims_success(text)
                                 and reply_summarizes
@@ -1738,7 +1816,20 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                     if _q_norm:
                         search_queries_seen.add(_q_norm)
                 try:
-                    if asyncio.iscoroutinefunction(executor):
+                    if name in DIRECTOR_LONG_TASK_TOOLS:
+                        # 长任务 executor（视觉生成，分钟级）：需要流式进度回传与协作取消；
+                        # 包装 event_cb 注入 step/call 上下文（executor 只发 tool.progress 业务字段）。
+                        if event_cb:
+                            def _gen_cb(ev, _step=step, _cid=call_id, _name=name):
+                                event_cb({"type": ev.get("type", "tool.progress"),
+                                          "step_id": _step, "call_id": _cid, "name": _name,
+                                          "label": _tool_label(_name),
+                                          **{k: v for k, v in ev.items() if k != "type"}})
+                        else:
+                            _gen_cb = None
+                        obs = await executor(rt, project, args, instruction, message_id,
+                                             event_cb=_gen_cb, cancel_event=cancel_event)
+                    elif asyncio.iscoroutinefunction(executor):
                         obs = await executor(rt, project, args, instruction, message_id)
                     else:
                         obs = executor(rt, project, args, instruction, message_id)
@@ -1847,6 +1938,18 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                     moved = True
                     s = f"移动镜头 {sid} 到第 {obs.get('order')} 位"
                     events.append({"kind": "shot_move", "shot_id": sid, "summary": s})
+                elif name == "shot.generate_images":
+                    done = [x for x in (obs.get("results") or []) if x.get("ok")]
+                    s = _op_human(obs)
+                    events.append({"kind": "shot_generate_images",
+                                   "shot_ids": [x.get("shot_id") for x in done],
+                                   "summary": s})
+                elif name == "shot.generate_videos":
+                    done = [x for x in (obs.get("results") or []) if x.get("ok")]
+                    s = _op_human(obs)
+                    events.append({"kind": "shot_generate_videos",
+                                   "shot_ids": [x.get("shot_id") for x in done],
+                                   "summary": s})
 
             if event_cb:
                 if exc_msg:
@@ -1983,6 +2086,7 @@ async def director_turn(rt: AgentRuntime, project: str, session_id: str,
         intent = "conversation"
 
     receipts_meta = []
+    generated_assets = []   # 本轮真实生成的分镜视觉资产（canonical 路径，前端窗口渲染）
     for r in receipts:
         receipts_meta.append({
             "operation": r.get("operation"), "ok": bool(r.get("ok")),
@@ -2004,7 +2108,20 @@ async def director_turn(rt: AgentRuntime, project: str, session_id: str,
             "current_shots": r.get("current_shots"),
             "deleted": r.get("deleted"),
             "removed_files": r.get("removed_files"),
+            # 视觉生成：分项结果/耗时/取消与超时标注（前端据此展示生成资产）
+            "variants": r.get("variants"),
+            "elapsed_s": r.get("elapsed_s"),
+            "cancelled": r.get("cancelled"),
+            "timed_out": r.get("timed_out"),
         })
+        if r.get("operation") in SHOT_GENERATE_TOOL_NAMES and r.get("ok"):
+            for item in (r.get("results") or []):
+                if item.get("ok") and item.get("local"):
+                    generated_assets.append({
+                        "shot_id": item.get("shot_id"),
+                        "kind": item.get("frame") or "first_frame",
+                        "path": item.get("local"),
+                    })
     meta = {"intent": intent, "events": events, "evidence_refs": [],
             "receipts": receipts_meta,
             "write_attempts": len(receipts_meta),
@@ -2013,6 +2130,7 @@ async def director_turn(rt: AgentRuntime, project: str, session_id: str,
             "trace": trace,
             "reasonings": reasoning,
             "search_sources": search_sources,
+            "generated_assets": generated_assets,   # 本轮真实生成的分镜图/视频（路径，窗口渲染用）
             "pending_delete_scenes": []}
     asst = AgentMessage(role="assistant", content=assistant_text, status=status, meta=meta)
     store.append_message(session_id, asst)

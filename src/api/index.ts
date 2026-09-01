@@ -727,13 +727,18 @@ export interface ViewsProgressEvent {
   type: 'views.progress'; character_name: string; view: string;
   message: string; pct: number;
 }
+/** Director 视觉生成等长任务的批次进度（tool.progress，如「已完成 3/8」）。 */
+export interface ToolProgressEvent {
+  type: 'tool.progress'; step_id: number; call_id: string; name: string;
+  label?: string; message: string; done?: number; total?: number; pct?: number;
+}
 export interface TurnCompletedEvent { type: 'turn.completed'; result: ScriptWriterTurnResult }
 export interface TurnFailedEvent { type: 'turn.failed'; error: string }
 /** 前端据 event.type 安全分支处理。turn.completed.result 仍是现有完整最终结构。 */
 export type AgentStreamEvent =
   | TurnStartedEvent | ReasoningStartedEvent | ReasoningDeltaEvent
   | ReasoningCompletedEvent | ToolPendingEvent | ToolStartedEvent | ToolCompletedEvent
-  | ToolFailedEvent | AssistantDeltaEvent | ViewsProgressEvent
+  | ToolFailedEvent | AssistantDeltaEvent | ViewsProgressEvent | ToolProgressEvent
   | TurnCompletedEvent | TurnFailedEvent;
 export interface AgentSession {
   session_id: string; project: string; agent_id: string;

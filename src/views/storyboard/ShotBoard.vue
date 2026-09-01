@@ -52,6 +52,10 @@
       </aside>
 
       <section class="seg-detail" v-if="selected">
+        <!-- 2026-08-31：Agent 正在修改分镜时的只读横幅（复用 Project SSE resource.locked） -->
+        <div v-if="storyboardLocked" class="agent-lock-banner">
+          🔒 Director 正在修改分镜，页面暂为只读；改动会实时同步进来，完成后自动恢复编辑。
+        </div>
         <!-- 故事段顶部：原文(只读) + 角色 + 覆盖 + 返回剧本 -->
         <div class="seg-head">
           <div class="seg-head-top">
@@ -166,7 +170,7 @@
             </div>
           </div>
           </template>
-          <button class="add-shot-btn" @click="addShot">+ 添加镜头</button>
+          <button class="add-shot-btn" :disabled="storyboardLocked" @click="addShot">+ 添加镜头</button>
         </div>
       </section>
     </div>
@@ -269,6 +273,7 @@ import DirectorContextToolbar from '@/components/storyboard/DirectorContextToolb
 import DirectorProposalOverlay from '@/components/storyboard/DirectorProposalOverlay.vue';
 import type { DirectorProposal } from '@/components/storyboard/proposal';
 import { useAgentUiStore } from '@/store/agentUi';
+import { useProjectEventsStore } from '@/store/projectEvents';
 
 const router = useRouter();
 const projStore = useProjectStore();
@@ -455,7 +460,10 @@ function shotStatusClass(sh: ShotData): string {
   return 'busy';
 }
 
-function openWorkbench(sh: ShotData) { workbenchShot.value = sh; }
+function openWorkbench(sh: ShotData) {
+  if (storyboardLocked.value) return;   // Agent 修改分镜期间只读：不打开编辑工作台
+  workbenchShot.value = sh;
+}
 function closeWorkbench() { workbenchShot.value = null; }
 
 // ---- AI-6C：Shot 级 selection + Contextual Director（复用 Floating Bar）----
@@ -576,6 +584,7 @@ function previewVideo(url: string) { if (!url) return; previewType.value = 'vide
 
 async function addShot() {
   if (!selected.value || !projectName.value) return;
+  if (storyboardLocked.value) return;   // Agent 修改分镜期间只读
   try {
     await apiClient.addShot(projectName.value, selected.value.scene_id);
     await load();
@@ -602,6 +611,7 @@ async function confirmDeleteShot() {
   const sh = ctxMenu.value?.shot;
   closeCtxMenu();
   if (!sh || !projectName.value) return;
+  if (storyboardLocked.value) return;   // Agent 修改分镜期间只读
   const hasArtifacts = sh.video?.local
     || (sh.first_frame?.candidates?.length ?? 0) > 0
     || (sh.last_frame?.candidates?.length ?? 0) > 0;
@@ -625,6 +635,26 @@ watch(() => jobStore.jobs.map(j => j.job_id + j.state).join('|'), () => {
     if (reloadTimer) clearTimeout(reloadTimer);
     reloadTimer = window.setTimeout(() => { load(); reloadTimer = null; }, 800);
   }
+});
+
+// ---- 2026-08-31：Agent 修改分镜时的实时刷新 + 只读锁 ----
+// 复用 app 级 Project SSE（MainLayout 挂载 useProjectEvents 喂 store），不另起轮询：
+//   resource.locked/unlocked（storyboard）→ 页面只读/恢复，锁定与解锁瞬间各 load() 一次
+//   同步基线与最终态；storyboard.changed 且仍在锁定期 → 静默 load() 拉 Agent 落盘的
+//   最新 canonical（锁定期用户不可编辑，覆盖本地安全）。锁释放覆盖完成/失败/停止三种
+//   结局（后端 turn finally 统一 unlock），前端无需区分。另有 4s resource-locks 对账兜底。
+const pev = useProjectEventsStore();
+const storyboardLocked = computed(() => pev.storyboardLocked);
+watch(storyboardLocked, (locked) => {
+  if (!projectName.value) return;
+  load();
+  if (locked) {
+    workbenchShot.value = null;   // 锁定期关闭编辑工作台（只读）
+    closeCtxMenu();
+  }
+});
+watch(() => pev.storyboardVersion, () => {
+  if (projectName.value && storyboardLocked.value) load();
 });
 
 function onDocClick() { closeCtxMenu(); }
@@ -695,6 +725,13 @@ watch(selected, () => { selectedShotId.value = null; restoreProposal(); });
 .seg-thumb { width: 40px; height: 22px; object-fit: cover; border-radius: 3px; background: var(--bg-root); }
 
 .seg-detail { flex: 1; min-width: 0; overflow-y: auto; }
+/* Agent 修改分镜期只读横幅（与 script-editor/characters 页的 lock 提示同风格） */
+.agent-lock-banner {
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(96, 165, 250, 0.1); border: 1px solid rgba(96, 165, 250, 0.35);
+  border-radius: 6px; padding: 8px 12px; margin-bottom: 12px;
+  font-size: 12px; color: #60a5fa;
+}
 .proj-head {
   display: flex; align-items: center; gap: 10px;
   padding: 10px 14px; background: var(--bg-surface); border: 1px solid var(--border);
