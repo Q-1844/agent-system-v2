@@ -2287,21 +2287,37 @@ async def director_turn(rt: AgentRuntime, project: str, session_id: str,
             reasoning = loop_state.get("reasonings", [])
             search_sources = loop_state.get("search_sources", [])
 
-    # ---- 会话治理：结构写计数 + Clean Review 触发 A（累计 ≥ 阈值，自动审查）----
+    # ---- 会话治理：结构写计数 + Re-grounding / Clean Review 触发 A ----
+    # Re-grounding 优先检查（与 Clean Review 共用计数源；16 = 两次 Clean Review 量级）：
+    # 主会话 staleness 密度已达实测致幻觉水平且用户还要继续在主会话干活 → 重开校准
+    # 会话（同 session_id、历史归档、状态头重新注入），计数器清零。
     review_result = None
+    reground_notice = None
     if client is not None:
         try:
             gov = session_governance.GovernanceStore(pdir, project)
             gov.record_structural_writes(receipts)
+            snap = gov.snapshot()
             if (status is None
-                    and gov.snapshot()["structural_since_review"]
+                    and snap["structural_since_reground"]
+                    >= session_governance.REGROUND_THRESHOLD):
+                reground_notice = session_governance.reground_session(
+                    store, session_id, pdir, project, last_user_intent=content)
+                gov.reset_all()
+            elif (status is None
+                    and snap["structural_since_review"]
                     >= session_governance.CLEAN_REVIEW_THRESHOLD):
                 review_result = await run_clean_review(
                     rt, client, project, trigger="structural_threshold")
                 gov.reset_since_review()
         except Exception:
-            log.exception("clean review 后处理失败（project=%s）", project)
-    if review_result is not None:
+            log.exception("会话治理后处理失败（project=%s）", project)
+    if reground_notice:
+        assistant_text += "\n\n" + reground_notice
+        events.append({"kind": "session_reground",
+                       "threshold": session_governance.REGROUND_THRESHOLD,
+                       "summary": "结构修改累计触发校准会话重置（历史已归档）"})
+    elif review_result is not None:
         assistant_text += (
             f"\n\n---\n【自动连续性审查】（本会话结构修改累计 "
             f"≥{session_governance.CLEAN_REVIEW_THRESHOLD} 次触发；由独立只读审查会话"
