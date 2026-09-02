@@ -147,7 +147,17 @@ def apply_end_state(rt, project: str, path: Path, scene_id: str,
     keep_ids = {it["shot_id"] for it in eff if it.get("shot_id") in cur_ids}
     del_ids = [i for i in cur_ids if i not in keep_ids]
     new_items = [it for it in eff if not it.get("shot_id") or it["shot_id"] not in cur_ids]
-    # 4. delete（先删；级联闭包意外 = 端态不可达信号）
+    # 4a. 预 detach（Part 2 §6.2 修订）：待删镜头的 keep 下游先解除接力——
+    #     canonical 接力边在 delete 时仍存活（c3 锚 c2），不先解除会级联误删 keep 镜
+    #     （合法端态"删中段重接下游"被误判为引擎缺陷）。解除后阶段 4b 再按端态改锚。
+    del_set = set(del_ids)
+    for sh in list(scene_of(load(path), scene_id).shots):
+        if sh.source_shot_id in del_set and sh.shot_id in keep_ids:
+            _exec(rt, project, "shot.update", shot_id=sh.shot_id,
+                  expected_revision=_shot_token(load(path).get_shot(sh.shot_id)),
+                  source_shot_id=None)
+            ops.append(("pre-detach", sh.shot_id, f"was→{sh.source_shot_id}"))
+    # 4b. delete（级联闭包意外 = 端态不可达信号；预 detach 后只剩引擎缺陷会触发）
     for sid in del_ids:
         casc = _exec(rt, project, "shot.delete", shot_id=sid)
         gone = casc.get("deleted", {}).get("shots", [])
@@ -482,13 +492,37 @@ def s10_create_relay_in_new_shots(tmp):
                f"created={created}；update 挂接 changed={obs2.get('changed')}")
 
 
+def s11_delete_mid_chain_relink(tmp):
+    """Part 2 §6.2 拓扑序验证：删接力链中段、保留并重接下游。
+    canonical s01 = [c1, c2(锚c1), c3(锚c2)]；端态 = [c1, c3(重接 c1)]（删 c2）。
+    合法端态（图完备：c3 的锚 c1 在集合且紧邻前驱）。若 delete 先行，
+    c3 在 canonical 的接力边（锚 c2）会触发级联误删 → 违反"保留 c3"。"""
+    path = tmp / "s11"; path.mkdir()
+    make_proj(path)
+    rt = rt_for(path)
+    end = [{"shot_id": "s01_c01", "description": "雨夜灯塔外景"},
+           {"shot_id": "s01_c03", "description": "楼梯间回望",
+            "source_shot_id": "s01_c01"}]
+    ok, probs, ops = apply_end_state(rt, "demo", path, "s01", end)
+    proj = load(path)
+    c3 = proj.get_shot("s01_c03")
+    if ok and c3 is not None and c3.source_shot_id == "s01_c01":
+        final = [sh.shot_id for sh in scene_of(proj, "s01").shots]
+        assert final == ["s01_c01", "s01_c03"], final
+        report("S11 删接力链中段+重接下游", "PASS",
+               f"ops={len(ops)}；c3 重接 c1，级联零误删")
+    else:
+        report("S11 删接力链中段+重接下游", "FAIL",
+               f"ok={ok} probs={probs} c3={c3 and c3.source_shot_id}")
+
+
 def main():
     tmp = Path(tempfile.mkdtemp(prefix="subagent_diff_spike_"))
     try:
         for fn in (s1_create, s2_update, s3_delete, s4_reorder, s4b_reorder_invalid,
                    s5_mixed, s6_detach_before_delete, s6b_workaround_costs,
                    s7_basis_stale, s8_scene_deleted, s9_partial_adoption,
-                   s10_create_relay_in_new_shots):
+                   s10_create_relay_in_new_shots, s11_delete_mid_chain_relink):
             try:
                 fn(tmp)
             except Exception as e:

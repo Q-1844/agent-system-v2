@@ -2,6 +2,9 @@
 
 > 分支 `design/subagent-v1`。基线：Part 1（`5edc0e1`）+ Errata（`1c200be`，**冲突时以
 > Errata 为准**）+ 接力可写性修复（`0f106c6`）+ diff spike（`937603c`，13 场景全 PASS）。
+> **rev2 修订（架构检查）**：DiffEngine 拓扑序新增 **pre-detach 前置子阶段**（§6.1-D2 /
+> §6.2 阶段 0.5）——原"delete 先行"在"删接力链中段 + 保留重接下游"的合法端态下会
+> 级联误删 keep 镜（spike S11 实测复现），修订后 spike 14 场景全 PASS。
 > 本轮范围：**协议与机制的字段级 schema + 算法规格**。可含确定性代码的规格说明
 > （伪代码），但不实现 Scene Agent 执行链路、不修改主链路行为——所有新工具面
 > 由配置门控（§2.4），默认关闭时主链路与当前基线 bit-for-bit 一致（§10 合规表）。
@@ -32,7 +35,8 @@ MD turn（主会话，subagent 功能开启时）
   │     → proposal.commit(...) / proposal.reject(...)
   │          └─ commit executor = DiffEngine（零 LLM，§6）
   │               ├─ liveness + basis 复查（commit 时点权威校验）
-  │               ├─ diff 派生 ops（delete → create(无锚) → reorder → update(含改锚)）
+  │               ├─ diff 派生 ops（pre-detach → delete → create(无锚) → reorder
+  │               │    → update(含改锚)；S11 修订见 §6.1-D2）
   │               ├─ 串行执行（每步读最新指纹）+ commit journal（§7.3 崩溃恢复）
   │               └─ 终态断言 + receipts + work_memory + 记忆入库（accepted-only，E2）
   └─ ④ turn 收尾（惰性检测节点③）：既有双计数器照常计数 + registry sweep（§7.2）
@@ -45,18 +49,18 @@ MD turn（主会话，subagent 功能开启时）
 
 ### 0.2 本文档用到的既有事实（全部已核对源码）
 
-| 事实 | 位置 |
-| --- | --- |
-| `SHOT_UPDATABLE_FIELDS` ≈ 30 个创作字段（含 `source_shot_id`，OCC 内容指纹覆盖接力） | director.py L157 |
-| `update_shot_relay` 校验：存在/同段/非自身/无环/**相邻**；`None`=解除并清 `source_version` | structure_service.py L409 |
-| `move_shot` **不检查接力邻接**——canonical 可存在"悬空接力"（source 非紧邻前驱） | structure_service.py L237 |
-| 接力按构造只在段内（`update_shot_relay` 同段校验 + shot_id 含段前缀） | 同上 |
-| `_scene_token`（SW 侧段内容指纹）= `SCENE_UPDATABLE_FIELDS`（title/location/time_of_day/summary/characters）的 sha256 前 8 位 | script_writer.py L208 |
-| `DEFAULT_MAX_TOOL_STEPS = 32`；`DIRECTOR_LONG_TASK_TOOLS` 有专门的超时/取消通道 | director.py L114/L135 |
-| 资源锁为进程内 per-project（单写者串行化成立） | project_events.py |
-| spike `apply_end_state` = DiffEngine 最小原型，拓扑序 delete→create→reorder→update 已固化 | spike/subagent_diff_spike.py |
+| 事实                                                                                                                 | 位置                             |
+| ------------------------------------------------------------------------------------------------------------------ | ------------------------------ |
+| `SHOT_UPDATABLE_FIELDS` ≈ 30 个创作字段（含 `source_shot_id`，OCC 内容指纹覆盖接力）                                                | director.py L157               |
+| `update_shot_relay` 校验：存在/同段/非自身/无环/**相邻**；`None`=解除并清 `source_version`                                            | structure\_service.py L409     |
+| `move_shot` **不检查接力邻接**——canonical 可存在"悬空接力"（source 非紧邻前驱）                                                         | structure\_service.py L237     |
+| 接力按构造只在段内（`update_shot_relay` 同段校验 + shot\_id 含段前缀）                                                                | 同上                             |
+| `_scene_token`（SW 侧段内容指纹）= `SCENE_UPDATABLE_FIELDS`（title/location/time\_of\_day/summary/characters）的 sha256 前 8 位 | script\_writer.py L208         |
+| `DEFAULT_MAX_TOOL_STEPS = 32`；`DIRECTOR_LONG_TASK_TOOLS` 有专门的超时/取消通道                                               | director.py L114/L135          |
+| 资源锁为进程内 per-project（单写者串行化成立）                                                                                      | project\_events.py             |
+| spike `apply_end_state` = DiffEngine 最小原型，拓扑序 delete→create→reorder→update 已固化                                     | spike/subagent\_diff\_spike.py |
 
----
+***
 
 ## 1. 端态表达学（先于 schema：一个关键的形式决策）
 
@@ -74,11 +78,11 @@ S10）。正式 schema 改为：
 
 这一形式决策**在类型层面消灭**了 spike 中两类运行期错误：
 
-| spike 场景 | source_shot_id 形式的错误 | chain:bool 形式 |
-| --- | --- | --- |
-| S4b 接力倒序 | 校验期错误"紧邻前驱不是来源" | **不可表达**（不存在指向非前项的引用） |
+| spike 场景 | source\_shot\_id 形式的错误                  | chain:bool 形式            |
+| -------- | --------------------------------------- | ------------------------ |
+| S4b 接力倒序 | 校验期错误"紧邻前驱不是来源"                         | **不可表达**（不存在指向非前项的引用）    |
 | S10 新镜互锚 | 需要 `__NEW_0__` 占位符 + create-后-update 挂接 | 占位符消失；diff 引擎内部用真实 id 挂接 |
-| 环 | 需环检测 | **不可表达**（有序列表中引用只能向前一项） |
+| 环        | 需环检测                                    | **不可表达**（有序列表中引用只能向前一项）  |
 
 接力闭包/紧邻/无环三类校验从"运行期检查"降为"构造期不可能"。`validate_end_state`
 保留的唯一图校验是：`chain[0] == false`（schema 强制）与 §4.3 的删申明完备性。
@@ -109,22 +113,22 @@ S10）。正式 schema 改为：
 ### 1.4 字段级表达：省略 = 保持（keeps）
 
 对保留镜头（`shot_id` 存在的项）：字段**省略 = 保持 canonical 当前值**，显式提供
-= 设为目标值。全集 = `SHOT_UPDATABLE_FIELDS − {source_shot_id}`（接力由 `chain`
+\= 设为目标值。全集 = `SHOT_UPDATABLE_FIELDS − {source_shot_id}`（接力由 `chain`
 表达，不走字段）。这避免"重述全字段"的 token 浪费与误改风险；镜头**集合**仍是
 完备枚举（§1.2），只是字段是 delta。新建项（无 `shot_id`）省略字段 = 工具默认值。
 
----
+***
 
 ## 2. DelegationContract（设计对象 1：字段 schema）
 
 ### 2.1 资格闸门（先于 contract 构造，确定性 veto）
 
-| 检查 | 规则 | 失败动作 |
-| --- | --- | --- |
-| 信号依据 | `signal.kind == "pressure"` 且 registry 中该 scene 的 `structural_since_delegation ≥ SPAWN_PRESSURE_THRESHOLD`（建议 6，§11）；或 `signal.kind == "declared"` 且 evidence 非空（MD 的复杂度声明文本）；或 `signal.kind == "user_explicit"` 且 evidence 非空（用户原话引用） | 拒绝派发，回执给 MD"缺依据，请在主会话直接执行或补充声明" |
-| 预算 | 本 turn MD 发起的 delegation < 3；全来源累计 < 6（硬上限，用户显式也受限但触发时**向用户明示**而非静默） | 拒绝 + 明示 |
-| liveness | scene_id ∈ 当前 canonical | 拒绝 + 提示（可能刚被 SW 删除） |
-| 单段单飞 | 该 scene_id 无 status ∈ {dispatched} 的 delegation（含本进程内存活句柄检查，§7.3） | 拒绝"该段已有在飞 delegation" |
+| 检查       | 规则                                                                                                                                                                                                                                     | 失败动作                            |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| 信号依据     | `signal.kind == "pressure"` 且 registry 中该 scene 的 `structural_since_delegation ≥ SPAWN_PRESSURE_THRESHOLD`（建议 6，§11）；或 `signal.kind == "declared"` 且 evidence 非空（MD 的复杂度声明文本）；或 `signal.kind == "user_explicit"` 且 evidence 非空（用户原话引用） | 拒绝派发，回执给 MD"缺依据，请在主会话直接执行或补充声明" |
+| 预算       | 本 turn MD 发起的 delegation < 3；全来源累计 < 6（硬上限，用户显式也受限但触发时**向用户明示**而非静默）                                                                                                                                                                   | 拒绝 + 明示                         |
+| liveness | scene\_id ∈ 当前 canonical                                                                                                                                                                                                               | 拒绝 + 提示（可能刚被 SW 删除）             |
+| 单段单飞     | 该 scene\_id 无 status ∈ {dispatched} 的 delegation（含本进程内存活句柄检查，§7.3）                                                                                                                                                                     | 拒绝"该段已有在飞 delegation"           |
 
 `user_explicit` 的判定是 MD 的语义声明（引用用户原话），Runtime 不做语义识别；
 确定性正则（类似 `_REVIEW_INTENT_RE`）只作**升级标注**不作依据——诚实记录：这条
@@ -209,25 +213,25 @@ LockedConstraint {
 
 MD 新增 4 个工具（均为 delegation 域，不碰 canonical 域 schema）：
 
-| 工具 | 类别 | 说明 |
-| --- | --- | --- |
-| `scene.delegate` | 长任务类（仿 `DIRECTOR_LONG_TASK_TOOLS` 的超时/取消通道） | §2.1 闸门 → 构造 contract → 跑实例 → 返回摘要 |
-| `proposal.read` | 只读 | 全文按需读取（Part 1 §10.2） |
-| `proposal.commit` | 写类（受单写串行 fence 约束） | DiffEngine 确定性执行（§6） |
-| `proposal.reject` | 写类（只写 proposal store，不碰 canonical） | 记录决策（§5） |
+| 工具                | 类别                                          | 说明                                 |
+| ----------------- | ------------------------------------------- | ---------------------------------- |
+| `scene.delegate`  | 长任务类（仿 `DIRECTOR_LONG_TASK_TOOLS` 的超时/取消通道） | §2.1 闸门 → 构造 contract → 跑实例 → 返回摘要 |
+| `proposal.read`   | 只读                                          | 全文按需读取（Part 1 §10.2）               |
+| `proposal.commit` | 写类（受单写串行 fence 约束）                          | DiffEngine 确定性执行（§6）               |
+| `proposal.reject` | 写类（只写 proposal store，不碰 canonical）          | 记录决策（§5）                           |
 
 **门控**：`offered_tools = DIRECTOR_TOOLS + (SUBAGENT_TOOLS if cfg.subagent_enabled)`。
 默认 `false` → 工具列表与系统提示逐字节不变 → 主链路 bit-for-bit（§10 合规表）。
 Scene Agent 实例是独立一次性会话，其存在不影响主会话。
 
----
+***
 
 ## 3. Scene Agent 工作实例（contract 的消费侧）
 
 ### 3.1 会话机制
 
 `create_ephemeral("director", "scene_agent", f"{scene_id}:{delegation_id}")`——
-不复用、用完即弃（`create_ephemeral` 既有语义，scope_type 专用值不进复用键）。
+不复用、用完即弃（`create_ephemeral` 既有语义，scope\_type 专用值不进复用键）。
 实例 = `_run_tool_loop(tools_whitelist=SCENE_AGENT_TOOLS)`：
 
 ```
@@ -273,7 +277,7 @@ SCENE_AGENT_TOOLS = DIRECTOR_READ_TOOLS ∪ {"proposal.submit"}
 参数 = §4 的 ProposalReturn 内容字段。executor 在**落盘前**做 §4.4 全部确定性
 校验；不合格 → 返回结构化错误（错误码 + 修复指引），实例可修后重交（**bounce
 即自愈**，同 OCC stale-retry 的交互模式）。多次提交合法：每次生成新
-proposal_id，先前者标 `superseded`；**最后成功提交者为有效提案**。循环终止由
+proposal\_id，先前者标 `superseded`；**最后成功提交者为有效提案**。循环终止由
 `max_steps` / `wall_clock_s` 兜底。
 
 ### 3.4 返回给 MD 的结构化摘要（≤500 字，Part 1 §10.2）
@@ -288,7 +292,7 @@ proposal_id，先前者标 `superseded`；**最后成功提交者为有效提案
  design_notes_excerpt: str}         # 截断摘录
 ```
 
----
+***
 
 ## 4. ProposalReturn（设计对象 2：字段 schema）
 
@@ -350,7 +354,7 @@ scene_slice_fingerprint(scene) =
 ```
 
 与 spike 版差异：spike 只哈希 `description`；正式版纳入**全部**单镜内容指纹
-（`_shot_token` 覆盖 ~30 字段 + 接力）——失效方向更保守（宁可错杀）。三性质：
+（`_shot_token` 覆盖 \~30 字段 + 接力）——失效方向更保守（宁可错杀）。三性质：
 确定性、可从 canonical 现算、**零 canonical schema 变更**（读时派生）。
 
 ### 4.3 端态合法性（DiffEngine 第 0 阶段的规格，零副作用）
@@ -363,30 +367,30 @@ scene_slice_fingerprint(scene) =
 
 ### 4.4 submit 时确定性校验清单（全过才落盘）
 
-| # | 校验 | 错误码 | 处置 |
-| --- | --- | --- | --- |
-| E1 | §4.3 全部 | `bad_end_state` | bounce（附具体项） |
-| E2 | `delegation_id`/`scene_id` 与实例 contract 一致 | `contract_mismatch` | bounce |
-| E3 | `constraint_responses` 覆盖全部 locked constraints | `missing_constraint_response` | bounce |
+| #  | 校验                                                                                        | 错误码                                | 处置                                |
+| -- | ----------------------------------------------------------------------------------------- | ---------------------------------- | --------------------------------- |
+| E1 | §4.3 全部                                                                                   | `bad_end_state`                    | bounce（附具体项）                      |
+| E2 | `delegation_id`/`scene_id` 与实例 contract 一致                                                | `contract_mismatch`                | bounce                            |
+| E3 | `constraint_responses` 覆盖全部 locked constraints                                            | `missing_constraint_response`      | bounce                            |
 | E4 | **basis 防伪**：`basis.scene_slice_fingerprint` ∈ {本实例读工具真实返回过的指纹} **且** == 当前 canonical 现算值 | `basis_fabricated` / `basis_stale` | bounce（stale 附当前指纹 + "重读后按新基线重交"） |
-| E5 | **读取证据**：trace 中存在 ≥1 次 `shot.list(scene_id)` 或本段镜头的 `shot.read` | `read_first` | bounce（F2 机制在提案域的直接拦截） |
-| E6 | `end_state` 非空时 `removed_shot_rationales` 覆盖 §1.2 | `undeclared_deletion` | bounce |
+| E5 | **读取证据**：trace 中存在 ≥1 次 `shot.list(scene_id)` 或本段镜头的 `shot.read`                          | `read_first`                       | bounce（F2 机制在提案域的直接拦截）            |
+| E6 | `end_state` 非空时 `removed_shot_rationales` 覆盖 §1.2                                         | `undeclared_deletion`              | bounce                            |
 
 `read_evidence.n_read_calls` 由 executor 从 trace 统计（**不是 LLM 自报**——防"自证
 读取量"本身被幻觉）。
 
----
+***
 
 ## 5. ReconcileDecision（设计对象 3）
 
 ### 5.1 四种决策的判定规则
 
-| 决策 | 触发条件（全部满足） | 执行 |
-| --- | --- | --- |
-| **accept** | ① basis 复查通过（commit 时点 §6.2-C1）；② MD 语义认可（end state 对照 global view；每条 `constraint_responses` 核实非敷衍；bcr 裁决完成） | `proposal.commit(proposal_id, decision_rationale)` → DiffEngine 全量执行 |
-| **rebase** | basis 复查**失败**（dispatch→commit 间该段被改：MD 自己的写 / SW story.update）且 MD 认为设计意图仍有效 | **不套用旧端态**（Part 1 §F）。执行 = `proposal.reject(kind="rebase")` + 新 `scene.delegate`（任务书 = 原意图 + 变更说明的 delta brief；新实例在新 basis 上重推导）。回退 = MD 用既有写工具手工完成（它有唯一写权限），决策记录标注 `manual` |
-| **reject** | MD 语义否决（设计质量/约束违反/bcr 不可接受） | `proposal.reject(proposal_id, kind="rejected", reasons[], decision_rationale)`；rationale 只留 proposal store，**不入记忆**（E2） |
-| **partial** | MD 认可子集（如剔除某个越界的新镜） | `proposal.commit(proposal_id, decision_rationale, exclude_item_refs=[端态数组下标])`；排除语义见 §5.2 |
+| 决策          | 触发条件（全部满足）                                                                                                   | 执行                                                                                                                                                                           |
+| ----------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **accept**  | ① basis 复查通过（commit 时点 §6.2-C1）；② MD 语义认可（end state 对照 global view；每条 `constraint_responses` 核实非敷衍；bcr 裁决完成） | `proposal.commit(proposal_id, decision_rationale)` → DiffEngine 全量执行                                                                                                         |
+| **rebase**  | basis 复查**失败**（dispatch→commit 间该段被改：MD 自己的写 / SW story.update）且 MD 认为设计意图仍有效                                | **不套用旧端态**（Part 1 §F）。执行 = `proposal.reject(kind="rebase")` + 新 `scene.delegate`（任务书 = 原意图 + 变更说明的 delta brief；新实例在新 basis 上重推导）。回退 = MD 用既有写工具手工完成（它有唯一写权限），决策记录标注 `manual` |
+| **reject**  | MD 语义否决（设计质量/约束违反/bcr 不可接受）                                                                                  | `proposal.reject(proposal_id, kind="rejected", reasons[], decision_rationale)`；rationale 只留 proposal store，**不入记忆**（E2）                                                      |
+| **partial** | MD 认可子集（如剔除某个越界的新镜）                                                                                          | `proposal.commit(proposal_id, decision_rationale, exclude_item_refs=[端态数组下标])`；排除语义见 §5.2                                                                                    |
 
 **bcr 的裁决与记录**：`border_change_requests` 由 MD 在 reconcile 时裁决
 （accept/reject/改写），裁决写入全局决策记忆（§8）——与 item 采纳**解耦**：被接受
@@ -411,7 +415,7 @@ exclude_item_refs: [int]        # end_state 数组下标
 （它声明接力的是"被排除的那个前驱"）。合法排除 = 被排除项是末项，或其后继
 `chain == false`。S9a（剔除尾部新镜）合法；S9b 类（剔除链中段）被拒。
 
----
+***
 
 ## 6. DiffEngine 规格（设计对象 4：spike 原型 → 正式规格）
 
@@ -421,9 +425,14 @@ exclude_item_refs: [int]        # end_state 数组下标
 DiffEngine: (current_canonical_scene_slice, effective_end_state, basis) → op 列表 → 执行
 性质：
   D1 纯函数派生：op 列表 = F(current, effective_end_state)，零 LLM、零隐藏状态
-  D2 拓扑序不变式（固定，spike 已固化）：
-       delete → create(不带接力，追加段尾) → reorder(selection 式 move)
-       → update(内容 + 改锚/解除，含 detach-before-delete 的逆向后置)
+  D2 拓扑序不变式（固定，spike 已固化，S11 修订）：
+       pre-detach(待删镜头的 keep 下游先解除接力) → delete →
+       create(不带接力，追加段尾) → reorder(selection 式 move)
+       → update(内容 + 改锚/解除)
+       【为何 pre-detach 必须先行】canonical 接力边在 delete 时刻仍存活（下游
+       锚着待删镜），不先解除会级联误删 keep 镜——"删接力链中段 + 保留重接下游"
+       是合法端态（端态的 chain 已声明重接），delete 先行会把它误判为
+       ABORT_INTEGRITY。预 detach 只处理 keep 下游（del 下游的级联是合法删除）。
   D3 每步用最新指纹（结构 op 前重算 _shots_token；内容 op 前重算 _shot_token）
   D4 可重算性（崩溃恢复的根基）：F(current, desired) 对 current 的任意
      "已部分变换"中间态重跑，得到的 op 列表 = 剩余变换（§7.3）
@@ -444,12 +453,22 @@ DiffEngine: (current_canonical_scene_slice, effective_end_state, basis) → op �
   create = items 无 shot_id（不含被排除项）
   期望序 = [item.shot_id（keeps）或分配占位（creates）按 end_state 序]
 
-阶段 1 delete（先行；级联守卫 = 纵深防御）
+阶段 0.5 pre-detach（S11 修订，先于一切 delete）
+  for sh in canonical_scene.shots:
+    if sh.source_shot_id ∈ del 且 sh.shot_id ∈ keep:
+      shot.update(sh.shot_id, source_shot_id=None)   # 解除（内容指纹随即变化，
+  ops.append(("pre-detach", sh.shot_id, …))           #  阶段 4 每镜前重算，天然兼容）
+  # 被解除镜的端态 chain 期望由阶段 4 的 relay_op 重新应用（改锚需邻接——
+  # reorder 在阶段 3；中间态"暂无接力"合法）。update 不改变结构指纹（_shots_token
+  # 只含 id 序），后续 delete 的结构 OCC 不受影响。
+
+阶段 1 delete（级联守卫 = 纵深防御）
   for sid in del:
     r = shot.delete(sid)                    # 真实 executor，receipt 入账
-    if r.cascaded ∩ keep ≠ ∅: → ABORT_INTEGRITY（应被 C3 拦下的 = 引擎 bug 警报）
-  # 注：端态已保证被保留镜的 chain 指向保留项，接力闭包在 C3 构造性成立，
-  # 意外级联只可能来自引擎缺陷——故为完整性警报而非 agent 错误
+    if r.cascaded ∩ keep ≠ ∅: → ABORT_INTEGRITY（应被 C3/阶段0.5 拦下的 = 引擎 bug 警报）
+  # 注：端态已保证被保留镜的 chain 指向保留项（C3 构造性成立），且阶段 0.5 已
+  # 解除 keep 下游对待删镜的活接力边——意外级联只可能来自引擎缺陷，故为完整性
+  # 警报而非 agent 错误
 
 阶段 2 create（追加段尾，spec 不含 source_shot_id——先建后锚，0f106c6 语义）
   create_many（≥2）或 create；回填真实 id 到期望序占位
@@ -473,18 +492,18 @@ DiffEngine: (current_canonical_scene_slice, effective_end_state, basis) → op �
 
 ### 6.3 错误分类学（三类处置的判定依据）
 
-| 类别 | 错误 | 检测点 | 判定依据（为什么归这类） |
-| --- | --- | --- | --- |
-| **bounce（打回 Scene Agent）** | E1–E6 全部（§4.4） | proposal.submit | **实例还活着**且错误源于它的产出——自愈成本 = 同实例内修正重交（OCC stale-retry 同模式）。涵盖：schema/图/删申明/约束回应缺失/basis 防伪与过期/读取证据 |
-| **MD 手动（标记 Main Director）** | `MD_REBASE`（commit 时 basis 过期）、`INTERRUPTED_COMMIT`（§7.3） | proposal.commit | **实例已消亡**（delegation 已返回），无法 bounce；且 MD 持有唯一写权限与全局视野——delta re-delegation 或手工修复都是它的合法动作 |
-| **abort（整体中止）** | `ABORT_LIVENESS`（scene 消亡，S8）、`ABORT_INTEGRITY`（级联守卫/终态断言失败）、执行期 op 异常（ OCC stale 等） | commit 各阶段 | liveness 是生命周期终态（retire 联动）；integrity = **应该已被上游拦截的错**，出现即引擎缺陷， loud log + 停止（不 bounce——不是 agent 的错）；执行期异常 = canonical 可能已部分变换，**诚实部分报告**（已执行 ops 的 receipts 全量返回，绝不假成功）+ `INTERRUPTED_COMMIT` 状态 → MD 决策（`resume` 重算剩余 or 手工） |
+| 类别                          | 错误                                                                                   | 检测点             | 判定依据（为什么归这类）                                                                                                                                                                                                                   |
+| --------------------------- | ------------------------------------------------------------------------------------ | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **bounce（打回 Scene Agent）**  | E1–E6 全部（§4.4）                                                                       | proposal.submit | **实例还活着**且错误源于它的产出——自愈成本 = 同实例内修正重交（OCC stale-retry 同模式）。涵盖：schema/图/删申明/约束回应缺失/basis 防伪与过期/读取证据                                                                                                                               |
+| **MD 手动（标记 Main Director）** | `MD_REBASE`（commit 时 basis 过期）、`INTERRUPTED_COMMIT`（§7.3）                            | proposal.commit | **实例已消亡**（delegation 已返回），无法 bounce；且 MD 持有唯一写权限与全局视野——delta re-delegation 或手工修复都是它的合法动作                                                                                                                                       |
+| **abort（整体中止）**             | `ABORT_LIVENESS`（scene 消亡，S8）、`ABORT_INTEGRITY`（级联守卫/终态断言失败）、执行期 op 异常（ OCC stale 等） | commit 各阶段      | liveness 是生命周期终态（retire 联动）；integrity = **应该已被上游拦截的错**，出现即引擎缺陷， loud log + 停止（不 bounce——不是 agent 的错）；执行期异常 = canonical 可能已部分变换，**诚实部分报告**（已执行 ops 的 receipts 全量返回，绝不假成功）+ `INTERRUPTED_COMMIT` 状态 → MD 决策（`resume` 重算剩余 or 手工） |
 
 **分类边界的原则**：错误归给**能在最低成本处修复它的一方**，且只归给有证据指向的
 一方——submit 阶段一切归实例（它可自愈），commit 阶段一切归 MD（实例不在了），
 "不应发生的"归引擎自身（警报而非甩锅）。纵深防御层（级联守卫、终态断言）的
 存在意义是捕获引擎 bug，不是扩展 bounce 面。
 
----
+***
 
 ## 7. SceneAgentRegistry（设计对象 5：落盘形态 + 三节点惰性检测）
 
@@ -536,11 +555,11 @@ MemoryEntry {
 
 ### 7.2 三节点惰性检测（全部确定性、零守护进程、SW 零感知）
 
-| 节点 | 时点 | 动作 |
-| --- | --- | --- |
-| ① **派发** | `scene.delegate` 闸门通过后、构造 contract 前 | liveness（不在 canonical → 拒绝 + 顺手 retire）；记忆前提清扫（§7.1 失效规则）；邻接快照现算（volatile 定义上不持久）；单段单飞检查 |
-| ② **commit** | DiffEngine 阶段 C | liveness 复查（飞行中 SW 删段 → `ABORT_LIVENESS` + retire，S8）；basis 复查；commit journal 落盘（§7.3） |
-| ③ **turn 收尾 sweep** | MD turn 成功收尾（搭载既有治理后处理，零 LLM） | registry scenes − canonical scene_ids → retire（SW `story.delete` 的检测点）；孤儿 delegation 清算（§7.3）；`structural_since_delegation` 从本轮 receipts 按 scene 聚合累加（receipts 带 scene_id）；delegation 摘要已由 commit executor 写入 work_memory（→ 状态头 / re-ground 携带物自动可见，零新管道） |
+| 节点                  | 时点                                   | 动作                                                                                                                                                                                                                                                           |
+| ------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| ① **派发**            | `scene.delegate` 闸门通过后、构造 contract 前 | liveness（不在 canonical → 拒绝 + 顺手 retire）；记忆前提清扫（§7.1 失效规则）；邻接快照现算（volatile 定义上不持久）；单段单飞检查                                                                                                                                                                     |
+| ② **commit**        | DiffEngine 阶段 C                      | liveness 复查（飞行中 SW 删段 → `ABORT_LIVENESS` + retire，S8）；basis 复查；commit journal 落盘（§7.3）                                                                                                                                                                       |
+| ③ **turn 收尾 sweep** | MD turn 成功收尾（搭载既有治理后处理，零 LLM）        | registry scenes − canonical scene\_ids → retire（SW `story.delete` 的检测点）；孤儿 delegation 清算（§7.3）；`structural_since_delegation` 从本轮 receipts 按 scene 聚合累加（receipts 带 scene\_id）；delegation 摘要已由 commit executor 写入 work\_memory（→ 状态头 / re-ground 携带物自动可见，零新管道） |
 
 ### 7.3 崩溃 / 并发一致性（攻击点，§9.3 详析）
 
@@ -558,31 +577,31 @@ committing → committed | partial | interrupted_commit
 
 **崩溃窗口逐个分析**：
 
-| 窗口 | 盘上状态 | 恢复（全部惰性，下一 MD turn / 派发节点触发） |
-| --- | --- | --- |
-| 实例运行中崩溃 | `dispatched`，无 proposal | sweep：`dispatched` 且无本进程存活句柄且无 proposal → `aborted`（单进程语义：重启后无任何实例存活，判定确定性成立）；delegation 摘要写 work_memory → MD 下轮可见 |
-| submit 后、reconcile 前 | `proposed` | 无需恢复——proposal 在 store，MD 下轮继续 reconcile（basis 若已过期走 rebase 路径） |
-| **commit 中途崩溃** | `committing` + journal（op 列表已落盘） | **可重算恢复（D4）**：`proposal.commit(proposal_id, resume=true)` 对**当前** canonical 重跑 `F(current, desired)` = 恰好剩余变换；恢复**必须 MD 显式触发**（中断可能是用户主动停止，不自动续跑）；basis 检查对 resume 豁免（current ≠ 原 basis 是构造性的）。若 MD 不续跑：`interrupted_commit` 终态留档，canonical 停在合法中间态（每个原语各自原子且自洽），MD 手工收尾 |
-| turn 收尾 sweep 前崩溃 | 计数/sweep 未跑 | 下一成功 turn 补（既有治理同款语义：STOPPED/FAILED 只记数不触发） |
+| 窗口                   | 盘上状态                             | 恢复（全部惰性，下一 MD turn / 派发节点触发）                                                                                                                                                                                                                                             |
+| -------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 实例运行中崩溃              | `dispatched`，无 proposal          | sweep：`dispatched` 且无本进程存活句柄且无 proposal → `aborted`（单进程语义：重启后无任何实例存活，判定确定性成立）；delegation 摘要写 work\_memory → MD 下轮可见                                                                                                                                                      |
+| submit 后、reconcile 前 | `proposed`                       | 无需恢复——proposal 在 store，MD 下轮继续 reconcile（basis 若已过期走 rebase 路径）                                                                                                                                                                                                          |
+| **commit 中途崩溃**      | `committing` + journal（op 列表已落盘） | **可重算恢复（D4）**：`proposal.commit(proposal_id, resume=true)` 对**当前** canonical 重跑 `F(current, desired)` = 恰好剩余变换；恢复**必须 MD 显式触发**（中断可能是用户主动停止，不自动续跑）；basis 检查对 resume 豁免（current ≠ 原 basis 是构造性的）。若 MD 不续跑：`interrupted_commit` 终态留档，canonical 停在合法中间态（每个原语各自原子且自洽），MD 手工收尾 |
+| turn 收尾 sweep 前崩溃    | 计数/sweep 未跑                      | 下一成功 turn 补（既有治理同款语义：STOPPED/FAILED 只记数不触发）                                                                                                                                                                                                                              |
 
 journal 内容：`{delegation_id, proposal_id, ops_plan（派生的 op 列表）, executed: [前缀 receipts], started_at}`——executed 前缀是**报告用**（诚实部分报告），恢复依据是
 D4 重算而非 journal 回放（重算不依赖 journal 的执行进度记录，journal 只保证
 "有人知道这里曾中断"）。
 
----
+***
 
 ## 8. Main Director 全局决策记忆（设计对象 6，Errata E3）
 
 ### 8.1 条目来源（锚定真实决策，无自由格式工具）
 
-| 来源 | 触发 | 条目 |
-| --- | --- | --- |
-| reconcile 决策 | 每次 commit/reject（`decision_rationale` 必填） | "s05 提案 accept：保 B 弃 A，因为…" |
-| bcr 裁决 | reconcile 中对 border_change_request 的处理 | "接受 s05/s06 边界改为夜戏衔接，依据…" |
-| 用户显式全局指令 | MD 在 delegation 调用中转述（`signal.evidence`） | 间接留痕于 origin，不单独建条（brief 机制覆盖用户约束） |
+| 来源           | 触发                                        | 条目                                 |
+| ------------ | ----------------------------------------- | ---------------------------------- |
+| reconcile 决策 | 每次 commit/reject（`decision_rationale` 必填） | "s05 提案 accept：保 B 弃 A，因为…"        |
+| bcr 裁决       | reconcile 中对 border\_change\_request 的处理  | "接受 s05/s06 边界改为夜戏衔接，依据…"          |
+| 用户显式全局指令     | MD 在 delegation 调用中转述（`signal.evidence`）  | 间接留痕于 origin，不单独建条（brief 机制覆盖用户约束） |
 
 **刻意不做**自由格式 `memory.record` 工具：无锚定的自由记忆会退化成"第二个会话
-历史"（F2 机制）；锚定到真实决策工件（proposal_id）的条目才有可审计的 provenance。
+历史"（F2 机制）；锚定到真实决策工件（proposal\_id）的条目才有可审计的 provenance。
 非提案类全局决策（V1）接受其会话态（Re-grounding 截肢）——已知缺陷 §12。
 
 ### 8.2 条目 schema 与 Re-grounding 携带物扩展
@@ -598,27 +617,27 @@ seed = [校准提示, 状态头, brief,
         最近意图]
 ```
 
-**bit-for-bit 保护**：无 subagent 活动的项目 global_memory 为空 → 该段不出现 →
+**bit-for-bit 保护**：无 subagent 活动的项目 global\_memory 为空 → 该段不出现 →
 seed 与现行逐字节一致。有活动时行为变化是 E3 要求的功能本身（修复"全局决策理由
 在 Re-grounding 后丢失"），不是回归。
 
----
+***
 
 ## 9. 攻击性分析（必测四项 + 补充）
 
 ### 9.1 contract 字段缺失导致的歧义（逐字段攻击表）
 
-| 若缺失/未定义 | 后果 | 本 schema 的封堵 |
-| --- | --- | --- |
-| border 窗口大小（"出入口取几镜"） | Scene Agent 不知快照边界，把窗口当全貌或反向要求读全片（越权读取扩散） | `window_k=2` 显式 + `total_shots` 让窗口性可见 |
-| 首/末段的邻接 | null 语义不明 → 实例臆造"上游存在" | `prev/next: NeighborView | null` + 注入文本显式"无上游/下游段" |
-| basis | 提案无锚 → MD 改动后套用旧端态 = 语义 lost update（S7 反面） | contract 与 proposal 双层携带 + submit/commit 双时点校验 + 防伪（§4.4-E4） |
-| 预算 | 实例无界运行（成本失控）/ 端态无界（巨型提案撑爆 reconcile） | `budget` 三字段 + executor 强制 |
-| 删申明 | 遗漏即删除的强语义变成静默数据丢失（E1→E2b 完备性劣化的放大器） | `removed_shot_rationales` 守卫（§1.2） |
-| chain 的 item-0 规则 | 段首镜声明接力 → 引用不存在的前驱 | schema 强制 `chain[0]=false` |
-| 空端态语义 | "删光本段" vs "无提案"混淆 | 空端态合法但须全量删申明；"无提案"= 未 submit，由 delegation 状态区分 |
-| memory 注入的前提标注 | 先验被当证据（F2 记忆版） | 注入头 advisory 声明 + 隔离计数 + zero-read gate + E5 读取证据 |
-| 读取证据口径 | LLM 自报读取量 = 又一个可幻觉字段 | executor 从 trace 统计（§4.4-E5 注） |
+| 若缺失/未定义               | 后果                                         | 本 schema 的封堵                                                 |                          |
+| --------------------- | ------------------------------------------ | ------------------------------------------------------------ | ------------------------ |
+| border 窗口大小（"出入口取几镜"） | Scene Agent 不知快照边界，把窗口当全貌或反向要求读全片（越权读取扩散）  | `window_k=2` 显式 + `total_shots` 让窗口性可见                       |                          |
+| 首/末段的邻接               | null 语义不明 → 实例臆造"上游存在"                     | \`prev/next: NeighborView                                    | null\` + 注入文本显式"无上游/下游段" |
+| basis                 | 提案无锚 → MD 改动后套用旧端态 = 语义 lost update（S7 反面） | contract 与 proposal 双层携带 + submit/commit 双时点校验 + 防伪（§4.4-E4） |                          |
+| 预算                    | 实例无界运行（成本失控）/ 端态无界（巨型提案撑爆 reconcile）       | `budget` 三字段 + executor 强制                                   |                          |
+| 删申明                   | 遗漏即删除的强语义变成静默数据丢失（E1→E2b 完备性劣化的放大器）        | `removed_shot_rationales` 守卫（§1.2）                           |                          |
+| chain 的 item-0 规则     | 段首镜声明接力 → 引用不存在的前驱                         | schema 强制 `chain[0]=false`                                   |                          |
+| 空端态语义                 | "删光本段" vs "无提案"混淆                          | 空端态合法但须全量删申明；"无提案"= 未 submit，由 delegation 状态区分               |                          |
+| memory 注入的前提标注        | 先验被当证据（F2 记忆版）                             | 注入头 advisory 声明 + 隔离计数 + zero-read gate + E5 读取证据            |                          |
+| 读取证据口径                | LLM 自报读取量 = 又一个可幻觉字段                       | executor 从 trace 统计（§4.4-E5 注）                               |                          |
 
 ### 9.2 diff 错误分类的边界（打回 vs 手动 vs abort）
 
@@ -654,94 +673,99 @@ write-ahead log 更适合本系统的模型（op 全部是幂等语义上的"到
 
 ### 9.4 partial adoption 与 border 联动
 
-攻击：**"MD partial 采纳了端态，但被剔除的项正是支撑某条 constraint_response /
+攻击：**"MD partial 采纳了端态，但被剔除的项正是支撑某条 constraint\_response /
 bcr 的设计"**——协议不试图确定性判定"哪些项支撑哪条回应"（语义问题），而是
 三点结构性防御：① **链切规则**（§5.2）保证 partial 不隐式改变保留镜的接力语义
 ——结构面的联动被确定性封死；② commit 回执附带**有效端态**（排除后版本）的
-constraint_responses 重印，MD 在收据里直接看到"承诺对的是哪个版本"；③ bcr 裁决
+constraint\_responses 重印，MD 在收据里直接看到"承诺对的是哪个版本"；③ bcr 裁决
 与 item 采纳解耦（§5.1）——bcr 影响下一轮 locked constraints，本轮 partial 缩水
 不自动撤销已接受的 bcr；MD 若反悔，路径是在下一轮 delegation 的
-locked_border_constraints 里改锁（flip-flop 守卫照常计数，Part 1 §11.5）。
+locked\_border\_constraints 里改锁（flip-flop 守卫照常计数，Part 1 §11.5）。
 残余风险：MD 语义上"剔除了出口镜却保留了'出口停在暴雨'的约束回应"这类人级
 疏忽——记入 §12，由事后 Clean Review（全局审查权）兜底。
 
 ### 9.5 补充攻击（本轮自加）
 
 - **实例提交了他段镜头 id**：E2 `contract_mismatch` / `foreign_scene_id` 拦截。
+
 - **实例伪造 basis**（抄历史指纹）：E4 防伪——必须 ∈ 本实例真实读到的指纹集合。
   代价：submit executor 需要访问实例 trace（同进程内可得，实现注记）。
+
 - **MD 用 delegation 逃避主会话工作**（delegation-as-avoidance，Part 1 §4.2 风险）：
   资格闸门 + 每轮上限 3 + 计数器全落盘（可审计）。
+
 - **同一 turn 多段 delegation**：允许（Planning 可并行）；V1 运行时**串行执行**
   （工具按序跑完）；协议本身不禁止真并发（per-scene basis 隔离 + commit 串行点），
   真并发执行留给后续版本——诚实标注，不算 Part 1 "Planning 可并行"的违反
   （并行的是 MD 的规划发起，不是执行）。
+
 - **空 scene 的 delegation**（S1）：合法——从零设计；端态全 create，删申明为空。
 
----
+***
 
 ## 10. 硬不变式合规表（交付自查）
 
-| 不变式 | 机制 | 自查 |
-| --- | --- | --- |
-| canonical 写权限唯一归 MD（串行 commit） | Scene Agent 白名单物理无写工具；commit = MD 调用的确定性 executor，受单写 fence | ✅ §3.1/§2.4 |
-| 跨 delegation 持久物必须带可检测前提；rejected/stale 不入库 | MemoryEntry.premises（token 级）+ E2 入库时点 + E4 volatile 不落盘 + submit/commit 双时点 basis | ✅ §7.1/§4.4 |
-| 生命周期检测惰性 + 确定性 | 三节点（§7.2）；无守护进程；sweep 纯集合运算；SW 侧零接口变更 | ✅ |
-| DiffEngine 零 LLM | D1 纯函数；错误处置分类学不含"问 LLM"路径 | ✅ §6 |
-| 主链路 bit-for-bit（无 delegation 时） | `subagent_enabled` 默认 false → 工具列表/系统提示不变；reground 扩展段条件出现；治理计数只在 commit 时产生（无 commit = 无变化）；实例为独立 ephemeral 会话 | ✅ §2.4/§8.2 |
-| （本轮）不实现执行链路、不改主链路 | 本文档 = 规格；spike 已在 `spike/`（非生产代码）；无生产代码改动 | ✅ |
+| 不变式                                         | 机制                                                                                                              | 自查          |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ----------- |
+| canonical 写权限唯一归 MD（串行 commit）              | Scene Agent 白名单物理无写工具；commit = MD 调用的确定性 executor，受单写 fence                                                     | ✅ §3.1/§2.4 |
+| 跨 delegation 持久物必须带可检测前提；rejected/stale 不入库 | MemoryEntry.premises（token 级）+ E2 入库时点 + E4 volatile 不落盘 + submit/commit 双时点 basis                              | ✅ §7.1/§4.4 |
+| 生命周期检测惰性 + 确定性                              | 三节点（§7.2）；无守护进程；sweep 纯集合运算；SW 侧零接口变更                                                                           | ✅           |
+| DiffEngine 零 LLM                            | D1 纯函数；错误处置分类学不含"问 LLM"路径                                                                                       | ✅ §6        |
+| 主链路 bit-for-bit（无 delegation 时）             | `subagent_enabled` 默认 false → 工具列表/系统提示不变；reground 扩展段条件出现；治理计数只在 commit 时产生（无 commit = 无变化）；实例为独立 ephemeral 会话 | ✅ §2.4/§8.2 |
+| （本轮）不实现执行链路、不改主链路                           | 本文档 = 规格；spike 已在 `spike/`（非生产代码）；无生产代码改动                                                                       | ✅           |
 
----
+***
 
 ## 11. 建议数值阈值汇总（全部标注依据，不拍死，实现后按遥测调）
 
-| 常量 | 建议值 | 依据 |
-| --- | --- | --- |
-| `SPAWN_PRESSURE_THRESHOLD` | 6 | 实测退化在项目级 ~13 次结构写后（E1+E2+E2b）；压测中重压力集中在 2 段 ≈ 5–6 次/段；段级浓度先于项目级总量到达设计负载。**低于** Clean Review 的 8：delegation 是比"审查+重置"链更早介入的廉价干预点 |
-| `MAX_DELEGATIONS_PER_TURN` | 3 | 每实例 = 完整 LLM 会话（成本）；3 段并行 redesign 已是单轮罕见规模 |
-| `HARD_DELEGATION_CAP` | 6 | 用户显式也受限（Part 1 §4.2"防无限 spawn"），超限**明示**不静默 |
-| `BORDER_WINDOW_K` | 2 镜/侧 | 接力链语境下边界内容通常跨两镜（出口镜 + 铺垫镜）；k=1 丢铺垫，k=3 冗余 |
-| `MEMORY_INJECTION_CAP` K | 12 | 段设计上下文规模（5–12 镜段 × 每镜 1 条 + 段级 notes 4）；防注入面成为新失真源 |
-| `PER_SHOT_RETENTION` M | 3 | 同镜决策保留最新 3 代——更早的已被后续迭代事实性取代 |
-| `GLOBAL_MEMORY_CAP` K_g | 8 | 全局决策注入面远小于段级；Re-grounding 携带物增量控制在 ~1KB 级 |
-| `INSTANCE_MAX_STEPS` | 32 | = `DEFAULT_MAX_TOOL_STEPS`（既有默认，S1–S10 实测远低于此） |
-| `WALL_CLOCK_S` | 600 | F4 只读审查 38s；设计 + 读 + 提交 3–5 倍余量；视觉生成类工具不在此实例内 |
-| `MAX_PROPOSAL_ITEMS` | 24 | 压测高潮段 7 镜；24 = 超出单段设计-at-once 合理规模的上界信号 |
-| `MIN_READ_EVIDENCE` | 1 次段级读 | zero-read gate 的提案域强化版；不要求更高（S1 场景一次 `shot.list(scene_id)` 即满足，空段无镜可 `shot.read`） |
+| 常量                         | 建议值    | 依据                                                                                                                               |
+| -------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `SPAWN_PRESSURE_THRESHOLD` | 6      | 实测退化在项目级 \~13 次结构写后（E1+E2+E2b）；压测中重压力集中在 2 段 ≈ 5–6 次/段；段级浓度先于项目级总量到达设计负载。**低于** Clean Review 的 8：delegation 是比"审查+重置"链更早介入的廉价干预点 |
+| `MAX_DELEGATIONS_PER_TURN` | 3      | 每实例 = 完整 LLM 会话（成本）；3 段并行 redesign 已是单轮罕见规模                                                                                      |
+| `HARD_DELEGATION_CAP`      | 6      | 用户显式也受限（Part 1 §4.2"防无限 spawn"），超限**明示**不静默                                                                                      |
+| `BORDER_WINDOW_K`          | 2 镜/侧  | 接力链语境下边界内容通常跨两镜（出口镜 + 铺垫镜）；k=1 丢铺垫，k=3 冗余                                                                                        |
+| `MEMORY_INJECTION_CAP` K   | 12     | 段设计上下文规模（5–12 镜段 × 每镜 1 条 + 段级 notes 4）；防注入面成为新失真源                                                                               |
+| `PER_SHOT_RETENTION` M     | 3      | 同镜决策保留最新 3 代——更早的已被后续迭代事实性取代                                                                                                     |
+| `GLOBAL_MEMORY_CAP` K\_g   | 8      | 全局决策注入面远小于段级；Re-grounding 携带物增量控制在 \~1KB 级                                                                                       |
+| `INSTANCE_MAX_STEPS`       | 32     | = `DEFAULT_MAX_TOOL_STEPS`（既有默认，S1–S10 实测远低于此）                                                                                   |
+| `WALL_CLOCK_S`             | 600    | F4 只读审查 38s；设计 + 读 + 提交 3–5 倍余量；视觉生成类工具不在此实例内                                                                                    |
+| `MAX_PROPOSAL_ITEMS`       | 24     | 压测高潮段 7 镜；24 = 超出单段设计-at-once 合理规模的上界信号                                                                                          |
+| `MIN_READ_EVIDENCE`        | 1 次段级读 | zero-read gate 的提案域强化版；不要求更高（S1 场景一次 `shot.list(scene_id)` 即满足，空段无镜可 `shot.read`）                                                |
 
----
+***
 
 ## 12. 已知缺陷与接受理由（Part 2 增量；Part 1 §12 继续有效）
 
-| # | 缺陷 | 接受理由 | 缓解 |
-| --- | --- | --- | --- |
-| P2-1 | **`user_explicit` 信任 MD 的语义分类**（引用原话可被编造） | 确定性正则识别委派意图的误伤/漏报都不可控；硬上限 + 全落盘审计把最坏情形限为"多花几次 delegation" | origin 全落盘；遥测异常率可观测 |
-| P2-2 | **chain:bool 无法表达"接力但隔位"**——若未来放宽接力邻接约束（如允许隔 1 镜接力），schema 需升级 | 当前 canonical 语义（`update_shot_relay` 相邻校验）下该表达不存在合法需求；提前支持 = 为不存在的状态设计 | schema 版本字段预留；升级 = `chain` 扩展为 `relay_offset`， DiffEngine 派生规则局部变更 |
-| P2-3 | **悬空接力被 commit 静默规范化**（§1.3）——Scene Agent 未注意时"顺手修复" | move 造成的悬空接力本身是既有系统的灰区状态；端态强制显式决定优于维持灰区 | 状态头显式标注 + receipt `relay_normalized` + 任务书模板提示 |
-| P2-4 | **partial 的语义联动仅结构面封死**，约束/边界面的联动靠 MD 注视（§9.4） | 语义联动不可确定性判定；引入 LLM 判定违反 D1 | 回执重印有效端态的 constraint_responses；事后 Clean Review 兜底 |
-| P2-5 | **rebase = 重新 delegation 的成本可能高于 MD 手工**（小改动场景） | 协议不强制 rebase 路径——MD 手工修复是内置回退（它有唯一写权限），决策记录标 `manual` 即可 | delta brief 机制让 re-delegation 复用原意图 |
-| P2-6 | **basis 防伪需要 submit executor 访问实例 trace**（实现耦合点） | 同进程内可得；跨进程部署时需随 proposal 附 trace 摘要 | 实现注记（Part 3） |
-| P2-7 | **单进程判死假设**（§9.3）：多进程/多 worker 部署下"重启即无存活实例"不成立 | 当前系统为单后端进程 + per-project 锁（既有架构事实） | 部署形态变更时重审（心跳/租约升级路径明确） |
-| P2-8 | **V1 delegation 串行执行**，多段 redesign 不真并发 | 每实例是分钟级 LLM 会话，串行 = 简单且可观测；并发执行的正确性基础（per-scene basis 隔离 + 串行 commit）本协议已铺好 | 后续版本放开执行并发不需协议变更 |
-| P2-9 | **非提案类全局决策（MD 会话中的即兴判断）仍随 Re-grounding 丢失** | 自由格式记忆工具会复制 F2 机制（§8.1 论证）；锚定式入库只覆盖 delegation 决策 | 已知边界；E3 修复的是"有工件的决策"，无工件的判断接受会话态 |
+| #    | 缺陷                                                             | 接受理由                                                                        | 缓解                                                                 |
+| ---- | -------------------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| P2-1 | **`user_explicit`** **信任 MD 的语义分类**（引用原话可被编造）                  | 确定性正则识别委派意图的误伤/漏报都不可控；硬上限 + 全落盘审计把最坏情形限为"多花几次 delegation"                   | origin 全落盘；遥测异常率可观测                                                |
+| P2-2 | **chain:bool 无法表达"接力但隔位"**——若未来放宽接力邻接约束（如允许隔 1 镜接力），schema 需升级 | 当前 canonical 语义（`update_shot_relay` 相邻校验）下该表达不存在合法需求；提前支持 = 为不存在的状态设计       | schema 版本字段预留；升级 = `chain` 扩展为 `relay_offset`， DiffEngine 派生规则局部变更 |
+| P2-3 | **悬空接力被 commit 静默规范化**（§1.3）——Scene Agent 未注意时"顺手修复"           | move 造成的悬空接力本身是既有系统的灰区状态；端态强制显式决定优于维持灰区                                     | 状态头显式标注 + receipt `relay_normalized` + 任务书模板提示                     |
+| P2-4 | **partial 的语义联动仅结构面封死**，约束/边界面的联动靠 MD 注视（§9.4）                 | 语义联动不可确定性判定；引入 LLM 判定违反 D1                                                  | 回执重印有效端态的 constraint\_responses；事后 Clean Review 兜底                 |
+| P2-5 | **rebase = 重新 delegation 的成本可能高于 MD 手工**（小改动场景）                | 协议不强制 rebase 路径——MD 手工修复是内置回退（它有唯一写权限），决策记录标 `manual` 即可                    | delta brief 机制让 re-delegation 复用原意图                                |
+| P2-6 | **basis 防伪需要 submit executor 访问实例 trace**（实现耦合点）               | 同进程内可得；跨进程部署时需随 proposal 附 trace 摘要                                         | 实现注记（Part 3）                                                       |
+| P2-7 | **单进程判死假设**（§9.3）：多进程/多 worker 部署下"重启即无存活实例"不成立                | 当前系统为单后端进程 + per-project 锁（既有架构事实）                                          | 部署形态变更时重审（心跳/租约升级路径明确）                                             |
+| P2-8 | **V1 delegation 串行执行**，多段 redesign 不真并发                        | 每实例是分钟级 LLM 会话，串行 = 简单且可观测；并发执行的正确性基础（per-scene basis 隔离 + 串行 commit）本协议已铺好 | 后续版本放开执行并发不需协议变更                                                   |
+| P2-9 | **非提案类全局决策（MD 会话中的即兴判断）仍随 Re-grounding 丢失**                    | 自由格式记忆工具会复制 F2 机制（§8.1 论证）；锚定式入库只覆盖 delegation 决策                           | 已知边界；E3 修复的是"有工件的决策"，无工件的判断接受会话态                                   |
 
----
+***
 
 ## 13. 实现映射（给 Part 3 的定位，本轮不实现）
 
-| 模块 | 位置建议 | 依赖的既有物 |
-| --- | --- | --- |
-| `scene_slice_fingerprint` 等派生指纹 | `src/agents/subagent/fingerprints.py` | `_shot_token` / `_scene_token` 同码形（E5） |
-| DiffEngine | `src/agents/subagent/diff_engine.py` | `TOOL_EXECUTORS` 直接调（spike 模式）；`update_shot_relay`（0f106c6） |
-| Registry / memory / proposal store | `src/agents/subagent/registry.py` | `atomic_write_json`；work_memory 集成 |
-| `scene.delegate` / `proposal.*` 工具 | director.py 工具表（条件挂载） | `_run_tool_loop` 的 `tools_whitelist` / 长任务通道 / `create_ephemeral` |
-| 全局记忆 + reground 扩展 | `session_governance.py`（条件段） | `reground_session` seed 追加（§8.2） |
-| 测试基线 | `tests/test_subagent_*.py` | spike 13 场景 = 第一批用例的种子（S4b/S9b 在 chain:bool 下转为 schema 不可表达测试） |
+| 模块                                 | 位置建议                                  | 依赖的既有物                                                            |
+| ---------------------------------- | ------------------------------------- | ----------------------------------------------------------------- |
+| `scene_slice_fingerprint` 等派生指纹    | `src/agents/subagent/fingerprints.py` | `_shot_token` / `_scene_token` 同码形（E5）                            |
+| DiffEngine                         | `src/agents/subagent/diff_engine.py`  | `TOOL_EXECUTORS` 直接调（spike 模式）；`update_shot_relay`（0f106c6）       |
+| Registry / memory / proposal store | `src/agents/subagent/registry.py`     | `atomic_write_json`；work\_memory 集成                               |
+| `scene.delegate` / `proposal.*` 工具 | director.py 工具表（条件挂载）                 | `_run_tool_loop` 的 `tools_whitelist` / 长任务通道 / `create_ephemeral` |
+| 全局记忆 + reground 扩展                 | `session_governance.py`（条件段）          | `reground_session` seed 追加（§8.2）                                  |
+| 测试基线                               | `tests/test_subagent_*.py`            | spike 13 场景 = 第一批用例的种子（S4b/S9b 在 chain:bool 下转为 schema 不可表达测试）    |
 
 **给 Part 3 的三条新硬约束**（继承 Part 1 三条 + 本轮新增）：
 
-4. 一切 submit/commit 校验错误必须携带机器可读错误码 + 具体修复指引（bounce
+1. 一切 submit/commit 校验错误必须携带机器可读错误码 + 具体修复指引（bounce
    自愈的前提）；
-5. commit 的 receipts 必须区分"计划 op"与"已执行 op"（诚实部分报告）；
-6. 记忆/registry/proposal store 的每次写入必须原子且自带 schema version（未来
+2. commit 的 receipts 必须区分"计划 op"与"已执行 op"（诚实部分报告）；
+3. 记忆/registry/proposal store 的每次写入必须原子且自带 schema version（未来
    迁移不靠猜测）。
+
