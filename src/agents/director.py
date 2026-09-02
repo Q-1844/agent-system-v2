@@ -1687,6 +1687,15 @@ def _append_fact_summary(rt: AgentRuntime, project: str, text: str, receipts: li
 
 # ============ 主循环（镜像 Script Writer 机制：单写串行 / 真相闸门 / zero-write
 # recovery / 搜索预算 / 防失控 / 超时恢复 / 协作取消 / 流式事件）============
+class _WallClockExceeded(Exception):
+    """墙钟预算耗尽（Sub-Agent 实例用）：调用方捕获后走诚实停止路径——
+    预算耗尽不是成功，绝不假成功声明。"""
+
+    def __init__(self, budget_s: float):
+        super().__init__(f"wall clock budget {budget_s}s exceeded")
+        self.budget_s = budget_s
+
+
 async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                          messages: list, instruction: str,
                          message_id: Optional[str],
@@ -1695,14 +1704,23 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                          event_cb=None,
                          state: Optional[dict] = None,
                          cancel_event=None,
-                         tools_whitelist: Optional[set] = None) -> dict:
+                         tools_whitelist: Optional[set] = None,
+                         extra_executors: Optional[dict] = None,
+                         wall_clock_s: Optional[float] = None) -> dict:
     """原生 function-calling 循环 + 执行真实性收口（结构性，非提示词）。
 
     tools_whitelist（会话治理新增，默认 None = 行为与基线完全一致）：只读审查会话
     （Clean Review）传入读工具集——client 只被告知白名单内的工具 schema，运行时
     再拒绝白名单外的任何调用（写工具物理不可用，双保险）；此模式下写域真相闸门
     （假成功纠偏/计数夸大/收尾重读）不上膛（审查报告天然包含"建议删除：…"类措辞，
-    会被误判为假成功声明），zero-read gate 照常生效（审查者也必须真实读取）。"""
+    会被误判为假成功声明），zero-read gate 照常生效（审查者也必须真实读取）。
+
+    extra_executors（Sub-Agent 新增，默认 None = 行为不变）：本实例专属 executor
+    （如 Scene Agent 的 proposal.submit 闭包——需要实例 state 的 trace 做 basis
+    防伪）。查找顺序：extra_executors → TOOL_EXECUTORS。
+
+    wall_clock_s（Sub-Agent 新增，默认 None = 行为不变）：墙钟预算；超时抛
+    _WallClockExceeded（调用方捕获后走诚实停止路径——预算耗尽不是成功）。"""
     created = updated = deleted = moved = False
     if state is None:
         state = {}
@@ -1710,6 +1728,7 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
     offered_tools = (DIRECTOR_TOOLS if tools_whitelist is None else
                      [t for t in DIRECTOR_TOOLS
                       if t["function"]["name"] in tools_whitelist])
+    _t0 = time.monotonic()
     events: list = state.setdefault("events", [])
     receipts: list = state.setdefault("receipts", [])
     write_attempts = 0
@@ -1751,6 +1770,8 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
     for step in range(max_steps):
         if cancel_event is not None and cancel_event.is_set():
             raise _TurnStopped()
+        if wall_clock_s is not None and (time.monotonic() - _t0) > wall_clock_s:
+            raise _WallClockExceeded(wall_clock_s)
         content = None
         tool_calls = None
         try:
@@ -1938,7 +1959,8 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
             # 读域调用计数（zero-read gate 用）：无论成败，真实发起过读工具调用即可。
             if name in DIRECTOR_READ_TOOLS:
                 read_calls += 1
-            executor = TOOL_EXECUTORS.get(name)
+            executor = ((extra_executors or {}).get(name)
+                        or TOOL_EXECUTORS.get(name))
             exc_msg = None
             if read_only and name not in (tools_whitelist or set()):
                 obs = {"ok": False, "operation": name,
