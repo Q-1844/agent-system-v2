@@ -2126,6 +2126,19 @@ async def run_clean_review(rt: AgentRuntime, client, project: str, *,
                                  tools_whitelist=REVIEW_READ_TOOLS)
     report = final.get("text") or ""
     trace = final.get("trace") or []
+    # Compaction 遥测：审查会话也落一行（session 为一次性 review session，可区分）
+    try:
+        _tio = sum(len(m.get("content") or "") for m in messages
+                   if m.get("role") == "tool")
+        _tio += sum(len(((tc.get("function") or {}).get("arguments")) or "")
+                    for m in messages for tc in (m.get("tool_calls") or []))
+        session_governance.log_context_telemetry(
+            pdir, project, "director", review_session.session_id,
+            f"review_{review_session.session_id}",
+            history_chars=len(instruction), system_chars=len(messages[0]["content"]),
+            tool_io_chars=_tio)
+    except Exception:
+        pass
     # 审查会话留存（一次性：不再被任何后续 turn 复用，文件保留供审计/对照 events 流）
     store.append_message(review_session.session_id,
                          AgentMessage(role="user", content=instruction))
@@ -2234,6 +2247,10 @@ async def director_turn(rt: AgentRuntime, project: str, session_id: str,
     reasoning: list = []
     trace: list = []
     search_sources: list = []
+    # Compaction 遥测（改动四：只观察不做压缩）——本轮上下文规模度量
+    tel_history_chars = sum(len(m.get("content") or "") for m in history)
+    tel_system_chars = 0
+    tel_tool_io_chars = 0
 
     if client is None:
         assistant_text = "[chat 未配置：Agnes 推理模型不可用，无法修改分镜。请在设置中配置 API Key。]"
@@ -2247,6 +2264,7 @@ async def director_turn(rt: AgentRuntime, project: str, session_id: str,
         messages: list[dict] = [{"role": "system", "content": system}]
         messages += history
         messages.append({"role": "user", "content": content})
+        tel_system_chars = len(system)
 
         loop_state: dict = {}
         try:
@@ -2286,6 +2304,17 @@ async def director_turn(rt: AgentRuntime, project: str, session_id: str,
             trace = loop_state.get("trace", [])
             reasoning = loop_state.get("reasonings", [])
             search_sources = loop_state.get("search_sources", [])
+        # 本轮 tool I/O 规模估算：tool 消息内容 + assistant tool_calls 参数
+        finally:
+            try:
+                for m in messages:
+                    if m.get("role") == "tool" and isinstance(m.get("content"), str):
+                        tel_tool_io_chars += len(m["content"])
+                    for tc in (m.get("tool_calls") or []):
+                        tel_tool_io_chars += len(
+                            ((tc.get("function") or {}).get("arguments")) or "")
+            except Exception:
+                pass
 
     # ---- 会话治理：结构写计数 + Re-grounding / Clean Review 触发 A ----
     # Re-grounding 优先检查（与 Clean Review 共用计数源；16 = 两次 Clean Review 量级）：
@@ -2390,6 +2419,14 @@ async def director_turn(rt: AgentRuntime, project: str, session_id: str,
             "pending_delete_scenes": []}
     asst = AgentMessage(role="assistant", content=assistant_text, status=status, meta=meta)
     store.append_message(session_id, asst)
+
+    # Compaction 遥测：每 turn 落盘一行上下文规模（project/agent/session/turn_id/
+    # history_chars/system_chars/tool_io_chars/时间戳）。将来若真出现长上下文证据，
+    # compaction 的阈值与设计有真实数据可用（实验否决当前做压缩本体）。
+    session_governance.log_context_telemetry(
+        pdir, project, "director", session_id, user_msg.message_id,
+        history_chars=tel_history_chars, system_chars=tel_system_chars,
+        tool_io_chars=tel_tool_io_chars)
 
     return {"assistant_message": assistant_text,
             "created": created, "updated": updated, "deleted": deleted, "moved": moved,
