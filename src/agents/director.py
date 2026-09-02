@@ -64,6 +64,7 @@ import httpx
 
 from src.core.models import Project, Shot
 from src.core.store import ProjectStore
+from src.core.atomic import atomic_write_json
 from src.storyboard.structure_service import (
     StructureError, insert_shots_after, move_shot,
     update_shot_fields, read_shot, renumber_shot_indices,
@@ -2071,6 +2072,121 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
             "reasonings": reasonings, "search_sources": search_sources}
 
 
+# ============ Clean Review（独立干净会话的连续性审查，STRESS F1/F2 vs F4）============
+# 证据：同一 Director 定义，污染主会话审查 = 零读取全幻觉（F2），干净新会话审查 =
+# 17 次工具调用、14/14 全读、几乎全命中（F4）。→ 不发明新 Checker Agent 定义，
+# 用「现有 Director 定义 + 一次性只读会话」做审查实例。
+# 触发：A（结构写操作累计 ≥ CLEAN_REVIEW_THRESHOLD，自动）/ B（用户审查意图，必触发）。
+REVIEW_READ_TOOLS = DIRECTOR_READ_TOOLS | {"web.search"}
+
+_REVIEW_PREAMBLE = """你是本项目派出的【只读连续性审查者】——同一 Director 定义、独立干净会话。规则：
+1. 你必须用读工具（story.list / story.read / script.read / character.list / character.read / shot.list / shot.read / web.search）自主读取当前真实状态后再下结论。除了本消息附带的创作约束与项目状态头，你没有任何历史上下文；禁止凭空推断任何镜头的具体内容。
+2. 你没有写权限：任何写工具调用都会被系统拒绝。你只产出问题清单与修改建议，由用户决定是否在主会话执行修改。
+3. 重点检查：内容级重复镜头（不同 shot_id 描述几乎相同）、镜头顺序/叙事错位、角色空间一致性（某时刻谁在哪里）、道具与伏笔弧线完整性、时间线、镜头 characters 是否都在角色 canonical 名单、以及任何违反用户创作约束的地方。
+4. 报告格式：每个问题一条，注明 scene_id/shot_id、问题描述、修改建议；最后给总体结论。你引用的每个 shot_id/scene_id 都必须来自工具真实返回。"""
+
+
+def _review_instruction(trigger: str, user_request: Optional[str],
+                        brief: Optional[str], header: str) -> str:
+    parts = [_REVIEW_PREAMBLE]
+    parts.append("# 用户创作约束（原始 brief，审查时必须对照）\n"
+                 + (brief or "（本项目未记录原始 brief）"))
+    parts.append(header)
+    if trigger == "user_request":
+        parts.append("# 本次审查任务\n用户要求：" + (user_request or "")
+                     + "\n请据此执行这次审查：先 story.list + shot.list 总览，再逐段"
+                       "story.read + shot.read 细读，输出问题清单（只报告不修改）。")
+    else:
+        parts.append("# 本次审查任务\n主会话的结构修改已累计到阈值，请对全片做一次连续性"
+                     "审查：先 story.list + shot.list 总览，再逐段 story.read + "
+                     "shot.read 细读，输出问题清单（只报告不修改）。")
+    return "\n\n".join(parts)
+
+
+async def run_clean_review(rt: AgentRuntime, client, project: str, *,
+                           trigger: str, user_request: Optional[str] = None,
+                           event_cb=None, cancel_event=None) -> dict:
+    """执行一次 Clean Review：一次性只读审查会话（不复用、用完即弃——复用会让
+    review session 自己积累 staleness）。Reviewer = 现有 Director agent 定义，
+    只读模式（client 只见读工具 schema + 运行时拒绝写调用）；上下文注入两样：
+    ① 让它用读工具自主读 canonical（F4 证明它能读好）；② 用户原始 brief/关键约束。
+    只报告不修改；报告落盘 output/agents/reviews/。"""
+    store = rt._session_store(project)
+    pdir = rt._resolve_project_dir(project)
+    review_session = session_governance.create_review_session(store, project)
+    proj = ProjectStore(pdir).load()
+    instruction = _review_instruction(
+        trigger, user_request,
+        session_governance.get_brief(pdir, project),
+        session_governance.build_state_header(pdir, project))
+    messages: list[dict] = [{"role": "system", "content": _build_system(proj)},
+                            {"role": "user", "content": instruction}]
+    final = await _run_tool_loop(rt, client, project, messages, instruction, None,
+                                 event_cb=event_cb, cancel_event=cancel_event,
+                                 tools_whitelist=REVIEW_READ_TOOLS)
+    report = final.get("text") or ""
+    trace = final.get("trace") or []
+    # 审查会话留存（一次性：不再被任何后续 turn 复用，文件保留供审计/对照 events 流）
+    store.append_message(review_session.session_id,
+                         AgentMessage(role="user", content=instruction))
+    store.append_message(review_session.session_id,
+                         AgentMessage(role="assistant", content=report,
+                                      meta={"trigger": trigger,
+                                            "tool_calls": len(trace),
+                                            "trace": trace}))
+    # 报告落盘（带触发原因与时间）
+    reviews_dir = pdir / "output" / "agents" / "reviews"
+    reviews_dir.mkdir(parents=True, exist_ok=True)
+    report_id = f"review_{int(time.time() * 1000)}"
+    report_path = reviews_dir / f"{report_id}.json"
+    atomic_write_json(report_path, {
+        "report_id": report_id, "project": project, "trigger": trigger,
+        "user_request": user_request, "review_session_id": review_session.session_id,
+        "tool_calls": len(trace), "trace": trace, "report": report,
+        "created_at": time.time(),
+    })
+    return {"report": report, "report_path": str(report_path),
+            "tool_calls": len(trace), "trace": trace,
+            "review_session_id": review_session.session_id, "trigger": trigger}
+
+
+async def _continuity_review_turn(rt, store, project: str, session_id: str,
+                                  user_msg, content: str, client, *,
+                                  event_cb=None, cancel_event=None) -> dict:
+    """Clean Review 触发 B（用户主动）的 turn 路径：不在（可能已 staleness 污染的）
+    主会话里跑审查，直接派发独立只读审查会话，报告作为本轮回复返回主会话/用户。"""
+    review = await run_clean_review(rt, client, project, trigger="user_request",
+                                    user_request=content, event_cb=event_cb,
+                                    cancel_event=cancel_event)
+    # 用户刚拿到一次审查 → 结构计数自本次审查起重新累计
+    try:
+        session_governance.GovernanceStore(
+            rt._resolve_project_dir(project), project).reset_since_review()
+    except Exception:
+        pass
+    assistant_text = (f"【连续性审查报告】（由独立只读审查会话完成，"
+                      f"{review['tool_calls']} 次真实工具读取；只报告不修改，"
+                      f"是否修改由你决定）\n\n{review['report']}")
+    events = [{"kind": "continuity_review", "trigger": "user_request",
+               "report_path": review["report_path"],
+               "review_session_id": review["review_session_id"],
+               "tool_calls": review["tool_calls"],
+               "summary": "独立会话连续性审查完成"}]
+    meta = {"intent": "continuity_review", "events": events, "evidence_refs": [],
+            "receipts": [], "write_attempts": 0, "write_success": 0,
+            "trace": [], "reasonings": [], "search_sources": [],
+            "generated_assets": [], "pending_delete_scenes": []}
+    asst = AgentMessage(role="assistant", content=assistant_text, meta=meta)
+    store.append_message(session_id, asst)
+    return {"assistant_message": assistant_text,
+            "created": False, "updated": False, "deleted": False, "moved": False,
+            "events": events, "message": asst.to_dict(),
+            "intent": "continuity_review", "receipts": [], "trace": [],
+            "search_sources": [], "evidence_refs": [], "linked_task_ids": [],
+            "linked_change_session_id": None, "session_id": session_id,
+            "agent_id": "director"}
+
+
 # ============ 主 turn ============
 async def director_turn(rt: AgentRuntime, project: str, session_id: str,
                         content: str, *, thinking: bool = False,
@@ -2096,11 +2212,20 @@ async def director_turn(rt: AgentRuntime, project: str, session_id: str,
     session = store.load(session_id)
 
     pdir = rt._resolve_project_dir(project)
+    # 会话治理：best-effort 捕获用户创作约束（项目首个 ≥10 字符用户消息 → brief，
+    # 供 Clean Review / Re-grounding 注入；正常创作流里这就是交给 SW 的故事 brief）
+    session_governance.capture_brief_if_absent(pdir, project, content, "director")
     history = [{"role": m.role, "content": m.content}
                for m in session.messages[:-1]
                if m.role in ("user", "assistant") and m.content and m.status is None]
 
     client = rt._resolve_client_or_none(agent_id="director")
+    # Clean Review 触发 B（用户主动，必触发）：审查意图 → 独立只读审查会话执行，
+    # 不在（可能已 staleness 污染的）主会话里跑审查（STRESS F1/F2 vs F4）。
+    if client is not None and session_governance.is_review_request(content):
+        return await _continuity_review_turn(
+            rt, store, project, session_id, user_msg, content, client,
+            event_cb=event_cb, cancel_event=cancel_event)
     assistant_text: str
     status: Optional[str] = None
     created = updated = deleted = moved = False
@@ -2161,6 +2286,33 @@ async def director_turn(rt: AgentRuntime, project: str, session_id: str,
             trace = loop_state.get("trace", [])
             reasoning = loop_state.get("reasonings", [])
             search_sources = loop_state.get("search_sources", [])
+
+    # ---- 会话治理：结构写计数 + Clean Review 触发 A（累计 ≥ 阈值，自动审查）----
+    review_result = None
+    if client is not None:
+        try:
+            gov = session_governance.GovernanceStore(pdir, project)
+            gov.record_structural_writes(receipts)
+            if (status is None
+                    and gov.snapshot()["structural_since_review"]
+                    >= session_governance.CLEAN_REVIEW_THRESHOLD):
+                review_result = await run_clean_review(
+                    rt, client, project, trigger="structural_threshold")
+                gov.reset_since_review()
+        except Exception:
+            log.exception("clean review 后处理失败（project=%s）", project)
+    if review_result is not None:
+        assistant_text += (
+            f"\n\n---\n【自动连续性审查】（本会话结构修改累计 "
+            f"≥{session_governance.CLEAN_REVIEW_THRESHOLD} 次触发；由独立只读审查会话"
+            f"完成，{review_result['tool_calls']} 次真实工具读取；只报告不修改，完整"
+            f"报告已存 {review_result['report_path']}）\n\n" + review_result["report"])
+        events.append({"kind": "continuity_review",
+                       "trigger": "structural_threshold",
+                       "report_path": review_result["report_path"],
+                       "review_session_id": review_result["review_session_id"],
+                       "tool_calls": review_result["tool_calls"],
+                       "summary": "结构修改累计触发的独立会话连续性审查"})
 
     if created:
         intent = "shot_create"

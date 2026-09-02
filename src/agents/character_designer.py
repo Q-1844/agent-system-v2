@@ -1479,6 +1479,9 @@ async def character_designer_turn(rt: AgentRuntime, project: str, session_id: st
     session = store.load(session_id)
 
     pdir = rt._resolve_project_dir(project)
+    # 会话治理（best-effort，不影响主流程）：项目首个 ≥10 字符用户消息 → 创作 brief。
+    from .session_governance import capture_brief_if_absent
+    capture_brief_if_absent(pdir, project, content, "character_designer")
     history = [{"role": m.role, "content": m.content}
                for m in session.messages[:-1]
                if m.role in ("user", "assistant") and m.content and m.status is None]
