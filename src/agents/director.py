@@ -198,17 +198,25 @@ def _shots_content_token(scenes) -> str:
 
 
 # ============ system ============
+# Sub-Agent 工具挂载时（subagent_enabled，tools.mount_subagent_tools）注入的
+# 系统提示追加段；未挂载 = None → _build_system 输出与基线逐字节一致。
+_SUBAGENT_SYSTEM_SUFFIX = None
+
+
 def _build_system(proj) -> str:
     """精简 system：只放职责、权限、工具说明、项目元信息（名称/段数/镜头数）。
     不注入完整 story_text / scenes / shots 列表——Agent 需要时用读工具按需取。"""
     n_shots = sum(len(sc.shots or []) for sc in (proj.scenes or []))
-    return DIRECTOR_SYSTEM.format(
+    base = DIRECTOR_SYSTEM.format(
         project_name=proj.name or "（未命名）",
         scenes_count=len(proj.scenes or []),
         shots_count=n_shots,
         max_create_batch=MAX_CREATE_BATCH,
         max_update_batch=MAX_UPDATE_BATCH,
     )
+    if _SUBAGENT_SYSTEM_SUFFIX:
+        base += "\n\n" + _SUBAGENT_SYSTEM_SUFFIX
+    return base
 
 
 DIRECTOR_SYSTEM = """你是 AGNES 的 Director（导演/分镜设计者），负责项目的【分镜模块】——把每个故事段的剧情转换成可用于动画制作的镜头（Shot）结构，并持续创建、修改、删除、排序这些镜头，维护镜头的拍摄方案（景别/机位/运镜/构图/光线/动作/节奏）。
@@ -2080,6 +2088,22 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                     moved = True
                     s = f"移动镜头 {sid} 到第 {obs.get('order')} 位"
                     events.append({"kind": "shot_move", "shot_id": sid, "summary": s})
+                elif name == "proposal.commit":
+                    # Sub-Agent 提案提交（挂载后才可达；未挂载时本分支不可达，
+                    # 行为不变）。旗标从 DiffEngine 汇总布尔取得（intent 判定用）。
+                    created = created or bool(obs.get("created"))
+                    updated = updated or bool(obs.get("updated"))
+                    deleted = deleted or bool(obs.get("deleted"))
+                    moved = moved or bool(obs.get("moved"))
+                    events.append({
+                        "kind": "proposal_commit",
+                        "proposal_id": obs.get("proposal_id"),
+                        "scene_id": obs.get("scene_id"),
+                        "summary": (f"通过提案改写 {obs.get('scene_id')}"
+                                    f"（{obs.get('n_created', 0)} 新建 / "
+                                    f"{obs.get('n_deleted', 0)} 删除 / "
+                                    f"{obs.get('n_moved', 0)} 移动 / "
+                                    f"{obs.get('n_updated', 0)} 更新）")})
                 elif name == "shot.generate_images":
                     done = [x for x in (obs.get("results") or []) if x.get("ok")]
                     s = _op_human(obs)
@@ -2309,6 +2333,18 @@ async def director_turn(rt: AgentRuntime, project: str, session_id: str,
         assistant_text = "[chat 未配置：Agnes 推理模型不可用，无法修改分镜。请在设置中配置 API Key。]"
         status = ResultStatus.NOT_CONFIGURED.value
     else:
+        # Sub-Agent 工具挂载（bit-for-bit 门控）：settings 顶层键 subagent_enabled
+        # 默认 false → 不挂载 → 工具列表/TOOL_EXECUTORS/写集合/系统提示逐字节不变。
+        # 挂载幂等；每 turn 重置 delegation 预算（§2.1 本 turn <3）。
+        try:
+            from src.agents.subagent.tools import (
+                is_subagent_enabled, mount_subagent_tools)
+            from src.agents.subagent import registry as _sa_reg
+            if is_subagent_enabled(rt):
+                mount_subagent_tools()
+                _sa_reg.reset_turn_budget()
+        except Exception:
+            log.exception("subagent 工具挂载检查失败（按未启用处理）")
         proj = ProjectStore(pdir).load()
         system = _build_system(proj)
         mem = rt._memory_supplement(project, "director")
