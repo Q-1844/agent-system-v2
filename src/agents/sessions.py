@@ -92,6 +92,21 @@ class AgentSessionStore:
         self._save(s)
         return s
 
+    def create_ephemeral(self, agent_id: str, scope_type: str, scope_id: str) -> AgentSession:
+        """一次性会话（会话治理：Clean Review 审查实例等）：每次调用必新建、不复用、
+        用完即弃。scope_type 用调用方给的专用值（如 "review"），不进入
+        get_or_create / get_or_create_conversation 的复用键，不影响长存会话语义。"""
+        sid = _new_id("sess")
+        s = AgentSession(session_id=sid, project=self.project_name, agent_id=agent_id,
+                         scope_type=scope_type, scope_id=scope_id or self.project_name)
+        self._save(s)
+        return s
+
+    def save(self, s: AgentSession) -> None:
+        """公开保存入口（会话治理 re-grounding 需要整体重写 messages，append_message
+        做不到）。语义与 _save 相同。"""
+        self._save(s)
+
     @staticmethod
     def _backfill_message_ids(s: AgentSession, agent_id: str, conv_id: str) -> None:
         """旧持久化消息没有 message_id/conversation_id/agent_id；原地补齐（保留 meta）。"""
