@@ -2431,12 +2431,30 @@ async def director_turn(rt: AgentRuntime, project: str, session_id: str,
     # Re-grounding 优先检查（与 Clean Review 共用计数源；16 = 两次 Clean Review 量级）：
     # 主会话 staleness 密度已达实测致幻觉水平且用户还要继续在主会话干活 → 重开校准
     # 会话（同 session_id、历史归档、状态头重新注入），计数器清零。
+    # Sub-Agent 计数口径（勿双计）：DiffEngine 子操作不经 tool-loop 账本——
+    # proposal.commit 的 receipt 内嵌 executed_ops；扁平化提取（本轮 receipts +
+    # 内嵌 executed_ops）后计入既有项目级双计数器（只数成功非幂等 create/delete/
+    # move，恰好一次——"proposal.commit" 本身不在 STRUCTURAL_WRITE_OPS）。Clean
+    # Review 联动自动成立：commit 计入 structural_since_review → ≥8 触发既有审查。
     review_result = None
     reground_notice = None
     if client is not None:
         try:
+            _flat_receipts = list(receipts)
+            for _r in receipts:
+                _flat_receipts.extend(_r.get("executed_ops") or [])
             gov = session_governance.GovernanceStore(pdir, project)
-            gov.record_structural_writes(receipts)
+            gov.record_structural_writes(_flat_receipts)
+            # registry：per-scene structural_since_delegation 聚合 + turn 收尾
+            # sweep（惰性检测节点③：retire / 孤儿清算；确定性，零 LLM）
+            try:
+                from src.agents.subagent import registry as _sa_registry
+                _sa_store = _sa_registry.SubagentStore(pdir, project)
+                _sa_store.add_structural_writes(_flat_receipts)
+                _proj_now = ProjectStore(pdir).load()
+                _sa_store.sweep([s.scene_id for s in _proj_now.scenes])
+            except Exception:
+                pass   # registry 无活动时目录不存在等——零副作用，静默
             snap = gov.snapshot()
             if (status is None
                     and snap["structural_since_reground"]
@@ -2509,6 +2527,9 @@ async def director_turn(rt: AgentRuntime, project: str, session_id: str,
             "elapsed_s": r.get("elapsed_s"),
             "cancelled": r.get("cancelled"),
             "timed_out": r.get("timed_out"),
+            # Sub-Agent：DiffEngine 内嵌子操作回执（治理扁平化 / 审计）
+            "executed_ops": r.get("executed_ops"),
+            "proposal_id": r.get("proposal_id"),
         })
         if r.get("operation") in SHOT_GENERATE_TOOL_NAMES and r.get("ok"):
             for item in (r.get("results") or []):

@@ -459,7 +459,8 @@ def _execute_proposal_commit(rt: AgentRuntime, project: str, arguments: str,
         store.update_scene_record(
             scene_id,
             accepted_proposals=int(rec.get("accepted_proposals", 0)) + 1)
-        store.add_structural_writes(receipt.get("executed_ops") or [])
+        # 注意：structural_since_delegation 不在此累加——turn 收尾的扁平化
+        # 提取（receipts + executed_ops）是唯一计费点，此处再加会双计。
     except Exception:
         log.exception("registry 计数更新失败（不阻断 commit）")
     return receipt

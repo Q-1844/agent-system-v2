@@ -327,6 +327,16 @@ def reground_session(store, session_id: str, project_dir, project_name: str,
     brief = get_brief(project_dir, project_name)
     if brief:
         seed.append("# 用户创作约束（原始 brief，创作与修改时必须遵守）\n" + brief)
+    # Sub-Agent 全局决策记忆（Errata E3）：MD 的全局创作决策 rationale 在
+    # Re-grounding 后不再丢失。条件追加——global_memory 为空时不产生任何字节
+    # （seed 与现行逐字节一致，bit-for-bit 保护）。best-effort：读取失败静默跳过。
+    try:
+        from src.agents.subagent.registry import SubagentStore
+        _gm = SubagentStore(project_dir, project_name).render_global_memory_for_injection()
+        if _gm:
+            seed.append(_gm)
+    except Exception:
+        pass
     if last_user_intent:
         seed.append(f"# 最近一轮用户意图\n{last_user_intent.strip()[:200]}")
     s.messages = [AgentMessage(role="user", content="\n\n".join(seed))]
