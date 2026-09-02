@@ -268,7 +268,8 @@ class SubagentStore:
 
     def add_structural_writes(self, receipts: Sequence[dict]) -> None:
         """按回执 scene_id 聚合累计 structural_since_delegation（turn 收尾 /
-        commit 后调用；只计成功非幂等结构写）。"""
+        commit 后调用；只计成功非幂等结构写）。只在确实更新了已有 scene 记录时
+        落盘——无 subagent 活动（从未 spawn）的项目零痕迹（不创建目录）。"""
         per_scene: Dict[str, int] = {}
         for r in receipts or []:
             if not (r.get("ok") and r.get("verified") and not r.get("unchanged")):
@@ -281,12 +282,15 @@ class SubagentStore:
         if not per_scene:
             return
         data = self._load_registry()
+        updated = False
         for sid, n in per_scene.items():
             rec = data["scenes"].get(sid)
             if rec is not None:
                 rec["structural_since_delegation"] = \
                     int(rec.get("structural_since_delegation", 0)) + n
-        self._save_registry(data)
+                updated = True
+        if updated:
+            self._save_registry(data)
 
     def pressure_ready(self, scene_id: str) -> bool:
         rec = self.scene_record(scene_id)
