@@ -101,6 +101,8 @@ from .script_writer import (
 )
 # —— Character Designer 只读执行器（角色参考资料）——
 from .character_designer import _execute_character_list, _execute_character_read
+# —— 会话治理共享原语（zero-read gate 检测 / ID 勘误 / Clean Review / Re-grounding）——
+from . import session_governance
 
 log = logging.getLogger("agents.director")
 
@@ -1519,6 +1521,53 @@ _ZERO_WRITE_RECOVERY_NUDGE = (
     "目标不存在等），就明确告诉用户原因，【不要】在没有工具真实返回的情况下声称已经修改完成。")
 
 
+# zero-read recovery（读域真相闸门，STRESS F2 的直接拦截点；zero-write 的读域镜像）：
+# 本 turn 零次读工具调用 + 回复引用具体 shot_id 细节 / 声称"已核对/逐镜精读" → 注入
+# 一次 nudge（turn-local、只一次、不循环）。纯探讨轮（不引用镜头、不声称核对）不拦。
+_ZERO_READ_RECOVERY_NUDGE = (
+    "【系统提示】你上面的回复引用了具体镜头内容，或声称已核对/逐镜精读/以工具返回为准，"
+    "但本轮【零次读工具调用】——用历史会话记忆冒充读取是不允许的：多轮修改后记忆里的"
+    "镜头可能已被删除或修改。请立即：①真正调用只读工具（shot.list / shot.read / "
+    "story.list / story.read / script.read / character.list / character.read）读取相关"
+    "镜头/故事段的【当前真实内容】；②只依据工具真实返回重新作答。如果你不打算读取，"
+    "就不要声称已核对、也不要引用具体镜头细节。系统会校验回复中引用的 shot_id/scene_id "
+    "是否真实存在，不存在的会被附加勘误标注。")
+
+
+def _deleted_ids_this_turn(receipts: list) -> set:
+    """本轮真实删除的镜头 ID（含级联下游）——"已删除 s05_c03" 是合法陈述，
+    ID 勘误时豁免。"""
+    out: set = set()
+    for r in receipts or []:
+        if (r.get("ok") and r.get("verified")
+                and r.get("operation") == "shot.delete"):
+            d = r.get("deleted") or {}
+            out.update(d.get("shots") or [])
+            if r.get("shot_id"):
+                out.add(r["shot_id"])
+    return out
+
+
+def _append_id_errata(rt: AgentRuntime, project: str, text: str, receipts: list) -> str:
+    """ID 存在性校验（防敷衍）：最终回复中出现的全部 shot_id/scene_id 逐一校验是否
+    存在于当前 canonical；引用不存在的 ID → 附加系统勘误块（确定性，不静默、不改写
+    模型原文）。纯追加，任何异常不影响主流程。"""
+    try:
+        if not text or not session_governance._HAS_ANY_ID_RE.search(text):
+            return text
+        proj = _reload(rt, project)
+        scene_ids = {sc.scene_id for sc in (proj.scenes or [])}
+        shot_ids = {sh.shot_id for sc in (proj.scenes or [])
+                    for sh in (sc.shots or [])}
+        block = session_governance.validate_cited_ids(
+            text, scene_ids, shot_ids, exempt=_deleted_ids_this_turn(receipts))
+        if block:
+            return text + block
+    except Exception:
+        pass
+    return text
+
+
 def _refresh_system(messages: list, rt: AgentRuntime, project: str) -> None:
     """每轮工具调用后无条件刷新 system（项目元信息/计数）。"""
     try:
@@ -1583,16 +1632,29 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                          thinking: bool = False,
                          event_cb=None,
                          state: Optional[dict] = None,
-                         cancel_event=None) -> dict:
-    """原生 function-calling 循环 + 执行真实性收口（结构性，非提示词）。"""
+                         cancel_event=None,
+                         tools_whitelist: Optional[set] = None) -> dict:
+    """原生 function-calling 循环 + 执行真实性收口（结构性，非提示词）。
+
+    tools_whitelist（会话治理新增，默认 None = 行为与基线完全一致）：只读审查会话
+    （Clean Review）传入读工具集——client 只被告知白名单内的工具 schema，运行时
+    再拒绝白名单外的任何调用（写工具物理不可用，双保险）；此模式下写域真相闸门
+    （假成功纠偏/计数夸大/收尾重读）不上膛（审查报告天然包含"建议删除：…"类措辞，
+    会被误判为假成功声明），zero-read gate 照常生效（审查者也必须真实读取）。"""
     created = updated = deleted = moved = False
     if state is None:
         state = {}
+    read_only = tools_whitelist is not None
+    offered_tools = (DIRECTOR_TOOLS if tools_whitelist is None else
+                     [t for t in DIRECTOR_TOOLS
+                      if t["function"]["name"] in tools_whitelist])
     events: list = state.setdefault("events", [])
     receipts: list = state.setdefault("receipts", [])
     write_attempts = 0
     corrective_round = 0
     zero_write_recovery_used = False
+    zero_read_recovery_used = False
+    read_calls = 0
     trace: list = state.setdefault("trace", [])
     reasonings: list = state.setdefault("reasonings", [])
     last_read_after_write = -1
@@ -1637,7 +1699,7 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                 step_content_buf: list[str] = []
                 async for ev in client.chat_completion_stream(
                         messages, temperature=0.7, max_tokens=65536,
-                        thinking=thinking, tools=DIRECTOR_TOOLS,
+                        thinking=thinking, tools=offered_tools,
                         tool_choice="auto"):
                     k = ev["kind"]
                     if k == "content_delta":
@@ -1669,7 +1731,7 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
             else:
                 resp = await client.chat_completion(
                     messages, temperature=0.7, max_tokens=65536,
-                    tools=DIRECTOR_TOOLS, tool_choice="auto")
+                    tools=offered_tools, tool_choice="auto")
                 tool_calls = resp.get("tool_calls")
                 content = resp.get("content")
         except httpx.ReadTimeout:
@@ -1706,6 +1768,7 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                                 and last_read_after_write < last_write_step)
             if (not zero_write_recovery_used
                     and write_attempts == 0 and not real_changes
+                    and not read_only
                     and _is_director_write_request(instruction)):
                 zero_write_recovery_used = True
                 log.info("director zero-write recovery 触发（project=%s）", project)
@@ -1713,7 +1776,9 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                 messages.append({"role": "user", "content": _ZERO_WRITE_RECOVERY_NUDGE})
                 _refresh_system(messages, rt, project)
                 continue
-            if false_claim or over_claim_n is not None or needs_final_read or search_false_claim:
+            if (not read_only
+                    and (false_claim or over_claim_n is not None
+                         or needs_final_read or search_false_claim)):
                 if corrective_round < MAX_CORRECTIVE_ROUNDS:
                     corrective_round += 1
                     messages.append({"role": "assistant", "content": text or ""})
@@ -1751,7 +1816,23 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                     _refresh_system(messages, rt, project)
                     continue
                 text = _honest_fallback(receipts)
+            # ---- zero-read gate（读域真相闸门，F2 类幻觉的直接拦截点）----
+            # 零次读工具调用 + 回复引用 ≥2 个 shot_id 或声称已核对/逐镜精读 → 注入
+            # 一次 recovery nudge（turn-local、只一次、不循环）。只读审查模式同样生效。
+            # 放在写域假成功纠偏【之后】：同时命中两者时先走既有写域纠偏（保持基线
+            # 行为不变），纠偏覆写后的兜底文本不会再命中本闸门。
+            if (not zero_read_recovery_used and read_calls == 0
+                    and not real_changes
+                    and session_governance.is_read_required_reply(text)):
+                zero_read_recovery_used = True
+                log.info("director zero-read recovery 触发（project=%s）", project)
+                messages.append({"role": "assistant", "content": text or ""})
+                messages.append({"role": "user", "content": _ZERO_READ_RECOVERY_NUDGE})
+                _refresh_system(messages, rt, project)
+                continue
             text = strip_reserved_fact_blocks(text)
+            # ID 存在性校验（防敷衍）：引用不存在的 shot_id/scene_id → 附加系统勘误块
+            text = _append_id_errata(rt, project, text, receipts)
             text = _append_fact_summary(rt, project, text, receipts)
             return {"text": text or "已完成。",
                     "created": created, "updated": updated, "deleted": deleted,
@@ -1792,9 +1873,16 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                               "summary": "本步写工具串行，已跳过"})
                 continue
 
+            # 读域调用计数（zero-read gate 用）：无论成败，真实发起过读工具调用即可。
+            if name in DIRECTOR_READ_TOOLS:
+                read_calls += 1
             executor = TOOL_EXECUTORS.get(name)
             exc_msg = None
-            if (executor is not None and name == "web.search"
+            if read_only and name not in (tools_whitelist or set()):
+                obs = {"ok": False, "operation": name,
+                       "error": ("本会话为只读审查会话，禁止调用写工具（任何修改都不会被执行）。"
+                                 "请只用只读工具读取并核对，产出问题清单与修改建议。")}
+            elif (executor is not None and name == "web.search"
                     and search_count >= MAX_WEB_SEARCH):
                 obs = {"ok": False, "operation": "web.search",
                        "code": "search_budget_exhausted",
