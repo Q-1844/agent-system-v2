@@ -358,6 +358,9 @@ _SHOT_WRITABLE_FIELDS = (
 _FIRST_FRAME_FIELDS = frozenset({
     "description", "characters", "shot_size", "camera_angle", "lighting",
     "composition", "important_details", "required_elements", "opening_state",
+    # 接力来源决定开场画面从哪来（inherit 用来源末帧，detach 后回退本镜生成），
+    # 改锚/解除同样让旧的首帧 prompt 不再代表新语义。
+    "source_shot_id",
 })
 _LAST_FRAME_FIELDS = frozenset({
     "motion", "frame_change", "last_frame_description", "end_state",
@@ -401,6 +404,59 @@ def _invalidate_stale_prompts(shot, changed: list[str]) -> dict:
             setattr(shot, sig_attr, "")
             actions[label] = "cleared"
     return actions
+
+
+def update_shot_relay(project: Project, shot_id: str, source_shot_id) -> dict:
+    """设置/解除镜头的接力来源（source_shot_id）。只改内存，调用方负责 save。
+
+    接力是结构关系字段（谁的末帧是我的开场），不属于内容字段白名单
+    （update_shot_fields），单独走本函数并做完整结构校验：
+      - source_shot_id 为 None/空 → 解除接力（同时清 source_version；opening_source
+        保留——生成侧以「opening_source==inherit 且 source_shot_id 非空」双条件分支，
+        悬空 opening_source 无害，与 delete_service 幸存镜头的处理同口径）；
+      - 设置时校验：来源存在、同段（接力按构造只在段内）、非自身、沿链无环、
+        且该镜头当前紧跟来源之后（接力语义 = 上一镜的末帧；不相邻先 move——
+        与 insert_shots_after 的接力约束同一口径）。
+    返回 {shot_id, source_shot_id, changed}。校验失败抛 StructureError。"""
+    shot = project.get_shot(shot_id)
+    if shot is None:
+        raise StructureError("not_found", f"镜头 {shot_id} 不存在")
+    src = str(source_shot_id).strip() if source_shot_id else ""
+    if not src:
+        if shot.source_shot_id:
+            shot.source_shot_id = None
+            shot.source_version = None
+            return {"shot_id": shot_id, "source_shot_id": None, "changed": True}
+        return {"shot_id": shot_id, "source_shot_id": None, "changed": False}
+    if src == shot_id:
+        raise StructureError("invalid", "接力来源不能是镜头自身")
+    src_shot = project.get_shot(src)
+    if src_shot is None:
+        raise StructureError("not_found", f"接力来源镜头不存在: {src}")
+    if src_shot.scene_id != shot.scene_id:
+        raise StructureError(
+            "invalid", f"接力来源 {src} 不在同一故事段（接力按构造只在段内）")
+    # 环检测：从来源沿链上溯，回到自身即成环
+    seen = {shot_id}
+    cur = src_shot
+    while cur is not None and cur.source_shot_id:
+        if cur.source_shot_id in seen:
+            raise StructureError("invalid", "接力来源成环（A接力B、B又接力A）")
+        seen.add(cur.source_shot_id)
+        cur = project.get_shot(cur.source_shot_id)
+    # 相邻性：接力镜头必须紧跟来源之后（insert 的接力约束同口径；diff/调用方先 move）
+    scene = next((s for s in project.scenes if s.scene_id == shot.scene_id), None)
+    ids = [sh.shot_id for sh in (scene.shots if scene else [])]
+    if ids.index(src) + 1 != ids.index(shot_id):
+        raise StructureError(
+            "invalid",
+            f"接力镜头必须紧跟来源 {src} 之后（当前不相邻）——请先用 shot.move 把"
+            f" {shot_id} 移到 {src} 之后，再设置接力来源")
+    changed = shot.source_shot_id != src
+    if changed:
+        shot.source_shot_id = src
+        shot.source_version = None   # 换锚后旧版本引用失效
+    return {"shot_id": shot_id, "source_shot_id": src, "changed": changed}
 
 
 def update_shot_fields(project: Project, shot_id: str, fields: Optional[dict] = None,

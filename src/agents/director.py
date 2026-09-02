@@ -67,7 +67,8 @@ from src.core.store import ProjectStore
 from src.core.atomic import atomic_write_json
 from src.storyboard.structure_service import (
     StructureError, insert_shots_after, move_shot,
-    update_shot_fields, read_shot, renumber_shot_indices,
+    update_shot_fields, update_shot_relay, read_shot, renumber_shot_indices,
+    _invalidate_stale_prompts,
 )
 
 from .models import AgentMessage, ResultStatus
@@ -148,7 +149,11 @@ def _shots_token(scenes) -> str:
 
 
 # shot.update 允许修改的镜头【创作内容】字段（与 structure_service 白名单一致；
-# 明确排除：shot_id/scene_id（身份）、index（顺序由结构操作决定）、产物/批次/接力/状态字段）。
+# 明确排除：shot_id/scene_id（身份）、index（顺序由结构操作决定）、产物/批次/状态字段）。
+# source_shot_id（接力来源）是结构关系字段：进本白名单是为了让内容指纹
+# （_shot_token/_shots_content_token）覆盖接力变更（OCC 保护），但它的写入不走
+# update_shot_fields（内容白名单不含它），由各执行器显式调 update_shot_relay
+# （存在/同段/无环/相邻校验）。创建时不可指定（新镜 id 未知，先建后锚）。
 SHOT_UPDATABLE_FIELDS = (
     "description", "characters", "target_duration_s", "dialogue",
     "shot_size", "camera", "camera_angle", "camera_movement",
@@ -160,6 +165,7 @@ SHOT_UPDATABLE_FIELDS = (
     "preserve_elements", "preserve_custom", "transition_description",
     "video_preserve_elements", "video_preserve_custom",
     "note",
+    "source_shot_id",
 )
 _LIST_FIELDS = ("characters", "required_elements", "preserve_elements",
                 "video_preserve_elements")
@@ -229,7 +235,7 @@ DIRECTOR_SYSTEM = """你是 AGNES 的 Director（导演/分镜设计者），负
 【写（必须一个一个来，每次用返回的最新指纹）】
 - shot.create(scene_id, description, …, after_shot_id?, expected_shots_revision)：给故事段补 1 个镜头（after_shot_id 省略则追加段尾）。只补 1 镜时用本工具。
 - shot.create_many(scene_id, shots[], after_shot_id?, expected_shots_revision)：一次创建一组镜头（≥2 镜；只补 1 镜用 shot.create）。【给一个故事段从无到有设计整组分镜，用本工具一次提交】；shots 数组顺序即镜头顺序。整批一次校验+一次原子写入，任一非法整批不写。
-- shot.update(shot_id, expected_revision, …)：精准修改一个镜头的任意拍摄字段（只传要改的）。用户说「第3镜改成近景」这类单镜要求时用本工具，不要重建整组。
+- shot.update(shot_id, expected_revision, …)：精准修改一个镜头的任意拍摄字段（只传要改的）。用户说「第3镜改成近景」这类单镜要求时用本工具，不要重建整组。改锚/解除接力也用它：传 source_shot_id=新来源（须先 move 到来源之后）或 null 解除。
 - shot.update_many(updates[], expected_revision)：一次修改 ≥{max_update_batch_prev} 个互相独立的镜头（「这组镜头整体重新设计得更有张力」）。每项 shot_id + 要改的字段；同镜多字段合并到一项。整批一次校验+一次原子写入。
 - shot.delete(shot_id)：删除一个镜头（系统会级联删除接力依赖它的下游镜头，并保留已生成文件）。用户明确要求删除时直接调用。
 - shot.move(shot_id, before_shot_id?/after_shot_id?, expected_shots_revision)：把一个镜头在同段内移到某镜之前/之后（都省略则移到段尾）。镜头顺序是状态依赖操作：多个移动必须一步一步来，每步用最新指纹，不要试图一次重排整组。
@@ -295,7 +301,7 @@ DIRECTOR_SYSTEM = """你是 AGNES 的 Director（导演/分镜设计者），负
 - 多镜重排：多次 shot.move，每次移动一个、用最新指纹，每步看结果再继续。
 - 【整体重设优先保留 shot_id】（重要）：用户说「重新设计这组镜头」「这组太平了，重做一下」「整体调整得更有张力」这类【不改变镜头结构】的重设请求时，默认用 shot.update_many 在原 shot_id 上改写拍摄方案——保留镜头身份、顺序和已生成的分镜图/视频资产。只有当你的导演判断结构确实需要变化（要增加镜头、删减镜头、镜头数量/叙事结构明显改变）才用 shot.create / shot.create_many / shot.delete。禁止用「全部删除再全部重建」来实现普通重设——已有图片/视频资产的镜头被删掉会让用户白白损失生成成果。
 - 推倒重做（用户明确说推倒重来/重做整组结构）：才先 shot.delete 删掉旧镜（或逐个删），再一次 shot.create_many 创建新组。
-- 有接力关系的两个镜头（source_shot_id）之间不能插入新镜头——系统会拒绝并说明；可在接力链末端之后插入。
+- 有接力关系的两个镜头（source_shot_id）之间不能插入新镜头——系统会拒绝并说明；可在接力链末端之后插入。要删除接力链中间的镜头但保留下游：先用 shot.update 把下游的 source_shot_id 改锚到更早的镜头（或传 null 解除），再删除——直接删会级联删掉全部下游。
 - 用户说的「第N镜」指某段内 index=N 的镜头（或全局唯一时该镜头）；先 shot.list 确认 shot_id 再操作，不要用 _c 编号猜顺序（删除后编号跳号）。
 
 要求：
@@ -411,8 +417,8 @@ SHOT_UPDATE_TOOL = {
         "description": (
             "精准修改【一个】镜头的拍摄字段（只传要改的字段）。必须先 shot.read(shot_id) 拿到"
             "该镜头内容指纹 expected_revision 并原样回传。用户只要求改某一镜（如「第3镜改成"
-            "近景」）时用本工具，不要重建整组镜头。不能改 shot_id/scene_id/顺序；产物、接力"
-            "来源（opening_source/source_shot_id）不在本工具范围。"),
+            "近景」）时用本工具，不要重建整组镜头。不能改 shot_id/scene_id/顺序；产物字段不在"
+            "本工具范围。接力来源用 source_shot_id 参数改锚/解除（须紧跟新来源之后，先 move）。"),
         "parameters": {
             "type": "object",
             "properties": {
@@ -420,6 +426,13 @@ SHOT_UPDATE_TOOL = {
                 "expected_revision": {
                     "type": "string",
                     "description": "你最近一次 shot.read(shot_id) 看到的该镜头内容指纹（revision，8 位十六进制）。期间该镜头被改动会拒绝写入并返回最新内容。",
+                },
+                "source_shot_id": {
+                    "type": "string",
+                    "description": ("接力来源（可选）：改为同段内上一镜的 shot_id（本镜开场沿用"
+                                    "其视频末帧）；传 null/空字符串解除接力。系统校验来源存在、"
+                                    "同段、无环、且本镜紧跟来源之后——不相邻时先用 shot.move "
+                                    "调整位置再改锚。删除接力来源镜头前先解除/改锚下游，否则会级联删除。"),
                 },
                 **_SHOT_FIELDS_PROPS,
             },
@@ -679,6 +692,12 @@ def _clean_shot_fields(fields: dict, valid_chars: set) -> tuple[dict, list]:
     out: dict = {}
     dropped: list = []
     for k, v in (fields or {}).items():
+        if k == "source_shot_id":
+            # 接力来源：显式 None/空 = 解除（detach），字符串 = 改锚——不能走通用
+            # 「None 剔除」规则（否则 detach 无法表达）。写入由执行器调
+            # update_shot_relay 完成（结构校验），不进 insert/update_shot_fields。
+            out[k] = str(v).strip() if v else None
+            continue
         if v is None or k not in SHOT_UPDATABLE_FIELDS:
             continue
         if k == "characters":
@@ -822,6 +841,12 @@ def _create_shots_impl(rt: AgentRuntime, project: str, arguments: str,
     for i, raw in enumerate(raw_specs):
         if not isinstance(raw, dict):
             raise AgentError("bad_arguments", f"shots[{i}] 必须是对象")
+        if str(raw.get("source_shot_id") or "").strip():
+            raise AgentError(
+                "bad_arguments",
+                f"shots[{i}] 创建时不能指定 source_shot_id（新镜头的 id 此时尚未分配，"
+                "批量内互相引用无法表达）。请先创建，再用 shot.update 设置接力来源"
+                "（改锚前先 shot.move 到来源之后）。")
         desc = str(raw.get("description") or "").strip()
         if not desc:
             raise AgentError("bad_arguments",
@@ -970,6 +995,20 @@ def _execute_shot_update(rt: AgentRuntime, project: str, arguments: str,
         res = update_shot_fields(proj, shot_id, real_diff)
     except StructureError as e:
         raise AgentError(e.code, e.message)
+    # 接力来源（结构关系字段）：不走 update_shot_fields（内容白名单不含它），
+    # 显式调 update_shot_relay 做结构校验（存在/同段/无环/相邻）。在 save 之前
+    # 执行——校验失败抛 AgentError 时内容改动尚未落盘，整单拒绝（原子性）。
+    relay_changed = False
+    if "source_shot_id" in real_diff:
+        try:
+            rres = update_shot_relay(proj, shot_id, real_diff["source_shot_id"])
+            relay_changed = bool(rres.get("changed"))
+        except StructureError as e:
+            raise AgentError(e.code, e.message)
+        if relay_changed:
+            res["changed"].append("source_shot_id")
+            res["prompts_invalidated"].update(
+                _invalidate_stale_prompts(shot, ["source_shot_id"]))
     after_values = {k: _shot_view(shot).get(k) for k in real_diff}
     pstore.save(proj)
 
@@ -1078,10 +1117,24 @@ def _execute_shot_update_many(rt: AgentRuntime, project: str, arguments: str,
             verified=True, unchanged=True, results=[],
             note="提供的字段值与各镜头当前内容完全一致，未产生变化。")
 
-    # 内存逐镜应用（沿用 update_shot_fields 的类型兜底/prompt 失效），一次原子写
+    # 内存逐镜应用（沿用 update_shot_fields 的类型兜底/prompt 失效），一次原子写。
+    # 接力来源同样在 save 前逐镜应用（update_shot_relay 结构校验）——任一项失败
+    # 整批拒绝，未落盘（原子性不变）。
     results = []
     for shot, sid, real_diff in prepared:
-        res = update_shot_fields(proj, sid, real_diff)
+        try:
+            res = update_shot_fields(proj, sid, real_diff)
+        except StructureError as e:
+            raise AgentError(e.code, e.message)
+        if "source_shot_id" in real_diff:
+            try:
+                rres = update_shot_relay(proj, sid, real_diff["source_shot_id"])
+            except StructureError as e:
+                raise AgentError(e.code, e.message)
+            if rres.get("changed"):
+                res["changed"].append("source_shot_id")
+                res["prompts_invalidated"].update(
+                    _invalidate_stale_prompts(shot, ["source_shot_id"]))
         results.append({"shot_id": sid, "changed": res["changed"],
                         "prompts_invalidated": res.get("prompts_invalidated", {}),
                         "scene_id": shot.scene_id})

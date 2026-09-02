@@ -156,16 +156,13 @@ def apply_end_state(rt, project: str, path: Path, scene_id: str,
             problems.append(f"delete {sid} 级联删掉了端态要保留的镜头: {unexpected}")
             return False, problems, ops
         ops.append(("delete", sid, {"cascaded": gone}))
-    # 5. create（追加段尾，无锚 → 无 dependency_block 风险；顺序随后续 reorder 拉正）
+    # 5. create（追加段尾，无锚 → 无 dependency_block 风险；顺序随后续 reorder 拉正）。
+    #    spec 不带 source_shot_id——创建时新镜 id 未分配，接力在 update 阶段挂接（先建后锚）。
     if len(new_items) >= 2:
-        specs = [{"description": it["description"],
-                  **({"source_shot_id": it["source_shot_id"]}
-                     if it.get("source_shot_id") else {})}
-                 for it in new_items]
+        specs = [{"description": it["description"]} for it in new_items]
         obs = _exec(rt, project, "shot.create_many", scene_id=scene_id, shots=specs,
                     expected_shots_revision=_shots_token(load(path).scenes))
         created = [c["shot_id"] for c in obs.get("created", [])]
-        # create_many 的 spec 是否接受 source_shot_id 由 _clean_shot_fields 决定
         for c, it in zip(created, new_items):
             it["shot_id"] = c
         ops.append(("create_many", scene_id, created))
@@ -174,8 +171,8 @@ def apply_end_state(rt, project: str, path: Path, scene_id: str,
         obs = _exec(rt, project, "shot.create", scene_id=scene_id,
                     description=it["description"],
                     expected_shots_revision=_shots_token(load(path).scenes))
-        it["shot_id"] = obs["shot_id"]
-        ops.append(("create", scene_id, obs["shot_id"]))
+        it["shot_id"] = obs["created"][0]["shot_id"]
+        ops.append(("create", scene_id, it["shot_id"]))
     # 6. reorder（selection 式；每步用最新结构指纹）
     desired = [it["shot_id"] for it in eff]
     for i in range(len(desired)):
@@ -189,13 +186,15 @@ def apply_end_state(rt, project: str, path: Path, scene_id: str,
             _exec(rt, project, "shot.move", shot_id=desired[i], after=desired[i - 1],
                   expected_shots_revision=_shots_token(load(path).scenes))
         ops.append(("move", desired[i], f"→pos {i}"))
-    # 7. update 内容（每镜最新内容指纹）
+    # 7. update 内容 + 接力挂接（每镜最新内容指纹；reorder 已保证相邻性）
     for it in eff:
         if it.get("shot_id") not in keep_ids and it.get("shot_id") not in \
                 [c.get("shot_id") for c in new_items]:
             continue
         fields = {k: v for k, v in it.items()
                   if k not in ("shot_id", "source_shot_id")}
+        if it.get("source_shot_id") is not None:
+            fields["source_shot_id"] = it["source_shot_id"]
         if not fields:
             continue
         _exec(rt, project, "shot.update", shot_id=it["shot_id"],
@@ -327,12 +326,12 @@ def s5_mixed(tmp):
 
 
 def s6_detach_before_delete(tmp):
-    """§11.6 的核心场景：删 c1 但保留接力它的 c2（改锚）。
-    预期 BLOCKER：update 工具白名单不含 source_shot_id → detach 不可表达。"""
+    """§11.6 的核心场景：删 c1 但保留接力它的 c2（先 detach 再 delete）。
+    修复后（update_shot_relay + shot.update 的 source_shot_id）应完整可达。"""
     path = tmp / "s6"; path.mkdir()
     make_proj(path)
     rt = rt_for(path)
-    # 尝试用现有工具改锚（模拟 diff engine 的 detach 步骤）
+    # detach：update 传 source_shot_id=None
     obs = TOOL_EXECUTORS["shot.update"](
         rt, "demo", json.dumps({"shot_id": "s01_c02",
                                 "expected_revision":
@@ -340,17 +339,21 @@ def s6_detach_before_delete(tmp):
                                 "source_shot_id": None}, ensure_ascii=False),
         "spike", "msg")
     detached = obs.get("ok") and "source_shot_id" in (obs.get("changed") or [])
-    if not detached:
-        # 白名单过滤 → 只能走裸 delete → 级联
-        obs2 = TOOL_EXECUTORS["shot.delete"](
-            rt, "demo", json.dumps({"shot_id": "s01_c01"}), "spike", "msg")
-        gone = obs2.get("deleted", {}).get("shots", [])
-        report("S6 detach-before-delete", "BLOCKER",
-               f"shot.update 无法改 source_shot_id（changed={obs.get('changed')}，"
-               f"unchanged={obs.get('unchanged')}）；裸 delete s01_c01 级联删除 "
-               f"{gone}——端态[保留c02]不可达，需删了重建（丢资产+id漂移）")
-        return
-    report("S6 detach-before-delete", "PASS")
+    assert detached, f"detach 失败: {obs}"
+    # delete 来源 → 下游存活
+    obs2 = TOOL_EXECUTORS["shot.delete"](
+        rt, "demo", json.dumps({"shot_id": "s01_c01"}), "spike", "msg")
+    gone = obs2.get("deleted", {}).get("shots", [])
+    c02 = load(path).get_shot("s01_c02")
+    c03 = load(path).get_shot("s01_c03")
+    if (c02 is not None and c02.source_shot_id is None
+            and c03 is not None and c03.source_shot_id == "s01_c02"
+            and gone == ["s01_c01"]):
+        report("S6 detach-before-delete", "PASS",
+               "c02 detach 后幸存（旧路径会被级联删除）；c03 仍接力 c02 不受影响；"
+               "仅 c01 被删（无意外级联）")
+    else:
+        report("S6 detach-before-delete", "FAIL", f"gone={gone} c02={c02} c03={c03}")
 
 
 def s6b_workaround_costs(tmp):
@@ -470,9 +473,13 @@ def s10_create_relay_in_new_shots(tmp):
                                 "source_shot_id": created[0]}, ensure_ascii=False),
         "spike", "msg")
     linked = obs2.get("ok") and "source_shot_id" in (obs2.get("changed") or [])
-    report("S10 新镜头间接力挂接", "PASS" if linked else "BLOCKER",
-           f"created={created}；update 挂接 changed={obs2.get('changed')}"
-           if not linked else f"created={created}")
+    if linked:
+        got = load(path).get_shot(created[1]).source_shot_id
+        report("S10 新镜头间接力挂接", "PASS",
+               f"created={created}；{created[1]} 接力 {got}（先建后锚模式验证）")
+    else:
+        report("S10 新镜头间接力挂接", "BLOCKER",
+               f"created={created}；update 挂接 changed={obs2.get('changed')}")
 
 
 def main():
