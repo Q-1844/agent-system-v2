@@ -407,3 +407,39 @@ def test_cascade_guard_abort_integrity(tmp_path_proj):
     # c02/c03 存活且链重接
     assert proj.get_shot("s01_c02") is not None
     assert proj.get_shot("s01_c03").source_shot_id == "s01_c02"
+
+
+# ============ end_state JSON 字符串容错（真机 Longrun 20260903 根因修复）===========
+def test_normalize_list_passthrough(tmp_path_proj):
+    """正常 Python list → 直接通过（现有行为不变）。"""
+    out = normalize_end_state([
+        {"shot_id": "s01_c01", "chain": False, "fields": {"description": "雨夜"}}])
+    assert len(out) == 1 and out[0]["shot_id"] == "s01_c01"
+    assert out[0]["fields"]["description"] == "雨夜"
+
+
+def test_normalize_json_string_array_accepted(tmp_path_proj):
+    """合法 JSON 字符串数组（Agnes 大参数双重序列化）→ parse 还原为 list 后通过。"""
+    raw = json.dumps([
+        {"shot_id": "s01_c01", "chain": False, "fields": {"description": "雨夜灯塔"}},
+        {"shot_id": "s01_c02", "chain": True, "fields": {"description": "她冲进走廊"}}],
+        ensure_ascii=False)
+    assert isinstance(raw, str) and raw.strip()[:1] == "["
+    out = normalize_end_state(raw)
+    assert len(out) == 2 and out[1]["chain"] is True
+    assert out[0]["fields"]["description"] == "雨夜灯塔"
+
+
+def test_normalize_illegal_json_string_rejected(tmp_path_proj):
+    """非法 JSON 字符串（[ 开头但 parse 失败）→ 保持 bad_end_state 拒绝。"""
+    with pytest.raises(Exception) as ei:
+        normalize_end_state("[{shot_id: 没引号的伪 JSON}]")
+    assert "end_state 必须是有序数组" in str(ei.value)
+
+
+def test_normalize_json_string_non_array_rejected(tmp_path_proj):
+    """JSON 字符串但解析后不是数组（如对象）→ 拒绝（容错只放宽『字符串化数组』
+    这一种形态，不放宽类型域）。"""
+    with pytest.raises(Exception) as ei:
+        normalize_end_state(json.dumps({"shot_id": "s01_c01"}))
+    assert "end_state 必须是有序数组" in str(ei.value)

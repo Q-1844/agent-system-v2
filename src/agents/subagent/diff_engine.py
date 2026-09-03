@@ -79,10 +79,21 @@ def normalize_end_state(raw: object) -> List[dict]:
     """把 LLM 提交的 end_state 规范化为内部形态。
     容忍两种写法：{shot_id?, chain, fields{...}, rationale?, dependencies?}
     与平铺字段（fields 平铺在项里——防御性解析，协议以 Part 2 §4.1 为准）。
-    不做合法性判定（validate_end_state 负责）。返回规范化列表（浅拷贝项）。"""
+    不做合法性判定（validate_end_state 负责）。返回规范化列表（浅拷贝项）。
+
+    JSON 字符串容错（真机 Subagent_Longrun_20260903 实测根因）：Agnes 在大参数
+    +中文引号时会把嵌套数组序列化成 JSON 字符串再塞进参数（SW 的 _loose_json
+    已记载同一行为）——str 且 [ 开头时尝试 json.loads 还原；还原失败或还原后
+    仍非 list 则按原错误拒绝（后续结构校验 E1–E6 不受影响）。"""
+    if isinstance(raw, str) and raw.strip()[:1] == "[":
+        try:
+            raw = json.loads(raw)
+        except Exception:
+            pass
     if not isinstance(raw, list):
         raise DiffError("bad_end_state", "end_state 必须是有序数组",
-                        "按提案格式提交：[{shot_id?, chain, fields{…}, rationale?}, …]")
+                        "按提案格式提交：[{shot_id?, chain, fields{…}, rationale?}, …]"
+                        "（直接给 JSON 数组，不要把数组包进字符串）")
     out: List[dict] = []
     writable = _shot_writable_fields()
     for it in raw:
