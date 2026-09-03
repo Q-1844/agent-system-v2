@@ -113,6 +113,40 @@ def normalize_end_state(raw: object) -> List[dict]:
     return out
 
 
+def normalize_removed_rationales(raw: object) -> dict:
+    """把 LLM 提交的 removed_shot_rationales 规范化为内部 dict（{shot_id: 删除理由}）。
+    不做 shot_id 合法性判定（validate_end_state 负责）。返回浅拷贝 dict。
+
+    JSON 字符串容错（真机 Subagent_Smoke_20260903 实测根因，与 normalize_end_state
+    同一模型行为）：Agnes 在大参数 +中文引号时会把嵌套对象也序列化成 JSON 字符串塞进
+    参数——真机 trace 里错误信息末尾的 '{' 来自 for sid in rationales 迭代字符串字符，
+    'str' object has no attribute 'get' 来自 rationales.get(sid)。str 时尝试 json.loads
+    还原；还原失败或还原后非 dict 则按 bad_end_state 结构化拒绝（后续 shot_id 合法性 /
+    删申明完备 E6 校验全部不变），绝不把裸 AttributeError 抛回模型。"""
+    if raw is None:
+        return {}
+    if isinstance(raw, str):
+        s = raw.strip()
+        if not s:
+            return {}
+        try:
+            raw = json.loads(s)
+        except Exception:
+            raise DiffError(
+                "bad_end_state",
+                "removed_shot_rationales 必须是 JSON 对象 {shot_id: 删除理由}，"
+                "收到无法解析的字符串",
+                '直接给 JSON 对象、不要包进字符串；形如 '
+                '{"s03_c06": "与 c05 内容重复，删除"}；不删任何镜头时给 {} 或省略该字段')
+    if not isinstance(raw, dict):
+        raise DiffError(
+            "bad_end_state",
+            f"removed_shot_rationales 必须是对象 {{shot_id: 删除理由}}，"
+            f"收到 {type(raw).__name__}",
+            '形如 {"s03_c06": "删除理由…"}；不删除任何镜头时给空对象 {} 或省略该字段')
+    return dict(raw)
+
+
 def validate_end_state(end_state: List[dict], scene: Scene, *,
                        constraint_ids: Sequence[str] = (),
                        constraint_responses: Sequence[dict] = (),
@@ -165,7 +199,7 @@ def validate_end_state(end_state: List[dict], scene: Scene, *,
     # 有效端态（排除后）的删申明完备（§1.2）
     effective_ids = {it.get("shot_id") for i, it in enumerate(end_state)
                      if i not in excl and it.get("shot_id")}
-    rationales = removed_rationales or {}
+    rationales = normalize_removed_rationales(removed_rationales)
     undeclared = [sid for sid in sorted(cur_ids) if sid not in effective_ids]
     for sid in undeclared:
         if not str(rationales.get(sid) or "").strip():
@@ -278,11 +312,13 @@ def run_diff_commit(rt: AgentRuntime, project: str, scene_id: str,
                 current_basis=cur_fp)
     try:
         end_state = normalize_end_state(proposal.get("end_state"))
+        removed_rationales = normalize_removed_rationales(
+            proposal.get("removed_shot_rationales"))
         validate_end_state(
             end_state, scene,
             constraint_ids=proposal.get("constraint_ids") or (),
             constraint_responses=proposal.get("constraint_responses") or (),
-            removed_rationales=proposal.get("removed_shot_rationales"),
+            removed_rationales=removed_rationales,
             exclude_item_refs=exclude_item_refs)
     except DiffError as e:
         return _obs_fail(e.code, e.message, e.fix_hint, **e.extra)

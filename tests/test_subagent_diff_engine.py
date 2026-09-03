@@ -12,7 +12,8 @@ from src.core.store import ProjectStore
 from src.agents.runtime import AgentRuntime
 from src.agents.subagent import fingerprints as fp
 from src.agents.subagent.diff_engine import (
-    run_diff_commit, validate_end_state, normalize_end_state, DiffError)
+    run_diff_commit, validate_end_state, normalize_end_state,
+    normalize_removed_rationales, DiffError)
 
 
 def make_proj(dirpath):
@@ -443,3 +444,73 @@ def test_normalize_json_string_non_array_rejected(tmp_path_proj):
     with pytest.raises(Exception) as ei:
         normalize_end_state(json.dumps({"shot_id": "s01_c01"}))
     assert "end_state 必须是有序数组" in str(ei.value)
+
+
+# ============ removed_shot_rationales JSON 字符串容错（真机 Smoke 20260903 根因修复）
+# 与 normalize_end_state 同一模型行为：Agnes 大参数把嵌套对象也序列化成 JSON 字符串。
+# 真机 trace：错误末尾 '{' = for sid in rationales 迭代字符串字符；
+# 'str' object has no attribute 'get' = rationales.get(sid)。修复须消灭裸 AttributeError。
+def test_normalize_rationales_dict_passthrough(tmp_path_proj):
+    """正常 dict → 直接通过（现有行为不变），返回浅拷贝。"""
+    d = {"s01_c03": "与 c02 内容重复"}
+    out = normalize_removed_rationales(d)
+    assert out == d and out is not d
+    assert normalize_removed_rationales(None) == {}
+
+
+def test_normalize_rationales_json_string_dict_accepted(tmp_path_proj):
+    """合法 JSON 字符串 dict（Agnes 双重序列化）→ parse 还原为 dict 后通过。"""
+    raw = json.dumps({"s01_c03": "与 c02 重复"}, ensure_ascii=False)
+    assert isinstance(raw, str)
+    out = normalize_removed_rationales(raw)
+    assert out == {"s01_c03": "与 c02 重复"}
+
+
+def test_normalize_rationales_illegal_json_string_rejected(tmp_path_proj):
+    """非法 JSON 字符串 → bad_end_state 结构化拒绝（不是 AttributeError）。"""
+    with pytest.raises(DiffError) as ei:
+        normalize_removed_rationales("{s01_c03: 没引号的伪 JSON}")
+    assert ei.value.code == "bad_end_state"
+
+
+def test_normalize_rationales_json_string_non_dict_rejected(tmp_path_proj):
+    """JSON 字符串但解析后不是对象（如数组）→ bad_end_state 拒绝（不放宽类型域）。"""
+    with pytest.raises(DiffError) as ei:
+        normalize_removed_rationales(json.dumps(["s01_c03", "s01_c04"]))
+    assert ei.value.code == "bad_end_state"
+    # 非字符串非 dict（裸 list）同样拒绝
+    with pytest.raises(DiffError) as ei2:
+        normalize_removed_rationales(["s01_c03"])
+    assert ei2.value.code == "bad_end_state"
+
+
+def test_string_rationales_no_attribute_error_in_validate(tmp_path_proj):
+    """回归：validate_end_state 吃字符串化 removed_shot_rationales 不得抛裸
+    AttributeError('str' object has no attribute 'get')。修复前：end_state 删
+    s01_c03 且 rationales 为 str → rationales.get(sid) 崩溃；修复后：parse 还原、
+    删申明完备校验通过。"""
+    scene = scene_of(load(tmp_path_proj), "s01")   # s01_c01 / c02 / c03
+    end = [{"shot_id": "s01_c01", "chain": False, "fields": {}},
+           {"shot_id": "s01_c02", "chain": True, "fields": {}}]  # 省略 c03 = 删除
+    # 旧代码在此抛 AttributeError；新代码 parse 后正常通过校验
+    validate_end_state(end, scene,
+                       removed_rationales=json.dumps({"s01_c03": "与 c02 重复"},
+                                                     ensure_ascii=False),
+                       require_responses=False)
+    # 非法 JSON 字符串 → 结构化 DiffError，同样不是 AttributeError
+    with pytest.raises(DiffError) as ei:
+        validate_end_state(end, scene, removed_rationales="{bad json",
+                           require_responses=False)
+    assert ei.value.code == "bad_end_state"
+
+
+def test_commit_string_rationales_delete_applies(tmp_path_proj):
+    """端到端 commit 路径：proposal 里 removed_shot_rationales 为 JSON 字符串
+    （run_diff_commit 边界规范化）→ 真实删除落盘，证明 commit 路径也覆盖。"""
+    end = [{"shot_id": "s01_c01", "chain": False, "fields": {}},
+           {"shot_id": "s01_c02", "chain": True, "fields": {}}]  # 删 c03
+    r = commit(tmp_path_proj, "s01", end,
+               rationales=json.dumps({"s01_c03": "与 c02 重复"}, ensure_ascii=False))
+    assert r["ok"], r
+    assert len(scene_of(load(tmp_path_proj), "s01").shots) == 2
+

@@ -34,7 +34,8 @@ from src.agents.models import AgentMessage
 
 from . import registry as reg
 from . import fingerprints as fp
-from .diff_engine import normalize_end_state, validate_end_state, DiffError
+from .diff_engine import (normalize_end_state, normalize_removed_rationales,
+                          validate_end_state, DiffError)
 
 log = logging.getLogger("agents.subagent.instance")
 
@@ -221,13 +222,15 @@ def _make_submit_executor(rt: AgentRuntime, project: str, delegation: dict,
                          "该段已被删除；停止提交，说明情况即可")
         try:
             end_state = normalize_end_state(args.get("end_state"))
+            removed_rationales = normalize_removed_rationales(
+                args.get("removed_shot_rationales"))
             _constraint_ids = [c.get("constraint_id") for c in
                                (delegation.get("locked_border_constraints") or [])]
             validate_end_state(
                 end_state, scene,
                 constraint_ids=_constraint_ids,
                 constraint_responses=args.get("constraint_responses") or [],
-                removed_rationales=args.get("removed_shot_rationales"),
+                removed_rationales=removed_rationales,
                 require_responses=bool(_constraint_ids))
         except DiffError as e:
             return _fail(e.code, e.message, e.fix_hint, **e.extra)
@@ -293,7 +296,7 @@ def _make_submit_executor(rt: AgentRuntime, project: str, delegation: dict,
             "scene_id": scene_id,
             "basis": {"scene_slice_fingerprint": basis_arg},
             "end_state": end_state,
-            "removed_shot_rationales": args.get("removed_shot_rationales") or {},
+            "removed_shot_rationales": removed_rationales,
             "constraint_ids": [c.get("constraint_id") for c in
                                (delegation.get("locked_border_constraints") or [])],
             "constraint_responses": args.get("constraint_responses") or [],
