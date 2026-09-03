@@ -1,0 +1,18 @@
+**s01 逐镜精读表（5 镜）**
+
+| # | shot_id | 描述 | 景别 | 运镜 | 对白 |
+|---|---------|------|------|------|------|
+| 1 | s01_c03 | 林晚星面部特写，侧耳倾听，眉头微蹙，随即按下通话键说话；小满在背景虚化中屏住呼吸 | close-up | slow push in | 林晚星：「这里是灯塔监听室，请重复你的位置与状况。」陈海锋：「这里是渔船'顺吉号'，引擎失灵，位置在灯塔东南七海里，请求援助……」 |
+| 2 | s01_c04 | 过肩镜头，林晚星肩背在前景左侧虚化；中景小满指着墙上海图/雷达屏幕，神情紧张专注；林晚星一边记录一边安抚对方 | medium close-up | static | 林晚星：「顺吉号，我已记录你的位置，救援即将出发，请保持镇定。」小满：「东南七海里……风向东北，浪高四米，救援艇需要二十分钟。」 |
+| 3 | s01_c01 | 深夜怒海全景，孤立石砌灯塔矗立在黑色海浪中，顶端光束穿透雨幕扫过浪峰；远处漆黑，闪电偶尔照亮波涛 | extreme wide shot | slow push in | — |
+| 4 | s01_c05 | 深夜怒海全景延续，灯塔光束从左向右扫过，照亮翻滚巨浪与飞溅浪花；海岸线隐约可见，风暴肆虐 | extreme wide shot | static | — |
+| 5 | s01_c06 | 监听室内，林晚星坐桌前握笔按住海图，缓缓抬头望向窗外；小满站她身后偏右双手扶窗框，两人同时望向风暴中心；窗外光束不断扫过照亮侧脸轮廓 | medium shot | slow push in | — |
+
+**补充字段（供导演参考）：**
+- s01_c03: camera_angle=eye level / lighting=仪表侧光，眼神有光点反射 / motion_pace=缓慢而紧张 / target=4s
+- s01_c04: camera_angle=over-the-shoulder / lighting=海图白光+仪表盘暖黄光混合 / motion_pace=快速而有序 / target=5s
+- s01_c01: camera_angle=low angle / lighting=侧逆光为主，冷蓝黑调，闪电补光 / motion_pace=缓慢而沉重 / target=6s
+- s01_c05: camera_angle=low angle / lighting=同 c01 / motion_pace=缓慢而沉重 / target=6s
+- s01_c06: camera_angle=eye level / lighting=室内暖黄+窗外冷蓝交替 / motion_pace=缓慢而紧张 / target=5s
+
+当前 s01 共 **5 个镜头**，无首帧/视频资产（has_first_frame=false）。
