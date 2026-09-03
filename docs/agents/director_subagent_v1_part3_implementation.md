@@ -59,7 +59,7 @@ bit-for-bit（快照测试锁定）。
 | --- | --- | --- | --- |
 | D-1 | Part 2 §4.4-E4（basis 防伪） | `scene_slice_fingerprint` 是派生值、不出现在任何工具返回——防伪由**组件**承担：`basis.scene_content_token` 必须 ∈ 实例 `story.read` 真实返回的 revision 集合，`basis.shots_structure_token` 必须 ∈ `shot.list` 返回集合；`scene_slice` 本身做 == 当前现算（防过期）。 | E4 的语义（"basis ∈ 实例真实读到的指纹集合"）以组件等价实现；净效果更强——实例必须同时真实读过段内容与镜头结构。 |
 | D-2 | Part 2 §4.4 校验顺序 | E5（read_first）先于 E4（basis 防伪）执行。 | 没读过时 read_first 是更准确的错误（否则报 fabricated 误导修复方向）；§4.4 表格编号是列举不是强制执行顺序。 |
-| D-3 | Part 2 §2.2 `locked_border_constraints` | V1 未在 `scene.delegate` 工具 schema 暴露结构化 constraints 参数（任务书阶段 4 工具面即 scene_id/task_brief/signal 三参数）——constraint_ids 恒空，E3 机制已实现（diff_engine 与 submit 均支持非空路径）但暂无生产触发。 | MD 的边界意图经 task_brief 自然语言传达；border_snapshot 照常注入实例。后续给工具加可选参数即可启用（协议面已留，零重构）。 |
+| D-3 | Part 2 §2.2 `locked_border_constraints` | **复核后已补齐（rev2）**：`scene.delegate` 增加可选 `locked_border_constraints` 参数（≤4 条，确定性校验 applies_to/statement，自动编号 bc_1..），注入包渲染编号约束，submit 以 delegation 约束上膛 E3（require_responses=bool(ids)），proposal 持久化 `constraint_ids` 供 commit 路径复验。测试 3 项（注入渲染 / E3 bounce / 持久化+复验）。无约束时注入保持占位（既有行为不变）。 | 已不再是留白；Part 1 设计对象 E（Border Ownership）的锁定半边完整落地。 |
 | D-4 | proposal.commit 的收尾重读 | 挂载后 `proposal.commit` ∈ DIRECTOR_WRITE_OPERATIONS → MD 回复含数字总结时可能触发既有"写后重读" nudge（一次 shot.list）。未按视觉生成工具先例豁免。 | DiffEngine 终态断言强于单镜重读，但 MD 的**口头总结**仍应以真实状态为准——保留 nudge 是诚实收尾，无害且低频。 |
 | D-5 | Part 2 §7.2 registry 计数落盘 | `add_structural_writes` 只在确实更新了已有 scene 记录时落盘——从未 spawn 过 Scene Agent 的项目（含开关关闭的全部正常创作流）不创建 `scene_agents/` 目录。 | bit-for-bit 的落盘面延伸（无 subagent 活动的项目零痕迹）；spawn 过的项目压力计数跨开关状态连续（设计内：压力是真实历史，与当时是否委派无关）。 |
 | D-6 | Part 2 §0.1 Model A（同步 delegation） | 实例预算 wall_clock_s=600 内同步完成；同 turn 多段 delegation 串行执行。 | 设计内（P2-8：V1 串行，并发执行留给后续版本，协议不变）。 |
@@ -107,8 +107,9 @@ bit-for-bit（快照测试锁定）。
 
 ## 5. 已知问题与后续
 
-1. **D-3（locked constraints 未暴露）**是 V1 功能面上最主要的留白——E3 机制
-   就绪，等一个工具参数。
+1. ~~**D-3（locked constraints 未暴露）**是 V1 功能面上最主要的留白~~
+   ——复核（原窗口终审）时已补齐：工具参数 + 注入渲染 + E3 双时点上膛 +
+   proposal 持久化 constraint_ids，附 3 项测试。
 2. **真机验证未做**（本轮全部 mock）：上真机后用 `_stress/stress_driver.py`
    同法压测 30+ 轮长程域（Part 1 §12-3 的遗留风险项）；Scene Agent 实例的
    真实 LLM 行为（提案质量、bounce 后自愈率）需真机观测。

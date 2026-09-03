@@ -396,3 +396,82 @@ def test_instance_injection_contains_required_sections(tmp_path):
     assert "proposal.submit" in text
     assert "先验设计决策" in text
     assert "本段指纹" in text and fp.scene_slice_fingerprint(proj.scenes[0]) in text
+
+
+# ============ locked_border_constraints（D-3 补齐：Part 2 §2.3/§4.4-E3）============
+def _submit_with_locks(tmp_path, submit_args, locks, *, prelude=None):
+    """带锁定边界约束的 submit 直调（复用 _submit_direct 的夹具语义）。
+    submit_args 里的 basis 占位符 "__FP__" 会被替换为项目建立后的真实指纹
+    （参数求值先于 make_proj，故不能在调用点现算）。"""
+    make_proj(tmp_path)
+    rt = rt_for(tmp_path, client=None)
+    proj = ProjectStore(tmp_path).load()
+    scene = proj.scenes[0]
+    submit_args = dict(submit_args)
+    if submit_args.get("basis", {}).get("scene_slice_fingerprint") == "__FP__":
+        submit_args["basis"] = {"scene_slice_fingerprint":
+                                fp.scene_slice_fingerprint(scene)}
+    delegation = {"delegation_id": "dlg_lc", "scene_id": "s01",
+                  "task_brief": "t", "basis": fp.compute_scene_basis(scene, proj.scenes),
+                  "locked_border_constraints": locks}
+    state: dict = {"trace": []}
+    for tool, obs in (prelude if prelude is not None else _reads(tmp_path)):
+        state["trace"].append({"step": 0, "tool": tool, "target": "s01",
+                               "result": "ok", "revision": obs, "ok": True})
+    executor = I._make_submit_executor(rt, "demo", delegation, state)
+    return executor(rt, "demo", json.dumps(submit_args, ensure_ascii=False), "t", "m"), rt
+
+
+def test_locked_constraints_rendered_in_instruction(tmp_path):
+    """注入包渲染锁定约束（带编号与中英方向标注）。"""
+    make_proj(tmp_path)
+    rt = rt_for(tmp_path, client=None)
+    proj = ProjectStore(tmp_path).load()
+    delegation = {"delegation_id": "dlg_i2", "scene_id": "s01",
+                  "task_brief": "t", "basis": fp.compute_scene_basis(proj.scenes[0], proj.scenes),
+                  "locked_border_constraints": [
+                      {"constraint_id": "bc_1", "applies_to": "exit",
+                       "statement": "出口必须停在暴雨未歇"}]}
+    text = I.build_instance_instruction(rt, "demo", delegation, proj.scenes[0])
+    assert "bc_1" in text and "出口必须停在暴雨未歇" in text
+    assert "constraint_responses" in text          # 回应义务明示
+    # 无约束时保持占位（bit-for-bit 于既有行为）
+    text2 = I.build_instance_instruction(
+        rt, "demo", {k: v for k, v in delegation.items()
+                     if k != "locked_border_constraints"}, proj.scenes[0])
+    assert "无结构化锁定约束" in text2
+
+
+def test_submit_missing_constraint_response_bounced(tmp_path):
+    """E3 上膛：有锁定约束但 constraint_responses 缺回应 → bounce 带修复指引。"""
+    locks = [{"constraint_id": "bc_1", "applies_to": "exit", "statement": "出口停在暴雨"}]
+    r, _ = _submit_with_locks(tmp_path, {
+        "basis": {"scene_slice_fingerprint": "__FP__"},
+        "end_state": GOOD_END, "removed_shot_rationales": {},
+        "constraint_responses": []}, locks)
+    assert not r["ok"] and r["code"] == "missing_constraint_response"
+    assert "bc_1" in r["error"] and r["fix_hint"]
+
+
+def test_submit_with_constraint_response_ok_and_persisted(tmp_path):
+    """回应齐全 → 提交成功，proposal 持久化 constraint_ids（commit 路径复验依据）。"""
+    locks = [{"constraint_id": "bc_1", "applies_to": "exit", "statement": "出口停在暴雨"},
+             {"constraint_id": "bc_2", "applies_to": "entry", "statement": "承接上段夜戏"}]
+    r, rt = _submit_with_locks(tmp_path, {
+        "basis": {"scene_slice_fingerprint": "__FP__"},
+        "end_state": GOOD_END, "removed_shot_rationales": {},
+        "constraint_responses": [
+            {"constraint_id": "bc_1", "response": "末镜保持雨势未减弱"},
+            {"constraint_id": "bc_2", "response": "首镜延续夜戏光线"}]}, locks)
+    assert r["ok"], r
+    from src.agents.subagent import registry as _reg
+    store = _reg.SubagentStore(rt._resolve_project_dir("demo"), "demo")
+    p = store.load_proposal(r["proposal_id"])
+    assert p["constraint_ids"] == ["bc_1", "bc_2"]
+    assert len(p["constraint_responses"]) == 2
+    # commit 路径复验：validate_end_state 以 proposal.constraint_ids 上膛（E3 第二时点）
+    from src.agents.subagent.diff_engine import normalize_end_state, validate_end_state
+    validate_end_state(normalize_end_state(p["end_state"]),
+                       ProjectStore(tmp_path).load().scenes[0],
+                       constraint_ids=p["constraint_ids"],
+                       constraint_responses=p["constraint_responses"])

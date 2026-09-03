@@ -64,6 +64,24 @@ SUBAGENT_TOOLS = [
                         },
                         "required": ["kind", "evidence"],
                     },
+                    "locked_border_constraints": {
+                        "type": "array",
+                        "description": (
+                            "锁定边界约束（可选，≤4 条；Part 2 §2.3）：本次任务中"
+                            "不可违反的出入口条件。每条 {applies_to: entry|exit|both,"
+                            " statement}。系统自动编号 bc_1.. 并注入任务书；实例必须"
+                            "逐条回应（constraint_responses），认为必须改边界走"
+                            " border_change_request。"),
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "applies_to": {"type": "string",
+                                               "enum": ["entry", "exit", "both"]},
+                                "statement": {"type": "string"},
+                            },
+                            "required": ["applies_to", "statement"],
+                        },
+                    },
                 },
                 "required": ["scene_id", "task_brief", "signal"],
             },
@@ -298,11 +316,37 @@ async def _execute_scene_delegate(rt: AgentRuntime, project: str,
     store.bump_delegation_count(scene_id)
 
     basis = fp.compute_scene_basis(scene, proj.scenes)
+    # locked_border_constraints（Part 2 §2.3）：确定性校验 + 自动编号 bc_1..
+    locked = []
+    for i, raw in enumerate(args.get("locked_border_constraints") or []):
+        if not isinstance(raw, dict):
+            return _gate_fail(
+                "bad_constraint", f"locked_border_constraints[{i}] 不是对象",
+                "每条约束是 {applies_to: entry|exit|both, statement}")
+        applies = str(raw.get("applies_to") or "").strip()
+        statement = str(raw.get("statement") or "").strip()
+        if applies not in ("entry", "exit", "both"):
+            return _gate_fail(
+                "bad_constraint",
+                f"locked_border_constraints[{i}].applies_to 非法：{applies!r}",
+                "applies_to ∈ {entry（入口）, exit（出口）, both}")
+        if not statement:
+            return _gate_fail(
+                "bad_constraint",
+                f"locked_border_constraints[{i}].statement 为空",
+                "写出具体不可违反的出入口条件（如：出口必须停在暴雨未歇）")
+        locked.append({"constraint_id": f"bc_{i + 1}",
+                       "applies_to": applies, "statement": statement})
+    if len(locked) > 4:
+        return _gate_fail(
+            "bad_constraint", f"锁定边界约束 {len(locked)} 条超上限（≤4）",
+            "合并同类约束或拆分 delegation")
     delegation = {
         "delegation_id": delegation_id, "scene_id": scene_id, "project": project,
         "status": "dispatched", "proposal_id": None,
         "origin": {"kind": kind, "evidence": evidence},
         "task_brief": task_brief,
+        "locked_border_constraints": locked,
         "basis": {**basis, "computed_at": time.time()},
         "created_at": time.time(),
     }

@@ -149,12 +149,24 @@ def build_instance_instruction(rt: AgentRuntime, project: str,
     proj = ProjectStore(pdir).load()
 
     mem_text, n_mem, n_quarantined = store.render_memory_for_injection(scene)
+    locked = delegation.get("locked_border_constraints") or []
+    if locked:
+        _applies_zh = {"entry": "入口", "exit": "出口", "both": "出入口"}
+        locked_lines = "\n".join(
+            f"- {c['constraint_id']}（{_applies_zh.get(c.get('applies_to'), '?')}）："
+            f"{c.get('statement')}" for c in locked)
+        locked_text = ("# 本次任务的锁定边界约束（不可违反；认为必须改 → "
+                       "border_change_request）\n"
+                       "每条约束必须在提案的 constraint_responses 里给出回应"
+                       "（说明如何满足，或为何需改边界）：\n" + locked_lines)
+    else:
+        locked_text = ("# 本次任务的锁定边界约束（不可违反；认为必须改 → border_change_request）\n"
+                       "（无结构化锁定约束；Main Director 的边界意图见任务书）")
     parts = [_INSTANCE_PREAMBLE.format(scene_id=scene.scene_id),
              _render_scene_state_header(scene),
              f"\n本段指纹（proposal.submit 的 basis 用）：{fp.scene_slice_fingerprint(scene)}\n",
              _render_border_pack(proj, scene),
-             "# 本次任务的锁定边界约束（不可违反；认为必须改 → border_change_request）\n"
-             "（无结构化锁定约束；Main Director 的边界意图见任务书）"]
+             locked_text]
     from src.agents import session_governance
     brief = session_governance.get_brief(pdir, project)
     parts.append("# 用户创作约束（原始 brief，设计时必须遵守）\n"
@@ -209,12 +221,14 @@ def _make_submit_executor(rt: AgentRuntime, project: str, delegation: dict,
                          "该段已被删除；停止提交，说明情况即可")
         try:
             end_state = normalize_end_state(args.get("end_state"))
+            _constraint_ids = [c.get("constraint_id") for c in
+                               (delegation.get("locked_border_constraints") or [])]
             validate_end_state(
                 end_state, scene,
-                constraint_ids=[],   # V1：结构化 locked constraints 未暴露（见任务书工具面）
+                constraint_ids=_constraint_ids,
                 constraint_responses=args.get("constraint_responses") or [],
                 removed_rationales=args.get("removed_shot_rationales"),
-                require_responses=False)
+                require_responses=bool(_constraint_ids))
         except DiffError as e:
             return _fail(e.code, e.message, e.fix_hint, **e.extra)
 
@@ -280,6 +294,8 @@ def _make_submit_executor(rt: AgentRuntime, project: str, delegation: dict,
             "basis": {"scene_slice_fingerprint": basis_arg},
             "end_state": end_state,
             "removed_shot_rationales": args.get("removed_shot_rationales") or {},
+            "constraint_ids": [c.get("constraint_id") for c in
+                               (delegation.get("locked_border_constraints") or [])],
             "constraint_responses": args.get("constraint_responses") or [],
             "border_change_requests": args.get("border_change_requests") or [],
             "design_notes": str(args.get("design_notes") or ""),
