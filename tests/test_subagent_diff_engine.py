@@ -13,7 +13,7 @@ from src.agents.runtime import AgentRuntime
 from src.agents.subagent import fingerprints as fp
 from src.agents.subagent.diff_engine import (
     run_diff_commit, validate_end_state, normalize_end_state,
-    normalize_removed_rationales, DiffError)
+    normalize_removed_rationales, normalize_basis, DiffError)
 
 
 def make_proj(dirpath):
@@ -513,4 +513,62 @@ def test_commit_string_rationales_delete_applies(tmp_path_proj):
                rationales=json.dumps({"s01_c03": "与 c02 重复"}, ensure_ascii=False))
     assert r["ok"], r
     assert len(scene_of(load(tmp_path_proj), "s01").shots) == 2
+
+
+# ============ basis JSON 字符串容错（真机 Smoke2 20260903 根因修复）
+# 与 normalize_end_state / normalize_removed_rationales 同一 Agnes 大参数双重序列化
+# 行为。真机 trace：10/10 proposal.submit 崩在 instance.py:251
+# (args.get("basis") or {}).get("scene_slice_fingerprint")，basis 被发成 JSON 字符串
+# 时 "…".get(...) 抛裸 AttributeError，因 basis 防伪段在 try/except DiffError 之外
+# 而逃逸成 tool.failed。修复消灭裸异常，指纹比对防伪全部不变。
+def test_normalize_basis_dict_passthrough(tmp_path_proj):
+    """正常 dict → 直接通过（浅拷贝）；None/空→{}。"""
+    d = {"scene_slice_fingerprint": "abc", "scene_content_token": "t"}
+    out = normalize_basis(d)
+    assert out == d and out is not d
+    assert normalize_basis(None) == {}
+    assert normalize_basis("   ") == {}
+
+
+def test_normalize_basis_json_string_dict_accepted(tmp_path_proj):
+    """合法 JSON 字符串 dict（Agnes 双重序列化）→ parse 还原为 dict 后通过。"""
+    raw = json.dumps({"scene_slice_fingerprint": "abc"}, ensure_ascii=False)
+    assert isinstance(raw, str)
+    out = normalize_basis(raw)
+    assert out == {"scene_slice_fingerprint": "abc"}
+
+
+def test_normalize_basis_illegal_json_string_rejected(tmp_path_proj):
+    """非法 JSON 字符串 → basis_fabricated 结构化拒绝（不是 AttributeError）。"""
+    with pytest.raises(DiffError) as ei:
+        normalize_basis("{scene_slice_fingerprint: 没引号的伪 JSON}")
+    assert ei.value.code == "basis_fabricated"
+
+
+def test_normalize_basis_json_string_non_dict_rejected(tmp_path_proj):
+    """JSON 字符串但解析后不是对象（如数组）→ basis_fabricated 拒绝（不放宽类型域）。
+    非字符串非 dict（裸 list）同样拒绝。"""
+    with pytest.raises(DiffError) as ei:
+        normalize_basis(json.dumps(["abc"]))
+    assert ei.value.code == "basis_fabricated"
+    with pytest.raises(DiffError) as ei2:
+        normalize_basis(["abc"])
+    assert ei2.value.code == "basis_fabricated"
+
+
+def test_string_basis_no_attribute_error(tmp_path_proj):
+    """回归：instance.py:251 的 (args.get("basis") or {}).get(...) 模式吃字符串化
+    basis 不得抛裸 AttributeError。修复前：basis 为 JSON 字符串 → "…".get(...) 崩溃；
+    修复后：normalize_basis 还原为 dict，正常取 fingerprint。"""
+    args = {"basis": json.dumps({"scene_slice_fingerprint": "abc"},
+                                ensure_ascii=False)}
+    # 旧代码在此抛 AttributeError；新代码 parse 后正常取值
+    basis_arg = normalize_basis(args.get("basis")).get(
+        "scene_slice_fingerprint") or ""
+    assert basis_arg == "abc"
+    # 非法 JSON 字符串 → 结构化 DiffError，同样不是 AttributeError
+    with pytest.raises(DiffError) as ei:
+        normalize_basis("{bad json")
+    assert ei.value.code == "basis_fabricated"
+
 

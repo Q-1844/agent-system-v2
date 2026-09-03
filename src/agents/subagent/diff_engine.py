@@ -147,6 +147,41 @@ def normalize_removed_rationales(raw: object) -> dict:
     return dict(raw)
 
 
+def normalize_basis(raw: object) -> dict:
+    """把 LLM 提交的 basis 规范化为内部 dict（{scene_slice_fingerprint: …, …}）。
+    不做指纹合法性判定（instance._submit 的 E4 防伪 / run_diff_commit 的 md_rebase
+    负责）。返回浅拷贝 dict。
+
+    JSON 字符串容错（真机 Subagent_Smoke2_20260903 实测根因，与 normalize_end_state
+    /normalize_removed_rationales 同一 Agnes 大参数双重序列化行为）：模型把 basis
+    对象也发成 JSON 字符串，原 (args.get("basis") or {}).get("scene_slice_fingerprint")
+    会抛裸 AttributeError('str' object has no attribute 'get')，因 basis 防伪段在
+    try/except DiffError 之外而逃逸成 tool.failed。str 时 json.loads 还原；还原失败或
+    非 dict → basis_fabricated 结构化拒绝，消灭裸异常；指纹比对防伪全部不变。"""
+    if raw is None:
+        return {}
+    if isinstance(raw, str):
+        s = raw.strip()
+        if not s:
+            return {}
+        try:
+            raw = json.loads(s)
+        except Exception:
+            raise DiffError(
+                "basis_fabricated",
+                "basis 必须是 JSON 对象 {scene_slice_fingerprint: …}，"
+                "收到无法解析的字符串",
+                '直接给 JSON 对象、不要包进字符串；形如 '
+                '{"scene_slice_fingerprint": "<本段指纹>"}（从注入包原样抄录）')
+    if not isinstance(raw, dict):
+        raise DiffError(
+            "basis_fabricated",
+            f"basis 必须是对象 {{scene_slice_fingerprint: …}}，"
+            f"收到 {type(raw).__name__}",
+            '形如 {"scene_slice_fingerprint": "<本段指纹>"}')
+    return dict(raw)
+
+
 def validate_end_state(end_state: List[dict], scene: Scene, *,
                        constraint_ids: Sequence[str] = (),
                        constraint_responses: Sequence[dict] = (),
@@ -299,18 +334,19 @@ def run_diff_commit(rt: AgentRuntime, project: str, scene_id: str,
         return _obs_fail("abort_liveness",
                          f"段 {scene_id} 已不存在（delegation 飞行中被删除）",
                          "该段的 delegation 已失效；如仍需处理请在主会话确认当前段集")
-    basis_fp = (proposal.get("basis") or {}).get("scene_slice_fingerprint")
-    if not resume and basis_fp:
-        cur_fp = fp.scene_slice_fingerprint(scene)
-        if cur_fp != basis_fp:
-            return _obs_fail(
-                "md_rebase",
-                f"basis stale：proposal 基于 {basis_fp}，当前 {cur_fp}"
-                "——不得直接套用旧端态（防语义 lost update）",
-                "两条路：① proposal.reject(kind='rebase') 后重新 scene.delegate"
-                "（delta 任务书复用原意图）；② 用既有写工具手工完成修改",
-                current_basis=cur_fp)
     try:
+        basis_fp = normalize_basis(
+            proposal.get("basis")).get("scene_slice_fingerprint")
+        if not resume and basis_fp:
+            cur_fp = fp.scene_slice_fingerprint(scene)
+            if cur_fp != basis_fp:
+                return _obs_fail(
+                    "md_rebase",
+                    f"basis stale：proposal 基于 {basis_fp}，当前 {cur_fp}"
+                    "——不得直接套用旧端态（防语义 lost update）",
+                    "两条路：① proposal.reject(kind='rebase') 后重新 scene.delegate"
+                    "（delta 任务书复用原意图）；② 用既有写工具手工完成修改",
+                    current_basis=cur_fp)
         end_state = normalize_end_state(proposal.get("end_state"))
         removed_rationales = normalize_removed_rationales(
             proposal.get("removed_shot_rationales"))

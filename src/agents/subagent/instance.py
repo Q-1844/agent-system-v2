@@ -35,7 +35,7 @@ from src.agents.models import AgentMessage
 from . import registry as reg
 from . import fingerprints as fp
 from .diff_engine import (normalize_end_state, normalize_removed_rationales,
-                          validate_end_state, DiffError)
+                          normalize_basis, validate_end_state, DiffError)
 
 log = logging.getLogger("agents.subagent.instance")
 
@@ -251,7 +251,11 @@ def _make_submit_executor(rt: AgentRuntime, project: str, delegation: dict,
 
         # E4 basis 防伪（实现口径见模块头注释）：
         #   值域检查（编造/过期）→ 组件检查（真实读过对应状态）
-        basis_arg = (args.get("basis") or {}).get("scene_slice_fingerprint") or ""
+        try:
+            basis_dict = normalize_basis(args.get("basis"))
+        except DiffError as e:
+            return _fail(e.code, e.message, e.fix_hint, **e.extra)
+        basis_arg = basis_dict.get("scene_slice_fingerprint") or ""
         contract_basis = (delegation.get("basis") or {})
         cur_fp = fp.scene_slice_fingerprint(scene)
         contract_fp = contract_basis.get("scene_slice_fingerprint")
