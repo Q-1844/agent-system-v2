@@ -248,7 +248,9 @@
             ◌ Agent 正在后台处理，可切换到其它模块，完成后这里会自动显示结果
           </div>
           <div v-else-if="currentLocked && !turn.running" class="lock-hint">
-            🔒 {{ selectedId === 'character_designer' ? 'Agent 正在修改本项目角色，输入暂时锁定' : 'Agent 正在修改本项目剧本，输入暂时锁定' }}
+            🔒 {{ selectedId === 'producer' ? 'Producer 委派的专业 Agent 正在修改项目，输入暂时锁定'
+                : selectedId === 'character_designer' ? 'Agent 正在修改本项目角色，输入暂时锁定'
+                : 'Agent 正在修改本项目剧本，输入暂时锁定' }}
           </div>
           <div v-if="chatError" class="chat-err">{{ chatError }}</div>
         </div>
@@ -341,14 +343,18 @@ const currentActivity = computed(() => turn.currentActivity);
 const assistantStreaming = computed(() => turn.streamingText);
 const completedSteps = computed(() => turn.completedSteps);
 function onToggleProcess() { turn.toggleProcess(); }
-// AI-7D-R：具备直接编辑工具、走流式 tool-loop 的 Agent（2026-08-30 加入 Character Designer、Director）
-const STREAMED_AGENTS = new Set(['script_writer', 'character_designer', 'director']);
+// AI-7D-R：具备直接编辑工具、走流式 tool-loop 的 Agent（2026-08-30 加入 Character Designer、Director；
+// 2026-09-04 Producer V1 Phase 1 加入——Producer 经 *.delegate 串行驱动 SW/CD/Director，多 Agent
+// 委派分钟级，必须走 /turn/stream（后台续跑 + SSE 时间线），非流式 HTTP 会超时）。
+const STREAMED_AGENTS = new Set(['script_writer', 'character_designer', 'director', 'producer']);
 const isStreamed = computed(() => STREAMED_AGENTS.has(selectedId.value));
 // 输入锁定按 Agent 写入域区分：Script Writer 写剧本域（story 锁），Character Designer 写角色域
-// （character 锁），Director 写分镜域（storyboard 锁）
+// （character 锁），Director 写分镜域（storyboard 锁）。Producer 自身不锁资源，但委派的任一
+// Specialist 会锁其域——故 Producer 三域任一锁定即提示（忙时由 turn.running 兜底禁输入）。
 const currentLocked = computed(() =>
   selectedId.value === 'character_designer' ? pev.charactersLocked
   : selectedId.value === 'director' ? pev.storyboardLocked
+  : selectedId.value === 'producer' ? (pev.storyLocked || pev.charactersLocked || pev.storyboardLocked)
   : pev.storyLocked);
 // 工作中 = 本地 legacy 路径忙，或流式 turn 在跑（含后台续跑）
 const busy = computed(() => sending.value || turn.running);
@@ -356,7 +362,9 @@ const busy = computed(() => sending.value || turn.running);
 const composerDisabled = computed(() => busy.value || currentLocked.value);
 const composerPlaceholder = computed(() =>
   currentLocked.value
-    ? (selectedId.value === 'character_designer'
+    ? (selectedId.value === 'producer'
+        ? '🔒 Producer 委派的专业 Agent 正在工作，请稍候…'
+        : selectedId.value === 'character_designer'
         ? '🔒 Agent 正在修改角色，请稍候…'
         : selectedId.value === 'director'
           ? '🔒 Agent 正在修改分镜，请稍候…'
