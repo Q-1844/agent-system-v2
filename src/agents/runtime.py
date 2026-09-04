@@ -382,9 +382,14 @@ class AgentRuntime:
         # Producer V1 Phase 1：Producer 项目级 Direct Chat 走原生 tool-loop（自己持久化
         # 消息、自己循环，经 *.delegate 真实调用 SW/CD/Director *_turn；不经过 inquiry
         # 只读路径）。与 SW/CD 同语义：在持久化 user 之前委派，避免重复落盘。仅 project scope。
+        # 门控：原生 tool-loop 需要 function-calling client（chat_completion）。纯 chat
+        # client（D1/D3 冻结契约——FakeClient 只有 .chat，驱动 inquiry/conversation/runtime_control
+        # 意图分流）与未配置 client 继续走下方 D1/D3 路径；真 Agnes（具 chat_completion）才接管。
         if agent_id == "producer" and scope_type == ScopeType.PROJECT.value:
-            from .producer import producer_turn
-            return await producer_turn(self, project, sid, content)
+            _pclient = self._resolve_client_or_none(agent_id="producer")
+            if _pclient is not None and hasattr(_pclient, "chat_completion"):
+                from .producer import producer_turn
+                return await producer_turn(self, project, sid, content)
 
         # 捕获对话历史（append 当前 user 之前的 messages）供 inquiry 路径多轮承接（D1.3 / Bug B）。
         # conversation 路径（_produce_chat_reply）自己读 session.messages 含历史；inquiry 路径需显式注入。
