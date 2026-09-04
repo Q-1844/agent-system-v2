@@ -379,6 +379,13 @@ class AgentRuntime:
             from .character_designer import character_designer_turn
             return await character_designer_turn(self, project, sid, content)
 
+        # Producer V1 Phase 1：Producer 项目级 Direct Chat 走原生 tool-loop（自己持久化
+        # 消息、自己循环，经 *.delegate 真实调用 SW/CD/Director *_turn；不经过 inquiry
+        # 只读路径）。与 SW/CD 同语义：在持久化 user 之前委派，避免重复落盘。仅 project scope。
+        if agent_id == "producer" and scope_type == ScopeType.PROJECT.value:
+            from .producer import producer_turn
+            return await producer_turn(self, project, sid, content)
+
         # 捕获对话历史（append 当前 user 之前的 messages）供 inquiry 路径多轮承接（D1.3 / Bug B）。
         # conversation 路径（_produce_chat_reply）自己读 session.messages 含历史；inquiry 路径需显式注入。
         history = [{"role": m.role, "content": m.content}

@@ -241,11 +241,14 @@ async def agent_turn(project_name: str, sid: str, req: SendMessageReq):
 # AI-7D-R：活跃流式 turn 注册表（进程内）。key=f"{project}::{sid}" → cancel_event。
 # 用途：①同一会话 turn 串行互斥（并发请求 409）；②后台续跑时的停止端点置位 cancel_event。
 # turn 任务在客户端断开后仍继续跑完（消息持久化、资源事件走总线），故这里必须独立于连接。
-_ACTIVE_TURN_EVENTS: dict = {}
-
-
-def _turn_key(project_name: str, sid: str) -> str:
-    return f"{project_name}::{sid}"
+# AI-Producer-V1：活跃 turn 注册表抽取为中性的 src/agents/turn_registry（router 与
+# Producer Bridge 共用同一进程内 dict，防止用户直开 Specialist 聊天与 Bridge 委派
+# 并发驱动同一 session）。_ACTIVE_TURN_EVENTS / _turn_key 保留为别名（同一 dict 对象 /
+# 同一函数），既有用法与既有测试（tests/test_ai_7d_r_turn_background.py 直接操作该 dict
+# 与 _turn_key）零改动——行为逐字节等价，仅挪位置 + 改 import。
+from src.agents import turn_registry
+_ACTIVE_TURN_EVENTS = turn_registry._ACTIVE
+_turn_key = turn_registry.key
 
 
 def _put_terminal_event(q: asyncio.Queue, ev) -> None:
@@ -318,9 +321,18 @@ async def agent_turn_stream(project_name: str, sid: str, req: StreamTurnReq):
         from src.agents.project_events import RESOURCE_STORYBOARD, emit_changed
         _turn_fn, _writes, _resource, _emit = (
             director_turn, DIRECTOR_WRITE_OPERATIONS, RESOURCE_STORYBOARD, emit_changed)
+    elif session.agent_id == "producer":
+        # Producer V1 Phase 1：流式端点支持 Producer tool-loop。Producer 自身不锁任何资源
+        # （_writes 空集）——锁由 Bridge 内 Specialist 接线（_cb 复制 §5.3-⑤b 语义）负责；
+        # 若传 delegate 名会双重锁/错域。_emit 不用（同因）。互斥 409 / cancel / SSE / 后台
+        # 续跑复用既有机制。Producer 的 _cb 仅转发事件到 SSE（含 Specialist 经 Bridge 转发
+        # 的 tool 时间线）；锁/emit 在 Bridge _cb 里按 Specialist 的 writes/resource 接。
+        from src.agents.producer import producer_turn
+        _turn_fn, _writes, _resource, _emit = (
+            producer_turn, set(), None, lambda *a, **k: None)
     else:
         _raise(AgentError("permission_denied",
-                          "流式 turn 仅支持 Script Writer / Character Designer / Director 会话"))
+                          "流式 turn 仅支持 Script Writer / Character Designer / Director / Producer 会话"))
     from src.agents.models import ScopeType
     from src.agents.project_events import get_project_bus
     if session.scope_type != ScopeType.PROJECT.value:
