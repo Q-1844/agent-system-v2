@@ -627,17 +627,17 @@ seed 与现行逐字节一致。有活动时行为变化是 E3 要求的功能�
 
 ### 9.1 contract 字段缺失导致的歧义（逐字段攻击表）
 
-| 若缺失/未定义               | 后果                                         | 本 schema 的封堵                                                 |                          |
+| 若缺失/未定义               | 后果                                         | 本 schema 的封堵                                                 | <br />                   |
 | --------------------- | ------------------------------------------ | ------------------------------------------------------------ | ------------------------ |
-| border 窗口大小（"出入口取几镜"） | Scene Agent 不知快照边界，把窗口当全貌或反向要求读全片（越权读取扩散）  | `window_k=2` 显式 + `total_shots` 让窗口性可见                       |                          |
+| border 窗口大小（"出入口取几镜"） | Scene Agent 不知快照边界，把窗口当全貌或反向要求读全片（越权读取扩散）  | `window_k=2` 显式 + `total_shots` 让窗口性可见                       | <br />                   |
 | 首/末段的邻接               | null 语义不明 → 实例臆造"上游存在"                     | \`prev/next: NeighborView                                    | null\` + 注入文本显式"无上游/下游段" |
-| basis                 | 提案无锚 → MD 改动后套用旧端态 = 语义 lost update（S7 反面） | contract 与 proposal 双层携带 + submit/commit 双时点校验 + 防伪（§4.4-E4） |                          |
-| 预算                    | 实例无界运行（成本失控）/ 端态无界（巨型提案撑爆 reconcile）       | `budget` 三字段 + executor 强制                                   |                          |
-| 删申明                   | 遗漏即删除的强语义变成静默数据丢失（E1→E2b 完备性劣化的放大器）        | `removed_shot_rationales` 守卫（§1.2）                           |                          |
-| chain 的 item-0 规则     | 段首镜声明接力 → 引用不存在的前驱                         | schema 强制 `chain[0]=false`                                   |                          |
-| 空端态语义                 | "删光本段" vs "无提案"混淆                          | 空端态合法但须全量删申明；"无提案"= 未 submit，由 delegation 状态区分               |                          |
-| memory 注入的前提标注        | 先验被当证据（F2 记忆版）                             | 注入头 advisory 声明 + 隔离计数 + zero-read gate + E5 读取证据            |                          |
-| 读取证据口径                | LLM 自报读取量 = 又一个可幻觉字段                       | executor 从 trace 统计（§4.4-E5 注）                               |                          |
+| basis                 | 提案无锚 → MD 改动后套用旧端态 = 语义 lost update（S7 反面） | contract 与 proposal 双层携带 + submit/commit 双时点校验 + 防伪（§4.4-E4） | <br />                   |
+| 预算                    | 实例无界运行（成本失控）/ 端态无界（巨型提案撑爆 reconcile）       | `budget` 三字段 + executor 强制                                   | <br />                   |
+| 删申明                   | 遗漏即删除的强语义变成静默数据丢失（E1→E2b 完备性劣化的放大器）        | `removed_shot_rationales` 守卫（§1.2）                           | <br />                   |
+| chain 的 item-0 规则     | 段首镜声明接力 → 引用不存在的前驱                         | schema 强制 `chain[0]=false`                                   | <br />                   |
+| 空端态语义                 | "删光本段" vs "无提案"混淆                          | 空端态合法但须全量删申明；"无提案"= 未 submit，由 delegation 状态区分               | <br />                   |
+| memory 注入的前提标注        | 先验被当证据（F2 记忆版）                             | 注入头 advisory 声明 + 隔离计数 + zero-read gate + E5 读取证据            | <br />                   |
+| 读取证据口径                | LLM 自报读取量 = 又一个可幻觉字段                       | executor 从 trace 统计（§4.4-E5 注）                               | <br />                   |
 
 ### 9.2 diff 错误分类的边界（打回 vs 手动 vs abort）
 
