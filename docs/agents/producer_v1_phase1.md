@@ -11,8 +11,9 @@
 | --- | --- | --- |
 | `src/agents/turn_registry.py` | 新建 | 中性活跃 turn 注册表（`_ACTIVE`/`key`/`acquire`/`pop`/`get`）。router 与 Producer Bridge 共用同一进程内 dict，防止用户直开 Specialist 与 Bridge 委派并发驱动同一 session。仿 `change_protocol/locks.py` 先例。 |
 | `src/agents/producer.py` | 新建 | PRODUCER_SYSTEM / 工具 schema / 专用轻量镜像 loop `producer_turn` / `_delegate_specialist`（三个共用一个泛化实现）/ `_bridge_cb`（锁与 `*.changed` 接线）/ workflow + bridge 消息持久化。 |
-| `src/agents/runtime.py` | 改 | `unified_turn` 加 producer project-scope 重路由（镜像 SW/CD 两行，在持久化 user 之前委派）。 |
+| `src/agents/runtime.py` | 改 | `unified_turn` 加 producer project-scope 重路由（镜像 SW/CD），**并门控于 function-calling client**（`chat_completion`）：真 Agnes/ScriptedClient 才走 producer tool-loop；纯 chat client（D1/D3 冻结契约 FakeClient）与未配置 client 继续走 inquiry/conversation/runtime_control 意图分流。 |
 | `routers/agents.py` | 改 | ① `_ACTIVE_TURN_EVENTS`/`_turn_key` 改为 `turn_registry` 的别名（同一 dict/函数，行为逐字节等价，既有测试零改动）；② `agent_turn_stream` 加 producer 分支（`_writes` 空集——Producer 自身不锁资源，锁由 Bridge 内 Specialist 接线负责）。 |
+| `src/views/agents/index.vue` | 改 | §8 最小切流：Agent Center `STREAMED_AGENTS` 加 `producer`（多 Agent 委派分钟级，非流式 HTTP 会超时）+ Producer 三域任一锁即提示。 |
 | `src/agents/models.py` | 不动 | `AgentTask.parent_task_id` 已存在（`:350`，已序列化），无需补。 |
 | `tests/test_producer_bridge.py` | 新建 | §10 A-L 全 11 测试（全 mock 不联网）。 |
 | `docs/agents/producer_v1_phase1.md` | 新建 | 本报告。 |
@@ -67,6 +68,23 @@ Producer 工具面（`_build_producer_tools`）= `project.inspect` + 7 个只读
 
 ## 7. 状态
 
-- mock 测试：11/11 通过。
-- 真机 smoke：待后端重启 + 用户手测（§11 九问）。
-- 回归：待全量 `pytest tests/` 对照 `V1_FROZEN.md` 噪声清单确认零新增失败。
+- mock 测试（`tests/test_producer_bridge.py` §10 A-L）：**11/11 通过**。
+- 影响面回归（按改动 blast radius 全部 standalone 跑，~595 例）：
+  - D1/D2/D3 unified_turn + 8 个 producer bridge + stream_turn/front_stream/project_events/r1_memory：79 passed
+  - 核心冻结套件（test_agents/director/sw-native/CD/turn-background/story-update/web-search/subagent bitforbit+gate）：180 passed / 1 skipped
+  - batch split/tools/cross-memory/false-success/min：48 passed
+  - long-execution + 全部 subagent（instance/registry/diff-engine/fingerprints/governance）：通过
+  - 7d_r tail（fact-strip/failure-observability/serial/story-delete/batch-delete-insert 等）+ tail api/runtime 套件（api/zero-write-recovery/clean-review/telemetry/partial-success/relay/story-continuation/regrounding/zero-read/workbench/interface/sensenova/prompt-builders/shot-rules）：125+109 passed
+  - **零新增失败**。全量套件内的失败均为基线已知噪声：`not_configured` 族（conftest 加载真 .env 时失败、**单跑即过**，已逐个验证）+ autopilot e2e 时序 flake（`test_project_autopilot`/`full_project_autopilot` 零引用 producer/stream/unified_turn，且 `import api_server` 干净、18/19 通过）。
+  - 修复记录：首版 producer 无条件重路由曾拦截 D1/D3 冻结路径（FakeClient 只有 `.chat()`），已用 **function-calling client 门控**修复（`2ea64fb`），D1/D2/D3 复绿。
+- 后端导入：`import api_server` 干净，FastAPI app 构建通过，`producer_turn` 可调，registry 别名同一 dict。
+- 前端：Agent Center Producer 已切 `/turn/stream`（`334622d`）；Vite HMR 无需重启后端即可生效（.vue）。
+- 真机 smoke：待后端重启（加载 Python 新代码）+ 新测试项目 + 真 Agnes（§11 九问）。这是用户验收闸。
+
+## 8. 提交
+
+分支 `feat/producer-v1-bridge`：
+- `dc5aa7b` docs(producer): 现状审计（Phase 1 输入基线）
+- `e4e274e` feat(producer): Specialist Bridge Core（turn_registry + producer.py + runtime + routers + 测试 + 本文档）
+- `2ea64fb` fix(producer): 门控 tool-loop 于 function-calling client（D1/D3 冻结路由不破）
+- `334622d` feat(producer-ui): Agent Center Producer 切 /turn/stream
