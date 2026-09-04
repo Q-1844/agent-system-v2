@@ -6,7 +6,9 @@
 #     渲染[window_k=2] + locked constraints + brief + 有效 decision memory[≤K，
 #     含隔离计数] + 任务书 + 提案格式说明）
 #   → _run_tool_loop(tools_whitelist=SCENE_AGENT_TOOLS, extra_executors=
-#     {"proposal.submit": 闭包}, wall_clock_s=600, max_steps=32)
+#     {"proposal.submit": 闭包}, max_steps=INSTANCE_MAX_STEPS)
+#     rev3（2026-09-04）：wall_clock_s 不再传递（renewable window 取代墙钟硬停）；
+#     max_steps 语义改为 renewable window（默认 1024，窗口用满续期，次数不限）。
 #   → proposal.submit 的 E1–E6 确定性校验（§4.4）→ proposal store 落盘
 #   → 返回给 MD 的结构化摘要（≤500 字量级，Part 1 §10.2）
 #
@@ -39,9 +41,11 @@ from .diff_engine import (normalize_end_state, normalize_removed_rationales,
 
 log = logging.getLogger("agents.subagent.instance")
 
-# 实例预算（Part 2 §11 建议值）
-INSTANCE_MAX_STEPS = 32
-INSTANCE_WALL_CLOCK_S = 600
+# 实例预算（Part 2 §11 建议值；rev3：max_steps 改为 renewable window 语义）
+INSTANCE_MAX_STEPS = 1024
+# rev3（2026-09-04）：wall_clock_s 不再作为实例硬停——取消传递，由 renewable
+# window + self-check 承载长任务。director 的 _WallClockExceeded 机制保留（默认
+# None），下方 except 分支降为防御性不可达。常量已删除（无引用）。
 BORDER_WINDOW_K = 2
 
 SCENE_AGENT_TOOLS = None   # 懒初始化（import director 时避免环）
@@ -401,11 +405,10 @@ async def run_scene_agent_instance(rt: AgentRuntime, project: str,
             max_steps=INSTANCE_MAX_STEPS,
             event_cb=event_cb, cancel_event=cancel_event,
             state=loop_state, tools_whitelist=_scene_agent_tools(),
-            extra_executors={"proposal.submit": submit_executor},
-            wall_clock_s=INSTANCE_WALL_CLOCK_S)
+            extra_executors={"proposal.submit": submit_executor})
     except _TurnStopped:
         stop_reason = "cancelled"
-    except _WallClockExceeded as e:
+    except _WallClockExceeded as e:   # 防御性不可达：rev3 后不再传递 wall_clock_s
         stop_reason = f"wall_clock_{int(e.budget_s)}s"
     except Exception as e:
         log.exception("Scene Agent 实例异常（delegation=%s）",

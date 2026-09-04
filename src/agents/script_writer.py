@@ -111,10 +111,10 @@ def _committed_scene_ids(receipts: list) -> list:
     return out
 
 
-# AI-7D-R：Runner 执行预算 = LLM 循环步数（每步可能含多个 tool_call），【仅用于防死循环】，
-# 不是业务数量限制——不规定"最多创建 N 个故事段"。整篇剧本拆分（read+list+N×create+
-# list+final）可能远超旧值 8，故默认放宽，且可由调用方按任务覆盖。
-DEFAULT_MAX_TOOL_STEPS = 32
+# 执行窗口大小（renewable window）：单次窗口用满后注入 self-check nudge 并续接
+# 新窗口（次数不限），由 Agent 自行判断继续/停止——不再硬停长任务。仅防单次窗口
+# 内的失控；24h 级连续生产由 renewable window + self-check 承载，非业务数量限制。
+DEFAULT_MAX_TOOL_STEPS = 1024
 # AI-7D-R 真实性收口：最终回复纠偏最多 1 次；仍不实则 Runtime 确定性覆写（非提示词保证）。
 MAX_CORRECTIVE_ROUNDS = 1
 # 防失控（需求 #11）：连续同一工具同一失败签名达此阈值 → 诚实停止重复，要求换思路。
@@ -2230,6 +2230,19 @@ _ZERO_WRITE_RECOVERY_NUDGE = (
     "工具真实返回的情况下声称已经修改完成。")
 
 
+# 执行窗口 self-check（renewable window 边界注入；相信 Agent 自我判断，
+# Runtime 不做循环检测——续期后模型返回文本即正常结束，返回工具调用即继续）。
+_WINDOW_SELF_CHECK_NUDGE = (
+    "【系统提示·执行窗口】你已经连续执行了较长时间（当前执行窗口已用满）。请检查"
+    "当前用户目标与最新的工具返回结果，然后自行判断：\n"
+    "① 如果任务已经完成，正常结束并汇报结果即可；\n"
+    "② 如果你确认自己正在重复相同的操作、没有取得任何新进展，并且已经没有合理的"
+    "新方向，可以停止并如实说明卡点；\n"
+    "③ 如果任务尚未完成且仍有明确、合理的下一步，请继续执行——不要因为执行步数"
+    "而停止，系统会自动为你续接新的执行窗口。"
+)
+
+
 def _claims_success(text: str) -> bool:
     """仅当存在完成态声称、且该声称不在否定语境中才判定为「声称成功」。
     用最近的一次匹配向前查找否定词，避免「我没移动，但我创建了」这类被全句否定误伤。"""
@@ -2529,7 +2542,24 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
         _refresh_system(messages, rt, project)
         return True
 
-    for step in range(max_steps):
+    step = -1
+    window_used = 0
+    window_renewals = 0
+    while True:
+        if cancel_event is not None and cancel_event.is_set():
+            raise _TurnStopped()
+        # ---- 执行窗口边界：self-check + 续期（renewable window，次数不限）----
+        if window_used >= max_steps:
+            window_renewals += 1
+            window_used = 0
+            timeout_retries = 0   # provider 超时预算随窗口重置（窗口语义；
+                                  # 24h 任务不应因累计 3 次超时被杀）
+            messages.append({"role": "user", "content": _WINDOW_SELF_CHECK_NUDGE})
+            _refresh_system(messages, rt, project)
+            log.info("tool-loop 执行窗口续期（project=%s renewals=%s total_steps=%s）",
+                     project, window_renewals, step + 1)
+        step += 1
+        window_used += 1
         # AI-7D-R 协作式停止：每步开始前检查取消信号（安全停在步骤边界，不打断
         # 当前单次 LLM 调用/原子写）。由 script_writer_turn 捕获 _TurnStopped 收尾。
         if cancel_event is not None and cancel_event.is_set():
@@ -2687,7 +2717,8 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
             return {"text": text or "已完成。",
                     "edited": edited, "created": created, "moved": moved, "scene_updated": scene_updated, "deleted": deleted,
                     "summary": summary, "events": events, "receipts": receipts, "trace": trace,
-                    "reasonings": reasonings, "search_sources": search_sources}
+                    "reasonings": reasonings, "search_sources": search_sources,
+                    "window_renewals": window_renewals}
 
         messages.append({"role": "assistant", "content": content or "",
                          "tool_calls": tool_calls})
@@ -2909,20 +2940,6 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
         # 无条件刷新 system（项目元信息/计数）。成功/stale/no-op/错误都需 Agent 基于最新状态继续。
         _refresh_system(messages, rt, project)
 
-    # 预算耗尽（防死循环）：诚实告知已完成的真实工作 + 剩余须用户续做，绝不谎称全部完成。
-    done = [r for r in receipts if r.get("ok") and r.get("verified") and not r.get("unchanged")]
-    if created or done:
-        created_ids = [r.get("scene_id") for r in receipts
-                       if r.get("operation") == "story.create"
-                       and r.get("ok") and r.get("verified")]
-        tail = (f"已真实创建故事段：{', '.join(created_ids)}。" if created_ids
-                else f"已完成部分工作（{len(done)} 次成功写入）。")
-        text = (f"（已达到执行预算上限 {max_steps} 步，本轮停止——这是防死循环的保护，不是"
-                f"业务数量限制。{tail}还有未完成的部分，请告诉我继续，或把剩余需求拆小一些。）")
-    else:
-        text = (f"（已达到执行预算上限 {max_steps} 步，本轮停止——这是防死循环的保护。"
-                f"本轮没有任何成功写入。请把需求拆小一些再试。）")
-    return {"text": text,
-            "edited": edited, "created": created, "moved": moved, "scene_updated": scene_updated, "deleted": deleted,
-            "summary": summary, "events": events, "receipts": receipts, "trace": trace,
-            "reasonings": reasonings, "search_sources": search_sources}
+    # （原「预算耗尽」诚实停止段已删除：renewable window 下窗口用满时注入
+    # self-check nudge 续期，由 Agent 自行判断继续/停止——while True 无 break，
+    # 此段不再可达。）

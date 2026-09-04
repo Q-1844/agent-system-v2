@@ -732,6 +732,8 @@ locked\_border\_constraints 里改锁（flip-flop 守卫照常计数，Part 1 §
 | `MAX_PROPOSAL_ITEMS`       | 24     | 压测高潮段 7 镜；24 = 超出单段设计-at-once 合理规模的上界信号                                                                                          |
 | `MIN_READ_EVIDENCE`        | 1 次段级读 | zero-read gate 的提案域强化版；不要求更高（S1 场景一次 `shot.list(scene_id)` 即满足，空段无镜可 `shot.read`）                                                |
 
+> rev3（2026-09-04）：`WALL_CLOCK_S` 不再作为实例硬停（取消传递）；`max_steps` 语义改为 renewable window（默认 1024，窗口用满注入 self-check nudge 续期，次数不限）。director 的 `_WallClockExceeded` 机制保留（默认 None = 行为不变）。
+
 ***
 
 ## 12. 已知缺陷与接受理由（Part 2 增量；Part 1 §12 继续有效）

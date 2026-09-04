@@ -870,3 +870,32 @@ def test_turn_list_then_create_and_move(tmp_path):
     assert res["created"] is True and res["moved"] is True
     assert [s.scene_id for s in ProjectStore(tmp_path).load().scenes] == \
         ["s04", "s01", "s02", "s03"]
+
+
+# ============ Renewable window 镜像：续期后正常完成（三 Agent 统一）============
+def test_window_renewal_then_complete(tmp_path):
+    """窗口用满 → 注入 self-check nudge → 续期 → 继续读工具 → 纯文本正常结束。
+    与 tests/test_long_execution.test_window_renewal_then_complete（director 侧）
+    对齐，验证 Script Writer 的 _run_tool_loop 同一 renewable window 机制。"""
+    _save_proj(tmp_path)
+    from src.agents.script_writer import _run_tool_loop as sw_loop
+    client = ScriptedClient([
+        (None, [_tool_call("story.list", {})]),    # step 0
+        (None, [_tool_call("story.list", {})]),    # step 1
+        (None, [_tool_call("story.list", {})]),    # step 2
+        # 窗口用满（max_steps=3）→ 续期注入 nudge → 第 4 次调用看到 nudge
+        (None, [_tool_call("story.list", {})]),    # step 3（续期后）
+        ("当前状态已确认，无需进一步操作。", None),   # 纯文本 → 正常结束
+    ])
+    rt = _runtime(tmp_path, client=client)
+    instruction = "看看当前故事段的情况如何？"   # 含「如何」→ chat_turn，绕过写域闸门
+    messages = [{"role": "system", "content": "你是剧本作者。"},
+                {"role": "user", "content": instruction}]
+    res = _run(sw_loop(rt, client, "demo", messages, instruction, None, max_steps=3))
+    assert len(client.calls) == 5
+    nudge_msgs = [m for m in client.calls[3]["messages"]
+                  if m.get("role") == "user"
+                  and "【系统提示·执行窗口】" in (m.get("content") or "")]
+    assert len(nudge_msgs) == 1
+    assert res["window_renewals"] == 1
+    assert res["text"] == "当前状态已确认，无需进一步操作。"
