@@ -76,38 +76,48 @@ _SPECIALIST_RESOURCE = {
 
 
 # ============ Producer system prompt ============
-PRODUCER_SYSTEM = """你是 AGNES 的 Producer Supervisor，项目级总协调者。你代替用户在三个专业 Agent 之间持续、可靠、自然地推进任务。
+PRODUCER_SYSTEM = """你是 AGNES 的 Producer Supervisor——动画项目的总制片协调者。你代替用户在三个专业 Agent 之间持续、可靠、自主地推进项目级目标。你始终持有用户对话控制权，不把对话交给 Specialist。
 
-【你的身份】你不是第四个创作 Agent。你不写剧本、不设计角色、不改分镜、不生成图/视频。你是项目负责人：判断该找谁、衔接上一步结果、汇总汇报。
+【身份与权限】你不是第四个创作 Agent。你不写剧本、不设计角色、不改分镜、不生成图/视频。你的工作是：读懂用户的项目级目标 → 观察真实项目状态 → 决定下一步该找谁 → 委派 → 读真实结果 → 评估影响 → 重新规划 → 判断完成 → 继续或结束或问用户。事实自己读，专业判断问 Specialist，专业修改交给 owner。你永远不直接修改任何 canonical。
 
-【三个专业 Agent 与其写入域（硬边界）】
-- Script Writer（script_writer.delegate）→ 剧本正文 / 故事段结构（story_text / scenes）
-- Character Designer（character_designer.delegate）→ 角色设定（characters）
-- Director（director.delegate）→ 分镜（scenes[].shots）与分镜视觉资产
+【硬边界（物理保证，不是提示词约束）】你的工具面里【根本没有】story/character/shot 的写工具与生成工具——只有只读工具与三个 *.delegate 委派工具。修改必须经对应 *.delegate 委派给 owner。
+- Script Writer（script_writer.delegate）→ Story / 剧本正文 / 故事段结构 / 情节逻辑 / 人物动机在故事层的成立 / 对白 / Scene 的叙事内容
+- Character Designer（character_designer.delegate）→ Character canonical / 外貌 / 服装 / 发型 / 视觉身份 / 三视图基础
+- Director（director.delegate）→ Shot / Storyboard / 镜头结构 / 构图 / 景别 / 运镜 / 分镜连续性 / 分镜图 / 视频
 
-你的工具面里【根本没有】story/character/shot 的写工具与生成工具——这是物理保证，不是提示词约束。修改必须经对应 *.delegate 委派给 owner。
+【决策循环】每个 Specialist 返回后，不要机械执行原计划——回到原始目标、对照当前项目真实状态、重新判断下一步最佳动作。这个循环贯穿整个 turn：理解目标 → 观察现状 → 决定下一步 → 委派 → 读真实 Task Result → 评估影响 → 重新规划 → 完成检查 → 继续/结束/问用户。
 
-【只读工具（自己按需读，默认读轻量地图，确需判断才局部 read）】
-project.inspect / story.list / story.read / script.read / character.list / character.read / shot.list / shot.read
-事实自己读，专业判断问 Specialist，修改交给 owner。不要每轮全量读。
+【目标锚定——防止"有工具就全用"】
+- "把 s06 分镜节奏优化一下" → 纯 Director 域，只找 Director。
+- "修改后半段剧情并同步受影响分镜" → Script Writer 完成不等于任务完成（还有下游分镜要同步）。
+- "全流程优化但不要乱改" → 对整个项目结果负责 ≠ 把三个 Agent 各调一遍。按真实问题调用。
 
-【如何委派（*.delegate 工具）】
-调用时传：objective（必填，任务目标）/ situation（背景：发生了什么、用户为什么需要）/ constraints（必须遵守的约束）/ scope（作用范围）/ user_intent（用户原话）。
-关键：你只告诉它「为什么找你 / 当前发生了什么 / 用户真正希望解决什么」。不要把 canonical 内容（剧本全文、分镜列表）复制进 envelope——Specialist 自己读最新 canonical。
-user_intent 尽量用用户原话。
+【Observe 纪律】默认读轻量地图（project.inspect / story.list / character.list / shot.list）；定位问题才局部 read（story.read / script.read / character.read / shot.read）；Specialist 完成后先看 Task Result（status/verified/changed_refs/warnings），只有判断下游影响时才局部重读 canonical。不要每轮全量读。明确单域任务可直接委派，无需大量前置读取。
 
-【自然衔接】上一步 delegate 返回 Task Result（status / summary / changed_refs / warnings）。据此判断下一步：
-- 把上一步重要变化用一两句写进下一个 delegate 的 situation；
-- Specialist 自己读 canonical，你别替它转述全文；
-- 不要为了流程而调用不需要的 Agent：故事没问题就不调 SW，角色没受影响就不调 CD。
+【动态路由与 Skip】允许任意顺序与回头：SW only / CD→Director / Director→SW→Director / …，由目标 + canonical + 真实结果决定。知道不调用谁也是智能——例如 SW 改了 s05/s06 节奏与动机但未动人物身份/外貌/服装 → 跳过 CD；Director 可能需要重新检查。禁止为显示"全流程"机械跑三个 Agent。
 
-【不要固定顺序】按真实项目状态判断该找谁，可以跳过 SW/CD 直接找 Director。
+【下游影响思考方向（思考方向，不是机械规则——每次按真实变化判断）】
+- Story 变了 → 考虑：哪些 Scene 实际变化 / Character 是否受影响 / 分镜是否需重新检查 / 已生成图视频是否基于旧内容——但不是所有 Story change 都触发所有下游。
+- Character 变了 → 考虑：哪些 Shot 使用该角色 / 三视图是否变化 / 相关已生成资产是否 stale（Story 通常不必动）。
+- Shot 变了 → 考虑：已生成图/视频是否 stale（Story/Character 通常不必动）。
 
-【失败处理】Specialist 失败 ≠ workflow 失败。收到 failed/stopped Task Result 后自行判断：换 Agent / 回上游 / 问用户。绝不假装成功、绝不声称未发生的修改。
+【事实层级】authoritative = Task Result 的 status / verified / changed_refs / warnings / Runtime 证据 / canonical 重读；参考性 = summary / assistant_message / 建议。Specialist 自然语言说"已经修改完成"【不是】verified execution truth——以 changed_refs 与 verified 为准。你只能引用 changed_refs 作为已发生的修改；changed_refs 为空即未改动，不要凭对话臆测进度。
 
-【真话纪律】你只能引用 Task Result 的 changed_refs 作为已发生的修改；changed_refs 为空即未改动。不要凭对话臆测进度。
+【自然衔接（envelope）】每次委派传：objective（必填，任务目标）/ situation（背景：发生了什么、为什么现在找你）/ constraints（必须遵守的约束）/ scope（作用范围）/ user_intent（用户原话）。situation 写"发生了什么 + 为什么现在找你"——例如 SW 返回后委派 Director：objective="重新检查受最新故事修改影响的分镜" / situation="Script Writer 刚调整 s05/s06，s06 人物动机与动作结果变化，角色视觉设定无变化" / constraints="以最新 Story canonical 为事实来源；不依赖旧记忆；不无意义重做未受影响 Scene" / scope scene_ids=[...]。对方会自己读最新 canonical——不要把 canonical 内容（剧本全文、分镜列表、4000 字回答）复制进 situation，压缩成几行"发生了什么"即可。user_intent 尽量用用户原话。
 
-【汇报】向用户汇报：你找了谁、为什么、做了什么、跳过了谁、发生了什么变化、还有什么残留 blocker。
+【Replanning 允许回头】A→B→A 合法。例：Director 说"无法仅靠镜头解决，故事中人物行动缺少成立原因" → 你判断 → 委派 SW → Story 修改 → 再回 Director 重新读取后继续。已调用过某 Agent 不代表本 workflow 不能再调用它。
+
+【Specialist 建议只是输入不是命令】Director 建议"改故事"时，你自己判断：是否与用户目标相关、是否有事实支持、是否先读相关 Story 再决定，而不是照办。
+
+【完成判断——两个方向都要守住】
+- 禁止：某 Specialist completed ⇒ 用户任务 completed。每次准备结束前回到原始目标检查：最初目标 / 已完成部分 / 哪些下游结果因上游修改变 stale / 未完成事项 / blocker。例："修改角色服装并同步所有受影响画面"——CD 完成不等于结束，还有相关分镜图/视频。
+- 禁止：为"彻底"无限优化。"优化一下"≠ 无限完美。判断：是否发现真实问题 / 用户关注的是否已解决 / 剩余是否只是主观边际优化。没有明确价值的修改 → 停止。
+
+【用户询问门槛】用户已给完整目标 → 自动继续，不逐步请示（"是否继续 Character？"禁止）。只有五类情况才问用户：①两个方向都会显著改变作品核心创意且无用户偏好可判 / ②用户要求互相冲突 / ③缺少只有用户知道的信息 / ④将发生明显超出用户要求的大范围创意改造 / ⑤Specialist 发现真实 blocker 且你无合理路径。普通专业细节不问。问用户 = 正常结束本轮 turn，在最终消息里给出问题（不是暂停机制，不存在 pause/resume）。
+
+【失败协调】status=failed ≠ workflow 失败。判断：同 Agent 修正后继续 / 读更多事实 / 换专业 Agent / provider 暂时错误 / 确无有效方向。不假装成功，也不一失败就放弃整个用户目标。
+
+【最终汇报结构】向用户汇报：①调用了哪些 Agent、为什么 / ②各自做了什么 / ③跳过了谁及理由 / ④项目哪些内容变化 / ⑤是否仍有 blocker。
 
 当前 project：{project_name}（{scenes_count} 场景 / {shots_count} 镜头 / {characters_count} 角色）。
 """
@@ -201,11 +211,23 @@ def _build_producer_tools() -> tuple:
     }
     delegate_schemas = [
         _delegate_schema("script_writer", "Script Writer",
-                         "委派任务给 Script Writer（剧本正文 / 故事段结构）。它自己读 canonical；你只传目标/背景/约束/范围，不要复制剧本全文。"),
+                         "委派任务给 Script Writer。\n"
+                         "【owns】Story / 剧本正文 / 故事段结构 / 情节逻辑 / 人物动机在故事层的成立 / 对白 / Scene 叙事内容。\n"
+                         "【适用】改剧情、调整节奏与动机、补/改对白、修订故事段结构。\n"
+                         "【不适用】角色外貌/服装/视觉身份（→ Character Designer）；镜头/构图/分镜图（→ Director）。\n"
+                         "【要点】Script Writer 会自己读最新 canonical——situation 写发生了什么+为什么找它，不要把剧本全文复制进去。"),
         _delegate_schema("character_designer", "Character Designer",
-                         "委派任务给 Character Designer（角色设定 / 三视图）。它自己读 canonical；你只传目标/背景/约束/范围。"),
+                         "委派任务给 Character Designer。\n"
+                         "【owns】Character canonical / 外貌 / 服装 / 发型 / 视觉身份 / 三视图基础。\n"
+                         "【适用】改角色外貌/服装/发型、调整视觉设定一致性、补三视图基础。\n"
+                         "【不适用】剧情/动机/对白（→ Script Writer）；镜头/分镜图（→ Director）。\n"
+                         "【要点】Character Designer 会自己读最新 canonical——situation 写发生了什么+为什么找它，不要把角色设定全文复制进去。"),
         _delegate_schema("director", "Director",
-                         "委派任务给 Director（分镜结构 / 镜头 / 视觉资产）。它自己读 canonical；你只传目标/背景/约束/范围。"),
+                         "委派任务给 Director。\n"
+                         "【owns】Shot / Storyboard / 镜头结构 / 构图 / 景别 / 运镜 / 分镜连续性 / 分镜图 / 视频。\n"
+                         "【适用】设计/调整分镜、改镜头节奏与构图、补分镜图、重新检查受上游变化影响的分镜。\n"
+                         "【不适用】剧情/动机/对白（→ Script Writer）；角色外貌/服装（→ Character Designer）。\n"
+                         "【要点】Director 会自己读最新 canonical——situation 写发生了什么+为什么找它，不要把分镜列表全文复制进去。"),
     ]
     offered = [_project_inspect_schema()] + read_schemas + delegate_schemas
     return offered, read_executors
@@ -381,14 +403,19 @@ def _wrap_task_result(turn_result: Optional[dict], err: Optional[str],
         status = "completed" if mstat is None else mstat  # None→completed；透传 stopped/failed/not_configured
         summary = (tr.get("assistant_message") or "").strip() or "[无回复]"
     changed = _derive_changed_refs(agent_id, receipts)
+    # verified 只从 receipts 派生（§3 事实层级 / §5.5）：存在任意 ok+verified+非 unchanged
+    # 的真实回执即 True——绝不采信 LLM 自述，也不用 status==completed 兜底（status=completed
+    # 但零真实写入时 verified=False，让 Producer 据 receipts 区分「真完成」与「空声称」）。
+    # 与各 Specialist 自身的 write_success 公式一致（ok and verified and not unchanged）。
+    verified = any(r.get("ok") and r.get("verified") and not r.get("unchanged")
+                   for r in receipts)
     return {
         "task_id": task_id, "workflow_id": workflow_id, "agent": agent_id,
         "status": status,
         "summary": summary[:800], "assistant_message": summary,
         "changed_refs": changed,
         "warnings": _derive_warnings(receipts),
-        "verified": bool(changed["scenes"] or changed["shots"] or changed["characters"])
-                    or status == "completed",
+        "verified": verified,
         "n_tool_calls": len(tr.get("trace") or []),
         "session_id": sid, "execution_ref": f"agent_task:{task_id}",
     }
@@ -444,12 +471,18 @@ class ProducerWorkflowStore:
         wf["updated_at"] = time.time()
         self._save(data)
 
-    def settle(self, wf_id: str, status: str) -> None:
+    def settle(self, wf_id: str, status: str,
+               coordination_summary: Optional[str] = None) -> None:
         data = self._load()
         wf = data.get("workflows", {}).get(wf_id)
         if wf is None:
             return
         wf["status"] = status
+        # last_coordination_summary：Runtime 从 receipts 派生（各 task 的 agent+status+
+        # summary 首行拼接），非模型文本/非 CoT——供可观测；task 链已含等价信息，此处
+        # 仅为 workflow 记录自洽（§5.3 二选一：加，Runtime 派生）。
+        if coordination_summary is not None:
+            wf["last_coordination_summary"] = coordination_summary[:600]
         wf["updated_at"] = time.time()
         self._save(data)
 
@@ -837,6 +870,10 @@ async def producer_turn(rt, project: str, session_id: str, content: str, *,
     reasonings: list = []
     window_renewals = 0
     linked_task_ids: list = []
+    # Compaction 遥测（镜像 director_turn）：本轮上下文规模度量，只观察不做压缩。
+    tel_history_chars = sum(len(m.get("content") or "") for m in history)
+    tel_system_chars = 0
+    tel_tool_io_chars = 0
 
     if client is None:
         assistant_text = "[chat 未配置：Agnes 推理模型不可用，无法协调任务。请在设置中配置 API Key。]"
@@ -846,6 +883,7 @@ async def producer_turn(rt, project: str, session_id: str, content: str, *,
         messages: list[dict] = [{"role": "system", "content": system}]
         messages += history
         messages.append({"role": "user", "content": content})
+        tel_system_chars = len(system)
 
         offered, read_executors = _build_producer_tools()
         # workflow 闭包：turn 内首次 delegate 惰性创建；prev_ref 链 parent_task_id
@@ -909,13 +947,28 @@ async def producer_turn(rt, project: str, session_id: str, content: str, *,
             reasonings = loop_state.get("reasonings", [])
             window_renewals = loop_state.get("window_renewals", 0)
         finally:
-            # workflow 终态（per-producer-turn：turn 结束置终态）
+            # workflow 终态（per-producer-turn：turn 结束置终态）+ coordination summary
             if wf_ref[0] is not None:
                 wf_status = ("completed" if status is None
                              else "failed" if status == ResultStatus.FAILED.value
                              else "stopped" if status == ResultStatus.STOPPED.value
                              else "completed")
-                ProducerWorkflowStore(pdir, project).settle(wf_ref[0]["workflow_id"], wf_status)
+                coord = " | ".join(
+                    f"{r.get('agent','?')}:{r.get('status','?')}"
+                    + (f"-{(r.get('summary') or '')[:80]}" if r.get('summary') else "")
+                    for r in (receipts or [])) or "(no delegations)"
+                ProducerWorkflowStore(pdir, project).settle(
+                    wf_ref[0]["workflow_id"], wf_status, coord)
+            # 本轮 tool I/O 规模估算（镜像 director_turn 遥测）
+            try:
+                for m in messages:
+                    if m.get("role") == "tool" and isinstance(m.get("content"), str):
+                        tel_tool_io_chars += len(m["content"])
+                    for tc in (m.get("tool_calls") or []):
+                        tel_tool_io_chars += len(
+                            ((tc.get("function") or {}).get("arguments")) or "")
+            except Exception:
+                pass
 
     linked_task_ids = [r.get("task_id") for r in receipts if r.get("task_id")]
     intent = "delegation" if receipts else "conversation"
@@ -926,6 +979,17 @@ async def producer_turn(rt, project: str, session_id: str, content: str, *,
     asst_msg = AgentMessage(role="assistant", content=assistant_text,
                             status=status, meta=meta)
     store.append_message(session_id, asst_msg)
+
+    # Compaction 遥测：每 turn 落盘一行上下文规模（镜像 director_turn/script_writer_turn）。
+    # best-effort，任何失败静默跳过，绝不影响 turn 主流程。
+    try:
+        from . import session_governance
+        session_governance.log_context_telemetry(
+            pdir, project, "producer", session_id, user_msg.message_id,
+            history_chars=tel_history_chars, system_chars=tel_system_chars,
+            tool_io_chars=tel_tool_io_chars)
+    except Exception:
+        pass
 
     return {
         "assistant_message": assistant_text,
