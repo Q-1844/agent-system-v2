@@ -316,3 +316,56 @@ Director；跨域 SW→Director）、有理由地跳过不需要的 Agent（Stor
 检查任务写入倾向），不阻塞 V1 冻结，留 Phase 3 / 后续迭代收口。
 
 **PASS 则停止扩展核心逻辑。** Phase 3（Production Room / Group Chat）本轮不做。
+
+---
+
+## ㉒ 极小范围收口修正（N3 收口，2026-09-06）
+
+针对 Case 3 NON-BLOCKER N3（Specialist completed 但 verified=false 时 Producer 重复相似
+delegation）做了一次**极小范围**收口。本轮不是 Phase 3；未实现群聊、未重构 Bridge、未改三个
+Specialist 核心架构。提交：`0f0256b`（prompt+delegate 描述）/ `44e40b5`（mock RE1-RE5+P2）。
+
+**改动（全部仅 `producer.py` prompt/描述 + 测试，零 Runtime 新增）**：
+- `PRODUCER_SYSTEM` 增【未实际修改的处理——区分 review 与 execution】节：①verified=false
+  不一律失败——review 意图（检查/分析/评估/给建议）verified=false 是正常结果；execution 意图
+  （优化/修改/修复）不能只完成"检查"就当目标完成；②execution 第一次 completed+verified=false
+  → 不判失败也不原样重复，对同一 Specialist 做一次【执行性纠偏】重新委派（situation 以
+  "[执行性纠偏]"开头，写明上轮无 verified 修改、要求重读 canonical、确有真实问题直接用写工具
+  执行、无值得修改问题则明说无需修改不乱改）；③第二次仍 verified=false → 不机械重复，三选一
+  replan（根因在他域→换 Agent）/接受 no-change/诚实报告"未能让 Specialist 产生实际修改"；
+  ④禁止为 verified=true 强迫无价值修改；已发过一次[执行性纠偏]不发第二次。
+- 三 delegate 描述（尤其 Director）微调：review+modify 任务发现真实问题应用写工具直接执行，
+  不要只返回审查报告；无值得修改问题明确说明无需修改。**不改 Director system prompt（§13）。**
+- 智能仍住 Agnes，由其读本 turn 历史自查"是否已发过[执行性纠偏]"；未建 retry engine/counter/
+  loop detector（§14 禁令遵守）。
+
+**mock（RE1-RE5 + P2，共 20/20 绿）**：RE1 review verified=false 正常接受；RE2 第一次失败写→
+[执行性纠偏]→第二次成功写（同 Specialist 二次无 409、parent 链、纠偏标记透传、2nd verified=true）；
+RE3 连续两次失败写不第三次机械调用同 Specialist（canonical 未变、消息诚实）；RE4 Specialist
+明确"无值得修改"→接受 no-change 不强写；RE5 Director 两次未写且指 Story 根因→Producer replan
+到 Script Writer；P2 prompt 弱断言。
+
+**真机 Case 3 replay（§16，全新安全项目 `__producer_phase2d_r3`，干净 r3 运行）**：
+Producer 读项目（inspect/list/read）后委派 SW（completed/verified=true，剧本 138→211 字）→
+CD（completed/verified=true，两角色三视图生成）→ **Director #1（completed/verified=false/n_tools=0，
+只读审查）→ Producer 发一次 [执行性纠偏]**（bridge_messages 第 4 条 situation 以"[执行性纠偏]"
+开头，objective 改为"基于上述审查报告，**实际修改所有镜头**。具体操作：1)…2)…3)…"）→
+**Director #2 仍 completed/verified=false/n_tools=0** → **Producer 停止，未发第 3 次 Director**。
+最终汇报诚实："Director 未能执行实际修改…连续两次委派后均只返回审查报告（verified=false，
+changed_refs 全空）"，未声称分镜已优化，未强制 Director 乱改。
+
+**§17 验收逐条**：最多一次 clarification retry（恰 1 次 [执行性纠偏]）✓ / 之后正确 finish（诚实
+blocker 报告，§9-C）✓ / 无机械重复（仅 2 次 Director 非旧版 5 次）✓ / 无强制乱改 ✓ / 无假成功 ✓。
+
+**判定：N3 RESOLVED → Producer V1 Phase 2 正式冻结。**
+- **N3 resolved**（收口目标达成）。
+- **N2 仍 NON-BLOCKER backlog**：即便 Producer 给出明确"[执行性纠偏]…实际修改…具体操作 1/2/3"，
+  Director（真 Agnes）第 2 轮仍 n_tool_calls=0（连重读都没做）未执行写入——这是 Director 侧
+  review-only 倾向（§13 明确本轮不改 Director）。证据已充分，作为未来独立 Director 任务候选。
+- N1（路由偏保守）/N4（前置读略多）/N5（真机无 A→B→A 自然 replan，但 RE5 mock 管道已证）/
+  N6（situation 偶啰嗦）继续 backlog。
+- 附注：replay 另两次（r1 malformed-JSON 400 / r2 免费档 429 rate limit）为 provider 容量/格式
+  瞬态错误，非代码问题；干净 r3 运行给出决定性证据。另观察到 Producer 自身 LLM 调用遇 429/500
+  会以 `[执行失败]` 收尾（producer loop 仅 catch ReadTimeout）——非本轮目标，记 backlog。
+
+**Producer 智能协调核心开发到此停止。下一阶段 Phase 3（Production Room / Group Chat）。**
