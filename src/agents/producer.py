@@ -117,6 +117,13 @@ PRODUCER_SYSTEM = """你是 AGNES 的 Producer Supervisor——动画项目的�
 
 【失败协调】status=failed ≠ workflow 失败。判断：同 Agent 修正后继续 / 读更多事实 / 换专业 Agent / provider 暂时错误 / 确无有效方向。不假装成功，也不一失败就放弃整个用户目标。
 
+【未实际修改的处理——区分 review 与 execution】Task Result 的 verified=false（completed 但无真实 canonical 写入）不等于失败。先看用户原始目标是 review 还是 execution：
+- review 意图（检查/分析/评估/看看有什么问题/给建议/审查）→ verified=false 是正常结果，接受，不 retry。
+- execution 意图（优化/修改/调整/修复/重新设计/同步修改/处理掉/把项目优化好）→ 不能只完成"检查"就当用户目标完成；"检查并优化"= review + 若发现真实问题则 execute。
+execution 任务第一次返回 completed 但 verified=false（无 changed_refs）时：①不立即判 workflow 失败，也不原样重复上一任务；②对同一 Specialist 做一次【执行性纠偏】重新委派——新 envelope 的 situation 以"[执行性纠偏]"开头，写"上一轮你 completed 但无 verified 修改；用户本次要求实际修改；请重读最新 canonical，若确有与用户目标相关的真实问题，用你的正式写工具直接执行必要修改；若确认没有值得修改的问题，明确说明无需修改，不要为产生写操作而乱改"；objective/scope/constraints/user_intent 保持；新任务表达必须变化，禁止原样重复。
+第二次仍 verified=false 时：不再机械调用同一 Specialist 处理同一目标。重新判断根因：①问题其实属其他领域（如 Director 说"故事层无法解决"）→ 换 Script Writer；②Specialist 明确说"无值得修改的问题"→ 接受 no-change，不写也是正确结果；③Specialist 仍只给建议未执行 → 不再重复，如实向用户报告"已完成检查但未能让该 Specialist 产生实际修改"，据剩余目标换 Agent 或报告 blocker。
+禁止为得到 verified=true 强迫 Specialist 做没有价值的修改。正确标准是"如果发现真实问题且用户要求解决就应实际执行；如果没有真实问题可以不写"，不是"必须写"。已对某问题发过一次[执行性纠偏]后，不要再发第二次（看本 turn 历史）。
+
 【最终汇报结构】向用户汇报：①调用了哪些 Agent、为什么 / ②各自做了什么 / ③跳过了谁及理由 / ④项目哪些内容变化 / ⑤是否仍有 blocker。
 
 当前 project：{project_name}（{scenes_count} 场景 / {shots_count} 镜头 / {characters_count} 角色）。
@@ -215,19 +222,22 @@ def _build_producer_tools() -> tuple:
                          "【owns】Story / 剧本正文 / 故事段结构 / 情节逻辑 / 人物动机在故事层的成立 / 对白 / Scene 叙事内容。\n"
                          "【适用】改剧情、调整节奏与动机、补/改对白、修订故事段结构。\n"
                          "【不适用】角色外貌/服装/视觉身份（→ Character Designer）；镜头/构图/分镜图（→ Director）。\n"
-                         "【要点】Script Writer 会自己读最新 canonical——situation 写发生了什么+为什么找它，不要把剧本全文复制进去。"),
+                         "【要点】Script Writer 会自己读最新 canonical——situation 写发生了什么+为什么找它，不要把剧本全文复制进去。\n"
+                         "若任务是检查并修改：发现真实问题就用写工具直接执行，不要只返回分析报告；若确认无值得修改的问题，明确说明无需修改。"),
         _delegate_schema("character_designer", "Character Designer",
                          "委派任务给 Character Designer。\n"
                          "【owns】Character canonical / 外貌 / 服装 / 发型 / 视觉身份 / 三视图基础。\n"
                          "【适用】改角色外貌/服装/发型、调整视觉设定一致性、补三视图基础。\n"
                          "【不适用】剧情/动机/对白（→ Script Writer）；镜头/分镜图（→ Director）。\n"
-                         "【要点】Character Designer 会自己读最新 canonical——situation 写发生了什么+为什么找它，不要把角色设定全文复制进去。"),
+                         "【要点】Character Designer 会自己读最新 canonical——situation 写发生了什么+为什么找它，不要把角色设定全文复制进去。\n"
+                         "若任务是检查并修改：发现真实问题就直接执行，不要只返回分析报告；无值得修改的问题则明确说明无需修改。"),
         _delegate_schema("director", "Director",
                          "委派任务给 Director。\n"
                          "【owns】Shot / Storyboard / 镜头结构 / 构图 / 景别 / 运镜 / 分镜连续性 / 分镜图 / 视频。\n"
                          "【适用】设计/调整分镜、改镜头节奏与构图、补分镜图、重新检查受上游变化影响的分镜。\n"
                          "【不适用】剧情/动机/对白（→ Script Writer）；角色外貌/服装（→ Character Designer）。\n"
-                         "【要点】Director 会自己读最新 canonical——situation 写发生了什么+为什么找它，不要把分镜列表全文复制进去。"),
+                         "【要点】Director 会自己读最新 canonical——situation 写发生了什么+为什么找它，不要把分镜列表全文复制进去。\n"
+                         "【重要】若任务是'检查并优化/修改'：发现真实问题就用 shot 写工具直接执行修改，不要只返回审查报告或只列建议；若确认没有值得修改的问题，明确说明无需修改，不要为了产生写操作而乱改。"),
     ]
     offered = [_project_inspect_schema()] + read_schemas + delegate_schemas
     return offered, read_executors
