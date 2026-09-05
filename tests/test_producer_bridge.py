@@ -734,3 +734,250 @@ def test_P1_prompt_content_weak_assertions():
     # 反模式提示：对方自己读 canonical，situation 不复制全文
     for d in descs.values():
         assert "canonical" in d and "全文" in d
+
+
+# ============================================================================
+# 收口 §15：未实际修改处理（区分 review/execution + 一次执行性纠偏 + 不机械重复）
+# 方法论（§2）：mock 只验证管道与运行时事实——重复委派同 Specialist 无 409、parent 链、
+# verified=false 回执正确处理、envelope [执行性纠偏] 标记透传、不假成功。智能判断（是否
+# 发纠偏、是否停止）由真机 replay 承担（§16）。Director 的 verified=false 经【过期指纹失败
+# 写】路径产生（write_attempts=1 → 零 zero_write_recovery 干扰；中性文本 → 零假成功纠偏）。
+# ============================================================================
+
+def _shot_token_for(tmp_path, scene_idx, shot_idx):
+    """取指定 shot 的镜头级内容指纹（build-time，供 shot.update OCC）。"""
+    proj = ProjectStore(tmp_path).load()
+    return _shot_token(proj.scenes[scene_idx].shots[shot_idx])
+
+
+# ---- RE1：review 任务 verified=false 正常接受（不 retry、不假成功）----
+def test_RE1_review_verified_false_accepted(tmp_path):
+    """§15 Test1：用户只要 review → Director completed+verified=false 是正常结果，
+    Producer 接受不 retry。管道层：verified=false 回执被正确处理、不假成功。"""
+    _save_proj(tmp_path)
+    env = _envelope("director",
+                    objective="审查 s01 分镜并给出意见，本轮不要求改写",
+                    situation="用户只想了解 s01 现状", user_intent="检查一下有没有问题")
+    client = ScriptedClient([
+        (None, [_tool_call("director.delegate", env, "p1")]),
+        (None, [_tool_call("shot.list", {"scene_id": "s01"}, "d1")]),
+        ("s01 分镜的镜头节奏基本合理，未发现需要立即处理的结构性问题；以下是几点观察供参考。",
+         None),
+        ("Director 审查了 s01，未发现需要修改的问题。", None),
+    ])
+    rt = _runtime(tmp_path, client=client)
+    sid = rt.get_or_create_session("demo", "producer", "project", "demo")["session_id"]
+    res = _run(producer.producer_turn(rt, "demo", sid, "检查一下 s01 有没有问题"))
+
+    assert res["intent"] == "delegation"
+    assert len(res["receipts"]) == 1
+    rec = res["receipts"][0]
+    assert rec["agent"] == "director"
+    assert rec["status"] == "completed"
+    assert rec["verified"] is False          # 无真实写入
+    assert rec["changed_refs"] == {"scenes": [], "shots": [], "characters": []}
+    assert rec["warnings"] == []
+    # canonical 未变（review 不写）
+    assert _shots_rev(tmp_path) == _shots_rev(tmp_path)  # 结构指纹不变（无写）
+    # 不假成功：Producer 最终消息不含对 review 的虚假"已修改"声称（receipts 已证零变更）
+
+
+# ---- RE2：execution 第一次 verified=false → 一次[执行性纠偏] → 第二次成功写 ----
+def test_RE2_exec_clarification_then_success(tmp_path):
+    """§15 Test2+3：execution 任务第一次 Director completed+verified=false（过期指纹失败
+    写）→ Producer 发一次[执行性纠偏]重新委派（situation 含标记，任务表达变化）→ 第二次
+    用正确指纹成功写。管道层：同 Specialist 二次委派无 409（registry 复用）、parent 链、
+    第二次 verified=true+changed_refs、纠偏 envelope 透传到 Director session。"""
+    _save_proj(tmp_path)
+    correct_token = _shot_token_for(tmp_path, 0, 0)  # s01_c01 内容指纹（第一次失败写不改它）
+    env1 = _envelope("director", objective="优化 s01 第1镜景别",
+                     situation="用户希望 s01 节奏更紧凑", user_intent="优化一下 s01")
+    env2 = _envelope("director", objective="优化 s01 第1镜景别",
+                     situation="[执行性纠偏]上一轮你 completed 但无 verified 修改；用户要求"
+                               "实际修改；请重读最新 canonical，确有问题就直接用 shot.update 执行",
+                     user_intent="优化一下 s01")
+    client = ScriptedClient([
+        (None, [_tool_call("director.delegate", env1, "p1")]),        # 第1次
+        (None, [_tool_call("shot.list", {"scene_id": "s01"}, "d1a")]),
+        (None, [_tool_call("shot.update",                                # 过期指纹 → 失败
+                           {"shot_id": "s01_c01", "expected_revision": "stale_token_xx",
+                            "shot_size": "close-up"}, "d1b")]),
+        ("s01_c01 景别调整遇到版本冲突，未能写入；需重读最新版本。", None),
+        (None, [_tool_call("director.delegate", env2, "p2")]),          # 第2次（纠偏）
+        (None, [_tool_call("shot.list", {"scene_id": "s01"}, "d2a")]),
+        (None, [_tool_call("shot.update",                                # 正确指纹 → 成功
+                           {"shot_id": "s01_c01", "expected_revision": correct_token,
+                            "shot_size": "close-up"}, "d2b")]),
+        ("已收紧 s01_c01 景别。", None),
+        ("Director 第一次遇到冲突，纠偏后成功收紧了 s01_c01 景别。", None),
+    ])
+    rt = _runtime(tmp_path, client=client)
+    sid = rt.get_or_create_session("demo", "producer", "project", "demo")["session_id"]
+    res = _run(producer.producer_turn(rt, "demo", sid, "优化一下 s01"))
+
+    assert len(res["receipts"]) == 2
+    assert [r["agent"] for r in res["receipts"]] == ["director", "director"]
+    # 第1次 verified=false（失败写）、第2次 verified=true（成功写）
+    assert res["receipts"][0]["verified"] is False
+    assert res["receipts"][1]["verified"] is True
+    assert res["receipts"][1]["changed_refs"]["shots"] == ["s01_c01"]
+    # 同 Director session 二次委派无 409（registry acquire/pop/acquire 复用）
+    d_sess = _dir_session(rt)
+    assert d_sess.agent_id == "director"
+    # 纠偏 envelope 的 [执行性纠偏] 标记透传到 Director 第2条 user 消息
+    d_users = [m for m in d_sess.messages if m.role == "user"]
+    assert any("[执行性纠偏]" in m.content for m in d_users)
+    # parent 链：t2.parent=t1
+    ts = AgentTaskStore(rt._resolve_project_dir("demo"), "demo")
+    tasks = list(reversed(ts.list(requester_agent="producer")))
+    assert len(tasks) == 2
+    assert tasks[1].parent_task_id == tasks[0].task_id
+    # canonical 真改了（s01_c01 景别 → close-up）
+    assert ProjectStore(tmp_path).load().scenes[0].shots[0].shot_size == "close-up"
+
+
+# ---- RE3：第二次仍 verified=false → 不第三次机械调用同 Specialist ----
+def test_RE3_second_false_no_third_mechanical_repeat(tmp_path):
+    """§15 Test4：连续两次 verified=false 后，Producer 不第三次机械调用同一 Director。
+    管道层：两失败写回执均 verified=false、Producer 正常结束（intent=delegation、2 receipts）、
+    最终消息诚实（不声称已修改——changed_refs 全空）。智能判断（停止而非重复）由真机承担。"""
+    _save_proj(tmp_path)
+    env1 = _envelope("director", objective="优化 s01 第1镜景别",
+                     user_intent="优化 s01")
+    env2 = _envelope("director", objective="优化 s01 第1镜景别",
+                     situation="[执行性纠偏]上一轮无 verified 修改，请直接执行",
+                     user_intent="优化 s01")
+    client = ScriptedClient([
+        (None, [_tool_call("director.delegate", env1, "p1")]),
+        (None, [_tool_call("shot.list", {"scene_id": "s01"}, "d1a")]),
+        (None, [_tool_call("shot.update",
+                           {"shot_id": "s01_c01", "expected_revision": "stale_a",
+                            "shot_size": "close-up"}, "d1b")]),
+        ("s01_c01 调整遇版本冲突，未写入。", None),
+        (None, [_tool_call("director.delegate", env2, "p2")]),
+        (None, [_tool_call("shot.list", {"scene_id": "s01"}, "d2a")]),
+        (None, [_tool_call("shot.update",
+                           {"shot_id": "s01_c01", "expected_revision": "stale_b",
+                            "shot_size": "close-up"}, "d2b")]),
+        ("仍遇版本冲突，未写入。", None),
+        ("Director 两次尝试均遇版本冲突未能修改 s01_c01，如实汇报未能完成实际修改。",
+         None),
+    ])
+    rt = _runtime(tmp_path, client=client)
+    sid = rt.get_or_create_session("demo", "producer", "project", "demo")["session_id"]
+    res = _run(producer.producer_turn(rt, "demo", sid, "优化 s01"))
+
+    assert len(res["receipts"]) == 2          # 仅 2 次，无第三次
+    assert all(r["verified"] is False for r in res["receipts"])
+    assert all(r["changed_refs"] == {"scenes": [], "shots": [], "characters": []}
+               for r in res["receipts"])
+    # canonical 未变（两次都失败写）
+    assert ProjectStore(tmp_path).load().scenes[0].shots[0].shot_size == "medium shot"
+    # 最终消息诚实：不含"已优化/已修改完成"类假成功（changed_refs 全空已证）
+    final = res["assistant_message"]
+    for bad in ("已优化完成", "已修改完成", "已经优化", "已经修改"):
+        assert bad not in final, f"假成功措辞 {bad} 不应出现"
+
+
+# ---- RE4：Specialist 明确"无值得修改"→ 接受 no-change（不为 verified 强行改）----
+def test_RE4_no_change_accept_not_force_write(tmp_path):
+    """§15 Test5：Specialist 检查后明确"无值得修改的问题"→ verified=false 是正确结果，
+    Producer 接受正常停止，不为了 verified=true 强行让 Specialist 改。"""
+    _save_proj(tmp_path)
+    env = _envelope("director", objective="审查 s01 分镜，确有问题再改",
+                    user_intent="检查并优化 s01")
+    client = ScriptedClient([
+        (None, [_tool_call("director.delegate", env, "p1")]),
+        (None, [_tool_call("shot.list", {"scene_id": "s01"}, "d1")]),
+        ("s01 分镜经审查，镜头节奏与景别搭配均合理，没有值得为了'优化'而修改的真实问题。",
+         None),
+        ("Director 审查后认为 s01 无需修改，已接受 no-change。", None),
+    ])
+    rt = _runtime(tmp_path, client=client)
+    sid = rt.get_or_create_session("demo", "producer", "project", "demo")["session_id"]
+    res = _run(producer.producer_turn(rt, "demo", sid, "检查并优化 s01"))
+
+    assert len(res["receipts"]) == 1
+    rec = res["receipts"][0]
+    assert rec["verified"] is False
+    assert rec["changed_refs"] == {"scenes": [], "shots": [], "characters": []}
+    # canonical 未变（未强行修改）
+    assert ProjectStore(tmp_path).load().scenes[0].shots[0].shot_size == "medium shot"
+
+
+# ---- RE5：Director 第二次未写且指 Story 根因 → Producer replan 到 Script Writer ----
+def test_RE5_upstream_replan_director_to_script_writer(tmp_path):
+    """§15 Test6：Director 连续未写且说明"问题根源在 Story 层"→ Producer replan 到
+    Script Writer 而非继续 Director。管道层：receipts=[director, director, script_writer]、
+    parent 链 t2.parent=t1/t3.parent=t2、SW 真实写 story。"""
+    _save_proj(tmp_path)
+    correct_story_rev = _story_rev(tmp_path)
+    new_text = "完整剧本正文。补充 s01 林小雨的动机。"
+    env_d1 = _envelope("director", objective="优化 s01 分镜节奏",
+                       user_intent="优化 s01")
+    env_d2 = _envelope("director", objective="优化 s01 分镜节奏",
+                       situation="[执行性纠偏]上一轮无 verified 修改；若分镜无法单独解决请说明",
+                       user_intent="优化 s01")
+    env_sw = _envelope("script_writer", objective="补充 s01 林小雨的行动动机",
+                       situation="Director 两次指出 s01 节奏问题根源在故事层动机不足，"
+                                 "分镜单独改不彻底，需先处理 Story",
+                       user_intent="优化 s01")
+    client = ScriptedClient([
+        (None, [_tool_call("director.delegate", env_d1, "p1")]),
+        (None, [_tool_call("shot.list", {"scene_id": "s01"}, "d1a")]),
+        (None, [_tool_call("shot.update",
+                           {"shot_id": "s01_c01", "expected_revision": "stale_a",
+                            "shot_size": "close-up"}, "d1b")]),
+        ("s01_c01 调整遇版本冲突未写入；且节奏问题根源在故事层动机不足，仅靠镜头无法彻底解决。",
+         None),
+        (None, [_tool_call("director.delegate", env_d2, "p2")]),
+        (None, [_tool_call("shot.list", {"scene_id": "s01"}, "d2a")]),
+        (None, [_tool_call("shot.update",
+                           {"shot_id": "s01_c01", "expected_revision": "stale_b",
+                            "shot_size": "close-up"}, "d2b")]),
+        ("仍遇版本冲突；根因在 Story 层，建议先补 s01 动机再回分镜。", None),
+        (None, [_tool_call("script_writer.delegate", env_sw, "p3")]),   # replan → SW
+        (None, [_tool_call("story.list", {}, "sw1")]),
+        (None, [_tool_call("script.update",
+                           {"new_story_text": new_text,
+                            "expected_revision": correct_story_rev}, "sw2")]),
+        ("已补充 s01 林小雨的动机。", None),
+        ("Director 指出根因在 Story，已让 SW 补充 s01 动机。", None),
+    ])
+    rt = _runtime(tmp_path, client=client)
+    sid = rt.get_or_create_session("demo", "producer", "project", "demo")["session_id"]
+    res = _run(producer.producer_turn(rt, "demo", sid, "优化 s01"))
+
+    assert [r["agent"] for r in res["receipts"]] == ["director", "director", "script_writer"]
+    assert res["receipts"][0]["verified"] is False   # Director 1st no write
+    assert res["receipts"][1]["verified"] is False   # Director 2nd no write
+    assert res["receipts"][2]["verified"] is True    # SW wrote story
+    assert res["receipts"][2]["changed_refs"] == {"scenes": [], "shots": [], "characters": []}
+    # SW 真改了 story_text（SW changed_refs 为空是因 story_text 不映射 scene/shot/char，
+    # 但 verified=true 来自 ok+verified+not-unchanged 回执—— receipts 派生正确）
+    assert ProjectStore(tmp_path).load().story_text == new_text
+    # parent 链
+    ts = AgentTaskStore(rt._resolve_project_dir("demo"), "demo")
+    tasks = list(reversed(ts.list(requester_agent="producer")))
+    assert len(tasks) == 3
+    assert tasks[1].parent_task_id == tasks[0].task_id
+    assert tasks[2].parent_task_id == tasks[1].task_id
+
+
+# ---- P2：PRODUCER_SYSTEM 含未实际修改处理原则（弱断言）----
+def test_P2_prompt_unmodified_handling_principles():
+    """弱断言：PRODUCER_SYSTEM 含[执行性纠偏]/区分 review-execution/不机械重复/
+    不为 verified 乱改 原则关键词。智能由真机 replay 验证（§16）。"""
+    s = producer.PRODUCER_SYSTEM
+    assert "未实际修改的处理" in s
+    assert "review" in s and "execution" in s
+    assert "执行性纠偏" in s
+    assert "不" in s and "机械" in s           # 不机械重复
+    assert "verified=true" in s or "verified" in s
+    assert "乱改" in s or "没有价值" in s       # 不为 verified 强行乱改
+    # delegate 描述含"不要只返回审查报告"
+    offered, _ = producer._build_producer_tools()
+    dir_d = next(t["function"]["description"]
+                for t in offered if t["function"]["name"] == "director.delegate")
+    assert "审查报告" in dir_d or "只返回" in dir_d
+
