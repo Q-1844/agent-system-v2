@@ -19,7 +19,7 @@ from src.agents.project_events import (get_project_bus, reset_project_bus,
                                        RESOURCE_STORYBOARD)
 from src.agents.script_writer import _story_token
 from src.agents.character_designer import _character_token
-from src.agents.director import _shots_token
+from src.agents.director import _shots_token, _shot_token
 from src.agents.tasks import AgentTaskStore
 
 
@@ -447,12 +447,14 @@ def test_I_window_renewal(tmp_path, monkeypatch):
                       if m.get("role") == "user"
                       and "系统提示·执行窗口" in (m.get("content") or ""))
     assert nudge_count == 1
-    # 🔴 grep 断言：Producer 代码无总步数/总时长上限常量
+    # 🔴 grep 断言：Producer 代码无总步数/总时长/总委派次数上限常量
     import inspect
     src = inspect.getsource(producer)
     assert "MAX_WINDOW_RENEWALS" not in src
     assert "TOTAL_MAX_STEPS" not in src
     assert "TOTAL_WALL_CLOCK" not in src
+    assert "MAX_DELEGATIONS" not in src
+    assert "MAX_DELEGATIONS_TOTAL" not in src
 
 
 # ============ J：Cancel 协作停止 + 透传到 Specialist ============
@@ -573,3 +575,162 @@ def test_L_lock_wiring(tmp_path):
     # 结束后 story 未锁
     assert not bus.is_locked("demo", RESOURCE_STORY)
     bus.unsubscribe("demo", q)
+
+
+# ============ R1：重复委派同 Specialist（replan 管道 Director→SW→Director）============
+def test_R1_replan_repeat_delegation(tmp_path):
+    """同一 turn 内两次委派同一 Specialist（Director）——验证 turn_registry
+    acquire/pop/acquire 复用正确（第二次委派不 409）、bridge_messages 六条、
+    task 链 parent 链接正确。Director 第二次用 shot.update（镜头级内容指纹，不受
+    第一次 create_many 与 SW 改剧本影响）。管道层测试，非智能测试（§2）。"""
+    _save_proj(tmp_path)
+    # s01_c01 镜头级内容指纹：Director call-1 在 s02 create_many（结构指纹变）+
+    # SW 改 story_text 都不影响 s01_c01 的内容指纹，故 build-time 取值仍有效。
+    s01_c01 = ProjectStore(tmp_path).load().scenes[0].shots[0]
+    shot_token = _shot_token(s01_c01)
+
+    dir_env_1 = _envelope("director", objective="为第2段设计分镜",
+                          situation="s02 当前没有镜头", user_intent="补全并优化这个项目")
+    sw_env = _envelope("script_writer", objective="优化剧本正文",
+                       situation="Director 指出故事层需先调整再回分镜",
+                       user_intent="补全并优化这个项目")
+    dir_env_2 = _envelope("director",
+                          objective="重新检查并调整 s01 第1镜景别",
+                          situation="Script Writer 已调整剧本正文；"
+                                    "s01_c01 的景别偏松，重新检查后收紧",
+                          user_intent="补全并优化这个项目")
+    new_text = "完整剧本正文。补充第二幕描写。"
+    shots_s02 = [{"description": "两人隔桌对坐", "characters": ["林小雨", "陈默"],
+                  "shot_size": "medium shot", "target_duration_s": 5},
+                 {"description": "陈默望向窗外", "characters": ["陈默"],
+                  "shot_size": "close-up", "target_duration_s": 3}]
+    client = ScriptedClient([
+        (None, [_tool_call("director.delegate", dir_env_1, "p_d1")]),       # 1 producer→Director
+        (None, [_tool_call("shot.list", {"scene_id": "s02"}, "d1a")]),
+        (None, [_tool_call("shot.create_many",
+                           {"scene_id": "s02", "shots": shots_s02,
+                            "expected_shots_revision": _shots_rev(tmp_path)}, "d1b")]),
+        ("已为第2段设计分镜；s01 节奏还需 SW 先调整故事。", None),
+        (None, [_tool_call("script_writer.delegate", sw_env, "p_sw")]),     # 2 producer→SW
+        (None, [_tool_call("story.list", {}, "sw1")]),
+        (None, [_tool_call("script.update",
+                           {"new_story_text": new_text,
+                            "expected_revision": _story_rev(tmp_path)}, "sw2")]),
+        ("已优化剧本正文。", None),
+        (None, [_tool_call("director.delegate", dir_env_2, "p_d2")]),       # 3 producer→Director(再次)
+        (None, [_tool_call("shot.list", {"scene_id": "s01"}, "d2a")]),
+        (None, [_tool_call("shot.update",
+                           {"shot_id": "s01_c01", "expected_revision": shot_token,
+                            "shot_size": "close-up"}, "d2b")]),
+        ("已重新检查并收紧 s01 第1镜景别。", None),
+        ("SW 调整了剧本，Director 先为 s02 加分镜、回头又收紧了 s01 第1镜。", None),
+    ])
+    rt = _runtime(tmp_path, client=client)
+    sid = rt.get_or_create_session("demo", "producer", "project", "demo")["session_id"]
+    res = _run(producer.producer_turn(rt, "demo", sid, "补全并优化这个项目"))
+
+    # 三次委派；Director 两次（replan 回头）——registry 第二次 acquire 不 409
+    assert len(res["receipts"]) == 3
+    assert [r["agent"] for r in res["receipts"]] == ["director", "script_writer", "director"]
+    assert res["receipts"][0]["status"] == "completed"
+    assert res["receipts"][2]["status"] == "completed"
+    # 同一 Director session 被复用（get_or_create_conversation 幂等）
+    d_sess = _dir_session(rt)
+    assert d_sess.agent_id == "director"
+    # bridge_messages 六条（3 委派 × P→S + S→P），发送方序列正确
+    bm = (rt._resolve_project_dir("demo") / "output" / "agents" / "producer"
+          / "bridge_messages.jsonl").read_text(encoding="utf-8").strip().splitlines()
+    assert len(bm) == 6
+    rows = [json.loads(l) for l in bm]
+    assert [r["sender"] for r in rows] == ["producer", "director", "producer",
+                                           "script_writer", "producer", "director"]
+    # task 链 parent：t2.parent=t1, t3.parent=t2（按创建时间旧→新）
+    ts = AgentTaskStore(rt._resolve_project_dir("demo"), "demo")
+    tasks = ts.list(requester_agent="producer")
+    assert len(tasks) == 3
+    tasks_by_time = list(reversed(tasks))  # list 是新→旧
+    t1, t2, t3 = tasks_by_time
+    assert t2.parent_task_id == t1.task_id
+    assert t3.parent_task_id == t2.task_id
+    # 真实 canonical 变化：s02 落了 2 镜 + s01_c01 景别收紧 + story_text 改了
+    proj = ProjectStore(tmp_path).load()
+    assert [sh.shot_id for sh in proj.scenes[1].shots] == ["s02_c01", "s02_c02"]
+    assert proj.scenes[0].shots[0].shot_size == "close-up"
+    assert proj.story_text == new_text
+
+
+# ============ R3：事实层级（verified/changed_refs 只从 receipts 派生，不采信自述）============
+def test_R3_fact_hierarchy_verified_from_receipts(tmp_path):
+    """SW 最终文本声称「已修改完成」，但其 script.update 用过期指纹 → 写回执 ok=False。
+    断言 Task Result verified=False、changed_refs 为空、canonical 未变、warnings 含失败写。
+    验证 Producer 据 receipts（而非 LLM 自述）判断事实（§3 事实层级 / §2 方法论）。"""
+    _save_proj(tmp_path)
+    original_text = ProjectStore(tmp_path).load().story_text
+    env = _envelope("script_writer", objective="优化剧本正文",
+                    situation="用户希望剧本更丰富", user_intent="优化一下这个项目")
+    client = ScriptedClient([
+        (None, [_tool_call("script_writer.delegate", env, "p_sw")]),   # producer→SW
+        (None, [_tool_call("story.list", {}, "sw1")]),                 # SW 读
+        (None, [_tool_call("script.update",                            # SW 写：故意用过期指纹
+                           {"new_story_text": "完整剧本正文。补充描写。",
+                            "expected_revision": "stale_token_xxxxx"}, "sw2")]),
+        ("已修改完成。", None),                                         # SW 声称完成（false claim）
+        ("已修改完成。", None),                                         # corrective 耗尽后仍声称
+        ("我已让 Script Writer 优化剧本正文。", None),                  # producer 汇报
+    ])
+    rt = _runtime(tmp_path, client=client)
+    sid = rt.get_or_create_session("demo", "producer", "project", "demo")["session_id"]
+    res = _run(producer.producer_turn(rt, "demo", sid, "优化一下这个项目"))
+
+    assert len(res["receipts"]) == 1
+    rec = res["receipts"][0]
+    assert rec["agent"] == "script_writer"
+    # 🔴 事实层级：verified=False（无 ok+verified+非unchanged 回执），changed_refs 为空
+    assert rec["verified"] is False
+    assert rec["changed_refs"] == {"scenes": [], "shots": [], "characters": []}
+    # 失败写进 warnings
+    assert rec["warnings"], "应有失败写 warning"
+    assert any("stale" in w or "script.update" in w for w in rec["warnings"])
+    # canonical 真的没被改（过期写未落盘）
+    assert ProjectStore(tmp_path).load().story_text == original_text
+
+
+# ============ P1：PRODUCER_SYSTEM 与 delegate 描述内容弱断言（辅助性）============
+def test_P1_prompt_content_weak_assertions():
+    """弱断言：PRODUCER_SYSTEM 含核心原则关键词、三个 delegate 描述含各自 ownership。
+    仅辅助性——智能行为由真机三案例验证（§2：mock 不做同义反复智能测试）。"""
+    sys_prompt = producer.PRODUCER_SYSTEM
+    # 完成判断两方向（不把 Specialist completed 当用户完成；不无限优化）
+    assert "完成判断" in sys_prompt
+    assert "无限" in sys_prompt
+    # 询问门槛（不逐步请示；仅五类情况问用户）
+    assert "询问门槛" in sys_prompt or "问用户" in sys_prompt
+    # 事实层级（authoritative vs 自述）
+    assert "事实层级" in sys_prompt
+    assert "authoritative" in sys_prompt
+    # 动态路由与 skip
+    assert "跳过" in sys_prompt or "Skip" in sys_prompt
+    # replan 回头
+    assert "回头" in sys_prompt or "Replanning" in sys_prompt
+    # 失败协调
+    assert "失败" in sys_prompt and "workflow 失败" in sys_prompt
+    # 最终汇报结构
+    assert "汇报" in sys_prompt
+
+    offered, _ = producer._build_producer_tools()
+    descs = {t["function"]["name"]: t["function"]["description"]
+             for t in offered if t["function"]["name"].endswith(".delegate")}
+    # 各自 ownership 关键词
+    sw_d = descs["script_writer.delegate"]
+    assert "owns" in sw_d and "剧本" in sw_d and "动机" in sw_d
+    cd_d = descs["character_designer.delegate"]
+    assert "owns" in cd_d and "外貌" in cd_d and "服装" in cd_d
+    dir_d = descs["director.delegate"]
+    assert "owns" in dir_d and "镜头" in dir_d and "构图" in dir_d
+    # 各自不适用域（指向其他 owner）
+    assert "Character Designer" in sw_d or "Director" in sw_d
+    assert "Script Writer" in cd_d or "Director" in cd_d
+    assert "Script Writer" in dir_d or "Character Designer" in dir_d
+    # 反模式提示：对方自己读 canonical，situation 不复制全文
+    for d in descs.values():
+        assert "canonical" in d and "全文" in d
