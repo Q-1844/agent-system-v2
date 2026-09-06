@@ -22,12 +22,13 @@
 # 所有权由工具面缺失直接保证；Producer 永远不是第四个 canonical writer。
 #
 # Import 纪律：本文件只 import src.core.* / .models / .tasks / .project_events /
-# .turn_registry / 标准库。Specialist 模块（script_writer/character_designer/director）
-# 一律 lazy import（在函数内），避免本模块 import 时拖入全部 Specialist 与循环风险。
+# .turn_registry / 标准库，以及 src.api.agnes_client 的 AgnesError/RETRYABLE（叶子客户端
+# 模块，收口 §1B 瞬态恢复需要判定可重试状态码；Specialist 模块一律 lazy import 的纪律不变）。
 from __future__ import annotations
 import asyncio
 import json
 import logging
+import random
 import secrets
 import time
 from pathlib import Path
@@ -35,6 +36,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 import httpx
 
+from src.api.agnes_client import AgnesError, RETRYABLE
 from src.core.atomic import atomic_write_json
 from src.core.store import ProjectStore
 from .models import (AgentMessage, AgentTask, AgentOp, ResultStatus,
@@ -48,6 +50,12 @@ log = logging.getLogger("producer")
 
 # ============ 常量 ============
 DEFAULT_MAX_TOOL_STEPS = 1024
+
+# 收口 §1B：LLM provider 瞬态错误（429/500/502/503/520 等 RETRYABLE 族）的 turn 级轻量
+# 恢复上限。HTTP request-level 重试在 AgnesClient 内已有（非流式 5 次指数退避 + 流式
+# 3 次尝试）；这里是更长瞬态窗口（如免费档分钟级 429 风暴）的最后一层：最多 2 次
+# 恢复 nudge，超过则如实失败（不建 Retry Engine，不设 workflow 总时长/总步数上限）。
+MAX_LLM_TRANSIENT_RECOVERIES = 2
 
 # 镜像 director._WINDOW_SELF_CHECK_NUDGE（每文件一份，仓库惯例；renewable window 边界注入）。
 _WINDOW_SELF_CHECK_NUDGE = (
@@ -267,6 +275,17 @@ def _tool_summary(name: str, obs: dict) -> str:
             return obs["summary"][:120]
         return f"{_tool_label(name)}完成"
     return f"{_tool_label(name)}失败：{obs.get('error') or obs.get('code') or '失败'}"
+
+
+async def _recover_backoff(seconds: float, cancel_event) -> None:
+    """可取消的恢复等待（小步睡眠，取消事件置位立即协作停止）。"""
+    waited = 0.0
+    while waited < seconds:
+        if cancel_event is not None and cancel_event.is_set():
+            raise _TurnStopped()
+        step = min(1.0, seconds - waited)
+        await asyncio.sleep(step)
+        waited += step
 
 
 # ============ project.inspect executor（Producer 专属，极简）============
@@ -698,6 +717,7 @@ async def _producer_tool_loop(rt, client, project: str, messages: list,
     step = -1
     window_used = 0
     window_renewals = 0
+    llm_transient_recoveries = 0   # §1B：turn 级瞬态恢复已用次数（上限 MAX_LLM_TRANSIENT_RECOVERIES）
     while True:
         if cancel_event is not None and cancel_event.is_set():
             raise _TurnStopped()
@@ -763,6 +783,26 @@ async def _producer_tool_loop(rt, client, project: str, messages: list,
                 "请继续未完成的步骤，不要重做已完成的部分。"})
             _refresh_producer_system(messages, rt, project)
             continue
+        except AgnesError as e:
+            # §1B：provider 瞬态错误（429/500/502/503/520 族）轻量恢复。AgnesClient 内
+            # request-level 重试耗尽后带原 status 抛到这里：仍属 RETRYABLE → 小步退避
+            # （cancel 感知）+ 一次恢复 nudge 继续；非瞬态（auth/参数/配额，status 不在
+            # RETRYABLE）或恢复次数用尽 → 原样上抛诚实失败。带 status 的错误都在状态码
+            # 检查点抛出（尚未产出任何流事件），重试无重复推送风险。
+            if (e.status in RETRYABLE
+                    and llm_transient_recoveries < MAX_LLM_TRANSIENT_RECOVERIES):
+                llm_transient_recoveries += 1
+                wait_s = min(30.0, 8.0 * llm_transient_recoveries) + random.uniform(0, 2)
+                log.warning("producer LLM 瞬态错误 status=%s（第 %d/%d 次恢复），退避 %.1fs",
+                            e.status, llm_transient_recoveries,
+                            MAX_LLM_TRANSIENT_RECOVERIES, wait_s)
+                await _recover_backoff(wait_s, cancel_event)
+                messages.append({"role": "user", "content":
+                    f"[系统恢复提示] 上一次模型请求遇到服务端临时错误（HTTP {e.status}），"
+                    "已自动等待后重试。请继续未完成的步骤，不要重做已完成的部分。"})
+                _refresh_producer_system(messages, rt, project)
+                continue
+            raise
 
         if not tool_calls:
             text = (content or "").strip() or "已完成。"
@@ -811,12 +851,30 @@ async def _producer_tool_loop(rt, client, project: str, messages: list,
                         obs = {"ok": False, "operation": name,
                                "error": f"{type(e).__name__}: {e}", "agent": name.split(".")[0]}
                     delegate_done_this_step = True
-                elif asyncio.iscoroutinefunction(executor):
-                    obs = await executor(rt, project, args, instruction, message_id)
                 else:
-                    obs = executor(rt, project, args, instruction, message_id)
+                    # 收口 §1A：read 工具异常（不存在实体/参数错等可恢复错误）转成 tool
+                    # failure 回给模型——Producer 可重新 list/read 最新 canonical 后继续，
+                    # 不再击穿整个 turn（真机：shot.read 不存在 shot → AgentError 抛穿 →
+                    # 整轮 failed）。只放行协作停止/任务取消；receipts/truth/cancel 语义不变
+                    # （read 失败不进 receipts，仅 trace 记 ok=False，前端可见）。
+                    try:
+                        if asyncio.iscoroutinefunction(executor):
+                            obs = await executor(rt, project, args, instruction, message_id)
+                        else:
+                            obs = executor(rt, project, args, instruction, message_id)
+                    except _TurnStopped:
+                        raise
+                    except (asyncio.CancelledError, KeyboardInterrupt):
+                        raise
+                    except Exception as e:
+                        log.warning("producer read tool %s 失败（转 tool failure 回模型）: %s: %s",
+                                    name, type(e).__name__, str(e)[:200])
+                        obs = {"ok": False, "operation": name,
+                               "error": f"{type(e).__name__}: {e}",
+                               "fix_hint": "该引用可能不存在或已变化；请先 list 最新 canonical "
+                                           "确认实际 id 后再重试或调整计划。"}
 
-            ok_now = bool(obs.get("ok"))
+            ok_now = bool(obs.get("ok")) if isinstance(obs, dict) else False
             # delegate 回执记入账本（receipts = Task Result 列表）；read 工具不入 receipts
             if name in DELEGATE_TOOLS:
                 receipts.append(obs)
