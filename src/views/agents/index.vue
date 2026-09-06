@@ -39,6 +39,12 @@
         <TeamChatPanel />
       </section>
 
+      <!-- Producer V1 Phase 3 · Production Room：群聊式协作投影（Producer 统一入口；
+           专业 Agent 的 Direct Chat 仍在左侧列表独立可用）。 -->
+      <section class="panel proom-panel" v-else-if="selectedId === 'producer'">
+        <ProductionRoom />
+      </section>
+
       <section class="panel" v-else-if="selected">
         <div class="panel-head">
           <div>
@@ -56,38 +62,8 @@
           </div>
         </div>
 
-        <!-- Producer 委派区 -->
-        <div v-if="selectedId === 'producer'" class="delegation">
-          <div class="sub-title">Delegated Tasks</div>
-          <div class="task-table">
-            <div class="task-row task-head">
-              <span>Target</span><span>Capability</span><span>Scope</span><span>Status</span><span>Result</span>
-            </div>
-            <div v-if="!tasks.length" class="empty">暂无委派任务</div>
-            <div v-for="t in tasks" :key="t.task_id" class="task-row">
-              <span>{{ t.target_agent }}</span>
-              <span>{{ t.capability_id }}</span>
-              <span>{{ t.scope_type }}:{{ t.scope_id }}</span>
-              <span :class="'st-' + t.status">{{ t.status }}</span>
-              <span class="result" :title="t.result_summary">{{ t.result_summary?.slice(0, 40) }}</span>
-            </div>
-          </div>
-
-          <div class="sub-title">New Delegation</div>
-          <div class="form-row">
-            <select v-model="delegForm.target_agent" class="input" @change="onTargetChange">
-              <option v-for="a in specialists" :key="a" :value="a">{{ a }}</option>
-            </select>
-            <select v-model="delegForm.capability_id" class="input">
-              <option v-for="c in targetCapabilities" :key="c.id" :value="c.id">{{ c.id }}{{ c.can_execute ? '' : ' (无权)' }}</option>
-            </select>
-            <input v-model="delegForm.scope_id" class="input scope-id" placeholder="scope_id (如 s01)" />
-            <button class="btn btn-primary" :disabled="delegating" @click="doDelegate">
-              {{ delegating ? '执行中…' : '委派' }}
-            </button>
-          </div>
-          <input v-model="delegForm.instruction" class="input full" placeholder="指令（如：检查 Scene 1 的分镜结构）" />
-        </div>
+        <!-- （Producer V1 Phase 3）旧 AI-6B 手动委派表单已由 Production Room 取代：
+             真实协作走 *.delegate tool-loop（群聊可见），不再走手工表单路径。 -->
 
         <!-- 聊天区 -->
         <div class="sub-title">Conversation（独立隔离）</div>
@@ -287,7 +263,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { apiClient } from '@/api';
-import type { AgentInfo, AgentCapability, AgentSession, AgentTask, AgentStreamEvent, ScriptWriterReceipt, ScriptWriterSearchSource } from '@/api';
+import type { AgentInfo, AgentSession, ScriptWriterReceipt, ScriptWriterSearchSource } from '@/api';
 import { useProjectStore } from '@/store';
 import { useChangeSessionStore } from '@/store/changeSession';
 import { useAgentTurnStore, type ProcessItem } from '@/store/agentTurn';
@@ -298,6 +274,7 @@ import TeamChatPanel from '@/components/agent/TeamChatPanel.vue';
 import ChangePlanReview from '@/components/agent/ChangePlanReview.vue';
 import ScriptWriterTestModal from '@/components/agent/ScriptWriterTestModal.vue';
 import DirectorTestModal from '@/components/agent/DirectorTestModal.vue';
+import ProductionRoom from '@/components/agent/ProductionRoom.vue';
 
 // ============ AI-7D-R 流式 Direct Chat：turn 状态归 app 级 store（切页面不丢） ============
 // 思考开关（发送瞬间 snapshot 固定，运行中切换不影响当前 turn）
@@ -518,21 +495,12 @@ watch(messagesEl, (el) => { if (el) { stick.bind(); stick.pinToBottom(); } });
 // 外部异步到达的消息（如变更结论 no_action 补录）：仅在用户贴底时跟随，看历史时不强拉。
 watch(() => session.value?.messages?.length, () => { stick.followIfStuck(); });
 
-// 委派
-const tasks = ref<AgentTask[]>([]);
-const delegating = ref(false);
-const specialists = ['script_writer', 'character_designer', 'director', 'production_planner', 'shot_producer', 'continuity_reviewer', 'editor'];
-const targetCaps = ref<AgentCapability[]>([]);
-const delegForm = ref({
-  target_agent: 'director', capability_id: 'storyboard.inspect',
-  scope_id: 's01', instruction: '检查分镜结构',
-});
+// （Producer V1 Phase 3）旧 AI-6B 手动委派表单的 tasks/delegForm/doDelegate 已随
+// Production Room 上线移除；真实协作由 Producer 的 *.delegate tool-loop 承载。
 
 const scopePlaceholder = computed(() =>
   scopeType.value === 'project' ? (projectName.value || 'project') :
   scopeType.value === 'scene' ? '如 s01' : '如 s01_c02');
-
-const targetCapabilities = computed(() => targetCaps.value);
 
 async function loadAgents() {
   try {
@@ -545,33 +513,22 @@ async function loadAgents() {
 
 async function selectAgent(id: string) {
   selectedId.value = id;
+  chatError.value = '';
+  // Producer V1 Phase 3：Producer 面板 = Production Room（自管 session/快照/实时合并），
+  // 不再走通用 openSession 聊天面板。
+  if (id === 'producer') { session.value = null; return; }
   // AI-7D-R §9：Direct Conversation 默认长存于 project 级（不随页面 scope 重建/碎片化）。
   // 用户仍可用上方 scope 选择器显式切到 scene/shot 会话。
   scopeType.value = 'project';
   scopeId.value = projectName.value || '';
   session.value = null;
-  chatError.value = '';
   if (id === 'script_writer') loadModelSwitch();   // 模型开关初值跟随 Agent 设置
-  if (id === 'producer') loadTasks();
   await openSession();
-  if (id !== 'producer') await loadTargetCaps(id);
 }
 
 function selectTeam() {
   selectedId.value = '__team__';
   chatError.value = '';
-}
-
-async function loadTargetCaps(agentId: string) {
-  try { targetCaps.value = await apiClient.getAgentCapabilities(agentId); }
-  catch (e: any) { targetCaps.value = []; }
-}
-
-async function onTargetChange() {
-  delegForm.value.capability_id = 'storyboard.inspect';
-  await loadTargetCaps(delegForm.value.target_agent);
-  const first = targetCaps.value.find(c => c.can_execute);
-  if (first) delegForm.value.capability_id = first.id;
 }
 
 async function openSession() {
@@ -661,39 +618,6 @@ function consumePendingIntoSession() {
   stick.pinToBottom();
 }
 
-async function loadTasks() {
-  if (!projectName.value) return;
-  try {
-    tasks.value = await apiClient.listAgentTasks(projectName.value, { requester_agent: 'producer' });
-  } catch (e: any) { /* ignore */ }
-}
-
-async function doDelegate() {
-  if (!projectName.value || delegating.value) return;
-  delegating.value = true;
-  chatError.value = '';
-  try {
-    // §21: operation 从选中 capability 的 metadata 派生（production_plan.create -> execute，
-    // inspect 类 -> inspect），不硬编码 inspect，避免 create 用错 operation。
-    const cap = targetCaps.value.find(c => c.id === delegForm.value.capability_id);
-    const op = cap?.operations?.length ? cap.operations[0] : 'inspect';
-    await apiClient.createAgentTask(projectName.value, {
-      requester_agent: 'producer',
-      target_agent: delegForm.value.target_agent,
-      scope_type: 'scene',
-      scope_id: delegForm.value.scope_id,
-      instruction: delegForm.value.instruction,
-      capability_id: delegForm.value.capability_id,
-      operation: op,
-    });
-    await loadTasks();
-  } catch (e: any) {
-    chatError.value = '委派失败: ' + (e.message || e);
-  } finally {
-    delegating.value = false;
-  }
-}
-
 // AI-7D D2：活跃执行 + 新变更请求的二选一（委托 csStore.resolveChangeChoice）
 async function onResolveChoice(choice: 'queue' | 'restart') {
   if (sending.value) return;
@@ -761,16 +685,12 @@ onUnmounted(() => {
 .scope-row { display: flex; gap: 6px; align-items: center; }
 
 .sub-title { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; }
-.delegation { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
-.task-table { display: flex; flex-direction: column; font-size: 12px; }
-.task-row { display: grid; grid-template-columns: 1.2fr 1.4fr 1.2fr 0.9fr 2fr; gap: 6px; padding: 6px 4px; border-bottom: 1px solid var(--border); color: var(--text-secondary); }
-.task-row.task-head { color: var(--text-muted); font-weight: 600; }
-.result { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.st-completed { color: #4ade80; }
-.st-failed { color: #f87171; }
-.st-running { color: #60a5fa; }
+/* （Producer V1 Phase 3）旧委派表单样式（.delegation/.task-table/.task-row/.st-*/.form-row）
+   已随 Production Room 取代手动委派而移除。 */
 
-.form-row { display: flex; gap: 6px; flex-wrap: wrap; }
+/* Producer V1 Phase 3 · Production Room 面板：内部自滚动（messages 区管滚动） */
+.proom-panel { overflow: hidden; }
+
 .input { background: var(--bg-root); border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; font-size: 12px; color: var(--text-primary); outline: none; }
 .input:focus { border-color: var(--accent); }
 .scope-id { flex: 1; min-width: 100px; }

@@ -754,6 +754,76 @@ export interface AgentTask {
   error: string | null; created_at: number; updated_at: number;
 }
 
+// ============ Producer V1 Phase 3 · Production Room 投影（GET /agents/producer/room）============
+/** changed_refs（receipts 派生的真实修改范围）。 */
+export interface RoomChangedRefs { scenes: string[]; shots: string[]; characters: string[] }
+/**
+ * Production Room 单条消息（backend production_room.py 投影）。
+ * 稳定 ID：user/producer 用 session message_id；delegation/result 用
+ * task:{task_id}:dispatch|result —— snapshot 与 SSE live 同键去重，不依赖内容相等。
+ */
+export interface RoomMessage {
+  id: string;
+  kind: 'user' | 'producer' | 'delegation' | 'specialist_result';
+  timestamp: number;
+  sender: string;
+  recipient?: string;
+  content: string;
+  // user / producer 消息
+  status?: string | null;
+  intent?: string | null;
+  linked_task_ids?: string[];
+  // delegation（Producer → Specialist）
+  task_id?: string;
+  workflow_id?: string;
+  situation?: string;
+  constraints?: string[];
+  scope?: Record<string, any>;
+  live?: boolean;
+  parent_task_id?: string | null;
+  capability_id?: string;
+  session_id?: string;
+  execution_ref?: string | null;
+  task_created_at?: number;
+  task_updated_at?: number;
+  // specialist_result（Specialist → Producer）
+  full_reply?: string | null;
+  full_reply_truncated?: boolean;
+  verified?: boolean | null;
+  changed_refs?: RoomChangedRefs;
+  warnings?: string[];
+  n_tool_calls?: number | null;
+}
+/** roster 单个成员状态（只来自 AgentTask / turn_registry / session 真实事实）。 */
+export interface RoomParticipant {
+  agent_id: string;
+  status: string;   // working | completed | cancelled | failed | interrupted | idle | not_configured
+  not_called?: boolean;
+  task_id?: string | null;
+  workflow_id?: string | null;
+  verified?: boolean | null;
+  changed_refs?: RoomChangedRefs;
+  n_tool_calls?: number | null;
+  summary?: string;
+  updated_at?: number;
+}
+export interface RoomWorkflow {
+  workflow_id: string; goal: string; status: string;
+  root_task_id?: string | null; task_ids: string[];
+  created_at: number; updated_at: number;
+  last_coordination_summary?: string;
+}
+export interface RoomSnapshot {
+  room_id: string;
+  project_id: string;
+  session_id: string | null;
+  turn_active: boolean;
+  generated_at: number;
+  workflow: RoomWorkflow | null;
+  participants: RoomParticipant[];
+  messages: RoomMessage[];
+}
+
 // ============ AI-7A Team Group Chat ============
 export interface TeamThread {
   thread_id: string; project_name: string; created_at: number; updated_at: number;
@@ -1871,6 +1941,11 @@ class ApiClient {
   /** AI-7D-R：查询后端此刻真实持有的资源锁（SSE unlock 事件丢失/半开连接时对账兜底）。 */
   async getResourceLocks(projectName: string): Promise<{ locks: any[] }> {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/resource-locks`);
+  }
+
+  /** Producer V1 Phase 3 · Production Room 只读投影（稳定 ID / 确定顺序 / 真实状态）。 */
+  async getProductionRoom(projectName: string): Promise<RoomSnapshot> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/agents/producer/room`);
   }
 
   // ============ AI-7D-R · Script Writer 最小测试弹窗（隔离，单工具 edit_story_text）============

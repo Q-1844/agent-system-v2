@@ -41,6 +41,13 @@ export const useAgentTurnStore = defineStore('agentTurn', () => {
   const running = ref(false);
   const activeProject = ref('');
   const activeSessionId = ref('');
+  // Phase 3 · Production Room：事件订阅 tap（store 生命周期与流一致，切页面不丢）
+  type TurnListener = (ev: AgentStreamEvent) => void;
+  const turnListeners = new Set<TurnListener>();
+  function onTurnEvent(fn: TurnListener): () => void {
+    turnListeners.add(fn);
+    return () => { turnListeners.delete(fn); };
+  }
   const processItems = ref<ProcessItem[]>([]);
   const processExpanded = ref(false);
   const streamingText = ref('');
@@ -68,6 +75,10 @@ export const useAgentTurnStore = defineStore('agentTurn', () => {
   }
 
   function onEvent(ev: AgentStreamEvent) {
+    // Phase 3 订阅 tap：Production Room store 等消费同一事件流（监听器异常不影响主流程）。
+    for (const fn of turnListeners) {
+      try { fn(ev); } catch { /* 订阅者自负 */ }
+    }
     switch (ev.type) {
       case 'turn.started':
         resetTurn();
@@ -208,6 +219,11 @@ export const useAgentTurnStore = defineStore('agentTurn', () => {
     // Director Visual Production（2026-08-31）：视觉生成长任务
     'shot.generate_images': '生成分镜图', 'shot.generate_videos': '生成镜头视频',
     'web.search': '搜索资料',
+    // Producer V1（Phase 1 delegate 工具；Phase 3：刷新后从 meta.trace 重建折叠条不再显示裸名）
+    'project.inspect': '查看项目概览',
+    'script_writer.delegate': '委派 Script Writer',
+    'character_designer.delegate': '委派 Character Designer',
+    'director.delegate': '委派 Director',
   };
 
   /**
@@ -267,6 +283,6 @@ export const useAgentTurnStore = defineStore('agentTurn', () => {
   return {
     running, activeProject, activeSessionId, processItems, processExpanded,
     streamingText, currentActivity, error, pendingMessage, completedSteps,
-    resetTurn, runTurn, cancelTurn, consumePending, processItemsFor, hydrateProcessItemsFromMeta, hydrateProcessItemsFromTrace, toggleProcess, onEvent,
+    resetTurn, runTurn, cancelTurn, consumePending, processItemsFor, hydrateProcessItemsFromMeta, hydrateProcessItemsFromTrace, toggleProcess, onEvent, onTurnEvent,
   };
 });
