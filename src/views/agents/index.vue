@@ -685,7 +685,7 @@ onUnmounted(() => {
 .scope-row { display: flex; gap: 6px; align-items: center; }
 
 .sub-title { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; }
-/* （Producer V1 Phase 3）旧委派表单样式（.delegation/.task-table/.task-row/.st-*/.form-row）
+/* （Producer V1 Phase 3）旧委派表单样式块（delegation/task-table/task-row/状态色/form-row）
    已随 Production Room 取代手动委派而移除。 */
 
 /* Producer V1 Phase 3 · Production Room 面板：内部自滚动（messages 区管滚动） */
