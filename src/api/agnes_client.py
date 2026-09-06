@@ -304,7 +304,11 @@ class AgnesClient:
             # 退避在限流槽之外做，避免占着令牌睡觉
             backoff = min(60, (2 ** attempt) * 3) + random.uniform(0, 2)
             await asyncio.sleep(backoff)
-        raise AgnesError(f"重试 {max_attempts} 次仍失败: {last}")
+        # 保留末次错误的 status/body：上层（如 producer loop 的瞬态恢复）需要区分
+        # 「可重试错误耗尽」（429/5xx，值得再等一轮）与「配置/配额类永久失败」。
+        raise AgnesError(f"重试 {max_attempts} 次仍失败: {last}",
+                         status=getattr(last, "status", None),
+                         body=getattr(last, "body", None))
 
     # ---------- 文本 ----------
     async def chat(self, messages: List[dict], *, temperature=0.7,
@@ -399,7 +403,11 @@ class AgnesClient:
         # "engine is not available temporarily"（挂 60~190s 后返回，非 stream 特有）。
         # 500 在 RETRYABLE 集合内、非流式 _request 本就自动重试；流式在【尚未产出任何
         # 事件】时对可重试状态做有限重试（3 次尝试），不改变成功路径行为。
-        stream_attempts = 3 if self._text_ep else 1
+        # 收口 §1B（2026-09-06）：重试扩展到纯 Agnes 路径——此前 stream_attempts 仅在
+        # SenseNova text_endpoint 时为 3，Agnes 主路径流式 429/500/520 直接抛（真机：
+        # producer turn 以 [执行失败] 收尾）。重试只发生在状态码检查点（尚未产出任何
+        # 事件），无重复推送风险；auth/参数类（非 RETRYABLE）仍然立即失败。
+        stream_attempts = 3
         for attempt in range(stream_attempts):
             async with httpx.AsyncClient(
                     base_url=base_url, headers=headers,

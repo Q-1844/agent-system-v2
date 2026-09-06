@@ -350,8 +350,11 @@ def test_sensenova_stream_retry_on_500_then_success():
     assert out[-1]["kind"] == "finish" and out[-1]["content"] == "hi"
 
 
-def test_agnes_stream_no_retry_keeps_single_attempt():
-    """Agnes（无 text_ep）流式遇 500 仍立即抛错——不改变原有行为。"""
+def test_agnes_stream_retryable_retries_then_raises():
+    """Agnes（无 text_ep）流式遇 RETRYABLE（500 族）→ 有限重试（3 次尝试）后抛。
+    2026-09-06 收口 §1B：流式重试从 SenseNova 专属扩展到 Agnes 主路径
+    （真机：producer turn 因 429/500 直接 [执行失败]）；成功路径行为不变。"""
+    import src.api.agnes_client as ac
     calls = []
 
     def handler(req):
@@ -359,11 +362,36 @@ def test_agnes_stream_no_retry_keeps_single_attempt():
         return httpx.Response(500, text="boom")
 
     c = make_client(handler, text_ep=None)
+    orig_sleep = ac.asyncio.sleep
+
+    async def _no_sleep(s):
+        pass
+    ac.asyncio.sleep = _no_sleep
+    try:
+        try:
+            _collect_stream(c)
+            assert False, "should raise"
+        except Exception as e:
+            assert "500" in str(e)
+        assert len(calls) == 3        # 流式 3 次尝试（RETRYABLE 耗尽）
+    finally:
+        ac.asyncio.sleep = orig_sleep
+
+
+def test_agnes_stream_non_retryable_single_attempt():
+    """非 RETRYABLE（401 auth 等）仍然立即失败：单次尝试、不重试。"""
+    calls = []
+
+    def handler(req):
+        calls.append(req)
+        return httpx.Response(401, text="unauthorized")
+
+    c = make_client(handler, text_ep=None)
     try:
         _collect_stream(c)
         assert False, "should raise"
     except Exception as e:
-        assert "500" in str(e)
+        assert "401" in str(e)
     assert len(calls) == 1
 
 
