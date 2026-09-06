@@ -504,6 +504,26 @@ async def get_task(project_name: str, tid: str):
     return t
 
 
+# ==================== Producer V1 Phase 3 · Production Room 投影 ====================
+@router.get("/api/project/{project_name}/agents/producer/room")
+async def production_room(project_name: str):
+    """Production Room 群聊投影（只读 GET）。
+
+    把已有持久事实——Producer session 消息 + bridge_messages.jsonl + AgentTask
+    （.delegate）+ workflows.json——投影成群聊 UI 需要的稳定 DTO：
+      - 消息稳定 ID（session message_id / task:{task_id}:dispatch|result），
+        snapshot 与 SSE live 用同一 ID 去重，不依赖内容相等；
+      - 确定性顺序（持久化时间戳 + kind 次序 + id），刷新 N 次顺序一致；
+      - 状态只来自真实事实（AgentTask/turn_registry/session status），不伪造。
+    本端点是纯派生 View：零写入、无缓存、不成为第二套 authoritative state。"""
+    from src.agents.production_room import build_room_projection
+    rt = get_agent_runtime()
+    try:
+        return build_room_projection(rt, project_name)
+    except AgentError as e:
+        _raise(e)
+
+
 # ==================== AI-7A Project Intelligence（只读语义检视，§6/§75）====================
 @router.get("/api/project/{project_name}/project-intelligence")
 async def project_intelligence(project_name: str,
