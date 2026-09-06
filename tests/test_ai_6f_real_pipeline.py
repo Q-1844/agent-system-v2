@@ -66,13 +66,15 @@ class FakeAgnes:
 
     async def create_video(self, prompt, *, mode="i2v", image_url=None, image_urls=None,
                            num_frames=121, frame_rate=24, width=1312, height=736,
-                           seed=None, negative_prompt=""):
+                           seed=None, negative_prompt="",
+                           model=None, duration_s=None):
         self.calls.append("create_video")
         vid = self._next_video_id
         return {"video_id": vid, "task_id": "t_1", "seconds": "5.0", "size": "1280x704"}
 
     async def poll_video(self, video_id, *, interval=5.0, max_wait=3600,
-                         on_progress=None, max_consecutive_failures=5):
+                         on_progress=None, max_consecutive_failures=5,
+                         model_name=None):
         self.calls.append("poll")
         if self._poll_error:
             from src.api.agnes_client import AgnesError

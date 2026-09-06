@@ -488,6 +488,48 @@ class AgnesClient:
         raise last_err or AgnesError("图片生成失败")
 
     # ---------- 视频 ----------
+    # 视频模型双契约（2026-09-06 实测，_video25_probe/）：
+    #   v2.0 家族（legacy）：model/prompt/num_frames(8n+1≤441)/frame_rate/width/height
+    #     + i2v 顶层 image 字符串 / keyframes extra_body.image
+    #   2.5 家族（agnes-video-2.5 / agnes-video-2.5-flash）：mode 必填（text/keyframe/reference）
+    #     + seconds 字符串（4-12s，720P）；【不接受】duration/resolution/num_frames
+    #     （400 报错原文：duration/resolution is not an allowed request field，
+    #      num_frames is a forbidden field，seconds 必须为 string——Go taskSubmitReqAlias）。
+    #     轮询 endpoint/参数不变（/agnesapi?video_id=&model_name=），URL 仍在 url 字段。
+    # model 参数 None = config 默认（agnes.models.video），存量调用行为逐字节不变。
+    def _video_model_id(self, model: Optional[str]) -> str:
+        return model or self.models["video"]
+
+    @staticmethod
+    def _is_video_25(model_id: str) -> bool:
+        return (model_id or "").startswith("agnes-video-2.5")
+
+    @staticmethod
+    def _video25_mode(legacy_mode: str) -> str:
+        """legacy 模式 → 2.5 契约 mode。已实测：t2v→text、i2v→keyframe（顶层 image
+        公网 URL，2026-09-06 各生成成功）。keyframes（首+尾双帧过渡）与 multi 在 2.5
+        契约上未验证——明确拒绝而不是发未验证的请求形状（默认模型仍是 v2.0，
+        keyframes 镜头走默认模型不受影响）。"""
+        if legacy_mode == "t2v":
+            return "text"
+        if legacy_mode == "i2v":
+            return "keyframe"
+        raise AgnesError(
+            f"agnes-video-2.5 系列暂不支持 {legacy_mode} 模式（双帧/多图契约未验证）；"
+            "请使用默认模型 agnes-video-v2.0，或将镜头切换为单首帧模式")
+
+    @staticmethod
+    def _video25_image(legacy_mode: str,
+                       image_url: Optional[str],
+                       image_urls: Optional[List[str]]) -> Dict[str, Any]:
+        if legacy_mode in ("t2v",):
+            return {}
+        if legacy_mode == "i2v":
+            if not image_url:
+                raise AgnesError("2.5 契约 keyframe 模式必须提供公网 image URL")
+            return {"image": image_url}          # 顶层字符串（实测）
+        raise AgnesError(f"2.5 契约暂不支持 {legacy_mode} 模式的图片参数")
+
     async def create_video(self, prompt: str, *,
                            mode: str = "i2v",
                            image_url: Optional[str] = None,
@@ -495,18 +537,42 @@ class AgnesClient:
                            num_frames: int = 121, frame_rate: int = 24,
                            width: int = 1312, height: int = 736,
                            seed: Optional[int] = None,
-                           negative_prompt: str = "") -> dict:
+                           negative_prompt: str = "",
+                           model: Optional[str] = None,
+                           duration_s: Optional[int] = None) -> dict:
         """提交视频任务。mode: 't2v' | 'i2v' | 'keyframes' | 'multi'
+        model: 覆盖 config 默认视频模型（agnes-video-2.5-flash 走新契约）。
+        duration_s: 新契约的时长（秒，4-12，str 传输）；legacy 忽略（用 num_frames）。
         返回创建响应（含 video_id / task_id / seconds / size）。"""
+        model_id = self._video_model_id(model)
+        if self._is_video_25(model_id):
+            seconds_25 = max(4, min(12, int(duration_s or 5)))
+            body: Dict[str, Any] = {"model": model_id, "prompt": prompt,
+                                    "mode": self._video25_mode(mode),
+                                    "seconds": str(seconds_25)}
+            img = self._video25_image(mode, image_url, image_urls)
+            if img:
+                body.update(img)
+            if self.quota:
+                ok, why = self.quota.can("video_seconds", seconds_25)
+                if not ok: raise AgnesError(why)
+            r = await self._request("POST", "/v1/videos", "video", json=body)
+            if self.quota: self.quota.consume("video_seconds", seconds_25)
+            data = r.json()
+            log.info("视频任务已提交（2.5 契约）model=%s mode=%s seconds=%s id=%s",
+                     model_id, body.get("mode"), seconds_25,
+                     data.get("video_id") or data.get("task_id"))
+            return data
+
         num_frames = snap_num_frames(num_frames, width, height)
         seconds = num_frames / max(frame_rate, 1)
         if self.quota:
             ok, why = self.quota.can("video_seconds", seconds)
             if not ok: raise AgnesError(why)
 
-        body: Dict[str, Any] = {"model": self.models["video"], "prompt": prompt,
-                                "num_frames": num_frames, "frame_rate": frame_rate,
-                                "width": width, "height": height}
+        body = {"model": model_id, "prompt": prompt,
+                "num_frames": num_frames, "frame_rate": frame_rate,
+                "width": width, "height": height}
         if seed is not None: body["seed"] = seed
         if negative_prompt:  body["negative_prompt"] = negative_prompt
 
@@ -551,8 +617,10 @@ class AgnesClient:
 
     async def poll_video(self, video_id: str, *,
                          interval: float = 5.0, max_wait: float = 3600,
-                         on_progress=None, max_consecutive_failures: int = 5) -> dict:
+                         on_progress=None, max_consecutive_failures: int = 5,
+                         model_name: Optional[str] = None) -> dict:
         """轮询直到 completed / failed。官方建议间隔 5s（AGNES_API_FACTS §3.5）。
+        model_name：提交 2.5 系模型时必须传同一模型名（None = config 默认，legacy 行为）。
         注意：轮询走 text 桶，不占视频桶——否则第二个任务永远提交不了。"""
         waited = 0.0
         consecutive = 0
@@ -561,7 +629,7 @@ class AgnesClient:
             try:
                 r = await self._request("GET", "/agnesapi", "text",
                                         params={"video_id": video_id,
-                                                "model_name": self.models["video"]},
+                                                "model_name": self._video_model_id(model_name)},
                                         max_attempts=3)
             except AgnesError as e:
                 if e.status is None:

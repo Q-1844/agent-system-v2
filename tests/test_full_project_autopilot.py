@@ -147,12 +147,14 @@ class FakeAgnes:
 
     async def create_video(self, prompt, *, mode="i2v", image_url=None, image_urls=None,
                            num_frames=121, frame_rate=24, width=1312, height=736,
-                           seed=None, negative_prompt=""):
+                           seed=None, negative_prompt="",
+                           model=None, duration_s=None):
         return {"video_id": f"vid_{uuid.uuid4().hex[:6]}", "task_id": "t_1",
                 "seconds": "1.0", "size": "320x240"}
 
     async def poll_video(self, video_id, *, interval=5.0, max_wait=3600,
-                         on_progress=None, max_consecutive_failures=5):
+                         on_progress=None, max_consecutive_failures=5,
+                         model_name=None):
         if on_progress:
             await on_progress(100, "completed", 0)
         return {"url": "https://platform-outputs.agnes-ai.space/videos/fake.mp4",

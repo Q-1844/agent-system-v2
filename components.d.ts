@@ -25,6 +25,7 @@ declare module 'vue' {
     FullProductionStudio: typeof import('./src/components/FullProductionStudio.vue')['default']
     OrchestrateModal: typeof import('./src/components/OrchestrateModal.vue')['default']
     ProductionPlannerStudio: typeof import('./src/components/ProductionPlannerStudio.vue')['default']
+    ProductionRoom: typeof import('./src/components/agent/ProductionRoom.vue')['default']
     ProjectProductionStudio: typeof import('./src/components/ProjectProductionStudio.vue')['default']
     PromptEditor: typeof import('./src/components/PromptEditor.vue')['default']
     ProposalReviewBar: typeof import('./src/components/storyboard/ProposalReviewBar.vue')['default']

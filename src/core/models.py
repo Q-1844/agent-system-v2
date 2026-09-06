@@ -152,6 +152,9 @@ class VideoAsset(Asset):
     frame_rate: int = 24                 # 提交值
     seconds_returned: Optional[float] = None   # 🔴 服务端回读的真实时长
     size_returned: Optional[str] = None        # 🔴 服务端回读的真实尺寸
+    # 生成所用视频模型（2026-09-06 新契约接入）。None=旧数据/config 默认（v2.0）——
+    # 恢复/续轮询必须用同一 model_name 轮询，否则 2.5 任务会查不到。
+    model: Optional[str] = None
     attempts: int = 0
 
 
@@ -200,6 +203,7 @@ class VideoVersion:
     num_frames: int = 0
     frame_rate: int = 24
     origin_run_id: Optional[str] = None  # AI-4B Autopilot：本版本由哪个 Run 生成（None=手工/旧）
+    model: Optional[str] = None          # 生成所用视频模型（None=旧数据/config 默认 v2.0）
 
 
 # ---- 批次解析/迁移 helper（Step 2 向后兼容：旧 first_frame/last_frame/video -> 批次）----

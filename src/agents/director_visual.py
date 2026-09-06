@@ -196,6 +196,7 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
     is_image = op == "shot.generate_images"
     variants = 1
     force = False
+    video_model = None
     if is_image:
         targets = _parse_image_targets(args)
         variants = max(1, min(2, int(args.get("variants") or 1)))
@@ -206,6 +207,25 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
         targets = _parse_video_targets(args)
         total_timeout = VIDEOS_TOTAL_TIMEOUT_S
         asset_noun = "视频"
+        # 视频模型（2026-09-06 新契约接入）：可选 agnes-video-2.5-flash（mode/seconds
+        # 新契约）；缺省 = config 默认 v2.0，行为不变。对 config 实际配置校验
+        # （client 不可用时退回已知默认集合，保证拒绝语义确定）。
+        raw_model = str(args.get("video_model") or "").strip()
+        if raw_model:
+            allowed: set = set()
+            try:
+                _client = rt._resolve_client_or_none(agent_id="director")
+                if _client is not None:
+                    allowed = {v for v in (_client.models or {}).values()
+                               if isinstance(v, str)}
+            except Exception:
+                allowed = set()
+            if not allowed:
+                allowed = {"agnes-video-v2.0", "agnes-video-2.5-flash"}
+            if raw_model not in allowed:
+                raise AgentError("bad_arguments",
+                                 f"未知视频模型 {raw_model}；可选：{sorted(allowed)}")
+            video_model = raw_model
 
     q = rt._resolve_job_queue_or_none()
     if q is None:
@@ -227,6 +247,8 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
         extra = {"origin_run_id": marker}
         if is_image:
             extra.update(variants=variants, force=force)
+        elif video_model:
+            extra["video_model"] = video_model
         job = q.submit(project, kind, t["shot_id"], **extra)
         jobs.append((t, job, marker))
 
@@ -456,6 +478,14 @@ SHOT_GENERATE_VIDEOS_TOOL = {
                     "maxItems": MAX_VIDEO_BATCH,
                     "items": {"type": "string"},
                     "description": f"要生成视频的镜头 id 数组（1~{MAX_VIDEO_BATCH} 个）。",
+                },
+                "video_model": {
+                    "type": "string",
+                    "enum": ["agnes-video-v2.0", "agnes-video-2.5-flash"],
+                    "description": (
+                        "视频模型（可选，缺省 = 项目默认 agnes-video-v2.0）。"
+                        "agnes-video-2.5-flash 为新一代模型（4-12 秒 720P，出片更快）；"
+                        "不确定时不要传，使用默认即可。"),
                 },
             },
             "required": ["shot_ids"],

@@ -72,13 +72,19 @@ class FakeAgnes:
 
     async def create_video(self, prompt, *, mode="i2v", image_url=None, image_urls=None,
                            num_frames=121, frame_rate=24, width=1312, height=736,
-                           seed=None, negative_prompt=""):
+                           seed=None, negative_prompt="",
+                           model=None, duration_s=None):
         self.calls.append("create_video")
+        self.last_create_kwargs = dict(mode=mode, image_url=image_url,
+                                       image_urls=image_urls, num_frames=num_frames,
+                                       model=model, duration_s=duration_s)
         return {"video_id": "vid_fake_1", "task_id": "t_1"}
 
     async def poll_video(self, video_id, *, interval=5.0, max_wait=3600,
-                         on_progress=None, max_consecutive_failures=5):
+                         on_progress=None, max_consecutive_failures=5,
+                         model_name=None):
         self.calls.append("poll")
+        self.last_poll_model = model_name
         if on_progress:
             await on_progress(100, "completed", 0)
         return {"url": "https://fake.agnes/videos/fake.mp4",
@@ -283,6 +289,74 @@ def test_generate_videos_ok(visual_env):
     assert len(mine) == 1
     assert shot.final_video == mine[0].version_id
     assert mine[0].local == r["local"]
+
+
+# ============ 视频模型选择（2026-09-06 新契约接入）============
+def test_generate_videos_with_25_model_threads_model_through_chain(visual_env):
+    """video_model=agnes-video-2.5-flash：create_video 收到 model+duration_s（4-12s），
+    poll 用同一 model_name，模型落库 shot.video.model 与 VideoVersion.model。"""
+    rt, q, agnes, tmp_path = visual_env
+    _save_proj(tmp_path, [_shot("s01_c01")])
+    _mark_first_frame_ready(tmp_path, "s01_c01")
+
+    async def scenario():
+        await q.start()
+        return await _execute_shot_generate_videos(
+            rt, PROJECT,
+            json.dumps({"shot_ids": ["s01_c01"],
+                        "video_model": "agnes-video-2.5-flash"}),
+            "instr", "m1")
+
+    obs = asyncio.run(scenario())
+    assert obs["ok"] and obs["verified"] and obs["done"] == 1
+    assert agnes.last_create_kwargs["model"] == "agnes-video-2.5-flash"
+    assert 4 <= agnes.last_create_kwargs["duration_s"] <= 12
+    assert agnes.last_poll_model == "agnes-video-2.5-flash"
+    proj = ProjectStore(tmp_path).load()
+    shot = proj.get_shot("s01_c01")
+    assert shot.video.model == "agnes-video-2.5-flash"
+    mine = [vv for vv in shot.video_versions if vv.origin_run_id == obs["results"][0]["origin_run_id"]]
+    assert len(mine) == 1 and mine[0].model == "agnes-video-2.5-flash"
+
+
+def test_generate_videos_without_model_keeps_legacy_behavior(visual_env):
+    """不传 video_model：create_video model=None（config 默认 v2.0），存量行为不变。"""
+    rt, q, agnes, tmp_path = visual_env
+    _save_proj(tmp_path, [_shot("s01_c01")])
+    _mark_first_frame_ready(tmp_path, "s01_c01")
+
+    async def scenario():
+        await q.start()
+        return await _execute_shot_generate_videos(
+            rt, PROJECT, json.dumps({"shot_ids": ["s01_c01"]}), "instr", "m1")
+
+    obs = asyncio.run(scenario())
+    assert obs["ok"] and obs["verified"]
+    assert agnes.last_create_kwargs["model"] is None
+    assert agnes.last_poll_model is None
+    proj = ProjectStore(tmp_path).load()
+    assert proj.get_shot("s01_c01").video.model is None
+
+
+def test_generate_videos_unknown_model_rejected(visual_env):
+    """未知模型 → AgentError bad_arguments，不提交任务。"""
+    import pytest
+    from src.agents.runtime import AgentError
+    rt, q, agnes, tmp_path = visual_env
+    _save_proj(tmp_path, [_shot("s01_c01")])
+    _mark_first_frame_ready(tmp_path, "s01_c01")
+
+    async def scenario():
+        await q.start()
+        return await _execute_shot_generate_videos(
+            rt, PROJECT,
+            json.dumps({"shot_ids": ["s01_c01"], "video_model": "agnes-video-9.9"}),
+            "instr", "m1")
+
+    with pytest.raises(AgentError) as ei:
+        asyncio.run(scenario())
+    assert "未知视频模型" in str(ei.value)
+    assert agnes.calls == []
 
 
 # ============ 4. 协作取消：已完成保留、未完成标 cancelled ============

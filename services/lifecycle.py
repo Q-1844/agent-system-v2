@@ -32,9 +32,13 @@ async def recover_pending_videos():
                 if sh.video.status != "generating" or not sh.video.video_id:
                     continue
                 vid = sh.video.video_id
-                logger.info(f"恢复检查: {p.name}/{sh.shot_id} video_id={vid}")
+                # 2.5 新契约任务必须用提交时同一 model_name 轮询（旧数据无 model 字段
+                # → None = config 默认，legacy 行为不变）
+                sh_model = getattr(sh.video, "model", None)
+                logger.info(f"恢复检查: {p.name}/{sh.shot_id} video_id={vid} model={sh_model or 'default'}")
                 try:
-                    res = await client.poll_video(vid, interval=5, max_wait=60)
+                    res = await client.poll_video(vid, interval=5, max_wait=60,
+                                                  model_name=sh_model)
                     dest = str(pdir / "output" / "videos" / f"{sh.shot_id}.mp4")
                     await client.download(res["url"], dest)
                     store.update_shot(sh.shot_id, lambda s, d=dest, r=res: (

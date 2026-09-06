@@ -85,3 +85,126 @@ def test_poll_progression(client):
     res = asyncio.run(agnes.poll_video("task_mock123", interval=0, max_wait=5))
     assert res["url"] == mock.video_url
     assert len(mock.find("GET", "/agnesapi")) == 3         # 3 次轮询
+
+
+# ---------- 2026-09-06 收口 §1B：流式 429/5xx 重试（扩展到 Agnes 主路径） ----------
+def test_stream_retry_on_429_agnes(client, monkeypatch):
+    """纯 Agnes 流式路径 429 → 退避重试一次 → 200 正常出事件（此前 stream_attempts
+    仅 SenseNova 为 3，Agnes 直接抛）。"""
+    import src.api.agnes_client as ac
+
+    async def _no_sleep(s):
+        pass
+    monkeypatch.setattr(ac.asyncio, "sleep", _no_sleep)
+    mock = MockAgnes(stream_429_times=1)
+    agnes = make_agnes(mock)
+
+    async def run():
+        evs = []
+        async for ev in agnes.chat_completion_stream([{"role": "user", "content": "hi"}]):
+            evs.append(ev)
+        return evs
+
+    evs = asyncio.run(run())
+    assert any(e["kind"] == "finish" for e in evs)
+    assert len(mock.find("POST", "/v1/chat/completions")) == 2   # 1 次 429 + 1 次成功
+
+
+def test_stream_429_exhaustion_raises(client, monkeypatch):
+    """持续 429 → 3 次尝试后抛 AgnesError（保留 status=429）。"""
+    import pytest
+    from src.api.agnes_client import AgnesError
+    import src.api.agnes_client as ac
+
+    async def _no_sleep(s):
+        pass
+    monkeypatch.setattr(ac.asyncio, "sleep", _no_sleep)
+    mock = MockAgnes(stream_429_times=99)
+    agnes = make_agnes(mock)
+
+    async def run():
+        async for _ in agnes.chat_completion_stream([{"role": "user", "content": "hi"}]):
+            pass
+
+    with pytest.raises(AgnesError) as ei:
+        asyncio.run(run())
+    assert ei.value.status == 429
+    assert len(mock.find("POST", "/v1/chat/completions")) == 3
+
+
+# ---------- 2026-09-06：视频模型双契约（v2.0 legacy / 2.5-flash 新契约） ----------
+def test_create_video_25_contract_body(client):
+    """2.5-flash 新契约：model/mode=text/seconds 字符串；不带 num_frames/width/height
+    （实测 400 报错原文：duration/resolution is not allowed，num_frames forbidden，
+    seconds 必须 string——_video25_probe/）。"""
+    mock = MockAgnes()
+    agnes = make_agnes(mock)
+    asyncio.run(agnes.create_video("prompt", mode="t2v", num_frames=121,
+                                   frame_rate=24, width=1280, height=704,
+                                   model="agnes-video-2.5-flash", duration_s=5))
+    body = mock.bodies("POST", "/v1/videos")[-1]
+    assert body["model"] == "agnes-video-2.5-flash"
+    assert body["mode"] == "text"
+    assert body["seconds"] == "5"
+    for forbidden in ("num_frames", "width", "height", "duration", "resolution",
+                      "frame_rate"):
+        assert forbidden not in body, forbidden
+
+
+def test_create_video_25_i2v_keyframe_image_top_level(client):
+    """2.5 i2v → mode=keyframe + 顶层 image 公网 URL（实测生成成功）。"""
+    mock = MockAgnes()
+    agnes = make_agnes(mock)
+    asyncio.run(agnes.create_video("prompt", mode="i2v", image_url="https://x/f.png",
+                                   model="agnes-video-2.5-flash", duration_s=6))
+    body = mock.bodies("POST", "/v1/videos")[-1]
+    assert body["mode"] == "keyframe"
+    assert body["image"] == "https://x/f.png"
+    assert body["seconds"] == "6"
+
+
+def test_create_video_25_keyframes_rejected(client):
+    """2.5 + keyframes（双帧）契约未验证 → 明确拒绝（不发送未验证请求形状）。"""
+    import pytest
+    from src.api.agnes_client import AgnesError
+    mock = MockAgnes()
+    agnes = make_agnes(mock)
+    with pytest.raises(AgnesError) as ei:
+        asyncio.run(agnes.create_video("prompt", mode="keyframes",
+                                       image_urls=["https://x/a.png", "https://x/b.png"],
+                                       model="agnes-video-2.5-flash"))
+    assert "暂不支持" in str(ei.value)
+    assert mock.find("POST", "/v1/videos") == []
+
+
+def test_legacy_video_default_unchanged(client):
+    """不传 model：legacy v2.0 body 原样（num_frames/frame_rate/width/height）。"""
+    mock = MockAgnes()
+    agnes = make_agnes(mock)
+    asyncio.run(agnes.create_video("prompt", mode="i2v", image_url="https://x/f.png",
+                                   num_frames=121, frame_rate=24, width=1280, height=704))
+    body = mock.bodies("POST", "/v1/videos")[-1]
+    assert body["model"] == "mock-video"
+    assert body["num_frames"] == 121 and body["width"] == 1280
+    assert "mode" not in body and "seconds" not in body
+
+
+def test_poll_video_carries_model_name(client):
+    """2.5 任务轮询必须带提交时同一 model_name（否则查不到任务）。"""
+    mock = MockAgnes(poll_in_progress=0)
+    agnes = make_agnes(mock)
+    asyncio.run(agnes.poll_video("task_25", interval=0, max_wait=5,
+                                 model_name="agnes-video-2.5-flash"))
+    req = mock.find("GET", "/agnesapi")[-1]
+    assert req.url.params["model_name"] == "agnes-video-2.5-flash"
+    assert req.url.params["video_id"] == "task_25"
+
+
+def test_video_model_field_roundtrip(client):
+    """VideoAsset/VideoVersion 的 model 可选字段：旧 JSON（无 model）加载不炸、新字段可写。"""
+    from src.core.models import VideoAsset, VideoVersion
+    old = VideoAsset.from_dict({"video_id": "v1", "num_frames": 121}) if hasattr(VideoAsset, "from_dict") else None
+    if old is not None:
+        assert old.model is None
+    vv = VideoVersion(version_id="vv_1", model="agnes-video-2.5-flash")
+    assert vv.model == "agnes-video-2.5-flash"

@@ -51,15 +51,19 @@ class MockAgnes:
                  video_url="https://mock.agnes/video/out.mp4",
                  video_id="task_mock123",
                  poll_in_progress=2,
-                 i2i_extra_400=False):
+                 i2i_extra_400=False,
+                 stream_429_times=0):
         self.image_url = image_url
         self.video_url = video_url
         self.video_id = video_id
         self.poll_in_progress = poll_in_progress
         # True = i2i image 放 extra_body 时返 400，触发 AgnesClient fallback 到顶层
         self.i2i_extra_400 = i2i_extra_400
+        # 前 N 次 /v1/chat/completions 返 429（流式重试路径测试）
+        self.stream_429_times = stream_429_times
         self.requests: list[httpx.Request] = []
         self._poll_count = 0
+        self._chat_count = 0
         self.transport = httpx.MockTransport(self._handler)
 
     # ---------- 路由 ----------
@@ -72,10 +76,21 @@ class MockAgnes:
             return self._videos(request)
         if method == "GET" and path == "/agnesapi":
             return self._poll(request)
+        if method == "POST" and path == "/v1/chat/completions":
+            return self._chat(request)
         if method == "GET":
             # 资产下载（image_url / video_url，任意 host）
             return httpx.Response(200, content=b"mock-bytes")
         return httpx.Response(404, text=f"unmocked {method} {path}")
+
+    def _chat(self, request: httpx.Request) -> httpx.Response:
+        self._chat_count += 1
+        if self._chat_count <= self.stream_429_times:
+            return httpx.Response(429, text='{"error":{"message":"rate limited"}}')
+        sse = ('data: {"choices":[{"delta":{"role":"assistant","content":"你好"}}]}\n\n'
+               'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n'
+               "data: [DONE]\n\n")
+        return httpx.Response(200, text=sse)
 
     def _images(self, request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)

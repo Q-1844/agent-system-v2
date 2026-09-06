@@ -129,7 +129,35 @@ OpenAI 兼容。
 
 ## 3. 视频接口
 
-### 3.1 创建任务 `POST /v1/videos`
+### 3.0 新契约视频模型 agnes-video-2.5 系列（2026-09-06 实测，_video25_probe/）
+
+`/v1/models` 列表确认存在：`agnes-video-2.5` / `agnes-video-2.5-flash` / `agnes-video-v2.0`。
+2.5 系列走**新契约**（与 §3.1 legacy 不同，字段互斥）：
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `model` | string | 是 | `agnes-video-2.5-flash` |
+| `prompt` | string | 是 | |
+| `mode` | string | 是 | `text`（文生）/ `keyframe`（首帧图生）/ `reference` |
+| `seconds` | **string** | 是 | 时长秒数**字符串**（如 `"5"`）；4–12s；Go 结构体 `taskSubmitReqAlias.seconds of type string` |
+| `image` | string | mode=keyframe 时 | **顶层**公网 URL（与 legacy i2v 同位置；实测 imgbb 与 agnes cos 图床均可） |
+
+- 🔴 **不接受** `duration` / `resolution`（400: `is not an allowed request field`）、
+  `num_frames`（400: `is a forbidden field`）。
+- 输出：固定 720P（响应 `size:"720P"`、`quality:"standard"`）；实测 5s 任务约 40–160s 出片。
+- 提交响应 `video_id`/`task_id`/`id` 三字段同值（`task_...`）。
+- 轮询 endpoint/参数与 §3.5 相同（`/agnesapi?video_id=&model_name=agnes-video-2.5-flash`，
+  model_name 必须与提交一致）；终态 URL 仍在 `url` 字段
+  （`https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_....mp4`），
+  `seconds` 回读为字符串（"5"）。
+- 未验证（勿发）：双帧 keyframes（首+尾）与多图 reference 的具体图片字段形状；
+  `seed`/`negative_prompt` 在新契约下的支持情况。项目代码对这两种模式明确拒绝
+  （AgnesClient.create_video → AgnesError"暂不支持"），默认模型仍为 v2.0。
+- 真机证据：`_video25_probe/v25c.*`（text 5s 成功）、`v25d.*`（keyframe 5s 成功）、
+  `v20.*`（legacy 回归成功）、REST 全链 smoke（`gp_video25_smoke.py` → SMOKE PASS，
+  VideoVersion.model 落库）。
+
+### 3.1 创建任务 `POST /v1/videos`（legacy：agnes-video-v2.0 默认链路，不变）
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|

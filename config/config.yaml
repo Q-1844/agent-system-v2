@@ -8,7 +8,9 @@ agnes:
   models:
     text: "agnes-2.5-flash"   # 2026-08-07 升级：agnes-2.0-flash 的 API-compatible upgrade（Chat Completions 兼容）
     image: "agnes-image-2.1-flash"
-    video: "agnes-video-v2.0"
+    video: "agnes-video-v2.0"          # 默认视频模型（存量链路语义不变）
+    video_25: "agnes-video-2.5-flash"  # 新契约视频模型（2026-09-06 实测：mode text/keyframe + seconds 字符串 4-12s，720P；
+                                       #  /v1/models 列表确认存在。仅显式选择时使用，见 AgnesClient.create_video(model=...)）
 
   # 🔴 限流器分桶 RPM（AGNES_API_FACTS §4.1 免费用户实际 RPM）。一般不用改。
   # 视频就是 1，别调大——并发提交视频 = 全部 429。

@@ -1160,6 +1160,12 @@ async def _handler_video(job, emit):
 
     prompt = build_video_prompt(shot, mode)
 
+    # 视频模型（2026-09-06 新契约接入）：job.params.video_model 显式选择时传给
+    # create_video（agnes-video-2.5-flash 走 mode/seconds 新契约）；None=config
+    # 默认 v2.0，存量行为逐字节不变。模型随 shot.video.model 落库——恢复/续轮询
+    # 必须用同一 model_name 轮询，否则 2.5 任务查不到。
+    video_model = (job.params or {}).get("video_model") or None
+
     # 🔴 恢复：已有 video_id 且未 done/failed -> 续轮询，不重提交。
     #  recover_pending_videos 把轮询超时（仍在跑）的设为 queued 后入队，handler 在此续轮询；
     #  failed 的不进恢复分支 -> 走 else 重新提交，避免对失效 video_id 死循环轮询。
@@ -1175,24 +1181,33 @@ async def _handler_video(job, emit):
             kwargs["image_urls"] = [eff_ff_url, shot.last_frame.selected.url]
         else:
             kwargs["image_url"] = eff_ff_url
+        if video_model:
+            kwargs["model"] = video_model
+            # 2.5 契约时长（秒，4-12，client 内再夹取）：由既有 8n+1 帧规划反推
+            kwargs["duration_s"] = max(4, min(12, round(
+                shot.video.num_frames / max(shot.video.frame_rate, 1))))
         created = await get_agnes_client().create_video(prompt, mode=mode, **kwargs)
         vid = created.get("video_id") or created.get("task_id") or created.get("id")
         if not vid:
             raise RuntimeError(f"视频任务创建无 video_id: {created}")
         # 🔴 提交成功立刻落库 video_id（崩了重启能接着轮询，不重提交、不重扣配额）
-        store.update_shot(job.shot_id, lambda s, v=vid, c=created: (
+        store.update_shot(job.shot_id, lambda s, v=vid, c=created, m=video_model: (
             setattr(s.video, "video_id", v),
             setattr(s.video, "task_id", c.get("task_id")),
             setattr(s.video, "status", ShotStatus.GENERATING.value),
             setattr(s.video, "attempts", s.video.attempts + 1),
+            setattr(s.video, "model", m),
         ))
         await emit("submit", f"{shot.shot_id} 已提交 video_id={vid}", 15)
 
-    # 轮询（5s，走 text 桶不占视频桶）
+    # 轮询（5s，走 text 桶不占视频桶）。model_name：2.5 任务必须用提交时同一模型名
+    # （job 显式指定 > 落库值 > None=config 默认）。
     async def on_prog(pct, st, waited):
         await emit("poll", f"{shot.shot_id} {st} {pct}%（已等 {int(waited)}s）", int(pct))
+    poll_model = video_model or getattr(shot.video, "model", None)
     try:
-        res = await get_agnes_client().poll_video(vid, interval=5, on_progress=on_prog)
+        res = await get_agnes_client().poll_video(vid, interval=5, on_progress=on_prog,
+                                                  model_name=poll_model)
     except PollTransientError as e:
         # 网络/超时（连续 5 次）：不标 failed，保留 video_id+generating，
         # retry/recover 续轮询（不重提交、不丢已生成视频）
@@ -1223,7 +1238,8 @@ async def _handler_video(job, emit):
                           local=str(dest), url=res["url"],
                           seconds_returned=res["seconds"], size_returned=res["size"],
                           num_frames=shot.video.num_frames, frame_rate=shot.video.frame_rate,
-                          origin_run_id=job.params.get("origin_run_id"))
+                          origin_run_id=job.params.get("origin_run_id"),
+                          model=poll_model or getattr(shot.video, "model", None))
     def mut(s, vv=new_vv, d=str(dest), r=res):
         s.video_versions.append(vv)
         s.final_video = vv.version_id
@@ -1250,15 +1266,19 @@ JOB_HANDLERS["video"] = _handler_video
 
 
 @router.post("/api/project/{project_name}/shot/{shot_id}/video")
-async def shot_video(project_name: str, shot_id: str):
-    """生成单镜头视频（入队 video 任务，串行 worker，1 RPM）"""
+async def shot_video(project_name: str, shot_id: str,
+                     video_model: Optional[str] = None):
+    """生成单镜头视频（入队 video 任务，串行 worker，1 RPM）。
+    video_model 可选：显式指定视频模型（如 agnes-video-2.5-flash，走新契约 mode/seconds）；
+    缺省 = config 默认（agnes-video-v2.0），行为不变。"""
     try:
         project_dir = get_project_manager().get_project_dir(project_name)
         from src.core.store import ProjectStore
         if ProjectStore(project_dir).load().get_shot(shot_id) is None:
             raise HTTPException(404, f"镜头 {shot_id} 不存在")
+        extra = {"video_model": video_model} if video_model else {}
         q = get_job_queue()
-        job = q.submit(project_name, "video", shot_id)
+        job = q.submit(project_name, "video", shot_id, **extra)
         return {"job_id": job.job_id, "shot_id": shot_id}
     except FileNotFoundError:
         raise HTTPException(404, "项目不存在")
