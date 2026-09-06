@@ -2302,19 +2302,53 @@ async def _continuity_review_turn(rt, store, project: str, session_id: str,
                "review_session_id": review["review_session_id"],
                "tool_calls": review["tool_calls"],
                "summary": "独立会话连续性审查完成"}]
+    # N2 收口（d，2026-09-06）：审查 trace 如实回传——此前硬编码空 trace，Producer 侧
+    # Task Result n_tool_calls 恒为 0，与报告文本"N 次真实工具读取"口径断裂。verified
+    # 仍由空 receipts 派生为 false（审查不产生写入，语义不变）。
+    review_trace = review.get("trace") or []
     meta = {"intent": "continuity_review", "events": events, "evidence_refs": [],
             "receipts": [], "write_attempts": 0, "write_success": 0,
-            "trace": [], "reasonings": [], "search_sources": [],
+            "trace": review_trace, "reasonings": [], "search_sources": [],
             "generated_assets": [], "pending_delete_scenes": []}
     asst = AgentMessage(role="assistant", content=assistant_text, meta=meta)
     store.append_message(session_id, asst)
     return {"assistant_message": assistant_text,
             "created": False, "updated": False, "deleted": False, "moved": False,
             "events": events, "message": asst.to_dict(),
-            "intent": "continuity_review", "receipts": [], "trace": [],
+            "intent": "continuity_review", "receipts": [], "trace": review_trace,
             "search_sources": [], "evidence_refs": [], "linked_task_ids": [],
             "linked_change_session_id": None, "session_id": session_id,
             "agent_id": "director"}
+
+
+# ============ N2 收口（2026-09-06）：Bridge 委派 envelope 的执行意图路由闸门 ============
+# 真机证据（Producer V1 Phase 2 Case3 / Phase 3 Turn1）：Producer 委派 objective 含
+# "连续性"（如"实际修复连续性问题"）时，is_review_request 的裸词命中把整个委派改道进
+# 只读审查会话（receipts=[]/trace=[] → Task Result n_tool_calls=0/verified=false），
+# Producer 的[执行性纠偏]按规则保持 objective 重发 → 二次命中同一路由。
+# 修复：仅当内容是 Bridge 委派 envelope（固定前缀）且 用户意图/任务目标 行命中执行动词
+# 时，跳过审查路由、交正常写 loop（Director 自主判断写或不写；无值得修改的问题可明确
+# no-change，不强制写）。纯检查 envelope（无执行动词）仍走审查；用户直聊行为逐字节不变。
+_BRIDGE_ENVELOPE_PREFIX = "【来自 Producer 的委派任务】"
+
+# 执行动词表（对齐 Director 写域与 producer delegate 描述措辞；刻意不含 检查/审查/
+# 分析/梳理/报告 等 review 词——那些留审查路由或主 loop 自主判断）
+_ENVELOPE_EXECUTION_INTENT_RE = re.compile(
+    r"修改|创建|新建|重建|重做|重新设计|重写|删除|移动|更新|修复|更正|"
+    r"补(齐|全|充|上)|执行|实际改|同步|优化|调整|生成")
+
+
+def _bridge_envelope_demands_execution(content: str) -> bool:
+    """Producer 委派 envelope 且 用户意图/任务目标 行明确要求实际修改 → True。
+    只看这两行（situation/constraints 是背景与约束，不参与意图判定）。"""
+    if not (content or "").lstrip().startswith(_BRIDGE_ENVELOPE_PREFIX):
+        return False
+    for line in (content or "").splitlines():
+        ls = line.strip()
+        if ls.startswith(("用户意图：", "任务目标：")) and \
+                _ENVELOPE_EXECUTION_INTENT_RE.search(ls):
+            return True
+    return False
 
 
 # ============ 主 turn ============
@@ -2352,7 +2386,10 @@ async def director_turn(rt: AgentRuntime, project: str, session_id: str,
     client = rt._resolve_client_or_none(agent_id="director")
     # Clean Review 触发 B（用户主动，必触发）：审查意图 → 独立只读审查会话执行，
     # 不在（可能已 staleness 污染的）主会话里跑审查（STRESS F1/F2 vs F4）。
-    if client is not None and session_governance.is_review_request(content):
+    # N2 收口：Bridge 委派 envelope 明确要求实际修改时不改道（否则执行任务被审查路由
+    # 劫持为只读报告、n_tool_calls=0，Producer 纠偏重发还二次命中）。
+    if (client is not None and session_governance.is_review_request(content)
+            and not _bridge_envelope_demands_execution(content)):
         return await _continuity_review_turn(
             rt, store, project, session_id, user_msg, content, client,
             event_cb=event_cb, cancel_event=cancel_event)
