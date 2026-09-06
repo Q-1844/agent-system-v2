@@ -82,6 +82,11 @@ from .director_visual import (
     _execute_shot_generate_images,
     _execute_shot_generate_videos,
 )
+# —— 视觉审查工具（Visual Review Tool V1：只读、fresh-context，本文件只注册接线）——
+from .director_vision_review import (
+    VISION_REVIEW_TOOL,
+    _execute_visual_review,
+)
 # —— Script Writer 共享基础设施（直接 import 复用，不改其文件）——
 from .script_writer import (
     MAX_WEB_SEARCH,
@@ -254,6 +259,11 @@ DIRECTOR_SYSTEM = """你是 AGNES 的 Director（导演/分镜设计者），负
 - 生成顺序不要硬编码「首帧→尾帧→视频」全套：按用户需求和镜头实际形态决定——有的镜头只要首帧（静态分镜），keyframes 镜头才需要尾帧，视频在开场画面就绪后才能生成。工具会对不满足前置条件的项返回结构化原因（如「首帧未就绪」），按提示先补齐再重试，不要盲目重发。
 - 生成前的现状确认用 shot.list(scene_id=…) 一次看清该段全部镜头（id/是否有首帧/接力关系）即可，不要逐个 shot.read 拖慢回合。
 - 生成很慢且消耗额度：用户明确要求出图/出视频时才调用；同一镜头不要反复重发（每次调用都会生成新候选=重新消耗额度）；用户说「重新生成一版/换一批」时才是有意的重生成。生成完成后提示用户到分镜页查看与挑选。
+
+【视觉审查（只读，真实看图）】
+- visual.review_image(shot_id, focus?, frame?)：用视觉模型真实查看该镜头已生成的分镜图，对照本镜 canonical 要求返回结构化反馈（verdict: pass/needs_fix/uncertain + issues）。focus 可选 shot_adherence（默认）/visual_defects（默认）/character_consistency（自动附角色三视图参考）/continuity（自动附同段上一镜画面）；frame 可选 first（默认）/last。
+- 🔴 你没有任何直接看图能力：对生成画面内容下判断只有一条正路——调用本工具拿真实视觉反馈。用户问「这张图有没有问题/符不符合要求/检查一下画面」时必须调用本工具；绝不允许凭 shot 描述、prompt、文件名或想象去描述/评价画面（那是编造，违反 truth gate）。
+- 审查结果是视觉模型的判断（可能 uncertain 或出错），供决策参考，不是 canonical 事实；不要把 pass/needs_fix 当成已确认的项目真相向用户断言，也不要因反馈不佳就自动重新生成（生成永远等用户要求）。
 
 🔴 最重要的铁律（违反即失败）：
 - 你只有通过【真正发起工具调用】（function/tool_calls）才能读/写数据。在回复里说「我已创建/已修改」但没有真正调用对应工具，等于什么都没做——这是严重错误。
@@ -660,6 +670,7 @@ DIRECTOR_TOOLS = [
     STORY_LIST_TOOL, STORY_READ_TOOL, SCRIPT_READ_TOOL,
     CHARACTER_LIST_TOOL, CHARACTER_READ_TOOL,
     WEB_SEARCH_TOOL,
+    VISION_REVIEW_TOOL,
 ]
 
 
@@ -1342,6 +1353,7 @@ TOOL_EXECUTORS = {
     "shot.move": _execute_shot_move,
     "shot.generate_images": _execute_shot_generate_images,
     "shot.generate_videos": _execute_shot_generate_videos,
+    "visual.review_image": _execute_visual_review,
     "story.list": _execute_story_list,
     "story.read": _execute_story_read,
     "script.read": _execute_script_read,
@@ -1358,6 +1370,7 @@ _TOOL_LABELS = {
     "shot.update": "修改镜头", "shot.update_many": "批量修改镜头",
     "shot.delete": "删除镜头", "shot.move": "移动镜头",
     "shot.generate_images": "生成分镜图", "shot.generate_videos": "生成镜头视频",
+    "visual.review_image": "视觉审查",
     "story.list": "读取故事段", "story.read": "读取故事段",
     "script.read": "读取剧本", "character.list": "读取角色列表",
     "character.read": "读取角色", "web.search": "搜索资料",
@@ -1397,6 +1410,10 @@ def _op_human(r: dict) -> str:
             f"{x.get('shot_id')}{'首帧' if x.get('frame') == 'first' else '尾帧' if x.get('frame') == 'last' else ''}"
             for x in done)
         return f"为 {len(done)}/{r.get('count', len(done))} 个镜头生成{noun}（{items}）"
+    if op == "visual.review_image":
+        v = r.get("review") or {}
+        n = len(v.get("issues") or [])
+        return f"视觉审查 {sid}（{v.get('verdict') or '—'}，{n} 条问题）"
     return f"{op}({sid or ''})"
 
 

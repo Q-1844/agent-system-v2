@@ -218,6 +218,8 @@ export const useAgentTurnStore = defineStore('agentTurn', () => {
     'shot.delete': '删除镜头', 'shot.move': '移动镜头',
     // Director Visual Production（2026-08-31）：视觉生成长任务
     'shot.generate_images': '生成分镜图', 'shot.generate_videos': '生成镜头视频',
+    // Visual Review Tool V1（2026-09-06）：只读视觉审查
+    'visual.review_image': '视觉审查',
     'web.search': '搜索资料',
     // Producer V1（Phase 1 delegate 工具；Phase 3：刷新后从 meta.trace 重建折叠条不再显示裸名）
     'project.inspect': '查看项目概览',

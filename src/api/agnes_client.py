@@ -365,6 +365,35 @@ class AgnesClient:
             "role": msg.get("role", "assistant"),
         }
 
+    async def chat_completion_vision(self, messages: List[dict], *, model: str,
+                                     temperature=0.2, max_tokens=1600) -> dict:
+        """Vision 请求（Visual Review Tool V1，2026-09-06 probe 定案）。
+
+        与 chat_completion 的三点差异：
+          1) model 显式传入（agnes-2.5-flash），不走 _text_cfg——text_endpoint
+             路由到 SenseNova 时文本客户端不能承载视觉请求；
+          2) 恒走主 endpoint（text_ep=False）——视觉能力只在 Agnes 主端点；
+          3) 返回 usage（prompt/completion/total + prompt_tokens_details.image_tokens），
+             供工具遥测（文档 §二十一）；provider 事实：图片输入按 image_tokens 计量。
+        messages[].content 允许数组形态（text / image_url）；image_url 支持
+        公网 URL 与 base64 data URI（probe C3：data URI 5/5 成功；imgbb 公网
+        URL 恒 500"loading IMAGE data"——勿用 imgbb 承载审查图）。
+        复用 _request（限流/重试/退避/配额），不新造 retry。"""
+        if self.quota:
+            ok, why = self.quota.can("text_calls", 1)
+            if not ok: raise AgnesError(why)
+        body: Dict[str, Any] = {"model": model, "messages": messages,
+                                "temperature": temperature, "max_tokens": max_tokens}
+        r = await self._request("POST", "/v1/chat/completions", "text",
+                                text_ep=False, json=body)
+        if self.quota: self.quota.consume("text_calls", 1)
+        data = r.json()
+        return {
+            "content": data["choices"][0]["message"].get("content"),
+            "usage": data.get("usage"),
+            "model": data.get("model"),
+        }
+
     async def chat_completion_stream(self, messages: List[dict], *, temperature=0.7,
                                       max_tokens=2048, thinking=False,
                                       tools: Optional[List[dict]] = None,
