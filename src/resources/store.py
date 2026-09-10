@@ -247,7 +247,7 @@ def legacy_character_references(project_dir, character_name: str) -> List[Refere
             checksum=None,                  # legacy Asset 无 checksum，不臆造
             view=view,
             purpose="identity",
-            background_type="transparent" if view else "",   # 三视图抠图为透明底（seg）
+            background_type="",             # 不臆造：local 可能是 raw（router bind）或 seg（handler），无法可靠区分
             source="legacy",
             origin=None,                    # legacy 无 lineage
             created_at=a.updated_at or 0.0,
