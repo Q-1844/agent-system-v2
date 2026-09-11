@@ -83,6 +83,7 @@ from routers import full_project_autopilot  # noqa: E402
 from routers import workspaces  # noqa: E402  AI-6A Creative Workspace / ChangeSet
 from routers import agents  # noqa: E402  AI-6B Multi-Agent Foundation
 from routers import resources  # noqa: E402  Production Resources V1 Phase 1B (read-only)
+from routers import scene_system  # noqa: E402  Scene System V1 Phase S1（空间事实系统；不与 /scenes 冲突）
 app.include_router(system.router)
 app.include_router(projects.router)
 app.include_router(script.router)
@@ -101,6 +102,7 @@ app.include_router(full_project_autopilot.router)
 app.include_router(workspaces.router)
 app.include_router(agents.router)   # AI-6B Multi-Agent Foundation
 app.include_router(resources.router)   # Production Resources V1 Phase 1B (read-only)
+app.include_router(scene_system.router)   # Scene System V1 Phase S1（Location/Anchor/Layout/View/SceneInstance）
 
 
 @app.on_event("startup")
