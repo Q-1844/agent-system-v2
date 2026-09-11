@@ -798,12 +798,31 @@ class SceneSystemService:
 
     @staticmethod
     def _instance_read(doc: SceneSystemDocument, inst: SceneInstance, *,
-                       story_scene_missing: Optional[bool] = None) -> dict:
+                       story_scene_missing: Optional[bool] = None,
+                       prop_annotation: Optional[dict] = None) -> dict:
         d = inst.to_dict()
         d["revision"] = scene_instance_revision(inst)
         if story_scene_missing is not None:
             d["story_scene_missing"] = story_scene_missing
+        if prop_annotation is not None:
+            d.update(prop_annotation)
         return d
+
+    def _prop_reference_annotation(self, state: SceneState) -> dict:
+        """S2A §6D：SceneState.prop_placements 引用的 Prop 在 Resources 中被删后，
+        read 必须诚实暴露（不 crash、不假装存在）：
+        - missing_props：可证明缺失（resources 可读且 prop 不在）——诚实标注；
+        - props_lookup_unavailable：resources.json 损坏无法判定——诚实标注不确定，
+          绝不静默当作存在或缺失（写路径已 fail closed，读路径只暴露不阻断）。"""
+        ids = list(state.prop_placements.keys())
+        if not ids:
+            return {"missing_props": [], "props_lookup_unavailable": False}
+        try:
+            props = self._lookup_props()
+        except _ResourcesLookupError:
+            return {"missing_props": [], "props_lookup_unavailable": True}
+        return {"missing_props": [p for p in ids if p not in props],
+                "props_lookup_unavailable": False}
 
     def read_scene_instance(self, instance_id: str) -> Optional[dict]:
         doc = self.store.load()
@@ -812,7 +831,8 @@ class SceneSystemService:
             return None
         # 悬空检测（§16）：旧 Story Scene 被删 → 明确标注，不静默忽略
         missing = not self._story_scene_exists(inst.story_scene_id)
-        return self._instance_read(doc, inst, story_scene_missing=missing)
+        return self._instance_read(doc, inst, story_scene_missing=missing,
+                                   prop_annotation=self._prop_reference_annotation(inst.state))
 
     def list_scene_instances(self, story_scene_id: Optional[str] = None,
                              location_id: Optional[str] = None) -> List[dict]:
@@ -824,7 +844,8 @@ class SceneSystemService:
             if location_id is not None and inst.location_id != location_id:
                 continue
             missing = not self._story_scene_exists(inst.story_scene_id)
-            out.append(self._instance_read(doc, inst, story_scene_missing=missing))
+            out.append(self._instance_read(doc, inst, story_scene_missing=missing,
+                                           prop_annotation=self._prop_reference_annotation(inst.state)))
         return out
 
     async def create_scene_instance(self, *, story_scene_id: str, location_id: str,

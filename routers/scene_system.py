@@ -550,7 +550,12 @@ async def delete_scene_instance(project: str, instance_id: str,
 
 @router.patch("/api/project/{project}/scene-system/scene-instances/{instance_id}/state")
 async def patch_scene_state(project: str, instance_id: str, patch: dict = Body(...)):
-    """SceneState partial patch（time/weather/lighting/anchor_states/prop_placements/notes）。"""
+    """SceneState patch。语义（S2A §6E，与 service 一致）：
+    - 字符串字段（time_of_day/weather/lighting/environment_conditions/notes）：partial——
+      未传字段保持不变；
+    - anchor_states / prop_placements：**整 dict 替换**——未传字段保持不变，传了则整个
+      dict 按传入内容替换（不是 per-key merge）；并发安全由 expected_revision (OCC) 保障，
+      调用方 read-patch-write。"""
     try:
         body = {k: v for k, v in patch.items() if k != "expected_revision"}
         receipt = await _service(project).patch_scene_state(
