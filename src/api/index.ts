@@ -2282,6 +2282,41 @@ class ApiClient {
   async readSharedResource(sharedId: string): Promise<any> {
     return this.request(`/api/shared/resources/${encodeURIComponent(sharedId)}`);
   }
+  // ===== Phase 1C5：Prop Reference Review + Approval + Composition =====
+  async reviewPropReference(projectName: string, propId: string, body: any = {}): Promise<any> {
+    return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/props/${encodeURIComponent(propId)}/review`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async approvePropReference(projectName: string, propId: string, body: any): Promise<any> {
+    return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/props/${encodeURIComponent(propId)}/approve`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async revokePropApproval(projectName: string, propId: string, body: any): Promise<any> {
+    return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/props/${encodeURIComponent(propId)}/revoke-approval`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async listCompositions(projectName: string, characterName?: string): Promise<{ compositions: any[]; document_revision: string }> {
+    const q = characterName ? `?character_name=${encodeURIComponent(characterName)}` : '';
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/compositions${q}`);
+  }
+  async readComposition(projectName: string, compositionId: string): Promise<any> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/compositions/${encodeURIComponent(compositionId)}`);
+  }
+  async createComposition(projectName: string, body: any): Promise<any> {
+    return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/compositions`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async updateComposition(projectName: string, compositionId: string, body: any): Promise<any> {
+    return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/compositions/${encodeURIComponent(compositionId)}`, { method: 'PATCH', body: JSON.stringify(body) });
+  }
+  async generateCompositionCandidates(projectName: string, compositionId: string, body: any): Promise<any> {
+    return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/compositions/${encodeURIComponent(compositionId)}/generate`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async reviewCompositionCandidates(projectName: string, compositionId: string, body: any = {}): Promise<any> {
+    return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/compositions/${encodeURIComponent(compositionId)}/review`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async approveCompositionCandidate(projectName: string, compositionId: string, body: any): Promise<any> {
+    return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/compositions/${encodeURIComponent(compositionId)}/approve`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async revokeCompositionApproval(projectName: string, compositionId: string, body: any): Promise<any> {
+    return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/compositions/${encodeURIComponent(compositionId)}/revoke-approval`, { method: 'POST', body: JSON.stringify(body) });
+  }
 }
 
 export const apiClient = new ApiClient();

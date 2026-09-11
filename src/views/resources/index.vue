@@ -93,6 +93,90 @@
             </div>
           </div>
         </div>
+
+        <!-- ======== Approved Compositions（组合参考，Phase 1C5）======== -->
+        <div class="comp-section">
+          <div class="panel-head">
+            <h4>Approved Compositions（组合参考）</h4>
+            <button class="mini primary" :disabled="!selectedCharacter" @click="showCreateComp = !showCreateComp">＋ 新建组合</button>
+          </div>
+          <p class="hint">Character + Approved Look + 1~3 道具 + 视觉关系 → 提前批准的组合参考图版。是 Reference，不是剧情持有事实。</p>
+          <form v-if="showCreateComp" class="inline-form col" @submit.prevent="createCompAction">
+            <select v-model="newComp.look_id" required>
+              <option value="" disabled>选择 approved Look（必选）</option>
+              <option v-for="lk in approvedLooks" :key="lk.id" :value="lk.id">{{ lk.name || lk.id }}（{{ lk.status }}）</option>
+            </select>
+            <div v-for="(b, i) in newComp.bindings" :key="i" class="binding-row">
+              <select v-model="b.prop_id">
+                <option value="" disabled>道具</option>
+                <option v-for="p in props" :key="p.id" :value="p.id">{{ p.name }}</option>
+              </select>
+              <select v-model="b.relation" title="relation">
+                <option v-for="r in RELATIONS" :key="r" :value="r">{{ r }}</option>
+              </select>
+              <select v-model="b.anchor" title="anchor">
+                <option v-for="an in ANCHORS" :key="an" :value="an">{{ an }}</option>
+              </select>
+              <input v-model="b.visual_state_note" placeholder="状态备注（可选，如 sheathed）" />
+              <button class="mini danger" type="button" @click="newComp.bindings.splice(i, 1)">移除</button>
+            </div>
+            <div class="form-row">
+              <button class="mini" type="button" :disabled="newComp.bindings.length >= 3"
+                      @click="newComp.bindings.push({ prop_id: '', relation: 'held', anchor: 'right_hand', visual_state_note: '' })">＋ 加道具（最多 3）</button>
+              <input v-model="newComp.label" placeholder="显示名（可选）" />
+              <input v-model="newComp.pose_note" placeholder="姿态备注（可选）" />
+              <button class="mini primary" type="submit" :disabled="busy">创建组合</button>
+            </div>
+          </form>
+          <div class="comp-cards">
+            <button v-for="c in compositions" :key="c.id" class="side-item" :class="{ active: selectedComp?.composition_id === c.id }" @click="openComp(c.id)">
+              {{ c.name || '(未命名)' }}<span class="sub">{{ c.relationship_summary }}</span>
+            </button>
+            <p v-if="selectedCharacter && !compositions.length" class="empty">该角色还没有组合参考（先批准 Look 与道具参考图）</p>
+          </div>
+
+          <div v-if="selectedComp" class="look-detail">
+            <div class="detail-head">
+              <h4>{{ selectedComp.label || selectedComp.composition_id }}</h4>
+              <span class="meta">Look: {{ selectedComp.look?.label || selectedComp.look_id }}</span>
+              <span v-for="b in selectedComp.prop_bindings_resolved" :key="b.prop_id" class="meta">
+                {{ b.prop?.name || b.prop_id }} · {{ b.relation }} @ {{ b.anchor }}
+              </span>
+              <div class="actions">
+                <select v-model="compGenCount"><option v-for="n in 4" :key="n" :value="n">{{ n }} 张</option></select>
+                <button class="mini primary" :disabled="busy" @click="generateCompAction">生成候选</button>
+                <button class="mini" :disabled="busy || !selectedComp.reference_asset_ids?.length" @click="reviewCompAction">视觉审查</button>
+                <button class="mini" :disabled="busy" @click="publishCompAction">发布到共享库</button>
+              </div>
+            </div>
+            <div class="cand-grid">
+              <div v-for="a in selectedComp.reference_assets" :key="a.asset_id" class="cand">
+                <img v-if="assetUrl(a)" :src="assetUrl(a)" />
+                <div v-else-if="a.missing" class="img placeholder missing">缺失</div>
+                <div v-else class="img placeholder">无图</div>
+                <div class="cand-info">
+                  <span v-if="selectedComp.cover_asset_id === a.asset_id" class="star" title="封面">★</span>
+                  <span v-if="selectedComp.approved_reference_asset_ids?.includes(a.asset_id)" class="badge approved">已批准</span>
+                  <span v-else-if="compReviewBadge(a)" class="badge" :class="compReviewBadge(a)">{{ compReviewBadge(a) }}</span>
+                </div>
+                <div v-if="compReview(a)" class="dims">
+                  <em v-for="d in COMP_DIMS" :key="d.k">{{ d.label }}: {{ compReview(a)[d.k] || '?' }}</em>
+                </div>
+                <div v-for="pb in compReview(a)?.per_binding || []" :key="pb.prop_id" class="binding-review">
+                  {{ pb.prop_id }}: 对象 {{ pb.object_correct || '?' }} / 持有 {{ pb.holder_correct || '?' }} / 位置 {{ pb.anchor_correct || '?' }} / {{ pb.visibility }}
+                </div>
+                <p v-if="compReview(a)?.summary" class="review-note">{{ compReview(a).summary }}</p>
+                <div class="cand-actions">
+                  <button v-if="!selectedComp.approved_reference_asset_ids?.includes(a.asset_id)"
+                          class="mini primary" :disabled="busy"
+                          :title="compReviewBadge(a) === 'pass' ? '' : '需要六维度审查通过后才能批准'"
+                          @click="approveCompAction(a)">批准</button>
+                  <button v-else class="mini" :disabled="busy" @click="revokeCompAction(a)">撤销批准</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -155,16 +239,31 @@
         <div class="detail-head">
           <h4>{{ selectedProp.name }}</h4>
           <div class="actions">
+            <button class="mini" :disabled="busy || !selectedProp.reference_asset_ids?.length" @click="reviewPropAction">视觉审查参考图</button>
             <button class="mini" @click="renamePropAction">重命名</button>
             <button class="mini danger" :disabled="busy" @click="deletePropAction">删除</button>
           </div>
         </div>
         <p class="desc">{{ selectedProp.description }}</p>
+        <p class="hint">组合参考（Composition）只使用「已批准」的道具参考图——先审查通过再批准。</p>
         <div class="ref-row">
           <div v-for="a in selectedProp.reference_assets" :key="a.asset_id" class="cand small">
             <img v-if="assetUrl(a)" :src="assetUrl(a)" />
             <div v-else class="img placeholder">无图</div>
-            <button class="mini danger" :disabled="busy" @click="detachPropRef(a)">解绑</button>
+            <div class="cand-info">
+              <span v-if="selectedProp.cover_asset_id === a.asset_id" class="star" title="封面">★</span>
+              <span v-if="selectedProp.approved_reference_asset_ids?.includes(a.asset_id)" class="badge approved">已批准</span>
+              <span v-else-if="propReviewBadge(a)" class="badge" :class="propReviewBadge(a)">{{ propReviewBadge(a) }}</span>
+            </div>
+            <p v-if="propReviewNote(a)" class="review-note">{{ propReviewNote(a) }}</p>
+            <div class="cand-actions">
+              <button v-if="!selectedProp.approved_reference_asset_ids?.includes(a.asset_id)"
+                      class="mini primary" :disabled="busy"
+                      :title="propReviewBadge(a) === 'pass' ? '' : '需要审查通过后才能批准'"
+                      @click="approvePropRefAction(a)">批准</button>
+              <button v-else class="mini" :disabled="busy" @click="revokePropRefAction(a)">撤销批准</button>
+              <button class="mini danger" :disabled="busy" @click="detachPropRef(a)">解绑</button>
+            </div>
           </div>
         </div>
         <form class="inline-form" @submit.prevent="attachPropRef">
@@ -197,7 +296,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useProjectStore } from '@/store';
 import { apiClient } from '@/api';
@@ -237,6 +336,38 @@ const newClothing = ref({ name: '', description: '' });
 const newProp = ref({ name: '', description: '' });
 const newRef = ref({ local: '', url: '' });
 const sharedList = ref<any[]>([]);
+
+// ===== Phase 1C5：Composition + Prop review =====
+const RELATIONS = ['held', 'carried', 'worn', 'attached', 'near'];
+const ANCHORS = ['right_hand', 'left_hand', 'back', 'waist', 'neck', 'beside_character'];
+const COMP_DIMS = [
+  { k: 'character_identity', label: '身份' },
+  { k: 'look_consistency', label: 'Look' },
+  { k: 'prop_fidelity', label: '道具' },
+  { k: 'prop_binding_correctness', label: '绑定' },
+  { k: 'required_prop_visibility', label: '可见' },
+  { k: 'visual_defects', label: '缺陷' },
+] as const;
+const compositions = ref<any[]>([]);
+const selectedComp = ref<any>(null);
+const showCreateComp = ref(false);
+const compGenCount = ref(1);
+const newComp = ref({ look_id: '', label: '', pose_note: '',
+  bindings: [{ prop_id: '', relation: 'held', anchor: 'right_hand', visual_state_note: '' }] as any[] });
+const approvedLooks = computed(() => looks.value.filter((l: any) => l.status === 'approved'));
+
+function propReviewBadge(a: any): string {
+  return selectedProp.value?.latest_reviews?.[a.asset_id]?.overall || '';
+}
+function propReviewNote(a: any): string {
+  return selectedProp.value?.latest_reviews?.[a.asset_id]?.summary || '';
+}
+function compReview(a: any): any {
+  return selectedComp.value?.latest_reviews?.[a.asset_id] || null;
+}
+function compReviewBadge(a: any): string {
+  return compReview(a)?.overall || '';
+}
 
 function assetUrl(a: any): string {
   if (!a || a.missing) return '';
@@ -278,11 +409,19 @@ async function refreshLooks() {
   const r = await apiClient.listLooks(projectName.value, selectedCharacter.value);
   looks.value = r.looks || [];
 }
+async function refreshCompositions() {
+  if (!selectedCharacter.value) { compositions.value = []; return; }
+  const r = await apiClient.listCompositions(projectName.value, selectedCharacter.value)
+    .catch(() => ({ compositions: [] }));
+  compositions.value = r.compositions || [];
+}
 
 async function selectCharacter(name: string) {
   selectedCharacter.value = name;
   selectedLook.value = null;
+  selectedComp.value = null;
   await refreshLooks();
+  await refreshCompositions();
 }
 async function openLook(id: string) {
   selectedLook.value = await apiClient.readLook(projectName.value, id);
@@ -491,6 +630,124 @@ async function detachPropRef(a: any) {
   } catch (e) { fail(e); } finally { busy.value = false; }
 }
 
+// ===== Phase 1C5 actions =====
+async function reviewPropAction() {
+  if (!selectedProp.value) return;
+  busy.value = true; errorMsg.value = '';
+  try {
+    await apiClient.reviewPropReference(projectName.value, selectedProp.value.prop_id, {});
+    await openProp(selectedProp.value.prop_id);
+  } catch (e) { fail(e); } finally { busy.value = false; }
+}
+async function approvePropRefAction(a: any) {
+  busy.value = true; errorMsg.value = '';
+  try {
+    await apiClient.approvePropReference(projectName.value, selectedProp.value.prop_id, {
+      asset_id: a.asset_id, expected_revision: selectedProp.value.revision,
+    });
+    await openProp(selectedProp.value.prop_id);
+    await refreshBase();
+  } catch (e) { fail(e); } finally { busy.value = false; }
+}
+async function revokePropRefAction(a: any) {
+  busy.value = true; errorMsg.value = '';
+  try {
+    await apiClient.revokePropApproval(projectName.value, selectedProp.value.prop_id, {
+      asset_id: a.asset_id, expected_revision: selectedProp.value.revision,
+    });
+    await openProp(selectedProp.value.prop_id);
+    await refreshBase();
+  } catch (e) { fail(e); } finally { busy.value = false; }
+}
+async function openComp(id: string) {
+  selectedComp.value = await apiClient.readComposition(projectName.value, id);
+}
+async function createCompAction() {
+  busy.value = true; errorMsg.value = '';
+  try {
+    const bindings = newComp.value.bindings
+      .filter((b: any) => b.prop_id)
+      .map((b: any) => ({ prop_id: b.prop_id, relation: b.relation, anchor: b.anchor,
+                          visual_state_note: b.visual_state_note || '' }));
+    const r = await apiClient.createComposition(projectName.value, {
+      character_name: selectedCharacter.value,
+      look_id: newComp.value.look_id,
+      prop_bindings: bindings,
+      label: newComp.value.label,
+      pose_note: newComp.value.pose_note,
+      expected_document_revision: docRev.value,
+    });
+    showCreateComp.value = false;
+    newComp.value = { look_id: '', label: '', pose_note: '',
+      bindings: [{ prop_id: '', relation: 'held', anchor: 'right_hand', visual_state_note: '' }] };
+    await refreshBase();
+    await refreshCompositions();
+    await openComp(r.target);
+  } catch (e) { fail(e); } finally { busy.value = false; }
+}
+async function generateCompAction() {
+  if (!selectedComp.value) return;
+  busy.value = true; errorMsg.value = '';
+  try {
+    await apiClient.generateCompositionCandidates(projectName.value, selectedComp.value.composition_id, {
+      expected_revision: selectedComp.value.revision,
+      candidate_count: compGenCount.value,
+    });
+    await openComp(selectedComp.value.composition_id);
+    await refreshCompositions();
+  } catch (e) { fail(e); } finally { busy.value = false; }
+}
+async function reviewCompAction() {
+  if (!selectedComp.value) return;
+  busy.value = true; errorMsg.value = '';
+  try {
+    await apiClient.reviewCompositionCandidates(projectName.value, selectedComp.value.composition_id, {});
+    await openComp(selectedComp.value.composition_id);
+  } catch (e) { fail(e); } finally { busy.value = false; }
+}
+async function approveCompAction(a: any) {
+  busy.value = true; errorMsg.value = '';
+  try {
+    await apiClient.approveCompositionCandidate(projectName.value, selectedComp.value.composition_id, {
+      asset_id: a.asset_id, expected_revision: selectedComp.value.revision,
+    });
+    await openComp(selectedComp.value.composition_id);
+    await refreshCompositions();
+  } catch (e) { fail(e); } finally { busy.value = false; }
+}
+async function revokeCompAction(a: any) {
+  busy.value = true; errorMsg.value = '';
+  try {
+    await apiClient.revokeCompositionApproval(projectName.value, selectedComp.value.composition_id, {
+      asset_id: a.asset_id, expected_revision: selectedComp.value.revision,
+    });
+    await openComp(selectedComp.value.composition_id);
+    await refreshCompositions();
+  } catch (e) { fail(e); } finally { busy.value = false; }
+}
+async function publishCompAction() {
+  if (!selectedComp.value) return;
+  busy.value = true; errorMsg.value = '';
+  try {
+    await apiClient.publishResource(projectName.value, selectedComp.value.composition_id);
+  } catch (e: any) {
+    if (e?.error === 'dependency_not_published' && Array.isArray(e?.missing_dependencies)) {
+      const prio: Record<string, number> = { character: 0, clothing: 1, prop: 2, look: 3 };
+      const deps = [...e.missing_dependencies].sort((a: any, b: any) => (prio[a.kind] ?? 9) - (prio[b.kind] ?? 9));
+      if (confirm(`组合依赖尚未发布（${deps.map((d: any) => `${d.kind}:${d.id}`).join('、')}）。\n按顺序自动发布全部依赖，然后发布组合？`)) {
+        try {
+          for (const d of deps) {
+            if (d.kind === 'character') await apiClient.publishCharacter(projectName.value, d.id);
+            else await apiClient.publishResource(projectName.value, d.id);
+          }
+          await apiClient.publishResource(projectName.value, selectedComp.value.composition_id);
+          errorMsg.value = '';
+        } catch (e2) { fail(e2); }
+      }
+    } else fail(e);
+  } finally { busy.value = false; }
+}
+
 async function switchShared() {
   scope.value = 'shared';
   busy.value = true;
@@ -569,4 +826,18 @@ onMounted(refreshBase);
 .ref-row { display: flex; gap: 10px; flex-wrap: wrap; }
 .empty { opacity: .5; font-size: 13px; padding: 12px 4px; }
 .shared-card { border: 1px solid rgba(128,128,128,.25); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+/* Phase 1C5：Composition 区 */
+.comp-section { border-top: 1px solid rgba(128,128,128,.2); margin-top: 6px; padding-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+.hint { margin: 0; font-size: 12px; opacity: .5; }
+.comp-cards { display: flex; gap: 10px; flex-wrap: wrap; }
+.comp-cards .side-item { min-width: 220px; }
+.binding-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.binding-row select, .binding-row input { background: rgba(128,128,128,.12); border: 1px solid rgba(128,128,128,.3); color: inherit; border-radius: 6px; padding: 5px 8px; font-size: 12px; }
+.binding-row input { flex: 1; min-width: 140px; }
+.form-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.form-row input { flex: 1; min-width: 120px; }
+.dims { display: flex; gap: 6px; flex-wrap: wrap; }
+.dims em { font-style: normal; font-size: 10px; opacity: .75; background: rgba(128,128,128,.12); border-radius: 6px; padding: 1px 5px; }
+.binding-review { font-size: 10px; opacity: .65; }
+.badge.held, .badge.comp { background: rgba(140,120,255,.2); color: #c9bcff; }
 </style>
