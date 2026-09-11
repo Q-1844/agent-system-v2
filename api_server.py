@@ -47,6 +47,10 @@ app = FastAPI(title="动画分镜工作流 API", version="1.0.0")
 
 # 静态文件挂载（projects_dir / BASE_DIR / 配置 / 单例 / getter 都在 deps.py）
 app.mount("/projects", StaticFiles(directory=str(projects_dir)), name="projects")
+# Phase 1C3/1C4：共享库媒体静态服务（shared_library/media/...；目录不存在则创建空挂载）
+from src.resources.shared_library import default_shared_dir as _shared_dir_fn  # noqa: E402
+_shared_dir_fn().mkdir(parents=True, exist_ok=True)
+app.mount("/shared_library", StaticFiles(directory=str(_shared_dir_fn())), name="shared_library")
 
 # 允许跨域
 app.add_middleware(

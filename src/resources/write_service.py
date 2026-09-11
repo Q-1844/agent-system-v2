@@ -783,3 +783,154 @@ class ResourceWriteService:
                                  before=before, after=lk.to_dict(),
                                  revision=look_revision(lk), verified=verified,
                                  document_revision_after=doc_rev)
+
+    # ==================================================================
+    # Prop CRUD（Phase 1C4：基本 create/update/delete/reference；不做 Location）
+    # ==================================================================
+    async def create_prop(self, *, name: str, description: str = "",
+                          tags: Optional[List[str]] = None,
+                          expected_document_revision: str = "") -> dict:
+        op = "resource.create_prop"
+        try:
+            name = self._require_str(name, "name")
+        except ValueError as e:
+            return self._receipt(op, ok=False, error="validation_error", detail=str(e))
+        async with self.store.write_lock():
+            doc = self.store.load()
+            cur = document_revision(doc)
+            if expected_document_revision != cur:
+                return self._stale_receipt(op, expected_document_revision, cur)
+            from .models import Prop, new_prop_id, prop_revision
+            p = Prop(prop_id=new_prop_id(), name=name, description=description or "",
+                     tags=list(tags or []),
+                     approval_status=ApprovalState.UNREVIEWED.value)
+            doc.props[p.prop_id] = p
+            self.store.save(doc)
+            doc_rev = self._verify_after_save()
+            reloaded = self.store.load().props.get(p.prop_id)
+            verified = reloaded is not None and prop_revision(reloaded) == prop_revision(p)
+            return self._receipt(op, ok=True, target=p.prop_id,
+                                 before=None, after=p.to_dict(),
+                                 revision=prop_revision(p), verified=verified,
+                                 document_revision_after=doc_rev)
+
+    async def update_prop(self, prop_id: str, patch: Dict[str, Any], *,
+                          expected_revision: str) -> dict:
+        op = "resource.update_prop"
+        _PROP_FIELDS = {"name", "description", "tags"}
+        try:
+            prop_id = self._require_str(prop_id, "prop_id")
+            unknown = set(patch) - _PROP_FIELDS
+            if unknown:
+                raise ValueError(f"未知/不可变字段: {sorted(unknown)}（可改: {sorted(_PROP_FIELDS)}）")
+            if "tags" in patch and patch["tags"] is not None and not isinstance(patch["tags"], list):
+                raise ValueError("tags 必须是 list")
+        except ValueError as e:
+            return self._receipt(op, ok=False, target=prop_id,
+                                 error="validation_error", detail=str(e))
+        async with self.store.write_lock():
+            doc = self.store.load()
+            p = doc.props.get(prop_id)
+            if p is None:
+                return self._receipt(op, ok=False, target=prop_id, error="not_found",
+                                     detail=f"prop 不存在: {prop_id}")
+            from .models import prop_revision
+            cur = prop_revision(p)
+            if expected_revision != cur:
+                return self._stale_receipt(op, expected_revision, cur, p.to_dict())
+            before = p.to_dict()
+            for f in _PROP_FIELDS:
+                if f in patch and patch[f] is not None:
+                    setattr(p, f, patch[f])
+            p.updated_at = time.time()
+            self.store.save(doc)
+            doc_rev = self._verify_after_save()
+            reloaded = self.store.load().props.get(prop_id)
+            verified = reloaded is not None and prop_revision(reloaded) == prop_revision(p)
+            return self._receipt(op, ok=True, target=prop_id,
+                                 before=before, after=p.to_dict(),
+                                 revision=prop_revision(p), verified=verified,
+                                 document_revision_after=doc_rev)
+
+    async def delete_prop(self, prop_id: str, *, expected_revision: str) -> dict:
+        """删除 Prop。当前模型中 Prop 没有被其它资源引用（Look 无 prop FK）——
+        无 resource_in_use 检查；未来 Look 加 prop 引用时必须补 reference sweep。"""
+        op = "resource.delete_prop"
+        async with self.store.write_lock():
+            doc = self.store.load()
+            p = doc.props.get(prop_id)
+            if p is None:
+                return self._receipt(op, ok=False, target=prop_id, error="not_found",
+                                     detail=f"prop 不存在: {prop_id}")
+            from .models import prop_revision
+            cur = prop_revision(p)
+            if expected_revision != cur:
+                return self._stale_receipt(op, expected_revision, cur, p.to_dict())
+            before = p.to_dict()
+            del doc.props[prop_id]
+            self.store.save(doc)
+            doc_rev = self._verify_after_save()
+            verified = self.store.load().props.get(prop_id) is None
+            return self._receipt(op, ok=True, target=prop_id,
+                                 before=before, after=None,
+                                 revision=None, verified=verified,
+                                 document_revision_after=doc_rev)
+
+    async def attach_prop_reference(self, prop_id: str, asset_id: str, *,
+                                    expected_revision: str) -> dict:
+        op = "resource.attach_prop_reference"
+        async with self.store.write_lock():
+            doc = self.store.load()
+            p = doc.props.get(prop_id)
+            if p is None:
+                return self._receipt(op, ok=False, target=prop_id, error="not_found",
+                                     detail=f"prop 不存在: {prop_id}")
+            from .models import prop_revision
+            cur = prop_revision(p)
+            if expected_revision != cur:
+                return self._stale_receipt(op, expected_revision, cur, p.to_dict())
+            if asset_id not in doc.reference_assets:
+                return self._receipt(op, ok=False, target=prop_id, error="asset_not_found",
+                                     detail=f"reference asset 不存在: {asset_id}")
+            if asset_id in p.reference_asset_ids:
+                return self._receipt(op, ok=True, target=prop_id, after=p.to_dict(),
+                                     revision=cur, verified=True, unchanged=True, error=None)
+            before = p.to_dict()
+            p.reference_asset_ids.append(asset_id)
+            p.updated_at = time.time()
+            self.store.save(doc)
+            doc_rev = self._verify_after_save()
+            reloaded = self.store.load().props.get(prop_id)
+            verified = reloaded is not None and asset_id in reloaded.reference_asset_ids
+            return self._receipt(op, ok=True, target=prop_id,
+                                 before=before, after=p.to_dict(),
+                                 revision=prop_revision(p), verified=verified,
+                                 document_revision_after=doc_rev)
+
+    async def detach_prop_reference(self, prop_id: str, asset_id: str, *,
+                                    expected_revision: str) -> dict:
+        op = "resource.detach_prop_reference"
+        async with self.store.write_lock():
+            doc = self.store.load()
+            p = doc.props.get(prop_id)
+            if p is None:
+                return self._receipt(op, ok=False, target=prop_id, error="not_found",
+                                     detail=f"prop 不存在: {prop_id}")
+            from .models import prop_revision
+            cur = prop_revision(p)
+            if expected_revision != cur:
+                return self._stale_receipt(op, expected_revision, cur, p.to_dict())
+            if asset_id not in p.reference_asset_ids:
+                return self._receipt(op, ok=True, target=prop_id, after=p.to_dict(),
+                                     revision=cur, verified=True, unchanged=True, error=None)
+            before = p.to_dict()
+            p.reference_asset_ids.remove(asset_id)
+            p.updated_at = time.time()
+            self.store.save(doc)
+            doc_rev = self._verify_after_save()
+            reloaded = self.store.load().props.get(prop_id)
+            verified = reloaded is not None and asset_id not in reloaded.reference_asset_ids
+            return self._receipt(op, ok=True, target=prop_id,
+                                 before=before, after=p.to_dict(),
+                                 revision=prop_revision(p), verified=verified,
+                                 document_revision_after=doc_rev)

@@ -94,6 +94,99 @@ _ERROR_STATUS = {
 }
 
 
+class CreatePropRequest(BaseModel):
+    name: str
+    description: str = ""
+    tags: Optional[List[str]] = None
+    expected_document_revision: str
+
+
+@router.post("/api/project/{project}/props")
+async def create_prop(project: str, req: CreatePropRequest):
+    """创建 Prop（Phase 1C4：基本 CRUD；Location 不在 Resources 域——归 Scene System）。"""
+    try:
+        receipt = await _write_service(project).create_prop(
+            name=req.name, description=req.description, tags=req.tags,
+            expected_document_revision=req.expected_document_revision)
+        _raise_for_receipt(receipt)
+        return receipt
+    except HTTPException:
+        raise
+    except ResourceSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"资源数据错误: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/api/project/{project}/props/{prop_id}")
+async def update_prop(project: str, prop_id: str, patch: dict = Body(...)):
+    """更新 Prop（name/description/tags；expected_revision 由 router 剥离）。"""
+    try:
+        body = {k: v for k, v in patch.items() if k != "expected_revision"}
+        receipt = await _write_service(project).update_prop(
+            prop_id, body, expected_revision=patch.get("expected_revision", ""))
+        _raise_for_receipt(receipt)
+        return receipt
+    except HTTPException:
+        raise
+    except ResourceSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"资源数据错误: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/api/project/{project}/props/{prop_id}")
+async def delete_prop(project: str, prop_id: str, expected_revision: str = Query(...)):
+    """删除 Prop（当前无资源引用 Prop；未来 Look 加 prop FK 时必须补 reference sweep）。"""
+    try:
+        receipt = await _write_service(project).delete_prop(
+            prop_id, expected_revision=expected_revision)
+        _raise_for_receipt(receipt)
+        return receipt
+    except HTTPException:
+        raise
+    except ResourceSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"资源数据错误: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class AttachPropReferenceRequest(BaseModel):
+    asset_id: str
+    expected_revision: str
+
+
+@router.post("/api/project/{project}/props/{prop_id}/references")
+async def attach_prop_reference(project: str, prop_id: str, req: AttachPropReferenceRequest):
+    try:
+        receipt = await _write_service(project).attach_prop_reference(
+            prop_id, req.asset_id, expected_revision=req.expected_revision)
+        _raise_for_receipt(receipt)
+        return receipt
+    except HTTPException:
+        raise
+    except ResourceSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"资源数据错误: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/api/project/{project}/props/{prop_id}/references/{asset_id}")
+async def detach_prop_reference(project: str, prop_id: str, asset_id: str,
+                                expected_revision: str = Query(...)):
+    try:
+        receipt = await _write_service(project).detach_prop_reference(
+            prop_id, asset_id, expected_revision=expected_revision)
+        _raise_for_receipt(receipt)
+        return receipt
+    except HTTPException:
+        raise
+    except ResourceSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"资源数据错误: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 def _raise_for_receipt(receipt: dict):
     """业务 receipt（ok=False）→ 对应 HTTP 状态码；body 保持完整 receipt 结构。"""
     if receipt.get("ok"):

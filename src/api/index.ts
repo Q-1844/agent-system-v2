@@ -2175,6 +2175,113 @@ class ApiClient {
   async dismissDirectorProposal(projectName: string, proposalId: string): Promise<{ dismissed: boolean; proposal_id: string }> {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/agents/director/proposals/${encodeURIComponent(proposalId)}/dismiss`, { method: 'POST' });
   }
+
+  // ==================== Production Resources V1（Phase 1C1~1C4）====================
+  // receipt/result 里 ok=false 的结构化错误直接抛给调用方（页面统一 catch 展示 detail）。
+  private async resourcesRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    try {
+      return await this.request<T>(endpoint, options);
+    } catch (e: any) {
+      // request() 抛的是 Error(message)；FastAPI HTTPException detail=receipt 结构化对象
+      // 时 message 是 JSON 文本——尝试解析回对象供页面判 error 码。
+      const msg = e?.message ?? String(e);
+      try {
+        const parsed = JSON.parse(msg);
+        if (parsed && typeof parsed === 'object' && 'error' in parsed) throw parsed;
+      } catch (parseErr) {
+        if (parseErr && typeof parseErr === 'object' && 'error' in (parseErr as any)) throw parseErr;
+      }
+      throw e;
+    }
+  }
+  async resourcesList(projectName: string, type: string = 'all'): Promise<{ resources: any[]; document_revision: string }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/resources?type=${encodeURIComponent(type)}`);
+  }
+  async readLook(projectName: string, lookId: string): Promise<any> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/looks/${encodeURIComponent(lookId)}`);
+  }
+  async listLooks(projectName: string, characterName?: string): Promise<{ looks: any[]; document_revision: string }> {
+    const q = characterName ? `?character_name=${encodeURIComponent(characterName)}` : '';
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/looks${q}`);
+  }
+  async readClothing(projectName: string, clothingId: string): Promise<any> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/clothings/${encodeURIComponent(clothingId)}`);
+  }
+  async listClothings(projectName: string): Promise<{ clothings: any[]; document_revision: string }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/clothings`);
+  }
+  async createClothing(projectName: string, body: any): Promise<any> {
+    return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/clothings`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async updateClothing(projectName: string, clothingId: string, body: any): Promise<any> {
+    return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/clothings/${encodeURIComponent(clothingId)}`, { method: 'PATCH', body: JSON.stringify(body) });
+  }
+  async deleteClothing(projectName: string, clothingId: string, expectedRevision: string): Promise<any> {
+    return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/clothings/${encodeURIComponent(clothingId)}?expected_revision=${encodeURIComponent(expectedRevision)}`, { method: 'DELETE' });
+  }
+  async attachClothingReference(projectName: string, clothingId: string, body: any): Promise<any> {
+    return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/clothings/${encodeURIComponent(clothingId)}/references`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async detachClothingReference(projectName: string, clothingId: string, assetId: string, expectedRevision: string): Promise<any> {
+    return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/clothings/${encodeURIComponent(clothingId)}/references/${encodeURIComponent(assetId)}?expected_revision=${encodeURIComponent(expectedRevision)}`, { method: 'DELETE' });
+  }
+  async registerReferenceAsset(projectName: string, body: any): Promise<any> {
+    return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/reference-assets`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async createLook(projectName: string, body: any): Promise<any> {
+    return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/looks`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async updateLook(projectName: string, lookId: string, body: any): Promise<any> {
+    return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/looks/${encodeURIComponent(lookId)}`, { method: 'PATCH', body: JSON.stringify(body) });
+  }
+  async generateLookCandidates(projectName: string, lookId: string, body: any): Promise<any> {
+    return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/looks/${encodeURIComponent(lookId)}/generate`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async reviewLookCandidates(projectName: string, lookId: string, body: any = {}): Promise<any> {
+    return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/looks/${encodeURIComponent(lookId)}/review`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async approveLookReference(projectName: string, lookId: string, body: any): Promise<any> {
+    return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/looks/${encodeURIComponent(lookId)}/approve`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async revokeLookApproval(projectName: string, lookId: string, body: any): Promise<any> {
+    return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/looks/${encodeURIComponent(lookId)}/revoke-approval`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async listProps(projectName: string): Promise<{ props: any[]; document_revision: string }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/props`);
+  }
+  async readProp(projectName: string, propId: string): Promise<any> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/props/${encodeURIComponent(propId)}`);
+  }
+  async createProp(projectName: string, body: any): Promise<any> {
+    return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/props`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async updateProp(projectName: string, propId: string, body: any): Promise<any> {
+    return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/props/${encodeURIComponent(propId)}`, { method: 'PATCH', body: JSON.stringify(body) });
+  }
+  async deleteProp(projectName: string, propId: string, expectedRevision: string): Promise<any> {
+    return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/props/${encodeURIComponent(propId)}?expected_revision=${encodeURIComponent(expectedRevision)}`, { method: 'DELETE' });
+  }
+  async attachPropReference(projectName: string, propId: string, body: any): Promise<any> {
+    return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/props/${encodeURIComponent(propId)}/references`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async detachPropReference(projectName: string, propId: string, assetId: string, expectedRevision: string): Promise<any> {
+    return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/props/${encodeURIComponent(propId)}/references/${encodeURIComponent(assetId)}?expected_revision=${encodeURIComponent(expectedRevision)}`, { method: 'DELETE' });
+  }
+  async publishResource(projectName: string, resourceId: string): Promise<any> {
+    return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/resources/publish`, { method: 'POST', body: JSON.stringify({ resource_id: resourceId }) });
+  }
+  async publishCharacter(projectName: string, characterName: string): Promise<any> {
+    return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/resources/publish-character`, { method: 'POST', body: JSON.stringify({ character_name: characterName }) });
+  }
+  async importSharedResource(projectName: string, body: any): Promise<any> {
+    return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/resources/import`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async listSharedResources(type: string = 'all'): Promise<{ resources: any[] }> {
+    return this.request(`/api/shared/resources?type=${encodeURIComponent(type)}`);
+  }
+  async readSharedResource(sharedId: string): Promise<any> {
+    return this.request(`/api/shared/resources/${encodeURIComponent(sharedId)}`);
+  }
 }
 
 export const apiClient = new ApiClient();

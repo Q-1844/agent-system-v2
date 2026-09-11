@@ -463,6 +463,12 @@ def test_api_read_only_no_mutation_endpoints(client):
         ("POST", "/api/project/{project}/resources/publish"),
         ("POST", "/api/project/{project}/resources/publish-character"),
         ("POST", "/api/project/{project}/resources/import"),
+        # Phase 1C4：Prop CRUD（Location 不在 Resources 域——归 Scene System）
+        ("POST", "/api/project/{project}/props"),
+        ("PATCH", "/api/project/{project}/props/{prop_id}"),
+        ("DELETE", "/api/project/{project}/props/{prop_id}"),
+        ("POST", "/api/project/{project}/props/{prop_id}/references"),
+        ("DELETE", "/api/project/{project}/props/{prop_id}/references/{asset_id}"),
     }
     write_routes = []
     for route in rres.router.routes:

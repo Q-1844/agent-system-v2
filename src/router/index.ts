@@ -26,6 +26,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '角色管理', icon: 'characters' }
       },
       {
+        path: 'resources',
+        name: 'Resources',
+        component: () => import('@/views/resources/index.vue'),
+        meta: { title: '生产资源', icon: 'resources' }
+      },
+      {
         path: 'storyboard',
         name: 'Storyboard',
         component: () => import('@/views/storyboard/ShotBoard.vue'),
