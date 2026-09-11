@@ -227,6 +227,8 @@ def compute_scene_instance_visual_basis(project_dir, doc: SceneSystemDocument,
         "prop_semantic_snapshots": prop_semantics,
         "selected_prop_references": list(ref_selection.get("prop_refs_selected", [])),
         "peer_state_reference": ref_selection.get("peer_state_reference"),
+        "include_peer": include_peer,   # 重算/溯源必须沿用原生成的 peer 策略（§14：
+        # 其它 view 变化不应 stale——peer 是可选增强，后来出现的 peer 不追溯作废）
         "candidate_count": candidate_count,
         "seed": seed,
         "model": {"provider": "agnes", "model_id": model_id,
@@ -268,6 +270,63 @@ def basis_reference_entries(project_dir, rdoc: Optional[ResourceDocument],
     return out
 
 
+def compute_state_view_staleness(project_dir, doc: SceneSystemDocument,
+                                 rdoc: Optional[ResourceDocument],
+                                 scene_instance: SceneInstance,
+                                 base_location: Location, base_view: LocationView,
+                                 instance_view: SceneInstanceView,
+                                 gen_basis: dict) -> dict:
+    """S2B §32/§33：approved state view 的 derived stale 检测（read 模型）。
+    用 generation record 里的 basis 参数对当前 canonical 重算，逐组件对比产生
+    stale_reasons（绝不自动 mutation——stale 是 derived fact，未来 Shot binding
+    必须拒绝 stale scene reference）。
+    返回 {is_stale, stale_reasons, current_basis_fingerprint}。"""
+    reasons: List[str] = []
+    try:
+        fresh_selection = select_state_view_visual_refs(
+            project_dir, doc, rdoc, base_view, instance_view, scene_instance,
+            include_peer=gen_basis.get("include_peer", True))
+    except _BasisInputError as e:
+        return {"is_stale": True,
+                "stale_reasons": [f"selection_failed:{e.code}"],
+                "current_basis_fingerprint": None}
+    current = compute_scene_instance_visual_basis(
+        project_dir, doc, rdoc, scene_instance, base_location, base_view, instance_view,
+        model_id=(gen_basis.get("model") or {}).get("model_id", ""),
+        size_tier=(gen_basis.get("model") or {}).get("size_tier", "1K"),
+        ratio=(gen_basis.get("model") or {}).get("ratio", "16:9"),
+        seed=gen_basis.get("seed"),
+        candidate_count=gen_basis.get("candidate_count", 2),
+        ref_selection=fresh_selection,
+        include_peer=gen_basis.get("include_peer", True))
+    if current["basis_fingerprint"] != instance_view.approved_basis_fingerprint:
+        # 逐组件归因（顺序固定，诚实可读）
+        if current.get("location_snapshot") != gen_basis.get("location_snapshot"):
+            reasons.append("location_identity_changed")
+        if current.get("location_view_snapshot") != gen_basis.get("location_view_snapshot"):
+            reasons.append("base_location_view_changed")
+        if current.get("base_location_reference") != gen_basis.get("base_location_reference"):
+            reasons.append("base_reference_changed")
+        cur_state = current.get("view_relevant_scene_state") or {}
+        old_state = gen_basis.get("view_relevant_scene_state") or {}
+        for k in ("time_of_day", "weather", "lighting", "environment_conditions"):
+            if cur_state.get(k) != old_state.get(k):
+                reasons.append(f"global_state_changed:{k}")
+                break
+        if cur_state.get("anchor_states") != old_state.get("anchor_states"):
+            reasons.append("anchor_state_changed")
+        if cur_state.get("prop_placements") != old_state.get("prop_placements"):
+            reasons.append("prop_placement_changed")
+        if current.get("selected_prop_references") != gen_basis.get("selected_prop_references"):
+            reasons.append("prop_reference_changed")
+        if current.get("peer_state_reference") != gen_basis.get("peer_state_reference"):
+            reasons.append("peer_reference_changed")
+        if not reasons:
+            reasons.append("basis_changed")
+    return {"is_stale": bool(reasons), "stale_reasons": reasons,
+            "current_basis_fingerprint": current["basis_fingerprint"]}
+
+
 def recompute_scene_instance_visual_basis_still_holds(
         project_dir, doc: SceneSystemDocument, rdoc: Optional[ResourceDocument],
         scene_instance: SceneInstance, base_location: Location, base_view: LocationView,
@@ -284,7 +343,7 @@ def recompute_scene_instance_visual_basis_still_holds(
     try:
         fresh_selection = select_state_view_visual_refs(
             project_dir, doc, rdoc, base_view, current_view, scene_instance,
-            include_peer=include_peer)
+            include_peer=basis.get("include_peer", include_peer))
     except _BasisInputError:
         return False, "basis_changed"
     current = compute_scene_instance_visual_basis(
@@ -295,7 +354,7 @@ def recompute_scene_instance_visual_basis_still_holds(
         seed=basis["seed"],
         candidate_count=basis["candidate_count"],
         ref_selection=fresh_selection,
-        include_peer=include_peer)
+        include_peer=basis.get("include_peer", include_peer))
     if current["basis_fingerprint"] != basis["basis_fingerprint"]:
         return False, "basis_changed"
     return True, ""

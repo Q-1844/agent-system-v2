@@ -286,7 +286,11 @@ class SceneVisualService:
             v3 = doc.views[view_id]
             v3.generation_status = GenerationStatus.READY.value
             v3.active_generation_id = generation_id
-            # approval_status 保持原状（generation 绝不自动 approve，T26）
+            # 重新生成使旧批准失效（批准针对旧候选；历史在 approval_records 保留）。
+            # generation 绝不自动 approve（T26），但旧候选被替换后旧批准不再描述当前候选。
+            _regen_reset = v3.approval_status == "approved"
+            if _regen_reset:
+                v3.approval_status = "unreviewed"
             self.store.save(doc)
             revision_after = view_revision(v3)
             doc_rev = self._verify_after_save()
@@ -548,7 +552,11 @@ class SceneVisualService:
             v3 = doc.scene_instance_views[scene_instance_view_id]
             v3.generation_status = GenerationStatus.READY.value
             v3.active_generation_id = generation_id
-            self.store.save(doc)   # generation 绝不自动 approve（T31）
+            # 重新生成使旧批准失效（§37 lifecycle：regen 后可重新 review+approve；
+            # 批准针对旧候选，历史在 approval_records 保留）。generation 绝不自动 approve（T31）。
+            if v3.approval_status == "approved":
+                v3.approval_status = "unreviewed"
+            self.store.save(doc)
             revision_after = view_revision(v3)
             doc_rev = self._verify_after_save()
             reloaded = self.store.load()
@@ -712,6 +720,262 @@ class SceneVisualService:
         if v is None:
             return None
         return self._instance_view_read(doc, v)
+
+    def read_scene_instance_view_status(self, scene_instance_view_id: str) -> Optional[dict]:
+        """S2B §32/§34：read 模型——base location view 摘要 + 当前 ViewRelevantSceneState
+        投影 + 审批/审查摘要 + derived stale（is_stale/stale_reasons；绝不自动 mutation）。
+        stale 锚点 = approved_basis_fingerprint vs 当前重算 generation basis 指纹。"""
+        doc = self.store.load()
+        v = doc.scene_instance_views.get(scene_instance_view_id)
+        if v is None:
+            return None
+        d = self._instance_view_read(doc, v)
+        base_view = doc.views.get(v.location_view_id)
+        d["base_location_view"] = base_view.to_dict() if base_view else None
+        inst = doc.scene_instances.get(v.scene_instance_id)
+        # 当前投影（derived，只读展示）
+        projection = None
+        if inst is not None and base_view is not None:
+            from .state_projection import project_scene_state_for_view
+            projection = project_scene_state_for_view(
+                inst, base_view,
+                [a for a in doc.anchors.values() if a.location_id == inst.location_id])
+        d["view_relevant_scene_state"] = projection
+        # 审查摘要（最新 pass 证据是否存在）
+        from .instance_view_review import latest_pass_review_for_instance_view
+        ev = (latest_pass_review_for_instance_view(
+            self.project_dir, scene_instance_view_id=v.scene_instance_view_id,
+            generation_id=v.active_generation_id, candidate_index=0)
+            if v.active_generation_id else None)
+        d["has_pass_review_evidence"] = ev is not None
+        d["latest_review_fingerprint"] = (ev["record"].get("reviewed_basis_fingerprint")
+                                          if ev else None)
+        # derived stale（§32：approved 才有意义；绝不自动 mutation）
+        if v.approval_status == "approved" and v.approved_basis_fingerprint \
+                and inst is not None and base_view is not None:
+            from .instance_view_basis import compute_state_view_staleness
+            from .visual_basis import load_resources_doc_or_none
+            gen_recs = [r for r in generation_records.read_records(
+                self.project_dir, generation_id=v.active_generation_id)
+                if r.get("operation") == "scene_instance_view.generate"]
+            gen_basis = (gen_recs[-1].get("basis") or {}) if gen_recs else {}
+            rdoc = load_resources_doc_or_none(self.project_dir)
+            st = compute_state_view_staleness(
+                self.project_dir, doc, rdoc, inst, doc.locations.get(inst.location_id),
+                base_view, v, gen_basis)
+            d["is_stale"] = st["is_stale"]
+            d["stale_reasons"] = st["stale_reasons"]
+        else:
+            d["is_stale"] = False
+            d["stale_reasons"] = []
+        return d
+
+    # ==================================================================
+    # S2B：SceneInstanceView 显式 Approval（§30/§31 cross-canonical saga）
+    # ==================================================================
+    async def approve_scene_instance_view(self, scene_instance_view_id: str, *,
+                                          candidate_index: int = 0,
+                                          expected_revision: str,
+                                          expected_resources_document_revision: str) -> dict:
+        """显式审批（review pass ≠ 自动 approve）。Saga 三阶段同 S2A（§31）：
+        A 短锁验证（candidate/PASS 证据/期望指纹当前/文件在盘/OCC + scene basis 未 stale）
+        → B 无 scene 锁经冻结 Resources 注册 ReferenceAsset（purpose=scene_instance_view）
+        → C 重验 attach；B→C 间变化 → orphan 不 attach 不偷删。"""
+        op = "scene.approve_scene_instance_view"
+        from .instance_view_review import (
+            build_scene_instance_review_expectations,
+            expectations_fingerprint as siv_expectations_fingerprint,
+            latest_pass_review_for_instance_view)
+        from .instance_view_basis import (
+            recompute_scene_instance_visual_basis_still_holds)
+
+        # ---- 阶段 A：scene 短锁验证 ----
+        async with self.store.write_lock():
+            doc = self.store.load()
+            sciv = doc.scene_instance_views.get(scene_instance_view_id)
+            if sciv is None:
+                return {"ok": False, "operation": op, "error": "instance_view_not_found",
+                        "detail": f"SceneInstanceView 不存在: {scene_instance_view_id}"}
+            if sciv.approval_status == "approved":
+                return {"ok": False, "operation": op, "error": "already_approved",
+                        "detail": "该 SceneInstanceView 已 approved（先 revoke 再重新审批）",
+                        "reference_asset_id": sciv.reference_asset_id}
+            generation_id = sciv.active_generation_id
+            if not generation_id or sciv.generation_status != GenerationStatus.READY.value:
+                return {"ok": False, "operation": op, "error": "no_candidates",
+                        "detail": "没有 committed 候选（先 generate；review pass 不自动 approve）"}
+            gen_recs = [r for r in generation_records.read_records(
+                self.project_dir, generation_id=generation_id)
+                if r.get("operation") == "scene_instance_view.generate"
+                and r.get("status") == "committed"]
+            if not gen_recs:
+                return {"ok": False, "operation": op, "error": "generation_record_missing",
+                        "detail": f"committed generation record 不存在: {generation_id}"}
+            gen_rec = gen_recs[-1]
+            candidate_files = list(gen_rec.get("candidate_files") or [])
+            if not isinstance(candidate_index, int) or isinstance(candidate_index, bool) \
+                    or not (0 <= candidate_index < len(candidate_files)):
+                return {"ok": False, "operation": op, "error": "invalid_candidate_index",
+                        "detail": f"candidate_index 必须是 0~{len(candidate_files) - 1}"}
+            candidate_file = candidate_files[candidate_index]
+            ev = latest_pass_review_for_instance_view(
+                self.project_dir, scene_instance_view_id=scene_instance_view_id,
+                generation_id=generation_id, candidate_index=candidate_index)
+            if ev is None:
+                return {"ok": False, "operation": op, "error": "review_pass_required",
+                        "detail": (f"candidate {candidate_index} 没有针对当前 generation 的 "
+                                   f"overall=pass 审查证据（approve 双向硬门槛）")}
+            # 审查基准仍当前（scene state / view / location / 参考组）
+            inst = doc.scene_instances.get(sciv.scene_instance_id)
+            base_view = doc.views.get(sciv.location_view_id)
+            rdoc = load_resources_doc_or_none(self.project_dir)
+            if inst is None or base_view is None:
+                return {"ok": False, "operation": op, "error": "canonical_changed",
+                        "detail": "SceneInstance 或 base LocationView 已不存在"}
+            expectations = build_scene_instance_review_expectations(doc, base_view, inst, rdoc)
+            fp = siv_expectations_fingerprint(
+                expectations, list(ev["record"].get("reference_asset_ids_used") or []))
+            if fp != ev["record"].get("reviewed_basis_fingerprint"):
+                return {"ok": False, "operation": op, "error": "stale_approval_basis",
+                        "detail": "审查之后 scene basis/参考组已变化（期望指纹不一致）；重新 review"}
+            if not (self.project_dir / candidate_file).is_file():
+                return {"ok": False, "operation": op, "error": "candidate_file_missing",
+                        "detail": f"候选文件丢失: {candidate_file}"}
+            # scene basis 未 stale（§30 前置：recompute 仍成立）
+            from .instance_view_basis import _BasisInputError
+            loc = doc.locations.get(inst.location_id)
+            try:
+                holds, why = recompute_scene_instance_visual_basis_still_holds(
+                    self.project_dir, doc, rdoc, inst, loc, base_view, sciv,
+                    gen_rec.get("basis") or {}, include_peer=True)
+            except _BasisInputError as e:
+                return {"ok": False, "operation": op, "error": e.code, "detail": e.detail}
+            if not holds:
+                return {"ok": False, "operation": op, "error": "stale_approval_basis",
+                        "detail": f"scene basis 已 stale（{why}）；重新 generate+review 再 approve"}
+            cur = view_revision(sciv)
+            if expected_revision != cur:
+                return self._stale_receipt(op, expected_revision, cur, sciv.to_dict())
+
+        # ---- 阶段 B：冻结 Resources 注册（无 scene 锁）----
+        from src.resources.write_service import ResourceWriteService
+        rws = ResourceWriteService(self.project_dir, self.project_name)
+        reg = await rws.register_reference_asset(
+            local=candidate_file, view="", purpose="scene_instance_view",
+            source="scene_system",
+            expected_document_revision=expected_resources_document_revision)
+        if not reg.get("ok"):
+            err = reg.get("error")
+            mapped = ("resources_stale_revision" if err == "stale_revision"
+                      else (err or "resources_register_failed"))
+            self._approval_record(self.project_dir, {
+                "approval_id": f"apv_{uuid.uuid4().hex[:12]}",
+                "operation": op, "status": "aborted",
+                "scene_instance_view_id": scene_instance_view_id,
+                "scene_instance_id": sciv.scene_instance_id,
+                "generation_id": generation_id, "candidate_index": candidate_index,
+                "asset_id": None, "error": mapped, "detail": reg.get("detail"),
+                "reviewed_basis_fingerprint": ev["record"].get("reviewed_basis_fingerprint"),
+                "completed_at": time.time(),
+            })
+            return {"ok": False, "operation": op, "error": mapped,
+                    "detail": f"Resources 注册失败（未 attach，无 orphan）：{reg.get('detail')}"}
+        asset_id = reg["target"]
+
+        # ---- 阶段 C：scene 短锁重验 + attach / orphan ----
+        async with self.store.write_lock():
+            doc = self.store.load()
+            sciv2 = doc.scene_instance_views.get(scene_instance_view_id)
+            still_valid = (sciv2 is not None
+                           and view_revision(sciv2) == cur
+                           and sciv2.active_generation_id == generation_id)
+            if not still_valid:
+                self._approval_record(self.project_dir, {
+                    "approval_id": f"apv_{uuid.uuid4().hex[:12]}",
+                    "operation": op, "status": "orphaned_reference_asset",
+                    "scene_instance_view_id": scene_instance_view_id,
+                    "scene_instance_id": sciv.scene_instance_id,
+                    "generation_id": generation_id, "candidate_index": candidate_index,
+                    "asset_id": asset_id, "error": "stale_approval_basis",
+                    "detail": ("阶段 B 注册后 SceneInstanceView 已变化；ReferenceAsset 已注册"
+                               "但未绑定（orphan，以后可 GC），approval_status 未变更"),
+                    "reviewed_basis_fingerprint": ev["record"].get("reviewed_basis_fingerprint"),
+                    "completed_at": time.time(),
+                })
+                return {"ok": False, "operation": op, "error": "stale_approval_basis",
+                        "detail": "approve 期间 SceneInstanceView 已变化；ReferenceAsset 已注册"
+                                  "但未绑定（orphaned approval asset，记录在 approval_records）",
+                        "orphaned_asset_id": asset_id}
+            # attach + 记录 approved_basis_fingerprint（read 层 stale 检测锚点，§3/§32）
+            sciv2.reference_asset_id = asset_id
+            sciv2.approval_status = "approved"
+            sciv2.approved_basis_fingerprint = (gen_rec.get("basis") or {}).get(
+                "basis_fingerprint")
+            self.store.save(doc)
+            revision_after = view_revision(sciv2)
+            doc_rev = self._verify_after_save()
+            reloaded = self.store.load()
+            v4 = reloaded.scene_instance_views.get(scene_instance_view_id)
+            verified = bool(v4 is not None and v4.approval_status == "approved"
+                            and v4.reference_asset_id == asset_id
+                            and v4.approved_basis_fingerprint)
+            self._approval_record(self.project_dir, {
+                "approval_id": f"apv_{uuid.uuid4().hex[:12]}",
+                "operation": op, "status": "approved",
+                "scene_instance_view_id": scene_instance_view_id,
+                "scene_instance_id": sciv.scene_instance_id,
+                "generation_id": generation_id, "candidate_index": candidate_index,
+                "asset_id": asset_id, "candidate_file": candidate_file,
+                "approved_basis_fingerprint": sciv2.approved_basis_fingerprint,
+                "reviewed_basis_fingerprint": ev["record"].get("reviewed_basis_fingerprint"),
+                "revision_after": revision_after,
+                "scene_document_revision_after": doc_rev,
+                "completed_at": time.time(), "verified": verified,
+            })
+            return {"ok": True, "operation": op, "scene_instance_view_id": scene_instance_view_id,
+                    "asset_id": asset_id, "candidate_index": candidate_index,
+                    "candidate_file": candidate_file,
+                    "approval_status": sciv2.approval_status,
+                    "approved_basis_fingerprint": sciv2.approved_basis_fingerprint,
+                    "revision_after": revision_after, "verified": verified}
+
+    async def revoke_scene_instance_view_approval(self, scene_instance_view_id: str, *,
+                                                  expected_revision: str,
+                                                  reason: str = "") -> dict:
+        """解除 approved（§39 T39）：approval_status → rejected；历史全保留
+        （approved_basis_fingerprint 保留——它仍是历史事实）。"""
+        op = "scene.revoke_scene_instance_view_approval"
+        async with self.store.write_lock():
+            doc = self.store.load()
+            sciv = doc.scene_instance_views.get(scene_instance_view_id)
+            if sciv is None:
+                return {"ok": False, "operation": op, "error": "instance_view_not_found",
+                        "detail": f"SceneInstanceView 不存在: {scene_instance_view_id}"}
+            cur = view_revision(sciv)
+            if expected_revision != cur:
+                return self._stale_receipt(op, expected_revision, cur, sciv.to_dict())
+            if sciv.approval_status != "approved":
+                return {"ok": False, "operation": op, "error": "not_approved",
+                        "detail": f"当前 approval_status={sciv.approval_status}"}
+            before = sciv.to_dict()
+            sciv.approval_status = "rejected"
+            self.store.save(doc)
+            revision_after = view_revision(sciv)
+            self._approval_record(self.project_dir, {
+                "approval_id": f"apv_{uuid.uuid4().hex[:12]}",
+                "operation": op, "status": "revoked",
+                "scene_instance_view_id": scene_instance_view_id,
+                "scene_instance_id": sciv.scene_instance_id,
+                "generation_id": sciv.active_generation_id,
+                "asset_id": sciv.reference_asset_id,
+                "reason": reason or "", "revision_after": revision_after,
+                "completed_at": time.time(),
+            })
+            return {"ok": True, "operation": op,
+                    "scene_instance_view_id": scene_instance_view_id,
+                    "approval_status": sciv.approval_status,
+                    "reference_asset_id_kept": sciv.reference_asset_id,
+                    "revision_after": revision_after, "before": before}
 
     # ============ approval 事件流（§19/§25）============
     @staticmethod
