@@ -771,6 +771,280 @@ class SceneSystemService:
             return self._receipt(op, ok=True, target=view_id, before=before, after=None,
                                  revision=None, verified=True, document_revision_after=doc_rev)
 
+    # ==================================================================
+    # SceneInstance / SceneState（§10/§11/§12）
+    # ==================================================================
+    # 跨 store 校验（同锁内、纯文件读、无网络）：
+    #   - story_scene_id → ProjectStore（project.json）；project.json 不存在/段不在
+    #     → story_scene_not_found（fail closed，不静默）。
+    #   - prop_placements 的 prop_id → ResourceStore（resources.json）；identity 属
+    #     Resources（§14），本系统只引用不复制；resources.json 损坏 → resources_lookup_failed。
+    def _story_scene_exists(self, story_scene_id: str) -> bool:
+        """现有 Story Scene 是否存在（read 也用：悬空标注 story_scene_missing）。"""
+        try:
+            project = ProjectStore(self.project_dir).load()
+        except FileNotFoundError:
+            return False
+        return any(sc.scene_id == story_scene_id for sc in project.scenes)
+
+    def _lookup_props(self) -> Dict[str, Any]:
+        """Resources props keyed map（只读引用校验用）。损坏 → _ResourcesLookupError。"""
+        from src.resources.store import ResourceStore
+        from src.resources.models import ResourceSchemaError
+        try:
+            return ResourceStore(self.project_dir, self.project_name).load().props
+        except ResourceSchemaError as e:
+            raise _ResourcesLookupError(str(e)) from e
+
+    @staticmethod
+    def _instance_read(doc: SceneSystemDocument, inst: SceneInstance, *,
+                       story_scene_missing: Optional[bool] = None) -> dict:
+        d = inst.to_dict()
+        d["revision"] = scene_instance_revision(inst)
+        if story_scene_missing is not None:
+            d["story_scene_missing"] = story_scene_missing
+        return d
+
+    def read_scene_instance(self, instance_id: str) -> Optional[dict]:
+        doc = self.store.load()
+        inst = doc.scene_instances.get(instance_id)
+        if inst is None:
+            return None
+        # 悬空检测（§16）：旧 Story Scene 被删 → 明确标注，不静默忽略
+        missing = not self._story_scene_exists(inst.story_scene_id)
+        return self._instance_read(doc, inst, story_scene_missing=missing)
+
+    def list_scene_instances(self, story_scene_id: Optional[str] = None,
+                             location_id: Optional[str] = None) -> List[dict]:
+        doc = self.store.load()
+        out = []
+        for inst in doc.scene_instances.values():
+            if story_scene_id is not None and inst.story_scene_id != story_scene_id:
+                continue
+            if location_id is not None and inst.location_id != location_id:
+                continue
+            missing = not self._story_scene_exists(inst.story_scene_id)
+            out.append(self._instance_read(doc, inst, story_scene_missing=missing))
+        return out
+
+    async def create_scene_instance(self, *, story_scene_id: str, location_id: str,
+                                    expected_document_revision: str = "") -> dict:
+        """创建 SceneInstance。T11/T12：story_scene 与 location 必须真实存在；
+        T13：同一 story_scene 至多一个 active instance。绑定时刻快照
+        location_revision_at_bind（历史事实，之后不随 location 更新）。"""
+        op = "scene.create_scene_instance"
+        try:
+            story_scene_id = self._require_str(story_scene_id, "story_scene_id")
+            location_id = self._require_str(location_id, "location_id")
+        except ValueError as e:
+            return self._receipt(op, ok=False, error="validation_error", detail=str(e))
+        async with self.store.write_lock():
+            doc = self.store.load()
+            loc = doc.locations.get(location_id)
+            if loc is None:
+                return self._receipt(op, ok=False, error="location_not_found",
+                                     detail=f"Location 不存在: {location_id}")
+            if not self._story_scene_exists(story_scene_id):
+                return self._receipt(
+                    op, ok=False, error="story_scene_not_found",
+                    detail=(f"Story Scene 不存在于项目 canonical: {story_scene_id}"
+                            f"（project.json 不存在或 scene_id 无效；不静默创建）"),
+                    story_scene_id=story_scene_id)
+            existing_active = [i for i in doc.scene_instances.values()
+                               if i.story_scene_id == story_scene_id
+                               and i.status == SceneInstanceStatus.ACTIVE.value]
+            if existing_active:
+                return self._receipt(
+                    op, ok=False, error="instance_already_active",
+                    detail=(f"Story Scene {story_scene_id} 已有 active SceneInstance "
+                            f"（V1 一段至多一个 active；先 archive/retire 或删除旧的）"),
+                    existing_scene_instance_ids=sorted(
+                        i.scene_instance_id for i in existing_active))
+            cur = document_revision(doc)
+            if expected_document_revision != cur:
+                return self._stale_receipt(op, expected_document_revision, cur)
+            inst = SceneInstance(scene_instance_id=new_scene_instance_id(),
+                                 story_scene_id=story_scene_id,
+                                 location_id=location_id,
+                                 location_revision_at_bind=location_revision(loc))
+            doc.scene_instances[inst.scene_instance_id] = inst
+            self.store.save(doc)
+            doc_rev = self._verify_after_save()
+            reloaded = self.store.load().scene_instances.get(inst.scene_instance_id)
+            verified = (reloaded is not None and
+                        scene_instance_revision(reloaded) == scene_instance_revision(inst))
+            return self._receipt(op, ok=True, target=inst.scene_instance_id,
+                                 before=None,
+                                 after=self._instance_read(self.store.load(), inst,
+                                                           story_scene_missing=False),
+                                 revision=scene_instance_revision(inst), verified=verified,
+                                 document_revision_after=doc_rev)
+
+    async def update_scene_instance_location(self, instance_id: str, *, location_id: str,
+                                             expected_revision: str) -> dict:
+        """换绑 Location（罕见操作）。fail closed：现有 state 的 anchor 引用不属于
+        新 location → state_references_old_location（先清 state 再换绑）。"""
+        op = "scene.update_scene_instance_location"
+        try:
+            location_id = self._require_str(location_id, "location_id")
+        except ValueError as e:
+            return self._receipt(op, ok=False, target=instance_id,
+                                 error="validation_error", detail=str(e))
+        async with self.store.write_lock():
+            doc = self.store.load()
+            inst = doc.scene_instances.get(instance_id)
+            if inst is None:
+                return self._receipt(op, ok=False, target=instance_id, error="instance_not_found",
+                                     detail=f"SceneInstance 不存在: {instance_id}")
+            cur = scene_instance_revision(inst)
+            if expected_revision != cur:
+                return self._stale_receipt(op, expected_revision, cur, inst.to_dict())
+            new_loc = doc.locations.get(location_id)
+            if new_loc is None:
+                return self._receipt(op, ok=False, error="location_not_found",
+                                     detail=f"Location 不存在: {location_id}")
+            new_anchors = self._location_anchor_ids(doc, location_id)
+            stale_refs = ([k for k in inst.state.anchor_states if k not in new_anchors]
+                          + [pid for pid, pp in inst.state.prop_placements.items()
+                             if pp.anchor_id not in new_anchors])
+            if stale_refs:
+                return self._receipt(
+                    op, ok=False, target=instance_id, error="state_references_old_location",
+                    detail=(f"SceneState 引用旧 location 的 anchor（先清空/修正 state 再换绑）: "
+                            f"{sorted(set(stale_refs))}"),
+                    stale_anchor_refs=sorted(set(stale_refs)))
+            before = inst.to_dict()
+            inst.location_id = location_id
+            inst.location_revision_at_bind = location_revision(new_loc)
+            inst.updated_at = time.time()
+            self.store.save(doc)
+            doc_rev = self._verify_after_save()
+            reloaded = self.store.load().scene_instances.get(instance_id)
+            verified = (reloaded is not None and
+                        scene_instance_revision(reloaded) == scene_instance_revision(inst))
+            return self._receipt(op, ok=True, target=instance_id,
+                                 before=before,
+                                 after=self._instance_read(self.store.load(), inst,
+                                                           story_scene_missing=False),
+                                 revision=scene_instance_revision(inst), verified=verified,
+                                 document_revision_after=doc_rev)
+
+    async def delete_scene_instance(self, instance_id: str, *, expected_revision: str) -> dict:
+        """删除 SceneInstance（连同其 SceneState——state 嵌入 instance，无独立真相源）。"""
+        op = "scene.delete_scene_instance"
+        async with self.store.write_lock():
+            doc = self.store.load()
+            inst = doc.scene_instances.get(instance_id)
+            if inst is None:
+                return self._receipt(op, ok=False, target=instance_id, error="instance_not_found",
+                                     detail=f"SceneInstance 不存在: {instance_id}")
+            cur = scene_instance_revision(inst)
+            if expected_revision != cur:
+                return self._stale_receipt(op, expected_revision, cur, inst.to_dict())
+            before = inst.to_dict()
+            del doc.scene_instances[instance_id]
+            self.store.save(doc)
+            doc_rev = self._verify_after_save()
+            return self._receipt(op, ok=True, target=instance_id, before=before, after=None,
+                                 revision=None, verified=True, document_revision_after=doc_rev)
+
+    async def patch_scene_state(self, instance_id: str, patch: Dict[str, Any], *,
+                                expected_revision: str) -> dict:
+        """SceneState partial patch（T14 round-trip / T15 / T16 校验点）。
+        - 字符串字段：time_of_day/weather/lighting/environment_conditions/notes。
+        - anchor_states / prop_placements：整 dict 替换（read-patch-write + OCC 保障
+          并发安全；不做 per-key 部分合并——语义更简单可预测）。
+        - anchor_states key 必须是该 instance location 的合法 anchor（T15）。
+        - prop_placements 的 prop_id 必须存在于 Resources（T16）；anchor_id 必须合法。
+        - 只保存跨 Shot 持续成立的结果状态；Shot 内动作过程属于 Shot/Video（§12）。"""
+        op = "scene.patch_scene_state"
+        _STR_FIELDS = {"time_of_day", "weather", "lighting", "environment_conditions", "notes"}
+        try:
+            instance_id = self._require_str(instance_id, "instance_id")
+            unknown = set(patch) - _STR_FIELDS - {"anchor_states", "prop_placements"}
+            if unknown:
+                raise ValueError(f"未知字段: {sorted(unknown)}（可 patch: "
+                                 f"{sorted(_STR_FIELDS)} + anchor_states + prop_placements）")
+            for f in _STR_FIELDS:
+                if f in patch and not isinstance(patch[f], str):
+                    raise ValueError(f"{f} 必须是 string")
+            anchor_states_raw = patch.get("anchor_states")
+            if anchor_states_raw is not None:
+                if not isinstance(anchor_states_raw, dict):
+                    raise ValueError("anchor_states 必须是 {anchor_id: {condition, note}} dict")
+            prop_placements_raw = patch.get("prop_placements")
+            if prop_placements_raw is not None:
+                if not isinstance(prop_placements_raw, dict):
+                    raise ValueError(
+                        "prop_placements 必须是 {prop_id: {anchor_id, state, note}} dict")
+        except ValueError as e:
+            return self._receipt(op, ok=False, target=instance_id,
+                                 error="validation_error", detail=str(e))
+        async with self.store.write_lock():
+            doc = self.store.load()
+            inst = doc.scene_instances.get(instance_id)
+            if inst is None:
+                return self._receipt(op, ok=False, target=instance_id, error="instance_not_found",
+                                     detail=f"SceneInstance 不存在: {instance_id}")
+            cur = scene_instance_revision(inst)
+            if expected_revision != cur:
+                return self._stale_receipt(op, expected_revision, cur, inst.to_dict())
+            loc_anchors = self._location_anchor_ids(doc, inst.location_id)
+            new_anchor_states: Optional[Dict[str, AnchorState]] = None
+            new_prop_placements: Optional[Dict[str, PropPlacement]] = None
+            if anchor_states_raw is not None:
+                new_anchor_states = {}
+                for k, v in anchor_states_raw.items():
+                    if k not in doc.anchors:
+                        return self._receipt(
+                            op, ok=False, target=instance_id, error="anchor_not_found",
+                            detail=f"anchor_states 引用不存在的 anchor: {k}")
+                    if k not in loc_anchors:
+                        return self._receipt(
+                            op, ok=False, target=instance_id, error="cross_location_anchor",
+                            detail=f"anchor_states 引用的 anchor {k} 不属于该 instance 的 location")
+                    new_anchor_states[k] = AnchorState.from_dict(v)
+            if prop_placements_raw is not None:
+                try:
+                    props = self._lookup_props()
+                except _ResourcesLookupError as e:
+                    return self._receipt(
+                        op, ok=False, target=instance_id, error="resources_lookup_failed",
+                        detail=f"resources.json 不可读（fail closed，不校验不放过）: {e}")
+                new_prop_placements = {}
+                for pid, v in prop_placements_raw.items():
+                    if pid not in props:
+                        return self._receipt(
+                            op, ok=False, target=instance_id, error="prop_not_found",
+                            detail=f"prop_placements 引用不存在的 Resource Prop: {pid}"
+                                   f"（Prop identity 属 Production Resources V1，只引用不复制）")
+                    pp = PropPlacement.from_dict(v)
+                    if pp.anchor_id and pp.anchor_id not in loc_anchors:
+                        return self._receipt(
+                            op, ok=False, target=instance_id, error="cross_location_anchor",
+                            detail=f"prop {pid} 的 anchor {pp.anchor_id} 不属于该 instance 的 location")
+                    new_prop_placements[pid] = pp
+            before = inst.to_dict()
+            for f in _STR_FIELDS:
+                if f in patch:
+                    setattr(inst.state, f, patch[f])
+            if new_anchor_states is not None:
+                inst.state.anchor_states = new_anchor_states
+            if new_prop_placements is not None:
+                inst.state.prop_placements = new_prop_placements
+            inst.updated_at = time.time()
+            self.store.save(doc)
+            doc_rev = self._verify_after_save()
+            reloaded = self.store.load().scene_instances.get(instance_id)
+            verified = (reloaded is not None and
+                        scene_instance_revision(reloaded) == scene_instance_revision(inst))
+            return self._receipt(op, ok=True, target=instance_id,
+                                 before=before,
+                                 after=self._instance_read(self.store.load(), inst,
+                                                           story_scene_missing=False),
+                                 revision=scene_instance_revision(inst), verified=verified,
+                                 document_revision_after=doc_rev)
+
 
 # ============ service 内部控制流异常（不逃逸出 service；转为 receipt）============
 class _NotFoundError(Exception):
@@ -783,3 +1057,8 @@ class _ValidationError(Exception):
     def __init__(self, detail: str, code: str = "validation_error"):
         super().__init__(detail)
         self.code = code
+
+
+class _ResourcesLookupError(Exception):
+    """resources.json 不可读（损坏）。prop 引用校验 fail closed 时转 receipt。"""
+
