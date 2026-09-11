@@ -29,8 +29,9 @@ ORPHAN_ERROR = "orphaned_by_process_restart"
 
 async def recover_orphaned_view_generations(project_dir,
                                             project_name: Optional[str] = None) -> dict:
-    """单项目孤儿清理：view generating → failed + 诚实 record（无 generation 身份
-    可考时用合成 gen_orphan_* id，basis=None 不臆造）。幂等：无孤儿时零写入。"""
+    """单项目孤儿清理：LocationView 与 SceneInstanceView 的 generating → failed +
+    诚实 record（无 generation 身份可考时用合成 gen_orphan_* id，basis=None 不臆造）。
+    幂等：无孤儿时零写入。S2B 扩展：scene_instance_views 进入同一恢复体系（§22）。"""
     pdir = Path(project_dir)
     pname = project_name or pdir.name
     store = SceneSystemStore(pdir, pname)
@@ -42,13 +43,15 @@ async def recover_orphaned_view_generations(project_dir,
         return receipt
     async with store.write_lock():
         doc = store.load()   # 损坏 → SceneSystemSchemaError 上抛（不静默重置）
-        receipt["scanned"] = len(doc.views)
-        orphans = [v for v in doc.views.values()
-                   if v.generation_status == GenerationStatus.GENERATING.value]
-        if not orphans:
+        receipt["scanned"] = len(doc.views) + len(doc.scene_instance_views)
+        view_orphans = [v for v in doc.views.values()
+                        if v.generation_status == GenerationStatus.GENERATING.value]
+        sciv_orphans = [v for v in doc.scene_instance_views.values()
+                        if v.generation_status == GenerationStatus.GENERATING.value]
+        if not view_orphans and not sciv_orphans:
             return receipt
         recovered: List[str] = []
-        for v in orphans:
+        for v in view_orphans:
             v.generation_status = GenerationStatus.FAILED.value
             generation_records.append_record(pdir, {
                 "generation_id": f"gen_orphan_{uuid.uuid4().hex[:8]}",
@@ -66,13 +69,37 @@ async def recover_orphaned_view_generations(project_dir,
                 "verified": False, "revision_after": None,
             }, path=generation_records_path(pdir))
             recovered.append(v.view_id)
+        for v in sciv_orphans:
+            v.generation_status = GenerationStatus.FAILED.value
+            generation_records.append_record(pdir, {
+                "generation_id": f"gen_orphan_{uuid.uuid4().hex[:8]}",
+                "operation": "scene.recover_orphan",
+                "scene_instance_view_id": v.scene_instance_view_id,
+                "scene_instance_id": v.scene_instance_id,
+                "location_view_id": v.location_view_id,
+                "basis": None, "prompt": None, "model": None, "seed": None,
+                "seeds_used": None, "selected_reference_ids": [],
+                "candidate_files": [], "candidate_urls": [],
+                "started_at": None, "completed_at": time.time(),
+                "status": "failed", "error": ORPHAN_ERROR,
+                "detail": "进程重启发现孤儿 generating 状态的 SceneInstanceView（S2B §22，"
+                          "同 LocationView 恢复语义），已置为 failed",
+                "verified": False, "revision_after": None,
+            }, path=generation_records_path(pdir))
+            recovered.append(v.scene_instance_view_id)
         store.save(doc)
         # 写后重读验证（truth gate 同口径）
         reloaded = store.load()
-        receipt["verified"] = all(
-            reloaded.views[vid].generation_status == GenerationStatus.FAILED.value
-            for vid in recovered)
+        receipt["verified"] = (
+            all(reloaded.views[vid].generation_status == GenerationStatus.FAILED.value
+                for vid in [v.view_id for v in view_orphans])
+            and all(reloaded.scene_instance_views[vid].generation_status
+                    == GenerationStatus.FAILED.value
+                    for vid in [v.scene_instance_view_id for v in sciv_orphans]))
         receipt["recovered"] = recovered
+        receipt["recovered_location_views"] = [v.view_id for v in view_orphans]
+        receipt["recovered_scene_instance_views"] = [v.scene_instance_view_id
+                                                     for v in sciv_orphans]
     return receipt
 
 

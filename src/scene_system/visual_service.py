@@ -330,8 +330,258 @@ class SceneVisualService:
         return await _impl(self.project_dir, view_id, agnes_client=agnes_client)
 
     # ==================================================================
-    # S2B：SceneInstanceView（§3/§4/§12）
+    # S2B：SceneInstanceView 生成（§12/§20-§23）
     # ==================================================================
+    async def generate_scene_instance_view(self, scene_instance_view_id: str, *,
+                                           expected_revision: str,
+                                           candidate_count: int = 2,
+                                           seed: Optional[int] = None,
+                                           include_peer: bool = True,
+                                           size_tier: str = "1K", ratio: str = "16:9",
+                                           agnes_client=None, downloader=None) -> dict:
+        """SceneInstanceView 候选生成（三阶段，完整复用 S2A 已证明协议 §20）。
+        前置 fail closed（§12/§2/§9）：base approved+参考可读+审批证据当前
+        （check_base_location_view）+ 可见 prop 完整（缺→prop_missing；resources
+        不可读→resources_lookup_failed——§2.D 不假装 Prop 输入完整）。"""
+        op = "scene_instance_view.generate"
+        generation_id = f"gen_{uuid.uuid4().hex[:12]}"
+        if not isinstance(candidate_count, int) or isinstance(candidate_count, bool) \
+                or candidate_count < 1 or candidate_count > self.MAX_CANDIDATE_COUNT:
+            return self._gen_result(generation_id, scene_instance_view_id, ok=False,
+                                    status="failed", error="invalid_candidate_count",
+                                    detail=f"candidate_count 必须是 1~{self.MAX_CANDIDATE_COUNT} 的整数")
+        if seed is not None and not isinstance(seed, int):
+            return self._gen_result(generation_id, scene_instance_view_id, ok=False,
+                                    status="failed", error="validation_error",
+                                    detail="seed 必须是整数或 null")
+
+        started_at = time.time()
+        record_base: Dict[str, Any] = {
+            "generation_id": generation_id, "operation": op,
+            "scene_instance_view_id": scene_instance_view_id,
+            "scene_instance_id": None, "location_id": None, "view_id": None,
+            "basis": None, "selected_reference_ids": [], "prop_refs_selected": [],
+            "prop_refs_omitted_due_to_budget": [], "prompt": None, "model": None,
+            "seed": seed, "seeds_used": [], "candidate_files": [], "candidate_urls": [],
+            "started_at": started_at, "completed_at": None, "status": None,
+            "error": None, "verified": False, "revision_after": None,
+        }
+
+        def _finish(**kw) -> dict:
+            rec = dict(record_base)
+            rec.update(kw.get("record_extra") or {})
+            rec["completed_at"] = time.time()
+            for k in ("status", "error", "basis", "selected_reference_ids",
+                      "prop_refs_selected", "prop_refs_omitted_due_to_budget",
+                      "candidate_files", "candidate_urls", "verified", "revision_after"):
+                if k in kw:
+                    rec[k] = kw[k]
+            rec["detail"] = kw.get("detail")
+            generation_records.append_record(self.project_dir, rec,
+                                             path=generation_records_path(self.project_dir))
+            kw.setdefault("record", rec)
+            return self._gen_result(generation_id, scene_instance_view_id,
+                                    ok=kw.get("ok", False), status=rec["status"],
+                                    error=rec["error"], detail=kw.get("detail"),
+                                    basis=rec["basis"],
+                                    candidate_files=rec["candidate_files"],
+                                    candidate_urls=rec["candidate_urls"],
+                                    verified=rec["verified"], record=rec,
+                                    **{k: v for k, v in kw.items()
+                                       if k in ("expected_revision", "current_revision",
+                                                "revision_after")})
+
+        # ---- 阶段 1：短锁（single-flight 先于 OCC——S2A 同决策）----
+        async with self.store.write_lock():
+            doc = self.store.load()
+            sciv = doc.scene_instance_views.get(scene_instance_view_id)
+            if sciv is None:
+                return self._gen_result(generation_id, scene_instance_view_id, ok=False,
+                                        status="failed", error="instance_view_not_found",
+                                        detail=f"SceneInstanceView 不存在: {scene_instance_view_id}")
+            if sciv.generation_status == GenerationStatus.GENERATING.value:
+                return self._gen_result(
+                    generation_id, scene_instance_view_id, ok=False, status="failed",
+                    error="generation_in_progress",
+                    detail="同一 SceneInstanceView 已有 active generation（per-view single-flight，"
+                           "§21）；未调用模型、未写 record、canonical 未改动")
+            cur = view_revision(sciv)
+            if expected_revision != cur:
+                return self._gen_result(
+                    generation_id, scene_instance_view_id, ok=False, status="failed",
+                    error="stale_revision",
+                    detail="entry OCC：expected_revision 与当前 scene_instance_view revision 不一致",
+                    expected_revision=expected_revision, current_revision=cur,
+                    current=sciv.to_dict())
+            inst = doc.scene_instances.get(sciv.scene_instance_id)
+            if inst is None:
+                return self._gen_result(generation_id, scene_instance_view_id, ok=False,
+                                        status="failed", error="scene_instance_not_found",
+                                        detail=f"SceneInstance 不存在: {sciv.scene_instance_id}")
+            base_location = doc.locations.get(inst.location_id)
+            if base_location is None:
+                return self._gen_result(generation_id, scene_instance_view_id, ok=False,
+                                        status="failed", error="location_not_found",
+                                        detail=f"Location 不存在: {inst.location_id}")
+            base_view = doc.views.get(sciv.location_view_id)
+            if base_view is None:
+                return self._gen_result(generation_id, scene_instance_view_id, ok=False,
+                                        status="failed", error="location_view_not_found",
+                                        detail=f"LocationView 不存在: {sciv.location_view_id}")
+            # §12/§2：base 母版门槛（approved+参考可读+审批证据当前）
+            rdoc = load_resources_doc_or_none(self.project_dir)
+            gate = self.check_base_location_view(doc, rdoc, base_view)
+            if not gate.get("ok"):
+                return self._gen_result(generation_id, scene_instance_view_id, ok=False,
+                                        status="failed", error=gate["error"],
+                                        detail=gate.get("detail"))
+            if agnes_client is None:
+                from deps import get_agnes_client
+                agnes_client = get_agnes_client()
+            model_id = agnes_client.models["image"]
+            # §15/§9：参考选择（内含可见 prop fail closed）
+            from .instance_view_basis import (
+                _BasisInputError, compute_scene_instance_visual_basis,
+                select_state_view_visual_refs)
+            try:
+                ref_selection = select_state_view_visual_refs(
+                    self.project_dir, doc, rdoc, base_view, sciv, inst,
+                    include_peer=include_peer)
+            except _BasisInputError as e:
+                return self._gen_result(generation_id, scene_instance_view_id, ok=False,
+                                        status="failed", error=e.code, detail=e.detail)
+            basis = compute_scene_instance_visual_basis(
+                self.project_dir, doc, rdoc, inst, base_location, base_view, sciv,
+                model_id=model_id, size_tier=size_tier, ratio=ratio, seed=seed,
+                candidate_count=candidate_count, ref_selection=ref_selection,
+                include_peer=include_peer)
+            record_base["scene_instance_id"] = inst.scene_instance_id
+            record_base["location_id"] = base_location.location_id
+            record_base["view_id"] = base_view.view_id
+            record_base["basis"] = basis
+            record_base["selected_reference_ids"] = [e.get("asset_id")
+                                                     for e in ref_selection["selected"]]
+            record_base["prop_refs_selected"] = list(ref_selection.get("prop_refs_selected", []))
+            record_base["prop_refs_omitted_due_to_budget"] = list(
+                ref_selection.get("prop_refs_omitted_due_to_budget", []))
+            record_base["prompt"] = basis["prompt"]
+            record_base["model"] = basis["model"]
+            prev_status = sciv.generation_status
+            sciv.generation_status = GenerationStatus.GENERATING.value
+            self.store.save(doc)
+
+        # ---- 阶段 2：无锁 provider（§20：绝不持 project lock 等模型）----
+        images: List[tuple] = []
+        seeds_used: List[Optional[int]] = []
+
+        async def _fail_close(err_code: str, detail_msg: str) -> dict:
+            diag_files = self._save_instance_view_candidate_files(
+                inst.scene_instance_id, scene_instance_view_id, generation_id,
+                [d for d, _ in images]) if images else []
+            async with self.store.write_lock():
+                doc2 = self.store.load()
+                v2 = doc2.scene_instance_views.get(scene_instance_view_id)
+                if v2 is not None:
+                    v2.generation_status = GenerationStatus.FAILED.value
+                    self.store.save(doc2)
+            return _finish(ok=False, status="failed", error=err_code, detail=detail_msg,
+                           candidate_files=diag_files,
+                           candidate_urls=[u for _, u in images if u])
+
+        try:
+            refs = agnes_image_inputs(self.project_dir, ref_selection["selected"])
+            proxy = getattr(agnes_client, "_proxy", None) or getattr(agnes_client, "proxy", None)
+            dl = downloader or self._download_default
+            for i in range(candidate_count):
+                use_seed = (seed + i) if seed is not None else None
+                seeds_used.append(use_seed)
+                record_base["seeds_used"] = list(seeds_used)
+                res = await agnes_client.generate_image(
+                    prompt=basis["prompt"], image_refs=refs or None,
+                    size_tier=size_tier, ratio=ratio, seed=use_seed)
+                url = (res or {}).get("url")
+                b64 = (res or {}).get("b64")
+                if b64:
+                    data = base64.b64decode(b64)
+                elif url:
+                    data = await dl(url, proxy=proxy)
+                else:
+                    raise RuntimeError("provider 未返回 url/b64（无图可保存，不伪造 asset）")
+                images.append((data, url))
+        except asyncio.CancelledError:
+            await _fail_close("cancelled",
+                              "生成被取消（任务取消/进程关闭）；已到手候选保留诊断目录")
+            raise
+        except Exception as e:
+            return await _fail_close("provider_failed", f"{type(e).__name__}: {e}")
+
+        saved_files = self._save_instance_view_candidate_files(
+            inst.scene_instance_id, scene_instance_view_id, generation_id,
+            [d for d, _ in images])
+
+        # ---- 阶段 3：短锁重验 basis + commit / stale 拒绝（§14）----
+        async with self.store.write_lock():
+            doc = self.store.load()
+            sciv3 = doc.scene_instance_views.get(scene_instance_view_id)
+            inst3 = doc.scene_instances.get(record_base["scene_instance_id"])
+            loc3 = doc.locations.get(record_base["location_id"])
+            bv3 = doc.views.get(record_base["view_id"])
+            rdoc3 = load_resources_doc_or_none(self.project_dir)
+            from .instance_view_basis import (
+                recompute_scene_instance_visual_basis_still_holds)
+            holds, why = (recompute_scene_instance_visual_basis_still_holds(
+                self.project_dir, doc, rdoc3, inst3, loc3, bv3, sciv3, basis,
+                include_peer=include_peer)
+                if all(x is not None for x in (sciv3, inst3, loc3, bv3))
+                else (False, "instance_view_missing"))
+            if not holds:
+                if sciv3 is not None:
+                    sciv3.generation_status = prev_status   # 诚实还原
+                    self.store.save(doc)
+                return _finish(ok=False, status="stale_basis",
+                               error="stale_generation_basis",
+                               detail=f"生成期间 scene instance visual basis 已变化（{why}），"
+                                      f"拒绝 commit；候选图保留在 generation 目录供诊断",
+                               candidate_files=saved_files,
+                               candidate_urls=[u for _, u in images if u],
+                               revision_after=None)
+            v3 = doc.scene_instance_views[scene_instance_view_id]
+            v3.generation_status = GenerationStatus.READY.value
+            v3.active_generation_id = generation_id
+            self.store.save(doc)   # generation 绝不自动 approve（T31）
+            revision_after = view_revision(v3)
+            doc_rev = self._verify_after_save()
+            reloaded = self.store.load()
+            v4 = reloaded.scene_instance_views.get(scene_instance_view_id)
+            files_ok = all((self.project_dir / f).is_file() for f in saved_files)
+            verified = bool(v4 is not None
+                            and v4.generation_status == GenerationStatus.READY.value
+                            and v4.active_generation_id == generation_id
+                            and files_ok)
+            return _finish(ok=True, status="committed",
+                           candidate_files=saved_files,
+                           candidate_urls=[u for _, u in images if u],
+                           verified=verified, revision_after=revision_after,
+                           record_extra={"scene_document_revision_after": doc_rev})
+
+    def _save_instance_view_candidate_files(self, scene_instance_id: str,
+                                            scene_instance_view_id: str,
+                                            generation_id: str,
+                                            images: List[bytes]) -> List[str]:
+        """§23：stable id 路径；原图不 rembg。"""
+        root = (self.project_dir / "output" / "scene_system" / "scene_instances"
+                / scene_instance_id / "views" / scene_instance_view_id
+                / "generations" / generation_id)
+        root.mkdir(parents=True, exist_ok=True)
+        out: List[str] = []
+        for i, data in enumerate(images, start=1):
+            name = f"candidate_{i:02d}.png"
+            (root / name).write_bytes(data)
+            out.append(f"output/scene_system/scene_instances/{scene_instance_id}/views/"
+                       f"{scene_instance_view_id}/generations/{generation_id}/{name}")
+        return out
+
+    # ============ approval 事件流（§19/§25）============
     def check_base_location_view(self, doc, rdoc, base_view) -> Dict[str, Any]:
         """S2B §2/§12：LocationView 作为 SceneInstanceView 生成母版的门槛（fail closed）。
         - approval_status == approved 且 reference_asset_id 非空且 ReferenceAsset 可读
@@ -361,13 +611,20 @@ class SceneVisualService:
             return {"ok": False, "error": "base_reference_missing",
                     "detail": f"base ReferenceAsset 不可读: {base_view.reference_asset_id}"}
         latest_appr = None
-        for rec in reversed(generation_records.read_records(
-                self.project_dir, path=approval_records_path(self.project_dir))):
-            if rec.get("operation") == "scene.approve_location_view" \
-                    and rec.get("status") == "approved" \
-                    and rec.get("view_id") == base_view.view_id:
-                latest_appr = rec
-                break
+        latest_event = None   # 该 view 的最新审批事件（approve 或 revoke 都算——revoke 取消证据）
+        for rec in generation_records.read_records(
+                self.project_dir, path=approval_records_path(self.project_dir)):
+            if rec.get("view_id") != base_view.view_id:
+                continue
+            op = rec.get("operation")
+            if op in ("scene.approve_location_view", "scene.revoke_view_approval"):
+                latest_event = rec
+                if op == "scene.approve_location_view" and rec.get("status") == "approved":
+                    latest_appr = rec   # 记最后一个 approved（被更新的 revoke 覆盖时作废）
+        if latest_event is not None and latest_event.get("operation") == "scene.revoke_view_approval":
+            return {"ok": False, "error": "location_view_not_approved",
+                    "detail": ("base LocationView 最新审批事件是 revoke（批准证据已被取消）；"
+                               "重新 review+approve 后才能作 SceneInstanceView 母版")}
         if latest_appr is None or not latest_appr.get("reviewed_basis_fingerprint"):
             return {"ok": False, "error": "location_view_not_approved",
                     "detail": "base LocationView 无 approved approval record（审批证据缺失）"}
