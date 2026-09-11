@@ -119,6 +119,16 @@ _ERROR_STATUS = {
     "not_approved": 409,
     "resources_stale_revision": 409,
     "resources_register_failed": 502,
+    # ---- Phase S2B SceneInstanceView ----
+    "instance_view_not_found": 404,
+    "scene_instance_not_found": 404,
+    "location_mismatch": 422,
+    "scene_instance_view_already_exists": 409,
+    "location_view_stale": 409,
+    "base_reference_missing": 409,
+    "canonical_changed": 500,
+    "location_view_not_approved": 409,
+    "prop_missing": 409,
 }
 
 
@@ -760,6 +770,154 @@ async def run_recovery(project: str):
         return receipt
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"项目不存在: {project}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ Phase S2B：SceneInstanceView（SceneInstance 视觉状态，§34）============
+class CreateSceneInstanceViewRequest(BaseModel):
+    scene_instance_id: str
+    location_view_id: str
+    label: str = ""
+    expected_document_revision: str
+
+
+@router.post("/api/project/{project}/scene-system/scene-instance-views")
+async def create_scene_instance_view(project: str, req: CreateSceneInstanceViewRequest):
+    """创建 SceneInstanceView（身份 = (scene_instance, location_view) 对；§2.C location 一致性）。"""
+    try:
+        receipt = await _visual_service(project).create_scene_instance_view(
+            scene_instance_id=req.scene_instance_id,
+            location_view_id=req.location_view_id, label=req.label,
+            expected_document_revision=req.expected_document_revision)
+        _raise_for_receipt(receipt)
+        return receipt
+    except SceneSystemSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"scene_system.json 数据错误: {e}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api/project/{project}/scene-system/scene-instance-views")
+async def list_scene_instance_views(project: str,
+                                    scene_instance_id: Optional[str] = Query(default=None),
+                                    location_view_id: Optional[str] = Query(default=None)):
+    try:
+        svc = _visual_service(project)
+        return {"scene_instance_views": svc.list_scene_instance_views(
+            scene_instance_id=scene_instance_id, location_view_id=location_view_id)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api/project/{project}/scene-system/scene-instance-views/{sciv_id}")
+async def read_scene_instance_view(project: str, sciv_id: str):
+    """read 模型（§34）：base location view + 当前 ViewRelevantSceneState 投影 +
+    审查摘要 + is_stale/stale_reasons（derived，不自动 mutation）。"""
+    try:
+        d = _visual_service(project).read_scene_instance_view_status(sciv_id)
+        if d is None:
+            raise HTTPException(status_code=404,
+                                detail=f"SceneInstanceView 不存在: {sciv_id}")
+        return d
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class GenerateSceneInstanceViewRequest(BaseModel):
+    expected_revision: str
+    candidate_count: int = 2
+    seed: Optional[int] = None
+    include_peer: bool = True
+    size_tier: str = "1K"
+    ratio: str = "16:9"
+
+
+@router.post("/api/project/{project}/scene-system/scene-instance-views/{sciv_id}/generate")
+async def generate_scene_instance_view(project: str, sciv_id: str,
+                                       req: GenerateSceneInstanceViewRequest):
+    """SceneInstanceView 候选生成（三阶段；base approved 母版强制；无人物）。"""
+    try:
+        receipt = await _visual_service(project).generate_scene_instance_view(
+            sciv_id, expected_revision=req.expected_revision,
+            candidate_count=req.candidate_count, seed=req.seed,
+            include_peer=req.include_peer, size_tier=req.size_tier, ratio=req.ratio)
+        _raise_for_receipt(receipt)
+        return receipt
+    except SceneSystemSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"scene_system.json 数据错误: {e}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/project/{project}/scene-system/scene-instance-views/{sciv_id}/review")
+async def review_scene_instance_view(project: str, sciv_id: str):
+    """七维度 Vision Review（逐项 state/prop evidence；canonical 零写入）。"""
+    try:
+        from src.scene_system.instance_view_review import (
+            review_scene_instance_view_candidates as _impl)
+        receipt = await _impl(get_project_manager().get_project_dir(project), sciv_id)
+        _raise_for_receipt(receipt)
+        return receipt
+    except SceneSystemSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"scene_system.json 数据错误: {e}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class ApproveSceneInstanceViewRequest(BaseModel):
+    candidate_index: int = 0
+    expected_revision: str
+    expected_resources_document_revision: str
+
+
+@router.post("/api/project/{project}/scene-system/scene-instance-views/{sciv_id}/approve")
+async def approve_scene_instance_view(project: str, sciv_id: str,
+                                      req: ApproveSceneInstanceViewRequest):
+    """显式 Approval（cross-canonical saga；review pass ≠ 自动 approve）。"""
+    try:
+        receipt = await _visual_service(project).approve_scene_instance_view(
+            sciv_id, candidate_index=req.candidate_index,
+            expected_revision=req.expected_revision,
+            expected_resources_document_revision=req.expected_resources_document_revision)
+        _raise_for_receipt(receipt)
+        return receipt
+    except SceneSystemSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"scene_system.json 数据错误: {e}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class RevokeSceneInstanceViewRequest(BaseModel):
+    expected_revision: str
+    reason: str = ""
+
+
+@router.post("/api/project/{project}/scene-system/scene-instance-views/{sciv_id}/revoke")
+async def revoke_scene_instance_view(project: str, sciv_id: str,
+                                     req: RevokeSceneInstanceViewRequest):
+    """解除 approved（历史保留）。"""
+    try:
+        receipt = await _visual_service(project).revoke_scene_instance_view_approval(
+            sciv_id, expected_revision=req.expected_revision, reason=req.reason)
+        _raise_for_receipt(receipt)
+        return receipt
+    except SceneSystemSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"scene_system.json 数据错误: {e}")
     except HTTPException:
         raise
     except Exception as e:
