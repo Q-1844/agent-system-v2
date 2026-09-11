@@ -237,6 +237,37 @@ def compute_scene_instance_visual_basis(project_dir, doc: SceneSystemDocument,
     return basis
 
 
+def basis_reference_entries(project_dir, rdoc: Optional[ResourceDocument],
+                            basis: dict) -> List[dict]:
+    """从 generation basis 重建生成时的参考 entries（review 对比图同源用）。
+    顺序确定性：base → peer → props。不可读项跳过（诚实）。"""
+    pdir = Path(project_dir)
+    out: List[dict] = []
+
+    def _entry(asset_id: Optional[str], role: str, extra: Optional[dict] = None) -> None:
+        if not asset_id or rdoc is None:
+            return
+        a = rdoc.reference_assets.get(asset_id)
+        if a is None or to_agnes_image_ref(pdir, url=a.url, local=a.local) is None:
+            return
+        data = load_image_bytes(pdir, a.local)
+        e = {"role": role, "asset_id": a.asset_id, "url": a.url, "local": a.local,
+             "sha256": sha256_bytes(data) if data is not None else None}
+        if extra:
+            e.update(extra)
+        out.append(e)
+
+    base_ref = (basis.get("base_location_reference") or {}).get("asset_id")
+    _entry(base_ref, "base_location_view")
+    peer_ref = (basis.get("peer_state_reference") or {}).get("asset_id")
+    _entry(peer_ref, "peer_state_view",
+           {"scene_instance_view_id": (basis.get("peer_state_reference") or {}).get(
+               "scene_instance_view_id")})
+    for pr in basis.get("selected_prop_references") or []:
+        _entry(pr.get("asset_id"), "prop_reference", {"prop_id": pr.get("prop_id")})
+    return out
+
+
 def recompute_scene_instance_visual_basis_still_holds(
         project_dir, doc: SceneSystemDocument, rdoc: Optional[ResourceDocument],
         scene_instance: SceneInstance, base_location: Location, base_view: LocationView,
