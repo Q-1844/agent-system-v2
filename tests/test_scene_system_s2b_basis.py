@@ -151,7 +151,8 @@ def test_t15_prompt_deterministic_and_sections(tmp_path):
     # 六 SECTION 关键内容
     assert "preserve the approved" in low and "do not change the architecture" in low
     assert "camera:" in low and "north" in low
-    assert "current scene state: night, storm, red emergency" in low
+    assert "override the base reference" in low, "SECTION 3 显式覆盖指令（E2E 实证）"
+    assert "night, storm, red emergency" in low
     assert "WEST WINDOW 02 is BROKEN" in p1   # 正确 anchor 被点名（§19）
     assert "WEST WINDOW 01" not in p1.split("Visible anchor state changes")[1].split("Anchor states")[0], \
         "window_01 不被误报为 broken"
