@@ -520,3 +520,199 @@ def test_http_create_and_patch_look(wclient):
     # read 端点反映 PATCH 后状态
     r6 = c.get(f"/api/project/{name}/looks/{look_id}")
     assert r6.json()["label"] == "Alice · V2" and r6.json()["generation_status"] == "none"
+
+
+# =====================================================================
+# Work C — GenerationBasis / prompt builder / generation records
+# =====================================================================
+from src.resources.generation import (
+    compute_generation_basis, recompute_basis_still_holds,
+    select_character_identity_refs, select_clothing_refs, agnes_image_inputs,
+    save_candidate_files, character_identity_fingerprint,
+)
+from src.resources.look_prompt import build_look_candidate_prompt
+from src.resources.generation_records import append_record, read_records, records_path
+from src.resources.models import clothing_revision as _clothing_revision
+
+
+def _make_basis(env, look_id, *, model_id="agnes-image-test", size_tier="1K", ratio="2:3",
+                seed=None, candidate_count=1, view_purpose="front"):
+    doc = env["ws"].store.load()
+    project = ProjectStore(env["pdir"]).load()
+    look = doc.looks[look_id]
+    return compute_generation_basis(env["pdir"], doc, project, look,
+                                    model_id=model_id, size_tier=size_tier, ratio=ratio,
+                                    seed=seed, candidate_count=candidate_count,
+                                    view_purpose=view_purpose)
+
+
+async def _seed_look(env, *, clothing_name="Black Coat", clothing_desc="long black wool coat"):
+    """建 clothing + look（真实 Alice + 三视图文件），返回 (look_id, clothing_id)。"""
+    ws = env["ws"]
+    r = await ws.create_clothing(name=clothing_name, description=clothing_desc,
+                                 expected_document_revision=env["doc_rev"])
+    assert r["ok"], r
+    r2 = await ws.create_look(character_name="Alice", label="Alice · Black Coat",
+                              clothing_id=r["target"],
+                              expected_document_revision=r["document_revision_after"])
+    assert r2["ok"], r2
+    return r2["target"], r["target"]
+
+
+# ---- T11 generation prompt deterministic ----
+def test_t11_generation_prompt_deterministic(env):
+    kw = dict(character_description="a girl with silver hair",
+              clothing_name="Black Coat", clothing_description="long black wool coat",
+              clothing_design_traits="high collar", clothing_materials=["wool"],
+              clothing_colors=["#111"], appearance_delta="scar on cheek",
+              view_purpose="front")
+    assert build_look_candidate_prompt(**kw) == build_look_candidate_prompt(**kw)
+    p = build_look_candidate_prompt(**kw)
+    # production reference 定位：含服装/外观/身份稳定/无遮挡语义
+    assert "Black Coat" in p and "wool" in p and "scar on cheek" in p
+    assert "pure white backdrop" in p          # 实测安全措辞（CLAUDE.md 内容审核坑）
+    assert "front angle" in p and "no occlusion" in p
+    # 无 view_purpose → 默认 front-facing
+    assert "front-facing view" in build_look_candidate_prompt(
+        character_description="x", view_purpose="")
+    # 无服装 → 无 Outfit 段
+    assert "Outfit" not in build_look_candidate_prompt(character_description="x")
+
+
+def test_character_identity_fingerprint_semantics(env):
+    project = ProjectStore(env["pdir"]).load()
+    alice = project.get_character("Alice")
+    fp1 = character_identity_fingerprint(alice)
+    assert fp1 and len(fp1) == 8
+    # description_en 变 → 身份指纹变（name+description_en=身份，Phase 1A 结论）
+    alice.description_en = "changed"
+    assert character_identity_fingerprint(alice) != fp1
+
+
+def test_identity_ref_selection_deterministic_order(env):
+    refs = select_character_identity_refs(env["pdir"], "Alice")
+    # adapter 固定 front→side→back；可用性：有 url 或可读 local（本 fixture 三者都有 url）
+    assert [e["view"] for e in refs] == ["front", "side", "back"]
+    # local 可读 → sha256 是真实内容指纹；不可读 → None（不臆造）
+    assert refs[0]["sha256"] is not None
+    # local 可读 → data URI 优先（§13）；无 local → url
+    inputs = agnes_image_inputs(env["pdir"], refs)
+    assert inputs[0].startswith("data:image/png;base64,")
+    # 无任何可用参考 → 空列表（生成侧 fail closed missing_character_reference）
+    assert select_character_identity_refs(env["pdir"], "Nobody") == []
+
+
+def test_clothing_ref_selection_order_and_empty_honest(env):
+    look_id, cl_id = run(_seed_look(env))
+    doc = env["ws"].store.load()
+    clothing = doc.clothings[cl_id]
+    # 无参考图 → 空列表（不假装使用了视觉参考）
+    assert select_clothing_refs(env["pdir"], doc, clothing) == []
+
+    img = env["pdir"] / "o" / "coat.png"
+    img.write_bytes(b"COAT-IMG")
+    r = run(env["ws"].register_reference_asset(
+        local="o/coat.png", view="flat",
+        expected_document_revision=document_revision(env["ws"].store.load())))
+    assert r["ok"], r
+    ra_id = r["target"]
+    cur = env["ws"].store.load().clothings[cl_id]
+    r2 = run(env["ws"].attach_clothing_reference(cl_id, ra_id,
+                                                 expected_revision=_clothing_revision(cur)))
+    assert r2["ok"], r2
+    doc2 = env["ws"].store.load()
+    refs = select_clothing_refs(env["pdir"], doc2, doc2.clothings[cl_id])
+    assert [e["asset_id"] for e in refs] == [ra_id]   # 存储顺序=选择顺序（确定性）
+
+
+def test_generation_basis_fingerprint_sensitivity(env):
+    look_id, cl_id = run(_seed_look(env))
+    basis = _make_basis(env, look_id)
+    assert len(basis["basis_fingerprint"]) == 8
+    # 快照完整性（§11）：不只 "Alice + Black Coat"
+    assert basis["character_identity_fingerprint"] and basis["character_description_snapshot"]
+    assert [e["view"] for e in basis["character_reference_snapshot"]] == ["front", "side", "back"]
+    assert basis["clothing_revision"] and basis["clothing_description_snapshot"]["name"] == "Black Coat"
+    assert basis["clothing_reference_asset_ids_used"] == []   # 无图时诚实为空
+    assert basis["prompt"] and basis["model"]["model_id"] == "agnes-image-test"
+    # 同状态同参数 → 同指纹（确定性）
+    assert _make_basis(env, look_id)["basis_fingerprint"] == basis["basis_fingerprint"]
+    # 参数不同 → 指纹不同
+    assert _make_basis(env, look_id, seed=7)["basis_fingerprint"] != basis["basis_fingerprint"]
+
+    # clothing 内容变 → stale
+    ok, why = recompute_basis_still_holds(env["pdir"], env["ws"].store.load(),
+                                          ProjectStore(env["pdir"]).load(), look_id, basis)
+    assert ok, why
+    run(env["ws"].update_clothing(cl_id, {"description": "changed"},
+                                  expected_revision=basis["clothing_revision"]))
+    ok, why = recompute_basis_still_holds(env["pdir"], env["ws"].store.load(),
+                                          ProjectStore(env["pdir"]).load(), look_id, basis)
+    assert not ok and why == "basis_changed"
+
+    # character description_en 变 → stale（新 basis 之后再改）
+    basis_b = _make_basis(env, look_id)
+    proj = ProjectStore(env["pdir"]).load()
+    proj.get_character("Alice").description_en = "edited identity"
+    ProjectStore(env["pdir"]).save(proj)
+    ok, why = recompute_basis_still_holds(env["pdir"], env["ws"].store.load(),
+                                          ProjectStore(env["pdir"]).load(), look_id, basis_b)
+    assert not ok and why == "basis_changed"
+
+    # view 文件内容变（同路径重生成）→ stale（内容 hash 进快照）
+    basis_c = _make_basis(env, look_id)
+    proj = ProjectStore(env["pdir"]).load()
+    proj.get_character("Alice").description_en = "a girl with silver hair"
+    ProjectStore(env["pdir"]).save(proj)
+    (env["pdir"] / "o" / "alice_front_seg.png").write_bytes(b"CHANGED-CONTENT")
+    ok, why = recompute_basis_still_holds(env["pdir"], env["ws"].store.load(),
+                                          ProjectStore(env["pdir"]).load(), look_id, basis_c)
+    assert not ok and why == "basis_changed"
+
+    # look 被删 → look_missing
+    ok, why = recompute_basis_still_holds(env["pdir"], env["ws"].store.load(),
+                                          ProjectStore(env["pdir"]).load(), "look_none", basis_c)
+    assert not ok and why == "look_missing"
+
+
+# ---- T17（前半）generation record 持久化：append-only / 尾部容错 / 无 base64 ----
+def test_t17_generation_records_persistence(env):
+    look_id, _ = run(_seed_look(env))
+    basis = _make_basis(env, look_id)
+    rec = {"generation_id": "gen_a1", "operation": "look.generate_candidates",
+           "look_id": look_id, "basis": basis, "prompt": basis["prompt"],
+           "model": basis["model"], "seed": None, "candidate_asset_ids": [],
+           "started_at": 1.0, "completed_at": 2.0, "status": "committed",
+           "error": None, "verified": True,
+           "resource_document_revision_after": "abcd1234"}
+    append_record(env["pdir"], rec)
+    append_record(env["pdir"], {**rec, "generation_id": "gen_a2", "status": "failed"})
+    # 崩溃半行容错
+    with open(records_path(env["pdir"]), "a", encoding="utf-8") as f:
+        f.write('{"broken": half')
+    recs = read_records(env["pdir"])
+    assert [x["generation_id"] for x in recs] == ["gen_a1", "gen_a2"]
+    assert read_records(env["pdir"], look_id=look_id, limit=1)[0]["generation_id"] == "gen_a2"
+    # 重启语义：新读取方从磁盘读全量
+    assert len(read_records(env["pdir"], look_id=look_id)) == 2
+    text = records_path(env["pdir"]).read_text(encoding="utf-8")
+    assert "base64" not in text and "b64" not in text
+
+
+def test_candidate_files_saved_under_look_id_dir(env):
+    look_id, _ = run(_seed_look(env))
+    rels = save_candidate_files(env["pdir"], look_id, "gen_x1", [b"IMG1", b"IMG2"])
+    # 统一新路径 + 与 label 解耦（look_id 为目录身份）
+    assert rels[0] == f"output/resources/looks/{look_id}/generations/gen_x1/candidate_01.png"
+    assert rels[1].endswith("candidate_02.png")
+    assert (env["pdir"] / rels[0]).read_bytes() == b"IMG1"
+    # look label 改名不影响目录
+    look = env["ws"].store.load().looks[look_id]
+    run(env["ws"].update_look(look_id, {"label": "Renamed"},
+                              expected_revision=_look_revision_of(env, look_id)))
+    assert (env["pdir"] / rels[0]).exists()
+
+
+def _look_revision_of(env, look_id):
+    from src.resources.models import look_revision
+    return look_revision(env["ws"].store.load().looks[look_id])
