@@ -24,6 +24,7 @@ projects/
 !projects/.gitkeep
 output/
 agents_data/
+shared_library/
 
 # 测试产物
 test_*.json
