@@ -28,12 +28,14 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from src.resources.generation import agnes_image_inputs
+from src.resources.generation import agnes_image_inputs, to_agnes_image_ref
 
 from . import generation_records
 from .generation_records import generation_records_path
 from .models import (
     GenerationStatus,
+    SceneInstanceView,
+    document_revision,
     view_revision,
 )
 from .store import SceneSystemStore
@@ -63,6 +65,12 @@ class SceneVisualService:
         reloaded = self.store.load()
         from .models import document_revision
         return document_revision(reloaded)
+
+    @staticmethod
+    def _require_str(value: Any, field: str) -> str:
+        if not isinstance(value, str):
+            raise ValueError(f"{field} 必须是 string，得到 {_type_name(value)}")
+        return value
 
     @staticmethod
     def _stale_receipt(operation: str, expected: str, current: str,
@@ -320,6 +328,133 @@ class SceneVisualService:
                                               agnes_client=None) -> dict:
         from .view_review import review_location_view_candidates as _impl
         return await _impl(self.project_dir, view_id, agnes_client=agnes_client)
+
+    # ==================================================================
+    # S2B：SceneInstanceView（§3/§4/§12）
+    # ==================================================================
+    def check_base_location_view(self, doc, rdoc, base_view) -> Dict[str, Any]:
+        """S2B §2/§12：LocationView 作为 SceneInstanceView 生成母版的门槛（fail closed）。
+        - approval_status == approved 且 reference_asset_id 非空且 ReferenceAsset 可读
+          （revoked 即使 reference_asset_id 保留为历史也不可用——§2.A）；
+        - base 的审批证据仍当前：最新 approved approval record 的期望指纹 == 当前重算值
+          （approved 之后 view/location/anchor/layout/参考语义变了 → location_view_stale，
+          §2.B——批准的是某个具体语义状态，语义漂移后旧批准不再背书）。"""
+        from .models import ApprovalState
+        from .view_review import build_review_expectations, expectations_fingerprint
+        from .generation_records import approval_records_path
+
+        if base_view is None:
+            return {"ok": False, "error": "location_view_not_found"}
+        if base_view.approval_status != ApprovalState.APPROVED.value:
+            return {"ok": False, "error": "location_view_not_approved",
+                    "detail": f"base LocationView approval_status={base_view.approval_status}"
+                              f"（只有 approved 可作 SceneInstanceView 母版；revoked 亦不可）"}
+        if not base_view.reference_asset_id:
+            return {"ok": False, "error": "location_view_not_approved",
+                    "detail": "base LocationView 无 reference_asset_id（无批准视觉母版）"}
+        if rdoc is None:
+            return {"ok": False, "error": "resources_lookup_failed",
+                    "detail": "resources.json 不可读（base ReferenceAsset 可用性无法判定）"}
+        asset = rdoc.reference_assets.get(base_view.reference_asset_id)
+        if asset is None or to_agnes_image_ref(self.project_dir, url=asset.url,
+                                               local=asset.local) is None:
+            return {"ok": False, "error": "base_reference_missing",
+                    "detail": f"base ReferenceAsset 不可读: {base_view.reference_asset_id}"}
+        latest_appr = None
+        for rec in reversed(generation_records.read_records(
+                self.project_dir, path=approval_records_path(self.project_dir))):
+            if rec.get("operation") == "scene.approve_location_view" \
+                    and rec.get("status") == "approved" \
+                    and rec.get("view_id") == base_view.view_id:
+                latest_appr = rec
+                break
+        if latest_appr is None or not latest_appr.get("reviewed_basis_fingerprint"):
+            return {"ok": False, "error": "location_view_not_approved",
+                    "detail": "base LocationView 无 approved approval record（审批证据缺失）"}
+        expectations = build_review_expectations(doc, base_view)
+        fp = expectations_fingerprint(expectations, [base_view.reference_asset_id])
+        if fp != latest_appr["reviewed_basis_fingerprint"]:
+            return {"ok": False, "error": "location_view_stale",
+                    "detail": ("base LocationView 批准后语义已变化（期望指纹不一致）；"
+                               "重新 review+approve 后才能再作 SceneInstanceView 母版")}
+        return {"ok": True}
+
+    async def create_scene_instance_view(self, *, scene_instance_id: str,
+                                         location_view_id: str, label: str = "",
+                                         expected_document_revision: str = "") -> dict:
+        """创建 SceneInstanceView（身份 = (scene_instance_id, location_view_id) 对，§4）。
+        §2.C：instance.location_id 必须与 LocationView.location_id 相同。"""
+        op = "scene.create_scene_instance_view"
+        try:
+            scene_instance_id = self._require_str(scene_instance_id, "scene_instance_id")
+            location_view_id = self._require_str(location_view_id, "location_view_id")
+        except ValueError as e:
+            return {"ok": False, "operation": op, "error": "validation_error", "detail": str(e)}
+        async with self.store.write_lock():
+            doc = self.store.load()
+            inst = doc.scene_instances.get(scene_instance_id)
+            if inst is None:
+                return {"ok": False, "operation": op, "error": "scene_instance_not_found",
+                        "detail": f"SceneInstance 不存在: {scene_instance_id}"}
+            base_view = doc.views.get(location_view_id)
+            if base_view is None:
+                return {"ok": False, "operation": op, "error": "location_view_not_found",
+                        "detail": f"LocationView 不存在: {location_view_id}"}
+            if inst.location_id != base_view.location_id:
+                return {"ok": False, "operation": op, "error": "location_mismatch",
+                        "detail": (f"SceneInstance.location_id={inst.location_id} 与 "
+                                   f"LocationView.location_id={base_view.location_id} 不一致（§2.C）")}
+            existing = next((v for v in doc.scene_instance_views.values()
+                             if v.scene_instance_id == scene_instance_id
+                             and v.location_view_id == location_view_id), None)
+            if existing is not None:
+                return {"ok": False, "operation": op, "error": "scene_instance_view_already_exists",
+                        "detail": ("该 (scene_instance, location_view) 对已有 SceneInstanceView"
+                                   "（§4 稳定身份：重新生成请复用现有对象）"),
+                        "scene_instance_view_id": existing.scene_instance_view_id}
+            cur = document_revision(doc)
+            if expected_document_revision != cur:
+                return self._stale_receipt(op, expected_document_revision, cur)
+            from .models import new_scene_instance_view_id, scene_instance_view_revision
+            v = SceneInstanceView(scene_instance_view_id=new_scene_instance_view_id(),
+                                  scene_instance_id=scene_instance_id,
+                                  location_view_id=location_view_id,
+                                  label=label or "")
+            doc.scene_instance_views[v.scene_instance_view_id] = v
+            self.store.save(doc)
+            doc_rev = self._verify_after_save()
+            reloaded = self.store.load().scene_instance_views.get(v.scene_instance_view_id)
+            verified = (reloaded is not None and
+                        scene_instance_view_revision(reloaded) == scene_instance_view_revision(v))
+            return {"ok": True, "operation": op, "target": v.scene_instance_view_id,
+                    "after": v.to_dict(), "revision": scene_instance_view_revision(v),
+                    "verified": verified, "document_revision_after": doc_rev}
+
+    def list_scene_instance_views(self, scene_instance_id: Optional[str] = None,
+                                  location_view_id: Optional[str] = None) -> List[dict]:
+        doc = self.store.load()
+        out = []
+        for v in doc.scene_instance_views.values():
+            if scene_instance_id is not None and v.scene_instance_id != scene_instance_id:
+                continue
+            if location_view_id is not None and v.location_view_id != location_view_id:
+                continue
+            out.append(self._instance_view_read(doc, v))
+        return out
+
+    @staticmethod
+    def _instance_view_read(doc, v: "SceneInstanceView") -> dict:
+        from .models import scene_instance_view_revision
+        d = v.to_dict()
+        d["revision"] = scene_instance_view_revision(v)
+        return d
+
+    def read_scene_instance_view(self, scene_instance_view_id: str) -> Optional[dict]:
+        doc = self.store.load()
+        v = doc.scene_instance_views.get(scene_instance_view_id)
+        if v is None:
+            return None
+        return self._instance_view_read(doc, v)
 
     # ============ approval 事件流（§19/§25）============
     @staticmethod
