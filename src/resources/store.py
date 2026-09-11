@@ -23,8 +23,8 @@ from typing import Optional, List, Callable
 from src.core.atomic import atomic_write_json
 from src.core.write_lock import project_write_lock   # Phase 1C async 写路径复用
 from .models import (
-    ResourceDocument, CharacterLook, Clothing, Prop, ReferenceAsset,
-    ResourceSchemaError, ResourceScope, ResourceSource,
+    ResourceDocument, CharacterLook, CharacterReferenceComposition, Clothing, Prop,
+    ReferenceAsset, ResourceSchemaError, ResourceScope, ResourceSource,
 )
 
 
@@ -89,6 +89,9 @@ class ResourceStore:
     def get_prop(self, prop_id: str) -> Optional[Prop]:
         return self.load().props.get(prop_id)
 
+    def get_composition(self, composition_id: str) -> Optional[CharacterReferenceComposition]:
+        return self.load().compositions.get(composition_id)
+
     def get_reference_asset(self, asset_id: str) -> Optional[ReferenceAsset]:
         return self.load().reference_assets.get(asset_id)
 
@@ -101,6 +104,9 @@ class ResourceStore:
 
     def list_props(self) -> List[Prop]:
         return list(self.load().props.values())
+
+    def list_compositions(self) -> List[CharacterReferenceComposition]:
+        return list(self.load().compositions.values())
 
     def list_reference_assets(self) -> List[ReferenceAsset]:
         return list(self.load().reference_assets.values())

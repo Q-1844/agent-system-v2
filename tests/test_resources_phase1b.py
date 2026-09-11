@@ -473,6 +473,10 @@ def test_api_read_only_no_mutation_endpoints(client):
         ("POST", "/api/project/{project}/props/{prop_id}/review"),
         ("POST", "/api/project/{project}/props/{prop_id}/approve"),
         ("POST", "/api/project/{project}/props/{prop_id}/revoke-approval"),
+        # Phase 1C5：Composition CRUD + generation（§6/§8-§14）
+        ("POST", "/api/project/{project}/compositions"),
+        ("PATCH", "/api/project/{project}/compositions/{composition_id}"),
+        ("POST", "/api/project/{project}/compositions/{composition_id}/generate"),
     }
     write_routes = []
     for route in rres.router.routes:

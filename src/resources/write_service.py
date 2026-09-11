@@ -34,14 +34,22 @@ from src.core.store import ProjectStore
 from .models import (
     ApprovalState,
     CharacterLook,
+    CharacterReferenceComposition,
     Clothing,
+    CompositionAnchor,
+    CompositionPropBinding,
+    CompositionRelation,
     GenerationStatus,
     ReferenceAsset,
+    RequiredVisibility,
     document_revision,
     clothing_revision,
     look_revision,
+    prop_revision,
     reference_asset_revision,
+    composition_revision,
     new_clothing_id,
+    new_composition_id,
     new_look_id,
     new_reference_asset_id,
 )
@@ -49,8 +57,11 @@ from .store import ResourceStore
 from .generation import (
     agnes_image_inputs,
     compute_generation_basis,
+    compute_composition_basis,
     recompute_basis_still_holds,
+    recompute_composition_basis_still_holds,
     save_candidate_files,
+    save_composition_candidate_files,
     sha256_bytes,
 )
 from . import generation_records
@@ -62,6 +73,13 @@ _ALLOWED_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 _CLOTHING_PATCH_FIELDS = {"name", "description", "design_traits", "materials", "colors", "tags"}
 # Look 可 PATCH 字段（character_name 是 FK 身份，不可改；改外观语义直接改这些字段）
 _LOOK_PATCH_FIELDS = {"label", "clothing_id", "appearance_description", "appearance_delta"}
+# Composition 可 PATCH 字段（character_name/look_id 是 FK 身份，不可改）
+_COMPOSITION_PATCH_FIELDS = {"label", "pose_note", "composition_description", "prop_bindings"}
+
+_COMPOSITION_RELATIONS = {e.value for e in CompositionRelation}
+_COMPOSITION_ANCHORS = {e.value for e in CompositionAnchor}
+_COMPOSITION_VISIBILITY = {e.value for e in RequiredVisibility}
+COMPOSITION_MAX_PROPS = 3   # 初版 1~3 个 props（§6：不开放无限多个 reference）
 
 
 def _type_name(v: Any) -> str:
@@ -853,8 +871,8 @@ class ResourceWriteService:
                                  document_revision_after=doc_rev)
 
     async def delete_prop(self, prop_id: str, *, expected_revision: str) -> dict:
-        """删除 Prop。当前模型中 Prop 没有被其它资源引用（Look 无 prop FK）——
-        无 resource_in_use 检查；未来 Look 加 prop 引用时必须补 reference sweep。"""
+        """删除 Prop。Phase 1C5 扩展：Composition.prop_bindings 引用该 prop 时
+        → resource_in_use（used_by_compositions，无级联——与 delete_clothing 同语义）。"""
         op = "resource.delete_prop"
         async with self.store.write_lock():
             doc = self.store.load()
@@ -866,6 +884,13 @@ class ResourceWriteService:
             cur = prop_revision(p)
             if expected_revision != cur:
                 return self._stale_receipt(op, expected_revision, cur, p.to_dict())
+            used_by = [c.composition_id for c in doc.compositions.values()
+                       if any(b.prop_id == prop_id for b in c.prop_bindings)]
+            if used_by:
+                return self._receipt(op, ok=False, target=prop_id,
+                                     error="resource_in_use",
+                                     detail="prop 仍被 Composition binding 引用，禁止删除（无级联）",
+                                     used_by_compositions=used_by)
             before = p.to_dict()
             del doc.props[prop_id]
             self.store.save(doc)
@@ -1029,3 +1054,430 @@ class ResourceWriteService:
                                  before=before, after=p.to_dict(),
                                  revision=prop_revision(p), verified=verified,
                                  document_revision_after=doc_rev)
+
+    # ==================================================================
+    # CharacterReferenceComposition CRUD（Phase 1C5 §6）
+    # ==================================================================
+    @staticmethod
+    def _validate_bindings(doc, raw_bindings) -> tuple:
+        """binding 校验（§6）：有限 enum / prop 真实存在 / 不重复同一 prop_id / 数量 1~3。
+        返回 (error_receipt|None, bindings|None)。"""
+        if not isinstance(raw_bindings, list) or not raw_bindings:
+            return ({"ok": False, "error": "invalid_prop_count",
+                     "detail": f"prop_bindings 必须是 1~{COMPOSITION_MAX_PROPS} 个的列表"}, None)
+        if len(raw_bindings) > COMPOSITION_MAX_PROPS:
+            return ({"ok": False, "error": "invalid_prop_count",
+                     "detail": f"prop_bindings 最多 {COMPOSITION_MAX_PROPS} 个（初版不开放无限 reference），"
+                               f"得到 {len(raw_bindings)}"}, None)
+        seen = set()
+        out: List[CompositionPropBinding] = []
+        for raw in raw_bindings:
+            if not isinstance(raw, dict) or not isinstance(raw.get("prop_id"), str) \
+                    or not raw.get("prop_id", "").strip():
+                return ({"ok": False, "error": "invalid_binding",
+                         "detail": "每个 binding 必须是含非空 prop_id 字符串的 object"}, None)
+            pid = raw["prop_id"].strip()
+            relation = raw.get("relation", CompositionRelation.HELD.value)
+            anchor = raw.get("anchor", CompositionAnchor.RIGHT_HAND.value)
+            visibility = raw.get("required_visibility", RequiredVisibility.REQUIRED.value)
+            if relation not in _COMPOSITION_RELATIONS:
+                return ({"ok": False, "error": "invalid_binding",
+                         "detail": f"relation 必须是 {sorted(_COMPOSITION_RELATIONS)}，得到: {relation}"}, None)
+            if anchor not in _COMPOSITION_ANCHORS:
+                return ({"ok": False, "error": "invalid_binding",
+                         "detail": f"anchor 必须是 {sorted(_COMPOSITION_ANCHORS)}，得到: {anchor}"}, None)
+            if visibility not in _COMPOSITION_VISIBILITY:
+                return ({"ok": False, "error": "invalid_binding",
+                         "detail": f"required_visibility 必须是 {sorted(_COMPOSITION_VISIBILITY)}，得到: {visibility}"}, None)
+            if pid not in doc.props:
+                return ({"ok": False, "error": "prop_not_found",
+                         "detail": f"Prop 不存在: {pid}"}, None)
+            if pid in seen:
+                return ({"ok": False, "error": "duplicate_prop_binding",
+                         "detail": f"同一 prop_id 不得重复绑定（V1 不支持多实例）: {pid}"}, None)
+            seen.add(pid)
+            out.append(CompositionPropBinding(
+                prop_id=pid, relation=relation, anchor=anchor,
+                visual_state_note=str(raw.get("visual_state_note") or ""),
+                required_visibility=visibility))
+        return (None, out)
+
+    async def create_composition(self, *, character_name: str, look_id: str,
+                                 prop_bindings: List[dict],
+                                 label: str = "", pose_note: str = "",
+                                 composition_description: str = "",
+                                 expected_document_revision: str = "") -> dict:
+        """创建 CharacterReferenceComposition（§6 全验证链）：
+        Character 真实存在 / Look 真实存在且属于该 Character / Look 已 approved 且
+        至少 1 张 approved reference / 每个绑定的 prop 真实存在 / bindings 合法
+        （有限 enum、无重复 prop_id、1~3 个）。创建后不自动生成、approval_status=unreviewed。"""
+        op = "resource.create_composition"
+        try:
+            character_name = self._require_str(character_name, "character_name").strip()
+            look_id = self._require_str(look_id, "look_id").strip()
+            if not character_name or not look_id:
+                raise ValueError("character_name / look_id 不能为空")
+        except ValueError as e:
+            return self._receipt(op, ok=False, error="validation_error", detail=str(e))
+        async with self.store.write_lock():
+            doc = self.store.load()
+            cur = document_revision(doc)
+            if expected_document_revision != cur:
+                return self._stale_receipt(op, expected_document_revision, cur)
+            try:
+                project = ProjectStore(self.project_dir).load()
+            except FileNotFoundError:
+                project = None
+            char = project.get_character(character_name) if project else None
+            if char is None:
+                return self._receipt(op, ok=False, error="character_not_found",
+                                     detail=f"Character 不存在于项目 canonical: {character_name}")
+            look = doc.looks.get(look_id)
+            if look is None:
+                return self._receipt(op, ok=False, error="look_not_found",
+                                     detail=f"Look 不存在: {look_id}")
+            if look.character_name != character_name:
+                return self._receipt(op, ok=False, error="look_character_mismatch",
+                                     detail=f"Look {look_id} 属于 Character '{look.character_name}'，"
+                                            f"与传入 '{character_name}' 不一致")
+            if look.approval_status != ApprovalState.APPROVED.value:
+                return self._receipt(op, ok=False, error="look_not_approved",
+                                     detail=f"Look {look_id} 未 approved（approval_status="
+                                            f"{look.approval_status}），不能进入 Composition")
+            if not look.approved_reference_asset_ids:
+                return self._receipt(op, ok=False, error="look_missing_approved_reference",
+                                     detail=f"Look {look_id} 没有任何 approved reference asset")
+            err, bindings = self._validate_bindings(doc, prop_bindings)
+            if err is not None:
+                return self._receipt(op, **err)
+            comp = CharacterReferenceComposition(
+                composition_id=new_composition_id(), character_name=character_name,
+                look_id=look_id, prop_bindings=bindings,
+                label=label or "", pose_note=pose_note or "",
+                composition_description=composition_description or "",
+                generation_status=GenerationStatus.NONE.value,
+                approval_status=ApprovalState.UNREVIEWED.value)
+            doc.compositions[comp.composition_id] = comp
+            self.store.save(doc)
+            doc_rev = self._verify_after_save()
+            reloaded = self.store.load().compositions.get(comp.composition_id)
+            verified = (reloaded is not None
+                        and composition_revision(reloaded) == composition_revision(comp))
+            return self._receipt(op, ok=True, target=comp.composition_id,
+                                 before=None, after=comp.to_dict(),
+                                 revision=composition_revision(comp), verified=verified,
+                                 document_revision_after=doc_rev)
+
+    async def update_composition(self, composition_id: str, patch: Dict[str, Any], *,
+                                 expected_revision: str) -> dict:
+        """更新 Composition（label/pose_note/composition_description/prop_bindings 全量替换）。
+        character_name/look_id 是身份 FK 不可改。bindings 更新走与 create 相同的验证链。"""
+        op = "resource.update_composition"
+        try:
+            composition_id = self._require_str(composition_id, "composition_id")
+            unknown = set(patch) - _COMPOSITION_PATCH_FIELDS
+            if unknown:
+                raise ValueError(
+                    f"未知/不可变字段: {sorted(unknown)}"
+                    f"（character_name/look_id 是身份 FK 不可改；可改: {sorted(_COMPOSITION_PATCH_FIELDS)}）")
+        except ValueError as e:
+            return self._receipt(op, ok=False, target=composition_id,
+                                 error="validation_error", detail=str(e))
+        async with self.store.write_lock():
+            doc = self.store.load()
+            comp = doc.compositions.get(composition_id)
+            if comp is None:
+                return self._receipt(op, ok=False, target=composition_id, error="not_found",
+                                     detail=f"composition 不存在: {composition_id}")
+            cur = composition_revision(comp)
+            if expected_revision != cur:
+                return self._stale_receipt(op, expected_revision, cur, comp.to_dict())
+            if "prop_bindings" in patch:
+                err, bindings = self._validate_bindings(doc, patch["prop_bindings"])
+                if err is not None:
+                    return self._receipt(op, **err)
+            before = comp.to_dict()
+            for f in _COMPOSITION_PATCH_FIELDS:
+                if f not in patch:
+                    continue
+                if f == "prop_bindings":
+                    comp.prop_bindings = bindings
+                else:
+                    setattr(comp, f, patch[f] or "")
+            comp.updated_at = time.time()
+            self.store.save(doc)
+            doc_rev = self._verify_after_save()
+            reloaded = self.store.load().compositions.get(composition_id)
+            verified = (reloaded is not None
+                        and composition_revision(reloaded) == composition_revision(comp))
+            return self._receipt(op, ok=True, target=composition_id,
+                                 before=before, after=comp.to_dict(),
+                                 revision=composition_revision(comp), verified=verified,
+                                 document_revision_after=doc_rev)
+
+    # ==================================================================
+    # Composition candidate generation（§8-§14）—— 三阶段协议 + per-composition single-flight
+    # ==================================================================
+    @staticmethod
+    def _comp_gen_result(generation_id: str, composition_id: str, *, ok: bool, status: str,
+                         error: Optional[str] = None, detail: Optional[str] = None,
+                         basis: Optional[dict] = None, candidate_asset_ids=None,
+                         candidate_files=None, candidate_urls=None, verified: bool = False,
+                         record: Optional[dict] = None, **extra) -> dict:
+        out = {
+            "ok": ok, "operation": "composition.generate_candidates",
+            "generation_id": generation_id, "composition_id": composition_id,
+            "status": status, "error": error, "detail": detail,
+            "basis": basis,
+            "candidate_asset_ids": list(candidate_asset_ids or []),
+            "candidate_files": list(candidate_files or []),
+            "candidate_urls": list(candidate_urls or []),
+            "verified": verified, "generation_record": record,
+        }
+        out.update(extra)
+        return out
+
+    async def generate_composition_candidates(self, composition_id: str, *,
+                                              expected_revision: str,
+                                              candidate_count: int = 1,
+                                              seed: Optional[int] = None,
+                                              agnes_client=None, downloader=None) -> dict:
+        """Composition 候选生成（三阶段协议，镜像 look 生成但 basis/输入选择/落盘路径独立）：
+          阶段1 短锁：entry OCC（expected_revision=composition revision）→ per-composition
+                 single-flight → 生成前全量重验证（look 仍 approved / 每 binding 的 prop
+                 仍有 approved reference）→ 构造 Composition GenerationBasis →
+                 无可用参考图 fail closed → generation_status=generating → 释放锁；
+          阶段2 无锁：调 AgnesClient.generate_image（绝不持 project_write_lock）；
+          阶段3 短锁：重算 basis 语义指纹，成立才 commit，否则 stale_basis 拒绝 attach。
+        失败语义与 look 生成同族：provider 失败不伪造 asset；record 诚实记录；
+        cancel cleanup 后 re-raise（不吞取消）。"""
+        op = "composition.generate_candidates"
+        generation_id = f"gen_{uuid.uuid4().hex[:12]}"
+        # ---- 入参校验（锁外）----
+        if not isinstance(candidate_count, int) or isinstance(candidate_count, bool) \
+                or candidate_count < 1 or candidate_count > self.MAX_CANDIDATE_COUNT:
+            return self._comp_gen_result(generation_id, composition_id, ok=False, status="failed",
+                                         error="invalid_candidate_count",
+                                         detail=f"candidate_count 必须是 1~{self.MAX_CANDIDATE_COUNT} 的整数")
+        if seed is not None and not isinstance(seed, int):
+            return self._comp_gen_result(generation_id, composition_id, ok=False, status="failed",
+                                         error="validation_error", detail="seed 必须是整数或 null")
+
+        started_at = time.time()
+        record_base: Dict[str, Any] = {
+            "generation_id": generation_id, "operation": op, "composition_id": composition_id,
+            "basis": None, "prompt": None, "model": None, "seed": seed,
+            "candidate_asset_ids": [], "candidate_files": [], "candidate_urls": [],
+            "started_at": started_at, "completed_at": None, "status": None,
+            "error": None, "verified": False, "resource_document_revision_after": None,
+        }
+
+        def _finish(**kw) -> dict:
+            rec = dict(record_base)
+            rec.update(kw.get("record_extra") or {})
+            rec["completed_at"] = time.time()
+            for k in ("status", "error", "basis", "candidate_asset_ids",
+                      "candidate_files", "candidate_urls", "verified",
+                      "resource_document_revision_after"):
+                if k in kw:
+                    rec[k] = kw[k]
+            rec["detail"] = kw.get("detail")
+            generation_records.append_record(self.project_dir, rec)
+            kw.setdefault("record", rec)
+            return self._comp_gen_result(generation_id, composition_id,
+                                         ok=kw.get("ok", False), status=rec["status"],
+                                         error=rec["error"], detail=kw.get("detail"),
+                                         basis=rec["basis"],
+                                         candidate_asset_ids=rec["candidate_asset_ids"],
+                                         candidate_files=rec["candidate_files"],
+                                         candidate_urls=rec["candidate_urls"],
+                                         verified=rec["verified"], record=rec)
+
+        # ---- 阶段 1：短锁 entry OCC + single-flight + 重验证 + basis snapshot ----
+        async with self.store.write_lock():
+            doc = self.store.load()
+            comp = doc.compositions.get(composition_id)
+            if comp is None:
+                return self._comp_gen_result(generation_id, composition_id, ok=False,
+                                             status="failed", error="not_found",
+                                             detail=f"composition 不存在: {composition_id}")
+            cur = composition_revision(comp)
+            if expected_revision != cur:
+                return self._comp_gen_result(
+                    generation_id, composition_id, ok=False, status="failed",
+                    error="stale_revision",
+                    detail="entry OCC：expected_revision 与当前 composition revision 不一致",
+                    expected_revision=expected_revision, current_revision=cur,
+                    current=comp.to_dict())
+            # per-composition single-flight（与 look 同原则）：检查与 generating 翻转在同一
+            # 短锁内串行化，无 TOCTOU；粒度只限 same composition_id，不同 composition 仍并发。
+            if comp.generation_status == GenerationStatus.GENERATING.value:
+                return self._comp_gen_result(
+                    generation_id, composition_id, ok=False, status="failed",
+                    error="generation_in_progress",
+                    detail="同一 Composition 已有 active generation（single-flight），"
+                           "本次请求被拒绝；未调用模型、未写 record、canonical 未改动")
+            # 生成前全量重验证（§6/§7：canonical 可能在 create 之后被改）
+            look = doc.looks.get(comp.look_id)
+            if look is None:
+                return self._comp_gen_result(generation_id, composition_id, ok=False,
+                                             status="failed", error="look_not_found",
+                                             detail=f"Look 不存在（生成前重验证失败）: {comp.look_id}")
+            if look.approval_status != ApprovalState.APPROVED.value:
+                return self._comp_gen_result(generation_id, composition_id, ok=False,
+                                             status="failed", error="look_not_approved",
+                                             detail=f"Look {comp.look_id} 已不再是 approved"
+                                                    f"（生成前重验证失败）")
+            if not look.approved_reference_asset_ids:
+                return self._comp_gen_result(generation_id, composition_id, ok=False,
+                                             status="failed", error="look_missing_approved_reference",
+                                             detail=f"Look {comp.look_id} 没有 approved reference")
+            for b in comp.prop_bindings:
+                prop = doc.props.get(b.prop_id)
+                if prop is None:
+                    return self._comp_gen_result(generation_id, composition_id, ok=False,
+                                                 status="failed", error="prop_not_found",
+                                                 detail=f"Prop 不存在（生成前重验证失败）: {b.prop_id}")
+                if not prop.approved_reference_asset_ids:
+                    return self._comp_gen_result(
+                        generation_id, composition_id, ok=False, status="failed",
+                        error="prop_reference_not_approved",
+                        detail=f"Prop '{prop.name}'（{b.prop_id}）没有 approved reference；"
+                               f"Composition 生成只使用 approved prop references，不偷偷用未审核图片")
+            if agnes_client is None:
+                from deps import get_agnes_client
+                agnes_client = get_agnes_client()
+            model_id = agnes_client.models["image"]
+            size_tier = "1K"
+            ratio = "2:3"
+            project = ProjectStore(self.project_dir).load()
+            basis = compute_composition_basis(
+                self.project_dir, doc, project, comp,
+                model_id=model_id, size_tier=size_tier, ratio=ratio,
+                seed=seed, candidate_count=candidate_count)
+            basis["started_at"] = started_at   # 指纹之后追加（不参与重算比对）
+            record_base["basis"] = basis
+            record_base["prompt"] = basis["prompt"]
+            record_base["model"] = basis["model"]
+            # fail closed：look hero 或任一 binding 的 prop hero 实际不可读 → 不退化纯文字生成
+            usable = [e for e in basis["selected_input_refs"]
+                      if (e.get("local") and (self.project_dir / e["local"]).is_file())
+                      or e.get("url")]
+            has_look = any(e.get("role") in ("look_hero", "look_extra_angle") for e in usable)
+            missing_props = [b["prop_id"] for b in basis["prop_bindings"]
+                             if not any(e.get("role") == "prop_hero" and e.get("prop_id") == b["prop_id"]
+                                        for e in usable)]
+            if not has_look:
+                return _finish(ok=False, status="failed", error="missing_look_reference",
+                               detail="Look approved reference 均不可读（fail closed，不退化纯文字生成）")
+            if missing_props:
+                return _finish(ok=False, status="failed", error="missing_prop_reference",
+                               detail=f"以下 prop 的 approved reference 均不可读: {missing_props}"
+                                      f"（fail closed，不退化纯文字生成）")
+            prev_status = comp.generation_status
+            comp.generation_status = GenerationStatus.GENERATING.value
+            self.store.save(doc)
+
+        # ---- 阶段 2：无锁调图片模型 ----
+        images: List[tuple] = []
+        seeds_used: List[Optional[int]] = []
+
+        async def _fail_close(err_code: str, detail_msg: str) -> dict:
+            """异常终态收口（与 look _fail_close 同族）：不伪造 asset、诚实终态、已到手候选留诊断。"""
+            diag_files = save_composition_candidate_files(
+                self.project_dir, composition_id, generation_id,
+                [d for d, _ in images]) if images else []
+            async with self.store.write_lock():
+                doc2 = self.store.load()
+                c2 = doc2.compositions.get(composition_id)
+                if c2 is not None:
+                    c2.generation_status = GenerationStatus.FAILED.value
+                    self.store.save(doc2)
+            return _finish(ok=False, status="failed", error=err_code, detail=detail_msg,
+                           candidate_files=diag_files,
+                           candidate_urls=[u for _, u in images if u])
+
+        try:
+            refs = agnes_image_inputs(self.project_dir, basis["selected_input_refs"])
+            proxy = getattr(agnes_client, "_proxy", None) or getattr(agnes_client, "proxy", None)
+            dl = downloader or self._download_default
+            for i in range(candidate_count):
+                use_seed = (seed + i) if seed is not None else None
+                seeds_used.append(use_seed)
+                record_base["seeds_used"] = list(seeds_used)
+                res = await agnes_client.generate_image(
+                    prompt=basis["prompt"], image_refs=refs,
+                    size_tier=size_tier, ratio=ratio, seed=use_seed)
+                url = (res or {}).get("url")
+                b64 = (res or {}).get("b64")
+                if b64:
+                    data = base64.b64decode(b64)
+                elif url:
+                    data = await dl(url, proxy=proxy)
+                else:
+                    raise RuntimeError("provider 未返回 url/b64（无图可保存，不伪造 asset）")
+                images.append((data, url))
+        except asyncio.CancelledError:
+            # cancel cleanup（1C1.2 同原则）：尽力写诚实终态后 re-raise，绝不吞取消；
+            # 若清理本身再被取消/进程死亡，startup orphan sweep 兜底。
+            await _fail_close("cancelled",
+                              "生成被取消（任务取消/进程关闭）；已到手候选保留诊断目录，未注册未挂载")
+            raise
+        except Exception as e:
+            return await _fail_close("provider_failed", f"{type(e).__name__}: {e}")
+
+        saved_files = save_composition_candidate_files(self.project_dir, composition_id,
+                                                       generation_id, [d for d, _ in images])
+
+        # ---- 阶段 3：短锁重验 basis + commit / stale 拒绝 ----
+        async with self.store.write_lock():
+            doc = self.store.load()
+            project = ProjectStore(self.project_dir).load()
+            holds, why = recompute_composition_basis_still_holds(self.project_dir, doc, project,
+                                                                 composition_id, basis)
+            if not holds:
+                # §8：绝不把旧生成结果 attach 到已变化的 composition；图片保留供诊断
+                c2 = doc.compositions.get(composition_id)
+                if c2 is not None:
+                    c2.generation_status = prev_status   # 内容态未变（诚实还原）
+                    self.store.save(doc)
+                return _finish(ok=False, status="stale_basis",
+                               error="stale_generation_basis",
+                               detail=f"生成期间 composition generation basis 已变化（{why}），拒绝 commit；"
+                                      f"候选图保留在 generation 目录供诊断，未成为资产",
+                               candidate_files=saved_files,
+                               candidate_urls=[u for _, u in images if u],
+                               resource_document_revision_after=None)
+
+            candidate_asset_ids: List[str] = []
+            for (data, url), rel in zip(images, saved_files):
+                asset = ReferenceAsset(asset_id=new_reference_asset_id(),
+                                       local=rel, url=url,
+                                       checksum=sha256_bytes(data),
+                                       view="composition",
+                                       purpose="composition",
+                                       background_type="",
+                                       source="generated")
+                doc.reference_assets[asset.asset_id] = asset
+                candidate_asset_ids.append(asset.asset_id)
+            c2 = doc.compositions[composition_id]
+            c2.reference_asset_ids.extend(candidate_asset_ids)
+            # 不追加 approved；approval_status 保持（§16：review pass ≠ 自动 approve）
+            c2.generation_status = GenerationStatus.READY.value
+            self.store.save(doc)
+            doc_rev = self._verify_after_save()
+
+            reloaded = self.store.load()
+            c3 = reloaded.compositions.get(composition_id)
+            assets_ok = all(aid in reloaded.reference_assets for aid in candidate_asset_ids)
+            files_ok = all((self.project_dir / f).is_file() for f in saved_files)
+            verified = (c3 is not None
+                        and all(aid in c3.reference_asset_ids for aid in candidate_asset_ids)
+                        and c3.generation_status == GenerationStatus.READY.value
+                        and assets_ok and files_ok)
+            return _finish(ok=True, status="committed",
+                           candidate_asset_ids=candidate_asset_ids,
+                           candidate_files=saved_files,
+                           candidate_urls=[u for _, u in images if u],
+                           verified=verified,
+                           resource_document_revision_after=doc_rev)

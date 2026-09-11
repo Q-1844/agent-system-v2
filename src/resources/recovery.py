@@ -28,7 +28,9 @@ ORPHAN_ERROR = "orphaned_by_process_restart"
 
 async def recover_orphaned_generations(project_dir, project_name: Optional[str] = None) -> dict:
     """单项目孤儿清理：generating → failed + 诚实 record（无 generation 身份可考，
-    用合成 gen_orphan_* id 标记，basis=None 不臆造）。幂等：无孤儿时零写入。"""
+    用合成 gen_orphan_* id 标记，basis=None 不臆造）。幂等：无孤儿时零写入。
+    Phase 1C5 扩展：composition.generating 孤儿进入同一恢复体系（§10），
+    record 以 composition_id 字段区分（look 字段缺席）。"""
     pdir = Path(project_dir)
     pname = project_name or pdir.name
     store = ResourceStore(pdir, pname)
@@ -40,12 +42,16 @@ async def recover_orphaned_generations(project_dir, project_name: Optional[str] 
         return receipt
     async with store.write_lock():
         doc = store.load()   # 损坏 → ResourceSchemaError 上抛（不静默重置）
-        receipt["scanned"] = len(doc.looks)
-        orphans = [lk for lk in doc.looks.values()
-                   if lk.generation_status == GenerationStatus.GENERATING.value]
-        if not orphans:
+        receipt["scanned"] = len(doc.looks) + len(doc.compositions)
+        look_orphans = [lk for lk in doc.looks.values()
+                        if lk.generation_status == GenerationStatus.GENERATING.value]
+        comp_orphans = [c for c in doc.compositions.values()
+                        if c.generation_status == GenerationStatus.GENERATING.value]
+        if not look_orphans and not comp_orphans:
             return receipt
-        for lk in orphans:
+        recovered_looks: List[str] = []
+        recovered_comps: List[str] = []
+        for lk in look_orphans:
             lk.generation_status = GenerationStatus.FAILED.value
             generation_records.append_record(pdir, {
                 "generation_id": f"gen_orphan_{uuid.uuid4().hex[:8]}",
@@ -60,13 +66,33 @@ async def recover_orphaned_generations(project_dir, project_name: Optional[str] 
                           "原 generation 身份不可考，候选图若已落盘留在 generation 诊断目录",
                 "verified": False, "resource_document_revision_after": None,
             })
-            receipt["recovered"].append(lk.look_id)
+            recovered_looks.append(lk.look_id)
+        for c in comp_orphans:
+            c.generation_status = GenerationStatus.FAILED.value
+            generation_records.append_record(pdir, {
+                "generation_id": f"gen_orphan_{uuid.uuid4().hex[:8]}",
+                "operation": "resources.recover_orphan",
+                "composition_id": c.composition_id,
+                "basis": None, "prompt": None, "model": None, "seed": None,
+                "seeds_used": None, "candidate_asset_ids": [], "candidate_files": [],
+                "candidate_urls": [],
+                "started_at": None, "completed_at": time.time(),
+                "status": "failed", "error": ORPHAN_ERROR,
+                "detail": "进程重启发现孤儿 generating 的 Composition（同 look 恢复语义），已置为 failed",
+                "verified": False, "resource_document_revision_after": None,
+            })
+            recovered_comps.append(c.composition_id)
         store.save(doc)
         # 写后重读验证（truth gate 同口径）
         reloaded = store.load()
-        receipt["verified"] = all(
-            reloaded.looks[lid].generation_status == GenerationStatus.FAILED.value
-            for lid in receipt["recovered"])
+        receipt["verified"] = (
+            all(reloaded.looks[lid].generation_status == GenerationStatus.FAILED.value
+                for lid in recovered_looks)
+            and all(reloaded.compositions[cid].generation_status == GenerationStatus.FAILED.value
+                    for cid in recovered_comps))
+        receipt["recovered"] = recovered_looks + recovered_comps
+        receipt["recovered_looks"] = recovered_looks
+        receipt["recovered_compositions"] = recovered_comps
     return receipt
 
 

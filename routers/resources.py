@@ -91,6 +91,18 @@ _ERROR_STATUS = {
     "clothing_not_published": 409,
     "character_exists": 409,
     "missing_shared_media": 409,
+    # Phase 1C5 Composition
+    "look_not_found": 404,
+    "look_not_approved": 409,
+    "look_character_mismatch": 400,
+    "look_missing_approved_reference": 409,
+    "prop_not_found": 404,
+    "duplicate_prop_binding": 400,
+    "invalid_prop_count": 400,
+    "invalid_binding": 400,
+    "prop_reference_not_approved": 409,
+    "missing_look_reference": 422,
+    "missing_prop_reference": 422,
 }
 
 
@@ -253,6 +265,114 @@ async def revoke_prop_approval(project: str, prop_id: str, req: RevokeApprovalRe
             prop_id, req.asset_id, expected_revision=req.expected_revision)
         _raise_for_receipt(receipt)
         return receipt
+    except HTTPException:
+        raise
+    except ResourceSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"资源数据错误: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =====================================================================
+# Phase 1C5 — CharacterReferenceComposition（§6 CRUD + §8-§14 生成）
+# =====================================================================
+class CreateCompositionRequest(BaseModel):
+    character_name: str
+    look_id: str
+    prop_bindings: List[dict]           # [{prop_id, relation, anchor, visual_state_note?, required_visibility?}]
+    label: str = ""
+    pose_note: str = ""
+    composition_description: str = ""
+    expected_document_revision: str
+
+
+class GenerateCompositionRequest(BaseModel):
+    expected_revision: str              # composition 的 resource revision（entry OCC）
+    candidate_count: int = 1
+    seed: Optional[int] = None
+
+
+@router.get("/api/project/{project}/compositions")
+async def list_compositions(project: str,
+                            character_name: str = Query(default=None, description="按角色名过滤")):
+    try:
+        svc = _service(project)
+        return {"compositions": svc.list_compositions(character_name),
+                "document_revision": svc.document_revision()}
+    except HTTPException:
+        raise
+    except ResourceSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"资源数据错误: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api/project/{project}/compositions/{composition_id}")
+async def read_composition(project: str, composition_id: str):
+    try:
+        res = _service(project).read_composition(composition_id)
+        if res is None:
+            raise HTTPException(status_code=404, detail=f"Composition 不存在: {composition_id}")
+        return res
+    except HTTPException:
+        raise
+    except ResourceSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"资源数据错误: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/project/{project}/compositions")
+async def create_composition(project: str, req: CreateCompositionRequest):
+    """创建 Composition（§6 全验证链：Character/Look/prop 存在、Look approved、
+    Look.character_name 一致、bindings 有限 enum、无重复 prop_id、1~3 个）。"""
+    try:
+        receipt = await _write_service(project).create_composition(
+            character_name=req.character_name, look_id=req.look_id,
+            prop_bindings=req.prop_bindings, label=req.label,
+            pose_note=req.pose_note,
+            composition_description=req.composition_description,
+            expected_document_revision=req.expected_document_revision)
+        _raise_for_receipt(receipt)
+        return receipt
+    except HTTPException:
+        raise
+    except ResourceSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"资源数据错误: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/api/project/{project}/compositions/{composition_id}")
+async def update_composition(project: str, composition_id: str, patch: dict = Body(...)):
+    """更新 Composition（label/pose_note/composition_description/prop_bindings 全量替换；
+    character_name/look_id 身份 FK 不可改；bindings 替换走 create 同款验证链）。"""
+    try:
+        body = {k: v for k, v in patch.items() if k != "expected_revision"}
+        receipt = await _write_service(project).update_composition(
+            composition_id, body,
+            expected_revision=patch.get("expected_revision", ""))
+        _raise_for_receipt(receipt)
+        return receipt
+    except HTTPException:
+        raise
+    except ResourceSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"资源数据错误: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/project/{project}/compositions/{composition_id}/generate")
+async def generate_composition_candidates(project: str, composition_id: str,
+                                          req: GenerateCompositionRequest):
+    """Composition 候选生成（三阶段协议 + per-composition single-flight）。
+    长操作：生成期间绝不持 project_write_lock。"""
+    try:
+        result = await _write_service(project).generate_composition_candidates(
+            composition_id, expected_revision=req.expected_revision,
+            candidate_count=req.candidate_count, seed=req.seed)
+        _raise_for_receipt(result)
+        return result
     except HTTPException:
         raise
     except ResourceSchemaError as e:

@@ -76,6 +76,20 @@ class ResourceService:
             "relationship_summary": f"view={a.view or '-'}; purpose={a.purpose or '-'}; source={a.source}",
         }
 
+    @staticmethod
+    def _composition_summary(c) -> dict:
+        from .models import composition_revision
+        return {
+            "id": c.composition_id, "type": "composition", "name": c.label,
+            "character_name": c.character_name, "look_id": c.look_id,
+            "status": c.approval_status, "generation_status": c.generation_status,
+            "cover_asset_id": c.cover_asset_id, "revision": composition_revision(c),
+            "relationship_summary": (
+                f"character={c.character_name}; look={c.look_id}; "
+                f"{len(c.prop_bindings)} prop binding(s), "
+                f"{len(c.reference_asset_ids)} ref(s), {len(c.approved_reference_asset_ids)} approved"),
+        }
+
     # ============ list（轻量地图）============
     def list_resources(self, type: Optional[str] = None) -> List[dict]:
         """统一资源列表。type ∈ look|clothing|prop|reference_asset|None(all)。
@@ -88,6 +102,8 @@ class ResourceService:
             out += [self._clothing_summary(c) for c in self.store.list_clothings()]
         if type in (None, "all", "prop"):
             out += [self._prop_summary(p) for p in self.store.list_props()]
+        if type in (None, "all", "composition"):
+            out += [self._composition_summary(c) for c in self.store.list_compositions()]
         if type == "reference_asset":
             out += [self._reference_asset_summary(a) for a in self.store.list_reference_assets()]
         return out
@@ -103,6 +119,12 @@ class ResourceService:
 
     def list_props(self) -> List[dict]:
         return [self._prop_summary(p) for p in self.store.list_props()]
+
+    def list_compositions(self, character_name: Optional[str] = None) -> List[dict]:
+        comps = self.store.list_compositions()
+        if character_name:
+            comps = [c for c in comps if c.character_name == character_name]
+        return [self._composition_summary(c) for c in comps]
 
     # ============ read（完整 typed relationship）============
     def _resolve_assets(self, asset_ids: List[str]) -> List[dict]:
@@ -204,7 +226,49 @@ class ResourceService:
         for p in self.store.list_props():
             if asset_id in p.reference_asset_ids:
                 used_by.append(p.prop_id)
+        for c in self.store.list_compositions():
+            if asset_id in c.reference_asset_ids or asset_id in c.approved_reference_asset_ids:
+                used_by.append(c.composition_id)
         return {**a.to_dict(), "revision": reference_asset_revision(a), "used_by": used_by}
+
+    def read_composition(self, composition_id: str) -> Optional[dict]:
+        """读 Composition：候选/approved/cover/look/逐 binding prop 全 resolve。"""
+        from .models import composition_revision
+        c = self.store.get_composition(composition_id)
+        if c is None:
+            return None
+        look = self.store.get_look(c.look_id)
+        look_resolved = None
+        if look is not None:
+            look_resolved = {
+                "look_id": look.look_id, "label": look.label,
+                "character_name": look.character_name,
+                "approval_status": look.approval_status,
+                "approved_reference_asset_ids": list(look.approved_reference_asset_ids),
+                "approved_reference_assets": self._resolve_assets(look.approved_reference_asset_ids),
+                "cover_asset_id": look.cover_asset_id,
+            }
+        bindings = []
+        for b in c.prop_bindings:
+            p = self.store.get_prop(b.prop_id)
+            bindings.append({
+                **b.to_dict(),
+                "prop": ({"prop_id": p.prop_id, "name": p.name,
+                          "description": p.description,
+                          "approval_status": p.approval_status,
+                          "approved_reference_asset_ids": list(p.approved_reference_asset_ids),
+                          "cover_asset_id": p.cover_asset_id} if p is not None
+                         else {"prop_id": b.prop_id, "missing": True}),
+            })
+        return {
+            **c.to_dict(),
+            "revision": composition_revision(c),
+            "reference_assets": self._resolve_assets(c.reference_asset_ids),
+            "approved_reference_assets": self._resolve_assets(c.approved_reference_asset_ids),
+            "cover_asset": (self._resolve_assets([c.cover_asset_id])[0] if c.cover_asset_id else None),
+            "look": look_resolved,
+            "prop_bindings_resolved": bindings,
+        }
 
     def read_resource(self, resource_id: str) -> Optional[dict]:
         """按 id 前缀 dispatch。"""
@@ -214,6 +278,8 @@ class ResourceService:
             return self.read_clothing(resource_id)
         if resource_id.startswith("prop_"):
             return self.read_prop(resource_id)
+        if resource_id.startswith("comp_"):
+            return self.read_composition(resource_id)
         if resource_id.startswith("ref_"):
             return self.read_reference_asset(resource_id)
         return None

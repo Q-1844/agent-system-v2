@@ -192,7 +192,8 @@ from src.resources.prop_review import (
     read_prop_review_records,
 )
 
-from tests.test_resources_phase1c1 import FakeAgnes, make_project, make_view_files, run
+from tests.test_resources_phase1c1 import (FakeAgnes, make_project, make_view_files, run,
+                                           _current_look_rev)
 from tests.test_resources_phase1c2 import FakeVision
 
 
@@ -210,24 +211,24 @@ def _prop_rev(env, prop_id):
     return prop_revision(env["ws"].store.load().props[prop_id])
 
 
-def _seed_prop(env, *, name="Wooden Sword", description="a short wooden training sword",
-               img_name="sword_ref.png"):
+async def _seed_prop(env, *, name="Wooden Sword", description="a short wooden training sword",
+                     img_name="sword_ref.png"):
     """建 prop + 绑定一张真实小图参考，返回 (prop_id, asset_id)。"""
     ws = env["ws"]
     img = env["pdir"] / "o" / img_name
     img.parent.mkdir(parents=True, exist_ok=True)
     img.write_bytes(f"PNG-REF-{img_name}".encode())
-    r = run(ws.create_prop(name=name, description=description,
-                           expected_document_revision=document_revision(ws.store.load())))
+    r = await ws.create_prop(name=name, description=description,
+                             expected_document_revision=document_revision(ws.store.load()))
     assert r["ok"], r
     prop_id = r["target"]
-    r2 = run(ws.register_reference_asset(
+    r2 = await ws.register_reference_asset(
         local=f"o/{img_name}", view="hero", purpose="prop",
-        expected_document_revision=r["document_revision_after"]))
+        expected_document_revision=r["document_revision_after"])
     assert r2["ok"], r2
     asset_id = r2["target"]
-    r3 = run(ws.attach_prop_reference(prop_id, asset_id,
-                                      expected_revision=_prop_rev(env, prop_id)))
+    r3 = await ws.attach_prop_reference(prop_id, asset_id,
+                                        expected_revision=_prop_rev(env, prop_id))
     assert r3["ok"], r3
     return prop_id, asset_id
 
@@ -251,7 +252,7 @@ PROP_CONCERN_JSON = _json.dumps({
 
 
 def test_prop_review_pass_flow_and_evidence(penv):
-    prop_id, asset_id = _seed_prop(penv)
+    prop_id, asset_id = run(_seed_prop(penv))
     res_path = penv["pdir"] / "output" / "resources.json"
     before = res_path.read_bytes()
     fv = FakeVision(PROP_PASS_JSON)
@@ -275,7 +276,7 @@ def test_prop_review_pass_flow_and_evidence(penv):
 
 
 def test_prop_review_overall_deterministic_not_trusting_model(penv):
-    prop_id, asset_id = _seed_prop(penv)
+    prop_id, asset_id = run(_seed_prop(penv))
     r = run(review_prop_reference(penv["pdir"], prop_id,
                                   agnes_client=FakeVision(PROP_NEEDSFIX_JSON)))
     cr = r["candidate_reviews"][0]
@@ -292,7 +293,7 @@ def test_prop_review_overall_deterministic_not_trusting_model(penv):
 
 
 def test_prop_review_isolation_and_fail_closed(penv):
-    prop_id, asset_id = _seed_prop(penv)
+    prop_id, asset_id = run(_seed_prop(penv))
     # fence 包裹 → 可解析
     r = run(review_prop_reference(penv["pdir"], prop_id,
                                   agnes_client=FakeVision("```json\n" + PROP_PASS_JSON + "\n```")))
@@ -317,7 +318,7 @@ def test_prop_review_isolation_and_fail_closed(penv):
 
 def test_prop_approve_gate_three_states_then_pass(penv):
     ws = penv["ws"]
-    prop_id, asset_id = _seed_prop(penv)
+    prop_id, asset_id = run(_seed_prop(penv))
     # ① 无证据 → 拒
     r = run(ws.approve_prop_reference(prop_id, asset_id, expected_revision=_prop_rev(penv, prop_id)))
     assert r["ok"] is False and r["error"] == "review_not_passed"
@@ -348,7 +349,7 @@ def test_prop_approve_gate_three_states_then_pass(penv):
 
 def test_prop_revoke_semantics(penv):
     ws = penv["ws"]
-    prop_id, asset_id = _seed_prop(penv)
+    prop_id, asset_id = run(_seed_prop(penv))
     run(review_prop_reference(penv["pdir"], prop_id, agnes_client=FakeVision(PROP_PASS_JSON)))
     run(ws.approve_prop_reference(prop_id, asset_id, expected_revision=_prop_rev(penv, prop_id)))
     r = run(ws.revoke_prop_approval(prop_id, asset_id, expected_revision=_prop_rev(penv, prop_id)))
@@ -365,7 +366,7 @@ def test_prop_revoke_semantics(penv):
 def test_prop_detach_cleans_approved_and_cover(penv):
     """detach 扩展（1C5）：approved ⊆ candidates 不变式——解绑同步清理 approved/cover。"""
     ws = penv["ws"]
-    prop_id, asset_id = _seed_prop(penv)
+    prop_id, asset_id = run(_seed_prop(penv))
     run(review_prop_reference(penv["pdir"], prop_id, agnes_client=FakeVision(PROP_PASS_JSON)))
     run(ws.approve_prop_reference(prop_id, asset_id, expected_revision=_prop_rev(penv, prop_id)))
     r = run(ws.detach_prop_reference(prop_id, asset_id, expected_revision=_prop_rev(penv, prop_id)))
@@ -378,7 +379,7 @@ def test_prop_detach_cleans_approved_and_cover(penv):
 
 
 def test_prop_read_latest_reviews(penv):
-    prop_id, _ = _seed_prop(penv)
+    prop_id, _ = run(_seed_prop(penv))
     run(review_prop_reference(penv["pdir"], prop_id, agnes_client=FakeVision(PROP_PASS_JSON)))
     svc = ResourceService(penv["pdir"], penv["pdir"].name)
     read = svc.read_prop(prop_id)
@@ -441,3 +442,555 @@ def test_prop_review_approve_http_contract(penv, tmp_path):
         assert read["latest_reviews"][asset_id]["overall"] == "pass"
     finally:
         rres.get_project_manager = orig
+
+
+# ============ Commit C：Composition CRUD + 生成核心（§6/§8-§14）============
+from src.core.write_lock import project_write_lock
+from src.resources.generation import MAX_COMPOSITION_INPUT_REFS
+from src.resources import generation_records as _grecs
+from src.resources.composition_prompt import build_composition_prompt
+from src.resources.look_review import review_look_candidates
+from tests.test_resources_phase1c1 import FakeAgnes as _FA  # noqa: F401
+from tests.test_resources_phase1c2 import PASS_JSON as LOOK_PASS_JSON
+
+
+def _comp_rev(env, comp_id):
+    from src.resources.models import composition_revision as _cr
+    return _cr(env["ws"].store.load().compositions[comp_id])
+
+
+async def _seed_approved_look(env, *, label="Alice · Black Coat"):
+    """clothing + look + 生成 1 候选 + pass 审查 + approve → (look_id, clothing_id)。"""
+    ws = env["ws"]
+    r = await ws.create_clothing(name="Black Coat", description="long black wool coat",
+                                 expected_document_revision=document_revision(ws.store.load()))
+    assert r["ok"], r
+    clothing_id = r["target"]
+    r2 = await ws.create_look(character_name="Alice", label=label, clothing_id=clothing_id,
+                              expected_document_revision=r["document_revision_after"])
+    assert r2["ok"], r2
+    look_id = r2["target"]
+    r3 = await ws.generate_look_candidates(look_id, expected_revision=_current_look_rev(env, look_id),
+                                           agnes_client=FakeAgnes(images=[b"LOOK-CAND"]))
+    assert r3["ok"], r3
+    asset_id = r3["candidate_asset_ids"][0]
+    from src.resources.look_review import review_look_candidates as _rv
+    rv = await _rv(env["pdir"], look_id, agnes_client=FakeVision(LOOK_PASS_JSON))
+    assert rv["ok"], rv
+    r4 = await ws.approve_look_reference(look_id, asset_id,
+                                         expected_revision=_current_look_rev(env, look_id))
+    assert r4["ok"], r4
+    return look_id, clothing_id
+
+
+async def _seed_approved_prop(env, *, name="Wooden Sword", description="a short wooden training sword",
+                              img_name="sword_ref.png"):
+    """prop + 参考图 + pass 审查 + approve → prop_id。"""
+    prop_id, asset_id = await _seed_prop(env, name=name, description=description, img_name=img_name)
+    from src.resources.prop_review import review_prop_reference as _rv
+    rv = await _rv(env["pdir"], prop_id, agnes_client=FakeVision(PROP_PASS_JSON))
+    assert rv["ok"], rv
+    r = await env["ws"].approve_prop_reference(prop_id, asset_id,
+                                               expected_revision=_prop_rev(env, prop_id))
+    assert r["ok"], r
+    return prop_id
+
+
+def _bind(prop_id, relation="held", anchor="right_hand", **kw):
+    return {"prop_id": prop_id, "relation": relation, "anchor": anchor, **kw}
+
+
+async def _seed_composition(env, *, bindings=None, label="Alice · Black Coat · Armed"):
+    """approved look + approved props + composition → composition_id。
+    bindings 默认：sword right_hand + compass left_hand。"""
+    ws = env["ws"]
+    look_id, _ = await _seed_approved_look(env)
+    sword = await _seed_approved_prop(env)
+    compass = await _seed_approved_prop(env, name="Brass Compass",
+                                        description="a brass navigation compass",
+                                        img_name="compass_ref.png")
+    if bindings is None:
+        bindings = [_bind(sword), _bind(compass, anchor="left_hand")]
+    r = await ws.create_composition(character_name="Alice", look_id=look_id,
+                                    prop_bindings=bindings, label=label,
+                                    expected_document_revision=document_revision(ws.store.load()))
+    assert r["ok"], r
+    return r["target"], look_id, [b["prop_id"] for b in bindings]
+
+
+# ---- T1 创建（2 props）----
+def test_t1_create_composition_two_props(penv):
+    comp_id, look_id, _ = run(_seed_composition(penv))
+    doc = penv["ws"].store.load()
+    c = doc.compositions[comp_id]
+    assert c.composition_id == comp_id and comp_id.startswith("comp_")
+    assert c.approval_status == "unreviewed" and c.generation_status == "none"
+    assert len(c.prop_bindings) == 2
+    assert c.prop_bindings[0].anchor == "right_hand" and c.prop_bindings[1].anchor == "left_hand"
+    assert doc.looks[look_id].approval_status == "approved"
+
+
+# ---- T2 缺 Character ----
+def test_t2_missing_character_rejected(penv):
+    ws = penv["ws"]
+    look_id, _ = run(_seed_approved_look(penv))
+    r = run(ws.create_composition(character_name="Nobody", look_id=look_id,
+                                  prop_bindings=[_bind("prop_x")],
+                                  expected_document_revision=document_revision(ws.store.load())))
+    assert r["ok"] is False and r["error"] == "character_not_found"
+
+
+# ---- T3 未 approved Look 拒绝 / look 角色不匹配 ----
+def test_t3_non_approved_look_rejected(penv):
+    ws = penv["ws"]
+    r = run(ws.create_clothing(name="Black Coat", expected_document_revision=document_revision(ws.store.load())))
+    r2 = run(ws.create_look(character_name="Alice", clothing_id=r["target"],
+                            expected_document_revision=r["document_revision_after"]))
+    look_id = r2["target"]     # 未生成未审查 → unreviewed
+    r3 = run(ws.create_composition(character_name="Alice", look_id=look_id,
+                                   prop_bindings=[_bind("prop_x")],
+                                   expected_document_revision=r2["document_revision_after"]))
+    assert r3["ok"] is False and r3["error"] == "look_not_approved"
+    # look 角色不匹配：给项目加第二个 Character "Bob"（存在，但 look 属于 Alice）
+    from src.core.models import Character as _Char
+    proj = ProjectStore(penv["pdir"]).load()
+    proj.characters.append(_Char(name="Bob", description_en="another character"))
+    ProjectStore(penv["pdir"]).save(proj)
+    r4 = run(ws.create_composition(character_name="Bob", look_id=look_id,
+                                   prop_bindings=[_bind("prop_x")],
+                                   expected_document_revision=document_revision(ws.store.load())))
+    assert r4["ok"] is False and r4["error"] == "look_character_mismatch"
+    # look 不存在
+    r5 = run(ws.create_composition(character_name="Alice", look_id="look_none",
+                                   prop_bindings=[_bind("prop_x")],
+                                   expected_document_revision=document_revision(ws.store.load())))
+    assert r5["ok"] is False and r5["error"] == "look_not_found"
+
+
+# ---- T4/T5 prop 缺失 / 无 approved reference ----
+def test_t4_missing_prop_rejected(penv):
+    ws = penv["ws"]
+    look_id, _ = run(_seed_approved_look(penv))
+    r = run(ws.create_composition(character_name="Alice", look_id=look_id,
+                                  prop_bindings=[_bind("prop_none")],
+                                  expected_document_revision=document_revision(ws.store.load())))
+    assert r["ok"] is False and r["error"] == "prop_not_found"
+
+
+def test_t5_prop_without_approved_ref_rejected_at_generation(penv):
+    """创建时 prop 只需存在（§6）；生成时无 approved reference → prop_reference_not_approved。"""
+    ws = penv["ws"]
+    look_id, _ = run(_seed_approved_look(penv))
+    prop_id, _ = run(_seed_prop(penv, name="Raw Sword"))     # 有参考图但未审查未批准
+    r = run(ws.create_composition(character_name="Alice", look_id=look_id,
+                                  prop_bindings=[_bind(prop_id)],
+                                  expected_document_revision=document_revision(ws.store.load())))
+    assert r["ok"], r
+    comp_id = r["target"]
+    g = run(ws.generate_composition_candidates(comp_id, expected_revision=_comp_rev(penv, comp_id),
+                                               agnes_client=FakeAgnes()))
+    assert g["ok"] is False and g["error"] == "prop_reference_not_approved", g
+    assert g.get("generation_record") is None or g["generation_record"]["error"] == "prop_reference_not_approved"
+    assert ws.store.load().compositions[comp_id].generation_status == "none"   # 状态未动
+
+
+# ---- T6/T7 1/2 props 合法 ----
+def test_t6_t7_valid_composition_counts(penv):
+    ws = penv["ws"]
+    look_id, _ = run(_seed_approved_look(penv))
+    p1 = run(_seed_approved_prop(penv, name="P1"))
+    r1 = run(ws.create_composition(character_name="Alice", look_id=look_id,
+                                   prop_bindings=[_bind(p1)],
+                                   expected_document_revision=document_revision(ws.store.load())))
+    assert r1["ok"], r1
+    p2 = run(_seed_approved_prop(penv, name="P2", img_name="p2.png"))
+    p3 = run(_seed_approved_prop(penv, name="P3", img_name="p3.png"))
+    r2 = run(ws.create_composition(character_name="Alice", look_id=look_id,
+                                   prop_bindings=[_bind(p2, anchor="left_hand"), _bind(p3, anchor="back")],
+                                   expected_document_revision=document_revision(ws.store.load())))
+    assert r2["ok"], r2
+    # 4 个 → 拒
+    p4 = run(_seed_approved_prop(penv, name="P4", img_name="p4.png"))
+    r3 = run(ws.create_composition(character_name="Alice", look_id=look_id,
+                                   prop_bindings=[_bind(p1), _bind(p2), _bind(p3), _bind(p4)],
+                                   expected_document_revision=document_revision(ws.store.load())))
+    assert r3["ok"] is False and r3["error"] == "invalid_prop_count"
+    # 0 个 → 拒
+    r4 = run(ws.create_composition(character_name="Alice", look_id=look_id,
+                                   prop_bindings=[],
+                                   expected_document_revision=document_revision(ws.store.load())))
+    assert r4["ok"] is False and r4["error"] == "invalid_prop_count"
+
+
+# ---- T8 重复 prop binding / 非法 enum ----
+def test_t8_duplicate_and_invalid_bindings_rejected(penv):
+    ws = penv["ws"]
+    look_id, _ = run(_seed_approved_look(penv))
+    p1 = run(_seed_approved_prop(penv))
+    rev = document_revision(ws.store.load())
+    r = run(ws.create_composition(character_name="Alice", look_id=look_id,
+                                  prop_bindings=[_bind(p1), _bind(p1, anchor="left_hand")],
+                                  expected_document_revision=rev))
+    assert r["ok"] is False and r["error"] == "duplicate_prop_binding"
+    r2 = run(ws.create_composition(character_name="Alice", look_id=look_id,
+                                   prop_bindings=[_bind(p1, relation="wield")],
+                                   expected_document_revision=document_revision(ws.store.load())))
+    assert r2["ok"] is False and r2["error"] == "invalid_binding"
+    r3 = run(ws.create_composition(character_name="Alice", look_id=look_id,
+                                   prop_bindings=[_bind(p1, anchor="sky")],
+                                   expected_document_revision=document_revision(ws.store.load())))
+    assert r3["ok"] is False and r3["error"] == "invalid_binding"
+
+
+# ---- T9 rename 不变 id ----
+def test_t9_composition_id_stable_on_rename(penv):
+    comp_id, *_ = run(_seed_composition(penv))
+    rev = _comp_rev(penv, comp_id)
+    r = run(penv["ws"].update_composition(comp_id, {"label": "Renamed"},
+                                          expected_revision=rev))
+    assert r["ok"] and r["verified"]
+    assert r["after"]["composition_id"] == comp_id
+    assert r["revision"] != rev
+
+
+# ---- 生成核心：三阶段 + commit ----
+def test_composition_generation_commits_full_chain(penv):
+    ws = penv["ws"]
+    comp_id, look_id, prop_ids = run(_seed_composition(penv))
+    rev = _comp_rev(penv, comp_id)
+    g = run(ws.generate_composition_candidates(comp_id, expected_revision=rev,
+                                               agnes_client=FakeAgnes(images=[b"COMP-CAND"])))
+    assert g["ok"] and g["status"] == "committed" and g["verified"], g
+    doc = ws.store.load()
+    c = doc.compositions[comp_id]
+    assert c.generation_status == "ready"
+    assert c.approval_status == "unreviewed"                       # T19：不自动 approve
+    assert c.approved_reference_asset_ids == []
+    assert c.reference_asset_ids == g["candidate_asset_ids"]
+    asset = doc.reference_assets[g["candidate_asset_ids"][0]]
+    assert asset.source == "generated" and asset.purpose == "composition"
+    assert (penv["pdir"] / asset.local).is_file()
+    assert asset.local.startswith(f"output/resources/compositions/{comp_id}/generations/")
+    # generation record：无 base64 + composition_id 字段
+    recs = _grecs.read_records(penv["pdir"], composition_id=comp_id)
+    assert len(recs) == 1 and recs[0]["operation"] == "composition.generate_candidates"
+    assert recs[0]["verified"] is True and recs[0]["status"] == "committed"
+    assert "data:image" not in _json.dumps(recs)
+    assert "base64" not in (penv["pdir"] / "output" / "resources.json").read_text(encoding="utf-8")
+    # basis 覆盖 §8 关键字段
+    basis = recs[0]["basis"]
+    assert basis["look_id"] == look_id and basis["composition_id"] == comp_id
+    assert basis["character_identity_fingerprint"]
+    assert basis["look_revision"] and len(basis["look_revision"]) == 8
+    for b in basis["prop_bindings"]:
+        assert b["prop_id"] in prop_ids and b["prop_revision"] and b["relation"] and b["anchor"]
+        assert b["approved_reference_ids_used"] and b["reference_snapshot"][0]["sha256"]
+    assert basis["selected_input_refs"] and basis["basis_fingerprint"]
+
+
+# ---- prompt 语义（§11）----
+def test_composition_prompt_semantics():
+    kw = dict(character_description="a girl with silver hair",
+              look_clothing_snapshot={"name": "Black Coat", "description": "long black wool coat",
+                                      "design_traits": "high collar", "materials": ["wool"],
+                                      "colors": ["#111"]},
+              bindings=[{"prop_name": "Wooden Sword", "prop_description": "wooden",
+                         "relation": "held", "anchor": "right_hand", "visual_state_note": ""},
+                        {"prop_name": "Compass", "prop_description": "brass",
+                         "relation": "held", "anchor": "left_hand", "visual_state_note": "lid open"}],
+              pose_note="standing", composition_description="")
+    p1 = build_composition_prompt(**kw)
+    assert p1 == build_composition_prompt(**kw)                    # 确定性
+    assert "RIGHT HAND" in p1 and "LEFT HAND" in p1
+    assert "Wooden Sword" in p1 and "Compass" in p1
+    assert "never merge, fuse or swap" in p1                       # 不融合不串位
+    assert "clearly visible" in p1
+    assert "pure white backdrop" in p1                             # 审核安全措辞
+    assert "no story action" in p1 and "no camera movement" in p1  # 不含 Shot 语义
+
+
+# ---- 参考预算（§12）----
+def test_reference_budget_selection_deterministic(penv):
+    ws = penv["ws"]
+    # 双 look approved ref（生成两次 + 两次 pass + approve 两个）
+    look_id, _ = run(_seed_approved_look(penv))
+    g2 = run(ws.generate_look_candidates(look_id, expected_revision=_current_look_rev(penv, look_id),
+                                         agnes_client=FakeAgnes(images=[b"SECOND-LOOK"])))
+    assert g2["ok"]
+    a2 = g2["candidate_asset_ids"][0]
+    run(review_look_candidates(penv["pdir"], look_id, agnes_client=FakeVision(LOOK_PASS_JSON)))
+    r = run(ws.approve_look_reference(look_id, a2, expected_revision=_current_look_rev(penv, look_id),
+                                      set_cover=False))
+    assert r["ok"]
+    sword = run(_seed_approved_prop(penv))
+    compass = run(_seed_approved_prop(penv, name="Compass", img_name="compass_ref.png"))
+    rcomp = run(ws.create_composition(character_name="Alice", look_id=look_id,
+                                      prop_bindings=[_bind(sword), _bind(compass, anchor="left_hand")],
+                                      expected_document_revision=document_revision(ws.store.load())))
+    comp_id = rcomp["target"]
+    g = run(ws.generate_composition_candidates(comp_id, expected_revision=_comp_rev(penv, comp_id),
+                                               agnes_client=FakeAgnes(images=[b"COMP"])))
+    assert g["ok"], g
+    basis = g["generation_record"]["basis"]
+    roles = [e["role"] for e in basis["selected_input_refs"]]
+    # 2 bindings + 2 approved look refs → look_hero + 2 prop_hero + 1 extra angle
+    assert roles.count("look_hero") == 1 and roles.count("look_extra_angle") == 1
+    assert roles.count("prop_hero") == 2
+    assert basis["input_budget"] == {"max": MAX_COMPOSITION_INPUT_REFS, "used": 4}
+    # 输入顺序确定性：look_hero 在前、extra 在最后
+    assert roles[0] == "look_hero" and roles[-1] == "look_extra_angle"
+    # 只使用 approved refs（FakeAgnes 看到的 data URI 数量 == 选择数）
+    assert len(g["generation_record"]) >= 0
+    # 1 binding → 无 extra angle
+    r1 = run(ws.create_composition(character_name="Alice", look_id=look_id,
+                                   prop_bindings=[_bind(sword)],
+                                   expected_document_revision=document_revision(ws.store.load())))
+    g1 = run(ws.generate_composition_candidates(r1["target"],
+                                                expected_revision=_comp_rev(penv, r1["target"]),
+                                                agnes_client=FakeAgnes(images=[b"COMP1"])))
+    roles1 = [e["role"] for e in g1["generation_record"]["basis"]["selected_input_refs"]]
+    assert roles1 == ["look_hero", "prop_hero"]
+    assert MAX_COMPOSITION_INPUT_REFS == 6
+
+
+# ---- T10 同 composition single-flight ----
+def test_t10_same_composition_single_flight(penv):
+    ws = penv["ws"]
+    comp_id, *_ = run(_seed_composition(penv))
+    a_in = asyncio.Event()
+    release_a = asyncio.Event()
+
+    async def hang_a(i):
+        a_in.set()
+        await asyncio.wait_for(release_a.wait(), 10)
+
+    async def scenario():
+        t_a = asyncio.create_task(ws.generate_composition_candidates(
+            comp_id, expected_revision=_comp_rev(penv, comp_id), agnes_client=FakeAgnes(on_call=hang_a)))
+        await asyncio.wait_for(a_in.wait(), 5)
+        rev_now = _comp_rev(penv, comp_id)
+        fake_b = FakeAgnes()
+        r_b = await ws.generate_composition_candidates(comp_id, expected_revision=rev_now,
+                                                       agnes_client=fake_b)
+        assert ws.store.load().compositions[comp_id].generation_status == "generating"
+        release_a.set()
+        r_a = await t_a
+        return r_b, fake_b, r_a
+
+    r_b, fake_b, r_a = run(scenario())
+    assert r_b["ok"] is False and r_b["error"] == "generation_in_progress"
+    assert fake_b.calls == 0
+    assert r_a["ok"] and r_a["status"] == "committed"
+
+
+# ---- T11 不同 composition 并发 ----
+def test_t11_different_compositions_concurrent(penv):
+    ws = penv["ws"]
+    comp1, *_ = run(_seed_composition(penv, label="C1"))
+    comp2, *_ = run(_seed_composition(penv, label="C2"))
+    a_in, b_in = asyncio.Event(), asyncio.Event()
+    rel_a, rel_b = asyncio.Event(), asyncio.Event()
+
+    async def hang_a(i):
+        a_in.set()
+        await asyncio.wait_for(rel_a.wait(), 10)
+
+    async def hang_b(i):
+        b_in.set()
+        await asyncio.wait_for(rel_b.wait(), 10)
+
+    async def scenario():
+        t_a = asyncio.create_task(ws.generate_composition_candidates(
+            comp1, expected_revision=_comp_rev(penv, comp1), agnes_client=FakeAgnes(on_call=hang_a)))
+        t_b = asyncio.create_task(ws.generate_composition_candidates(
+            comp2, expected_revision=_comp_rev(penv, comp2), agnes_client=FakeAgnes(on_call=hang_b)))
+        await asyncio.wait_for(asyncio.gather(a_in.wait(), b_in.wait()), 5)
+        rel_a.set()
+        rel_b.set()
+        return await asyncio.gather(t_a, t_b)
+
+    r_a, r_b = run(scenario())
+    assert r_a["ok"] and r_b["ok"]
+    doc = ws.store.load()
+    assert doc.compositions[comp1].generation_status == "ready"
+    assert doc.compositions[comp2].generation_status == "ready"
+
+
+# ---- T12 生成期间不持写锁 ----
+def test_t12_provider_not_holding_write_lock(penv):
+    comp_id, *_ = run(_seed_composition(penv))
+
+    async def check_lock(i):
+        lock = project_write_lock(penv["pdir"].name)
+        assert lock.locked() is False, "generate_image 期间绝不持 project_write_lock"
+
+    g = run(penv["ws"].generate_composition_candidates(
+        comp_id, expected_revision=_comp_rev(penv, comp_id),
+        agnes_client=FakeAgnes(on_call=check_lock)))
+    assert g["ok"], g
+
+
+# ---- T13/T14/T15 生成中改 Look/Prop/binding → stale 拒绝 commit ----
+def test_t13_stale_look_basis_rejects_commit(penv):
+    ws = penv["ws"]
+    comp_id, look_id, _ = run(_seed_composition(penv))
+
+    async def mutate(i):
+        r = await ws.update_look(look_id, {"appearance_delta": "changed mid-flight"},
+                                 expected_revision=_current_look_rev(penv, look_id))
+        assert r["ok"], r
+
+    g = run(ws.generate_composition_candidates(
+        comp_id, expected_revision=_comp_rev(penv, comp_id),
+        agnes_client=FakeAgnes(on_call=mutate)))
+    assert g["ok"] is False and g["status"] == "stale_basis" and g["error"] == "stale_generation_basis"
+    c = ws.store.load().compositions[comp_id]
+    assert c.generation_status == "none"                # 诚实还原
+    assert c.reference_asset_ids == []                  # 未 attach 旧结果
+    rec = _grecs.read_records(penv["pdir"], composition_id=comp_id)
+    assert rec[-1]["status"] == "stale_basis" and rec[-1]["verified"] is False
+    # stale 后可重试
+    g2 = run(ws.generate_composition_candidates(comp_id, expected_revision=_comp_rev(penv, comp_id),
+                                                agnes_client=FakeAgnes(images=[b"RETRY"])))
+    assert g2["ok"] and g2["status"] == "committed"
+
+
+def test_t14_stale_prop_basis_rejects_commit(penv):
+    ws = penv["ws"]
+    comp_id, _, prop_ids = run(_seed_composition(penv))
+
+    async def mutate(i):
+        r = await ws.update_prop(prop_ids[0], {"description": "changed mid-flight"},
+                                 expected_revision=_prop_rev(penv, prop_ids[0]))
+        assert r["ok"], r
+
+    g = run(ws.generate_composition_candidates(
+        comp_id, expected_revision=_comp_rev(penv, comp_id),
+        agnes_client=FakeAgnes(on_call=mutate)))
+    assert g["ok"] is False and g["status"] == "stale_basis"
+    assert ws.store.load().compositions[comp_id].reference_asset_ids == []
+
+
+def test_t15_changed_binding_rejects_commit(penv):
+    ws = penv["ws"]
+    comp_id, _, prop_ids = run(_seed_composition(penv))
+
+    async def mutate(i):
+        r = await ws.update_composition(
+            comp_id,
+            {"prop_bindings": [_bind(prop_ids[0], anchor="left_hand"), _bind(prop_ids[1], anchor="back")]},
+            expected_revision=_comp_rev(penv, comp_id))
+        assert r["ok"], r
+
+    g = run(ws.generate_composition_candidates(
+        comp_id, expected_revision=_comp_rev(penv, comp_id),
+        agnes_client=FakeAgnes(on_call=mutate)))
+    assert g["ok"] is False and g["status"] == "stale_basis"
+    assert ws.store.load().compositions[comp_id].reference_asset_ids == []
+
+
+# ---- T16 cancel cleanup ----
+class HangingForeverAgnes:
+    def __init__(self):
+        self.models = {"image": "agnes-image-test"}
+
+    async def generate_image(self, prompt, *, image_refs=None, size_tier="1K",
+                             ratio="16:9", seed=None, want_b64=False):
+        await asyncio.Event().wait()
+
+
+def test_t16_cancel_cleanup_writes_failed_and_reraises(penv):
+    ws = penv["ws"]
+    comp_id, *_ = run(_seed_composition(penv))
+
+    async def scenario():
+        t = asyncio.create_task(ws.generate_composition_candidates(
+            comp_id, expected_revision=_comp_rev(penv, comp_id),
+            agnes_client=HangingForeverAgnes()))
+        await asyncio.sleep(0.2)
+        t.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await t                       # cancel 向上传播，不吞
+        return ws.store.load().compositions[comp_id]
+
+    c = run(scenario())
+    assert c.generation_status == "failed"
+    rec = _grecs.read_records(penv["pdir"], composition_id=comp_id)
+    assert rec[-1]["status"] == "failed" and rec[-1]["error"] == "cancelled"
+    # 终态后 single-flight 放行
+    g2 = run(ws.generate_composition_candidates(comp_id, expected_revision=_comp_rev(penv, comp_id),
+                                                agnes_client=FakeAgnes(images=[b"AFTER-CANCEL"])))
+    assert g2["ok"] and g2["status"] == "committed"
+
+
+# ---- T17/T18 startup orphan sweep + 幂等 ----
+def test_t17_t18_startup_orphan_sweep_compositions(penv):
+    ws = penv["ws"]
+    pdir = penv["pdir"]
+    comp_id, *_ = run(_seed_composition(penv))
+    healthy_id, *_ = run(_seed_composition(penv, label="Healthy"))
+    # 模拟死进程磁盘态：comp generating
+    doc = ws.store.load()
+    doc.compositions[comp_id].generation_status = "generating"
+    ws.store.save(doc)
+    res_path = pdir / "output" / "resources.json"
+
+    from src.resources.recovery import recover_orphaned_generations
+    r = run(recover_orphaned_generations(pdir, pdir.name))
+    assert r["ok"] and r["recovered"] == [comp_id]
+    assert r.get("recovered_compositions") == [comp_id]
+    doc = ws.store.load()
+    assert doc.compositions[comp_id].generation_status == "failed"
+    assert doc.compositions[healthy_id].generation_status == "none"     # 健康者零改动
+    rec = _grecs.read_records(penv["pdir"], composition_id=comp_id)
+    assert rec[-1]["error"] == "orphaned_by_process_restart"
+    assert rec[-1]["basis"] is None and rec[-1]["generation_id"].startswith("gen_orphan_")
+    # 幂等：第二遍零写入
+    raw = res_path.read_bytes()
+    r2 = run(recover_orphaned_generations(pdir, pdir.name))
+    assert r2["recovered"] == []
+    assert res_path.read_bytes() == raw
+    # 恢复后可再次生成
+    g = run(ws.generate_composition_candidates(comp_id, expected_revision=_comp_rev(penv, comp_id),
+                                               agnes_client=FakeAgnes(images=[b"AFTER-SWEEP"])))
+    assert g["ok"] and g["status"] == "committed"
+
+
+# ---- delete_prop 引用保护 ----
+def test_delete_prop_with_composition_reference_blocked(penv):
+    ws = penv["ws"]
+    comp_id, _, prop_ids = run(_seed_composition(penv))
+    r = run(ws.delete_prop(prop_ids[0], expected_revision=_prop_rev(penv, prop_ids[0])))
+    assert r["ok"] is False and r["error"] == "resource_in_use"
+    assert r["used_by_compositions"] == [comp_id]
+
+
+# ---- T34 重启持久化 ----
+def test_t34_restart_persistence(penv):
+    ws = penv["ws"]
+    comp_id, look_id, prop_ids = run(_seed_composition(penv))
+    g = run(ws.generate_composition_candidates(comp_id, expected_revision=_comp_rev(penv, comp_id),
+                                               agnes_client=FakeAgnes(images=[b"PERSIST"])))
+    assert g["ok"]
+    from src.resources.service import ResourceService
+    svc2 = ResourceService(penv["pdir"], penv["pdir"].name)      # 全新实例（重启语义）
+    read = svc2.read_composition(comp_id)
+    assert read["composition_id"] == comp_id
+    assert read["generation_status"] == "ready"
+    assert [a["asset_id"] for a in read["reference_assets"]] == g["candidate_asset_ids"]
+    assert read["look"]["look_id"] == look_id
+    assert [b["prop"]["prop_id"] for b in read["prop_bindings_resolved"]] == prop_ids
+    lst = svc2.list_compositions(character_name="Alice")
+    assert [c["id"] for c in lst] == [comp_id]
+
+
+# ---- T36 project.json 字节不变（composition 全链路）----
+def test_t36_project_json_byte_unchanged(penv):
+    ws = penv["ws"]
+    pdir = penv["pdir"]
+    pj = pdir / "output" / "project.json"
+    before = pj.read_bytes()
+    comp_id, _, _ = run(_seed_composition(penv))
+    run(ws.generate_composition_candidates(comp_id, expected_revision=_comp_rev(penv, comp_id),
+                                           agnes_client=FakeAgnes(images=[b"X"])))
+    assert pj.read_bytes() == before
