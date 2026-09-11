@@ -542,7 +542,7 @@ class ResourceWriteService:
                                     candidate_urls=rec["candidate_urls"],
                                     verified=rec["verified"], record=rec)
 
-        # ---- 阶段 1：短锁 entry OCC + basis snapshot（§5 阶段1）----
+        # ---- 阶段 1：短锁 entry OCC + per-look single-flight + basis snapshot（§5 阶段1）----
         async with self.store.write_lock():
             doc = self.store.load()
             look = doc.looks.get(look_id)
@@ -556,6 +556,16 @@ class ResourceWriteService:
                     error="stale_revision", detail="entry OCC：expected_revision 与当前 look revision 不一致",
                     expected_revision=expected_revision, current_revision=cur,
                     current=look.to_dict())
+            # per-look single-flight（Phase 1C1.1）：同一 look 任意时刻最多一个 active generation。
+            # 检查在同一短锁内 → 与阶段1的 generating 翻转天然串行化，无 TOCTOU 窗口；
+            # 粒度只限 same look_id（状态在 look 上），不同 look 仍可并发生成。
+            # 拒绝语义：不调模型、不写 record、不改 canonical、不替换已有 generation 状态。
+            if look.generation_status == GenerationStatus.GENERATING.value:
+                return self._gen_result(
+                    generation_id, look_id, ok=False, status="failed",
+                    error="generation_in_progress",
+                    detail="同一 Look 已有 active generation（per-look single-flight），"
+                           "本次请求被拒绝；未调用模型、未写 record、canonical 未改动")
             if agnes_client is None:
                 from deps import get_agnes_client   # 惰性 import（避免 app 上下文依赖进入 resources 测试）
                 agnes_client = get_agnes_client()

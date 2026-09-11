@@ -73,6 +73,7 @@ _ERROR_STATUS = {
     "validation_error": 400,
     "invalid_candidate_count": 400,
     "provider_failed": 502,
+    "generation_in_progress": 409,   # Phase 1C1.1 per-look single-flight
 }
 
 
