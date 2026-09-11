@@ -64,10 +64,22 @@ class AnchorKind(str, Enum):
 
 
 class ApprovalState(str, Enum):
-    """审批状态（语义沿用 Resources；本轮 view 仅 metadata，无生成无 review）。"""
+    """审批状态（语义沿用 Resources）。S2A 起 view approval 走真实 approve/revoke 协议：
+    生成成功 ≠ approved；review pass ≠ 自动 approved（显式 mutation 才算）。"""
     UNREVIEWED = "unreviewed"
     APPROVED = "approved"
     REJECTED = "rejected"
+
+
+class GenerationStatus(str, Enum):
+    """生成状态（独立于审批状态——两个维度绝不合并，S2A §8）。
+    语义对齐 Resources：none=未生成；pending=已请求待处理；generating=生成中；
+    ready=候选就绪（≠ approved）；failed=生成失败。"""
+    NONE = "none"
+    PENDING = "pending"
+    GENERATING = "generating"
+    READY = "ready"
+    FAILED = "failed"
 
 
 class SceneInstanceStatus(str, Enum):
@@ -205,11 +217,18 @@ class SetLayout:
                    **kw)
 
 
-# ============ LocationView（§8）============
+# ============ LocationView（§8；S2A 起含视觉生成状态）============
 @dataclass
 class LocationView:
-    """Location 的一个观察视角 metadata（不用 Character 式 front/side/back）。
-    Phase S1 只建 metadata，不生成图片（reference_asset_id 留给未来）。"""
+    """Location 的一个观察视角定义（不用 Character 式 front/side/back）。
+    🔴 LocationView ≠ ReferenceAsset（S2A §3）：本实体是"从哪里往哪看、应看到哪些
+    稳定结构"的空间视角定义；批准的视觉图是它指向的 Resources ReferenceAsset。
+    S2A 视觉状态（schema v2 新增字段——v1 runtime 会静默丢弃它们，故 bump v2）：
+    - generation_status：生成状态维度（none/pending/generating/ready/failed）
+    - active_generation_id：当前候选所属 generation（commit 时写入；指向
+      output/scene_system/generation_records.jsonl 中该次生成的记录）
+    - reference_asset_id / approval_status：S1 已有；approval 是显式协议结果。
+    生成成功 ≠ approved；review pass ≠ 自动 approved（§8/§25）。"""
     view_id: str
     location_id: str                          # FK → Location.location_id
     label: str = ""                           # 如 "South-west to North-east"
@@ -218,6 +237,8 @@ class LocationView:
     visible_anchor_ids: List[str] = field(default_factory=list)
     reference_asset_id: Optional[str] = None
     approval_status: str = ApprovalState.UNREVIEWED.value
+    generation_status: str = GenerationStatus.NONE.value
+    active_generation_id: Optional[str] = None
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
 
@@ -363,11 +384,20 @@ class SceneInstance:
 
 
 # ============ SceneSystemDocument（canonical 顶层容器，§15）============
-# schema v1：本轮基础系统。顶层五个 keyed collection。
-# 命名空间：/api/project/{p}/scene-system/*（不与现有 /scenes（Story Scene 对账）、
-# /resources、/story 冲突）。
-SCENE_SYSTEM_SCHEMA_VERSION = 1
-_SUPPORTED_SCENE_SYSTEM_SCHEMA_VERSIONS = (1,)
+# schema v2（Phase S2A）：LocationView 新增视觉生成状态字段（generation_status /
+# active_generation_id）。
+# 惰性迁移契约（同 Resources 1C5 已证明有效的原则，S2A §7）：
+#   - v1 文件可读：in-memory 新字段取默认值，schema_version 规范化为 2；
+#   - 纯 read 绝不写盘（load 从不 save）→ 不存在"读时自动写回 v2"；
+#   - 第一次真实 mutation save 时才把 v2 持久化到磁盘（幂等、非破坏性）；
+#   - 旧 S1 runtime（只支持 v1）面对 v2 文件 fail closed（SceneSystemSchemaError）
+#     而非静默丢字段——为什么必须 bump 而不是 v1 additive：v1 文件若带新字段，
+#     不认识该字段的旧 runtime load→save 会静默丢弃 generation_status/
+#     active_generation_id（from_dict known-key 白名单外全部忽略），
+#     让旧 runtime 大声报错是唯一安全方向；
+#   - 未知未来版本（≥3）继续 fail closed。
+SCENE_SYSTEM_SCHEMA_VERSION = 2
+_SUPPORTED_SCENE_SYSTEM_SCHEMA_VERSIONS = (1, 2)
 
 
 @dataclass

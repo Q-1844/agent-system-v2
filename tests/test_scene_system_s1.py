@@ -503,13 +503,17 @@ def test_t21_bad_json_fail_closed(pdir):
 
 
 def test_t22_unknown_schema_fail_closed(pdir):
+    """S2A 起受支持版本为 (1, 2)（v2=LocationView 视觉状态，惰性迁移）；未知未来版本（≥3）fail closed。"""
     st = SceneSystemStore(pdir, pdir.name)
     st.path.parent.mkdir(parents=True, exist_ok=True)
     st.path.write_text(json.dumps({"schema_version": 99, "locations": {}}), encoding="utf-8")
     with pytest.raises(SceneSystemSchemaError):
         st.load()
     with pytest.raises(SceneSystemSchemaError):
-        SceneSystemDocument.from_dict({"schema_version": 2, "locations": {}})
+        st.path.write_text(json.dumps({"schema_version": 3, "locations": {}}), encoding="utf-8")
+        st.load()
+    with pytest.raises(SceneSystemSchemaError):
+        SceneSystemDocument.from_dict({"schema_version": 3, "locations": {}})
 
 
 # ============ T23：重启持久化 ============

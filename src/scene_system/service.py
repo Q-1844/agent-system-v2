@@ -37,7 +37,6 @@ from .models import (
     AnchorPlacement,
     AnchorRelation,
     AnchorState,
-    ApprovalState,
     Location,
     LocationView,
     PropPlacement,
@@ -702,21 +701,22 @@ class SceneSystemService:
     async def update_view(self, view_id: str, patch: Dict[str, Any], *,
                           expected_revision: str) -> dict:
         op = "scene.update_view"
-        _FIELDS = {"label", "camera_zone", "look_direction", "visible_anchor_ids",
-                   "reference_asset_id", "approval_status"}
+        # S2A §7/§8/§25：视觉状态字段（generation_status/active_generation_id/
+        # reference_asset_id/approval_status）是协议管理字段——只能经
+        # generate/review/approve/revoke 协议变更，不允许手工 patch 绕过审批证据链。
+        _FIELDS = {"label", "camera_zone", "look_direction", "visible_anchor_ids"}
         try:
             view_id = self._require_str(view_id, "view_id")
             unknown = set(patch) - _FIELDS
             if unknown:
-                raise ValueError(f"未知/不可变字段: {sorted(unknown)}（可改: {sorted(_FIELDS)}；"
-                                 f"view_id/location_id 身份恒不变）")
+                raise ValueError(
+                    f"未知/不可变字段: {sorted(unknown)}（可改: {sorted(_FIELDS)}；"
+                    f"view_id/location_id 身份恒不变；视觉状态字段 generation_status/"
+                    f"active_generation_id/reference_asset_id/approval_status 由 "
+                    f"generate/approve/revoke 协议管理，不可手工 patch）")
             if "visible_anchor_ids" in patch and \
                     not isinstance(patch["visible_anchor_ids"], list):
                 raise ValueError("visible_anchor_ids 必须是 list")
-            if "approval_status" in patch and \
-                    patch["approval_status"] not in {s.value for s in ApprovalState}:
-                raise ValueError(f"非法 approval_status: {patch['approval_status']!r} "
-                                 f"（允许: {[s.value for s in ApprovalState]}）")
         except ValueError as e:
             return self._receipt(op, ok=False, target=view_id,
                                  error="validation_error", detail=str(e))
@@ -736,13 +736,11 @@ class SceneSystemService:
                 except (_NotFoundError, _ValidationError) as e:
                     return self._receipt(op, ok=False, error=e.code, detail=str(e))
             before = v.to_dict()
-            for f in ("label", "camera_zone", "look_direction", "approval_status"):
+            for f in ("label", "camera_zone", "look_direction"):
                 if f in patch and patch[f] is not None:
                     setattr(v, f, patch[f])
             if "visible_anchor_ids" in patch:
                 v.visible_anchor_ids = list(patch["visible_anchor_ids"] or [])
-            if "reference_asset_id" in patch:
-                v.reference_asset_id = patch["reference_asset_id"]   # 显式 null = 清除
             v.updated_at = time.time()
             self.store.save(doc)
             doc_rev = self._verify_after_save()
