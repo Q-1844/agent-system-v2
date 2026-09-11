@@ -138,6 +138,16 @@ async def startup():
                                _rec.get("total_recovered"), _rec.get("errors"))
         except Exception as _rec_err:
             logger.warning("资源生成孤儿恢复跳过: %s", _rec_err)
+        # Scene System S2A §15：LocationView 孤儿 generating 启动清理（同判定依据，
+        # 同幂等语义；无 daemon 无轮询）。失败仅告警，不阻塞启动。
+        try:
+            from src.scene_system.recovery import recover_all_projects as _scene_recover
+            _srec = await _scene_recover(deps.project_manager)
+            if _srec.get("total_recovered") or _srec.get("errors"):
+                logger.warning("场景视图生成孤儿恢复: recovered=%s errors=%s",
+                               _srec.get("total_recovered"), _srec.get("errors"))
+        except Exception as _srec_err:
+            logger.warning("场景视图生成孤儿恢复跳过: %s", _srec_err)
         logger.info("API服务器已启动")
     except Exception as e:
         logger.error(f"初始化失败: {e}")
