@@ -21,6 +21,7 @@
 #   Agent 模块**（resources 基础设施不反向依赖 Agent runtime）。
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import time
@@ -591,6 +592,23 @@ class ResourceWriteService:
         # ---- 阶段 2：无锁调图片模型（§5 阶段2 / §14）----
         images: List[tuple] = []   # (bytes, url|None)
         seeds_used: List[Optional[int]] = []
+        saved_files: List[str] = []
+
+        async def _fail_close(err_code: str, detail_msg: str) -> dict:
+            """异常终态收口（§21）：不伪造 asset、旧 refs 保留、status=failed、诚实 record。
+            已到手的候选图保留在 generation 诊断目录（不注册、不 attach）。"""
+            diag_files = save_candidate_files(self.project_dir, look_id, generation_id,
+                                              [d for d, _ in images]) if images else []
+            async with self.store.write_lock():
+                doc = self.store.load()
+                lk = doc.looks.get(look_id)
+                if lk is not None:
+                    lk.generation_status = GenerationStatus.FAILED.value
+                    self.store.save(doc)
+            return _finish(ok=False, status="failed", error=err_code, detail=detail_msg,
+                           candidate_files=diag_files,
+                           candidate_urls=[u for _, u in images if u])
+
         try:
             refs = agnes_image_inputs(self.project_dir, basis["character_reference_snapshot"]) + \
                 agnes_image_inputs(self.project_dir, basis["clothing_reference_snapshot"])
@@ -612,20 +630,16 @@ class ResourceWriteService:
                 else:
                     raise RuntimeError("provider 未返回 url/b64（无图可保存，不伪造 asset）")
                 images.append((data, url))
+        except asyncio.CancelledError:
+            # Phase 1C1.2 cancel cleanup：任务取消/进程关闭时尽力写诚实终态，然后
+            # **re-raise，永不吞 cancel**（AI-6F 教训：吞 CancelledError 使 worker/shutdown
+            # 永挂）。清理是 best-effort——若清理本身再被取消/进程被 kill，startup
+            # orphan sweep（src/resources/recovery.py）兜底。
+            await _fail_close("cancelled",
+                              "生成被取消（任务取消/进程关闭）；已到手候选保留诊断目录，未注册未挂载")
+            raise
         except Exception as e:   # §21 provider failure：不伪造、旧 refs 保留、status=failed
-            # 已到手的候选图保留在 generation 临时目录供诊断（不注册、不 attach）
-            diag_files = save_candidate_files(self.project_dir, look_id, generation_id,
-                                              [d for d, _ in images]) if images else []
-            async with self.store.write_lock():
-                doc = self.store.load()
-                lk = doc.looks.get(look_id)
-                if lk is not None:
-                    lk.generation_status = GenerationStatus.FAILED.value
-                    self.store.save(doc)
-            return _finish(ok=False, status="failed", error="provider_failed",
-                           detail=f"{type(e).__name__}: {e}",
-                           candidate_files=diag_files,
-                           candidate_urls=[u for _, u in images if u])
+            return await _fail_close("provider_failed", f"{type(e).__name__}: {e}")
 
         # 候选图落盘（唯一 generation_id 目录，无需锁）
         saved_files = save_candidate_files(self.project_dir, look_id, generation_id,

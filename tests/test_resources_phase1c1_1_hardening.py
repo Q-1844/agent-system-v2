@@ -229,3 +229,115 @@ def test_t6_rejection_is_zero_side_effect(env):
     assert len(recs) == 1 and recs[0]["status"] == "committed"    # 只存在 A 的 record
     assert look.generation_status == "ready"
     assert len(doc.reference_assets) == 1                          # 只有 A 的 1 个候选
+
+
+# =====================================================================
+# Phase 1C1.2 — Generation Recovery（cancel cleanup + startup orphan sweep）
+# =====================================================================
+from src.resources.recovery import recover_orphaned_generations, recover_all_projects
+from src.resources.models import CharacterLook, new_look_id as _new_look_id
+
+
+class HangingForeverAgnes:
+    """provider await 永不返回（模拟 30s 生成窗口）。"""
+
+    def __init__(self):
+        self.models = {"image": "agnes-image-test"}
+
+    async def generate_image(self, prompt, *, image_refs=None, size_tier="1K",
+                             ratio="16:9", seed=None, want_b64=False):
+        await asyncio.Event().wait()
+
+
+# ---- T-R1 cancel cleanup：provider await 中任务被取消 → 诚实终态 + re-raise ----
+def test_cancel_cleanup_writes_failed_and_reraises(env):
+    ws = env["ws"]
+    look_id, _ = run(_seed_look(env))
+
+    async def scenario():
+        t = asyncio.create_task(ws.generate_look_candidates(
+            look_id, expected_revision=_current_look_rev(env, look_id),
+            agnes_client=HangingForeverAgnes()))
+        await asyncio.sleep(0.2)        # 阶段1完成（generating 落盘），已进入 provider
+        t.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await t                     # 🔴 cancel 必须向上传播（不吞）
+        return ws.store.load().looks[look_id]
+
+    look = run(scenario())
+    assert look.generation_status == "failed"          # 不卡 generating（cancel cleanup 生效）
+    rec = _read_records(env["pdir"], look_id=look_id)
+    assert len(rec) == 1 and rec[0]["status"] == "failed" and rec[0]["error"] == "cancelled"
+    # 终态后 single-flight 不阻塞：可再次生成
+    r2 = run(ws.generate_look_candidates(
+        look_id, expected_revision=_current_look_rev(env, look_id),
+        agnes_client=FakeAgnes(images=[b"AFTER-CANCEL"])))
+    assert r2["ok"] and r2["status"] == "committed"
+
+
+# ---- T-R2 startup sweep：孤儿 generating → failed + record；幂等；他人不动 ----
+def _make_orphan(env, look_id):
+    """模拟死进程磁盘态：直接把 look 置为 generating（绕过协议=崩溃语义）。"""
+    ws = env["ws"]
+    doc = ws.store.load()
+    doc.looks[look_id].generation_status = "generating"
+    ws.store.save(doc)
+
+
+def test_startup_sweep_recovers_orphan_generating(env):
+    ws = env["ws"]
+    pdir = env["pdir"]
+    look_id, _ = run(_seed_look(env))
+    healthy_id, _ = run(_seed_look(env))   # 第二个 look（正常态，必须不被触碰）
+    _make_orphan(env, look_id)
+
+    r = run(recover_orphaned_generations(pdir, pdir.name))
+    assert r["ok"] and r["scanned"] == 2 and r["recovered"] == [look_id]
+    doc = ws.store.load()
+    assert doc.looks[look_id].generation_status == "failed"
+    assert doc.looks[healthy_id].generation_status == "none"              # 健康者零改动
+    rec = _read_records(pdir, look_id=look_id)
+    assert rec[-1]["error"] == "orphaned_by_process_restart"
+    assert rec[-1]["status"] == "failed" and rec[-1]["basis"] is None     # 不臆造 basis
+    assert rec[-1]["generation_id"].startswith("gen_orphan_")
+
+    # 幂等：第二遍零恢复、零写入
+    res_bytes = (pdir / "output" / "resources.json").read_bytes()
+    r2 = run(recover_orphaned_generations(pdir, pdir.name))
+    assert r2["recovered"] == [] and r2["scanned"] == 2
+    assert (pdir / "output" / "resources.json").read_bytes() == res_bytes
+    # 恢复后 single-flight 放行：可再次生成
+    r3 = run(ws.generate_look_candidates(
+        look_id, expected_revision=_current_look_rev(env, look_id),
+        agnes_client=FakeAgnes(images=[b"AFTER-SWEEP"])))
+    assert r3["ok"] and r3["status"] == "committed"
+
+
+# ---- T-R3 recover_all_projects：多项目 + 损坏项目容错不阻塞 ----
+def test_recover_all_projects_multi_and_tolerant(tmp_path):
+    from src.resources.write_service import ResourceWriteService
+
+    # 项目 A：有孤儿（recovery 只碰 resources.json，无需 project.json）
+    pa = tmp_path / "pa"
+    (pa / "output").mkdir(parents=True)
+    ws_a = ResourceWriteService(pa, "pa")
+    lk = CharacterLook(look_id=_new_look_id(), character_name="Alice",
+                       generation_status="generating")
+    doc = ws_a.store.load()
+    doc.looks[lk.look_id] = lk
+    ws_a.store.save(doc)
+    # 项目 B：干净、无 resources.json
+    (tmp_path / "pb" / "output").mkdir(parents=True)
+    # 项目 C：resources.json 损坏（fail closed → 记 error，不阻塞其它项目）
+    pc = tmp_path / "pc"
+    (pc / "output").mkdir(parents=True)
+    (pc / "output" / "resources.json").write_text("{ broken", encoding="utf-8")
+
+    from src.utils.project_manager import ProjectManager
+    pm = ProjectManager(base_dir=str(tmp_path))
+    summary = run(recover_all_projects(pm))
+    assert summary["total_recovered"] == 1
+    assert summary["projects"]["pa"]["recovered"] == 1
+    assert summary["projects"]["pb"]["recovered"] == 0
+    assert "pc" in summary["errors"] and summary["ok"] is False
+    assert ws_a.store.load().looks[lk.look_id].generation_status == "failed"

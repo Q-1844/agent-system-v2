@@ -122,6 +122,16 @@ async def startup():
         # SenseNova 文本客户端（Agent 模型切换用；sensenova 块不完整时为 None，运行时回落 Agnes）
         deps.sensenova_text_client = deps.pipeline_controller.sensenova_text_client
         deps.project_manager = deps.pipeline_controller.project_manager
+        # Production Resources 1C1.2：启动时清理孤儿 generating（崩溃/kill 遗留；
+        # 此刻无 in-flight generation，判定无歧义）。失败仅告警，不阻塞启动。
+        try:
+            from src.resources.recovery import recover_all_projects
+            _rec = await recover_all_projects(deps.project_manager)
+            if _rec.get("total_recovered") or _rec.get("errors"):
+                logger.warning("资源生成孤儿恢复: recovered=%s errors=%s",
+                               _rec.get("total_recovered"), _rec.get("errors"))
+        except Exception as _rec_err:
+            logger.warning("资源生成孤儿恢复跳过: %s", _rec_err)
         logger.info("API服务器已启动")
     except Exception as e:
         logger.error(f"初始化失败: {e}")

@@ -547,10 +547,11 @@ def _make_basis(env, look_id, *, model_id="agnes-image-test", size_tier="1K", ra
 
 
 async def _seed_look(env, *, clothing_name="Black Coat", clothing_desc="long black wool coat"):
-    """建 clothing + look（真实 Alice + 三视图文件），返回 (look_id, clothing_id)。"""
+    """建 clothing + look（真实 Alice + 三视图文件），返回 (look_id, clothing_id)。
+    每次取当前 document revision（可在一个用例内多次调用）。"""
     ws = env["ws"]
     r = await ws.create_clothing(name=clothing_name, description=clothing_desc,
-                                 expected_document_revision=env["doc_rev"])
+                                 expected_document_revision=document_revision(ws.store.load()))
     assert r["ok"], r
     r2 = await ws.create_look(character_name="Alice", label="Alice · Black Coat",
                               clothing_id=r["target"],
