@@ -28,14 +28,17 @@ from src.core.write_lock import project_write_lock
 from .store import ResourceStore
 
 from .models import (
-    ApprovalState, CharacterLook, Clothing, Prop, ReferenceAsset,
-    ResourceDocument, ResourceOrigin, ResourceSchemaError,
+    ApprovalState, CharacterLook, CharacterReferenceComposition, Clothing, Prop,
+    ReferenceAsset, ResourceDocument, ResourceOrigin, ResourceSchemaError,
     document_revision,
-    new_clothing_id, new_look_id, new_prop_id, new_reference_asset_id,
+    new_clothing_id, new_composition_id, new_look_id, new_prop_id, new_reference_asset_id,
 )
 
 SHARED_LOCK_KEY = "__shared_library__"
-SHARED_SCHEMA_VERSION = 1
+# schema v2（Phase 1C5）：新增 compositions 段。惰性迁移契约与 ResourceDocument 相同：
+# v1 可读（compositions={}，in-memory 规范化 v2），纯读不写回，首次写持久化 v2，未知 fail closed。
+SHARED_SCHEMA_VERSION = 2
+_SUPPORTED_SHARED_SCHEMA_VERSIONS = (1, 2)
 _IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 
 
@@ -101,6 +104,7 @@ class SharedDocument:
     looks: Dict[str, CharacterLook] = field(default_factory=dict)
     clothings: Dict[str, Clothing] = field(default_factory=dict)
     props: Dict[str, Prop] = field(default_factory=dict)
+    compositions: Dict[str, CharacterReferenceComposition] = field(default_factory=dict)
     reference_assets: Dict[str, ReferenceAsset] = field(default_factory=dict)
     meta: Dict[str, SharedEntryMeta] = field(default_factory=dict)
 
@@ -111,6 +115,7 @@ class SharedDocument:
             "looks": {k: v.to_dict() for k, v in self.looks.items()},
             "clothings": {k: v.to_dict() for k, v in self.clothings.items()},
             "props": {k: v.to_dict() for k, v in self.props.items()},
+            "compositions": {k: v.to_dict() for k, v in self.compositions.items()},
             "reference_assets": {k: v.to_dict() for k, v in self.reference_assets.items()},
             "meta": {k: v.to_dict() for k, v in self.meta.items()},
         }
@@ -119,14 +124,19 @@ class SharedDocument:
     def from_dict(cls, raw: dict) -> "SharedDocument":
         raw = dict(raw or {})
         sv = raw.get("schema_version", SHARED_SCHEMA_VERSION)
-        if sv != SHARED_SCHEMA_VERSION:
-            raise ResourceSchemaError(f"unsupported shared schema_version: {sv}")
+        if sv not in _SUPPORTED_SHARED_SCHEMA_VERSIONS:
+            raise ResourceSchemaError(
+                f"unsupported shared schema_version: {sv} "
+                f"(supported: {list(_SUPPORTED_SHARED_SCHEMA_VERSIONS)})")
+        # v1 → in-memory 规范化 v2（compositions={}）；纯读不写盘，首写才持久化 v2。
         return cls(
-            schema_version=sv,
+            schema_version=SHARED_SCHEMA_VERSION,
             characters={k: SharedCharacter.from_dict(v) for k, v in (raw.get("characters") or {}).items()},
             looks={k: CharacterLook.from_dict(v) for k, v in (raw.get("looks") or {}).items()},
             clothings={k: Clothing.from_dict(v) for k, v in (raw.get("clothings") or {}).items()},
             props={k: Prop.from_dict(v) for k, v in (raw.get("props") or {}).items()},
+            compositions={k: CharacterReferenceComposition.from_dict(v)
+                          for k, v in (raw.get("compositions") or {}).items()},
             reference_assets={k: ReferenceAsset.from_dict(v) for k, v in (raw.get("reference_assets") or {}).items()},
             meta={k: SharedEntryMeta.from_dict(v) for k, v in (raw.get("meta") or {}).items()},
         )
@@ -211,6 +221,16 @@ class SharedStore:
                             "character": (m.character_snapshot if m else None),
                             "version": (m.version if m else None),
                             "origin_project": (m.origin_project if m else None)})
+        for rid, c in sdoc.compositions.items():
+            if kind in (None, "all", "composition"):
+                m = sdoc.meta.get(rid)
+                out.append({"id": rid, "type": "composition", "name": c.label,
+                            "character": (m.character_snapshot if m else None),
+                            "character_name": c.character_name,
+                            "look_id": c.look_id,
+                            "prop_bindings": len(c.prop_bindings),
+                            "version": (m.version if m else None),
+                            "origin_project": (m.origin_project if m else None)})
         return out
 
     def read_shared(self, shared_id: str) -> Optional[dict]:
@@ -224,6 +244,8 @@ class SharedStore:
             base, kind = sdoc.clothings[shared_id].to_dict(), "clothing"
         elif shared_id in sdoc.props:
             base, kind = sdoc.props[shared_id].to_dict(), "prop"
+        elif shared_id in sdoc.compositions:
+            base, kind = sdoc.compositions[shared_id].to_dict(), "composition"
         elif shared_id in sdoc.reference_assets:
             base, kind = sdoc.reference_assets[shared_id].to_dict(), "reference_asset"
         if base is None:
@@ -277,7 +299,7 @@ class SharedLibraryService:
 
     # ---------- publish ----------
     async def publish(self, resource_id: str) -> dict:
-        """发布 look_/clothing_/prop_ 资源到共享库（character 走 publish_character）。
+        """发布 look_/clothing_/prop_/comp_ 资源到共享库（character 走 publish_character）。
         只读项目 canonical；幂等 republish=同 shared id 版本+1。"""
         op = "shared.publish"
         if resource_id.startswith("look_"):
@@ -286,6 +308,8 @@ class SharedLibraryService:
             return await self._publish_typed(resource_id, "clothings")
         if resource_id.startswith("prop_"):
             return await self._publish_typed(resource_id, "props")
+        if resource_id.startswith("comp_"):
+            return await self._publish_composition(resource_id)
         return {"ok": False, "operation": op, "error": "not_found",
                 "detail": f"不支持的发布目标（character 用 publish_character）: {resource_id}"}
 
@@ -347,13 +371,20 @@ class SharedLibraryService:
             meta.history.append({"version": meta.version, "published_at": time.time()})
             # 媒体映射（republish 复用映射，同 shared asset id 刷新内容）
             new_ref_ids: List[str] = []
+            ref_map: Dict[str, str] = {}
             for aid, src in media_sources.items():
                 shared_aid = meta.asset_map.get(aid) or new_reference_asset_id()
                 meta.asset_map[aid] = shared_aid
                 ra = self.shared.copy_media_in(src, shared_aid)
                 sdoc.reference_assets[shared_aid] = ra
                 new_ref_ids.append(shared_aid)
+                ref_map[aid] = shared_aid
             entry.reference_asset_ids = new_ref_ids
+            # Phase 1C5 修复：approved/cover remap 到 shared 资产（不留悬空项目 asset id）
+            entry.approved_reference_asset_ids = [
+                ref_map[a] for a in original.approved_reference_asset_ids if a in ref_map]
+            entry.cover_asset_id = (ref_map.get(original.cover_asset_id)
+                                    if original.cover_asset_id else None)
             self.shared.save(sdoc)
             # 写后重读验证
             back = self.shared.load()
@@ -425,18 +456,152 @@ class SharedLibraryService:
                     meta.character_snapshot = char_snapshot
             meta.history.append({"version": meta.version, "published_at": time.time()})
             new_ref_ids: List[str] = []
+            ref_map: Dict[str, str] = {}
             for aid, src in media_sources.items():
                 shared_aid = meta.asset_map.get(aid) or new_reference_asset_id()
                 meta.asset_map[aid] = shared_aid
                 sdoc.reference_assets[shared_aid] = self.shared.copy_media_in(src, shared_aid)
                 new_ref_ids.append(shared_aid)
+                ref_map[aid] = shared_aid
             entry.reference_asset_ids = new_ref_ids
+            # Phase 1C5 修复：approved/cover remap 到 shared 资产（Composition 生成消费
+            # look.approved_reference_asset_ids，悬空 id 会让导入方 fail closed）
+            entry.approved_reference_asset_ids = [
+                ref_map[a] for a in look.approved_reference_asset_ids if a in ref_map]
+            entry.cover_asset_id = (ref_map.get(look.cover_asset_id)
+                                    if look.cover_asset_id else None)
             self.shared.save(sdoc)
             back = self.shared.load()
             verified = meta.resource_id in back.looks
             return {"ok": True, "operation": op, "kind": "look",
                     "shared_id": meta.resource_id, "version": meta.version,
                     "shared_resource_ids": new_ref_ids, "verified": verified}
+
+    async def _publish_composition(self, original_id: str) -> dict:
+        """发布 CharacterReferenceComposition（§17）。依赖链显式（与 look→clothing 同哲学，
+        不隐式捆绑发布）：Character / Look / Look 的 Clothing / 全部绑定 Prop 必须已发布；
+        共享条目 FK 全部 remap 到 shared 侧 id；候选媒体 copy-on-publish（asset_map 复用）。"""
+        op = "shared.publish_composition"
+        proj_doc = self.store.load()
+        comp = proj_doc.compositions.get(original_id)
+        if comp is None:
+            return {"ok": False, "operation": op, "error": "not_found",
+                    "detail": f"项目 Composition 不存在: {original_id}"}
+        # ---- 依赖检查（显式动作链，缺哪个报哪个）----
+        missing: List[dict] = []
+        async with self.shared.write_lock():
+            sdoc0 = self.shared.load()
+            look_meta = self._find_meta_by_origin(sdoc0, "look", comp.look_id)
+            if look_meta is None:
+                missing.append({"kind": "look", "id": comp.look_id})
+                shared_look_id = None
+            else:
+                shared_look_id = look_meta.resource_id
+            look = proj_doc.looks.get(comp.look_id)
+            shared_clothing_id = None
+            if look is not None and look.clothing_id:
+                cm = self._find_meta_by_origin(sdoc0, "clothing", look.clothing_id)
+                if cm is None:
+                    missing.append({"kind": "clothing", "id": look.clothing_id})
+                else:
+                    shared_clothing_id = cm.resource_id
+            prop_id_map: Dict[str, str] = {}
+            for b in comp.prop_bindings:
+                pm = self._find_meta_by_origin(sdoc0, "prop", b.prop_id)
+                if pm is None:
+                    missing.append({"kind": "prop", "id": b.prop_id})
+                else:
+                    prop_id_map[b.prop_id] = pm.resource_id
+            char_meta = self._find_meta_by_origin(sdoc0, "character", comp.character_name)
+            if char_meta is None:
+                missing.append({"kind": "character", "id": comp.character_name})
+        if missing:
+            return {"ok": False, "operation": op, "error": "dependency_not_published",
+                    "detail": "Composition 发布要求其全部依赖先发布（显式动作链）",
+                    "missing_dependencies": missing,
+                    "hint": "先 publish character / look（clothing 随 look 链）/ 各绑定 prop"}
+        # 候选媒体快照
+        media_sources: Dict[str, Path] = {}
+        for aid in comp.reference_asset_ids:
+            a = proj_doc.reference_assets.get(aid)
+            if a is None:
+                continue
+            p = Path(self.project_dir) / a.local if a.local and not Path(a.local).is_absolute() \
+                else Path(a.local or "")
+            if p.is_file():
+                media_sources[aid] = p
+        # look 身份快照（沿用 look meta；composition meta 存发布时角色身份）
+        try:
+            project = ProjectStore(self.project_dir).load()
+        except FileNotFoundError:
+            project = None
+        char = project.get_character(comp.character_name) if project else None
+        char_snapshot = ({"name": char.name, "description_en": char.description_en or ""}
+                         if char is not None else None)
+        async with self.shared.write_lock():
+            sdoc = self.shared.load()
+            meta = self._find_meta_by_origin(sdoc, "composition", original_id)
+            if meta is None:
+                new_id = new_composition_id()
+                entry = CharacterReferenceComposition(
+                    composition_id=new_composition_id(), character_name=comp.character_name,
+                    label=comp.label, look_id=shared_look_id,
+                    prop_bindings=[type(b)(prop_id=prop_id_map[b.prop_id], relation=b.relation,
+                                           anchor=b.anchor,
+                                           visual_state_note=b.visual_state_note,
+                                           required_visibility=b.required_visibility)
+                                   for b in comp.prop_bindings],
+                    pose_note=comp.pose_note,
+                    composition_description=comp.composition_description)
+                entry.scope = "shared"
+                entry.origin = ResourceOrigin(source="shared_library")
+                meta = SharedEntryMeta(resource_id=new_id, kind="composition", version=1,
+                                       origin_project=self.project_name, original_id=original_id,
+                                       character_snapshot=char_snapshot)
+                sdoc.meta[new_id] = meta
+                sdoc.compositions[new_id] = entry
+            else:
+                meta.version += 1
+                entry = sdoc.compositions[meta.resource_id]
+                entry.character_name = comp.character_name
+                entry.label = comp.label
+                entry.look_id = shared_look_id
+                entry.prop_bindings = [type(b)(prop_id=prop_id_map[b.prop_id], relation=b.relation,
+                                               anchor=b.anchor,
+                                               visual_state_note=b.visual_state_note,
+                                               required_visibility=b.required_visibility)
+                                       for b in comp.prop_bindings]
+                entry.pose_note = comp.pose_note
+                entry.composition_description = comp.composition_description
+                entry.updated_at = time.time()
+                if char_snapshot:
+                    meta.character_snapshot = char_snapshot
+            meta.history.append({"version": meta.version, "published_at": time.time()})
+            # 候选媒体（republish 复用 asset_map，同 shared asset id 刷新内容）
+            new_ref_ids: List[str] = []
+            ref_map: Dict[str, str] = {}
+            for aid, src in media_sources.items():
+                shared_aid = meta.asset_map.get(aid) or new_reference_asset_id()
+                meta.asset_map[aid] = shared_aid
+                sdoc.reference_assets[shared_aid] = self.shared.copy_media_in(src, shared_aid)
+                new_ref_ids.append(shared_aid)
+                ref_map[aid] = shared_aid
+            entry.reference_asset_ids = new_ref_ids
+            # approved ⊆ candidates；cover remap（不可映射的项按当前快照缺失处理，诚实丢弃）
+            entry.approved_reference_asset_ids = [ref_map[a] for a in comp.approved_reference_asset_ids
+                                                  if a in ref_map]
+            entry.cover_asset_id = ref_map.get(comp.cover_asset_id) if comp.cover_asset_id else None
+            entry.approval_status = comp.approval_status
+            entry.generation_status = comp.generation_status   # 发布快照（导入方按同状态落盘）
+            self.shared.save(sdoc)
+            back = self.shared.load()
+            verified = meta.resource_id in back.compositions
+            return {"ok": True, "operation": op, "kind": "composition",
+                    "shared_id": meta.resource_id, "version": meta.version,
+                    "shared_resource_ids": new_ref_ids,
+                    "shared_look_id": shared_look_id,
+                    "shared_prop_ids": prop_id_map,
+                    "verified": verified}
 
     async def publish_character(self, character_name: str) -> dict:
         """发布项目 Character（三视图母版）到共享库。只读项目 canonical。"""
@@ -512,6 +677,8 @@ class SharedLibraryService:
                 kind = "look"
             elif shared_id in sdoc.characters:
                 kind = "character"
+            elif shared_id in sdoc.compositions:
+                kind = "composition"
             if kind is None:
                 return {"ok": False, "operation": op, "error": "not_found",
                         "detail": f"共享资源不存在: {shared_id}"}
@@ -535,6 +702,8 @@ class SharedLibraryService:
                         bundle[lk.clothing_id] = "clothing"
             if kind == "character":
                 return await self._import_character(sdoc, shared_id, meta, expected_document_revision)
+            if kind == "composition":
+                return self._import_composition(sdoc, shared_id, meta, doc)
             # look 导入前校验角色存在
             if kind == "look":
                 try:
@@ -579,6 +748,105 @@ class SharedLibraryService:
                                   shared_resource_id=shared_aid,
                                   shared_version=None, imported_at=_now_iso()))
         return new_id
+
+    def _import_composition(self, sdoc: SharedDocument, shared_id: str,
+                            meta: Optional[SharedEntryMeta], doc: ResourceDocument) -> dict:
+        """导入共享 Composition（caller 已持项目锁且 OCC 通过；由本方法完成写入与 save）。
+
+        自动捆绑（带查重，与 look→clothing 同语义）：shared look（及其 clothing）+ 各绑定
+        prop——项目内已有 origin 指向同一共享条目的副本则 FK 直连既有副本。要求目标项目
+        已存在同名 Character。全部 id（look/prop/candidate refs/cover）remap 后建项目副本。"""
+        op = "shared.import_composition"
+        from .models import CompositionPropBinding
+        scomp = sdoc.compositions[shared_id]
+        # ① 目标项目必须有同名 Character
+        try:
+            project = ProjectStore(self.project_dir).load()
+        except FileNotFoundError:
+            project = None
+        if project is None or project.get_character(scomp.character_name) is None:
+            return {"ok": False, "operation": op, "error": "character_not_found",
+                    "detail": f"目标项目缺少同名 Character '{scomp.character_name}'"
+                              f"（先导入/创建角色再导入 Composition）"}
+        # ② bundle（查重：已有 origin 指向同一共享条目 → 不重复导入）
+        bundle: Dict[str, str] = {}
+        slook_id = scomp.look_id
+        if slook_id and slook_id in sdoc.looks and \
+                not any(l.origin and l.origin.shared_resource_id == slook_id
+                        for l in doc.looks.values()):
+            bundle[slook_id] = "look"
+            sl = sdoc.looks[slook_id]
+            if sl.clothing_id and sl.clothing_id in sdoc.clothings and \
+                    not any(c.origin and c.origin.shared_resource_id == sl.clothing_id
+                            for c in doc.clothings.values()):
+                bundle[sl.clothing_id] = "clothing"
+        for b in scomp.prop_bindings:
+            if b.prop_id in sdoc.props and \
+                    not any(p.origin and p.origin.shared_resource_id == b.prop_id
+                            for p in doc.props.values()):
+                bundle[b.prop_id] = "prop"
+        imported = self._do_import(sdoc, bundle, doc)
+        # ③ FK 解析（新导入副本 或 项目内既有副本）
+        new_look_id = imported.get(slook_id)
+        if new_look_id is None and slook_id:
+            for l in doc.looks.values():
+                if l.origin and l.origin.shared_resource_id == slook_id:
+                    new_look_id = l.look_id
+                    break
+        new_prop_ids: Dict[str, Optional[str]] = {}
+        for b in scomp.prop_bindings:
+            nid = imported.get(b.prop_id)
+            if nid is None:
+                for p in doc.props.values():
+                    if p.origin and p.origin.shared_resource_id == b.prop_id:
+                        nid = p.prop_id
+                        break
+            new_prop_ids[b.prop_id] = nid
+        unresolved = [pid for pid, nid in new_prop_ids.items() if nid is None]
+        if (slook_id and new_look_id is None) or unresolved:
+            return {"ok": False, "operation": op, "error": "dependency_resolution_failed",
+                    "detail": "Composition 依赖无法解析（共享条目 FK 悬空）",
+                    "unresolved_look": slook_id if new_look_id is None else None,
+                    "unresolved_props": unresolved}
+        # ④ 候选媒体 copy-on-import + remap
+        new_ref_ids: List[str] = []
+        ref_map: Dict[str, str] = {}
+        for aid in scomp.reference_asset_ids:
+            new_aid = self._copy_media_to_project(sdoc, aid, doc, purpose="composition")
+            if new_aid:
+                ref_map[aid] = new_aid
+                new_ref_ids.append(new_aid)
+        # ⑤ 项目副本（approved ⊆ candidates 不变式；generation/approval 状态按发布快照保留）
+        new_comp = CharacterReferenceComposition(
+            composition_id=new_composition_id(),
+            character_name=scomp.character_name, label=scomp.label,
+            look_id=new_look_id or "",
+            prop_bindings=[CompositionPropBinding(
+                prop_id=new_prop_ids[b.prop_id], relation=b.relation, anchor=b.anchor,
+                visual_state_note=b.visual_state_note,
+                required_visibility=b.required_visibility)
+                for b in scomp.prop_bindings if new_prop_ids.get(b.prop_id)],
+            pose_note=scomp.pose_note,
+            composition_description=scomp.composition_description,
+            reference_asset_ids=new_ref_ids,
+            approved_reference_asset_ids=[ref_map[a] for a in scomp.approved_reference_asset_ids
+                                          if a in ref_map],
+            cover_asset_id=(ref_map.get(scomp.cover_asset_id) if scomp.cover_asset_id else None),
+            generation_status=scomp.generation_status,
+            approval_status=scomp.approval_status,
+            origin=ResourceOrigin(source="shared_library", shared_resource_id=shared_id,
+                                  shared_version=(meta.version if meta else None),
+                                  imported_at=_now_iso()))
+        doc.compositions[new_comp.composition_id] = new_comp
+        self.store.save(doc)
+        doc_rev = document_revision(self.store.load())
+        return {"ok": True, "operation": op, "kind": "composition",
+                "imported_id": new_comp.composition_id, "shared_id": shared_id,
+                "version": (meta.version if meta else None),
+                "imported_bundle": dict(imported),
+                "look_id": new_look_id,
+                "prop_ids": {k: v for k, v in new_prop_ids.items()},
+                "document_revision_after": doc_rev}
 
     def _do_import(self, sdoc: SharedDocument, bundle: Dict[str, str],
                    doc: ResourceDocument) -> Dict[str, str]:
@@ -650,6 +918,17 @@ class SharedLibraryService:
             bucket = (doc.clothings if k == "clothing" else
                       doc.props if k == "prop" else doc.looks)
             bucket[imported[sid]].reference_asset_ids = new_refs
+            # Phase 1C5 修复（Composition 使 approved refs 成为生成输入，必须可解析）：
+            # approved/cover 一并 remap 到项目内新资产；无法 remap 的项诚实丢弃，
+            # approved 清空则 approval_status 回 unreviewed（不保留悬空审批）。
+            target = bucket[imported[sid]]
+            target.approved_reference_asset_ids = [
+                asset_map[a] for a in entry.approved_reference_asset_ids if a in asset_map]
+            target.cover_asset_id = (asset_map.get(entry.cover_asset_id)
+                                     if entry.cover_asset_id else None)
+            if not target.approved_reference_asset_ids \
+                    and target.approval_status == ApprovalState.APPROVED.value:
+                target.approval_status = ApprovalState.UNREVIEWED.value
         return imported
 
     async def _import_character(self, sdoc: SharedDocument, shared_id: str,

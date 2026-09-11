@@ -91,6 +91,9 @@ _ERROR_STATUS = {
     "clothing_not_published": 409,
     "character_exists": 409,
     "missing_shared_media": 409,
+    # Phase 1C5 Composition Shared Library
+    "dependency_not_published": 409,
+    "dependency_resolution_failed": 409,
     # Phase 1C5 Composition
     "look_not_found": 404,
     "look_not_approved": 409,

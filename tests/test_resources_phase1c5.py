@@ -1241,3 +1241,223 @@ def test_t26_t27_t28_approve_gate_then_pass_then_revoke(penv):
     assert c.cover_asset_id is None and asset_id in c.reference_asset_ids
     r6 = run(ws.revoke_composition_approval(comp_id, asset_id, expected_revision=rev()))
     assert r6["ok"] and r6.get("unchanged") is True
+
+
+# ============ Commit E：Shared Library publish/import（§17）============
+from src.resources.shared_library import SharedLibraryService, SharedStore, SHARED_SCHEMA_VERSION
+
+
+async def _seed_shared_ready_project(env, shared_dir):
+    """A 项目：approved look + approved props + composition（候选已生成已审批）
+    + 全依赖发布链（character→clothing→look→props→composition）。
+    返回 dict（含 svc、各 shared id、candidate asset id）。"""
+    ws = env["ws"]
+    comp_id, look_id, prop_ids = await _seed_composition(env)
+    g = await ws.generate_composition_candidates(
+        comp_id, expected_revision=_comp_rev(env, comp_id),
+        agnes_client=FakeAgnes(images=[b"SHARE-CAND"]))
+    assert g["ok"], g
+    cand_asset = g["candidate_asset_ids"][0]
+    await review_composition_candidates(env["pdir"], comp_id,
+                                        agnes_client=FakeVision(_make_comp_json(prop_ids)))
+    r = await ws.approve_composition_candidate(comp_id, cand_asset,
+                                               expected_revision=_comp_rev(env, comp_id))
+    assert r["ok"], r
+    svc = SharedLibraryService(env["pdir"], env["pdir"].name, shared_dir=shared_dir)
+    r_char = await svc.publish_character("Alice")
+    assert r_char["ok"], r_char
+    look = ws.store.load().looks[look_id]
+    r_cloth = await svc.publish(look.clothing_id)
+    assert r_cloth["ok"], r_cloth
+    r_look = await svc.publish(look_id)
+    assert r_look["ok"], r_look
+    shared_props = {}
+    for pid in prop_ids:
+        rp = await svc.publish(pid)
+        assert rp["ok"], rp
+        shared_props[pid] = rp["shared_id"]
+    r_comp = await svc.publish(comp_id)
+    assert r_comp["ok"], r_comp
+    return {"comp_id": comp_id, "look_id": look_id, "prop_ids": prop_ids,
+            "cand_asset": cand_asset, "svc": svc, "r_comp": r_comp,
+            "shared_props": shared_props, "look": look}
+
+
+def test_t29_publish_composition_full_dependency_chain(penv, tmp_path):
+    shared_dir = tmp_path / "shared_library"
+    info = run(_seed_shared_ready_project(penv, shared_dir))
+    sdoc = SharedStore(shared_dir).load()
+    assert sdoc.schema_version == SHARED_SCHEMA_VERSION == 2
+    entry = sdoc.compositions[info["r_comp"]["shared_id"]]
+    assert entry.scope == "shared"
+    assert entry.look_id == info["r_comp"]["shared_look_id"]
+    assert [b.prop_id for b in entry.prop_bindings] == list(info["shared_props"].values())
+    assert len(entry.reference_asset_ids) == 1
+    assert entry.approved_reference_asset_ids == entry.reference_asset_ids   # 发布快照已审批
+    # 媒体真实复制
+    sa = sdoc.reference_assets[entry.reference_asset_ids[0]]
+    assert (shared_dir / "media" / Path(sa.local).name).is_file()
+    # 项目 canonical 零改动（publish 只读项目）
+    # （_seed_shared_ready_project 结束时的 canonical 与 publish 前一致——用 origin None 验证）
+    proj_comp = penv["ws"].store.load().compositions[info["comp_id"]]
+    assert proj_comp.origin is None
+    # republish：同 shared id、version+1
+    r2 = run(info["svc"].publish(info["comp_id"]))
+    assert r2["ok"] and r2["shared_id"] == info["r_comp"]["shared_id"] and r2["version"] == 2
+
+
+def test_t29b_publish_dependency_not_published(penv, tmp_path):
+    shared_dir = tmp_path / "shared_library2"
+    ws = penv["ws"]
+    comp_id, look_id, prop_ids = run(_seed_composition(penv))
+    svc = SharedLibraryService(penv["pdir"], penv["pdir"].name, shared_dir=shared_dir)
+    r = run(svc.publish(comp_id))
+    assert r["ok"] is False and r["error"] == "dependency_not_published"
+    kinds = {m["kind"] for m in r["missing_dependencies"]}
+    assert kinds == {"character", "look", "clothing", "prop"}
+
+
+def test_t30_t31_import_composition_and_id_remap(penv, tmp_path):
+    shared_dir = tmp_path / "shared_library"
+    info = run(_seed_shared_ready_project(penv, shared_dir))
+    shared_bytes_before = (shared_dir / "resources.json").read_bytes()
+    # B 项目：有同名 Alice（独立目录）
+    bdir = tmp_path / "projb"
+    (bdir / "output").mkdir(parents=True)
+    from src.core.models import Project, Character, Asset, ShotStatus
+    proj = Project(name=bdir.name)
+    c = Character(name="Alice", description_en="a girl with silver hair")
+    c.views = {"front": Asset(local="o/alice_front_seg.png", url="https://x/front",
+                              status=ShotStatus.DONE.value)}
+    proj.characters = [c]
+    ProjectStore(bdir).save(proj)
+    (bdir / "o").mkdir(exist_ok=True)
+    (bdir / "o" / "alice_front_seg.png").write_bytes(b"PNG-B")
+
+    svc_b = SharedLibraryService(bdir, bdir.name, shared_dir=shared_dir)
+    from src.resources.store import ResourceStore as _RS
+    doc_rev = document_revision(_RS(bdir, bdir.name).load())
+    r = run(svc_b.import_resource(info["r_comp"]["shared_id"], expected_document_revision=doc_rev))
+    assert r["ok"], r
+    # T31 remap 全链
+    bdoc = _RS(bdir, bdir.name).load()
+    comp = bdoc.compositions[r["imported_id"]]
+    assert comp.composition_id != info["r_comp"]["shared_id"]        # 新 id
+    assert comp.scope == "project"
+    assert comp.look_id == r["look_id"] and comp.look_id in bdoc.looks
+    assert [b.prop_id for b in comp.prop_bindings] == \
+        [r["prop_ids"][info["shared_props"][p]] for p in info["prop_ids"]]
+    assert comp.origin.shared_resource_id == info["r_comp"]["shared_id"]
+    assert comp.origin.source == "shared_library"
+    # 候选媒体复制进项目且可读
+    assert len(comp.reference_asset_ids) == 1
+    a = bdoc.reference_assets[comp.reference_asset_ids[0]]
+    assert (bdir / a.local).is_file()
+    # approved/cover remap 到项目内资产（不悬空）
+    assert comp.approved_reference_asset_ids == comp.reference_asset_ids
+    assert comp.cover_asset_id in comp.reference_asset_ids
+    assert comp.approval_status == "approved" and comp.generation_status == "ready"
+    # 捆绑导入的 look：approved refs 也 remap 到 B 项目内资产（1C5 修复验证）
+    blook = bdoc.looks[comp.look_id]
+    assert blook.origin.shared_resource_id == info["r_comp"]["shared_look_id"]
+    assert blook.approved_reference_asset_ids and \
+        all(aid in bdoc.reference_assets for aid in blook.approved_reference_asset_ids)
+    # 捆绑的 props 存在且 origin 指向共享母版
+    for b in comp.prop_bindings:
+        assert b.prop_id in bdoc.props
+        assert bdoc.props[b.prop_id].origin.shared_resource_id in info["shared_props"].values()
+    # shared 字节不变
+    assert (shared_dir / "resources.json").read_bytes() == shared_bytes_before
+
+
+def test_t30b_import_composition_without_character_rejected(penv, tmp_path):
+    shared_dir = tmp_path / "shared_library3"
+    info = run(_seed_shared_ready_project(penv, shared_dir))
+    bdir = tmp_path / "projc"
+    (bdir / "output").mkdir(parents=True)
+    from src.core.models import Project
+    ProjectStore(bdir).save(Project(name=bdir.name))    # 无 Alice
+    svc_b = SharedLibraryService(bdir, bdir.name, shared_dir=shared_dir)
+    from src.resources.store import ResourceStore as _RS
+    r = run(svc_b.import_resource(info["r_comp"]["shared_id"],
+                                  expected_document_revision=document_revision(_RS(bdir, bdir.name).load())))
+    assert r["ok"] is False and r["error"] == "character_not_found"
+    # OCC stale
+    (bdir / "output" / "resources.json").unlink(missing_ok=True)
+    r2 = run(svc_b.import_resource(info["r_comp"]["shared_id"], expected_document_revision="badrev"))
+    assert r2["ok"] is False and r2["error"] == "stale_revision"
+
+
+def test_t32_t33_ab_isolation_and_shared_untouched(penv, tmp_path):
+    shared_dir = tmp_path / "shared_library"
+    info = run(_seed_shared_ready_project(penv, shared_dir))
+    shared_path = shared_dir / "resources.json"
+    shared_before = shared_path.read_bytes()
+
+    def _make_project(name):
+        pdir = tmp_path / name
+        (pdir / "output").mkdir(parents=True)
+        from src.core.models import Project, Character, Asset, ShotStatus
+        proj = Project(name=name)
+        c = Character(name="Alice", description_en="a girl with silver hair")
+        c.views = {"front": Asset(local="o/alice_front_seg.png", url="https://x/f",
+                                  status=ShotStatus.DONE.value)}
+        proj.characters = [c]
+        ProjectStore(pdir).save(proj)
+        (pdir / "o").mkdir(exist_ok=True)
+        (pdir / "o" / "alice_front_seg.png").write_bytes(b"PNG")
+        return pdir
+
+    # B 导入
+    bdir = _make_project("projb")
+    svc_b = SharedLibraryService(bdir, bdir.name, shared_dir=shared_dir)
+    from src.resources.store import ResourceStore as _RS
+    rb = run(svc_b.import_resource(info["r_comp"]["shared_id"],
+                                   expected_document_revision=document_revision(_RS(bdir, bdir.name).load())))
+    assert rb["ok"], rb
+    # C 导入（独立副本）
+    cdir = _make_project("projc")
+    svc_c = SharedLibraryService(cdir, cdir.name, shared_dir=shared_dir)
+    rc = run(svc_c.import_resource(info["r_comp"]["shared_id"],
+                                   expected_document_revision=document_revision(_RS(cdir, cdir.name).load())))
+    assert rc["ok"], rc
+    assert rb["imported_id"] != rc["imported_id"]      # 各自独立副本
+    # A 改原版 + B 改副本 → shared 字节不变
+    ws_a = penv["ws"]
+    run(ws_a.update_composition(info["comp_id"], {"label": "A-edited"},
+                                expected_revision=_comp_rev(penv, info["comp_id"])))
+    wb = ResourceWriteService(bdir, bdir.name)
+    run(wb.update_composition(rb["imported_id"], {"label": "B-edited"},
+                              expected_revision=_comp_rev({"ws": wb}, rb["imported_id"])))
+    assert shared_path.read_bytes() == shared_before   # T33：shared 字节级不变
+    # C 的副本不受 A/B 影响（保持发布版本内容）
+    cdoc = _RS(cdir, cdir.name).load()
+    assert cdoc.compositions[rc["imported_id"]].label != "A-edited"
+    assert cdoc.compositions[rc["imported_id"]].label != "B-edited"
+    # B 再导入同一共享条目 → 仍获得共享发布版本（新副本，FK 直连既有 props/look 副本）
+    rb2 = run(svc_b.import_resource(info["r_comp"]["shared_id"],
+                                    expected_document_revision=document_revision(_RS(bdir, bdir.name).load())))
+    assert rb2["ok"], rb2
+    bdoc = _RS(bdir, bdir.name).load()
+    comp2 = bdoc.compositions[rb2["imported_id"]]
+    assert comp2.look_id == rb["look_id"]              # 查重：复用既有 look 副本，不重复导入
+
+
+def test_shared_v1_file_lazy_upgrade(tmp_path):
+    """共享库 v1 文件：可读（compositions={}），纯读零写回。"""
+    shared_dir = tmp_path / "shared_libraryv1"
+    shared_dir.mkdir()
+    raw = {"schema_version": 1, "characters": {}, "looks": {}, "clothings": {},
+           "props": {}, "reference_assets": {}, "meta": {}}
+    p = shared_dir / "resources.json"
+    p.write_text(_json.dumps(raw), encoding="utf-8")
+    before = p.read_bytes()
+    store = SharedStore(shared_dir)
+    doc = store.load()
+    assert doc.schema_version == SHARED_SCHEMA_VERSION == 2
+    assert doc.compositions == {}
+    assert p.read_bytes() == before
+    with pytest.raises(ResourceSchemaError):
+        (shared_dir / "bad").mkdir()
+        (shared_dir / "bad" / "resources.json").write_text('{"schema_version": 7}')
+        SharedStore(shared_dir / "bad").load()
