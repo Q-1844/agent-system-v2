@@ -909,6 +909,11 @@ class ResourceWriteService:
 
     async def detach_prop_reference(self, prop_id: str, asset_id: str, *,
                                     expected_revision: str) -> dict:
+        """解除 Prop ↔ ReferenceAsset 绑定（幂等）。
+        Phase 1C5 扩展：同步从 approved_reference_asset_ids 移除（approved ⊆ candidates
+        不变式）+ cover 指向该 asset 时清空 + approved 变空回 unreviewed。
+        （Composition 生成只消费 approved prop refs，绝不允许出现"已解绑却仍 approved"
+        的悬空审批——那是 prop_reference 语义漏洞。）"""
         op = "resource.detach_prop_reference"
         async with self.store.write_lock():
             doc = self.store.load()
@@ -925,11 +930,101 @@ class ResourceWriteService:
                                      revision=cur, verified=True, unchanged=True, error=None)
             before = p.to_dict()
             p.reference_asset_ids.remove(asset_id)
+            if asset_id in p.approved_reference_asset_ids:
+                p.approved_reference_asset_ids.remove(asset_id)
+            if p.cover_asset_id == asset_id:
+                p.cover_asset_id = None
+            if not p.approved_reference_asset_ids:
+                p.approval_status = ApprovalState.UNREVIEWED.value
             p.updated_at = time.time()
             self.store.save(doc)
             doc_rev = self._verify_after_save()
             reloaded = self.store.load().props.get(prop_id)
-            verified = reloaded is not None and asset_id not in reloaded.reference_asset_ids
+            verified = (reloaded is not None
+                        and asset_id not in reloaded.reference_asset_ids
+                        and asset_id not in reloaded.approved_reference_asset_ids)
+            return self._receipt(op, ok=True, target=prop_id,
+                                 before=before, after=p.to_dict(),
+                                 revision=prop_revision(p), verified=verified,
+                                 document_revision_after=doc_rev)
+
+    # ==================================================================
+    # Prop Reference Approval（Phase 1C5 §7：Composition 生成只消费 approved prop refs）
+    # ==================================================================
+    async def approve_prop_reference(self, prop_id: str, asset_id: str, *,
+                                     expected_revision: str,
+                                     set_cover: Optional[bool] = None) -> dict:
+        """显式审批 Prop 参考图。门槛（与 look approve 同语义）：该 asset 在本 Prop 下
+        必须有 overall=pass 的视觉审查证据（review pass 不自动 approve；
+        无 pass 证据不能 approve）。set_cover 语义与 look 相同。"""
+        op = "resource.approve_prop_reference"
+        from .prop_review import has_prop_pass_evidence
+        async with self.store.write_lock():
+            doc = self.store.load()
+            p = doc.props.get(prop_id)
+            if p is None:
+                return self._receipt(op, ok=False, target=prop_id, error="not_found",
+                                     detail=f"prop 不存在: {prop_id}")
+            from .models import prop_revision
+            cur = prop_revision(p)
+            if expected_revision != cur:
+                return self._stale_receipt(op, expected_revision, cur, p.to_dict())
+            if asset_id not in p.reference_asset_ids:
+                return self._receipt(op, ok=False, target=prop_id, error="not_in_candidates",
+                                     detail=f"asset 不在该 Prop 的参考集中: {asset_id}")
+            if not has_prop_pass_evidence(self.project_dir, prop_id, asset_id):
+                return self._receipt(op, ok=False, target=prop_id,
+                                     error="review_not_passed",
+                                     detail=f"该参考缺少 overall=pass 的视觉审查证据，禁止 approve"
+                                            f"（先 POST /props/{prop_id}/review）：{asset_id}")
+            if asset_id in p.approved_reference_asset_ids:
+                return self._receipt(op, ok=True, target=prop_id, after=p.to_dict(),
+                                     revision=cur, verified=True, unchanged=True, error=None)
+            before = p.to_dict()
+            p.approved_reference_asset_ids.append(asset_id)
+            if set_cover or (set_cover is None and p.cover_asset_id is None):
+                p.cover_asset_id = asset_id
+            p.approval_status = ApprovalState.APPROVED.value
+            p.updated_at = time.time()
+            self.store.save(doc)
+            doc_rev = self._verify_after_save()
+            reloaded = self.store.load().props.get(prop_id)
+            verified = (reloaded is not None
+                        and asset_id in reloaded.approved_reference_asset_ids)
+            return self._receipt(op, ok=True, target=prop_id,
+                                 before=before, after=p.to_dict(),
+                                 revision=prop_revision(p), verified=verified,
+                                 document_revision_after=doc_rev)
+
+    async def revoke_prop_approval(self, prop_id: str, asset_id: str, *,
+                                   expected_revision: str) -> dict:
+        """撤销 Prop 参考审批（候选保留；approved 变空回 unreviewed；cover 指向则清空）。"""
+        op = "resource.revoke_prop_approval"
+        async with self.store.write_lock():
+            doc = self.store.load()
+            p = doc.props.get(prop_id)
+            if p is None:
+                return self._receipt(op, ok=False, target=prop_id, error="not_found",
+                                     detail=f"prop 不存在: {prop_id}")
+            from .models import prop_revision
+            cur = prop_revision(p)
+            if expected_revision != cur:
+                return self._stale_receipt(op, expected_revision, cur, p.to_dict())
+            if asset_id not in p.approved_reference_asset_ids:
+                return self._receipt(op, ok=True, target=prop_id, after=p.to_dict(),
+                                     revision=cur, verified=True, unchanged=True, error=None)
+            before = p.to_dict()
+            p.approved_reference_asset_ids.remove(asset_id)
+            if p.cover_asset_id == asset_id:
+                p.cover_asset_id = None
+            if not p.approved_reference_asset_ids:
+                p.approval_status = ApprovalState.UNREVIEWED.value
+            p.updated_at = time.time()
+            self.store.save(doc)
+            doc_rev = self._verify_after_save()
+            reloaded = self.store.load().props.get(prop_id)
+            verified = (reloaded is not None
+                        and asset_id not in reloaded.approved_reference_asset_ids)
             return self._receipt(op, ok=True, target=prop_id,
                                  before=before, after=p.to_dict(),
                                  revision=prop_revision(p), verified=verified,

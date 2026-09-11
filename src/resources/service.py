@@ -167,12 +167,26 @@ class ResourceService:
         p = self.store.get_prop(prop_id)
         if p is None:
             return None
+        # 每张参考图的最近审查结论（Phase 1C5 prop review evidence 只读视图）
+        from .prop_review import latest_prop_review_for_asset
+        latest_reviews = {}
+        for aid in p.reference_asset_ids:
+            cr = latest_prop_review_for_asset(self.project_dir, prop_id, aid)
+            if cr is not None:
+                latest_reviews[aid] = {
+                    "status": cr.get("status"), "overall": cr.get("overall"),
+                    "prop_fidelity": cr.get("prop_fidelity"),
+                    "visual_clarity": cr.get("visual_clarity"),
+                    "visual_defects": cr.get("visual_defects"),
+                    "summary": cr.get("summary"),
+                }
         return {
             **p.to_dict(),
             "revision": prop_revision(p),
             "reference_assets": self._resolve_assets(p.reference_asset_ids),
             "approved_reference_assets": self._resolve_assets(p.approved_reference_asset_ids),
             "cover_asset": (self._resolve_assets([p.cover_asset_id])[0] if p.cover_asset_id else None),
+            "latest_reviews": latest_reviews,
         }
 
     def read_reference_asset(self, asset_id: str) -> Optional[dict]:

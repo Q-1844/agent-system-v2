@@ -177,3 +177,267 @@ def test_composition_document_revision_includes_compositions():
     doc.compositions[new_composition_id()] = CharacterReferenceComposition(
         composition_id=new_composition_id(), character_name="Alice", look_id="look_1")
     assert document_revision(doc) != r1
+
+
+# ============ Commit B：Prop Reference Review + Approval（§7 最小闭环）============
+import json as _json
+
+from src.resources.service import ResourceService
+from src.resources.write_service import ResourceWriteService
+from src.resources.prop_review import (
+    review_prop_reference,
+    has_prop_pass_evidence,
+    build_prop_review_prompt,
+    derive_prop_overall,
+    read_prop_review_records,
+)
+
+from tests.test_resources_phase1c1 import FakeAgnes, make_project, make_view_files, run
+from tests.test_resources_phase1c2 import FakeVision
+
+
+@pytest.fixture
+def penv(tmp_path):
+    """带 Alice 的项目 + WriteService + document revision（Prop/Composition 测试用）。"""
+    pdir = make_project(tmp_path, with_character=True)
+    make_view_files(pdir)
+    ws = ResourceWriteService(pdir, pdir.name)
+    return {"pdir": pdir, "ws": ws, "doc_rev": document_revision(ws.store.load())}
+
+
+def _prop_rev(env, prop_id):
+    from src.resources.models import prop_revision
+    return prop_revision(env["ws"].store.load().props[prop_id])
+
+
+def _seed_prop(env, *, name="Wooden Sword", description="a short wooden training sword",
+               img_name="sword_ref.png"):
+    """建 prop + 绑定一张真实小图参考，返回 (prop_id, asset_id)。"""
+    ws = env["ws"]
+    img = env["pdir"] / "o" / img_name
+    img.parent.mkdir(parents=True, exist_ok=True)
+    img.write_bytes(f"PNG-REF-{img_name}".encode())
+    r = run(ws.create_prop(name=name, description=description,
+                           expected_document_revision=document_revision(ws.store.load())))
+    assert r["ok"], r
+    prop_id = r["target"]
+    r2 = run(ws.register_reference_asset(
+        local=f"o/{img_name}", view="hero", purpose="prop",
+        expected_document_revision=r["document_revision_after"]))
+    assert r2["ok"], r2
+    asset_id = r2["target"]
+    r3 = run(ws.attach_prop_reference(prop_id, asset_id,
+                                      expected_revision=_prop_rev(env, prop_id)))
+    assert r3["ok"], r3
+    return prop_id, asset_id
+
+
+PROP_PASS_JSON = _json.dumps({
+    "prop_fidelity": "pass", "fidelity_notes": "wooden training sword as described",
+    "visual_clarity": "pass", "clarity_notes": "whole object readable",
+    "visual_defects": "pass", "defect_notes": "none",
+    "overall": "pass", "summary": "clean prop reference"})
+PROP_NEEDSFIX_JSON = _json.dumps({
+    "prop_fidelity": "fail", "fidelity_notes": "this is a metal sword, not wooden",
+    "visual_clarity": "pass", "clarity_notes": "ok",
+    "visual_defects": "pass", "defect_notes": "none",
+    "overall": "pass",   # 模型自报 pass —— 服务端必须推导 needs_fix
+    "summary": "wrong material"})
+PROP_CONCERN_JSON = _json.dumps({
+    "prop_fidelity": "concern", "fidelity_notes": "grip color differs",
+    "visual_clarity": "pass", "clarity_notes": "ok",
+    "visual_defects": "pass", "defect_notes": "none",
+    "overall": "pass", "summary": "minor concern"})
+
+
+def test_prop_review_pass_flow_and_evidence(penv):
+    prop_id, asset_id = _seed_prop(penv)
+    res_path = penv["pdir"] / "output" / "resources.json"
+    before = res_path.read_bytes()
+    fv = FakeVision(PROP_PASS_JSON)
+    r = run(review_prop_reference(penv["pdir"], prop_id, agnes_client=fv))
+    assert r["ok"] and r["status"] == "completed", r
+    cr = r["candidate_reviews"][0]
+    assert cr["asset_id"] == asset_id and cr["status"] == "reviewed"
+    assert (cr["prop_fidelity"], cr["visual_clarity"], cr["visual_defects"]) == ("pass", "pass", "pass")
+    assert cr["overall"] == "pass"
+    # vision 契约面：显式 agnes-2.5-flash + data URI 输入 + prompt 含道具期望
+    assert fv.calls[0]["model"] == "agnes-2.5-flash"
+    img_part = [c for c in fv.calls[0]["messages"][0]["content"] if c["type"] == "image_url"]
+    assert img_part and img_part[0]["image_url"]["url"].startswith("data:image/png;base64,")
+    assert "Wooden Sword" in fv.calls[0]["messages"][0]["content"][0]["text"]
+    # 证据落盘（prop_id 流）、无 base64、canonical 字节不变（review 不写 canonical）
+    recs = read_prop_review_records(penv["pdir"], prop_id=prop_id)
+    assert len(recs) == 1 and recs[0]["operation"] == "prop.review_candidates"
+    assert recs[0]["candidate_reviews"][0]["overall"] == "pass"
+    assert "data:image" not in _json.dumps(recs)
+    assert res_path.read_bytes() == before
+
+
+def test_prop_review_overall_deterministic_not_trusting_model(penv):
+    prop_id, asset_id = _seed_prop(penv)
+    r = run(review_prop_reference(penv["pdir"], prop_id,
+                                  agnes_client=FakeVision(PROP_NEEDSFIX_JSON)))
+    cr = r["candidate_reviews"][0]
+    assert cr["overall"] == "needs_fix" and cr["model_overall"] == "pass"
+    r2 = run(review_prop_reference(penv["pdir"], prop_id,
+                                   agnes_client=FakeVision(PROP_CONCERN_JSON)))
+    assert r2["candidate_reviews"][0]["overall"] == "uncertain"
+    # 纯函数直证
+    assert derive_prop_overall({"prop_fidelity": "fail", "visual_clarity": "pass",
+                                "visual_defects": "pass"}) == "needs_fix"
+    assert derive_prop_overall({"prop_fidelity": None, "visual_clarity": "pass",
+                                "visual_defects": "pass"}) == "uncertain"   # 缺失不判 pass
+    assert build_prop_review_prompt(prop_name="X") == build_prop_review_prompt(prop_name="X")
+
+
+def test_prop_review_isolation_and_fail_closed(penv):
+    prop_id, asset_id = _seed_prop(penv)
+    # fence 包裹 → 可解析
+    r = run(review_prop_reference(penv["pdir"], prop_id,
+                                  agnes_client=FakeVision("```json\n" + PROP_PASS_JSON + "\n```")))
+    assert r["candidate_reviews"][0]["overall"] == "pass"
+    # 垃圾回复 → parse_failed（fail closed，不可作为 pass 证据）
+    r2 = run(review_prop_reference(penv["pdir"], prop_id, agnes_client=FakeVision("not json")))
+    assert r2["candidate_reviews"][0]["status"] == "parse_failed"
+    assert r2["candidate_reviews"][0]["overall"] == "uncertain"
+    assert not has_prop_pass_evidence(penv["pdir"], prop_id, asset_id)
+    # provider 异常 → 单候选隔离
+    r3 = run(review_prop_reference(penv["pdir"], prop_id,
+                                   agnes_client=FakeVision(RuntimeError("vision boom"))))
+    assert r3["candidate_reviews"][0]["status"] == "provider_error"
+    # entry 失败族
+    assert run(review_prop_reference(penv["pdir"], "prop_none"))["error"] == "not_found"
+    ws = penv["ws"]
+    r_empty = run(ws.create_prop(name="Empty", expected_document_revision=document_revision(ws.store.load())))
+    assert run(review_prop_reference(penv["pdir"], r_empty["target"]))["error"] == "no_candidates"
+    assert run(review_prop_reference(penv["pdir"], prop_id,
+                                     asset_ids=["ref_other"]))["error"] == "not_in_candidates"
+
+
+def test_prop_approve_gate_three_states_then_pass(penv):
+    ws = penv["ws"]
+    prop_id, asset_id = _seed_prop(penv)
+    # ① 无证据 → 拒
+    r = run(ws.approve_prop_reference(prop_id, asset_id, expected_revision=_prop_rev(penv, prop_id)))
+    assert r["ok"] is False and r["error"] == "review_not_passed"
+    # ② needs_fix → 拒
+    run(review_prop_reference(penv["pdir"], prop_id, agnes_client=FakeVision(PROP_NEEDSFIX_JSON)))
+    r = run(ws.approve_prop_reference(prop_id, asset_id, expected_revision=_prop_rev(penv, prop_id)))
+    assert r["ok"] is False and r["error"] == "review_not_passed"
+    # ③ uncertain（concern）→ 拒
+    run(review_prop_reference(penv["pdir"], prop_id, agnes_client=FakeVision(PROP_CONCERN_JSON)))
+    r = run(ws.approve_prop_reference(prop_id, asset_id, expected_revision=_prop_rev(penv, prop_id)))
+    assert r["ok"] is False and r["error"] == "review_not_passed"
+    # ④ pass → 批准（approved ids + 状态 + 自动封面 + verified）
+    run(review_prop_reference(penv["pdir"], prop_id, agnes_client=FakeVision(PROP_PASS_JSON)))
+    r = run(ws.approve_prop_reference(prop_id, asset_id, expected_revision=_prop_rev(penv, prop_id)))
+    assert r["ok"] and r["verified"], r
+    p = ws.store.load().props[prop_id]
+    assert p.approved_reference_asset_ids == [asset_id]
+    assert p.approval_status == "approved" and p.cover_asset_id == asset_id
+    # 幂等
+    r2 = run(ws.approve_prop_reference(prop_id, asset_id, expected_revision=_prop_rev(penv, prop_id)))
+    assert r2["ok"] and r2.get("unchanged") is True
+    # not_in_candidates / OCC
+    r3 = run(ws.approve_prop_reference(prop_id, "ref_other", expected_revision=_prop_rev(penv, prop_id)))
+    assert r3["ok"] is False and r3["error"] == "not_in_candidates"
+    r4 = run(ws.approve_prop_reference(prop_id, asset_id, expected_revision="00000000"))
+    assert r4["ok"] is False and r4["error"] == "stale_revision"
+
+
+def test_prop_revoke_semantics(penv):
+    ws = penv["ws"]
+    prop_id, asset_id = _seed_prop(penv)
+    run(review_prop_reference(penv["pdir"], prop_id, agnes_client=FakeVision(PROP_PASS_JSON)))
+    run(ws.approve_prop_reference(prop_id, asset_id, expected_revision=_prop_rev(penv, prop_id)))
+    r = run(ws.revoke_prop_approval(prop_id, asset_id, expected_revision=_prop_rev(penv, prop_id)))
+    assert r["ok"] and r["verified"]
+    p = ws.store.load().props[prop_id]
+    assert p.approved_reference_asset_ids == []                  # approved 清空
+    assert p.approval_status == "unreviewed"                     # 状态回退
+    assert p.cover_asset_id is None                              # cover 清空
+    assert asset_id in p.reference_asset_ids                     # 候选保留
+    r2 = run(ws.revoke_prop_approval(prop_id, asset_id, expected_revision=_prop_rev(penv, prop_id)))
+    assert r2["ok"] and r2.get("unchanged") is True              # 幂等
+
+
+def test_prop_detach_cleans_approved_and_cover(penv):
+    """detach 扩展（1C5）：approved ⊆ candidates 不变式——解绑同步清理 approved/cover。"""
+    ws = penv["ws"]
+    prop_id, asset_id = _seed_prop(penv)
+    run(review_prop_reference(penv["pdir"], prop_id, agnes_client=FakeVision(PROP_PASS_JSON)))
+    run(ws.approve_prop_reference(prop_id, asset_id, expected_revision=_prop_rev(penv, prop_id)))
+    r = run(ws.detach_prop_reference(prop_id, asset_id, expected_revision=_prop_rev(penv, prop_id)))
+    assert r["ok"] and r["verified"]
+    p = ws.store.load().props[prop_id]
+    assert asset_id not in p.reference_asset_ids
+    assert asset_id not in p.approved_reference_asset_ids        # 不允许悬空审批
+    assert p.cover_asset_id is None
+    assert p.approval_status == "unreviewed"
+
+
+def test_prop_read_latest_reviews(penv):
+    prop_id, _ = _seed_prop(penv)
+    run(review_prop_reference(penv["pdir"], prop_id, agnes_client=FakeVision(PROP_PASS_JSON)))
+    svc = ResourceService(penv["pdir"], penv["pdir"].name)
+    read = svc.read_prop(prop_id)
+    asset_id = list(read["latest_reviews"].keys())[0]
+    assert read["latest_reviews"][asset_id]["overall"] == "pass"
+    assert read["latest_reviews"][asset_id]["prop_fidelity"] == "pass"
+
+
+def test_prop_review_approve_http_contract(penv, tmp_path):
+    """HTTP 契约：创建 prop→approve 409（无证据）→（service 层注入 pass 证据）→approve 200→read 反映。"""
+    import shutil
+
+    import routers.resources as rres
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from src.utils.project_manager import ProjectManager
+
+    pdir = penv["pdir"]
+    pmroot = tmp_path / "pmroot"
+    pmroot.mkdir(exist_ok=True)
+    shutil.copytree(pdir, pmroot / pdir.name, dirs_exist_ok=True)
+    orig = rres.get_project_manager
+    rres.get_project_manager = lambda: ProjectManager(base_dir=str(pmroot))
+    app = FastAPI()
+    app.include_router(rres.router)
+    c = TestClient(app)
+    try:
+        name = pdir.name
+        doc_rev = c.get(f"/api/project/{name}/resources").json()["document_revision"]
+        rp = c.post(f"/api/project/{name}/props",
+                    json={"name": "Compass", "expected_document_revision": doc_rev})
+        assert rp.status_code == 200, rp.text
+        prop_id = rp.json()["target"]
+        img = pmroot / name / "o" / "compass_ref.png"   # HTTP 服务操作的是 pmroot 副本目录
+        img.parent.mkdir(parents=True, exist_ok=True)
+        img.write_bytes(b"PNG-COMPASS")
+        doc_rev = c.get(f"/api/project/{name}/resources").json()["document_revision"]
+        rr = c.post(f"/api/project/{name}/reference-assets",
+                    json={"local": "o/compass_ref.png", "expected_document_revision": doc_rev})
+        assert rr.status_code == 200, rr.text
+        asset_id = rr.json()["target"]
+        ra = c.post(f"/api/project/{name}/props/{prop_id}/references",
+                    json={"asset_id": asset_id,
+                          "expected_revision": c.get(f"/api/project/{name}/props/{prop_id}").json()["revision"]})
+        assert ra.status_code == 200, ra.text
+        prop_rev = c.get(f"/api/project/{name}/props/{prop_id}").json()["revision"]
+        # 无证据 approve → 409
+        r409 = c.post(f"/api/project/{name}/props/{prop_id}/approve",
+                      json={"asset_id": asset_id, "expected_revision": prop_rev})
+        assert r409.status_code == 409
+        assert r409.json()["detail"]["error"] == "review_not_passed"
+        # service 层注入 pass 证据（fake vision）→ HTTP approve 200
+        run(review_prop_reference(pmroot / name, prop_id, agnes_client=FakeVision(PROP_PASS_JSON)))
+        prop_rev = c.get(f"/api/project/{name}/props/{prop_id}").json()["revision"]
+        r200 = c.post(f"/api/project/{name}/props/{prop_id}/approve",
+                      json={"asset_id": asset_id, "expected_revision": prop_rev})
+        assert r200.status_code == 200 and r200.json()["verified"] is True, r200.text
+        read = c.get(f"/api/project/{name}/props/{prop_id}").json()
+        assert read["approval_status"] == "approved"
+        assert read["latest_reviews"][asset_id]["overall"] == "pass"
+    finally:
+        rres.get_project_manager = orig

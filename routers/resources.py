@@ -187,6 +187,80 @@ async def detach_prop_reference(project: str, prop_id: str, asset_id: str,
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# =====================================================================
+# Phase 1C5 — Prop Reference Review + Approval（§7 最小闭环：
+# Composition 生成只消费 approved prop references）
+# =====================================================================
+class ReviewPropRequest(BaseModel):
+    asset_ids: Optional[List[str]] = None   # 缺省=该 Prop 全部参考图
+
+
+class ApprovePropReferenceRequest(BaseModel):
+    asset_id: str
+    expected_revision: str                  # prop 的 resource revision
+    set_cover: Optional[bool] = None        # None=首个 approved 自动成为封面
+
+
+class RevokeApprovalRequest(BaseModel):
+    asset_id: str
+    expected_revision: str
+# （Phase 1C5 起上移到此定义：prop 与 look 的 revoke 端点共用同一请求体）
+
+
+@router.post("/api/project/{project}/props/{prop_id}/review")
+async def review_prop_reference(project: str, prop_id: str, req: ReviewPropRequest):
+    """Prop 参考图视觉审查（prop_fidelity / visual_clarity / visual_defects 三维度）。
+    不写 canonical；审查证据进 review_records.jsonl（prop_id 流）。"""
+    try:
+        project_dir = get_project_manager().get_project_dir(project)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"项目不存在: {project}")
+    try:
+        from src.resources.prop_review import review_prop_reference as _review
+        result = await _review(project_dir, prop_id, asset_ids=req.asset_ids)
+        _raise_for_receipt(result)
+        return result
+    except HTTPException:
+        raise
+    except ResourceSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"资源数据错误: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/project/{project}/props/{prop_id}/approve")
+async def approve_prop_reference(project: str, prop_id: str, req: ApprovePropReferenceRequest):
+    """显式审批 Prop 参考图（门槛：overall=pass 审查证据；review_not_passed → 409）。"""
+    try:
+        receipt = await _write_service(project).approve_prop_reference(
+            prop_id, req.asset_id, expected_revision=req.expected_revision,
+            set_cover=req.set_cover)
+        _raise_for_receipt(receipt)
+        return receipt
+    except HTTPException:
+        raise
+    except ResourceSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"资源数据错误: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/project/{project}/props/{prop_id}/revoke-approval")
+async def revoke_prop_approval(project: str, prop_id: str, req: RevokeApprovalRequest):
+    """撤销 Prop 参考审批（候选保留；approved 变空回 unreviewed）。"""
+    try:
+        receipt = await _write_service(project).revoke_prop_approval(
+            prop_id, req.asset_id, expected_revision=req.expected_revision)
+        _raise_for_receipt(receipt)
+        return receipt
+    except HTTPException:
+        raise
+    except ResourceSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"资源数据错误: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 def _raise_for_receipt(receipt: dict):
     """业务 receipt（ok=False）→ 对应 HTTP 状态码；body 保持完整 receipt 结构。"""
     if receipt.get("ok"):
@@ -558,11 +632,6 @@ class ApproveLookReferenceRequest(BaseModel):
     asset_id: str
     expected_revision: str                  # look 的 resource revision
     set_cover: Optional[bool] = None        # None=首个 approved 自动成为封面
-
-
-class RevokeApprovalRequest(BaseModel):
-    asset_id: str
-    expected_revision: str
 
 
 @router.post("/api/project/{project}/looks/{look_id}/review")

@@ -469,6 +469,10 @@ def test_api_read_only_no_mutation_endpoints(client):
         ("DELETE", "/api/project/{project}/props/{prop_id}"),
         ("POST", "/api/project/{project}/props/{prop_id}/references"),
         ("DELETE", "/api/project/{project}/props/{prop_id}/references/{asset_id}"),
+        # Phase 1C5：Prop Reference Review + Approval（§7 最小闭环）
+        ("POST", "/api/project/{project}/props/{prop_id}/review"),
+        ("POST", "/api/project/{project}/props/{prop_id}/approve"),
+        ("POST", "/api/project/{project}/props/{prop_id}/revoke-approval"),
     }
     write_routes = []
     for route in rres.router.routes:
