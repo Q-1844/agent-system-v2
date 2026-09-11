@@ -1,0 +1,241 @@
+# Scene System V1 — Phase S2B（SceneInstance Visual State）报告
+
+分支 `feat/scene-system-v1-s1`（延续 S1/S2A；本轮 8 commits：
+`8e3d796`A preflight+schema v3+模型 → `b8decdd`B 投影+CRUD → `ad31442`C prompt+参考+basis →
+`000e3dc`D 生成引擎 → `be88e0d`E Review → `78446ba`F approval+stale read → `bd0d26a`G HTTP+测试 →
+`fe2cf2a` E2E 实证修复 + 本报告）。
+**不接 Agent、不改 Shot/Director/Sub-Agent/prompt_builder；无 CharacterPlacement/视频/动作时间线。**
+
+验收状态（§36-§38/§44）：
+- ✅ **正向链全真实通过（r9）**：同一 SceneInstance 两个不同方向 approved state views
+  （B 使用 approved A 作 peer）+ 七维度 Review + cross-canonical approval
+- ✅ **§37 stale 检测真机验证**：lighting 改白光 → A/B 双 stale（归因正确）——真实 approved 视图上
+- ✅ §38 不可见变化不 stale：mock 证明（§38 明文允许 mock）+ §14 规则矩阵测试
+- ⚠️ §37 regen-refresh 真机 3 轮诚实未过（A-regen 复鲜链）= MODEL_LIMITATION（见 §22）；
+  regen→review→approve 机制本体由 r9 首轮链（同对象）+ mock T40 证明
+
+---
+
+## 1. Preflight（§2）
+
+- **A（revoked base）**：`select_reference_views`/`check_base_location_view` 均要求
+  `approval_status==approved` + reference_asset_id 存在 + ReferenceAsset 可读——revoked
+  即使保留 reference_asset_id 也不可用（T 证明；顺带修复显式请求被空候选 early-return
+  掩盖的分支缺陷）。
+- **B（stale base）**：`check_base_location_view` 比对最新 approved approval record 的
+  `reviewed_basis_fingerprint` 与当前重算值——批准后语义漂移 → `location_view_stale`。
+  🔴 语义补强：**最新审批事件是 revoke 则证据取消**（修复 revoke 后旧 record 仍可背书的漏洞）。
+  🔴 指纹重算按**批准时审查实际使用的参考组**（记录新增 `reference_asset_ids_used`）——
+  首张 view 审查时参考组是 `[]`，falsy `or` fallback 曾造成永远 mismatch（E2E 两次实证）。
+- **C（location 一致性）**：create 校验 `instance.location_id == base_view.location_id`，
+  违反 → `location_mismatch`（422）。
+- **D（missing prop）**：生成链可见 prop 缺失 → `prop_missing` fail closed；resources.json
+  不可读 → `resources_lookup_failed`——绝不假装 Prop 输入完整（T 证明）。
+
+## 2. Schema v3 decision（§5）
+
+新增 canonical collection `scene_instance_views` → 旧 v2 runtime load→save 会静默丢弃 →
+**bump 2→3**，惰性迁移契约不变：v2 可读（in-memory `scene_instance_views={}`）/纯 read 零写回
+（T3）/首 mutation 落 v3（T4）/旧 v2 runtime 见 v3 fail closed（T5）/≥4 fail closed（T6）。
+
+## 3. SceneInstanceView ontology（§3/§4）
+
+`sciv_<uuid12>`：scene_instance_id + location_view_id（身份 = 二元组，pair 唯一）+
+label? + generation_status + active_generation_id + reference_asset_id? + approval_status +
+**approved_basis_fingerprint**（approve 时写入的语义基准快照 = read 层 stale 锚点）+ 时间戳。
+不重复保存 camera_zone/look_direction/visible_anchor_ids（属 LocationView）；
+不复制 SceneState（唯一 canonical = SceneInstance.state）。
+重新生成 = 更新同一对象指针（§4；E2E 实证：regen 复用对象，重复 create 被正确拒绝）。
+
+## 4. ViewRelevantSceneState（§6-§8）
+
+`project_scene_state_for_view`（state_projection.py，纯函数）：全局态（time_of_day/weather/
+lighting/environment_conditions）恒入；anchor_states 只取 `anchor_id ∈ visible_anchor_ids`；
+prop_placements 只取 `placement.anchor_id ∈ visible`。**绝不持久化**（每次 generation/review/
+read 重算；canonical 唯一）。有意收窄：SceneState.notes 不进投影（可能含非视觉叙事评注）。
+
+## 5. Visible/invisible state rules（§14/§33）
+
+由投影自然涌现 + 专项测试（basis 层矩阵 + 生成链路 + E2E）：
+- **必须 stale**：location identity / base view 定义 / base 批准与参考资产 / 全局态 /
+  可见 anchor state / 可见 prop placement / 可见 prop 语义（name/description）与选中参考
+- **必须不 stale**：不可见 anchor state / 不可见 prop placement / 其它 LocationView 变化 /
+  updated_at-only 触碰（prop 快照用语义子集非裸 revision）/ 后来批准的 peer
+  （**include_peer 记入 basis**——recompute 沿用原生策略，peer 是可选增强不追溯作废）
+
+## 6. GenerationBasis（§13）
+
+`compute_scene_instance_visual_basis`：sciv/instance/story_scene/location id + location 快照 +
+location_view_id + view 语义快照 + base_location_reference（asset_id+checksum）+
+base_location_basis_fingerprint（可重算）+ view_relevant_scene_state 投影 + 可见 anchor 快照 +
+prop 语义快照 + selected_prop_references（id+checksum）+ peer_state_reference + prompt +
+model/seed/candidate_count + **include_peer** → basis_fingerprint（sha256[:8]，started_at 不入）。
+
+## 7. Reference strategy（§15/§16）
+
+1 base approved LocationView（强制——无母版绝不 SceneState 文生图，T16）→ 2 optional
+approved peer（同 instance、sciv id 升序、自身排除；E2E 实证 B 用 A）→ 3 可见 props 的
+approved refs（每 prop 1 张确定性、**分项上限 2**、总预算 `MAX_TOTAL_VISUAL_REFS=4`）。
+超预算/无 approved ref → text-only 继续 + `prop_refs_selected`/`prop_refs_omitted_due_to_budget`/
+`props_text_only(visual_reference_missing)` 诚实记录（§10.A；T13/T18）。绝不全量喂模型。
+
+## 8. Prompt builder（§17/§18）
+
+`build_scene_instance_view_prompt`（确定性，六 SECTION）：Preserve Base Identity / Requested
+View / Scene State（**显式 OVERRIDE 指令**——base 是中性日光态，模型倾向复制 base 光照；
+r6/r7 实证弱点后补强）/ Visible Anchor State Changes（正确 anchor 点名，§19）/ Visible Prop
+Placements / Negative Constraints（no people——§11 即使 Story Scene 有角色；identity 高于
+SceneState 自由发挥——§18）。不修改 S2A base prompt 稳定行为。
+
+## 9. Lock / single-flight（§20/§21）
+
+三阶段协议完全复用 S2A：短锁（single-flight **先于** entry OCC + base 门槛 + 选择 + basis →
+generating）→ 无锁 provider（T19 锁探针）→ 短锁重算 basis → commit/stale（诚实还原 prev）。
+粒度 = same scene_instance_view_id（T20）；不同 state view 并发（T21）。
+
+## 10. Recovery（§22/§23）
+
+CancelledError → 诚实终态 + re-raise（T28）；startup sweep 扩展到 scene_instance_views
+（generating → failed + orphan record，幂等 T29/T30）；候选 stable-id 路径
+`output/scene_system/scene_instances/{instance}/views/{sciv}/generations/{gen}/`，原图不 rembg。
+
+## 11. Vision Review（§25-§27）
+
+`instance_view_review.py`（独立模块；VISION_MODEL=**agnes-3.0-flash**）。七维度 +
+**逐项 evidence**：scene_state_consistency 逐项（time/weather/env + 每 anchor state，
+缺回报 fail closed）；prop_placement_consistency 逐 Prop（correct/wrong_place/missing/
+substituted，缺回报 fail closed）；§19 structural counts 进 prompt（anchor description 作为
+explicit structural expectation）。对比图从生成 basis 分字段重建（base/peer/props）。
+Review 零改 canonical；records 带 `review_type=scene_instance_view` + expected_state_projection。
+
+## 12. Deterministic overall（§28）
+
+模型只报观察 + 自报 overall 仅记录。hard 集条件化：恒 hard = location_identity/
+view_consistency/anchor_consistency/scene_state_consistency；有可见 props → prop hard；
+SceneState 给了非空期望 → lighting_weather hard。任一 hard fail → needs_fix；全 pass → pass；
+concern/缺失 → uncertain（fail closed 不判 pass）。T35 全路径。
+
+## 13. Approval（§30）
+
+`approve_scene_instance_view`：PASS 证据（针对当前 generation/candidate）+ 期望指纹当前 +
+scene basis 未 stale + 候选文件在盘 + OCC → 显式 attach。**重新生成使旧批准失效**
+（批准针对旧候选；历史 records 保留；S2A LocationView 引擎对称实现——§37 lifecycle 的前提）。
+revoke → rejected + 历史/锚点/资产全保留（T39）。
+
+## 14. Stale read model（§32/§33）
+
+`read_scene_instance_view_status`：base view 摘要 + 当前投影 + 审查摘要 +
+`is_stale`/`stale_reasons`（derived fact，绝不自动 mutation）。归因逐组件：
+location_identity_changed / base_location_view_changed / base_reference_changed /
+`global_state_changed:{field}` / anchor_state_changed / prop_placement_changed /
+prop_reference_changed / peer_reference_changed。
+**§33 核心**：不可见变化不进投影 → 不 stale（E2E r9/续篇：south stairs damaged → A 不 stale、
+B stale；mock T41 同）。未来 Shot binding 必须拒绝 stale scene reference。
+
+## 15. Resources saga（§31）
+
+同 S2A 三阶段：A 短锁验证 → B 经冻结 Resources `register_reference_asset`
+（purpose=**scene_instance_view**，source=scene_system，真实 sha256；Resources schema 零改动）
+→ C 重验 attach；B→C 竞态 → orphan record 不偷删（T38 竞态注入）。
+
+## 16. Real E2E（§36）✅
+
+`_e2e_scene_s2b.py`（真实 Agnes；r4-r9 共 6 轮，全部诚实记录，日志 `_scene_s2b_e2e_log*.txt`）：
+
+**R9 正链成立**：
+- Lighthouse Control Room（5 anchors + SetLayout）→ Base View A（south_west→north_east）
+  与 View B（north_entrance→south）真实 generate→review→approve（各 ≤3 轮）
+- Wooden Sword prop：真实 t2i → review pass → approve（**approved visual ref 进 state view 生成**）
+- Story Scene s09 → SceneInstance → SceneState（night/violent storm/red emergency lighting/
+  west_window_02 broken/float wet/sword near main_console）
+- **StateView A approved**（candidate 含：夜+风暴+湿地面+碎窗+剑位正确）
+- **StateView B approved**，生成 basis `peer=A`（同一剧情时刻维持 ✓）
+- 目检：A（暗夜红光氛围）与 B（不同方向、楼梯可见）身份一致、状态到位
+
+## 17. State-change stale E2E（§37）+ 不可见（§38）
+
+- **§37 步骤 1 真机 PASS（r9，真实 approved 视图上）**：lighting red emergency → normal white
+  （不重新生成）→ A stale（`global_state_changed:lighting` + `peer_reference_changed`）、
+  B stale（`global_state_changed:lighting`）——归因逐组件正确。
+- §37 步骤 2（regen A → 复鲜）：真机 3 轮诚实 needs_fix（续篇脚本，白光态重生成）——
+  **MODEL_LIMITATION**（§22）。机制（同对象 regen→review→approve）由 r9 首轮 A 链 +
+  mock T40（精确复刻 §37 场景：双 stale → 只 regen A → A 复鲜 B 仍 stale）证明。
+- §38：mock（§38 明文允许）——T41 + §14 矩阵：south stairs damaged → 仅可见它的 B stale。
+
+## 18. Tests（§39 T1-T48）
+
+| 套件 | tests | 覆盖 |
+|---|---|---|
+| s2b_schema | 7 | T2-T6 + preflight A + 实体 round-trip |
+| s2b_projection | 6 | T7/T8/T12/T13/T14 + 投影纯度 |
+| s2b_basis | 7 | T15-T18 + §14 规则矩阵（含 updated_at 不误判、peer 不追溯） |
+| s2b_generation | 16 | §12 家族+§2.D+T19-T31 |
+| s2b_review | 5 | T32-T35 + 只读 canonical |
+| s2b_approval | 6 | T36-T41（含 §37 lifecycle、§33） |
+| s2b_master | 5 | T42/T43/T44/T47 + HTTP 全链（含 stale 翻转） |
+| （T1/T45/T46/T48） | — | 回归运行 |
+
+## 19. Regression
+
+全量合并（S1 25 + S2A 51 + S2B 52 + 资源八套件 144 + Agent 关键 91）= **363 passed，0 失败**
+（commit G 时点；Commit H 修复后再跑 approval/generation 子集 27 passed）。
+冻结区（Resources/core/agents/ai/revision）vs `6b4b8ad` diff 为空；T47 Agent 源零引用。
+
+## 20. Deviations
+
+- **D1** commit 顺序调整：文档建议 B=basis、C=prompt+选择；实际 B=投影+CRUD、
+  C=prompt+选择+basis（basis 依赖后两者，依赖序更干净）。
+- **D2** ViewRelevantSceneState 不含 SceneState.notes（可能非视觉；有意收窄）。
+- **D3** §15 的"peer 仅在提供额外价值时使用"落地为确定性规则：存在 approved peer 即用
+  （同一剧情时刻的另一方向按定义提供状态一致性价值）；sciv id 升序取第一个可用。
+- **D4** include_peer 记入 basis 且 recompute 沿用（§14"其它 view 变化不应 stale"的必然推论：
+  后来批准的 peer 不追溯作废）。
+- **D5** 重新生成使旧批准失效（S2A/S2B 对称）：批准针对旧候选；§37 lifecycle 的前提；
+  历史在 records 保留。
+- **D6** revolve 后旧 approval record 不再背书（最新审批事件语义）。
+- **D7** S2A approve 记录补存 reference_asset_ids_used（§2.B 检查需要按批准时实际参考组重算）。
+- **D8** UI 未做（§35 系统优先）。
+- **D9** E2E 过程中两个实现修复（falsy fallback、OVERRIDE 指令）——均由真机实证驱动，
+  已单独提交 `fe2cf2a`。
+
+## 21. Blockers
+
+无（E2E regen-refresh 项归入 MODEL_LIMITATIONS，非流程阻塞）。
+
+## 22. MODEL_LIMITATIONS
+
+1. **多约束状态重生成的通过率方差大**（核心限制）：从日光 base 做 i2i 并同时满足
+   night/storm/red emergency/w2 broken/wet floor/sword placement 六重约束，
+   单候选通过率约 20-40%（r9 链内 2/6、r4 0/6、r6 0/6、r7 0/6、r8 1/9 判 pass；
+   续篇白光重生成 0/9）。已实证的改进：OVERRIDE 指令（r8 起全部候选 night+storm 过）、
+   去除 style_notes 中的 "daylight"（身份声明时段与 state 冲突——**规格约束：
+   Location style_notes 不应含时段/天气词**）、候选数 3。剩余瓶颈：red emergency lighting
+   的可信渲染与 per-anchor breakage 精度（r8 最佳候选 6/7 维 pass，仅 lighting=concern）。
+2. **anchor_consistency 偶发 concern**：状态改动会连带轻微结构漂移（窗数/楼梯入画）。
+   §19 的 structural counts 进 prompt 后仍偶发；需要更高质量基线或局部重绘能力（未来阶段）。
+3. vision 解析偶发 parse_failed（3.0-flash 偶尔输出非 JSON）——fail closed 不判 pass，
+  重试即过；无系统性风险。
+4. §37 regen-refresh 真机未过即本条 1 的直接体现；不建议无限重试烧配额——等图像模型
+   升级或引入局部 inpainting 类能力后再补真机验证（逻辑已 mock 全覆盖）。
+
+## 23. Recommendation for next phase（S2C/后续）
+
+1. **Shot binding**（S2B §40 明示下一阶段）：Shot 增加 scene_instance_id/scene_instance_view_id
+   （改 Shot schema 需单独评审）+ prompt_builder 消费 approved scene reference +
+   stale scene reference 拒绝（§32 的 read 模型已就绪）。
+2. **Scene debug workspace UI**（两轮推迟项）：Location/View/Instance/StateView 树 +
+   候选图点选 + review evidence 展示 + approve/revoke——纯前端消费现有 HTTP。
+3. **per-anchor 局部重绘**（MODEL_LIMITATION 1 的工程解）：broken window 等局部状态
+   用 inpainting/局部 edit 而非全图重生成（需 Agnes 能力调研）。
+4. **CharacterPlacement**（S1 §13 规划）在 Shot binding 之后。
+5. **Agent Integration** 最后：Director/Sub-Agent 读 approved state views +
+   stale 感知（所有数据与 HTTP 已就绪，工具化是独立评审阶段）。
+
+---
+
+## 停止点确认（§44）
+
+已完成：SceneInstanceView + SceneState visual generation + Review + Approval +
+derived stale detection + 2-view real E2E（r9 正链 + §37 stale 检测真机）。
+§37 regen-refresh 真机复鲜为 MODEL_LIMITATION（逻辑 mock 全覆盖，r9 首轮同对象链真实通过）。
+未做：Shot binding / continuity validator / CharacterPlacement / Agent integration。等待确认。
