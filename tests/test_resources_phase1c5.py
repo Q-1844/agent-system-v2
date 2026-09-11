@@ -994,3 +994,250 @@ def test_t36_project_json_byte_unchanged(penv):
     run(ws.generate_composition_candidates(comp_id, expected_revision=_comp_rev(penv, comp_id),
                                            agnes_client=FakeAgnes(images=[b"X"])))
     assert pj.read_bytes() == before
+
+
+# ============ Commit D：Composition Visual Review + Approval（§15/§16）============
+from src.resources.composition_review import (
+    review_composition_candidates,
+    has_composition_pass_evidence,
+    latest_composition_review_for_asset,
+    derive_composition_overall,
+    derive_binding_dimensions,
+    read_composition_review_records,
+)
+
+
+def _bind_review_entry(prop_id, *, object_correct="pass", holder_correct="pass",
+                       anchor_correct="pass", visibility="visible", notes="ok"):
+    return {"prop_id": prop_id, "object_correct": object_correct,
+            "holder_correct": holder_correct, "anchor_correct": anchor_correct,
+            "visibility": visibility, "notes": notes}
+
+
+def _comp_review_json(*, character_identity="pass", look_consistency="pass",
+                      bindings=None, visual_defects="pass", overall="pass",
+                      summary="good composition"):
+    return _json.dumps({
+        "character_identity": character_identity, "character_notes": "ok",
+        "look_consistency": look_consistency, "look_notes": "ok",
+        "bindings": bindings or [],
+        "visual_defects": visual_defects, "defect_notes": "none",
+        "overall": overall, "summary": summary})
+
+
+def _make_comp_json(prop_ids, **kw):
+    bindings = kw.pop("bindings", None) or [_bind_review_entry(p) for p in prop_ids]
+    return _comp_review_json(bindings=bindings, **kw)
+
+
+async def _seed_comp_with_candidate(env, *, images=(b"COMP-CAND",)):
+    comp_id, look_id, prop_ids = await _seed_composition(env)
+    g = await env["ws"].generate_composition_candidates(
+        comp_id, expected_revision=_comp_rev(env, comp_id),
+        candidate_count=len(images), agnes_client=FakeAgnes(images=list(images)))
+    assert g["ok"], g
+    return comp_id, list(g["candidate_asset_ids"]), prop_ids
+
+
+# ---- 多图契约 + 审查通过全链路 ----
+def test_composition_review_multi_image_contract_and_pass(penv):
+    ws = penv["ws"]
+    comp_id, asset_ids, prop_ids = run(_seed_comp_with_candidate(penv))
+    res_path = penv["pdir"] / "output" / "resources.json"
+    before = res_path.read_bytes()
+    fv = FakeVision(_make_comp_json(prop_ids))
+    r = run(review_composition_candidates(penv["pdir"], comp_id, agnes_client=fv))
+    assert r["ok"] and r["status"] == "completed", r
+    cr = r["candidate_reviews"][0]
+    assert cr["asset_id"] == asset_ids[0] and cr["status"] == "reviewed"
+    assert cr["overall"] == "pass"
+    assert all(cr[d] == "pass" for d in ("character_identity", "look_consistency",
+                                         "prop_fidelity", "prop_binding_correctness",
+                                         "required_prop_visibility", "visual_defects"))
+    # 契约面：多图输入（1 candidate + look refs + 2 prop refs）+ agnes-2.5-flash
+    call = fv.calls[0]
+    assert call["model"] == "agnes-2.5-flash"
+    imgs = [c for c in call["messages"][0]["content"] if c["type"] == "image_url"]
+    assert len(imgs) == 4, f"candidate+look+2 prop refs，实际 {len(imgs)}"
+    assert imgs[0]["image_url"]["url"].startswith("data:image/png;base64,")
+    text = call["messages"][0]["content"][0]["text"]
+    assert "IMAGE 1" in text and "IMAGE 4" in text
+    for p in prop_ids:
+        assert p in text
+    assert "RIGHT HAND" in text.replace("right_hand", "RIGHT HAND").upper() or "right_hand" in text
+    # 证据：composition 流、无 base64、canonical 字节不变
+    recs = read_composition_review_records(penv["pdir"], composition_id=comp_id)
+    assert len(recs) == 1 and recs[0]["operation"] == "composition.review_candidates"
+    assert "data:image" not in _json.dumps(recs)
+    assert res_path.read_bytes() == before
+    # read_composition latest_reviews 反映
+    from src.resources.service import ResourceService
+    read = ResourceService(penv["pdir"], penv["pdir"].name).read_composition(comp_id)
+    assert read["latest_reviews"][asset_ids[0]]["overall"] == "pass"
+    assert len(read["latest_reviews"][asset_ids[0]]["per_binding"]) == 2
+
+
+# ---- T20-T24 六维度逐项 ----
+def test_t20_identity_dimension_fail(penv):
+    comp_id, _, prop_ids = run(_seed_comp_with_candidate(penv))
+    r = run(review_composition_candidates(
+        penv["pdir"], comp_id,
+        agnes_client=FakeVision(_make_comp_json(prop_ids, character_identity="fail",
+                                                overall="pass"))))
+    cr = r["candidate_reviews"][0]
+    assert cr["character_identity"] == "fail" and cr["overall"] == "needs_fix"
+    assert cr["model_overall"] == "pass"      # 模型自报不采信
+
+
+def test_t21_look_dimension_concern(penv):
+    comp_id, _, prop_ids = run(_seed_comp_with_candidate(penv))
+    r = run(review_composition_candidates(
+        penv["pdir"], comp_id,
+        agnes_client=FakeVision(_make_comp_json(prop_ids, look_consistency="concern"))))
+    assert r["candidate_reviews"][0]["look_consistency"] == "concern"
+    assert r["candidate_reviews"][0]["overall"] == "uncertain"
+
+
+def test_t22_prop_fidelity_from_binding_object_correct(penv):
+    comp_id, _, prop_ids = run(_seed_comp_with_candidate(penv))
+    bindings = [_bind_review_entry(prop_ids[0]),
+                _bind_review_entry(prop_ids[1], object_correct="fail",
+                                   notes="this is a metal sword not a compass")]
+    r = run(review_composition_candidates(
+        penv["pdir"], comp_id,
+        agnes_client=FakeVision(_make_comp_json(prop_ids, bindings=bindings))))
+    cr = r["candidate_reviews"][0]
+    assert cr["prop_fidelity"] == "fail"
+    assert cr["overall"] == "needs_fix"
+    per = {b["prop_id"]: b for b in cr["per_binding"]}
+    assert per[prop_ids[1]]["object_correct"] == "fail"
+
+
+def test_t23_holder_anchor_correctness_per_binding(penv):
+    comp_id, _, prop_ids = run(_seed_comp_with_candidate(penv))
+    # holder 错（剑浮在空中/另一人拿着）→ binding 维度 fail
+    b1 = [_bind_review_entry(prop_ids[0], holder_correct="fail", notes="sword floating"),
+          _bind_review_entry(prop_ids[1])]
+    r = run(review_composition_candidates(penv["pdir"], comp_id,
+                                          agnes_client=FakeVision(_comp_review_json(bindings=b1))))
+    assert r["candidate_reviews"][0]["prop_binding_correctness"] == "fail"
+    assert r["candidate_reviews"][0]["overall"] == "needs_fix"
+    # anchor 错（罗盘到了右手）→ binding 维度 fail
+    b2 = [_bind_review_entry(prop_ids[0]),
+          _bind_review_entry(prop_ids[1], anchor_correct="fail", notes="compass in right hand")]
+    r2 = run(review_composition_candidates(penv["pdir"], comp_id,
+                                           agnes_client=FakeVision(_comp_review_json(bindings=b2))))
+    assert r2["candidate_reviews"][0]["prop_binding_correctness"] == "fail"
+
+
+def test_t24_missing_prop_detection(penv):
+    comp_id, _, prop_ids = run(_seed_comp_with_candidate(penv))
+    # 回复缺一个 binding（罗盘没被审到）→ fail closed
+    b1 = [_bind_review_entry(prop_ids[0])]
+    r = run(review_composition_candidates(penv["pdir"], comp_id,
+                                          agnes_client=FakeVision(_comp_review_json(bindings=b1))))
+    cr = r["candidate_reviews"][0]
+    assert cr["prop_binding_correctness"] == "fail"      # 缺失 binding fail closed
+    assert cr["required_prop_visibility"] == "fail"
+    assert cr["overall"] == "needs_fix"
+    # visibility=missing → required_prop_visibility fail
+    b2 = [_bind_review_entry(prop_ids[0]),
+          _bind_review_entry(prop_ids[1], visibility="missing", notes="compass absent")]
+    r2 = run(review_composition_candidates(penv["pdir"], comp_id,
+                                           agnes_client=FakeVision(_comp_review_json(bindings=b2))))
+    assert r2["candidate_reviews"][0]["required_prop_visibility"] == "fail"
+    assert r2["candidate_reviews"][0]["overall"] == "needs_fix"
+    # obscured 同样 fail（required 必须清晰可见）
+    b3 = [_bind_review_entry(prop_ids[0]),
+          _bind_review_entry(prop_ids[1], visibility="obscured")]
+    r3 = run(review_composition_candidates(penv["pdir"], comp_id,
+                                           agnes_client=FakeVision(_comp_review_json(bindings=b3))))
+    assert r3["candidate_reviews"][0]["required_prop_visibility"] == "fail"
+
+
+def test_t25_overall_deterministic_derivation_pure():
+    # 纯函数直证：任何 fail → needs_fix；全 pass → pass；concern/缺失 → uncertain
+    full_pass = {d: "pass" for d in ("character_identity", "look_consistency", "prop_fidelity",
+                                     "prop_binding_correctness", "required_prop_visibility",
+                                     "visual_defects")}
+    assert derive_composition_overall(full_pass) == "pass"
+    assert derive_composition_overall({**full_pass, "visual_defects": "fail"}) == "needs_fix"
+    assert derive_composition_overall({**full_pass, "look_consistency": "concern"}) == "uncertain"
+    assert derive_composition_overall({k: None for k in full_pass}) == "uncertain"   # 缺失不判 pass
+    # binding 派生：缺失 binding → fail closed（缺失=missing-prop 缺陷信号）
+    d = derive_binding_dimensions([], [{"prop_id": "p1", "required_visibility": "required"}])
+    assert d["prop_fidelity"] == "fail" and d["prop_binding_correctness"] == "fail"
+    assert d["required_prop_visibility"] == "fail"
+    # optional binding 不可见不拖垮 required 维度
+    d2 = derive_binding_dimensions(
+        [{"prop_id": "p1", "object_correct": "pass", "holder_correct": "pass",
+          "anchor_correct": "pass", "visibility": "missing"}],
+        [{"prop_id": "p1", "required_visibility": "optional"}])
+    assert d2["required_prop_visibility"] == "pass"
+    assert d2["prop_binding_correctness"] == "pass"
+
+
+# ---- review 失败隔离 / entry 失败 ----
+def test_composition_review_entry_failures_and_isolation(penv):
+    comp_id, asset_ids, _ = run(_seed_comp_with_candidate(penv))
+    # parse 失败 → uncertain，不可作为 pass 证据
+    r = run(review_composition_candidates(penv["pdir"], comp_id, agnes_client=FakeVision("junk")))
+    assert r["candidate_reviews"][0]["status"] == "parse_failed"
+    assert not has_composition_pass_evidence(penv["pdir"], comp_id, asset_ids[0])
+    # provider 错误隔离
+    r2 = run(review_composition_candidates(penv["pdir"], comp_id,
+                                           agnes_client=FakeVision(RuntimeError("boom"))))
+    assert r2["candidate_reviews"][0]["status"] == "provider_error"
+    # entry 失败族
+    assert run(review_composition_candidates(penv["pdir"], "comp_none"))["error"] == "not_found"
+    assert run(review_composition_candidates(penv["pdir"], comp_id,
+                                             asset_ids=["ref_other"]))["error"] == "not_in_candidates"
+
+
+# ---- T26-T28 approve / revoke ----
+def test_t26_t27_t28_approve_gate_then_pass_then_revoke(penv):
+    ws = penv["ws"]
+    comp_id, asset_ids, prop_ids = run(_seed_comp_with_candidate(penv))
+    asset_id = asset_ids[0]
+
+    def rev():
+        return _comp_rev(penv, comp_id)
+
+    # ① 无证据 → 拒
+    r = run(ws.approve_composition_candidate(comp_id, asset_id, expected_revision=rev()))
+    assert r["ok"] is False and r["error"] == "review_not_passed"
+    # ② needs_fix → 拒
+    run(review_composition_candidates(
+        penv["pdir"], comp_id,
+        agnes_client=FakeVision(_make_comp_json(prop_ids, character_identity="fail"))))
+    r = run(ws.approve_composition_candidate(comp_id, asset_id, expected_revision=rev()))
+    assert r["ok"] is False and r["error"] == "review_not_passed"
+    # ③ uncertain（concern）→ 拒
+    run(review_composition_candidates(
+        penv["pdir"], comp_id,
+        agnes_client=FakeVision(_make_comp_json(prop_ids, look_consistency="concern"))))
+    r = run(ws.approve_composition_candidate(comp_id, asset_id, expected_revision=rev()))
+    assert r["ok"] is False and r["error"] == "review_not_passed"
+    # ④ pass → 批准
+    run(review_composition_candidates(penv["pdir"], comp_id,
+                                      agnes_client=FakeVision(_make_comp_json(prop_ids))))
+    r = run(ws.approve_composition_candidate(comp_id, asset_id, expected_revision=rev()))
+    assert r["ok"] and r["verified"], r
+    c = ws.store.load().compositions[comp_id]
+    assert c.approved_reference_asset_ids == [asset_id]
+    assert c.approval_status == "approved" and c.cover_asset_id == asset_id
+    # 幂等 / not_in_candidates / OCC
+    r2 = run(ws.approve_composition_candidate(comp_id, asset_id, expected_revision=rev()))
+    assert r2["ok"] and r2.get("unchanged") is True
+    r3 = run(ws.approve_composition_candidate(comp_id, "ref_other", expected_revision=rev()))
+    assert r3["ok"] is False and r3["error"] == "not_in_candidates"
+    r4 = run(ws.approve_composition_candidate(comp_id, asset_id, expected_revision="00000000"))
+    assert r4["ok"] is False and r4["error"] == "stale_revision"
+    # ⑤ T28 revoke
+    r5 = run(ws.revoke_composition_approval(comp_id, asset_id, expected_revision=rev()))
+    assert r5["ok"] and r5["verified"]
+    c = ws.store.load().compositions[comp_id]
+    assert c.approved_reference_asset_ids == [] and c.approval_status == "unreviewed"
+    assert c.cover_asset_id is None and asset_id in c.reference_asset_ids
+    r6 = run(ws.revoke_composition_approval(comp_id, asset_id, expected_revision=rev()))
+    assert r6["ok"] and r6.get("unchanged") is True

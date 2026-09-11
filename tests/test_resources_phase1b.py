@@ -477,6 +477,10 @@ def test_api_read_only_no_mutation_endpoints(client):
         ("POST", "/api/project/{project}/compositions"),
         ("PATCH", "/api/project/{project}/compositions/{composition_id}"),
         ("POST", "/api/project/{project}/compositions/{composition_id}/generate"),
+        # Phase 1C5：Composition Visual Review + Approval（§15/§16）
+        ("POST", "/api/project/{project}/compositions/{composition_id}/review"),
+        ("POST", "/api/project/{project}/compositions/{composition_id}/approve"),
+        ("POST", "/api/project/{project}/compositions/{composition_id}/revoke-approval"),
     }
     write_routes = []
     for route in rres.router.routes:

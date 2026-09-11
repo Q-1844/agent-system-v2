@@ -260,6 +260,23 @@ class ResourceService:
                           "cover_asset_id": p.cover_asset_id} if p is not None
                          else {"prop_id": b.prop_id, "missing": True}),
             })
+        # 每个候选的最近审查结论（1C5 六维度 review evidence 只读视图）
+        from .composition_review import latest_composition_review_for_asset
+        latest_reviews = {}
+        for aid in c.reference_asset_ids:
+            cr = latest_composition_review_for_asset(self.project_dir, composition_id, aid)
+            if cr is not None:
+                latest_reviews[aid] = {
+                    "status": cr.get("status"), "overall": cr.get("overall"),
+                    "character_identity": cr.get("character_identity"),
+                    "look_consistency": cr.get("look_consistency"),
+                    "prop_fidelity": cr.get("prop_fidelity"),
+                    "prop_binding_correctness": cr.get("prop_binding_correctness"),
+                    "required_prop_visibility": cr.get("required_prop_visibility"),
+                    "visual_defects": cr.get("visual_defects"),
+                    "per_binding": cr.get("per_binding"),
+                    "summary": cr.get("summary"),
+                }
         return {
             **c.to_dict(),
             "revision": composition_revision(c),
@@ -268,6 +285,7 @@ class ResourceService:
             "cover_asset": (self._resolve_assets([c.cover_asset_id])[0] if c.cover_asset_id else None),
             "look": look_resolved,
             "prop_bindings_resolved": bindings,
+            "latest_reviews": latest_reviews,
         }
 
     def read_resource(self, resource_id: str) -> Optional[dict]:

@@ -381,6 +381,74 @@ async def generate_composition_candidates(project: str, composition_id: str,
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class ReviewCompositionRequest(BaseModel):
+    asset_ids: Optional[List[str]] = None   # 缺省=该 Composition 全部候选
+
+
+@router.post("/api/project/{project}/compositions/{composition_id}/review")
+async def review_composition_candidates(project: str, composition_id: str,
+                                        req: ReviewCompositionRequest):
+    """Composition 六维度 Vision Review（§15）：candidate + approved Look reference +
+    逐 prop approved reference 多图输入；逐 binding 检查；overall 由维度确定性推导。
+    不写 canonical；证据进 review_records.jsonl（composition_id 流）。"""
+    try:
+        project_dir = get_project_manager().get_project_dir(project)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"项目不存在: {project}")
+    try:
+        from src.resources.composition_review import review_composition_candidates as _review
+        result = await _review(project_dir, composition_id, asset_ids=req.asset_ids)
+        _raise_for_receipt(result)
+        return result
+    except HTTPException:
+        raise
+    except ResourceSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"资源数据错误: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class ApproveCompositionRequest(BaseModel):
+    asset_id: str
+    expected_revision: str                  # composition 的 resource revision
+    set_cover: Optional[bool] = None        # None=首个 approved 自动成为封面
+
+
+@router.post("/api/project/{project}/compositions/{composition_id}/approve")
+async def approve_composition_candidate(project: str, composition_id: str,
+                                        req: ApproveCompositionRequest):
+    """显式审批 Composition 候选（门槛：六维度 overall=pass 审查证据；否则 409）。"""
+    try:
+        receipt = await _write_service(project).approve_composition_candidate(
+            composition_id, req.asset_id, expected_revision=req.expected_revision,
+            set_cover=req.set_cover)
+        _raise_for_receipt(receipt)
+        return receipt
+    except HTTPException:
+        raise
+    except ResourceSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"资源数据错误: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/project/{project}/compositions/{composition_id}/revoke-approval")
+async def revoke_composition_approval(project: str, composition_id: str,
+                                      req: RevokeApprovalRequest):
+    """撤销 Composition 审批（候选保留；approved 变空回 unreviewed）。"""
+    try:
+        receipt = await _write_service(project).revoke_composition_approval(
+            composition_id, req.asset_id, expected_revision=req.expected_revision)
+        _raise_for_receipt(receipt)
+        return receipt
+    except HTTPException:
+        raise
+    except ResourceSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"资源数据错误: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 def _raise_for_receipt(receipt: dict):
     """业务 receipt（ok=False）→ 对应 HTTP 状态码；body 保持完整 receipt 结构。"""
     if receipt.get("ok"):

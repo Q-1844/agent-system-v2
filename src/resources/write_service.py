@@ -1481,3 +1481,83 @@ class ResourceWriteService:
                            candidate_urls=[u for _, u in images if u],
                            verified=verified,
                            resource_document_revision_after=doc_rev)
+
+    # ==================================================================
+    # Composition Approval（Phase 1C5 §16：review pass ≠ 自动 approved，双向分开）
+    # ==================================================================
+    async def approve_composition_candidate(self, composition_id: str, asset_id: str, *,
+                                            expected_revision: str,
+                                            set_cover: Optional[bool] = None) -> dict:
+        """显式审批 Composition 候选。门槛（§16）：对应当前候选存在最新有效的
+        overall=pass 六维度审查证据（无 pass 证据不能 approve；pass 不自动 approve）。"""
+        op = "resource.approve_composition_candidate"
+        from .composition_review import has_composition_pass_evidence
+        async with self.store.write_lock():
+            doc = self.store.load()
+            comp = doc.compositions.get(composition_id)
+            if comp is None:
+                return self._receipt(op, ok=False, target=composition_id, error="not_found",
+                                     detail=f"composition 不存在: {composition_id}")
+            cur = composition_revision(comp)
+            if expected_revision != cur:
+                return self._stale_receipt(op, expected_revision, cur, comp.to_dict())
+            if asset_id not in comp.reference_asset_ids:
+                return self._receipt(op, ok=False, target=composition_id,
+                                     error="not_in_candidates",
+                                     detail=f"asset 不在该 Composition 候选集中: {asset_id}")
+            if not has_composition_pass_evidence(self.project_dir, composition_id, asset_id):
+                return self._receipt(op, ok=False, target=composition_id,
+                                     error="review_not_passed",
+                                     detail=f"该候选缺少 overall=pass 的六维度审查证据，禁止 approve"
+                                            f"（先 POST /compositions/{composition_id}/review）：{asset_id}")
+            if asset_id in comp.approved_reference_asset_ids:
+                return self._receipt(op, ok=True, target=composition_id, after=comp.to_dict(),
+                                     revision=cur, verified=True, unchanged=True, error=None)
+            before = comp.to_dict()
+            comp.approved_reference_asset_ids.append(asset_id)
+            if set_cover or (set_cover is None and comp.cover_asset_id is None):
+                comp.cover_asset_id = asset_id
+            comp.approval_status = ApprovalState.APPROVED.value
+            comp.updated_at = time.time()
+            self.store.save(doc)
+            doc_rev = self._verify_after_save()
+            reloaded = self.store.load().compositions.get(composition_id)
+            verified = (reloaded is not None
+                        and asset_id in reloaded.approved_reference_asset_ids)
+            return self._receipt(op, ok=True, target=composition_id,
+                                 before=before, after=comp.to_dict(),
+                                 revision=composition_revision(comp), verified=verified,
+                                 document_revision_after=doc_rev)
+
+    async def revoke_composition_approval(self, composition_id: str, asset_id: str, *,
+                                          expected_revision: str) -> dict:
+        """撤销 Composition 审批（候选保留；approved 变空回 unreviewed；cover 指向则清空）。"""
+        op = "resource.revoke_composition_approval"
+        async with self.store.write_lock():
+            doc = self.store.load()
+            comp = doc.compositions.get(composition_id)
+            if comp is None:
+                return self._receipt(op, ok=False, target=composition_id, error="not_found",
+                                     detail=f"composition 不存在: {composition_id}")
+            cur = composition_revision(comp)
+            if expected_revision != cur:
+                return self._stale_receipt(op, expected_revision, cur, comp.to_dict())
+            if asset_id not in comp.approved_reference_asset_ids:
+                return self._receipt(op, ok=True, target=composition_id, after=comp.to_dict(),
+                                     revision=cur, verified=True, unchanged=True, error=None)
+            before = comp.to_dict()
+            comp.approved_reference_asset_ids.remove(asset_id)
+            if comp.cover_asset_id == asset_id:
+                comp.cover_asset_id = None
+            if not comp.approved_reference_asset_ids:
+                comp.approval_status = ApprovalState.UNREVIEWED.value
+            comp.updated_at = time.time()
+            self.store.save(doc)
+            doc_rev = self._verify_after_save()
+            reloaded = self.store.load().compositions.get(composition_id)
+            verified = (reloaded is not None
+                        and asset_id not in reloaded.approved_reference_asset_ids)
+            return self._receipt(op, ok=True, target=composition_id,
+                                 before=before, after=comp.to_dict(),
+                                 revision=composition_revision(comp), verified=verified,
+                                 document_revision_after=doc_rev)
