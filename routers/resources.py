@@ -72,6 +72,7 @@ _ERROR_STATUS = {
     "invalid_reference_input": 400,
     "validation_error": 400,
     "invalid_candidate_count": 400,
+    "provider_failed": 502,
 }
 
 
@@ -262,6 +263,13 @@ class CreateLookRequest(BaseModel):
     expected_document_revision: str
 
 
+class GenerateLookCandidatesRequest(BaseModel):
+    expected_revision: str              # look 的 resource revision（entry OCC）
+    candidate_count: int = 1            # 硬上限 4（service 校验）
+    view_purpose: str = ""
+    seed: Optional[int] = None
+
+
 @router.post("/api/project/{project}/clothings")
 async def create_clothing(project: str, req: CreateClothingRequest):
     """创建 Clothing（不自动生成图片；approval_status=unreviewed）。"""
@@ -399,6 +407,26 @@ async def update_look(project: str, look_id: str, patch: dict = Body(...)):
             expected_revision=patch.get("expected_revision", ""))
         _raise_for_receipt(receipt)
         return receipt
+    except HTTPException:
+        raise
+    except ResourceSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"资源数据错误: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/project/{project}/looks/{look_id}/generate")
+async def generate_look_candidates(project: str, look_id: str,
+                                   req: GenerateLookCandidatesRequest):
+    """CharacterLook 候选生成（三阶段协议：短锁 snapshot → 无锁图片生成 → 重锁验证 commit）。
+    这是长操作（真实图片生成秒级~几十秒）；生成期间绝不持 project_write_lock。"""
+    try:
+        result = await _write_service(project).generate_look_candidates(
+            look_id, expected_revision=req.expected_revision,
+            candidate_count=req.candidate_count, view_purpose=req.view_purpose,
+            seed=req.seed)
+        _raise_for_receipt(result)
+        return result
     except HTTPException:
         raise
     except ResourceSchemaError as e:

@@ -21,8 +21,10 @@
 #   Agent 模块**（resources 基础设施不反向依赖 Agent runtime）。
 from __future__ import annotations
 
+import base64
 import hashlib
 import time
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -43,6 +45,14 @@ from .models import (
     new_reference_asset_id,
 )
 from .store import ResourceStore
+from .generation import (
+    agnes_image_inputs,
+    compute_generation_basis,
+    recompute_basis_still_holds,
+    save_candidate_files,
+    sha256_bytes,
+)
+from . import generation_records
 
 # 本轮允许注册的本地图片扩展名（注册的是"已有图片"；其余一律拒绝，不猜内容）
 _ALLOWED_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
@@ -444,3 +454,225 @@ class ResourceWriteService:
                                  before=before, after=lk.to_dict(),
                                  revision=look_revision(lk), verified=verified,
                                  document_revision_after=doc_rev)
+
+    # ==================================================================
+    # CharacterLook candidate generation（§10-§21）—— 三阶段协议
+    # ==================================================================
+    MAX_CANDIDATE_COUNT = 4
+
+    @staticmethod
+    async def _download_default(url: str, proxy=None) -> bytes:
+        """下载 provider 生成图（GCS 公开读，不带 Authorization——CLAUDE.md 实测）。"""
+        import httpx
+        async with httpx.AsyncClient(proxy=proxy, timeout=60) as c:
+            r = await c.get(url)
+            r.raise_for_status()
+            return r.content
+
+    @staticmethod
+    def _gen_result(generation_id: str, look_id: str, *, ok: bool, status: str,
+                    error: Optional[str] = None, detail: Optional[str] = None,
+                    basis: Optional[dict] = None, candidate_asset_ids=None,
+                    candidate_files=None, candidate_urls=None, verified: bool = False,
+                    record: Optional[dict] = None, **extra) -> dict:
+        out = {
+            "ok": ok, "operation": "look.generate_candidates",
+            "generation_id": generation_id, "look_id": look_id,
+            "status": status, "error": error, "detail": detail,
+            "basis": basis,
+            "candidate_asset_ids": list(candidate_asset_ids or []),
+            "candidate_files": list(candidate_files or []),
+            "candidate_urls": list(candidate_urls or []),
+            "verified": verified, "generation_record": record,
+        }
+        out.update(extra)
+        return out
+
+    async def generate_look_candidates(self, look_id: str, *, expected_revision: str,
+                                       candidate_count: int = 1, view_purpose: str = "",
+                                       seed: Optional[int] = None,
+                                       agnes_client=None, downloader=None) -> dict:
+        """Look 候选生成（§10）。三阶段协议（§5/§14/§19）：
+          阶段1 短锁：entry OCC（expected_revision=look revision）→ 构造 GenerationBasis
+                 → 无 identity ref 则 fail closed missing_character_reference
+                 → generation_status=generating → 释放锁；
+          阶段2 无锁：调 AgnesClient.generate_image（绝不持 project_write_lock 等图片模型）；
+          阶段3 短锁：重算 basis 语义指纹，成立才 commit（ReferenceAsset source=generated +
+                 追加 reference_asset_ids + status=ready + 重读验证），否则 stale_basis 拒绝。
+        失败语义（§21）：provider 失败不伪造 asset；旧 reference_asset_ids 保留；
+        record 诚实记录。candidate_count 默认 1、硬上限 4。"""
+        op = "look.generate_candidates"
+        generation_id = f"gen_{uuid.uuid4().hex[:12]}"
+        # ---- 入参校验（锁外）----
+        if not isinstance(candidate_count, int) or isinstance(candidate_count, bool) \
+                or candidate_count < 1 or candidate_count > self.MAX_CANDIDATE_COUNT:
+            return self._gen_result(generation_id, look_id, ok=False, status="failed",
+                                    error="invalid_candidate_count",
+                                    detail=f"candidate_count 必须是 1~{self.MAX_CANDIDATE_COUNT} 的整数")
+        if seed is not None and not isinstance(seed, int):
+            return self._gen_result(generation_id, look_id, ok=False, status="failed",
+                                    error="validation_error", detail="seed 必须是整数或 null")
+
+        started_at = time.time()
+        record_base: Dict[str, Any] = {
+            "generation_id": generation_id, "operation": op, "look_id": look_id,
+            "basis": None, "prompt": None, "model": None, "seed": seed,
+            "candidate_asset_ids": [], "candidate_files": [], "candidate_urls": [],
+            "started_at": started_at, "completed_at": None, "status": None,
+            "error": None, "verified": False, "resource_document_revision_after": None,
+        }
+
+        def _finish(**kw) -> dict:
+            rec = dict(record_base)
+            rec.update(kw.get("record_extra") or {})
+            rec["completed_at"] = time.time()
+            for k in ("status", "error", "basis", "candidate_asset_ids",
+                      "candidate_files", "candidate_urls", "verified",
+                      "resource_document_revision_after"):
+                if k in kw:
+                    rec[k] = kw[k]
+            rec["detail"] = kw.get("detail")   # §21：真实错误信息必须进 record
+            generation_records.append_record(self.project_dir, rec)
+            kw.setdefault("record", rec)
+            return self._gen_result(generation_id, look_id, ok=kw.get("ok", False),
+                                    status=rec["status"], error=rec["error"],
+                                    detail=kw.get("detail"), basis=rec["basis"],
+                                    candidate_asset_ids=rec["candidate_asset_ids"],
+                                    candidate_files=rec["candidate_files"],
+                                    candidate_urls=rec["candidate_urls"],
+                                    verified=rec["verified"], record=rec)
+
+        # ---- 阶段 1：短锁 entry OCC + basis snapshot（§5 阶段1）----
+        async with self.store.write_lock():
+            doc = self.store.load()
+            look = doc.looks.get(look_id)
+            if look is None:
+                return self._gen_result(generation_id, look_id, ok=False, status="failed",
+                                        error="not_found", detail=f"look 不存在: {look_id}")
+            cur = look_revision(look)
+            if expected_revision != cur:
+                return self._gen_result(
+                    generation_id, look_id, ok=False, status="failed",
+                    error="stale_revision", detail="entry OCC：expected_revision 与当前 look revision 不一致",
+                    expected_revision=expected_revision, current_revision=cur,
+                    current=look.to_dict())
+            if agnes_client is None:
+                from deps import get_agnes_client   # 惰性 import（避免 app 上下文依赖进入 resources 测试）
+                agnes_client = get_agnes_client()
+            model_id = agnes_client.models["image"]
+            size_tier = "1K"
+            ratio = "2:3"   # 全身参考竖图（与既有角色三视图同口径，非视频画幅）
+            project = ProjectStore(self.project_dir).load()
+            basis = compute_generation_basis(
+                self.project_dir, doc, project, look,
+                model_id=model_id, size_tier=size_tier, ratio=ratio,
+                seed=seed, candidate_count=candidate_count, view_purpose=view_purpose)
+            record_base["basis"] = basis
+            record_base["prompt"] = basis["prompt"]
+            record_base["model"] = basis["model"]
+            # §12 fail closed：没有任何可读 Character reference → 不退化纯文字生成
+            if not basis["character_reference_snapshot"]:
+                return _finish(ok=False, status="failed", error="missing_character_reference",
+                               detail=f"Character {look.character_name} 没有可用的 identity reference（fail closed，不退化纯文字生成）")
+            prev_status = look.generation_status
+            look.generation_status = GenerationStatus.GENERATING.value
+            self.store.save(doc)
+
+        # ---- 阶段 2：无锁调图片模型（§5 阶段2 / §14）----
+        images: List[tuple] = []   # (bytes, url|None)
+        seeds_used: List[Optional[int]] = []
+        try:
+            refs = agnes_image_inputs(self.project_dir, basis["character_reference_snapshot"]) + \
+                agnes_image_inputs(self.project_dir, basis["clothing_reference_snapshot"])
+            proxy = getattr(agnes_client, "_proxy", None) or getattr(agnes_client, "proxy", None)
+            dl = downloader or self._download_default
+            for i in range(candidate_count):
+                use_seed = (seed + i) if seed is not None else None   # 多候选：seed+i 保证可复现且不重复
+                seeds_used.append(use_seed)
+                record_base["seeds_used"] = list(seeds_used)
+                res = await agnes_client.generate_image(
+                    prompt=basis["prompt"], image_refs=refs,
+                    size_tier=size_tier, ratio=ratio, seed=use_seed)
+                url = (res or {}).get("url")
+                b64 = (res or {}).get("b64")
+                if b64:
+                    data = base64.b64decode(b64)
+                elif url:
+                    data = await dl(url, proxy=proxy)
+                else:
+                    raise RuntimeError("provider 未返回 url/b64（无图可保存，不伪造 asset）")
+                images.append((data, url))
+        except Exception as e:   # §21 provider failure：不伪造、旧 refs 保留、status=failed
+            # 已到手的候选图保留在 generation 临时目录供诊断（不注册、不 attach）
+            diag_files = save_candidate_files(self.project_dir, look_id, generation_id,
+                                              [d for d, _ in images]) if images else []
+            async with self.store.write_lock():
+                doc = self.store.load()
+                lk = doc.looks.get(look_id)
+                if lk is not None:
+                    lk.generation_status = GenerationStatus.FAILED.value
+                    self.store.save(doc)
+            return _finish(ok=False, status="failed", error="provider_failed",
+                           detail=f"{type(e).__name__}: {e}",
+                           candidate_files=diag_files,
+                           candidate_urls=[u for _, u in images if u])
+
+        # 候选图落盘（唯一 generation_id 目录，无需锁）
+        saved_files = save_candidate_files(self.project_dir, look_id, generation_id,
+                                           [d for d, _ in images])
+
+        # ---- 阶段 3：短锁重验 basis + commit / stale 拒绝（§19/§20）----
+        async with self.store.write_lock():
+            doc = self.store.load()
+            project = ProjectStore(self.project_dir).load()
+            holds, why = recompute_basis_still_holds(self.project_dir, doc, project,
+                                                     look_id, basis)
+            if not holds:
+                # §19：绝不把旧生成结果 attach 到已变化的 Look；图片保留供诊断
+                lk = doc.looks.get(look_id)
+                if lk is not None:
+                    lk.generation_status = prev_status   # look 内容态未变（诚实还原）
+                    self.store.save(doc)
+                return _finish(ok=False, status="stale_basis",
+                               error="stale_generation_basis",
+                               detail=f"生成期间 generation basis 已变化（{why}），拒绝 commit；"
+                                      f"候选图保留在 generation 目录供诊断，未成为 Look 资产",
+                               candidate_files=saved_files,
+                               candidate_urls=[u for _, u in images if u],
+                               resource_document_revision_after=None)
+
+            # ---- successful commit（§20）----
+            candidate_asset_ids: List[str] = []
+            for (data, url), rel in zip(images, saved_files):
+                asset = ReferenceAsset(asset_id=new_reference_asset_id(),
+                                       local=rel, url=url,
+                                       checksum=sha256_bytes(data),
+                                       view=view_purpose or "",
+                                       purpose="look",
+                                       background_type="",       # 原始生成图，不臆造背景类型
+                                       source="generated")
+                doc.reference_assets[asset.asset_id] = asset
+                candidate_asset_ids.append(asset.asset_id)
+            lk = doc.looks[look_id]
+            lk.reference_asset_ids.extend(candidate_asset_ids)
+            # 不追加 approved_reference_asset_ids；approval_status 保持 unreviewed（§23）
+            lk.generation_status = GenerationStatus.READY.value
+            self.store.save(doc)
+            doc_rev = self._verify_after_save()
+
+            # §20.7 重读验证：Look / ReferenceAssets / 文件 真实存在
+            reloaded = self.store.load()
+            lk2 = reloaded.looks.get(look_id)
+            assets_ok = all(aid in reloaded.reference_assets for aid in candidate_asset_ids)
+            files_ok = all((self.project_dir / f).is_file() for f in saved_files)
+            verified = (lk2 is not None
+                        and all(aid in lk2.reference_asset_ids for aid in candidate_asset_ids)
+                        and lk2.generation_status == GenerationStatus.READY.value
+                        and lk2.approval_status == ApprovalState.UNREVIEWED.value
+                        and assets_ok and files_ok)
+            return _finish(ok=True, status="committed",
+                           candidate_asset_ids=candidate_asset_ids,
+                           candidate_files=saved_files,
+                           candidate_urls=[u for _, u in images if u],
+                           verified=verified,
+                           resource_document_revision_after=doc_rev)

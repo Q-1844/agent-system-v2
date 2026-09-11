@@ -716,3 +716,353 @@ def test_candidate_files_saved_under_look_id_dir(env):
 def _look_revision_of(env, look_id):
     from src.resources.models import look_revision
     return look_revision(env["ws"].store.load().looks[look_id])
+
+
+# =====================================================================
+# Work D — 三阶段生成协议 / stale-basis 保护 / failure semantics
+# =====================================================================
+import base64 as _b64
+
+from src.resources.generation_records import read_records as _read_records
+
+
+class FakeAgnes:
+    """可编程 fake AgnesClient（只实现 generate_image 契约面）。
+    on_call(call_index) 是 async hook——用于生成中途改 canonical（T19/T20）/ 检查锁（T13）。"""
+
+    def __init__(self, images=None, *, fail_on=None, on_call=None, b64_mode=True):
+        self.models = {"image": "agnes-image-test"}
+        self.images = images or [b"FAKE-PNG-1", b"FAKE-PNG-2", b"FAKE-PNG-3", b"FAKE-PNG-4"]
+        self.calls = 0
+        self.fail_on = fail_on
+        self.on_call = on_call
+        self.b64_mode = b64_mode
+        self.prompts = []
+        self.refs_seen = []
+        self.seeds_seen = []
+
+    async def generate_image(self, prompt, *, image_refs=None, size_tier="1K",
+                             ratio="16:9", seed=None, want_b64=False):
+        i = self.calls
+        self.calls += 1
+        self.prompts.append(prompt)
+        self.refs_seen.append(list(image_refs or []))
+        self.seeds_seen.append(seed)
+        if self.on_call is not None:
+            await self.on_call(i)
+        if self.fail_on is not None and i == self.fail_on:
+            raise RuntimeError("provider boom（测试注入）")
+        data = self.images[i % len(self.images)]
+        if self.b64_mode:
+            return {"url": None, "b64": _b64.b64encode(data).decode("ascii")}
+        return {"url": f"https://provider-out/{i}.png", "b64": None}
+
+
+async def _fake_dl(url, proxy=None):
+    return b"DOWNLOADED:" + url.encode()
+
+
+def _current_look_rev(env, look_id):
+    from src.resources.models import look_revision
+    return look_revision(env["ws"].store.load().looks[look_id])
+
+
+# ---- T10 无 identity ref → missing_character_reference（fail closed）----
+def test_t10_generate_without_identity_reference(env):
+    # 无三视图文件的 Character：把 views 指向不存在文件且无 url
+    pdir = env["pdir"]
+    proj = ProjectStore(pdir).load()
+    c = Character(name="Bare", description_en="no views")
+    proj.characters.append(c)
+    ProjectStore(pdir).save(proj)
+
+    async def flow():
+        ws = env["ws"]
+        r = await ws.create_look(character_name="Bare", label="Bare · x",
+                                 expected_document_revision=document_revision(ws.store.load()))
+        return r["target"]
+
+    look_id = run(flow())
+    fake = FakeAgnes()
+    r = run(env["ws"].generate_look_candidates(
+        look_id, expected_revision=_current_look_rev(env, look_id), agnes_client=fake))
+    assert r["ok"] is False and r["error"] == "missing_character_reference"
+    assert fake.calls == 0                       # 未调用图片模型（不退化纯文字生成）
+    rec = _read_records(env["pdir"], look_id=look_id)
+    assert len(rec) == 1 and rec[0]["status"] == "failed" and rec[0]["error"] == "missing_character_reference"
+
+
+# ---- T12 candidate_count 上限 ----
+def test_t12_candidate_count_limits(env):
+    look_id, _ = run(_seed_look(env))
+    for bad in (0, -1, 5, 100):
+        r = run(env["ws"].generate_look_candidates(
+            look_id, expected_revision=_current_look_rev(env, look_id),
+            candidate_count=bad, agnes_client=FakeAgnes()))
+        assert r["ok"] is False and r["error"] == "invalid_candidate_count", bad
+    # 上限 4 可用
+    fake = FakeAgnes(images=[b"P1", b"P2", b"P3", b"P4"])
+    r = run(env["ws"].generate_look_candidates(
+        look_id, expected_revision=_current_look_rev(env, look_id),
+        candidate_count=4, agnes_client=fake))
+    assert r["ok"] is True and r["status"] == "committed", r
+    assert fake.calls == 4 and len(r["candidate_asset_ids"]) == 4
+
+
+# ---- entry OCC：expected_revision 错 → 拒绝启动、无 record、状态不变 ----
+def test_generate_entry_occ_rejected(env):
+    look_id, _ = run(_seed_look(env))
+    r = run(env["ws"].generate_look_candidates(
+        look_id, expected_revision="00000000", agnes_client=FakeAgnes()))
+    assert r["ok"] is False and r["error"] == "stale_revision"
+    assert r["expected_revision"] == "00000000" and r["current"]["character_name"] == "Alice"
+    assert fake_calls_zero(_read_records(env["pdir"], look_id=look_id))
+    assert env["ws"].store.load().looks[look_id].generation_status == "none"
+
+
+def fake_calls_zero(recs):
+    assert recs == []
+    return True
+
+
+# ---- T13 生成期间不持 write lock（mock/spy）----
+def test_t13_no_write_lock_held_during_model_call(env):
+    look_id, _ = run(_seed_look(env))
+    pname = env["pdir"].name
+    checked = {"n": 0}
+
+    async def spy_lock(i):
+        lock = project_write_lock(pname)
+        assert lock.locked() is False, f"generate_image 调用期间持锁（call {i}）"
+        checked["n"] += 1
+
+    fake = FakeAgnes(on_call=spy_lock)
+    r = run(env["ws"].generate_look_candidates(
+        look_id, expected_revision=_current_look_rev(env, look_id),
+        candidate_count=2, agnes_client=fake))
+    assert r["ok"] and r["status"] == "committed"
+    assert checked["n"] == 2
+    # 结束后锁也必须释放
+    assert project_write_lock(pname).locked() is False
+
+
+# ---- T14/T15 生成成功：文件落盘 / asset 创建 / look ids 更新 / 不自动 approved ----
+def test_t14_t15_generation_success_commit(env):
+    pdir = env["pdir"]
+    pj_before = (pdir / "output" / "project.json").read_bytes()
+    look_id, cl_id = run(_seed_look(env))
+    fake = FakeAgnes()
+    r = run(env["ws"].generate_look_candidates(
+        look_id, expected_revision=_current_look_rev(env, look_id),
+        view_purpose="front", agnes_client=fake))
+    assert r["ok"] and r["status"] == "committed" and r["verified"] is True
+    assert fake.calls == 1
+    # §12：identity refs 按确定性顺序送进模型（front/side/back 都可用 → 3 个 image_refs）
+    assert len(fake.refs_seen[0]) == 3
+    assert all(str(x).startswith(("data:image/", "https://")) for x in fake.refs_seen[0])
+
+    # 文件真实落盘（原始生成图，不做 rembg 替换）
+    rel = r["candidate_files"][0]
+    assert (pdir / rel).is_file() and (pdir / rel).read_bytes() == b"FAKE-PNG-1"
+    assert "output/resources/looks/" in rel and "candidate_01.png" in rel
+
+    # ReferenceAsset：source=generated、checksum=真实内容 sha256、local/url 双存
+    doc = env["ws"].store.load()
+    asset = doc.reference_assets[r["candidate_asset_ids"][0]]
+    import hashlib
+    assert asset.source == "generated" and asset.purpose == "look"
+    assert asset.checksum == hashlib.sha256(b"FAKE-PNG-1").hexdigest()
+    assert asset.local == rel and asset.url is None   # b64 模式无 provider url
+
+    # Look：reference_asset_ids 追加；generation_status=ready
+    look = doc.looks[look_id]
+    assert look.reference_asset_ids == r["candidate_asset_ids"]
+    assert look.generation_status == "ready"
+
+    # §20.4/§23：approved 不追加、approval 保持 unreviewed（T15）
+    assert look.approved_reference_asset_ids == [] and look.approval_status == "unreviewed"
+
+    # §18：record 完整 + verified + 无 base64
+    recs = _read_records(pdir, look_id=look_id)
+    assert len(recs) == 1
+    rec = recs[0]
+    for field in ("generation_id", "operation", "look_id", "basis", "prompt", "model",
+                  "seed", "candidate_asset_ids", "started_at", "completed_at",
+                  "status", "error", "verified", "resource_document_revision_after"):
+        assert field in rec, field
+    assert rec["status"] == "committed" and rec["verified"] is True
+    assert rec["candidate_asset_ids"] == r["candidate_asset_ids"]
+    assert rec["resource_document_revision_after"] == r["generation_record"]["resource_document_revision_after"]
+    assert "base64" not in (pdir / "output" / "resources" / "generation_records.jsonl").read_text(encoding="utf-8")
+
+    # T21：整个生成流程不修改 project.json / Character.views 不迁移
+    assert (pdir / "output" / "project.json").read_bytes() == pj_before
+    c = ProjectStore(pdir).load().get_character("Alice")
+    assert set(c.views.keys()) == {"front", "side", "back"}
+
+
+# ---- T16 多候选：独立 asset_id / 独立文件 / seed+i ----
+def test_t16_multi_candidates_independent_assets(env):
+    look_id, _ = run(_seed_look(env))
+    fake = FakeAgnes(images=[b"C1IMG", b"C2IMG", b"C3IMG"])
+    r = run(env["ws"].generate_look_candidates(
+        look_id, expected_revision=_current_look_rev(env, look_id),
+        candidate_count=3, seed=42, agnes_client=fake))
+    assert r["ok"] and len(r["candidate_asset_ids"]) == 3
+    assert len(set(r["candidate_asset_ids"])) == 3
+    doc = env["ws"].store.load()
+    assert all(aid in doc.looks[look_id].reference_asset_ids for aid in r["candidate_asset_ids"])
+    # 独立文件、独立 checksum
+    import hashlib
+    sums = {doc.reference_assets[aid].checksum for aid in r["candidate_asset_ids"]}
+    assert sums == {hashlib.sha256(x).hexdigest() for x in (b"C1IMG", b"C2IMG", b"C3IMG")}
+    assert len(set(r["candidate_files"])) == 3
+    # seed+i 诚实记录（42,43,44）
+    assert fake.seeds_seen == [42, 43, 44]
+    assert r["generation_record"]["seeds_used"] == [42, 43, 44]
+
+
+# ---- T18 provider failure：不伪造 / Look failed / 旧 refs 保留 ----
+def test_t18_provider_failure_semantics(env):
+    look_id, _ = run(_seed_look(env))
+    # 第一次：成功 1 候选 → 旧 refs
+    fake1 = FakeAgnes()
+    r1 = run(env["ws"].generate_look_candidates(
+        look_id, expected_revision=_current_look_rev(env, look_id), agnes_client=fake1))
+    assert r1["ok"]
+    old_ids = list(r1["candidate_asset_ids"])
+
+    # 第二次：candidate 2/2 失败（多候选中途失败 → 整体失败，无部分提交）
+    fake2 = FakeAgnes(images=[b"X1", b"X2"], fail_on=1)
+    r2 = run(env["ws"].generate_look_candidates(
+        look_id, expected_revision=_current_look_rev(env, look_id),
+        candidate_count=2, agnes_client=fake2))
+    assert r2["ok"] is False and r2["status"] == "failed" and r2["error"] == "provider_failed"
+    assert r2["candidate_asset_ids"] == []                    # 不伪造 asset
+    doc = env["ws"].store.load()
+    look = doc.looks[look_id]
+    assert look.reference_asset_ids == old_ids                # 旧 refs 保留
+    assert look.generation_status == "failed"
+    assert len(doc.reference_assets) == 1                     # 无新增 asset
+    rec = _read_records(env["pdir"], look_id=look_id)[-1]
+    assert rec["status"] == "failed" and rec["verified"] is False
+    assert rec["error"] == "provider_failed"
+    assert "provider boom" in (rec.get("detail") or "")   # §21：真实错误进 record
+    # 下一次 generation 可重试成功
+    fake3 = FakeAgnes(images=[b"RETRY-IMG"])
+    r3 = run(env["ws"].generate_look_candidates(
+        look_id, expected_revision=_current_look_rev(env, look_id), agnes_client=fake3))
+    assert r3["ok"] and r3["status"] == "committed"
+    doc2 = env["ws"].store.load()
+    assert doc2.looks[look_id].generation_status == "ready"
+    assert doc2.looks[look_id].reference_asset_ids == old_ids + r3["candidate_asset_ids"]
+
+
+# ---- T19 stale generation basis：生成期间改 Look → commit 拒绝 ----
+def test_t19_stale_look_basis_mid_generation(env):
+    look_id, _ = run(_seed_look(env))
+    ws = env["ws"]
+
+    async def mutate_mid_flight(i):
+        # 模拟用户在 30s 生成窗口内改 Look 外观语义
+        r = await ws.update_look(look_id, {"appearance_delta": "red coat instead"},
+                                 expected_revision=_current_look_rev(env, look_id))
+        assert r["ok"], r
+
+    fake = FakeAgnes(on_call=mutate_mid_flight)
+    r = run(ws.generate_look_candidates(
+        look_id, expected_revision=_current_look_rev(env, look_id), agnes_client=fake))
+    assert fake.calls == 1                      # 图片确实生成了
+    assert r["ok"] is False and r["status"] == "stale_basis"
+    assert r["error"] == "stale_generation_basis"
+    assert r["candidate_asset_ids"] == []       # 未 attach
+    # 图片保留在 generation 目录供诊断
+    assert r["candidate_files"] and (env["pdir"] / r["candidate_files"][0]).is_file()
+    doc = ws.store.load()
+    look = doc.looks[look_id]
+    assert look.reference_asset_ids == []       # Look 不挂旧候选
+    assert look.generation_status == "none"     # 状态诚实还原（未 attach 任何东西）
+    assert len(doc.reference_assets) == 0       # 未注册任何 asset
+    rec = _read_records(env["pdir"], look_id=look_id)[-1]
+    assert rec["status"] == "stale_basis" and rec["verified"] is False
+    assert rec["candidate_asset_ids"] == []     # record 诚实：生成完成但 commit 被拒
+
+
+# ---- T20 stale Clothing basis：生成期间改 Clothing → commit 拒绝 ----
+def test_t20_stale_clothing_basis_mid_generation(env):
+    look_id, cl_id = run(_seed_look(env))
+    ws = env["ws"]
+
+    async def mutate_mid_flight(i):
+        r = await ws.update_clothing(cl_id, {"description": "red wool coat now"},
+                                     expected_revision=_current_look_rev_clothing(env, cl_id))
+        assert r["ok"], r
+
+    fake = FakeAgnes(on_call=mutate_mid_flight)
+    r = run(ws.generate_look_candidates(
+        look_id, expected_revision=_current_look_rev(env, look_id), agnes_client=fake))
+    assert r["ok"] is False and r["status"] == "stale_basis" and r["error"] == "stale_generation_basis"
+    assert ws.store.load().looks[look_id].reference_asset_ids == []
+    rec = _read_records(env["pdir"], look_id=look_id)[-1]
+    assert rec["status"] == "stale_basis"
+
+
+def _current_look_rev_clothing(env, cl_id):
+    return _clothing_revision(env["ws"].store.load().clothings[cl_id])
+
+
+# ---- T25 重启后：Look / assets / generation records 完整恢复 ----
+def test_t25_restart_recovery(env):
+    look_id, cl_id = run(_seed_look(env))
+    fake = FakeAgnes()
+    r = run(env["ws"].generate_look_candidates(
+        look_id, expected_revision=_current_look_rev(env, look_id), agnes_client=fake))
+    assert r["ok"]
+    # 模拟重启：全新 service 实例从磁盘重读
+    ws2 = ResourceWriteService(env["pdir"], env["pdir"].name)
+    rs2 = ResourceService(env["pdir"], env["pdir"].name)
+    look = ws2.store.load().looks[look_id]
+    assert look.generation_status == "ready"
+    assert look.reference_asset_ids == r["candidate_asset_ids"]
+    for aid in r["candidate_asset_ids"]:
+        a = ws2.store.load().reference_assets[aid]
+        assert (env["pdir"] / a.local).is_file()
+    recs = _read_records(env["pdir"], look_id=look_id)
+    assert len(recs) == 1 and recs[0]["status"] == "committed"
+    rl = rs2.read_look(look_id)
+    assert rl["generation_status"] == "ready"
+    assert [x["asset_id"] for x in rl["reference_assets"]] == r["candidate_asset_ids"]
+    assert all(not x["missing"] for x in rl["reference_assets"])
+
+
+# ---- HTTP：POST /looks/{id}/generate（router wiring，fake agnes 经 deps 注入）----
+def test_http_generate_endpoint(wclient, monkeypatch):
+    import deps as deps_mod
+    c, pdir, name = wclient
+
+    r = c.post(f"/api/project/{name}/looks", json={
+        "character_name": "Alice", "label": "Alice · Gen",
+        "expected_document_revision": _doc_rev(c, name)})
+    assert r.status_code == 200
+    look_id = r.json()["target"]
+    look_rev = r.json()["revision"]
+
+    fake = FakeAgnes()
+    monkeypatch.setattr(deps_mod, "get_agnes_client", lambda: fake, raising=True)
+    r2 = c.post(f"/api/project/{name}/looks/{look_id}/generate", json={
+        "expected_revision": look_rev, "candidate_count": 1})
+    assert r2.status_code == 200, r2.text
+    body = r2.json()
+    assert body["ok"] and body["status"] == "committed" and body["verified"] is True
+    assert len(body["candidate_asset_ids"]) == 1
+
+    # candidate_count 越界 → 400
+    r3 = c.post(f"/api/project/{name}/looks/{look_id}/generate", json={
+        "expected_revision": body["generation_record"]["resource_document_revision_after"],
+        "candidate_count": 9})
+    assert r3.status_code == 400 and r3.json()["detail"]["error"] == "invalid_candidate_count"
+
+    # look 不存在 → 404
+    r4 = c.post(f"/api/project/{name}/looks/look_none/generate", json={
+        "expected_revision": "whatever"})
+    assert r4.status_code == 404
