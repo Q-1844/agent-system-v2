@@ -637,7 +637,13 @@ class SceneVisualService:
             return {"ok": False, "error": "location_view_not_approved",
                     "detail": "base LocationView 无 approved approval record（审批证据缺失）"}
         expectations = build_review_expectations(doc, base_view)
-        fp = expectations_fingerprint(expectations, [base_view.reference_asset_id])
+        # 按批准时审查实际使用的参考组重算。🔴 用 `is not None` 判空——首张 view 审查时
+        # 参考组是空列表 []（falsy！`or` fallback 会把它替换成当前 ref 造成永远 mismatch，
+        # E2E 两次实证后才抓到）。
+        appr_ref_ids = latest_appr.get("reference_asset_ids_used")
+        fp = expectations_fingerprint(
+            expectations, list(appr_ref_ids) if appr_ref_ids is not None
+            else [base_view.reference_asset_id])
         if fp != latest_appr["reviewed_basis_fingerprint"]:
             return {"ok": False, "error": "location_view_stale",
                     "detail": ("base LocationView 批准后语义已变化（期望指纹不一致）；"
@@ -1122,6 +1128,7 @@ class SceneVisualService:
                 "generation_id": generation_id, "candidate_index": candidate_index,
                 "asset_id": asset_id, "candidate_file": candidate_file,
                 "reviewed_basis_fingerprint": ev["record"].get("reviewed_basis_fingerprint"),
+                "reference_asset_ids_used": list(ev["record"].get("reference_asset_ids_used") or []),
                 "revision_after": revision_after,
                 "scene_document_revision_after": doc_rev,
                 "started_at": None, "completed_at": time.time(), "verified": verified,

@@ -53,12 +53,15 @@ def build_scene_instance_view_prompt(location: Location,
         cam.append(f"looking toward the {_c(base_view.look_direction)}")
     parts.append("Camera: " + (", ".join(cam) if cam else "same viewpoint as the base reference image") + ".")
 
-    # SECTION 3 — Scene State（全局态）
+    # SECTION 3 — Scene State（全局态）。🔴 显式覆盖指令：base 参考是中性日光态，
+    # 模型倾向复制 base 光照——state 要求必须显式声明 override（E2E 实证弱点）。
     state_bits = [_c(projection.get(k)) for k in
                   ("time_of_day", "weather", "lighting", "environment_conditions")]
     state_bits = [b for b in state_bits if b]
     if state_bits:
-        parts.append("Current scene state: " + ", ".join(state_bits) + ".")
+        parts.append("Current scene state (OVERRIDE the base reference's daylight and "
+                     "neutral lighting where the state differs): "
+                     + ", ".join(state_bits) + ".")
     else:
         parts.append("Current scene state: unchanged from the base reference (neutral state).")
 
