@@ -253,19 +253,128 @@ class Prop:
         return cls(origin=origin, **kw)
 
 
+# ============ CompositionPropBinding（Phase 1C5）============
+class CompositionRelation(str, Enum):
+    """角色与道具的视觉关系（有限 enum，不做万能 free JSON——执行文档 §4）。
+    语义 = 这张 approved composition plate 上道具应该呈现的视觉关系，
+    不是剧情 ownership / 不是时间线。"""
+    HELD = "held"
+    CARRIED = "carried"
+    WORN = "worn"
+    ATTACHED = "attached"
+    NEAR = "near"
+
+
+class CompositionAnchor(str, Enum):
+    """道具在画面上相对角色的视觉锚点（视觉关系，不是世界坐标、不是剧情 ownership）。"""
+    RIGHT_HAND = "right_hand"
+    LEFT_HAND = "left_hand"
+    BACK = "back"
+    WAIST = "waist"
+    NECK = "neck"
+    BESIDE_CHARACTER = "beside_character"
+
+
+class RequiredVisibility(str, Enum):
+    """该道具在 composition 中是否必须清晰可见（review 维度 required_prop_visibility 的依据）。"""
+    REQUIRED = "required"
+    OPTIONAL = "optional"
+
+
+@dataclass
+class CompositionPropBinding:
+    """一条 角色↔道具 视觉绑定。只描述这张 approved composition 应该长什么样。
+    绝不表示道具的持有时间线（那属于未来 Scene/Shot Continuity System，禁止入 Resources）。"""
+    prop_id: str                                 # FK → Prop.prop_id
+    relation: str = CompositionRelation.HELD.value
+    anchor: str = CompositionAnchor.RIGHT_HAND.value
+    visual_state_note: str = ""                  # 如 "sword sheathed" / "compass open"
+    required_visibility: str = RequiredVisibility.REQUIRED.value
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: Any) -> "CompositionPropBinding":
+        d = dict(d or {})
+        known = {f for f in cls.__dataclass_fields__}
+        return cls(**{k: v for k, v in d.items() if k in known})
+
+
+# ============ CharacterReferenceComposition（Phase 1C5）============
+def new_composition_id() -> str:
+    return f"comp_{uuid.uuid4().hex[:12]}"
+
+
+@dataclass
+class CharacterReferenceComposition:
+    """为后续生成一致性而提前批准的视觉组合参考（approved visual composition plate）：
+    Character + Approved CharacterLook + 1~3 个 Prop + 明确的视觉关系。
+
+    🔴 语义边界（执行文档 §3）：它是 Reference（生产参考图版），**不是**：
+    剧情 / Shot 状态 / Prop ownership canonical / Scene continuity / 角色永久持有关系。
+    "Alice 右手拿木剑"只意味着这张 approved plate 里她右手拿木剑。"""
+    composition_id: str
+    scope: str = ResourceScope.PROJECT.value
+    label: str = ""                              # 显示名（rename 不变 composition_id）
+    character_name: str = ""                     # FK → Character.name（身份，不可改）
+    look_id: str = ""                            # FK → CharacterLook.look_id（须 approved）
+    prop_bindings: List[CompositionPropBinding] = field(default_factory=list)
+    pose_note: str = ""
+    composition_description: str = ""
+    reference_asset_ids: List[str] = field(default_factory=list)
+    approved_reference_asset_ids: List[str] = field(default_factory=list)
+    cover_asset_id: Optional[str] = None
+    generation_status: str = GenerationStatus.NONE.value
+    approval_status: str = ApprovalState.UNREVIEWED.value
+    origin: Optional[ResourceOrigin] = None
+    created_at: float = field(default_factory=time.time)
+    updated_at: float = field(default_factory=time.time)
+
+    def to_dict(self) -> dict:
+        d = asdict(self)   # asdict 递归展开 prop_bindings 为 list[dict]
+        d["origin"] = self.origin.to_dict() if self.origin else None
+        return d
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "CharacterReferenceComposition":
+        d = dict(d or {})
+        origin = ResourceOrigin.from_dict(d.get("origin"))
+        bindings_raw = d.get("prop_bindings") or []
+        known = {f for f in cls.__dataclass_fields__} - {"origin", "prop_bindings"}
+        kw = {k: v for k, v in d.items() if k in known}
+        return cls(origin=origin,
+                   prop_bindings=[CompositionPropBinding.from_dict(b)
+                                  for b in bindings_raw if isinstance(b, dict)],
+                   **kw)
+
+
 # ============ ResourceDocument（canonical 顶层容器）============
-RESOURCES_SCHEMA_VERSION = 1
+# schema v2（Phase 1C5）：新增顶层 canonical collection `compositions`。
+# 惰性迁移契约（执行文档 §5）：
+#   - v1 文件可读：in-memory compositions={}，且 in-memory schema_version 规范化为 2；
+#   - 纯 read 绝不写盘（ResourceStore.load 从不 save）→ 不存在"读时自动写回 v2"；
+#   - 第一次真实 mutation save 时才把 v2 持久化到磁盘（幂等、非破坏性，旧字段原样保留）；
+#   - 未知 future schema（≥3）继续 fail closed（ResourceSchemaError）。
+# 为什么 bump 而不是 v1 additive：v1 文件若带 compositions key，不认识该 key 的旧 runtime
+#   会 load→save 静默丢弃 compositions（from_dict known-key 白名单外全部忽略）；
+#   v2 让旧 runtime fail closed 大声报错而非静默丢数据——这是唯一安全方向。
+RESOURCES_SCHEMA_VERSION = 2
+_SUPPORTED_RESOURCE_SCHEMA_VERSIONS = (1, 2)
 
 
 @dataclass
 class ResourceDocument:
     """resources.json canonical 文档。
     稳定 ID keyed map（不依赖 name 作身份）。
-    schema_version 受支持范围外 → fail closed（ResourceSchemaError），绝不静默猜测/重置。"""
+    schema_version：v1（无 compositions）与 v2（有 compositions）均可读（惰性迁移）；
+    in-memory 一律规范化为 v2；受支持范围外 → fail closed（ResourceSchemaError），
+    绝不静默猜测/重置。"""
     schema_version: int = RESOURCES_SCHEMA_VERSION
     looks: Dict[str, CharacterLook] = field(default_factory=dict)
     clothings: Dict[str, Clothing] = field(default_factory=dict)
     props: Dict[str, Prop] = field(default_factory=dict)
+    compositions: Dict[str, CharacterReferenceComposition] = field(default_factory=dict)
     reference_assets: Dict[str, ReferenceAsset] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
@@ -274,6 +383,7 @@ class ResourceDocument:
             "looks": {k: v.to_dict() for k, v in self.looks.items()},
             "clothings": {k: v.to_dict() for k, v in self.clothings.items()},
             "props": {k: v.to_dict() for k, v in self.props.items()},
+            "compositions": {k: v.to_dict() for k, v in self.compositions.items()},
             "reference_assets": {k: v.to_dict() for k, v in self.reference_assets.items()},
         }
 
@@ -281,14 +391,19 @@ class ResourceDocument:
     def from_dict(cls, raw: dict) -> "ResourceDocument":
         raw = dict(raw or {})
         sv = raw.get("schema_version", RESOURCES_SCHEMA_VERSION)
-        if sv != RESOURCES_SCHEMA_VERSION:
+        if sv not in _SUPPORTED_RESOURCE_SCHEMA_VERSIONS:
             raise ResourceSchemaError(
-                f"unsupported resources.json schema_version: {sv} (expected {RESOURCES_SCHEMA_VERSION})")
+                f"unsupported resources.json schema_version: {sv} "
+                f"(supported: {list(_SUPPORTED_RESOURCE_SCHEMA_VERSIONS)})")
+        # v1 → in-memory 规范化为 v2（compositions 缺省 {}）；纯读路径不写盘，
+        # 只有真实 mutation 的 save 才会把 v2 持久化（§5 惰性迁移契约）。
         return cls(
-            schema_version=sv,
+            schema_version=RESOURCES_SCHEMA_VERSION,
             looks={k: CharacterLook.from_dict(v) for k, v in (raw.get("looks") or {}).items()},
             clothings={k: Clothing.from_dict(v) for k, v in (raw.get("clothings") or {}).items()},
             props={k: Prop.from_dict(v) for k, v in (raw.get("props") or {}).items()},
+            compositions={k: CharacterReferenceComposition.from_dict(v)
+                          for k, v in (raw.get("compositions") or {}).items()},
             reference_assets={k: ReferenceAsset.from_dict(v) for k, v in (raw.get("reference_assets") or {}).items()},
         )
 
@@ -317,6 +432,10 @@ def clothing_revision(c: Clothing) -> str:
 
 def prop_revision(p: Prop) -> str:
     return hashlib.sha256(_canonical_json(p.to_dict()).encode("utf-8")).hexdigest()[:8]
+
+
+def composition_revision(c: CharacterReferenceComposition) -> str:
+    return hashlib.sha256(_canonical_json(c.to_dict()).encode("utf-8")).hexdigest()[:8]
 
 
 def reference_asset_revision(a: ReferenceAsset) -> str:
