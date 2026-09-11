@@ -18,6 +18,7 @@ from .models import (
     ResourceScope, ResourceSource, ApprovalState, GenerationStatus, ResourceOrigin,
     new_look_id, new_clothing_id, new_prop_id, new_reference_asset_id,
     look_revision, clothing_revision, prop_revision, reference_asset_revision,
+    document_revision,
 )
 from .store import legacy_character_references as _legacy_refs
 
@@ -188,6 +189,12 @@ class ResourceService:
         if resource_id.startswith("ref_"):
             return self.read_reference_asset(resource_id)
         return None
+
+    # ============ document revision（创建类 mutation 的 OCC 期望值来源）============
+    def document_revision(self) -> str:
+        """当前整个 resources document 的内容指纹。创建新资源时调用方以此作为
+        expected_document_revision（Phase 1C1 §4）。"""
+        return document_revision(self.store.load())
 
     # ============ legacy Character.views 只读 adapter（§8/§9）============
     def legacy_character_references(self, character_name: str) -> List[dict]:

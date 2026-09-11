@@ -348,3 +348,175 @@ def test_lock_released_after_each_mutation(env):
     run(ws.create_clothing(name="C", expected_document_revision=env["doc_rev"]))
     lock = project_write_lock(env["pdir"].name)
     assert lock.locked() is False   # mutation 返回后锁必须已释放
+
+
+# =====================================================================
+# Work B — HTTP 写 API 契约（router 只做 mapping；业务错误→结构化 status 码）
+# =====================================================================
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from src.utils.project_manager import ProjectManager
+import routers.resources as rres
+
+
+@pytest.fixture
+def wclient(tmp_path):
+    """最小 FastAPI app（resources router）+ PM 指向 tmp_path。"""
+    pdir = make_project(tmp_path, with_character=True)
+    make_view_files(pdir)
+    orig = rres.get_project_manager
+    rres.get_project_manager = lambda: ProjectManager(base_dir=str(tmp_path))
+    app = FastAPI()
+    app.include_router(rres.router)
+    try:
+        yield TestClient(app), pdir, pdir.name
+    finally:
+        rres.get_project_manager = orig
+
+
+def _doc_rev(c, project):
+    return c.get(f"/api/project/{project}/resources").json()["document_revision"]
+
+
+def test_http_list_envelope_has_document_revision(wclient):
+    c, pdir, name = wclient
+    for path in ("/resources", "/looks", "/clothings", "/props"):
+        r = c.get(f"/api/project/{name}{path}")
+        assert r.status_code == 200 and len(r.json()["document_revision"]) == 8, path
+
+
+def test_http_create_clothing_and_stale_409(wclient):
+    c, pdir, name = wclient
+    rev = _doc_rev(c, name)
+    r = c.post(f"/api/project/{name}/clothings", json={
+        "name": "Black Coat", "description": "long black wool coat",
+        "expected_document_revision": rev})
+    assert r.status_code == 200 and r.json()["ok"] is True and r.json()["verified"] is True
+
+    r2 = c.post(f"/api/project/{name}/clothings", json={
+        "name": "Second", "expected_document_revision": rev})
+    assert r2.status_code == 409
+    body = r2.json()["detail"]
+    assert body["error"] == "stale_revision" and body["current_revision"] != rev
+
+    # 缺 expected_document_revision → pydantic 422
+    r3 = c.post(f"/api/project/{name}/clothings", json={"name": "Third"})
+    assert r3.status_code == 422
+
+
+def test_http_clothing_rename_patch_and_unknown_field(wclient):
+    c, pdir, name = wclient
+    rev = _doc_rev(c, name)
+    r = c.post(f"/api/project/{name}/clothings", json={"name": "C1", "expected_document_revision": rev})
+    cl_id, cl_rev = r.json()["target"], r.json()["revision"]
+
+    r2 = c.patch(f"/api/project/{name}/clothings/{cl_id}",
+                 json={"name": "Dark Coat", "expected_revision": cl_rev})
+    assert r2.status_code == 200 and r2.json()["after"]["clothing_id"] == cl_id
+
+    r3 = c.patch(f"/api/project/{name}/clothings/{cl_id}",
+                 json={"clothing_id": "hack", "expected_revision": r2.json()["revision"]})
+    assert r3.status_code == 400 and r3.json()["detail"]["error"] == "validation_error"
+
+    r4 = c.patch(f"/api/project/{name}/clothings/{cl_id}",
+                 json={"name": "X", "expected_revision": "badrev"})
+    assert r4.status_code == 409 and r4.json()["detail"]["error"] == "stale_revision"
+
+
+def test_http_delete_clothing_in_use_409_then_free(wclient):
+    c, pdir, name = wclient
+    rev = _doc_rev(c, name)
+    r = c.post(f"/api/project/{name}/clothings", json={"name": "C1", "expected_document_revision": rev})
+    cl_id, cl_rev = r.json()["target"], r.json()["revision"]
+    r2 = c.post(f"/api/project/{name}/looks", json={
+        "character_name": "Alice", "label": "Alice · C1", "clothing_id": cl_id,
+        "expected_document_revision": r.json()["document_revision_after"]})
+    assert r2.status_code == 200
+
+    r3 = c.delete(f"/api/project/{name}/clothings/{cl_id}", params={"expected_revision": cl_rev})
+    assert r3.status_code == 409 and r3.json()["detail"]["error"] == "resource_in_use"
+    assert r3.json()["detail"]["used_by_looks"] == [r2.json()["target"]]
+
+    # 无引用的另一个 clothing 可删
+    r4 = c.post(f"/api/project/{name}/clothings", json={"name": "C2",
+                "expected_document_revision": r2.json()["document_revision_after"]})
+    r5 = c.delete(f"/api/project/{name}/clothings/{r4.json()['target']}",
+                  params={"expected_revision": r4.json()["revision"]})
+    assert r5.status_code == 200 and r5.json()["ok"] is True
+
+
+def test_http_register_reference_asset_local_and_traversal(wclient):
+    c, pdir, name = wclient
+    (pdir / "o").mkdir(exist_ok=True)
+    (pdir / "o" / "coat.png").write_bytes(b"PNGDATA")
+    rev = _doc_rev(c, name)
+
+    r = c.post(f"/api/project/{name}/reference-assets", json={
+        "local": "o/coat.png", "view": "flat", "purpose": "design",
+        "expected_document_revision": rev})
+    assert r.status_code == 200
+    import hashlib
+    assert r.json()["after"]["checksum"] == hashlib.sha256(b"PNGDATA").hexdigest()
+
+    r2 = c.post(f"/api/project/{name}/reference-assets", json={
+        "local": "../evil.png", "expected_document_revision": rev})
+    assert r2.status_code == 400 and r2.json()["detail"]["error"] == "invalid_reference_input"
+
+    r3 = c.post(f"/api/project/{name}/reference-assets", json={
+        "url": "ftp://bad", "expected_document_revision": rev})
+    assert r3.status_code == 400
+
+
+def test_http_attach_detach_clothing_reference(wclient):
+    c, pdir, name = wclient
+    (pdir / "o").mkdir(exist_ok=True)
+    (pdir / "o" / "ref.png").write_bytes(b"P")
+    rev = _doc_rev(c, name)
+    r = c.post(f"/api/project/{name}/reference-assets", json={
+        "local": "o/ref.png", "expected_document_revision": rev})
+    ra_id = r.json()["target"]
+    r2 = c.post(f"/api/project/{name}/clothings", json={"name": "C",
+                "expected_document_revision": r.json()["document_revision_after"]})
+    cl_id, cl_rev = r2.json()["target"], r2.json()["revision"]
+
+    r3 = c.post(f"/api/project/{name}/clothings/{cl_id}/references",
+                json={"asset_id": ra_id, "expected_revision": cl_rev})
+    assert r3.status_code == 200 and r3.json()["after"]["reference_asset_ids"] == [ra_id]
+
+    r4 = c.post(f"/api/project/{name}/clothings/{cl_id}/references",
+                json={"asset_id": "ref_none", "expected_revision": r3.json()["revision"]})
+    assert r4.status_code == 404 and r4.json()["detail"]["error"] == "asset_not_found"
+
+    r5 = c.delete(f"/api/project/{name}/clothings/{cl_id}/references/{ra_id}",
+                  params={"expected_revision": r3.json()["revision"]})
+    assert r5.status_code == 200 and r5.json()["after"]["reference_asset_ids"] == []
+
+
+def test_http_create_and_patch_look(wclient):
+    c, pdir, name = wclient
+    r = c.post(f"/api/project/{name}/looks", json={
+        "character_name": "Alice", "label": "Alice · Base",
+        "expected_document_revision": _doc_rev(c, name)})
+    assert r.status_code == 200
+    look_id, look_rev = r.json()["target"], r.json()["revision"]
+
+    r2 = c.post(f"/api/project/{name}/looks", json={
+        "character_name": "Nobody", "expected_document_revision": _doc_rev(c, name)})
+    assert r2.status_code == 404 and r2.json()["detail"]["error"] == "character_not_found"
+
+    r3 = c.post(f"/api/project/{name}/looks", json={
+        "character_name": "Alice", "clothing_id": "clothing_none",
+        "expected_document_revision": _doc_rev(c, name)})
+    assert r3.status_code == 404 and r3.json()["detail"]["error"] == "clothing_not_found"
+
+    r4 = c.patch(f"/api/project/{name}/looks/{look_id}",
+                 json={"label": "Alice · V2", "expected_revision": look_rev})
+    assert r4.status_code == 200 and r4.json()["after"]["label"] == "Alice · V2"
+
+    r5 = c.patch(f"/api/project/{name}/looks/{look_id}",
+                 json={"character_name": "Bob", "expected_revision": look_rev})
+    assert r5.status_code == 400
+
+    # read 端点反映 PATCH 后状态
+    r6 = c.get(f"/api/project/{name}/looks/{look_id}")
+    assert r6.json()["label"] == "Alice · V2" and r6.json()["generation_status"] == "none"

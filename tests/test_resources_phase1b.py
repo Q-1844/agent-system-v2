@@ -441,11 +441,30 @@ def test_api_looks_filter_and_legacy(client):
 
 
 def test_api_read_only_no_mutation_endpoints(client):
-    """Phase 1B 契约：resources router 不注册任何写方法。"""
+    """写端点白名单契约（Phase 1B 只读 → Phase 1C1 §22 开放有限写 API 后演进）：
+    resources router 的写方法必须恰为本轮规定的清单，不得夹带其它 mutation
+    （无 Look delete / 无 Prop 写 API / 无 approve / reject / 无 Agent 接线端点）。"""
     write_methods = {"post", "put", "patch", "delete"}
+    allowed = {
+        ("POST", "/api/project/{project}/clothings"),
+        ("PATCH", "/api/project/{project}/clothings/{clothing_id}"),
+        ("DELETE", "/api/project/{project}/clothings/{clothing_id}"),
+        ("POST", "/api/project/{project}/reference-assets"),
+        ("POST", "/api/project/{project}/clothings/{clothing_id}/references"),
+        ("DELETE", "/api/project/{project}/clothings/{clothing_id}/references/{asset_id}"),
+        ("POST", "/api/project/{project}/looks"),
+        ("PATCH", "/api/project/{project}/looks/{look_id}"),
+        ("POST", "/api/project/{project}/looks/{look_id}/generate"),
+    }
+    write_routes = []
     for route in rres.router.routes:
-        methods = {m.lower() for m in getattr(route, "methods", set())}
-        assert not (methods & write_methods), f"mutation endpoint leaked: {route.path} {methods}"
+        methods = {m.upper() for m in getattr(route, "methods", set())}
+        if methods & {m.upper() for m in write_methods}:
+            write_routes.append(route)
+            for m in methods & {mm.upper() for mm in write_methods}:
+                assert (m, route.path) in allowed, f"未规定的 mutation 端点: {m} {route.path}"
+    # 写端点确实存在（防止白名单形同虚设）
+    assert len(write_routes) >= 8
 
 
 def test_api_project_not_found(tmp_path):
