@@ -455,6 +455,10 @@ def test_api_read_only_no_mutation_endpoints(client):
         ("POST", "/api/project/{project}/looks"),
         ("PATCH", "/api/project/{project}/looks/{look_id}"),
         ("POST", "/api/project/{project}/looks/{look_id}/generate"),
+        # Phase 1C2：Visual Review + Approval
+        ("POST", "/api/project/{project}/looks/{look_id}/review"),
+        ("POST", "/api/project/{project}/looks/{look_id}/approve"),
+        ("POST", "/api/project/{project}/looks/{look_id}/revoke-approval"),
     }
     write_routes = []
     for route in rres.router.routes:

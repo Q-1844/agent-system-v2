@@ -20,10 +20,16 @@ def records_path(project_dir) -> Path:
     return Path(project_dir) / "output" / "resources" / "generation_records.jsonl"
 
 
-def append_record(project_dir, record: dict) -> None:
-    """追加一条 generation record（append-only；JSON 行，UTF-8，ensure_ascii=False）。
-    不做文件锁：写入发生在 project_write_lock 临界区内（由调用方保证），单行 append。"""
-    p = records_path(project_dir)
+def review_records_path(project_dir) -> Path:
+    """Phase 1C2：视觉审查证据流（与 generation_records 对称、相互独立）。"""
+    return Path(project_dir) / "output" / "resources" / "review_records.jsonl"
+
+
+def append_record(project_dir, record: dict, *, path: Optional[Path] = None) -> None:
+    """追加一条 record（append-only；JSON 行，UTF-8，ensure_ascii=False）。
+    不做文件锁：写入发生在临界区/单调用方上下文内（由调用方保证），单行 append。
+    path 缺省=generation_records.jsonl；review 流传 review_records_path()。"""
+    p = path or records_path(project_dir)
     p.parent.mkdir(parents=True, exist_ok=True)
     line = json.dumps(record, ensure_ascii=False, default=str)
     with p.open("a", encoding="utf-8") as f:
@@ -32,10 +38,11 @@ def append_record(project_dir, record: dict) -> None:
 
 def read_records(project_dir, *, look_id: Optional[str] = None,
                  generation_id: Optional[str] = None,
-                 limit: Optional[int] = None) -> List[dict]:
+                 limit: Optional[int] = None,
+                 path: Optional[Path] = None) -> List[dict]:
     """读取 records（append 顺序）。容错尾部损坏行（append 半行崩溃 → 跳过，
     不让诊断数据读不出来）。look_id/generation_id 过滤；limit 取最近 N 条。"""
-    p = records_path(project_dir)
+    p = path or records_path(project_dir)
     if not p.exists():
         return []
     out: List[dict] = []

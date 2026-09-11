@@ -74,6 +74,9 @@ _ERROR_STATUS = {
     "invalid_candidate_count": 400,
     "provider_failed": 502,
     "generation_in_progress": 409,   # Phase 1C1.1 per-look single-flight
+    "review_not_passed": 409,        # Phase 1C2：approve 需 pass 证据
+    "not_in_candidates": 400,
+    "no_candidates": 400,
 }
 
 
@@ -428,6 +431,81 @@ async def generate_look_candidates(project: str, look_id: str,
             seed=req.seed)
         _raise_for_receipt(result)
         return result
+    except HTTPException:
+        raise
+    except ResourceSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"资源数据错误: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =====================================================================
+# Phase 1C2 — Visual Review + Approval（review pass ≠ approved，双向分开）
+# =====================================================================
+class ReviewLookRequest(BaseModel):
+    asset_ids: Optional[List[str]] = None   # 缺省=该 Look 全部候选
+    view_purpose: str = ""
+
+
+class ApproveLookReferenceRequest(BaseModel):
+    asset_id: str
+    expected_revision: str                  # look 的 resource revision
+    set_cover: Optional[bool] = None        # None=首个 approved 自动成为封面
+
+
+class RevokeApprovalRequest(BaseModel):
+    asset_id: str
+    expected_revision: str
+
+
+@router.post("/api/project/{project}/looks/{look_id}/review")
+async def review_look_candidates(project: str, look_id: str, req: ReviewLookRequest):
+    """视觉审查候选（身份一致/服装一致/视觉缺陷三维度）→ 独立 review evidence。
+    不写 canonical；review pass 不产生任何 approved 状态。vision 模型 agnes-2.5-flash。"""
+    try:
+        project_dir = get_project_manager().get_project_dir(project)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"项目不存在: {project}")
+    try:
+        from src.resources.look_review import review_look_candidates as _review
+        result = await _review(project_dir, look_id, asset_ids=req.asset_ids,
+                               view_purpose=req.view_purpose)
+        _raise_for_receipt(result)
+        return result
+    except HTTPException:
+        raise
+    except ResourceSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"资源数据错误: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/project/{project}/looks/{look_id}/approve")
+async def approve_look_reference(project: str, look_id: str, req: ApproveLookReferenceRequest):
+    """显式审批：把某张候选放入 approved_reference_asset_ids。
+    门槛：该候选必须有 overall=pass 的审查证据（review_not_passed → 409）。"""
+    try:
+        receipt = await _write_service(project).approve_look_reference(
+            look_id, req.asset_id, expected_revision=req.expected_revision,
+            set_cover=req.set_cover)
+        _raise_for_receipt(receipt)
+        return receipt
+    except HTTPException:
+        raise
+    except ResourceSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"资源数据错误: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/project/{project}/looks/{look_id}/revoke-approval")
+async def revoke_look_approval(project: str, look_id: str, req: RevokeApprovalRequest):
+    """撤销审批（候选保留在 reference_asset_ids；approved 变空回 unreviewed）。"""
+    try:
+        receipt = await _write_service(project).revoke_look_approval(
+            look_id, req.asset_id, expected_revision=req.expected_revision)
+        _raise_for_receipt(receipt)
+        return receipt
     except HTTPException:
         raise
     except ResourceSchemaError as e:

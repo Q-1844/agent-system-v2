@@ -700,3 +700,86 @@ class ResourceWriteService:
                            candidate_urls=[u for _, u in images if u],
                            verified=verified,
                            resource_document_revision_after=doc_rev)
+
+    # ==================================================================
+    # Approval（Phase 1C2）：review pass ≠ approved（双向严格分开）
+    # ==================================================================
+    async def approve_look_reference(self, look_id: str, asset_id: str, *,
+                                     expected_revision: str,
+                                     set_cover: Optional[bool] = None) -> dict:
+        """显式审批：把某张候选 ReferenceAsset 放入 approved_reference_asset_ids。
+        门槛（双向语义的另一半）：该 asset 在本 Look 下必须已有 overall=pass 的
+        视觉审查证据（review pass 不自动 approve，但没有 pass 证据也不能 approve）。
+        set_cover：None=首个 approved 自动成为封面（展示默认，非审批语义）；
+        True=强制设为封面；False=不动封面。"""
+        op = "resource.approve_look_reference"
+        from .look_review import has_pass_evidence
+        async with self.store.write_lock():
+            doc = self.store.load()
+            lk = doc.looks.get(look_id)
+            if lk is None:
+                return self._receipt(op, ok=False, target=look_id, error="not_found",
+                                     detail=f"look 不存在: {look_id}")
+            cur = look_revision(lk)
+            if expected_revision != cur:
+                return self._stale_receipt(op, expected_revision, cur, lk.to_dict())
+            if asset_id not in lk.reference_asset_ids:
+                return self._receipt(op, ok=False, target=look_id, error="not_in_candidates",
+                                     detail=f"asset 不在该 Look 候选集中: {asset_id}")
+            if not has_pass_evidence(self.project_dir, look_id, asset_id):
+                return self._receipt(op, ok=False, target=look_id,
+                                     error="review_not_passed",
+                                     detail=f"该候选缺少 overall=pass 的视觉审查证据，禁止 approve"
+                                            f"（先 POST /looks/{look_id}/review）：{asset_id}")
+            if asset_id in lk.approved_reference_asset_ids:
+                return self._receipt(op, ok=True, target=look_id, after=lk.to_dict(),
+                                     revision=cur, verified=True, unchanged=True, error=None)
+            before = lk.to_dict()
+            lk.approved_reference_asset_ids.append(asset_id)
+            if set_cover or (set_cover is None and lk.cover_asset_id is None):
+                lk.cover_asset_id = asset_id
+            lk.approval_status = ApprovalState.APPROVED.value
+            lk.updated_at = time.time()
+            self.store.save(doc)
+            doc_rev = self._verify_after_save()
+            reloaded = self.store.load().looks.get(look_id)
+            verified = (reloaded is not None
+                        and asset_id in reloaded.approved_reference_asset_ids)
+            return self._receipt(op, ok=True, target=look_id,
+                                 before=before, after=lk.to_dict(),
+                                 revision=look_revision(lk), verified=verified,
+                                 document_revision_after=doc_rev)
+
+    async def revoke_look_approval(self, look_id: str, asset_id: str, *,
+                                   expected_revision: str) -> dict:
+        """撤销审批：从 approved_reference_asset_ids 移除；cover 若指向该 asset 置 None；
+        approved 变空则 approval_status 回 unreviewed。不动 reference_asset_ids（候选仍在）。"""
+        op = "resource.revoke_look_approval"
+        async with self.store.write_lock():
+            doc = self.store.load()
+            lk = doc.looks.get(look_id)
+            if lk is None:
+                return self._receipt(op, ok=False, target=look_id, error="not_found",
+                                     detail=f"look 不存在: {look_id}")
+            cur = look_revision(lk)
+            if expected_revision != cur:
+                return self._stale_receipt(op, expected_revision, cur, lk.to_dict())
+            if asset_id not in lk.approved_reference_asset_ids:
+                return self._receipt(op, ok=True, target=look_id, after=lk.to_dict(),
+                                     revision=cur, verified=True, unchanged=True, error=None)
+            before = lk.to_dict()
+            lk.approved_reference_asset_ids.remove(asset_id)
+            if lk.cover_asset_id == asset_id:
+                lk.cover_asset_id = None
+            if not lk.approved_reference_asset_ids:
+                lk.approval_status = ApprovalState.UNREVIEWED.value
+            lk.updated_at = time.time()
+            self.store.save(doc)
+            doc_rev = self._verify_after_save()
+            reloaded = self.store.load().looks.get(look_id)
+            verified = (reloaded is not None
+                        and asset_id not in reloaded.approved_reference_asset_ids)
+            return self._receipt(op, ok=True, target=look_id,
+                                 before=before, after=lk.to_dict(),
+                                 revision=look_revision(lk), verified=verified,
+                                 document_revision_after=doc_rev)

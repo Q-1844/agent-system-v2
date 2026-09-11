@@ -125,6 +125,19 @@ class ResourceService:
             cl = self.store.get_clothing(lk.clothing_id)
             if cl is not None:
                 clothing = {**cl.to_dict(), "revision": clothing_revision(cl)}
+        # 每个候选的最近审查结论（1C2 review evidence 只读视图；证据本体在 review_records.jsonl）
+        from .look_review import latest_review_for_asset
+        latest_reviews = {}
+        for aid in lk.reference_asset_ids:
+            cr = latest_review_for_asset(self.project_dir, look_id, aid)
+            if cr is not None:
+                latest_reviews[aid] = {
+                    "status": cr.get("status"), "overall": cr.get("overall"),
+                    "identity_consistency": cr.get("identity_consistency"),
+                    "costume_consistency": cr.get("costume_consistency"),
+                    "visual_defects": cr.get("visual_defects"),
+                    "summary": cr.get("summary"),
+                }
         return {
             **lk.to_dict(),
             "revision": look_revision(lk),
@@ -132,6 +145,7 @@ class ResourceService:
             "approved_reference_assets": self._resolve_assets(lk.approved_reference_asset_ids),
             "cover_asset": (self._resolve_assets([lk.cover_asset_id])[0] if lk.cover_asset_id else None),
             "clothing": clothing,
+            "latest_reviews": latest_reviews,
         }
 
     def read_clothing(self, clothing_id: str) -> Optional[dict]:
