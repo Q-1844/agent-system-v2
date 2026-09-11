@@ -1,11 +1,20 @@
-"""Scene System V1 路由（Phase S1）——空间与场景事实系统 HTTP API。
+"""Scene System V1 路由（Phase S1 Foundation + Phase S2A 视觉协议）。
 
 命名空间 /api/project/{project}/scene-system/*：
 🔴 不与现有 /scenes（Story Scene 对账保存）、/story、/resources、/character-design
    路径空间冲突。Scene System ≠ 现有 Story Scene（story_scene_id 单向引用，见
    src/scene_system/models.py 头部审计结论）。
 
-读 API（GET，sync service、零副作用——绝不创建 scene_system.json）：
+Phase S2A 视觉协议端点（业务在 src/scene_system/visual_service.py / view_review.py）：
+- POST /scene-system/views/{view_id}/generate   三阶段候选生成（provider 在锁外）
+- POST /scene-system/views/{view_id}/review     六维度 Vision Review（canonical 零写入）
+- POST /scene-system/views/{view_id}/approve    显式 Approval（cross-canonical saga）
+- POST /scene-system/views/{view_id}/revoke     解除 approved（历史保留）
+- GET  /scene-system/views/{view_id}/generations|reviews|approvals   证据流只读
+- POST /scene-system/recovery/run               孤儿 generating 清理（幂等；startup 已挂载）
+🔴 仍不接任何 Agent；LocationView 生成 = Base Location identity，不做 SceneState 状态图（§29）。
+
+Phase S1 读 API（GET，sync service、零副作用——绝不创建 scene_system.json）：
 - GET  /api/project/{project}/scene-system/overview
         文档概览 + document_revision（创建类 mutation 的 OCC 期望值来源）
 - GET  /api/project/{project}/scene-system/locations            Location 列表（含派生 anchor/view/layout 索引）
@@ -39,8 +48,8 @@
 - PATCH  /api/project/{project}/scene-system/scene-instances/{instance_id}/state
                                                                              （expected_revision；SceneState patch）
 
-🔴 router 只做 request validation / HTTP mapping；业务逻辑全在 src/scene_system/service.py。
-🔴 本轮不开放：任何图片生成 / Visual Review / Agent 工具接线。
+🔴 router 只做 request validation / HTTP mapping；业务逻辑全在 service 层。
+🔴 不接 Agent 工具（S1/S2A 两轮一致）。
 """
 from typing import Any, Dict, List, Optional
 
@@ -60,6 +69,15 @@ def _service(project_name: str) -> SceneSystemService:
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"项目不存在: {project_name}")
     return SceneSystemService(project_dir, project_name)
+
+
+def _visual_service(project_name: str):
+    try:
+        project_dir = get_project_manager().get_project_dir(project_name)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"项目不存在: {project_name}")
+    from src.scene_system.visual_service import SceneVisualService
+    return SceneVisualService(project_dir, project_name)
 
 
 # receipt error 码 → HTTP status（router 只做 HTTP mapping）
@@ -83,6 +101,24 @@ _ERROR_STATUS = {
     "cross_location_relation": 422,
     "cross_location_anchor": 422,
     "resources_lookup_failed": 500,
+    # ---- Phase S2A 视觉协议 ----
+    "generation_in_progress": 409,
+    "stale_generation_basis": 409,
+    "stale_approval_basis": 409,
+    "invalid_candidate_count": 400,
+    "invalid_candidate_index": 400,
+    "no_candidates": 409,
+    "not_ready": 409,
+    "generation_record_missing": 500,
+    "candidate_file_missing": 500,
+    "reference_view_not_approved": 400,
+    "reference_not_usable": 400,
+    "reference_budget_exceeded": 400,
+    "review_pass_required": 409,
+    "already_approved": 409,
+    "not_approved": 409,
+    "resources_stale_revision": 409,
+    "resources_register_failed": 502,
 }
 
 
@@ -564,6 +600,166 @@ async def patch_scene_state(project: str, instance_id: str, patch: dict = Body(.
         return receipt
     except SceneSystemSchemaError as e:
         raise HTTPException(status_code=500, detail=f"scene_system.json 数据错误: {e}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ Phase S2A：LocationView 视觉协议（generate/review/approve/revoke）============
+class GenerateLocationViewRequest(BaseModel):
+    expected_revision: str
+    candidate_count: int = 2
+    seed: Optional[int] = None
+    reference_view_ids: Optional[List[str]] = None   # 显式参考（approved views）；缺省=自动确定性选择
+    size_tier: str = "1K"
+    ratio: str = "16:9"
+
+
+@router.post("/api/project/{project}/scene-system/views/{view_id}/generate")
+async def generate_location_view(project: str, view_id: str,
+                                 req: GenerateLocationViewRequest):
+    """LocationView 候选生成（三阶段协议；provider 调用在锁外）。
+    Base Location identity——不生成 SceneState 剧情状态图（§29）。"""
+    try:
+        receipt = await _visual_service(project).generate_location_view(
+            view_id, expected_revision=req.expected_revision,
+            candidate_count=req.candidate_count, seed=req.seed,
+            reference_view_ids=req.reference_view_ids,
+            size_tier=req.size_tier, ratio=req.ratio)
+        _raise_for_receipt(receipt)
+        return receipt
+    except SceneSystemSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"scene_system.json 数据错误: {e}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/project/{project}/scene-system/views/{view_id}/review")
+async def review_location_view(project: str, view_id: str):
+    """对当前 committed 候选执行六维度 Vision Review（canonical 零写入；证据入 review_records）。"""
+    try:
+        receipt = await _visual_service(project).review_location_view_candidates(view_id)
+        _raise_for_receipt(receipt)
+        return receipt
+    except SceneSystemSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"scene_system.json 数据错误: {e}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class ApproveLocationViewRequest(BaseModel):
+    candidate_index: int = 0
+    expected_revision: str                # scene view revision（OCC）
+    expected_resources_document_revision: str   # resources document revision（第二个 canonical 的 OCC）
+
+
+@router.post("/api/project/{project}/scene-system/views/{view_id}/approve")
+async def approve_location_view(project: str, view_id: str, req: ApproveLocationViewRequest):
+    """显式 Approval（cross-canonical saga）：注册 Resources ReferenceAsset + attach。
+    review pass ≠ 自动 approve；approve 需 pass 证据 + 双 canonical OCC 期望值。"""
+    try:
+        receipt = await _visual_service(project).approve_location_view(
+            view_id, candidate_index=req.candidate_index,
+            expected_revision=req.expected_revision,
+            expected_resources_document_revision=req.expected_resources_document_revision)
+        _raise_for_receipt(receipt)
+        return receipt
+    except SceneSystemSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"scene_system.json 数据错误: {e}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class RevokeViewApprovalRequest(BaseModel):
+    expected_revision: str
+    reason: str = ""
+
+
+@router.post("/api/project/{project}/scene-system/views/{view_id}/revoke")
+async def revoke_view_approval(project: str, view_id: str, req: RevokeViewApprovalRequest):
+    """解除 approved（approval_status→rejected）；历史 records 与 ReferenceAsset 全保留。"""
+    try:
+        receipt = await _visual_service(project).revoke_view_approval(
+            view_id, expected_revision=req.expected_revision, reason=req.reason)
+        _raise_for_receipt(receipt)
+        return receipt
+    except SceneSystemSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"scene_system.json 数据错误: {e}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ 证据流只读端点（generation/review/approval records）============
+@router.get("/api/project/{project}/scene-system/views/{view_id}/generations")
+async def read_generation_records(project: str, view_id: str,
+                                  limit: Optional[int] = Query(default=None)):
+    try:
+        from src.scene_system import generation_records as _gr
+        recs = _gr.read_records(get_project_manager().get_project_dir(project),
+                                view_id=view_id, limit=limit)
+        return {"generation_records": recs}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"项目不存在: {project}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api/project/{project}/scene-system/views/{view_id}/reviews")
+async def read_review_records(project: str, view_id: str,
+                              limit: Optional[int] = Query(default=None)):
+    try:
+        from src.scene_system import generation_records as _gr
+        recs = _gr.read_records(get_project_manager().get_project_dir(project),
+                                view_id=view_id, limit=limit,
+                                path=_gr.review_records_path(
+                                    get_project_manager().get_project_dir(project)))
+        return {"review_records": recs}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"项目不存在: {project}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api/project/{project}/scene-system/views/{view_id}/approvals")
+async def read_approval_records(project: str, view_id: str):
+    try:
+        from src.scene_system import generation_records as _gr
+        pdir = get_project_manager().get_project_dir(project)
+        recs = _gr.read_records(pdir, view_id=view_id,
+                                path=_gr.approval_records_path(pdir))
+        return {"approval_records": recs}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"项目不存在: {project}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/project/{project}/scene-system/recovery/run")
+async def run_recovery(project: str):
+    """手动触发孤儿 generating 清理（幂等；startup 已自动挂载，此端点供运维/测试）。"""
+    try:
+        from src.scene_system.recovery import recover_orphaned_view_generations
+        pdir = get_project_manager().get_project_dir(project)
+        receipt = await recover_orphaned_view_generations(pdir, project)
+        _raise_for_receipt(receipt)
+        return receipt
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"项目不存在: {project}")
     except HTTPException:
         raise
     except Exception as e:

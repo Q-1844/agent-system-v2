@@ -315,6 +315,12 @@ class SceneVisualService:
         out.update(extra)
         return out
 
+    # ============ Review（§21-§24；实现在 view_review.py，此处委托保持 router→service）============
+    async def review_location_view_candidates(self, view_id: str, *,
+                                              agnes_client=None) -> dict:
+        from .view_review import review_location_view_candidates as _impl
+        return await _impl(self.project_dir, view_id, agnes_client=agnes_client)
+
     # ============ approval 事件流（§19/§25）============
     @staticmethod
     def _approval_record(project_dir, record: dict) -> None:
