@@ -459,6 +459,10 @@ def test_api_read_only_no_mutation_endpoints(client):
         ("POST", "/api/project/{project}/looks/{look_id}/review"),
         ("POST", "/api/project/{project}/looks/{look_id}/approve"),
         ("POST", "/api/project/{project}/looks/{look_id}/revoke-approval"),
+        # Phase 1C3：Shared Production Library
+        ("POST", "/api/project/{project}/resources/publish"),
+        ("POST", "/api/project/{project}/resources/publish-character"),
+        ("POST", "/api/project/{project}/resources/import"),
     }
     write_routes = []
     for route in rres.router.routes:

@@ -38,6 +38,16 @@ from deps import get_project_manager
 from src.resources.service import ResourceService
 from src.resources.models import ResourceSchemaError
 
+
+def _shared_service(project_name: str):
+    """Phase 1C3：SharedLibraryService（publish/import；shared canonical 在仓库根 shared_library/）。"""
+    try:
+        project_dir = get_project_manager().get_project_dir(project_name)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"项目不存在: {project_name}")
+    from src.resources.shared_library import SharedLibraryService
+    return SharedLibraryService(project_dir, project_name)
+
 router = APIRouter()
 
 
@@ -77,6 +87,10 @@ _ERROR_STATUS = {
     "review_not_passed": 409,        # Phase 1C2：approve 需 pass 证据
     "not_in_candidates": 400,
     "no_candidates": 400,
+    # Phase 1C3 Shared Library
+    "clothing_not_published": 409,
+    "character_exists": 409,
+    "missing_shared_media": 409,
 }
 
 
@@ -512,3 +526,104 @@ async def revoke_look_approval(project: str, look_id: str, req: RevokeApprovalRe
         raise HTTPException(status_code=500, detail=f"资源数据错误: {e}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# =====================================================================
+# Phase 1C3 — Shared Production Library 最小闭环
+# （publish 只读项目 canonical 只写 shared_library；import copy-on-import 写项目）
+# =====================================================================
+class PublishRequest(BaseModel):
+    resource_id: str    # look_/clothing_/prop_（character 走 /publish-character）
+
+
+class PublishCharacterRequest(BaseModel):
+    character_name: str
+
+
+class ImportSharedRequest(BaseModel):
+    shared_resource_id: str
+    expected_document_revision: str   # import 写项目 canonical → 必须接 document OCC
+
+
+@router.post("/api/project/{project}/resources/publish")
+async def publish_resource(project: str, req: PublishRequest):
+    """发布项目资源（look/clothing/prop）到共享库（copy-on-publish；republish=版本+1）。
+    look 依赖的 Clothing 必须先发布（clothing_not_published → 409）。"""
+    try:
+        result = await _shared_service(project).publish(req.resource_id)
+        _raise_for_receipt(result)
+        return result
+    except HTTPException:
+        raise
+    except ResourceSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"资源数据错误: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/project/{project}/resources/publish-character")
+async def publish_character(project: str, req: PublishCharacterRequest):
+    """发布项目 Character（三视图母版）到共享库。"""
+    try:
+        result = await _shared_service(project).publish_character(req.character_name)
+        _raise_for_receipt(result)
+        return result
+    except HTTPException:
+        raise
+    except ResourceSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"资源数据错误: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/project/{project}/resources/import")
+async def import_shared_resource(project: str, req: ImportSharedRequest):
+    """从共享库导入到项目（copy-on-import：新 id、媒体复制进项目、origin 记录版本/来源）。
+    look 自动捆绑其共享 clothing；character 导入要求项目内无同名角色。"""
+    try:
+        result = await _shared_service(project).import_resource(
+            req.shared_resource_id, expected_document_revision=req.expected_document_revision)
+        _raise_for_receipt(result)
+        return result
+    except HTTPException:
+        raise
+    except ResourceSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"资源数据错误: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def _shared_store_for_read():
+    from src.resources.shared_library import SharedStore
+    return SharedStore()
+
+
+@router.get("/api/shared/resources")
+async def list_shared_resources(type: str = Query(default="all", description="character|look|clothing|prop|all")):
+    """共享库轻量列表（全局命名空间，不属于任何项目）。"""
+    try:
+        store = _shared_store_for_read()
+        return {"resources": store.list_shared(None if type == "all" else type)}
+    except ResourceSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"资源数据错误: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api/shared/resources/{shared_id}")
+async def read_shared_resource(shared_id: str):
+    """读共享资源（含 version/origin/关系 resolve）。"""
+    try:
+        res = _shared_store_for_read().read_shared(shared_id)
+        if res is None:
+            raise HTTPException(status_code=404, detail=f"共享资源不存在: {shared_id}")
+        return res
+    except HTTPException:
+        raise
+    except ResourceSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"资源数据错误: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
