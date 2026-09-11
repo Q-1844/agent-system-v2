@@ -33,7 +33,14 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from src.resources.generation import fingerprint, to_agnes_image_ref
-from src.resources.look_review import VISION_MODEL, _extract_json, _normalize_dim
+from src.resources.look_review import _extract_json, _normalize_dim
+
+# Scene System 域自含视觉审查模型常量（同 Resources 惯例：本域自含，不 import agents）。
+# S2B 起：agnes-3.0-flash（2026-09-11 探针实证：视觉+JSON 遵从 OK、延迟不劣于 2.5、
+# 判定质量更好——identity 与 state 失配正确分离，2.5 会把状态失配渗入 identity 判定）。
+# 🔴 冻结 Resources 域（look/prop/composition review）维持 2.5-flash 不动——切换属
+# Resources 域决策，不在 Scene System 轮次内偷偷改。
+VISION_MODEL = "agnes-3.0-flash"
 
 from . import generation_records
 from .generation_records import review_records_path

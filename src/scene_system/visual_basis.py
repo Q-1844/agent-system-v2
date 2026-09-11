@@ -123,24 +123,21 @@ def select_reference_views(project_dir, doc: SceneSystemDocument,
            "explicit_ids": list(explicit_reference_view_ids or []),
            "input_budget": {"max": MAX_VIEW_REFERENCE_REFS, "used": 0}, "notes": []}
     candidates = _approved_reference_candidates(doc, rdoc, target.location_id)
-    if not candidates:
-        out["notes"].append("no_approved_reference_available")
-        return out
-    if rdoc is None:
-        out["error"] = "resources_lookup_failed"
-        out["notes"].append("approved references exist but resources.json unreadable")
-        return out
-
-    usable: List[Tuple[LocationView, dict]] = []
-    for cv in candidates:
-        entry = _ref_entry_for_asset(pdir, rdoc, cv.reference_asset_id)
-        if entry is not None:
-            usable.append((cv, entry))
 
     if explicit_reference_view_ids:
-        seen: List[str] = []
+        # 显式请求：逐个诚实校验（revoked/未批准/不可用都要具体报错，不被空候选 early-return 掩盖）
+        if rdoc is None and candidates:
+            return {**out, "error": "resources_lookup_failed",
+                    "detail": "approved 参考候选存在但 resources.json 不可读（fail closed）"}
+        usable: List[Tuple[LocationView, dict]] = []
+        if rdoc is not None:
+            for cv in candidates:
+                entry = _ref_entry_for_asset(pdir, rdoc, cv.reference_asset_id)
+                if entry is not None:
+                    usable.append((cv, entry))
         by_id = {cv.view_id: (cv, e) for cv, e in usable}
         approved_ids = {cv.view_id for cv in candidates}
+        seen: List[str] = []
         for vid in explicit_reference_view_ids:
             if len(seen) >= MAX_VIEW_REFERENCE_REFS:
                 return {**out, "error": "reference_budget_exceeded",
@@ -149,32 +146,50 @@ def select_reference_views(project_dir, doc: SceneSystemDocument,
                 continue
             if vid not in approved_ids:
                 return {**out, "error": "reference_view_not_approved",
-                        "detail": f"view {vid} 不是本 location 已 approved 的参考候选"}
+                        "detail": (f"view {vid} 不是本 location 已 approved 的参考候选"
+                                   f"（revoked/未批准皆不可作 base）")}
             if vid not in by_id:
                 return {**out, "error": "reference_not_usable",
                         "detail": f"view {vid} 的 approved ReferenceAsset 不可读/不可用"}
             cv, e = by_id[vid]
             seen.append(vid)
             out["selected"].append({**e, "view_id": cv.view_id})
-    else:
-        target_set = set(target.visible_anchor_ids or [])
-        ranked = sorted(usable, key=lambda ce: (-len(target_set & set(ce[0].visible_anchor_ids)),
-                                                ce[0].view_id))
-        if ranked:
-            first_cv, first_e = ranked[0]
-            out["selected"].append({**first_e, "view_id": first_cv.view_id})
-            covered = set(first_cv.visible_anchor_ids) & target_set
-            uncovered = target_set - covered
-            if uncovered:
-                # 第二张：对未覆盖 anchors 贡献最大者（并列 view_id 升序）
-                second = sorted(((cv, e) for cv, e in ranked[1:]
-                                 if set(cv.visible_anchor_ids) & uncovered),
-                                key=lambda ce: (-len(set(ce[0].visible_anchor_ids) & uncovered),
-                                                ce[0].view_id))
-                if second:
-                    cv2, e2 = second[0]
-                    out["selected"].append({**e2, "view_id": cv2.view_id})
-                    out["notes"].append("second_reference_added_for_uncovered_anchors")
+        out["reference_view_ids"] = [e["view_id"] for e in out["selected"]]
+        out["input_budget"]["used"] = len(out["selected"])
+        return out
+
+    # auto 路径
+    if not candidates:
+        out["notes"].append("no_approved_reference_available")
+        return out
+    if rdoc is None:
+        out["error"] = "resources_lookup_failed"
+        out["notes"].append("approved references exist but resources.json unreadable")
+        return out
+    usable: List[Tuple[LocationView, dict]] = []
+    for cv in candidates:
+        entry = _ref_entry_for_asset(pdir, rdoc, cv.reference_asset_id)
+        if entry is not None:
+            usable.append((cv, entry))
+
+    target_set = set(target.visible_anchor_ids or [])
+    ranked = sorted(usable, key=lambda ce: (-len(target_set & set(ce[0].visible_anchor_ids)),
+                                            ce[0].view_id))
+    if ranked:
+        first_cv, first_e = ranked[0]
+        out["selected"].append({**first_e, "view_id": first_cv.view_id})
+        covered = set(first_cv.visible_anchor_ids) & target_set
+        uncovered = target_set - covered
+        if uncovered:
+            # 第二张：对未覆盖 anchors 贡献最大者（并列 view_id 升序）
+            second = sorted(((cv, e) for cv, e in ranked[1:]
+                             if set(cv.visible_anchor_ids) & uncovered),
+                            key=lambda ce: (-len(set(ce[0].visible_anchor_ids) & uncovered),
+                                            ce[0].view_id))
+            if second:
+                cv2, e2 = second[0]
+                out["selected"].append({**e2, "view_id": cv2.view_id})
+                out["notes"].append("second_reference_added_for_uncovered_anchors")
 
     out["reference_view_ids"] = [e["view_id"] for e in out["selected"]]
     out["input_budget"]["used"] = len(out["selected"])

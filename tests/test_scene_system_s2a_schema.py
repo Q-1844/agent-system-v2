@@ -72,7 +72,8 @@ def test_t2_v1_file_loads_with_defaults_normalized(pdir):
     # v2 新字段取默认值，in-memory 规范化为 v2
     assert v.generation_status == GenerationStatus.NONE.value
     assert v.active_generation_id is None
-    assert doc.schema_version == SCENE_SYSTEM_SCHEMA_VERSION == 2
+    # S2B 起受支持最新版本为 v3（scene_instance_views collection）；in-memory 规范化为 v3
+    assert doc.schema_version == SCENE_SYSTEM_SCHEMA_VERSION == 3
 
 
 def test_t3_v1_pure_read_zero_writeback(pdir):
@@ -98,7 +99,8 @@ def test_t4_first_mutation_upgrades_v1_to_v2(pdir):
                                         expected_revision=loc["revision"]))
     assert r["ok"], r
     on_disk = json.loads(path.read_text(encoding="utf-8"))
-    assert on_disk["schema_version"] == 2, "首次真实 mutation 安全升级到 v2"
+    assert on_disk["schema_version"] >= 2, "首次真实 mutation 安全升级（S2B 起 v1 文件首 mutation 直接升到当前 v3）"
+    assert on_disk["schema_version"] == 3, "首次真实 mutation 安全升级到当前版本 v3"
     # 旧数据原样保留（非破坏性）
     assert on_disk["locations"]["loc_v1test000001"]["name"] == "灯塔监听室"
     # v2 view 字段持久化时带默认值
@@ -109,7 +111,7 @@ def test_t5_unknown_future_schema_fail_closed(pdir):
     write_v1_file(pdir)
     path = pdir / "output" / "scene_system.json"
     raw = json.loads(path.read_text(encoding="utf-8"))
-    raw["schema_version"] = 3
+    raw["schema_version"] = 4   # S2B 起 3 为受支持版本；未知未来版本=≥4
     path.write_text(json.dumps(raw), encoding="utf-8")
     with pytest.raises(SceneSystemSchemaError):
         SceneSystemStore(pdir, pdir.name).load()

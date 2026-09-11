@@ -383,6 +383,43 @@ class SceneInstance:
         return cls(state=state, **kw)
 
 
+# ============ SceneInstanceView（S2B §3）============
+def new_scene_instance_view_id() -> str:
+    return f"sciv_{uuid.uuid4().hex[:12]}"
+
+
+@dataclass
+class SceneInstanceView:
+    """某个 SceneInstance 在某个 LocationView 方向上的已生成视觉状态图（身份实体）。
+    🔴 身份规则（S2B §4）：一个 (scene_instance_id, location_view_id) 对至多一个本实体；
+    重新生成 = 更新本对象的 generation/reference 指针（历史 records 保留），绝不新建身份。
+    🔴 不重复保存 camera_zone/look_direction/visible_anchor_ids（属 LocationView，
+    经 location_view_id 读取）；不复制 SceneState（唯一 canonical = SceneInstance.state；
+    ViewRelevantSceneState 只是每次重算的 derived projection，绝不持久化第二份）。
+    approved_basis_fingerprint：approve 时记录的语义基准指纹——read 层 stale 检测
+    （is_stale/stale_reasons）用它对比当前重算值（S2B §32；derived，不自动 mutation）。"""
+    scene_instance_view_id: str
+    scene_instance_id: str                    # FK → SceneInstance.scene_instance_id
+    location_view_id: str                     # FK → LocationView.view_id（base 视觉母版）
+    label: str = ""
+    generation_status: str = GenerationStatus.NONE.value
+    active_generation_id: Optional[str] = None
+    reference_asset_id: Optional[str] = None
+    approval_status: str = ApprovalState.UNREVIEWED.value
+    approved_basis_fingerprint: Optional[str] = None
+    created_at: float = field(default_factory=time.time)
+    updated_at: float = field(default_factory=time.time)
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "SceneInstanceView":
+        d = dict(d or {})
+        known = {f for f in cls.__dataclass_fields__}
+        return cls(**{k: v for k, v in d.items() if k in known})
+
+
 # ============ SceneSystemDocument（canonical 顶层容器，§15）============
 # schema v2（Phase S2A）：LocationView 新增视觉生成状态字段（generation_status /
 # active_generation_id）。
@@ -396,8 +433,14 @@ class SceneInstance:
 #     active_generation_id（from_dict known-key 白名单外全部忽略），
 #     让旧 runtime 大声报错是唯一安全方向；
 #   - 未知未来版本（≥3）继续 fail closed。
-SCENE_SYSTEM_SCHEMA_VERSION = 2
-_SUPPORTED_SCENE_SYSTEM_SCHEMA_VERSIONS = (1, 2)
+SCENE_SYSTEM_SCHEMA_VERSION = 3
+_SUPPORTED_SCENE_SYSTEM_SCHEMA_VERSIONS = (1, 2, 3)
+# schema v3（Phase S2B）：新增顶层 canonical collection `scene_instance_views`。
+# bump 理由（同 v1→v2）：v2 文件若带 scene_instance_views key，不认识该 collection 的
+# 旧 v2 runtime load→save 会静默丢弃它（known-key 白名单外全部忽略）——
+# 让旧 runtime fail closed 大声报错是唯一安全方向。惰性迁移契约不变：
+#   v2 可读（in-memory scene_instance_views={}，规范化为 v3）；纯 read 零写回；
+#   第一次真实 S2B mutation 才落盘 v3；旧 v2 runtime 面对 v3 fail closed；≥4 fail closed。
 
 
 @dataclass
@@ -411,6 +454,7 @@ class SceneSystemDocument:
     layouts: Dict[str, SetLayout] = field(default_factory=dict)
     views: Dict[str, LocationView] = field(default_factory=dict)
     scene_instances: Dict[str, SceneInstance] = field(default_factory=dict)
+    scene_instance_views: Dict[str, SceneInstanceView] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -420,6 +464,7 @@ class SceneSystemDocument:
             "layouts": {k: v.to_dict() for k, v in self.layouts.items()},
             "views": {k: v.to_dict() for k, v in self.views.items()},
             "scene_instances": {k: v.to_dict() for k, v in self.scene_instances.items()},
+            "scene_instance_views": {k: v.to_dict() for k, v in self.scene_instance_views.items()},
         }
 
     @classmethod
@@ -438,6 +483,8 @@ class SceneSystemDocument:
             views={k: LocationView.from_dict(v) for k, v in (raw.get("views") or {}).items()},
             scene_instances={k: SceneInstance.from_dict(v)
                              for k, v in (raw.get("scene_instances") or {}).items()},
+            scene_instance_views={k: SceneInstanceView.from_dict(v)
+                                  for k, v in (raw.get("scene_instance_views") or {}).items()},
         )
 
 
@@ -477,3 +524,7 @@ def view_revision(view: LocationView) -> str:
 
 def scene_instance_revision(instance: SceneInstance) -> str:
     return _rev(instance.to_dict())
+
+
+def scene_instance_view_revision(view: "SceneInstanceView") -> str:
+    return _rev(view.to_dict())
