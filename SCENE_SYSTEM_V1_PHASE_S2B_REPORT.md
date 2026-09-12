@@ -384,3 +384,26 @@ market×2 同地点不同状态、apartment×1）、全量回归 34 failed 与�
 ## 素材模块真机覆盖总账（含历史）
 Look 链（Alice·Black Coat + Ethan×2）、Prop 链（木剑/黄铜罗盘/木提灯/燧发枪/出诊包）、
 Composition 链（1C5）、Shared Library publish/import——Resources 全实体类型均有真实通过记录。
+
+---
+
+# Phase S2B.5 附录（Composition：人物拿枪的组合参考——模块边界验证）
+
+起因：用户验收时提出"生成人物拿枪的样子"，并追问属素材模块还是分镜模块。
+**边界裁定（回应用户）**：人物持枪的"标准样子"= 素材模块的 **Composition**
+（Character + Approved Look + Prop + 持握关系——1C5 专为一致性参考设计的实体）；
+"某个镜头里怎么用枪"= 分镜模块；SceneState 只记位置事实。Composition 现在做
+不浪费——分镜生成时以已批准组合参考保证每镜持枪一致。
+
+批次 `_e2e_resources_composition.py`（真实 Agnes，幂等）：**PASS（78s）**
+- Composition "Ethan · Flintlock"：Ethan Cole + Ethan·Charcoal Overcoat（approved Look）
+  + Antique Flintlock Pistol（approved 参考，relation=held @ right_hand，
+  visual_state_note="cocked and held at chest height"）
+- 生成 3 候选 → 六维度审查（1 needs_fix / 1 uncertain / **1 全 PASS**）→ approve +
+  set_cover
+- 目检：同一男子身份保持、炭灰大衣正确、右手持燧发枪于胸前、无多余人物/缺陷
+
+## 意义
+素材模块全实体（Character/Clothing/Look/Prop/Composition）在写实域的真机闭环完成。
+分镜阶段的 Shot 生成可直接消费：已批准 Composition（人物拿枪）+ 已批准 LocationView /
+SceneInstanceView（场景状态）——分镜一致性参考的两半都已就绪。
