@@ -2317,6 +2317,131 @@ class ApiClient {
   async revokeCompositionApproval(projectName: string, compositionId: string, body: any): Promise<any> {
     return this.resourcesRequest(`/api/project/${encodeURIComponent(projectName)}/compositions/${encodeURIComponent(compositionId)}/revoke-approval`, { method: 'POST', body: JSON.stringify(body) });
   }
+
+  // ================= Scene System V1（空间与场景事实系统） =================
+  // receipt 结构化错误直接抛对象（页面 fail(e) 读 e.error/e.detail）
+  private async sceneRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const url = `${this.baseUrl}${endpoint}`;
+    const response = await fetch(url, {
+      headers: { 'Content-Type': 'application/json', ...options.headers },
+      ...options,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const d = (data as any).detail;
+      if (d && typeof d === 'object' && 'error' in d) throw d;
+      throw { error: 'http_error', detail: (data as any).detail ?? `HTTP ${response.status}` } as any;
+    }
+    return data as T;
+  }
+
+  // ---- 读 ----
+  async sceneOverview(projectName: string): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/overview`);
+  }
+  async sceneListLocations(projectName: string): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/locations`);
+  }
+  async sceneReadLocation(projectName: string, locationId: string): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/locations/${encodeURIComponent(locationId)}`);
+  }
+  async sceneListAnchors(projectName: string, locationId: string): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/anchors?location_id=${encodeURIComponent(locationId)}`);
+  }
+  async sceneReadLayoutByLocation(projectName: string, locationId: string): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/locations/${encodeURIComponent(locationId)}/layout`).catch(() => null);
+  }
+  async sceneListViews(projectName: string, locationId: string): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/views?location_id=${encodeURIComponent(locationId)}`);
+  }
+  async sceneListSceneInstances(projectName: string): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/scene-instances`);
+  }
+  async sceneReadSceneInstance(projectName: string, instanceId: string): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/scene-instances/${encodeURIComponent(instanceId)}`);
+  }
+  async sceneListInstanceViews(projectName: string, instanceId: string): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/scene-instance-views?scene_instance_id=${encodeURIComponent(instanceId)}`);
+  }
+  async sceneReadInstanceViewStatus(projectName: string, scivId: string): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/scene-instance-views/${encodeURIComponent(scivId)}`);
+  }
+  async sceneViewGenerations(projectName: string, viewId: string, limit = 6): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/views/${encodeURIComponent(viewId)}/generations?limit=${limit}`);
+  }
+  async sceneInstanceViewGenerations(projectName: string, scivId: string, limit = 6): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/scene-instance-views/${encodeURIComponent(scivId)}/generations`).catch(() => ({ generation_records: [] }));
+  }
+  async sceneViewApprovals(projectName: string, viewId: string): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/views/${encodeURIComponent(viewId)}/approvals`).catch(() => ({ approval_records: [] }));
+  }
+  async sceneInstanceViewApprovals(projectName: string, scivId: string): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/scene-instance-views/${encodeURIComponent(scivId)}/approvals`).catch(() => ({ approval_records: [] }));
+  }
+
+  // ---- Location ----
+  async sceneCreateLocation(projectName: string, body: any): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/locations`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async sceneUpdateLocation(projectName: string, locationId: string, body: any): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/locations/${encodeURIComponent(locationId)}`, { method: 'PATCH', body: JSON.stringify(body) });
+  }
+  // ---- Anchor ----
+  async sceneCreateAnchor(projectName: string, body: any): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/anchors`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async sceneUpdateAnchor(projectName: string, anchorId: string, body: any): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/anchors/${encodeURIComponent(anchorId)}`, { method: 'PATCH', body: JSON.stringify(body) });
+  }
+  async sceneDeleteAnchor(projectName: string, anchorId: string, expectedRevision: string): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/anchors/${encodeURIComponent(anchorId)}?expected_revision=${encodeURIComponent(expectedRevision)}`, { method: 'DELETE' });
+  }
+  // ---- Layout ----
+  async sceneCreateLayout(projectName: string, locationId: string, body: any): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/locations/${encodeURIComponent(locationId)}/layout`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async sceneUpdateLayout(projectName: string, layoutId: string, body: any): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/layouts/${encodeURIComponent(layoutId)}`, { method: 'PATCH', body: JSON.stringify(body) });
+  }
+  // ---- LocationView ----
+  async sceneCreateView(projectName: string, body: any): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/views`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async sceneGenerateLocationView(projectName: string, viewId: string, body: any): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/views/${encodeURIComponent(viewId)}/generate`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async sceneReviewLocationView(projectName: string, viewId: string): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/views/${encodeURIComponent(viewId)}/review`, { method: 'POST', body: JSON.stringify({}) });
+  }
+  async sceneApproveLocationView(projectName: string, viewId: string, body: any): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/views/${encodeURIComponent(viewId)}/approve`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async sceneRevokeLocationView(projectName: string, viewId: string, body: any): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/views/${encodeURIComponent(viewId)}/revoke`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  // ---- SceneInstance ----
+  async sceneCreateSceneInstance(projectName: string, body: any): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/scene-instances`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async scenePatchSceneState(projectName: string, instanceId: string, body: any): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/scene-instances/${encodeURIComponent(instanceId)}/state`, { method: 'PATCH', body: JSON.stringify(body) });
+  }
+  // ---- SceneInstanceView ----
+  async sceneCreateInstanceView(projectName: string, body: any): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/scene-instance-views`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async sceneGenerateInstanceView(projectName: string, scivId: string, body: any): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/scene-instance-views/${encodeURIComponent(scivId)}/generate`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async sceneReviewInstanceView(projectName: string, scivId: string): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/scene-instance-views/${encodeURIComponent(scivId)}/review`, { method: 'POST', body: JSON.stringify({}) });
+  }
+  async sceneApproveInstanceView(projectName: string, scivId: string, body: any): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/scene-instance-views/${encodeURIComponent(scivId)}/approve`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async sceneRevokeInstanceView(projectName: string, scivId: string, body: any): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/scene-instance-views/${encodeURIComponent(scivId)}/revoke`, { method: 'POST', body: JSON.stringify(body) });
+  }
 }
 
 export const apiClient = new ApiClient();

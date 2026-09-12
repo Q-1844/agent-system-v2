@@ -32,6 +32,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '生产资源', icon: 'resources' }
       },
       {
+        path: 'scene-system',
+        name: 'SceneSystem',
+        component: () => import('@/views/scene-system/index.vue'),
+        meta: { title: '场景系统', icon: 'scene' }
+      },
+      {
         path: 'storyboard',
         name: 'Storyboard',
         component: () => import('@/views/storyboard/ShotBoard.vue'),
