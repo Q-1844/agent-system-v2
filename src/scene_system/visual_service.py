@@ -847,18 +847,33 @@ class SceneVisualService:
             if not (self.project_dir / candidate_file).is_file():
                 return {"ok": False, "operation": op, "error": "candidate_file_missing",
                         "detail": f"候选文件丢失: {candidate_file}"}
-            # scene basis 未 stale（§30 前置：recompute 仍成立）
-            from .instance_view_basis import _BasisInputError
+            # scene basis 未 stale（§30/§14；S2B.1-③ no-peer 口径：peer 是可选生成增强，
+            # 不属于批准语义——peer 变化不阻断 approve，也不追溯 stale）。组件级对比。
+            from .instance_view_basis import _BasisInputError, compute_no_peer_basis
             loc = doc.locations.get(inst.location_id)
+            gb = gen_rec.get("basis") or {}
             try:
-                holds, why = recompute_scene_instance_visual_basis_still_holds(
+                cur_np = compute_no_peer_basis(
                     self.project_dir, doc, rdoc, inst, loc, base_view, sciv,
-                    gen_rec.get("basis") or {}, include_peer=True)
+                    model_id=(gb.get("model") or {}).get("model_id", ""),
+                    size_tier=(gb.get("model") or {}).get("size_tier", "1K"),
+                    ratio=(gb.get("model") or {}).get("ratio", "16:9"),
+                    seed=gb.get("seed"),
+                    candidate_count=gb.get("candidate_count", 2))
             except _BasisInputError as e:
                 return {"ok": False, "operation": op, "error": e.code, "detail": e.detail}
-            if not holds:
+            _stale_field = None
+            for _field in ("location_snapshot", "location_view_snapshot",
+                           "base_location_reference", "view_relevant_scene_state",
+                           "selected_prop_references"):
+                if cur_np.get(_field) != gb.get(_field):
+                    _stale_field = _field
+                    break
+            if _stale_field:
                 return {"ok": False, "operation": op, "error": "stale_approval_basis",
-                        "detail": f"scene basis 已 stale（{why}）；重新 generate+review 再 approve"}
+                        "detail": (f"生成之后 {_stale_field} 已变化（no-peer 口径）；"
+                                   f"重新 generate+review 再 approve")}
+            approved_fp = cur_np["basis_fingerprint"]
             cur = view_revision(sciv)
             if expected_revision != cur:
                 return self._stale_receipt(op, expected_revision, cur, sciv.to_dict())
@@ -912,11 +927,11 @@ class SceneVisualService:
                         "detail": "approve 期间 SceneInstanceView 已变化；ReferenceAsset 已注册"
                                   "但未绑定（orphaned approval asset，记录在 approval_records）",
                         "orphaned_asset_id": asset_id}
-            # attach + 记录 approved_basis_fingerprint（read 层 stale 检测锚点，§3/§32）
+            # attach + 记录 approved_basis_fingerprint（read 层 stale 检测锚点，§3/§32；
+            # S2B.1-③：no-peer 口径——peer 不属于批准语义）
             sciv2.reference_asset_id = asset_id
             sciv2.approval_status = "approved"
-            sciv2.approved_basis_fingerprint = (gen_rec.get("basis") or {}).get(
-                "basis_fingerprint")
+            sciv2.approved_basis_fingerprint = approved_fp
             self.store.save(doc)
             revision_after = view_revision(sciv2)
             doc_rev = self._verify_after_save()

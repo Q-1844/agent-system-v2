@@ -78,6 +78,7 @@ def select_state_view_visual_refs(project_dir, doc: SceneSystemDocument,
         "prop_refs_selected": [],
         "prop_refs_omitted_due_to_budget": [],
         "props_text_only": [],
+        "notes": [],   # peer_skipped_stale:{id} / peer_skipped_cycle:{id} / …（诚实观测）
         "input_budget": {"max": MAX_TOTAL_VISUAL_REFS, "used": 0},
     }
     if rdoc is None:
@@ -95,7 +96,10 @@ def select_state_view_visual_refs(project_dir, doc: SceneSystemDocument,
     out["selected"].append(base_entry)
 
     # 2. optional peer state view（同 SceneInstance、approved、非自身、参考可读；
-    #    确定性：scene_instance_view_id 升序第一个可用项）
+    #    确定性：scene_instance_view_id 升序第一个可用项）。
+    #    S2B.1-①：stale peer（approved 但当前语义已漂移）不得进入 generation——
+    #    它会向新状态注入过期剧情状态的视觉信号；
+    #    S2B.1-②：peer 依赖链回到自身（成环）的 peer 不得进入。
     if include_peer:
         peers = sorted((v for v in doc.scene_instance_views.values()
                         if v.scene_instance_id == instance_view.scene_instance_id
@@ -104,6 +108,13 @@ def select_state_view_visual_refs(project_dir, doc: SceneSystemDocument,
                         and v.reference_asset_id),
                        key=lambda v: v.scene_instance_view_id)
         for p in peers:
+            if not _peer_state_current(project_dir, doc, rdoc, scene_instance, p):
+                out["notes"].append(f"peer_skipped_stale:{p.scene_instance_view_id}")
+                continue
+            if _peer_chain_reaches(project_dir, doc, p.scene_instance_view_id,
+                                   instance_view.scene_instance_view_id):
+                out["notes"].append(f"peer_skipped_cycle:{p.scene_instance_view_id}")
+                continue
             entry = _asset_entry(pdir, rdoc, p.reference_asset_id, "peer_state_view")
             if entry is None:
                 continue
@@ -227,6 +238,7 @@ def compute_scene_instance_visual_basis(project_dir, doc: SceneSystemDocument,
         "prop_semantic_snapshots": prop_semantics,
         "selected_prop_references": list(ref_selection.get("prop_refs_selected", [])),
         "peer_state_reference": ref_selection.get("peer_state_reference"),
+        "selection_notes": list(ref_selection.get("notes") or []),
         "include_peer": include_peer,   # 重算/溯源必须沿用原生成的 peer 策略（§14：
         # 其它 view 变化不应 stale——peer 是可选增强，后来出现的 peer 不追溯作废）
         "candidate_count": candidate_count,
@@ -270,37 +282,120 @@ def basis_reference_entries(project_dir, rdoc: Optional[ResourceDocument],
     return out
 
 
+# ============ S2B.1：peer 资格（stale 排除 + 成环禁止）+ no-peer basis ============
+def compute_no_peer_basis(project_dir, doc: SceneSystemDocument,
+                          rdoc: Optional[ResourceDocument],
+                          scene_instance: SceneInstance,
+                          base_location: Location, base_view: LocationView,
+                          instance_view: SceneInstanceView, *,
+                          model_id: str, size_tier: str, ratio: str,
+                          seed: Optional[int], candidate_count: int) -> dict:
+    """S2B.1-③：no-peer basis（peer 是可选生成增强，不属于批准语义——§14 的
+    must-stale 清单不含 peer）。approve 存其指纹为 approved_basis_fingerprint；
+    read 层 staleness 用同口径重算对比。抛 _BasisInputError（caller 转 receipt）。"""
+    selection = select_state_view_visual_refs(
+        project_dir, doc, rdoc, base_view, instance_view, scene_instance,
+        include_peer=False)
+    return compute_scene_instance_visual_basis(
+        project_dir, doc, rdoc, scene_instance, base_location, base_view, instance_view,
+        model_id=model_id, size_tier=size_tier, ratio=ratio, seed=seed,
+        candidate_count=candidate_count, ref_selection=selection, include_peer=False)
+
+
+def _latest_committed_gen_basis(project_dir, sciv: SceneInstanceView) -> Optional[dict]:
+    if not sciv.active_generation_id:
+        return None
+    gens = [r for r in generation_records.read_records(
+        project_dir, generation_id=sciv.active_generation_id)
+        if r.get("operation") == "scene_instance_view.generate"
+        and r.get("status") == "committed"]
+    return (gens[-1].get("basis") or {}) if gens else None
+
+
+def _peer_state_current(project_dir, doc: SceneSystemDocument,
+                        rdoc: Optional[ResourceDocument],
+                        scene_instance: SceneInstance,
+                        peer: SceneInstanceView) -> bool:
+    """S2B.1-①：peer 是否"approved 且当前"——有 committed generation、有
+    approved_basis_fingerprint、且 no-peer 重算指纹一致（stale peer 不得进入
+    generation：它会向新状态注入过期剧情状态的视觉信号）。"""
+    if peer.approval_status != ApprovalState.APPROVED.value or not peer.reference_asset_id:
+        return False
+    if not peer.approved_basis_fingerprint:
+        return False
+    gen_basis = _latest_committed_gen_basis(project_dir, peer)
+    if not gen_basis:
+        return False
+    base_view = doc.views.get(peer.location_view_id)
+    loc = doc.locations.get(scene_instance.location_id)
+    if base_view is None or loc is None:
+        return False
+    try:
+        current = compute_no_peer_basis(
+            project_dir, doc, rdoc, scene_instance, loc, base_view, peer,
+            model_id=(gen_basis.get("model") or {}).get("model_id", ""),
+            size_tier=(gen_basis.get("model") or {}).get("size_tier", "1K"),
+            ratio=(gen_basis.get("model") or {}).get("ratio", "16:9"),
+            seed=gen_basis.get("seed"),
+            candidate_count=gen_basis.get("candidate_count", 2))
+    except _BasisInputError:
+        return False
+    return current["basis_fingerprint"] == peer.approved_basis_fingerprint
+
+
+def _peer_chain_reaches(project_dir, doc: SceneSystemDocument,
+                        start_sciv_id: str, target_id: str, *,
+                        max_depth: int = 8) -> bool:
+    """S2B.1-②：从候选 peer 沿"其 generation 实际使用的 peer"依赖链走——
+    回到 target（或任何环）→ True（该 peer 不可用）。committed generation record
+    是唯一依赖真相源。防御性深度上限。"""
+    visited = {start_sciv_id}
+    cur = start_sciv_id
+    for _ in range(max_depth):
+        sciv = doc.scene_instance_views.get(cur)
+        if sciv is None:
+            return False
+        gen_basis = _latest_committed_gen_basis(project_dir, sciv)
+        if not gen_basis:
+            return False
+        nxt = (gen_basis.get("peer_state_reference") or {}).get("scene_instance_view_id")
+        if not nxt:
+            return False
+        if nxt == target_id or nxt in visited:
+            return True
+        visited.add(nxt)
+        cur = nxt
+    return True   # 深度超限——防御性视为不可用
+
+
 def compute_state_view_staleness(project_dir, doc: SceneSystemDocument,
                                  rdoc: Optional[ResourceDocument],
                                  scene_instance: SceneInstance,
                                  base_location: Location, base_view: LocationView,
                                  instance_view: SceneInstanceView,
                                  gen_basis: dict) -> dict:
-    """S2B §32/§33：approved state view 的 derived stale 检测（read 模型）。
-    用 generation record 里的 basis 参数对当前 canonical 重算，逐组件对比产生
-    stale_reasons（绝不自动 mutation——stale 是 derived fact，未来 Shot binding
-    必须拒绝 stale scene reference）。
+    """S2B §32/§33 + S2B.1-③：approved state view 的 derived stale 检测（read 模型）。
+    🔴 no-peer 口径：peer 是可选生成增强，不属于批准语义——**later peer 不追溯
+    stale earlier view**（§14"其它 view 变化不应 stale"），peer_reference_changed
+    不再是 stale 理由。用 no-peer 重算对比 approved_basis_fingerprint，逐组件归因
+    （绝不自动 mutation——stale 是 derived fact，未来 Shot binding 必须拒绝 stale 引用）。
     返回 {is_stale, stale_reasons, current_basis_fingerprint}。"""
     reasons: List[str] = []
     try:
-        fresh_selection = select_state_view_visual_refs(
-            project_dir, doc, rdoc, base_view, instance_view, scene_instance,
-            include_peer=gen_basis.get("include_peer", True))
+        current = compute_no_peer_basis(
+            project_dir, doc, rdoc, scene_instance, base_location, base_view,
+            instance_view,
+            model_id=(gen_basis.get("model") or {}).get("model_id", ""),
+            size_tier=(gen_basis.get("model") or {}).get("size_tier", "1K"),
+            ratio=(gen_basis.get("model") or {}).get("ratio", "16:9"),
+            seed=gen_basis.get("seed"),
+            candidate_count=gen_basis.get("candidate_count", 2))
     except _BasisInputError as e:
         return {"is_stale": True,
                 "stale_reasons": [f"selection_failed:{e.code}"],
                 "current_basis_fingerprint": None}
-    current = compute_scene_instance_visual_basis(
-        project_dir, doc, rdoc, scene_instance, base_location, base_view, instance_view,
-        model_id=(gen_basis.get("model") or {}).get("model_id", ""),
-        size_tier=(gen_basis.get("model") or {}).get("size_tier", "1K"),
-        ratio=(gen_basis.get("model") or {}).get("ratio", "16:9"),
-        seed=gen_basis.get("seed"),
-        candidate_count=gen_basis.get("candidate_count", 2),
-        ref_selection=fresh_selection,
-        include_peer=gen_basis.get("include_peer", True))
     if current["basis_fingerprint"] != instance_view.approved_basis_fingerprint:
-        # 逐组件归因（顺序固定，诚实可读）
+        # 逐组件归因（顺序固定，诚实可读；peer 组件不参与——S2B.1-③）
         if current.get("location_snapshot") != gen_basis.get("location_snapshot"):
             reasons.append("location_identity_changed")
         if current.get("location_view_snapshot") != gen_basis.get("location_view_snapshot"):
@@ -319,8 +414,6 @@ def compute_state_view_staleness(project_dir, doc: SceneSystemDocument,
             reasons.append("prop_placement_changed")
         if current.get("selected_prop_references") != gen_basis.get("selected_prop_references"):
             reasons.append("prop_reference_changed")
-        if current.get("peer_state_reference") != gen_basis.get("peer_state_reference"):
-            reasons.append("peer_reference_changed")
         if not reasons:
             reasons.append("basis_changed")
     return {"is_stale": bool(reasons), "stale_reasons": reasons,

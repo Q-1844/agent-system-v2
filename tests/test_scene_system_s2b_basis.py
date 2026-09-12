@@ -122,6 +122,51 @@ def _approve_base_view(svc: SceneSystemService, pdir: Path, view_id: str, asset_
     asyncio.run(flow())
 
 
+def _sciv_rev(pdir: Path, sciv_id: str) -> str:
+    from src.scene_system.models import view_revision
+    return view_revision(SceneSystemStore(pdir, pdir.name).load()
+                         .scene_instance_views[sciv_id])
+
+
+async def _simulate_sciv_approval(pdir: Path, sciv_id: str):
+    """S2B.1 口径的批准捷径：no-peer 指纹锚点 + 真实可读资产（peer 资格检查用）。"""
+    from src.scene_system.instance_view_basis import compute_no_peer_basis
+    from src.resources.store import ResourceStore as RS
+    from src.scene_system import generation_records
+    st = SceneSystemStore(pdir, pdir.name)
+    doc = st.load()
+    sciv = doc.scene_instance_views[sciv_id]
+    inst = doc.scene_instances[sciv.scene_instance_id]
+    loc = doc.locations[inst.location_id]
+    bv = doc.views[sciv.location_view_id]
+    gens = [r for r in generation_records.read_records(pdir, generation_id=sciv.active_generation_id)
+            if r.get("operation") == "scene_instance_view.generate" and r.get("status") == "committed"]
+    gb = gens[-1].get("basis") or {}
+    fp = compute_no_peer_basis(
+        pdir, doc, RS(pdir, pdir.name).load(), inst, loc, bv, sciv,
+        model_id=(gb.get("model") or {}).get("model_id", ""),
+        size_tier=(gb.get("model") or {}).get("size_tier", "1K"),
+        ratio=(gb.get("model") or {}).get("ratio", "16:9"),
+        seed=gb.get("seed"), candidate_count=gb.get("candidate_count", 2))["basis_fingerprint"]
+    asset_id = f"ref_sim_{sciv_id[-8:]}"
+    local = f"output/scene_system/scene_instances/sim/{sciv_id}/c_01.png"
+    f = pdir / local
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_bytes(b"\x89PNG sim-" + sciv_id.encode())
+    rdoc = RS(pdir, pdir.name).load()
+    rdoc.reference_assets[asset_id] = ReferenceAsset(asset_id=asset_id, local=local,
+                                                     checksum="c" * 8, source="scene_system")
+    RS(pdir, pdir.name).save(rdoc)
+    async with st.write_lock():
+        d = st.load()
+        v = d.scene_instance_views[sciv_id]
+        v.approval_status = "approved"
+        v.approved_basis_fingerprint = fp
+        v.reference_asset_id = asset_id
+        st.save(d)
+    return fp
+
+
 def _load(pdir: Path):
     st = SceneSystemStore(pdir, pdir.name)
     doc = st.load()
@@ -184,17 +229,23 @@ def test_t16_base_location_ref_mandatory(tmp_path):
 
 # ============ T17：peer selection deterministic ============
 def test_t17_peer_selection_deterministic(tmp_path):
+    """S2B.1 起 peer 资格 = approved + committed generation + no-peer 指纹当前
+    （stale/未生成 peer 不进 generation）——peers 走真实 generate 链。"""
     pdir = make_pdir(tmp_path)
     svc = SceneSystemService(pdir, pdir.name)
     vs = SceneVisualService(pdir, pdir.name)
     ids = asyncio.run(_seed_full(svc, pdir))
     add_asset(pdir, "ref_base0000001",
               "output/scene_system/locations/x/views/base/generations/g/candidate_01.png")
-    add_asset(pdir, "ref_peerA000001",
-              "output/scene_system/scene_instances/x/views/peerA/generations/g/candidate_01.png")
-    add_asset(pdir, "ref_peerB000001",
-              "output/scene_system/scene_instances/x/views/peerB/generations/g/candidate_01.png")
     _approve_base_view(svc, pdir, ids["v_north"], "ref_base0000001")
+
+    class _Gen:
+        models = {"image": "fake-image-model"}
+
+        async def generate_image(self, prompt, *, image_refs=None, size_tier="1K",
+                                 ratio="16:9", seed=None, want_b64=False):
+            return {"url": None, "b64": "f2b1fake"}
+
     # 第三个 LocationView（peer B 的 base——pair 唯一性要求 peers 各用不同 view）
     async def third_view():
         drev = svc.document_overview()["document_revision"]
@@ -203,25 +254,26 @@ def test_t17_peer_selection_deterministic(tmp_path):
                                   expected_document_revision=drev)
         return r["target"]
     v_east = asyncio.run(third_view())
-    # 两个 approved peer state views（peer A 经 v_south；peer B 经 v_east）——id 升序决定选择
+    # peer 生成的 base 门槛：v_south / v_east 也需 approved（捷径 + approval records）
+    for vid, ref in ((ids["v_south"], "ref_baseS0000001"), (v_east, "ref_baseE0000001")):
+        add_asset(pdir, ref,
+                  f"output/scene_system/locations/x/views/{vid}/g/candidate_01.png")
+        _approve_base_view(svc, pdir, vid, ref)
+
     async def make_peers():
-        vs = SceneVisualService(pdir, pdir.name)
         made = []
-        for vid, ref in ((ids["v_south"], "ref_peerA000001"), (v_east, "ref_peerB000001")):
+        for vid in (ids["v_south"], v_east):
             drev = svc.document_overview()["document_revision"]
             r = await vs.create_scene_instance_view(
                 scene_instance_id=ids["inst"], location_view_id=vid,
                 label="peer", expected_document_revision=drev)
             assert r["ok"], r
+            gen = await vs.generate_scene_instance_view(
+                r["target"], expected_revision=_sciv_rev(pdir, r["target"]),
+                candidate_count=1, agnes_client=_Gen(), include_peer=False)
+            assert gen["ok"], gen.get("error")
+            await _simulate_sciv_approval(pdir, r["target"])
             made.append(r["target"])
-        st = SceneSystemStore(pdir, pdir.name)
-        async with st.write_lock():
-            d = st.load()
-            d.scene_instance_views[made[0]].approval_status = "approved"
-            d.scene_instance_views[made[0]].reference_asset_id = "ref_peerA000001"
-            d.scene_instance_views[made[1]].approval_status = "approved"
-            d.scene_instance_views[made[1]].reference_asset_id = "ref_peerB000001"
-            st.save(d)
         return made
     peers = asyncio.run(make_peers())
     doc, rdoc, _ = _load(pdir)
