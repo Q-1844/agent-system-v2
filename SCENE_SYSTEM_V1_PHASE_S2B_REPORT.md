@@ -336,3 +336,24 @@ market×2 同地点不同状态、apartment×1）、全量回归 34 failed 与�
 负向移除/全局反向光照的状态（关霓虹/调暗/normal white at night）i2i 无法可靠渲染——
 此类状态建议人工修图或等局部重绘/图生图强度控制能力。系统数据与流程对该类状态
 完全兼容（stale/approve 机制与状态内容无关）。
+
+---
+
+# Phase S2B.3 附录（多风格对照：同一项目多地点独立风格）
+
+起因：用户指出此前夹具全为写实风，且每轮开新项目既浪费也剥夺了对照验收。
+审计结论：**系统层面从 S2A 起就支持**——style_notes 是每地点独立自由字段、
+一个项目地点数量无限制，属测试夹具盲区而非能力缺失。
+
+批次 `scene_style_gallery`（**长期保留项目**，`_e2e_scene_styles.py` 幂等续跑不重建）：
+- CelAnimeStation — 雨后车站月台（赛璐璐动画：crisp line art / flat colors）approved
+- WatercolorCanalTown — 清晨运河小镇（水彩绘本：paper texture / color blooms）approved
+- InkWashMountainTemple — 云中山寺（中国水墨：brush strokes / 留白 + 一点朱红）approved
+- 三张 hero 视角全部 attempt 1 通过（水墨 3/3 候选全 pass）——**风格自由度完全由
+  style_notes 承载，与管线/审查正交**
+
+## 沉淀
+- 验收项目从一次性改为**长期画廊项目**（scene_style_gallery），后续新风格/新地点
+  直接往里加，支持用户横向对照。
+- 生成风格载体 = Location.style_notes（每地点独立）——项目级 StyleAnchor 与
+  场景生成的集成留给 Shot binding 阶段统一设计。
