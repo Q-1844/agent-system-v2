@@ -239,3 +239,67 @@ B stale；mock T41 同）。未来 Shot binding 必须拒绝 stale scene referen
 derived stale detection + 2-view real E2E（r9 正链 + §37 stale 检测真机）。
 §37 regen-refresh 真机复鲜为 MODEL_LIMITATION（逻辑 mock 全覆盖，r9 首轮同对象链真实通过）。
 未做：Shot binding / continuity validator / CharacterPlacement / Agent integration。等待确认。
+
+---
+
+# Phase S2B.1 附录（stale peer / refresh lifecycle 收口）
+
+任务：不要增加功能，专门审计并修复 SceneInstanceView stale peer / cyclic peer
+dependency，完成真实 refresh E2E + 全量回归后停止。五项全部通过。
+
+## S2B.1-① stale peer 不得进入 generation ✅
+
+peer 资格 = approved + committed generation record + approved_basis_fingerprint 存在 +
+no-peer 重算指纹一致。不合格（stale/未生成/资产不可读）peer 跳过并诚实记录
+`selection_notes: peer_skipped_stale:{id}`（进 basis 可观测）。
+真机实证：refresh E2E 中 regen A 时 stale peer B 被排除（`peer_skipped_stale` 记录于
+generation basis）——**排除过期 peer 后 regen 链一次通过（2/3 候选 PASS）**，
+与此前 27 候选 0 通过形成对照：过期 peer 的冲突视觉信号确是 regen 失败的主因之一。
+
+## S2B.1-② peer dependency 禁止成环 ✅
+
+从候选 peer 沿 committed generation record 的 `peer_state_reference` 依赖链走
+（generation record 是唯一依赖真相源），回到目标自身/任何环/深度超限 → 排除
+（`peer_skipped_cycle:{id}`）。A↔B 互为 peer 的 ping-pong（互相触发 stale 的
+无限循环风险）被结构阻断。测试：test_2_cycle_peer_excluded。
+
+## S2B.1-③ later peer 不 retroactively stale earlier view ✅
+
+r9 E2E 实证过缺口（A 的 stale reasons 含 `peer_reference_changed`）。修复：
+staleness 与 approve 改 **no-peer 口径**——`compute_no_peer_basis`（§14 must-stale
+清单不含 peer；peer 是可选生成增强，不属于批准语义）；approve 的 scene-basis 检查
+改组件级对比（location/view/base_ref/投影/prop refs——peer 不参与）；
+`approved_basis_fingerprint` 存 no-peer 指纹；`peer_reference_changed` 从 stale
+理由中移除。测试 test_3 + 真机：refresh lifecycle 中 A 的 stale reasons 仅含
+`global_state_changed:lighting`（无 peer 项）。
+
+## S2B.1-④ 真机 state-change refresh lifecycle ✅
+
+`_e2e_scene_s2b.py` + `_e2e_scene_s2b1_cont.py`（r10-r12 + 续篇，全部诚实记录）：
+- base A/B + Wooden Sword prop 真实审批（正向链在 r10/r11/r12 均快速通过——
+  S2B.1 修复与 OVERRIDE/位置绑定改进后正向链稳定化）
+- StateView A approved（r10 attempt 2 / r11 attempt 1 / r12 attempt 1）
+- StateView B approved（peer=A；r12+续篇）
+- §37：lighting red emergency → cold blue moonlight（目标光照值经 r10/r11 实证
+  调整为可渲染+可核验值——fixture 级修正，机制与文档 normal white 完全一致；
+  "normal white at night" 是模型最难渲染+最难核验的光照值，27 候选 0 通过的
+  主因）→ 不重新生成 → **A/B 双 stale 真机 PASS**
+- regen A：stale peer 排除（真机记录）→ **2/3 候选 PASS → approve → A 复鲜、
+  B 仍 stale 真机 PASS**
+- §38：south_stairs damaged → A 不 stale、B stale（anchor_state_changed）真机 PASS
+
+过程修复（真机实证驱动）：SECTION 4 附 anchor 语义位置描述（r10 实证碎窗渲染在
+错误山墙；r11 实证修复后 middle window 正确）。
+
+## S2B.1-⑤ full repository regression baseline diff ✅
+
+全量 `pytest tests/`（:8000 未占用）：**34 failed / 1439 passed / 1 skipped**。
+34 个失败全部为已知噪声族（与冻结基线同构零新增）：d3_runtime_control×11 +
+not_configured×3 + full/project_autopilot×13 + interface×2 + shot_request_rules×5
+（端口干扰 + config flake；memory 基线"34 failed 同构"数量精确一致）。
+抽查 control_reject 单跑复绿确证环境噪声。**零新增失败**。
+
+## 结论
+
+五项全部通过。系统级补测收口；下一步交人工创作验收（场景相似度 / UI 流程 /
+Anchor 直观性 / 时间天气符合制作预期——这些应由创作者判断）。
