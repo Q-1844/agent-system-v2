@@ -155,7 +155,7 @@
           </form>
           <div class="view-cards">
             <button v-for="v in views" :key="v.view_id" class="view-card" :class="{ active: selectedViewId === v.view_id }" @click="selectView(v.view_id)">
-              <img v-if="approvedFileMap[v.view_id]" :src="candidateUrl(approvedFileMap[v.view_id])" class="cover" />
+              <img v-if="approvedFileMap[v.view_id]" :src="candidateUrl(approvedFileMap[v.view_id])" class="cover zoomable" @click.stop="openPreview(candidateUrl(approvedFileMap[v.view_id]))" />
               <div v-else class="cover placeholder">未生成</div>
               <span class="view-name">{{ v.label || v.view_id }}</span>
               <span class="sub">{{ v.camera_zone || '—' }} → {{ v.look_direction || '—' }}</span>
@@ -191,7 +191,7 @@
 
             <div class="cand-grid">
               <div v-for="c in viewCandidates" :key="c.index" class="cand">
-                <img :src="candidateUrl(c.file)" />
+                <img :src="candidateUrl(c.file)" class="zoomable" @click.stop="openPreview(candidateUrl(c.file))" />
                 <div class="cand-info">
                   <span class="meta">#{{ c.index }}</span>
                   <span v-if="selectedView.reference_asset_id && approvedFileMap[selectedView.view_id] === c.file" class="badge approved">已批准</span>
@@ -295,7 +295,7 @@
           <p class="hint">一个「场景实例 × base 视角」一张状态图；生成用 base 批准参考 + 可见锚点状态 + 可见道具</p>
           <div class="view-cards">
             <button v-for="sv in stateViews" :key="sv.scene_instance_view_id" class="view-card" :class="{ active: selectedStateViewId === sv.scene_instance_view_id }" @click="selectStateView(sv.scene_instance_view_id)">
-              <img v-if="approvedFileMap[sv.scene_instance_view_id]" :src="candidateUrl(approvedFileMap[sv.scene_instance_view_id])" class="cover" />
+              <img v-if="approvedFileMap[sv.scene_instance_view_id]" :src="candidateUrl(approvedFileMap[sv.scene_instance_view_id])" class="cover zoomable" @click.stop="openPreview(candidateUrl(approvedFileMap[sv.scene_instance_view_id]))" />
               <div v-else class="cover placeholder">未生成</div>
               <span class="view-name">{{ sv.label || baseViewLabel(sv.location_view_id) }}</span>
               <span class="badges">
@@ -326,12 +326,12 @@
             <div class="side-by-side">
               <div class="sbs-item">
                 <span class="sbs-label">base 地点参考（{{ baseViewLabel(selectedStateView.location_view_id) }}）</span>
-                <img v-if="approvedFileMap[selectedStateView.location_view_id]" :src="candidateUrl(approvedFileMap[selectedStateView.location_view_id])" />
+                <img v-if="approvedFileMap[selectedStateView.location_view_id]" :src="candidateUrl(approvedFileMap[selectedStateView.location_view_id])" class="zoomable" @click.stop="openPreview(candidateUrl(approvedFileMap[selectedStateView.location_view_id]))" />
                 <div v-else class="img placeholder">base 未批准</div>
               </div>
               <div class="sbs-item">
                 <span class="sbs-label">本状态视图</span>
-                <img v-if="approvedFileMap[selectedStateView.scene_instance_view_id]" :src="candidateUrl(approvedFileMap[selectedStateView.scene_instance_view_id])" />
+                <img v-if="approvedFileMap[selectedStateView.scene_instance_view_id]" :src="candidateUrl(approvedFileMap[selectedStateView.scene_instance_view_id])" class="zoomable" @click.stop="openPreview(candidateUrl(approvedFileMap[selectedStateView.scene_instance_view_id]))" />
                 <div v-else class="img placeholder">未批准</div>
                 <div v-if="currentProjection" class="proj-chips">
                   <em v-if="currentProjection.time_of_day">时段: {{ currentProjection.time_of_day }}</em>
@@ -350,7 +350,7 @@
 
             <div class="cand-grid">
               <div v-for="c in stateViewCandidates" :key="c.index" class="cand">
-                <img :src="candidateUrl(c.file)" />
+                <img :src="candidateUrl(c.file)" class="zoomable" @click.stop="openPreview(candidateUrl(c.file))" />
                 <div class="cand-info">
                   <span class="meta">#{{ c.index }}</span>
                   <span v-if="approvedFileMap[selectedStateView.scene_instance_view_id] === c.file" class="badge approved">已批准</span>
@@ -381,6 +381,13 @@
       </div>
       <div v-else class="main-area empty">← 选择或创建一个场景实例</div>
     </section>
+
+    <!-- 图片放大预览（lightbox） -->
+    <div v-if="previewImg" class="img-lightbox" @click="previewImg = ''">
+      <img :src="previewImg" @click.stop />
+      <button class="lightbox-close" @click="previewImg = ''">×</button>
+      <span class="lightbox-hint">点击空白处或 × 关闭</span>
+    </div>
   </div>
 </template>
 
@@ -395,6 +402,8 @@ const { projectName } = storeToRefs(store);
 
 const tab = ref<'locations' | 'instances'>('locations');
 const busy = ref(false);
+const previewImg = ref('');
+function openPreview(url: string) { if (url) previewImg.value = url; }
 const errorMsg = ref('');
 const overview = ref<any>(null);
 
@@ -989,7 +998,7 @@ onMounted(async () => {
 .view-cards { display: flex; gap: 12px; flex-wrap: wrap; }
 .view-card { width: 170px; border: 1px solid rgba(128,128,128,.25); background: transparent; color: inherit; border-radius: 10px; padding: 8px; cursor: pointer; display: flex; flex-direction: column; gap: 5px; }
 .view-card.active { border-color: #6ea8ff; box-shadow: 0 0 0 1px #6ea8ff inset; }
-.view-card .cover { width: 100%; height: 105px; object-fit: cover; border-radius: 6px; background: rgba(128,128,128,.15); }
+.view-card .cover { width: 100%; height: 120px; object-fit: contain; border-radius: 6px; background: rgba(0,0,0,.25); }
 .cover.placeholder, .img.placeholder { display: flex; align-items: center; justify-content: center; opacity: .4; font-size: 12px; height: 105px; }
 .img.placeholder { height: 100%; min-height: 120px; }
 .view-name { font-size: 13px; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1003,7 +1012,7 @@ onMounted(async () => {
 .approved-main .badge { position: absolute; right: 8px; top: 8px; }
 .cand-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
 .cand { border: 1px solid rgba(128,128,128,.25); border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
-.cand img { width: 100%; height: 130px; object-fit: cover; border-radius: 6px; background: rgba(128,128,128,.15); }
+.cand img { width: 100%; height: 150px; object-fit: contain; border-radius: 6px; background: rgba(0,0,0,.25); }
 .cand-info { display: flex; gap: 6px; align-items: center; min-height: 18px; }
 .cand-actions { display: flex; gap: 6px; }
 .dims { display: flex; gap: 4px; flex-wrap: wrap; }
@@ -1019,4 +1028,10 @@ onMounted(async () => {
 .sbs-label { font-size: 12px; opacity: .6; }
 .proj-chips { display: flex; gap: 5px; flex-wrap: wrap; }
 .proj-chips em { font-style: normal; font-size: 10px; background: rgba(90,160,255,.15); color: #a9c9ff; border-radius: 6px; padding: 1px 6px; }
+.zoomable { cursor: zoom-in; }
+.zoomable:hover { outline: 1px solid #6ea8ff; }
+.img-lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.86); z-index: 9999; display: flex; align-items: center; justify-content: center; cursor: zoom-out; }
+.img-lightbox img { max-width: 92vw; max-height: 92vh; object-fit: contain; border-radius: 8px; box-shadow: 0 8px 60px rgba(0,0,0,.6); cursor: default; }
+.lightbox-close { position: absolute; right: 18px; top: 12px; border: 1px solid rgba(255,255,255,.4); background: transparent; color: #fff; font-size: 20px; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; }
+.lightbox-hint { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; color: rgba(255,255,255,.5); font-size: 12px; }
 </style>

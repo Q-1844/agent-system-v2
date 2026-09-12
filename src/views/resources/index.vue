@@ -74,7 +74,7 @@
           </div>
           <div class="cand-grid">
             <div v-for="a in selectedLook.reference_assets" :key="a.asset_id" class="cand">
-              <img v-if="assetUrl(a)" :src="assetUrl(a)" />
+              <img v-if="assetUrl(a)" :src="assetUrl(a)" class="zoomable" @click.stop="openPreview(assetUrl(a))" />
               <div v-else-if="a.missing" class="img placeholder missing">缺失</div>
               <div v-else class="img placeholder">无图</div>
               <div class="cand-info">
@@ -151,7 +151,7 @@
             </div>
             <div class="cand-grid">
               <div v-for="a in selectedComp.reference_assets" :key="a.asset_id" class="cand">
-                <img v-if="assetUrl(a)" :src="assetUrl(a)" />
+                <img v-if="assetUrl(a)" :src="assetUrl(a)" class="zoomable" @click.stop="openPreview(assetUrl(a))" />
                 <div v-else-if="a.missing" class="img placeholder missing">缺失</div>
                 <div v-else class="img placeholder">无图</div>
                 <div class="cand-info">
@@ -207,7 +207,7 @@
         <p class="desc">{{ selectedClothing.description }} {{ selectedClothing.design_traits }}</p>
         <div class="ref-row">
           <div v-for="a in selectedClothing.reference_assets" :key="a.asset_id" class="cand small">
-            <img v-if="assetUrl(a)" :src="assetUrl(a)" />
+            <img v-if="assetUrl(a)" :src="assetUrl(a)" class="zoomable" @click.stop="openPreview(assetUrl(a))" />
             <div v-else class="img placeholder">无图</div>
             <button class="mini danger" :disabled="busy" @click="detachClothingRef(a)">解绑</button>
           </div>
@@ -248,7 +248,7 @@
         <p class="hint">组合参考（Composition）只使用「已批准」的道具参考图——先审查通过再批准。</p>
         <div class="ref-row">
           <div v-for="a in selectedProp.reference_assets" :key="a.asset_id" class="cand small">
-            <img v-if="assetUrl(a)" :src="assetUrl(a)" />
+            <img v-if="assetUrl(a)" :src="assetUrl(a)" class="zoomable" @click.stop="openPreview(assetUrl(a))" />
             <div v-else class="img placeholder">无图</div>
             <div class="cand-info">
               <span v-if="selectedProp.cover_asset_id === a.asset_id" class="star" title="封面">★</span>
@@ -292,6 +292,13 @@
         <p v-if="!sharedList.length" class="empty">共享库为空（在项目资源里点「发布到共享库」）</p>
       </div>
     </section>
+
+    <!-- ================= 图片放大预览（lightbox） ================= -->
+    <div v-if="previewImg" class="img-lightbox" @click="previewImg = ''">
+      <img :src="previewImg" @click.stop />
+      <button class="lightbox-close" @click="previewImg = ''">×</button>
+      <span class="lightbox-hint">点击空白处或 × 关闭</span>
+    </div>
   </div>
 </template>
 
@@ -312,6 +319,8 @@ const PROJECT_TABS = [
   { key: 'props', label: '其他（道具）' },
 ] as const;
 
+const previewImg = ref('');
+function openPreview(url: string) { if (url) previewImg.value = url; }
 const busy = ref(false);
 const errorMsg = ref('');
 function fail(e: any) {
@@ -798,7 +807,7 @@ onMounted(refreshBase);
 .mini:disabled { opacity: .4; cursor: not-allowed; }
 .look-cards { display: flex; gap: 12px; flex-wrap: wrap; }
 .look-card { width: 150px; border: 1px solid rgba(128,128,128,.25); background: transparent; color: inherit; border-radius: 10px; padding: 8px; cursor: pointer; display: flex; flex-direction: column; gap: 6px; }
-.look-card .cover { width: 100%; height: 110px; object-fit: cover; border-radius: 6px; background: rgba(128,128,128,.15); }
+.look-card .cover { width: 100%; height: 120px; object-fit: contain; border-radius: 6px; background: rgba(0,0,0,.25); }
 .cover.placeholder, .img.placeholder { display: flex; align-items: center; justify-content: center; opacity: .4; font-size: 12px; }
 .img.placeholder.missing { color: #ff9d9d; }
 .look-name { font-size: 13px; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -816,8 +825,8 @@ onMounted(refreshBase);
 .detail-head .actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
 .cand-grid, .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
 .cand { border: 1px solid rgba(128,128,128,.25); border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
-.cand img, .cand .img { width: 100%; height: 130px; object-fit: cover; border-radius: 6px; background: rgba(128,128,128,.15); }
-.cand.small img, .cand.small .img { height: 80px; }
+.cand img, .cand .img { width: 100%; height: 150px; object-fit: contain; border-radius: 6px; background: rgba(0,0,0,.25); }
+.cand.small img, .cand.small .img { height: 96px; }
 .cand-info { display: flex; gap: 6px; align-items: center; min-height: 18px; }
 .star { color: #ffd75e; }
 .cand-actions { display: flex; gap: 6px; }
@@ -840,4 +849,10 @@ onMounted(refreshBase);
 .dims em { font-style: normal; font-size: 10px; opacity: .75; background: rgba(128,128,128,.12); border-radius: 6px; padding: 1px 5px; }
 .binding-review { font-size: 10px; opacity: .65; }
 .badge.held, .badge.comp { background: rgba(140,120,255,.2); color: #c9bcff; }
+.zoomable { cursor: zoom-in; }
+.zoomable:hover { outline: 1px solid #6ea8ff; }
+.img-lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.86); z-index: 9999; display: flex; align-items: center; justify-content: center; cursor: zoom-out; }
+.img-lightbox img { max-width: 92vw; max-height: 92vh; object-fit: contain; border-radius: 8px; box-shadow: 0 8px 60px rgba(0,0,0,.6); cursor: default; }
+.lightbox-close { position: absolute; right: 18px; top: 12px; border: 1px solid rgba(255,255,255,.4); background: transparent; color: #fff; font-size: 20px; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; }
+.lightbox-hint { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; color: rgba(255,255,255,.5); font-size: 12px; }
 </style>
