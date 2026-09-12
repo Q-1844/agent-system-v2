@@ -30,13 +30,16 @@ from .models import CharacterLook, Clothing
 VISION_MODEL = "agnes-2.5-flash"   # 与 Director 视觉审查同源（本域自含常量，不 import agents）
 
 _DIMENSIONS = ("identity_consistency", "costume_consistency", "visual_defects")
+# P1 §15：项目风格一致性维度（profile specified 时追加；hard——fail → overall 不得 pass）
+STYLE_DIMENSION = "project_style_consistency"
 
 
 def _expectations_fingerprint(*, character_description: str,
                               clothing_snapshot: Optional[dict],
                               appearance_description: str, appearance_delta: str,
-                              view_purpose: str) -> str:
-    """审查基准指纹：本次审查所对照的期望（角色/服装/外观/视角）。
+                              view_purpose: str,
+                              visual_profile_fingerprint: Optional[str] = None) -> str:
+    """审查基准指纹：本次审查所对照的期望（角色/服装/外观/视角 + 项目风格，P1 §15）。
     与生成 basis 指纹口径独立——审查的是'当前期望'，记录指纹即可追溯。"""
     return fingerprint({
         "character_description": character_description,
@@ -44,6 +47,7 @@ def _expectations_fingerprint(*, character_description: str,
         "appearance_description": appearance_description,
         "appearance_delta": appearance_delta,
         "view_purpose": view_purpose,
+        "visual_profile_fingerprint": visual_profile_fingerprint,
     })
 
 
@@ -51,8 +55,11 @@ def build_review_prompt(*, character_description: str,
                         clothing_snapshot: Optional[dict],
                         appearance_description: str = "",
                         appearance_delta: str = "",
-                        view_purpose: str = "") -> str:
-    """确定性审查 prompt（无时间/随机）。要求只回 JSON。"""
+                        view_purpose: str = "",
+                        style_expectation: str = "") -> str:
+    """确定性审查 prompt（无时间/随机）。要求只回 JSON。
+    style_expectation（P1 §15）：visual_profile.compiler 输出的项目风格期望段；
+    非空时 project_style_consistency 成为第 4 个维度（hard）。"""
     cl = clothing_snapshot or {}
     outfit_bits = ", ".join(x for x in (
         _clean(cl.get("name") or ""), _clean(cl.get("description") or ""),
@@ -64,7 +71,8 @@ def build_review_prompt(*, character_description: str,
     expected_outfit = outfit_bits or "no specific outfit requirement"
     view = _clean(view_purpose).lower() or "front-facing full body reference"
 
-    return (
+    n_dims = 4 if style_expectation else 3
+    parts = [
         "You are a strict production reference reviewer for an animation pipeline.\n"
         "Review THIS candidate image against the EXPECTED baseline below.\n\n"
         f"Expected character identity: {_clean(character_description) or '(unspecified)'}\n"
@@ -72,20 +80,29 @@ def build_review_prompt(*, character_description: str,
         f"Expected appearance notes: {_clean(appearance_description) or 'none'}"
         f"{('; ' + _clean(appearance_delta)) if _clean(appearance_delta) else ''}\n"
         f"Generation view intent: {view}\n\n"
-        "Check exactly these three dimensions:\n"
+        f"Check exactly these {n_dims} dimensions:\n"
         "1. identity_consistency — the character matches the expected identity "
         "(face, hairstyle, body proportions); suitable as a reusable production reference.\n"
         "2. costume_consistency — the outfit matches the expected clothing description "
         "(design, colors, materials, completeness).\n"
         "3. visual_defects — obvious visual defects: malformed limbs/hands/face, artifacts, "
         "watermark or text, accidental occlusion of key design information, wrong framing "
-        "(must read as a full-body production reference).\n\n"
-        "Answer with ONLY a JSON object (no markdown fence) in exactly this schema:\n"
-        '{"identity_consistency": "pass|concern|fail", "identity_notes": "...",\n'
-        ' "costume_consistency": "pass|concern|fail", "costume_notes": "...",\n'
-        ' "visual_defects": "pass|concern|fail", "defect_notes": "...",\n'
-        ' "overall": "pass|needs_fix|uncertain", "summary": "..."}'
-    )
+        "(must read as a full-body production reference).\n",
+    ]
+    if style_expectation:
+        parts.append(
+            f"4. project_style_consistency — the image must belong to the project's declared "
+            f"visual production style/medium (hard dimension: a style mismatch must fail).\n"
+            f"{style_expectation}\n")
+    schema = ('{"identity_consistency": "pass|concern|fail", "identity_notes": "...",\n'
+              ' "costume_consistency": "pass|concern|fail", "costume_notes": "...",\n'
+              ' "visual_defects": "pass|concern|fail", "defect_notes": "...",\n')
+    if style_expectation:
+        schema += (' "project_style_consistency": "pass|concern|fail", "style_notes": "...",\n')
+    schema += ' "overall": "pass|needs_fix|uncertain", "summary": "..."}'
+    parts.append("Answer with ONLY a JSON object (no markdown fence) in exactly this schema:\n"
+                 + schema)
+    return "\n".join(parts)
 
 
 def _extract_json(text: str) -> Optional[dict]:
@@ -116,9 +133,11 @@ def _normalize_dim(v: Any) -> Optional[str]:
     return s if s in ("pass", "concern", "fail") else None
 
 
-def derive_overall(dims: Dict[str, Optional[str]]) -> str:
-    """overall 确定性推导：任何 fail→needs_fix；全 pass→pass；其余（concern/缺失）→uncertain。"""
-    vals = [dims.get(d) for d in _DIMENSIONS]
+def derive_overall(dims: Dict[str, Optional[str]],
+                   dimensions: tuple = _DIMENSIONS) -> str:
+    """overall 确定性推导：任何 fail→needs_fix；全 pass→pass；其余（concern/缺失）→uncertain。
+    dimensions 可扩展（P1 §15：profile specified 时含 project_style_consistency——hard）。"""
+    vals = [dims.get(d) for d in dimensions]
     if any(v == "fail" for v in vals):
         return "needs_fix"
     if all(v == "pass" for v in vals):
@@ -169,6 +188,14 @@ async def review_look_candidates(project_dir, look_id: str, *,
         project = ProjectStore(pdir).load()
     except FileNotFoundError:
         project = None
+    # P1 §15：项目风格期望（unspecified → 该维度不进入本次审查，record 诚实标注）
+    from src.visual_profile import load_profile_or_none
+    from src.visual_profile.compiler import compile_project_style_review_expectation
+    from src.visual_profile.models import visual_profile_fingerprint
+    visual_profile = load_profile_or_none(pdir)   # 坏文件向上抛（router 转诚实错误）
+    style_expectation = compile_project_style_review_expectation(visual_profile)
+    all_dimensions = _DIMENSIONS + ((STYLE_DIMENSION,) if visual_profile else ())
+    vp_fingerprint = visual_profile_fingerprint(visual_profile) if visual_profile else None
     look: Optional[CharacterLook] = doc.looks.get(look_id)
     if look is None:
         return {"ok": False, "operation": "look.review_candidates", "review_id": review_id,
@@ -200,12 +227,14 @@ async def review_look_candidates(project_dir, look_id: str, *,
     basis_fp = _expectations_fingerprint(
         character_description=character_description, clothing_snapshot=clothing_snapshot,
         appearance_description=look.appearance_description,
-        appearance_delta=look.appearance_delta, view_purpose=view_purpose)
+        appearance_delta=look.appearance_delta, view_purpose=view_purpose,
+        visual_profile_fingerprint=vp_fingerprint)
     prompt = build_review_prompt(character_description=character_description,
                                  clothing_snapshot=clothing_snapshot,
                                  appearance_description=look.appearance_description,
                                  appearance_delta=look.appearance_delta,
-                                 view_purpose=view_purpose)
+                                 view_purpose=view_purpose,
+                                 style_expectation=style_expectation)
 
     candidate_reviews: List[dict] = []
     usage_total = {"prompt_tokens": 0, "completion_tokens": 0}
@@ -236,17 +265,22 @@ async def review_look_candidates(project_dir, look_id: str, *,
             return {"asset_id": asset_id, "status": "parse_failed", "overall": "uncertain",
                     "summary": "vision 回复无法解析为 JSON（fail closed，不可作为 pass 证据）",
                     "raw_head": ((res or {}).get("content") or "")[:200]}
-        dims = {d: _normalize_dim(parsed.get(d)) for d in _DIMENSIONS}
-        return {"asset_id": asset_id, "status": "reviewed",
-                "identity_consistency": dims["identity_consistency"],
-                "identity_notes": str(parsed.get("identity_notes") or ""),
-                "costume_consistency": dims["costume_consistency"],
-                "costume_notes": str(parsed.get("costume_notes") or ""),
-                "visual_defects": dims["visual_defects"],
-                "defect_notes": str(parsed.get("defect_notes") or ""),
-                "overall": derive_overall(dims),
-                "model_overall": str(parsed.get("overall") or ""),
-                "summary": str(parsed.get("summary") or "")}
+        dims = {d: _normalize_dim(parsed.get(d)) for d in all_dimensions}
+        result = {"asset_id": asset_id, "status": "reviewed",
+                  "identity_consistency": dims["identity_consistency"],
+                  "identity_notes": str(parsed.get("identity_notes") or ""),
+                  "costume_consistency": dims["costume_consistency"],
+                  "costume_notes": str(parsed.get("costume_notes") or ""),
+                  "visual_defects": dims["visual_defects"],
+                  "defect_notes": str(parsed.get("defect_notes") or ""),
+                  "overall": derive_overall(dims, all_dimensions),
+                  "model_overall": str(parsed.get("overall") or ""),
+                  "summary": str(parsed.get("summary") or "")}
+        if visual_profile is not None:
+            # P1 §15：hard 维度结论进 per-candidate 结果；unspecified → 维度不存在
+            result[STYLE_DIMENSION] = dims[STYLE_DIMENSION]
+            result["style_notes"] = str(parsed.get("style_notes") or "")
+        return result
 
     for aid in targets:
         candidate_reviews.append(await review_one(aid))
@@ -256,6 +290,9 @@ async def review_look_candidates(project_dir, look_id: str, *,
         "reviewed_basis_fingerprint": basis_fp, "model": VISION_MODEL, "prompt": prompt,
         "candidate_asset_ids": list(targets),
         "candidate_reviews": candidate_reviews,
+        # P1 §15：项目风格审查口径（unspecified → not_applicable，维度未参与）
+        "visual_profile_fingerprint": vp_fingerprint,
+        "project_style_consistency": ("evaluated" if visual_profile else "not_applicable"),
         "usage": usage_total,
         "started_at": started_at, "completed_at": time.time(),
         "status": "completed", "error": None, "verified": True,

@@ -47,6 +47,10 @@ def make_pdir(tmp_path: Path) -> Path:
     rdoc = ResourceDocument()
     rdoc.props["prop_sword01"] = ResourceProp(prop_id="prop_sword01", name="木剑")
     ResourceStore(pdir, pdir.name).save(rdoc)
+    # P1：生成路径 profile-aware（fail closed on unspecified）——测试环境默认写实
+    from src.visual_profile import VisualProfileService
+    VisualProfileService(pdir, pdir.name).update(render_family="photorealistic",
+                                                 expected_revision="")
     return pdir
 
 
@@ -77,12 +81,14 @@ def _no_peer_fp(pdir: Path, sciv_id: str) -> str:
     gb = gens[-1].get("basis") or {}
     from src.resources.store import ResourceStore as RS
     rdoc = RS(pdir, pdir.name).load()
+    from src.visual_profile import load_profile_or_none as _lpon
     return compute_no_peer_basis(
         pdir, doc, rdoc, inst, loc, bv, sciv,
         model_id=(gb.get("model") or {}).get("model_id", ""),
         size_tier=(gb.get("model") or {}).get("size_tier", "1K"),
         ratio=(gb.get("model") or {}).get("ratio", "16:9"),
         seed=gb.get("seed"), candidate_count=gb.get("candidate_count", 2),
+        visual_profile=_lpon(pdir),
     )["basis_fingerprint"]
 
 
@@ -309,7 +315,9 @@ def test_refresh_cycle_stale_peer_excluded_and_regenerated(tmp_path):
             "lighting_weather": "pass",
             "props": [{"prop_id": "prop_sword01", "observed": "correct",
                        "verdict": "pass", "notes": ""}],
-            "visual_defects": "pass", "overall": "pass", "summary": "ok"},
+            "visual_defects": "pass",
+            "project_style_consistency": "pass", "style_notes": "ok",
+            "overall": "pass", "summary": "ok"},
             ensure_ascii=False)
 
         class FakeV:

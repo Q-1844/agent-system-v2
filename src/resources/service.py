@@ -24,6 +24,32 @@ from .store import legacy_character_references as _legacy_refs
 
 
 class ResourceService:
+    # ---- P1 §13/§14：latest committed generation 的 style 兼容结论（computed 只读，
+    #      不落盘、不 mutation；legacy record → unknown + generated_before_visual_profile）----
+    def _latest_generation_style(self, **filter_kw) -> Optional[dict]:
+        from .generation_records import read_records
+        from src.visual_profile import load_profile_or_none
+        from src.visual_profile.models import (style_compatibility_of_basis,
+                                               visual_profile_fingerprint,
+                                               VisualProfileSchemaError)
+        recs = [r for r in read_records(self.project_dir, **filter_kw)
+                if r.get("status") == "committed" and r.get("basis")]
+        if not recs:
+            return None
+        last = recs[-1]
+        try:
+            vp = load_profile_or_none(self.project_dir)
+            cur_fp = visual_profile_fingerprint(vp) if vp is not None else None
+        except VisualProfileSchemaError:
+            return {"generation_id": last.get("generation_id"),
+                    "style_compatibility": "visual_profile_unreadable",
+                    "generated_before_visual_profile": None,
+                    "visual_profile_fingerprint": (last.get("basis") or {}).get(
+                        "visual_profile_fingerprint")}
+        comp = style_compatibility_of_basis(last.get("basis"), cur_fp)
+        comp["generation_id"] = last.get("generation_id")
+        return comp
+
     """项目资源只读 service + 内部测试用 typed create/update。"""
 
     def __init__(self, project_dir, project_name: Optional[str] = None):
@@ -168,6 +194,8 @@ class ResourceService:
             "cover_asset": (self._resolve_assets([lk.cover_asset_id])[0] if lk.cover_asset_id else None),
             "clothing": clothing,
             "latest_reviews": latest_reviews,
+            # P1 §13：latest committed generation 的项目风格兼容结论（computed）
+            "latest_generation_style": self._latest_generation_style(look_id=lk.look_id),
         }
 
     def read_clothing(self, clothing_id: str) -> Optional[dict]:
@@ -286,6 +314,9 @@ class ResourceService:
             "look": look_resolved,
             "prop_bindings_resolved": bindings,
             "latest_reviews": latest_reviews,
+            # P1 §13：latest committed generation 的项目风格兼容结论（computed）
+            "latest_generation_style": self._latest_generation_style(
+                composition_id=c.composition_id),
         }
 
     def read_resource(self, resource_id: str) -> Optional[dict]:

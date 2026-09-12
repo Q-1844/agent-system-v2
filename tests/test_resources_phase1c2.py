@@ -45,17 +45,20 @@ PASS_JSON = json.dumps({
     "identity_consistency": "pass", "identity_notes": "matches reference",
     "costume_consistency": "pass", "costume_notes": "coat as specified",
     "visual_defects": "pass", "defect_notes": "none",
+    "project_style_consistency": "pass", "style_notes": "matches project style",
     "overall": "pass", "summary": "good production reference"})
 NEEDSFIX_JSON = json.dumps({
     "identity_consistency": "pass", "identity_notes": "ok",
     "costume_consistency": "pass", "costume_notes": "ok",
     "visual_defects": "fail", "defect_notes": "extra sixth finger",
+    "project_style_consistency": "pass", "style_notes": "ok",
     "overall": "pass",   # 模型自报 pass —— 服务端必须推导为 needs_fix
     "summary": "defect"})
 CONCERN_JSON = json.dumps({
     "identity_consistency": "pass", "identity_notes": "ok",
     "costume_consistency": "concern", "costume_notes": "buttons differ",
     "visual_defects": "pass", "defect_notes": "none",
+    "project_style_consistency": "pass", "style_notes": "ok",
     "overall": "pass", "summary": "minor concern"})
 FENCED_PASS = "```json\n" + PASS_JSON + "\n```"
 

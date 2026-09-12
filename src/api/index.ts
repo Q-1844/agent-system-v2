@@ -1023,9 +1023,37 @@ class ApiClient {
     return data.projects;
   }
 
-  async createProject(name: string): Promise<void> {
-    await this.request(`/api/projects/create?name=${encodeURIComponent(name)}`, {
-      method: 'POST',
+  async createProject(name: string, renderFamily: string, artDirection = ''): Promise<void> {
+    // P1 §6：render_family 必选（后端契约校验，不静默默认）
+    let url = `/api/projects/create?name=${encodeURIComponent(name)}`
+      + `&render_family=${encodeURIComponent(renderFamily)}`;
+    if (artDirection) url += `&art_direction=${encodeURIComponent(artDirection)}`;
+    await this.request(url, { method: 'POST' });
+  }
+
+  // ============ Project Visual Profile（P1 §20） ============
+
+  async getVisualProfile(project: string): Promise<{
+    specified: boolean;
+    visual_profile: {
+      render_family: string; art_direction: string; style_tags: string[];
+      negative_style_constraints: string[];
+    } | null;
+    revision: string;
+    has_approved_visual_assets: boolean;
+    check_error?: string;
+  }> {
+    return this.request(`/api/project/${encodeURIComponent(project)}/visual-profile`);
+  }
+
+  async updateVisualProfile(project: string, body: {
+    render_family: string; art_direction?: string;
+    style_tags?: string[]; negative_style_constraints?: string[];
+    expected_revision: string;
+  }): Promise<{ ok: boolean; revision: string; has_approved_visual_assets: boolean }> {
+    return this.request(`/api/project/${encodeURIComponent(project)}/visual-profile`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
     });
   }
 

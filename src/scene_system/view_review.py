@@ -91,15 +91,19 @@ def build_review_expectations(doc: SceneSystemDocument, view: LocationView) -> d
     }
 
 
-def expectations_fingerprint(expectations: dict, reference_asset_ids: List[str]) -> str:
-    """审查基准指纹：本次审查对照的期望（规格 + 实际附上的 approved 参考组）。"""
+def expectations_fingerprint(expectations: dict, reference_asset_ids: List[str],
+                             visual_profile_fingerprint: Optional[str] = None) -> str:
+    """审查基准指纹：本次审查对照的期望（规格 + 实际附上的 approved 参考组 + 项目风格）。"""
     return fingerprint({"expectations": expectations,
-                        "reference_ids": list(reference_asset_ids)})
+                        "reference_ids": list(reference_asset_ids),
+                        "visual_profile_fingerprint": visual_profile_fingerprint})
 
 
 # ============ 确定性审查 prompt（§21/§22）============
-def build_view_review_prompt(expectations: dict, image_labels: List[str]) -> str:
-    """确定性审查 prompt（无时间/随机）。要求只回 JSON。"""
+def build_view_review_prompt(expectations: dict, image_labels: List[str],
+                             style_expectation: str = "") -> str:
+    """确定性审查 prompt（无时间/随机）。要求只回 JSON。
+    style_expectation（P1 §15）：非空时 project_style_consistency 成为追加维度（hard）。"""
     loc = expectations.get("location") or {}
     view = expectations.get("view") or {}
     lines: list = []
@@ -139,13 +143,14 @@ def build_view_review_prompt(expectations: dict, image_labels: List[str]) -> str
         f"Camera expectation: viewed from the {_c(view.get('camera_zone')) or '(unspecified)'} "
         f"of the space, looking toward the {_c(view.get('look_direction')) or '(unspecified)'}.")
     lines.append("")
-    lines.append(
+    n_dims = 7 if style_expectation else 6
+    dim_block = (
         "IMPORTANT comparison principle: you are judging whether this candidate shows THE SAME "
         "LOCATION — not whether it looks pixel-similar to the reference images. Materials may "
         "differ in brightness/hue because the viewing angle changed. But the COUNT of doors, "
         "window types, major landmarks, and their layout relations must not drift or be "
         "substituted.\n"
-        "Check exactly these six dimensions:\n"
+        f"Check exactly these {n_dims} dimensions:\n"
         "1. location_identity — the candidate depicts the same kind of place as the expected "
         "identity description (architecture, atmosphere, scale), consistent with the approved "
         "references when present.\n"
@@ -159,16 +164,25 @@ def build_view_review_prompt(expectations: dict, image_labels: List[str]) -> str
         "direction (we are looking from where the view says, toward what it says).\n"
         "6. visual_defects — obvious defects: malformed geometry, artifacts, watermark or text, "
         "fused objects, extra unexplained structures, people/props/weather that should not be "
-        "in a base location reference.\n\n"
-        "Answer with ONLY a JSON object (no markdown fence) in exactly this schema:\n"
-        '{"location_identity": "pass|concern|fail", "location_notes": "...",\n'
-        ' "anchors": [{"anchor_id": "<must echo the expected anchor_id>",\n'
-        '              "visibility": "clearly_visible|partially|missing", "notes": "..."}],\n'
-        ' "anchor_consistency": "pass|concern|fail", "anchor_notes": "...",\n'
-        ' "layout_consistency": "pass|concern|fail", "layout_notes": "...",\n'
-        ' "view_consistency": "pass|concern|fail", "view_notes": "...",\n'
-        ' "visual_defects": "pass|concern|fail", "defect_notes": "...",\n'
-        ' "overall": "pass|needs_fix|uncertain", "summary": "..."}')
+        "in a base location reference.\n")
+    if style_expectation:
+        dim_block += (
+            "7. project_style_consistency — the image must belong to the project's declared "
+            "visual production style/medium (hard dimension: a style mismatch must fail).\n"
+            + style_expectation + "\n")
+    schema = ('{"location_identity": "pass|concern|fail", "location_notes": "...",\n'
+              ' "anchors": [{"anchor_id": "<must echo the expected anchor_id>",\n'
+              '              "visibility": "clearly_visible|partially|missing", "notes": "..."}],\n'
+              ' "anchor_consistency": "pass|concern|fail", "anchor_notes": "...",\n'
+              ' "layout_consistency": "pass|concern|fail", "layout_notes": "...",\n'
+              ' "view_consistency": "pass|concern|fail", "view_notes": "...",\n')
+    if style_expectation:
+        schema += (' "project_style_consistency": "pass|concern|fail", "style_notes": "...",\n')
+    schema += (' "visual_defects": "pass|concern|fail", "defect_notes": "...",\n'
+               ' "overall": "pass|needs_fix|uncertain", "summary": "..."}')
+    lines.append(dim_block + "\n"
+                 "Answer with ONLY a JSON object (no markdown fence) in exactly this schema:\n"
+                 + schema)
     return "\n".join(lines)
 
 
@@ -211,10 +225,12 @@ def derive_anchor_visibility(parsed_anchors: List[dict],
     return {"anchor_visibility": dim, "per_anchor": per_anchor}
 
 
-def derive_view_overall(dims: Dict[str, Optional[str]]) -> str:
+def derive_view_overall(dims: Dict[str, Optional[str]],
+                        dimensions: tuple = VIEW_DIMENSIONS) -> str:
     """overall 确定性推导（§23）：关键维度（含 anchor_visibility 的 fail 路径）任一
-    fail → needs_fix；六维度全 pass → pass；其余（concern/uncertain/缺失）→ uncertain。"""
-    vals = [dims.get(d) for d in VIEW_DIMENSIONS]
+    fail → needs_fix；全维度 pass → pass；其余（concern/uncertain/缺失）→ uncertain。
+    dimensions 可扩展（P1 §15：profile specified 时含 project_style_consistency——hard）。"""
+    vals = [dims.get(d) for d in dimensions]
     if any(v == "fail" for v in vals):
         return "needs_fix"
     if all(v == "pass" for v in vals):
@@ -289,6 +305,15 @@ async def review_location_view_candidates(project_dir, view_id: str, *,
 
     expectations = build_review_expectations(doc, view)
 
+    # P1 §15：项目风格期望（unspecified → 该维度不进入本次审查，record 诚实标注）
+    from src.visual_profile import load_profile_or_none
+    from src.visual_profile.compiler import compile_project_style_review_expectation
+    from src.visual_profile.models import visual_profile_fingerprint as vp_fp_fn
+    visual_profile = load_profile_or_none(pdir)
+    style_expectation = compile_project_style_review_expectation(visual_profile)
+    all_dimensions = VIEW_DIMENSIONS + (("project_style_consistency",) if visual_profile else ())
+    vp_fingerprint = vp_fp_fn(visual_profile) if visual_profile else None
+
     # 对比参考（§22）：该候选生成时使用的 approved references（记录在 generation basis），
     # 对当前 resources 解析出可用图。
     ref_entries = list((gen_rec.get("basis") or {}).get("selected_references") or [])
@@ -304,8 +329,10 @@ async def review_location_view_candidates(project_dir, view_id: str, *,
         content_static.append({"type": "image_url", "image_url": {"url": ref}})
         ref_ids_used.append(e.get("asset_id"))
 
-    basis_fp = expectations_fingerprint(expectations, ref_ids_used)
-    prompt = build_view_review_prompt(expectations, image_labels)
+    basis_fp = expectations_fingerprint(expectations, ref_ids_used,
+                                        visual_profile_fingerprint=vp_fingerprint)
+    prompt = build_view_review_prompt(expectations, image_labels,
+                                      style_expectation=style_expectation)
 
     candidate_reviews: List[dict] = []
     usage_total = {"prompt_tokens": 0, "completion_tokens": 0}
@@ -345,18 +372,27 @@ async def review_location_view_candidates(project_dir, view_id: str, *,
             "view_consistency": _normalize_dim(parsed.get("view_consistency")),
             "visual_defects": _normalize_dim(parsed.get("visual_defects")),
         }
-        return {"candidate_index": candidate_index, "candidate_file": candidate_file,
-                "status": "reviewed",
-                "dimensions": dims,
-                "location_notes": str(parsed.get("location_notes") or ""),
-                "per_anchor": derived["per_anchor"],
-                "anchor_notes": str(parsed.get("anchor_notes") or ""),
-                "layout_notes": str(parsed.get("layout_notes") or ""),
-                "view_notes": str(parsed.get("view_notes") or ""),
-                "defect_notes": str(parsed.get("defect_notes") or ""),
-                "overall": derive_view_overall(dims),
-                "model_overall": str(parsed.get("overall") or ""),
-                "summary": str(parsed.get("summary") or "")}
+        if visual_profile is not None:
+            # P1 §15：hard 维度；unspecified → 维度不存在，不参与 overall
+            dims["project_style_consistency"] = _normalize_dim(
+                parsed.get("project_style_consistency"))
+        result = {"candidate_index": candidate_index, "candidate_file": candidate_file,
+                  "status": "reviewed",
+                  "dimensions": dims,
+                  "location_notes": str(parsed.get("location_notes") or ""),
+                  "per_anchor": derived["per_anchor"],
+                  "anchor_notes": str(parsed.get("anchor_notes") or ""),
+                  "layout_notes": str(parsed.get("layout_notes") or ""),
+                  "view_notes": str(parsed.get("view_notes") or ""),
+                  "defect_notes": str(parsed.get("defect_notes") or ""),
+                  "overall": derive_view_overall(dims, all_dimensions),
+                  "model_overall": str(parsed.get("overall") or ""),
+                  "summary": str(parsed.get("summary") or "")}
+        if visual_profile is not None:
+            # P1 §15：拍平到顶层（与 Resources review 结果同形，便于消费方统一读取）
+            result["project_style_consistency"] = dims["project_style_consistency"]
+            result["style_notes"] = str(parsed.get("style_notes") or "")
+        return result
 
     for idx, f in enumerate(candidate_files):
         candidate_reviews.append(await review_one(idx, f))
@@ -369,6 +405,9 @@ async def review_location_view_candidates(project_dir, view_id: str, *,
         "candidate_files": list(candidate_files),
         "reference_asset_ids_used": ref_ids_used,
         "candidate_reviews": candidate_reviews,
+        # P1 §15：项目风格审查口径（unspecified → not_applicable，维度未参与）
+        "visual_profile_fingerprint": vp_fingerprint,
+        "project_style_consistency": ("evaluated" if visual_profile else "not_applicable"),
         "usage": usage_total,
         "started_at": started_at, "completed_at": time.time(),
         "status": "completed", "error": None,

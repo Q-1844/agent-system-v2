@@ -27,43 +27,60 @@ from .look_prompt import _clean
 from .look_review import VISION_MODEL, _extract_json, _normalize_dim
 
 _PROP_DIMENSIONS = ("prop_fidelity", "visual_clarity", "visual_defects")
+# P1 §15：项目风格一致性维度（profile specified 时追加；hard——fail → overall 不得 pass）
+STYLE_DIMENSION = "project_style_consistency"
 
 
-def _expectations_fingerprint(*, prop_name: str, prop_description: str, prop_tags: List[str]) -> str:
-    """审查基准指纹：本次审查对照的道具期望。"""
+def _expectations_fingerprint(*, prop_name: str, prop_description: str, prop_tags: List[str],
+                              visual_profile_fingerprint: Optional[str] = None) -> str:
+    """审查基准指纹：本次审查对照的道具期望（+ 项目风格，P1 §15）。"""
     return fingerprint({"prop_name": prop_name, "prop_description": prop_description,
-                        "tags": list(prop_tags)})
+                        "tags": list(prop_tags),
+                        "visual_profile_fingerprint": visual_profile_fingerprint})
 
 
 def build_prop_review_prompt(*, prop_name: str, prop_description: str = "",
-                             prop_tags: Optional[List[str]] = None) -> str:
-    """确定性审查 prompt（无时间/随机）。要求只回 JSON。"""
+                             prop_tags: Optional[List[str]] = None,
+                             style_expectation: str = "") -> str:
+    """确定性审查 prompt（无时间/随机）。要求只回 JSON。
+    style_expectation（P1 §15）：非空时 project_style_consistency 成为第 4 个维度（hard）。"""
     tags = ", ".join(_clean(str(t)) for t in (prop_tags or []) if _clean(str(t)))
-    return (
+    n_dims = 4 if style_expectation else 3
+    parts = [
         "You are a strict production reference reviewer for an animation pipeline.\n"
         "Review THIS candidate image of a PROP against the EXPECTED baseline below.\n\n"
         f"Expected prop: {_clean(prop_name) or '(unspecified)'}\n"
         f"Expected description: {_clean(prop_description) or '(unspecified)'}\n"
         f"Tags: {tags or '(none)'}\n\n"
-        "Check exactly these three dimensions:\n"
+        f"Check exactly these {n_dims} dimensions:\n"
         "1. prop_fidelity — the object is really the expected prop (shape, materials, colors, "
         "defining details all match the description); nothing essential is missing or replaced.\n"
         "2. visual_clarity — the prop reads clearly as a standalone production reference: clean "
         "composition, even lighting, whole object visible, silhouette and key details readable.\n"
         "3. visual_defects — obvious defects: malformed geometry, artifacts, watermark or text, "
-        "unrelated objects merged into the prop, broken perspective.\n\n"
-        "Answer with ONLY a JSON object (no markdown fence) in exactly this schema:\n"
-        '{"prop_fidelity": "pass|concern|fail", "fidelity_notes": "...",\n'
-        ' "visual_clarity": "pass|concern|fail", "clarity_notes": "...",\n'
-        ' "visual_defects": "pass|concern|fail", "defect_notes": "...",\n'
-        ' "overall": "pass|needs_fix|uncertain", "summary": "..."}'
-    )
+        "unrelated objects merged into the prop, broken perspective.\n",
+    ]
+    if style_expectation:
+        parts.append(
+            "4. project_style_consistency — the image must belong to the project's declared "
+            "visual production style/medium (hard dimension: a style mismatch must fail).\n"
+            f"{style_expectation}\n")
+    schema = ('{"prop_fidelity": "pass|concern|fail", "fidelity_notes": "...",\n'
+              ' "visual_clarity": "pass|concern|fail", "clarity_notes": "...",\n'
+              ' "visual_defects": "pass|concern|fail", "defect_notes": "...",\n')
+    if style_expectation:
+        schema += (' "project_style_consistency": "pass|concern|fail", "style_notes": "...",\n')
+    schema += ' "overall": "pass|needs_fix|uncertain", "summary": "..."}'
+    parts.append("Answer with ONLY a JSON object (no markdown fence) in exactly this schema:\n"
+                 + schema)
+    return "\n".join(parts)
 
 
-def derive_prop_overall(dims: Dict[str, Optional[str]]) -> str:
+def derive_prop_overall(dims: Dict[str, Optional[str]],
+                        dimensions: tuple = _PROP_DIMENSIONS) -> str:
     """overall 确定性推导：任何 fail→needs_fix；全 pass→pass；其余（concern/缺失）→uncertain。
-    维度缺失一律不判 pass（fail closed）。"""
-    vals = [dims.get(d) for d in _PROP_DIMENSIONS]
+    维度缺失一律不判 pass（fail closed）。dimensions 可扩展（P1 §15 hard 维度）。"""
+    vals = [dims.get(d) for d in dimensions]
     if any(v == "fail" for v in vals):
         return "needs_fix"
     if all(v == "pass" for v in vals):
@@ -127,11 +144,22 @@ async def review_prop_reference(project_dir, prop_id: str, *,
         from deps import get_agnes_client   # 惰性（与 generation 同惯例）
         agnes_client = get_agnes_client()
 
+    # P1 §15：项目风格期望（unspecified → 该维度不进入本次审查，record 诚实标注）
+    from src.visual_profile import load_profile_or_none
+    from src.visual_profile.compiler import compile_project_style_review_expectation
+    from src.visual_profile.models import visual_profile_fingerprint
+    visual_profile = load_profile_or_none(pdir)
+    style_expectation = compile_project_style_review_expectation(visual_profile)
+    all_dimensions = _PROP_DIMENSIONS + ((STYLE_DIMENSION,) if visual_profile else ())
+    vp_fingerprint = visual_profile_fingerprint(visual_profile) if visual_profile else None
+
     basis_fp = _expectations_fingerprint(prop_name=prop.name,
                                          prop_description=prop.description,
-                                         prop_tags=list(prop.tags))
+                                         prop_tags=list(prop.tags),
+                                         visual_profile_fingerprint=vp_fingerprint)
     prompt = build_prop_review_prompt(prop_name=prop.name, prop_description=prop.description,
-                                      prop_tags=list(prop.tags))
+                                      prop_tags=list(prop.tags),
+                                      style_expectation=style_expectation)
 
     candidate_reviews: List[dict] = []
     usage_total = {"prompt_tokens": 0, "completion_tokens": 0}
@@ -162,17 +190,22 @@ async def review_prop_reference(project_dir, prop_id: str, *,
             return {"asset_id": asset_id, "status": "parse_failed", "overall": "uncertain",
                     "summary": "vision 回复无法解析为 JSON（fail closed，不可作为 pass 证据）",
                     "raw_head": ((res or {}).get("content") or "")[:200]}
-        dims = {d: _normalize_dim(parsed.get(d)) for d in _PROP_DIMENSIONS}
-        return {"asset_id": asset_id, "status": "reviewed",
-                "prop_fidelity": dims["prop_fidelity"],
-                "fidelity_notes": str(parsed.get("fidelity_notes") or ""),
-                "visual_clarity": dims["visual_clarity"],
-                "clarity_notes": str(parsed.get("clarity_notes") or ""),
-                "visual_defects": dims["visual_defects"],
-                "defect_notes": str(parsed.get("defect_notes") or ""),
-                "overall": derive_prop_overall(dims),
-                "model_overall": str(parsed.get("overall") or ""),
-                "summary": str(parsed.get("summary") or "")}
+        dims = {d: _normalize_dim(parsed.get(d)) for d in all_dimensions}
+        result = {"asset_id": asset_id, "status": "reviewed",
+                  "prop_fidelity": dims["prop_fidelity"],
+                  "fidelity_notes": str(parsed.get("fidelity_notes") or ""),
+                  "visual_clarity": dims["visual_clarity"],
+                  "clarity_notes": str(parsed.get("clarity_notes") or ""),
+                  "visual_defects": dims["visual_defects"],
+                  "defect_notes": str(parsed.get("defect_notes") or ""),
+                  "overall": derive_prop_overall(dims, all_dimensions),
+                  "model_overall": str(parsed.get("overall") or ""),
+                  "summary": str(parsed.get("summary") or "")}
+        if visual_profile is not None:
+            # P1 §15：hard 维度结论进 per-candidate 结果；unspecified → 维度不存在
+            result[STYLE_DIMENSION] = dims[STYLE_DIMENSION]
+            result["style_notes"] = str(parsed.get("style_notes") or "")
+        return result
 
     for aid in targets:
         candidate_reviews.append(await review_one(aid))
@@ -182,6 +215,9 @@ async def review_prop_reference(project_dir, prop_id: str, *,
         "reviewed_basis_fingerprint": basis_fp, "model": VISION_MODEL, "prompt": prompt,
         "candidate_asset_ids": list(targets),
         "candidate_reviews": candidate_reviews,
+        # P1 §15：项目风格审查口径（unspecified → not_applicable，维度未参与）
+        "visual_profile_fingerprint": vp_fingerprint,
+        "project_style_consistency": ("evaluated" if visual_profile else "not_applicable"),
         "usage": usage_total,
         "started_at": started_at, "completed_at": time.time(),
         "status": "completed", "error": None, "verified": True,

@@ -101,6 +101,9 @@ _ERROR_STATUS = {
     "cross_location_relation": 422,
     "cross_location_anchor": 422,
     "resources_lookup_failed": 500,
+    # Project Visual Profile P1：unspecified fail closed / 坏文件
+    "project_visual_profile_required": 422,
+    "visual_profile_unreadable": 500,
     # ---- Phase S2A 视觉协议 ----
     "generation_in_progress": 409,
     "stale_generation_basis": 409,
@@ -714,8 +717,30 @@ async def read_generation_records(project: str, view_id: str,
                                   limit: Optional[int] = Query(default=None)):
     try:
         from src.scene_system import generation_records as _gr
-        recs = _gr.read_records(get_project_manager().get_project_dir(project),
-                                view_id=view_id, limit=limit)
+        pdir = get_project_manager().get_project_dir(project)
+        recs = _gr.read_records(pdir, view_id=view_id, limit=limit)
+        # P1 §13/§14：附加 computed style 兼容结论（不落盘、不 mutation）。
+        # legacy record → unknown + generated_before_visual_profile=true（不伪造）。
+        from src.visual_profile import load_profile_or_none
+        from src.visual_profile.models import (style_compatibility_of_basis,
+                                               VisualProfileSchemaError)
+        try:
+            vp = load_profile_or_none(pdir)
+            cur_fp = None
+            from src.visual_profile.models import visual_profile_fingerprint
+            if vp is not None:
+                cur_fp = visual_profile_fingerprint(vp)
+        except VisualProfileSchemaError:
+            cur_fp = "__unreadable__"
+        for rec in recs:
+            basis = rec.get("basis") or {}
+            if cur_fp == "__unreadable__":
+                rec["style_compatibility"] = {
+                    "style_compatibility": "visual_profile_unreadable",
+                    "generated_before_visual_profile": None,
+                    "visual_profile_fingerprint": basis.get("visual_profile_fingerprint")}
+            else:
+                rec["style_compatibility"] = style_compatibility_of_basis(basis, cur_fp)
         return {"generation_records": recs}
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"项目不存在: {project}")

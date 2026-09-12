@@ -189,6 +189,20 @@ class SceneVisualService:
             if agnes_client is None:
                 from deps import get_agnes_client   # 惰性 import（测试可注入 fake）
                 agnes_client = get_agnes_client()
+            # P1 §7/§20 fail closed：visual_profile unspecified → 不猜风格，拒绝生成。
+            from src.visual_profile import load_profile_or_none
+            from src.visual_profile.models import VisualProfileSchemaError
+            try:
+                visual_profile = load_profile_or_none(self.project_dir)
+            except VisualProfileSchemaError as e:
+                return self._gen_result(generation_id, view_id, ok=False, status="failed",
+                                        error="visual_profile_unreadable",
+                                        detail=f"project_profile.json 损坏（fail closed）：{e}")
+            if visual_profile is None:
+                return self._gen_result(generation_id, view_id, ok=False, status="failed",
+                                        error="project_visual_profile_required",
+                                        detail="项目未设置 ProjectVisualProfile（P1 §7 fail closed，"
+                                               "不猜测 realistic/anime/3D）；先设置项目视觉定义")
             model_id = agnes_client.models["image"]
             rdoc = load_resources_doc_or_none(self.project_dir)
             selection = select_reference_views(self.project_dir, doc, rdoc, view,
@@ -200,7 +214,8 @@ class SceneVisualService:
             basis = compute_location_visual_basis(
                 self.project_dir, doc, rdoc, location, view,
                 model_id=model_id, size_tier=size_tier, ratio=ratio,
-                seed=seed, candidate_count=candidate_count, reference_selection=selection)
+                seed=seed, candidate_count=candidate_count, reference_selection=selection,
+                visual_profile=visual_profile)
             record_base["location_id"] = location.location_id
             record_base["basis"] = basis
             record_base["selected_reference_ids"] = list(basis["reference_view_ids"])
@@ -442,6 +457,20 @@ class SceneVisualService:
             if agnes_client is None:
                 from deps import get_agnes_client
                 agnes_client = get_agnes_client()
+            # P1 §7/§20 fail closed：visual_profile unspecified → 不猜风格，拒绝生成。
+            from src.visual_profile import load_profile_or_none
+            from src.visual_profile.models import VisualProfileSchemaError
+            try:
+                visual_profile = load_profile_or_none(self.project_dir)
+            except VisualProfileSchemaError as e:
+                return self._gen_result(generation_id, scene_instance_view_id, ok=False,
+                                        status="failed", error="visual_profile_unreadable",
+                                        detail=f"project_profile.json 损坏（fail closed）：{e}")
+            if visual_profile is None:
+                return self._gen_result(generation_id, scene_instance_view_id, ok=False,
+                                        status="failed", error="project_visual_profile_required",
+                                        detail="项目未设置 ProjectVisualProfile（P1 §7 fail closed，"
+                                               "不猜测 realistic/anime/3D）；先设置项目视觉定义")
             model_id = agnes_client.models["image"]
             # §15/§9：参考选择（内含可见 prop fail closed）
             from .instance_view_basis import (
@@ -458,7 +487,7 @@ class SceneVisualService:
                 self.project_dir, doc, rdoc, inst, base_location, base_view, sciv,
                 model_id=model_id, size_tier=size_tier, ratio=ratio, seed=seed,
                 candidate_count=candidate_count, ref_selection=ref_selection,
-                include_peer=include_peer)
+                include_peer=include_peer, visual_profile=visual_profile)
             record_base["scene_instance_id"] = inst.scene_instance_id
             record_base["location_id"] = base_location.location_id
             record_base["view_id"] = base_view.view_id
@@ -839,11 +868,22 @@ class SceneVisualService:
                 return {"ok": False, "operation": op, "error": "canonical_changed",
                         "detail": "SceneInstance 或 base LocationView 已不存在"}
             expectations = build_scene_instance_review_expectations(doc, base_view, inst, rdoc)
+            # P1 §15：approve 与 review 同口径（期望指纹含项目风格；profile 变更 → 重新 review）
+            from src.visual_profile import load_profile_or_none
+            from src.visual_profile.models import (visual_profile_fingerprint,
+                                                   VisualProfileSchemaError)
+            try:
+                _vp = load_profile_or_none(self.project_dir)
+            except VisualProfileSchemaError as e:
+                return {"ok": False, "operation": op, "error": "visual_profile_unreadable",
+                        "detail": f"project_profile.json 损坏（fail closed）：{e}"}
+            _vp_fp = visual_profile_fingerprint(_vp) if _vp is not None else None
             fp = siv_expectations_fingerprint(
-                expectations, list(ev["record"].get("reference_asset_ids_used") or []))
+                expectations, list(ev["record"].get("reference_asset_ids_used") or []),
+                visual_profile_fingerprint=_vp_fp)
             if fp != ev["record"].get("reviewed_basis_fingerprint"):
                 return {"ok": False, "operation": op, "error": "stale_approval_basis",
-                        "detail": "审查之后 scene basis/参考组已变化（期望指纹不一致）；重新 review"}
+                        "detail": "审查之后 scene basis/参考组/项目风格已变化（期望指纹不一致）；重新 review"}
             if not (self.project_dir / candidate_file).is_file():
                 return {"ok": False, "operation": op, "error": "candidate_file_missing",
                         "detail": f"候选文件丢失: {candidate_file}"}
@@ -859,7 +899,8 @@ class SceneVisualService:
                     size_tier=(gb.get("model") or {}).get("size_tier", "1K"),
                     ratio=(gb.get("model") or {}).get("ratio", "16:9"),
                     seed=gb.get("seed"),
-                    candidate_count=gb.get("candidate_count", 2))
+                    candidate_count=gb.get("candidate_count", 2),
+                    visual_profile=_vp)
             except _BasisInputError as e:
                 return {"ok": False, "operation": op, "error": e.code, "detail": e.detail}
             _stale_field = None
@@ -1063,13 +1104,25 @@ class SceneVisualService:
                 return {"ok": False, "operation": op, "error": "review_pass_required",
                         "detail": (f"candidate {candidate_index} 没有针对当前 generation 的 "
                                    f"overall=pass 审查证据（approve 双向硬门槛，T29）")}
-            # 审查基准仍当前：期望指纹必须与审查时一致（view/location/anchor/layout/参考组）
+            # 审查基准仍当前：期望指纹必须与审查时一致（view/location/anchor/layout/参考组
+            # + 项目风格——P1 §15：review 记录的指纹含 visual_profile_fingerprint，approve
+            # 用同口径重算，profile 变更 → stale_approval_basis，重新 review 后再 approve）
+            from src.visual_profile import load_profile_or_none
+            from src.visual_profile.models import (visual_profile_fingerprint,
+                                                   VisualProfileSchemaError)
+            try:
+                _vp = load_profile_or_none(self.project_dir)
+            except VisualProfileSchemaError as e:
+                return {"ok": False, "operation": op, "error": "visual_profile_unreadable",
+                        "detail": f"project_profile.json 损坏（fail closed）：{e}"}
             expectations = build_review_expectations(doc, view)
-            fp = expectations_fingerprint(expectations,
-                                          list(ev["record"].get("reference_asset_ids_used") or []))
+            fp = expectations_fingerprint(
+                expectations, list(ev["record"].get("reference_asset_ids_used") or []),
+                visual_profile_fingerprint=(visual_profile_fingerprint(_vp)
+                                            if _vp is not None else None))
             if fp != ev["record"].get("reviewed_basis_fingerprint"):
                 return {"ok": False, "operation": op, "error": "stale_approval_basis",
-                        "detail": "审查之后空间语义/参考组已变化（期望指纹不一致）；重新 review 后再 approve"}
+                        "detail": "审查之后空间语义/参考组/项目风格已变化（期望指纹不一致）；重新 review 后再 approve"}
             if not (self.project_dir / candidate_file).is_file():
                 return {"ok": False, "operation": op, "error": "candidate_file_missing",
                         "detail": f"候选文件丢失: {candidate_file}"}

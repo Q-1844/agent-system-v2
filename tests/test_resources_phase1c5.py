@@ -237,17 +237,20 @@ PROP_PASS_JSON = _json.dumps({
     "prop_fidelity": "pass", "fidelity_notes": "wooden training sword as described",
     "visual_clarity": "pass", "clarity_notes": "whole object readable",
     "visual_defects": "pass", "defect_notes": "none",
+    "project_style_consistency": "pass", "style_notes": "ok",
     "overall": "pass", "summary": "clean prop reference"})
 PROP_NEEDSFIX_JSON = _json.dumps({
     "prop_fidelity": "fail", "fidelity_notes": "this is a metal sword, not wooden",
     "visual_clarity": "pass", "clarity_notes": "ok",
     "visual_defects": "pass", "defect_notes": "none",
+    "project_style_consistency": "pass", "style_notes": "ok",
     "overall": "pass",   # 模型自报 pass —— 服务端必须推导 needs_fix
     "summary": "wrong material"})
 PROP_CONCERN_JSON = _json.dumps({
     "prop_fidelity": "concern", "fidelity_notes": "grip color differs",
     "visual_clarity": "pass", "clarity_notes": "ok",
     "visual_defects": "pass", "defect_notes": "none",
+    "project_style_consistency": "pass", "style_notes": "ok",
     "overall": "pass", "summary": "minor concern"})
 
 
@@ -1021,6 +1024,7 @@ def _comp_review_json(*, character_identity="pass", look_consistency="pass",
         "character_identity": character_identity, "character_notes": "ok",
         "look_consistency": look_consistency, "look_notes": "ok",
         "bindings": bindings or [],
+        "project_style_consistency": "pass", "style_notes": "ok",
         "visual_defects": visual_defects, "defect_notes": "none",
         "overall": overall, "summary": summary})
 
@@ -1331,6 +1335,9 @@ def test_t30_t31_import_composition_and_id_remap(penv, tmp_path):
                               status=ShotStatus.DONE.value)}
     proj.characters = [c]
     ProjectStore(bdir).save(proj)
+    # P1：profile-aware 生成测试环境默认写实
+    from src.visual_profile import VisualProfileService as _VPS
+    _VPS(bdir, bdir.name).update(render_family="photorealistic", expected_revision="")
     (bdir / "o").mkdir(exist_ok=True)
     (bdir / "o" / "alice_front_seg.png").write_bytes(b"PNG-B")
 
@@ -1377,6 +1384,8 @@ def test_t30b_import_composition_without_character_rejected(penv, tmp_path):
     (bdir / "output").mkdir(parents=True)
     from src.core.models import Project
     ProjectStore(bdir).save(Project(name=bdir.name))    # 无 Alice
+    from src.visual_profile import VisualProfileService as _VPS2
+    _VPS2(bdir, bdir.name).update(render_family="photorealistic", expected_revision="")
     svc_b = SharedLibraryService(bdir, bdir.name, shared_dir=shared_dir)
     from src.resources.store import ResourceStore as _RS
     r = run(svc_b.import_resource(info["r_comp"]["shared_id"],
@@ -1404,6 +1413,10 @@ def test_t32_t33_ab_isolation_and_shared_untouched(penv, tmp_path):
                                   status=ShotStatus.DONE.value)}
         proj.characters = [c]
         ProjectStore(pdir).save(proj)
+        # P1：profile-aware 生成测试环境默认写实
+        from src.visual_profile import VisualProfileService as _VPS3
+        _VPS3(pdir, pdir.name).update(render_family="photorealistic",
+                                      expected_revision="")
         (pdir / "o").mkdir(exist_ok=True)
         (pdir / "o" / "alice_front_seg.png").write_bytes(b"PNG")
         return pdir

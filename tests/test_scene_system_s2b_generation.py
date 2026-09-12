@@ -68,6 +68,10 @@ def make_pdir(tmp_path: Path) -> Path:
     for pid in ("prop_sword01", "prop_hidden01"):
         rdoc.props[pid] = ResourceProp(prop_id=pid, name=pid)
     ResourceStore(pdir, pdir.name).save(rdoc)
+    # P1：生成路径 profile-aware（fail closed on unspecified）——测试环境默认写实
+    from src.visual_profile import VisualProfileService
+    VisualProfileService(pdir, pdir.name).update(render_family="photorealistic",
+                                                 expected_revision="")
     return pdir
 
 

@@ -52,6 +52,7 @@ def _reply(anchor_id: str, overrides: dict | None = None) -> str:
         "layout_consistency": "pass", "layout_notes": "",
         "view_consistency": "pass", "view_notes": "",
         "visual_defects": "pass", "defect_notes": "",
+        "project_style_consistency": "pass", "style_notes": "ok",
         "overall": "pass", "summary": "ok",
     }
     d.update(overrides or {})
@@ -64,6 +65,10 @@ def make_pdir(tmp_path: Path) -> Path:
     proj = Project(name=name)
     proj.scenes = [Scene(scene_id="s01", summary="x")]
     ProjectStore(pdir).save(proj)
+    # P1：生成路径 profile-aware（fail closed on unspecified）——测试环境默认写实
+    from src.visual_profile import VisualProfileService
+    VisualProfileService(pdir, pdir.name).update(render_family="photorealistic",
+                                                 expected_revision="")
     return pdir
 
 
@@ -95,7 +100,9 @@ def test_t27_review_dimensions_all_present(tmp_path):
         pdir, ids["vid"], agnes_client=FakeVision(_reply(ids["a1"]))))
     assert r["ok"], r.get("error")
     for cr in r["candidate_reviews"]:
-        assert set(cr["dimensions"].keys()) == set(view_review.VIEW_DIMENSIONS)
+        # P1 §15：profile specified 时追加 project_style_consistency（hard 维度）
+        assert set(cr["dimensions"].keys()) == (
+            set(view_review.VIEW_DIMENSIONS) | {"project_style_consistency"})
     rec = view_review.read_view_review_records(pdir, view_id=ids["vid"])[-1]
     assert rec["operation"] == "scene.review_candidates"
     for field in ("review_id", "location_id", "view_id", "generation_id",

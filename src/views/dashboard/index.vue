@@ -33,7 +33,11 @@
           @click="enterProject(p)"
         >
           <span class="proj-name">{{ p }}</span>
-          <span class="proj-enter">进入 →</span>
+          <span class="proj-card-right">
+            <span class="proj-style" v-if="projectStyleLabel(p)" @click.stop="openStyle(p)">{{ projectStyleLabel(p) }}</span>
+            <span class="proj-style unset" v-else @click.stop="openStyle(p)">风格未设置</span>
+            <span class="proj-enter">进入 →</span>
+          </span>
         </div>
       </div>
       <div v-else class="empty-hint">还没有项目，点「+ 添加项目」开始</div>
@@ -53,10 +57,74 @@
             ref="nameInput"
           />
         </div>
+        <div class="form-group">
+          <label>视觉风格（必选）</label>
+          <div class="style-cards">
+            <div
+              v-for="opt in RENDER_FAMILY_OPTIONS"
+              :key="opt.value"
+              class="style-card"
+              :class="{ selected: newRenderFamily === opt.value }"
+              @click="newRenderFamily = opt.value"
+            >
+              <span class="sc-name">{{ opt.label }}</span>
+              <span class="sc-desc">{{ opt.desc }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="form-group" v-if="newRenderFamily">
+          <label>艺术方向（可选）</label>
+          <input
+            v-model="newArtDirection"
+            class="input"
+            :placeholder="`例如：${artDirectionPlaceholder}`"
+          />
+        </div>
         <div class="dialog-btns">
           <button class="btn btn-cancel" @click="showAdd = false">取消</button>
-          <button class="btn btn-confirm" :disabled="adding" @click="confirmAdd">
+          <button class="btn btn-confirm" :disabled="adding || !newRenderFamily" @click="confirmAdd">
             {{ adding ? '创建中...' : '创建并进入' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 视觉风格设置对话框（P1 §19 最小入口） -->
+    <div v-if="showStyle" class="dialog-overlay" @click.self="showStyle = false">
+      <div class="dialog">
+        <h3>视觉风格 · {{ styleProjectName }}</h3>
+        <div v-if="styleLoading" class="empty-hint">加载中...</div>
+        <template v-else>
+          <div class="form-group">
+            <label>视觉介质 / Render Family</label>
+            <div class="style-cards">
+              <div
+                v-for="opt in RENDER_FAMILY_OPTIONS"
+                :key="opt.value"
+                class="style-card"
+                :class="{ selected: styleRenderFamily === opt.value }"
+                @click="styleRenderFamily = opt.value"
+              >
+                <span class="sc-name">{{ opt.label }}</span>
+                <span class="sc-desc">{{ opt.desc }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>艺术方向（可选）</label>
+            <input v-model="styleArtDirection" class="input" placeholder="例如：cinematic anime with detailed backgrounds" />
+          </div>
+          <div class="warn-box" v-if="styleHasApprovedAssets">
+            ⚠ 更改项目视觉风格可能使已生成的资产过期（existing generated assets may become stale）。
+          </div>
+          <div class="warn-box" v-else-if="!styleWasSpecified">
+            ℹ 该项目尚未设置视觉风格。生成视觉素材前必须先设置（P1 fail closed）。
+          </div>
+        </template>
+        <div class="dialog-btns">
+          <button class="btn btn-cancel" @click="showStyle = false">取消</button>
+          <button class="btn btn-confirm" :disabled="styleSaving || !styleRenderFamily" @click="confirmStyle">
+            {{ styleSaving ? '保存中...' : '保存' }}
           </button>
         </div>
       </div>
@@ -84,13 +152,98 @@ const newName = ref('');
 const adding = ref(false);
 const nameInput = ref<HTMLInputElement | null>(null);
 
+// ---- P1：视觉风格 ----
+const RENDER_FAMILY_OPTIONS = [
+  { value: 'photorealistic', label: 'Photorealistic', desc: '写实实拍质感' },
+  { value: '2d_animation', label: '2D Animation', desc: '二维动画 / 赛璐璐' },
+  { value: '3d_animation', label: '3D Animation', desc: '三维动画 / CGI' },
+  { value: 'stylized', label: 'Stylized', desc: '风格化插画' },
+  { value: 'custom', label: 'Custom', desc: '自定义（由艺术方向定义）' },
+] as const;
+const newRenderFamily = ref('');
+const newArtDirection = ref('');
+const artDirectionPlaceholder = computed(() =>
+  newRenderFamily.value === '2d_animation'
+    ? 'cinematic Japanese anime, clean cel shading, detailed environment'
+    : 'cinematic anime with detailed backgrounds');
+
+// 项目名 → 视觉风格标签缓存（进入项目卡片展示用，懒加载）
+const styleLabels = ref<Record<string, string>>({});
+function projectStyleLabel(p: string): string {
+  return styleLabels.value[p] || '';
+}
+
+const showStyle = ref(false);
+const styleProjectName = ref('');
+const styleLoading = ref(false);
+const styleSaving = ref(false);
+const styleRenderFamily = ref('');
+const styleArtDirection = ref('');
+const styleRevision = ref('');
+const styleHasApprovedAssets = ref(false);
+const styleWasSpecified = ref(false);
+
+async function loadStyleLabels() {
+  // 只为未缓存的项目懒加载一次（旧项目显示「风格未设置」）
+  for (const p of projects.value) {
+    if (styleLabels.value[p] !== undefined) continue;
+    try {
+      const r = await apiClient.getVisualProfile(p);
+      styleLabels.value = { ...styleLabels.value, [p]: r.specified ? familyLabel(r.visual_profile!.render_family) : '' };
+    } catch { styleLabels.value = { ...styleLabels.value, [p]: '' }; }
+  }
+}
+
+function familyLabel(v: string): string {
+  return RENDER_FAMILY_OPTIONS.find((o) => o.value === v)?.label || v;
+}
+
+function openStyle(p: string) {
+  styleProjectName.value = p;
+  showStyle.value = true;
+  styleLoading.value = true;
+  apiClient.getVisualProfile(p).then((r) => {
+    styleRenderFamily.value = r.specified ? r.visual_profile!.render_family : '';
+    styleArtDirection.value = r.specified ? r.visual_profile!.art_direction : '';
+    styleRevision.value = r.revision;
+    styleHasApprovedAssets.value = r.has_approved_visual_assets;
+    styleWasSpecified.value = r.specified;
+  }).catch((e: any) => {
+    store.showNotification(`加载视觉风格失败: ${e.message}`, 'error');
+    showStyle.value = false;
+  }).finally(() => { styleLoading.value = false; });
+}
+
+async function confirmStyle() {
+  styleSaving.value = true;
+  try {
+    await apiClient.updateVisualProfile(styleProjectName.value, {
+      render_family: styleRenderFamily.value,
+      art_direction: styleArtDirection.value.trim(),
+      expected_revision: styleRevision.value,
+    });
+    store.showNotification('视觉风格已更新', 'success');
+    styleLabels.value = { ...styleLabels.value, [styleProjectName.value]: familyLabel(styleRenderFamily.value) };
+    showStyle.value = false;
+  } catch (e: any) {
+    store.showNotification(`保存失败: ${e.message}`, 'error');
+  } finally {
+    styleSaving.value = false;
+  }
+}
+
 async function loadProjects() {
-  try { projects.value = await apiClient.listProjects(); }
+  try {
+    projects.value = await apiClient.listProjects();
+    loadStyleLabels();
+  }
   catch (e: any) { console.error('[dashboard] 加载项目列表失败', e); }
 }
 
 function openAdd() {
   newName.value = '';
+  newRenderFamily.value = '';
+  newArtDirection.value = '';
   showAdd.value = true;
 }
 
@@ -104,9 +257,10 @@ async function confirmAdd() {
   if (!name) { store.showNotification('请输入项目名称', 'error'); return; }
   // 前端预检（即时反馈）；后端 409 是权威保障
   if (projects.value.includes(name)) { store.showNotification('项目已存在', 'error'); return; }
+  if (!newRenderFamily.value) { store.showNotification('请选择视觉风格', 'error'); return; }
   adding.value = true;
   try {
-    await apiClient.createProject(name);
+    await apiClient.createProject(name, newRenderFamily.value, newArtDirection.value.trim());
     await store.loadProject(name);
     router.push('/characters');    // 创建后直接进角色页
   } catch (e: any) {
@@ -235,6 +389,67 @@ onMounted(() => { loadProjects(); });
 .proj-enter {
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.proj-card-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.proj-style {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--accent);
+  cursor: pointer;
+  &:hover { filter: brightness(1.2); }
+  &.unset {
+    background: transparent;
+    border: 1px dashed var(--border);
+    color: var(--text-muted);
+  }
+}
+
+// 视觉风格卡片（P1 §18）
+.style-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.style-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: all 0.15s ease;
+
+  &:hover { border-color: var(--accent); }
+  &.selected {
+    border-color: var(--accent);
+    background: rgba(99, 102, 241, 0.1);
+  }
+
+  .sc-name { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+  .sc-desc { font-size: 11px; color: var(--text-muted); }
+}
+
+.warn-box {
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  color: #f87171;
+
+  &:has(+ .warn-box) { margin-bottom: 8px; }
 }
 
 .empty-hint {

@@ -20,6 +20,7 @@ from src.resources.store import ResourceStore
 from src.scene_system.service import SceneSystemService
 from src.scene_system.store import SceneSystemStore
 from src.scene_system.visual_service import SceneVisualService
+from src.visual_profile import load_profile_or_none
 from src.scene_system.instance_view_basis import (
     MAX_TOTAL_VISUAL_REFS, _BasisInputError, compute_scene_instance_visual_basis,
     recompute_scene_instance_visual_basis_still_holds, select_state_view_visual_refs)
@@ -36,6 +37,10 @@ def make_pdir(tmp_path: Path) -> Path:
     for pid in ("prop_sword01", "prop_compass02", "prop_lamp03", "prop_hidden01"):
         rdoc.props[pid] = ResourceProp(prop_id=pid, name=pid)
     ResourceStore(pdir, pdir.name).save(rdoc)
+    # P1：生成路径 profile-aware（fail closed on unspecified）——测试环境默认写实
+    from src.visual_profile import VisualProfileService
+    VisualProfileService(pdir, pdir.name).update(render_family="photorealistic",
+                                                 expected_revision="")
     return pdir
 
 
@@ -142,12 +147,14 @@ async def _simulate_sciv_approval(pdir: Path, sciv_id: str):
     gens = [r for r in generation_records.read_records(pdir, generation_id=sciv.active_generation_id)
             if r.get("operation") == "scene_instance_view.generate" and r.get("status") == "committed"]
     gb = gens[-1].get("basis") or {}
+    from src.visual_profile import load_profile_or_none as _lpon
     fp = compute_no_peer_basis(
         pdir, doc, RS(pdir, pdir.name).load(), inst, loc, bv, sciv,
         model_id=(gb.get("model") or {}).get("model_id", ""),
         size_tier=(gb.get("model") or {}).get("size_tier", "1K"),
         ratio=(gb.get("model") or {}).get("ratio", "16:9"),
-        seed=gb.get("seed"), candidate_count=gb.get("candidate_count", 2))["basis_fingerprint"]
+        seed=gb.get("seed"), candidate_count=gb.get("candidate_count", 2),
+        visual_profile=_lpon(pdir))["basis_fingerprint"]
     asset_id = f"ref_sim_{sciv_id[-8:]}"
     local = f"output/scene_system/scene_instances/sim/{sciv_id}/c_01.png"
     f = pdir / local
@@ -389,6 +396,7 @@ def test_s14_stale_rules_matrix(tmp_path):
             doc.locations[ids["loc"]], doc.views[ids["v_north"]],
             doc.scene_instance_views[sciv_id],
             model_id="m", size_tier="1K", ratio="16:9", seed=42, candidate_count=2,
+            visual_profile=load_profile_or_none(pdir),
             ref_selection=select_state_view_visual_refs(
                 pdir, doc, rdoc, doc.views[ids["v_north"]],
                 doc.scene_instance_views[sciv_id], doc.scene_instances[ids["inst"]])))

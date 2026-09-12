@@ -79,6 +79,9 @@ _ERROR_STATUS = {
     "clothing_not_found": 404,
     "asset_not_found": 404,
     "missing_character_reference": 422,
+    # Project Visual Profile P1：unspecified fail closed / 坏文件
+    "project_visual_profile_required": 422,
+    "visual_profile_unreadable": 500,
     "invalid_reference_input": 400,
     "validation_error": 400,
     "invalid_candidate_count": 400,

@@ -62,6 +62,7 @@ class FakeVision:
                          "notes": ""}],
             "anchor_consistency": "pass", "layout_consistency": "pass",
             "view_consistency": "pass", "visual_defects": "pass",
+            "project_style_consistency": "pass", "style_notes": "ok",
             "overall": "pass", "summary": "ok"}, ensure_ascii=False), "usage": {}}
 
 
@@ -71,6 +72,10 @@ def make_pdir(tmp_path: Path) -> Path:
     proj = Project(name=name)
     proj.scenes = [Scene(scene_id="s01", summary="x")]
     ProjectStore(pdir).save(proj)
+    # P1：生成路径 profile-aware（fail closed on unspecified）——测试环境默认写实
+    from src.visual_profile import VisualProfileService
+    VisualProfileService(pdir, pdir.name).update(render_family="photorealistic",
+                                                 expected_revision="")
     return pdir
 
 

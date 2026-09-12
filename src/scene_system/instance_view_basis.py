@@ -181,8 +181,12 @@ def compute_scene_instance_visual_basis(project_dir, doc: SceneSystemDocument,
                                         model_id: str, size_tier: str, ratio: str,
                                         seed: Optional[int], candidate_count: int,
                                         ref_selection: dict,
-                                        include_peer: bool = True) -> dict:
+                                        include_peer: bool = True,
+                                        visual_profile=None) -> dict:
     """SceneInstanceView GenerationBasis（§13）。纯函数；同状态+同参数 → 同 basis。
+    visual_profile（P1 §12）：项目级介质/艺术方向；非 None 时 style 指令进 prompt
+    后缀，snapshot + visual_profile_fingerprint 入 basis（与 Location 身份、
+    SceneState 时间/天气/灯光三层不混淆）。
     caller 在指纹之后自行追加 started_at（不入指纹）。"""
     anchors = sorted((a for a in doc.anchors.values()
                       if a.location_id == base_location.location_id),
@@ -210,11 +214,15 @@ def compute_scene_instance_visual_basis(project_dir, doc: SceneSystemDocument,
     base_expectations = build_review_expectations(doc, base_view)
     base_fp = expectations_fingerprint(base_expectations, [base_view.reference_asset_id])
 
-    prompt = build_scene_instance_view_prompt(
+    domain_prompt = build_scene_instance_view_prompt(
         base_location, base_view, anchors, projection, prop_semantics,
         has_peer_reference=ref_selection.get("peer_state_reference") is not None,
         peer_note=(ref_selection.get("peer_state_reference") or {}).get(
             "scene_instance_view_id", ""))
+    from src.visual_profile.compiler import append_style_instruction
+    from src.visual_profile.models import (profile_snapshot,
+                                           visual_profile_fingerprint)
+    prompt = append_style_instruction(domain_prompt, visual_profile)
 
     basis: Dict[str, Any] = {
         "scene_instance_view_id": instance_view.scene_instance_view_id,
@@ -247,6 +255,9 @@ def compute_scene_instance_visual_basis(project_dir, doc: SceneSystemDocument,
                   "size_tier": size_tier, "ratio": ratio},
         "prompt": prompt,
     }
+    if visual_profile is not None:
+        basis["visual_profile"] = profile_snapshot(visual_profile)
+        basis["visual_profile_fingerprint"] = visual_profile_fingerprint(visual_profile)
     basis["basis_fingerprint"] = fingerprint(basis)
     return basis
 
@@ -289,17 +300,20 @@ def compute_no_peer_basis(project_dir, doc: SceneSystemDocument,
                           base_location: Location, base_view: LocationView,
                           instance_view: SceneInstanceView, *,
                           model_id: str, size_tier: str, ratio: str,
-                          seed: Optional[int], candidate_count: int) -> dict:
+                          seed: Optional[int], candidate_count: int,
+                          visual_profile=None) -> dict:
     """S2B.1-③：no-peer basis（peer 是可选生成增强，不属于批准语义——§14 的
     must-stale 清单不含 peer）。approve 存其指纹为 approved_basis_fingerprint；
-    read 层 staleness 用同口径重算对比。抛 _BasisInputError（caller 转 receipt）。"""
+    read 层 staleness 用同口径重算对比。抛 _BasisInputError（caller 转 receipt）。
+    visual_profile（P1 §12）随口径透传。"""
     selection = select_state_view_visual_refs(
         project_dir, doc, rdoc, base_view, instance_view, scene_instance,
         include_peer=False)
     return compute_scene_instance_visual_basis(
         project_dir, doc, rdoc, scene_instance, base_location, base_view, instance_view,
         model_id=model_id, size_tier=size_tier, ratio=ratio, seed=seed,
-        candidate_count=candidate_count, ref_selection=selection, include_peer=False)
+        candidate_count=candidate_count, ref_selection=selection, include_peer=False,
+        visual_profile=visual_profile)
 
 
 def _latest_committed_gen_basis(project_dir, sciv: SceneInstanceView) -> Optional[dict]:
@@ -330,6 +344,11 @@ def _peer_state_current(project_dir, doc: SceneSystemDocument,
     loc = doc.locations.get(scene_instance.location_id)
     if base_view is None or loc is None:
         return False
+    from src.visual_profile import load_profile_or_none
+    try:
+        visual_profile = load_profile_or_none(project_dir)
+    except Exception:   # noqa: BLE001 - profile 不可读 → 无法证明 peer 当前 → 视为不当前
+        return False
     try:
         current = compute_no_peer_basis(
             project_dir, doc, rdoc, scene_instance, loc, base_view, peer,
@@ -337,7 +356,8 @@ def _peer_state_current(project_dir, doc: SceneSystemDocument,
             size_tier=(gen_basis.get("model") or {}).get("size_tier", "1K"),
             ratio=(gen_basis.get("model") or {}).get("ratio", "16:9"),
             seed=gen_basis.get("seed"),
-            candidate_count=gen_basis.get("candidate_count", 2))
+            candidate_count=gen_basis.get("candidate_count", 2),
+            visual_profile=visual_profile)
     except _BasisInputError:
         return False
     return current["basis_fingerprint"] == peer.approved_basis_fingerprint
@@ -379,8 +399,27 @@ def compute_state_view_staleness(project_dir, doc: SceneSystemDocument,
     stale earlier view**（§14"其它 view 变化不应 stale"），peer_reference_changed
     不再是 stale 理由。用 no-peer 重算对比 approved_basis_fingerprint，逐组件归因
     （绝不自动 mutation——stale 是 derived fact，未来 Shot binding 必须拒绝 stale 引用）。
+    P1 §13/§14 项目风格归因：profile-aware generation（basis 有
+    visual_profile_fingerprint）与当前 profile 不一致 → project_visual_profile_changed；
+    legacy basis（无该键）在项目已有 profile 时 → generated_before_visual_profile
+    （诚实区分，不伪造"符合当前 Style"）；项目从未设置 profile → 不因此 stale。
     返回 {is_stale, stale_reasons, current_basis_fingerprint}。"""
     reasons: List[str] = []
+    # ---- P1 项目风格归因（先于全量重算；profile 不可读 → 诚实标记无法验证）----
+    from src.visual_profile import load_profile_or_none
+    from src.visual_profile.models import visual_profile_fingerprint
+    try:
+        cur_profile = load_profile_or_none(project_dir)
+        cur_profile_fp = visual_profile_fingerprint(cur_profile) if cur_profile else None
+    except Exception:   # noqa: BLE001
+        reasons.append("visual_profile_unreadable")
+        cur_profile_fp = "__unreadable__"
+    stored_profile_fp = gen_basis.get("visual_profile_fingerprint")
+    if stored_profile_fp:
+        if cur_profile_fp != stored_profile_fp and cur_profile_fp != "__unreadable__":
+            reasons.append("project_visual_profile_changed")
+    elif cur_profile_fp is not None and cur_profile_fp != "__unreadable__":
+        reasons.append("generated_before_visual_profile")
     try:
         current = compute_no_peer_basis(
             project_dir, doc, rdoc, scene_instance, base_location, base_view,
@@ -389,10 +428,12 @@ def compute_state_view_staleness(project_dir, doc: SceneSystemDocument,
             size_tier=(gen_basis.get("model") or {}).get("size_tier", "1K"),
             ratio=(gen_basis.get("model") or {}).get("ratio", "16:9"),
             seed=gen_basis.get("seed"),
-            candidate_count=gen_basis.get("candidate_count", 2))
+            candidate_count=gen_basis.get("candidate_count", 2),
+            visual_profile=(cur_profile
+                            if cur_profile_fp != "__unreadable__" else None))
     except _BasisInputError as e:
         return {"is_stale": True,
-                "stale_reasons": [f"selection_failed:{e.code}"],
+                "stale_reasons": reasons + [f"selection_failed:{e.code}"],
                 "current_basis_fingerprint": None}
     if current["basis_fingerprint"] != instance_view.approved_basis_fingerprint:
         # 逐组件归因（顺序固定，诚实可读；peer 组件不参与——S2B.1-③）
@@ -427,12 +468,22 @@ def recompute_scene_instance_visual_basis_still_holds(
         include_peer: bool = True) -> Tuple[bool, str]:
     """§14：生成结束（阶段3）对当前 canonical 同参数重算 basis 并比对。
     可见状态变化 → 投影变 → stale；不可见变化不进投影 → 不 stale（§33）。
-    instance_view 删除 → (False, "instance_view_missing")；投影/快照/参考变化 → basis_changed。"""
+    instance_view 删除 → (False, "instance_view_missing")；profile 变更 → (False,
+    "project_visual_profile_changed")（P1 §13）；投影/快照/参考变化 → basis_changed。"""
     current_view = doc.scene_instance_views.get(instance_view.scene_instance_view_id) \
         if instance_view is not None else None
     if current_view is None or scene_instance is None or base_location is None \
             or base_view is None:
         return False, "instance_view_missing"
+    from .visual_basis import _profile_stale_reason
+    profile_reason = _profile_stale_reason(project_dir, basis)
+    if profile_reason:
+        return False, profile_reason
+    from src.visual_profile import load_profile_or_none
+    try:
+        visual_profile = load_profile_or_none(project_dir)
+    except Exception:   # noqa: BLE001 - 与 staleness 同口径：不可读 → 无法证明仍成立
+        return False, "visual_profile_unreadable"
     try:
         fresh_selection = select_state_view_visual_refs(
             project_dir, doc, rdoc, base_view, current_view, scene_instance,
@@ -447,7 +498,8 @@ def recompute_scene_instance_visual_basis_still_holds(
         seed=basis["seed"],
         candidate_count=basis["candidate_count"],
         ref_selection=fresh_selection,
-        include_peer=basis.get("include_peer", include_peer))
+        include_peer=basis.get("include_peer", include_peer),
+        visual_profile=visual_profile)
     if current["basis_fingerprint"] != basis["basis_fingerprint"]:
         return False, "basis_changed"
     return True, ""

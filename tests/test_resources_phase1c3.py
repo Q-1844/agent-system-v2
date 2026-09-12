@@ -42,6 +42,10 @@ async def _seed_project_a(td: Path):
                "side": Asset(local=str((pa / "o" / "alice_side_seg.png").resolve()), status=ShotStatus.DONE.value)}
     proj.characters = [c]
     ProjectStore(pa).save(proj)
+    # P1：生成路径 profile-aware——测试环境默认写实
+    from src.visual_profile import VisualProfileService
+    VisualProfileService(pa, "pa").update(render_family="photorealistic",
+                                          expected_revision="")
     ws = ResourceWriteService(pa, "pa")
     r = await ws.create_clothing(name="Black Coat", description="long black wool coat",
                                  expected_document_revision=document_revision(ws.store.load()))
@@ -64,6 +68,10 @@ def _new_project(td: Path, name: str):
     p = td / name
     (p / "output").mkdir(parents=True, exist_ok=True)
     ProjectStore(p).save(Project(name=name))
+    # P1：profile-aware 生成测试环境默认写实
+    from src.visual_profile import VisualProfileService
+    VisualProfileService(p, name).update(render_family="photorealistic",
+                                         expected_revision="")
     ws = ResourceWriteService(p, name)
     svc = SharedLibraryService(p, name, shared_dir=td / "shared_library")
     return p, ws, svc

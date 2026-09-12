@@ -38,6 +38,10 @@ def make_project(base: Path, with_character: bool = False) -> Path:
         }
         proj.characters = [c]
     ProjectStore(pdir).save(proj)
+    # P1：生成路径 profile-aware（fail closed on unspecified）——测试环境默认写实
+    from src.visual_profile import VisualProfileService
+    VisualProfileService(pdir, pdir.name).update(render_family="photorealistic",
+                                                 expected_revision="")
     return pdir
 
 
@@ -540,10 +544,12 @@ def _make_basis(env, look_id, *, model_id="agnes-image-test", size_tier="1K", ra
     doc = env["ws"].store.load()
     project = ProjectStore(env["pdir"]).load()
     look = doc.looks[look_id]
+    from src.visual_profile import load_profile_or_none   # P1：basis 随当前 profile
     return compute_generation_basis(env["pdir"], doc, project, look,
                                     model_id=model_id, size_tier=size_tier, ratio=ratio,
                                     seed=seed, candidate_count=candidate_count,
-                                    view_purpose=view_purpose)
+                                    view_purpose=view_purpose,
+                                    visual_profile=load_profile_or_none(env["pdir"]))
 
 
 async def _seed_look(env, *, clothing_name="Black Coat", clothing_desc="long black wool coat"):

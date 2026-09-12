@@ -162,9 +162,13 @@ def _clothing_snapshot(c: Clothing) -> dict:
 def compute_generation_basis(project_dir, doc, project, look: CharacterLook, *,
                              model_id: str, size_tier: str, ratio: str,
                              seed: Optional[int], candidate_count: int,
-                             view_purpose: str) -> dict:
+                             view_purpose: str,
+                             visual_profile=None) -> dict:
     """从当前 canonical 状态构造一次生成的完整事实快照 + 语义指纹。
-    纯函数式：不写盘、不调网络。同状态 + 同参数 → 同 basis（确定性）。"""
+    纯函数式：不写盘、不调网络。同状态 + 同参数 → 同 basis（确定性）。
+    visual_profile（P1 §11）：ProjectVisualProfile 或 None；非 None 时编译后的
+    项目 style 指令进 prompt 后缀，snapshot + visual_profile_fingerprint 入 basis
+    （profile 变更 → 指纹变 → stale，recompute 报 project_visual_profile_changed）。"""
     project_dir = Path(project_dir)
     character = project.get_character(look.character_name) if project is not None else None
     char_refs = select_character_identity_refs(project_dir, look.character_name) \
@@ -172,7 +176,7 @@ def compute_generation_basis(project_dir, doc, project, look: CharacterLook, *,
     clothing = doc.clothings.get(look.clothing_id) if look.clothing_id else None
     cloth_refs = select_clothing_refs(project_dir, doc, clothing) if clothing is not None else []
 
-    prompt = build_look_candidate_prompt(
+    domain_prompt = build_look_candidate_prompt(
         character_description=(character.description_en or "") if character is not None else "",
         clothing_name=(clothing.name if clothing is not None else ""),
         clothing_description=(clothing.description if clothing is not None else ""),
@@ -183,6 +187,10 @@ def compute_generation_basis(project_dir, doc, project, look: CharacterLook, *,
         appearance_delta=look.appearance_delta,
         view_purpose=view_purpose,
     )
+    from src.visual_profile.compiler import append_style_instruction
+    from src.visual_profile.models import (profile_snapshot,
+                                           visual_profile_fingerprint)
+    prompt = append_style_instruction(domain_prompt, visual_profile)
 
     basis: Dict[str, Any] = {
         "look_id": look.look_id,
@@ -204,18 +212,43 @@ def compute_generation_basis(project_dir, doc, project, look: CharacterLook, *,
                   "size_tier": size_tier, "ratio": ratio},
         "prompt": prompt,
     }
+    if visual_profile is not None:
+        basis["visual_profile"] = profile_snapshot(visual_profile)
+        basis["visual_profile_fingerprint"] = visual_profile_fingerprint(visual_profile)
     basis["basis_fingerprint"] = fingerprint(basis)
     return basis
+
+
+def _profile_stale_reason(project_dir, basis: dict) -> Optional[str]:
+    """P1 §13：basis 存有 visual_profile_fingerprint 且与当前 profile 不一致 →
+    明确 stale 理由 project_visual_profile_changed。legacy basis（无该键）→ None
+    （P1 §14：不伪造、不自动全局 stale，兼容语义由 read 层 unknown 报告）。"""
+    stored = basis.get("visual_profile_fingerprint")
+    if not stored:
+        return None
+    from src.visual_profile import load_profile_or_none
+    from src.visual_profile.models import visual_profile_fingerprint
+    profile = load_profile_or_none(project_dir)
+    current_fp = visual_profile_fingerprint(profile) if profile is not None else None
+    if current_fp != stored:
+        return "project_visual_profile_changed"
+    return None
 
 
 def recompute_basis_still_holds(project_dir, doc, project, look_id: str,
                                 basis: dict) -> Tuple[bool, str]:
     """§19/§20：生成结束后重算 basis，比对语义指纹。
-    look 已删除 → (False, "look_missing")；指纹不同 → (False, "basis_changed")。
+    look 已删除 → (False, "look_missing")；profile 变更 → (False,
+    "project_visual_profile_changed")（P1 §13，先于全量重算给明确理由）；
+    其余指纹不同 → (False, "basis_changed")。
     绝不 runtime 偷偷替换 basis 后强行提交。"""
     look = doc.looks.get(look_id)
     if look is None:
         return False, "look_missing"
+    profile_reason = _profile_stale_reason(project_dir, basis)
+    if profile_reason:
+        return False, profile_reason
+    from src.visual_profile import load_profile_or_none
     current = compute_generation_basis(
         project_dir, doc, project, look,
         model_id=basis["model"]["model_id"],
@@ -224,6 +257,7 @@ def recompute_basis_still_holds(project_dir, doc, project, look_id: str,
         seed=basis["seed"],
         candidate_count=basis["candidate_count"],
         view_purpose=basis["view_purpose"],
+        visual_profile=load_profile_or_none(project_dir),
     )
     if current["basis_fingerprint"] != basis["basis_fingerprint"]:
         return False, "basis_changed"
@@ -362,14 +396,17 @@ def _binding_section(project_dir, doc, b, prop_section_by_id: Dict[str, dict]) -
 
 def compute_composition_basis(project_dir, doc, project, composition, *,
                               model_id: str, size_tier: str, ratio: str,
-                              seed: Optional[int], candidate_count: int) -> dict:
+                              seed: Optional[int], candidate_count: int,
+                              visual_profile=None) -> dict:
     """从当前 canonical 状态构造一次 composition 生成的事实快照 + 语义指纹。
 
     语义指纹覆盖（§8）：composition 语义内容（不含 label/状态机/时间戳字段——display
     label 改名等无害写不误判 stale）+ naked look_revision（look 不被 composition 流改动，
     显式要求"Look 更新 → stale"）+ 每 prop 的 naked prop_revision + 实际使用的参考图
     （ids + 内容 sha256）+ prompt/model/seed/count。生成结束后同参数重算比对。
-    纯函数式：不写盘、不调网络。caller 在指纹计算之后自行追加 started_at（不入指纹）。"""
+    纯函数式：不写盘、不调网络。caller 在指纹计算之后自行追加 started_at（不入指纹）。
+    visual_profile（P1 §11）：非 None 时项目 style 指令进 prompt 后缀，
+    snapshot + visual_profile_fingerprint 入 basis。"""
     project_dir = Path(project_dir)
     look = doc.looks.get(composition.look_id)
     character = project.get_character(composition.character_name) if project is not None else None
@@ -380,7 +417,7 @@ def compute_composition_basis(project_dir, doc, project, composition, *,
     binding_sections = [_binding_section(project_dir, doc, b, section_by_id)
                         for b in composition.prop_bindings]
 
-    prompt = build_composition_prompt(
+    domain_prompt = build_composition_prompt(
         character_description=(character.description_en or "") if character is not None else "",
         look_clothing_snapshot=_clothing_snapshot(clothing) if clothing is not None else None,
         look_appearance_description=(look.appearance_description if look is not None else ""),
@@ -394,6 +431,10 @@ def compute_composition_basis(project_dir, doc, project, composition, *,
         pose_note=composition.pose_note,
         composition_description=composition.composition_description,
     )
+    from src.visual_profile.compiler import append_style_instruction
+    from src.visual_profile.models import (profile_snapshot,
+                                           visual_profile_fingerprint)
+    prompt = append_style_instruction(domain_prompt, visual_profile)
 
     basis: Dict[str, Any] = {
         "composition_id": composition.composition_id,
@@ -419,6 +460,9 @@ def compute_composition_basis(project_dir, doc, project, composition, *,
                   "size_tier": size_tier, "ratio": ratio},
         "prompt": prompt,
     }
+    if visual_profile is not None:
+        basis["visual_profile"] = profile_snapshot(visual_profile)
+        basis["visual_profile_fingerprint"] = visual_profile_fingerprint(visual_profile)
     basis["basis_fingerprint"] = fingerprint(basis)
     return basis
 
@@ -426,11 +470,16 @@ def compute_composition_basis(project_dir, doc, project, composition, *,
 def recompute_composition_basis_still_holds(project_dir, doc, project, composition_id: str,
                                             basis: dict) -> Tuple[bool, str]:
     """§8：生成结束后重算 basis，比对语义指纹。
-    composition 已删除 → (False, "composition_missing")；指纹不同 → (False, "basis_changed")。
+    composition 已删除 → (False, "composition_missing")；profile 变更 → (False,
+    "project_visual_profile_changed")（P1 §13）；其余指纹不同 → (False, "basis_changed")。
     绝不 runtime 偷偷替换 basis 后强行提交。"""
     composition = doc.compositions.get(composition_id)
     if composition is None:
         return False, "composition_missing"
+    profile_reason = _profile_stale_reason(project_dir, basis)
+    if profile_reason:
+        return False, profile_reason
+    from src.visual_profile import load_profile_or_none
     current = compute_composition_basis(
         project_dir, doc, project, composition,
         model_id=basis["model"]["model_id"],
@@ -438,6 +487,7 @@ def recompute_composition_basis_still_holds(project_dir, doc, project, compositi
         ratio=basis["model"]["ratio"],
         seed=basis["seed"],
         candidate_count=basis["candidate_count"],
+        visual_profile=load_profile_or_none(project_dir),
     )
     if current["basis_fingerprint"] != basis["basis_fingerprint"]:
         return False, "basis_changed"

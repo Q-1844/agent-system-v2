@@ -44,6 +44,8 @@ SIV_DIMENSIONS = ("location_identity", "view_consistency", "anchor_consistency",
                   "prop_placement_consistency", "visual_defects")
 SIV_HARD_DIMENSIONS = ("location_identity", "view_consistency", "anchor_consistency",
                        "scene_state_consistency")
+# P1 §15：项目风格一致性维度（profile specified 时追加，恒 hard）
+STYLE_DIMENSION = "project_style_consistency"
 
 
 # ============ 审查期望（当前 canonical）+ 期望指纹 ============
@@ -86,14 +88,18 @@ def build_scene_instance_review_expectations(doc: SceneSystemDocument,
     }
 
 
-def expectations_fingerprint(expectations: dict, reference_asset_ids: List[str]) -> str:
+def expectations_fingerprint(expectations: dict, reference_asset_ids: List[str],
+                             visual_profile_fingerprint: Optional[str] = None) -> str:
     return fingerprint({"expectations": expectations,
-                        "reference_ids": list(reference_asset_ids)})
+                        "reference_ids": list(reference_asset_ids),
+                        "visual_profile_fingerprint": visual_profile_fingerprint})
 
 
 # ============ 确定性审查 prompt（§19/§26/§27）============
 def build_scene_instance_review_prompt(expectations: dict,
-                                       image_labels: List[str]) -> str:
+                                       image_labels: List[str],
+                                       style_expectation: str = "") -> str:
+    """style_expectation（P1 §15）：非空时 project_style_consistency 成为追加维度（hard）。"""
     loc = expectations.get("location") or {}
     view = expectations.get("view") or {}
     state = expectations.get("scene_state") or {}
@@ -149,8 +155,9 @@ def build_scene_instance_review_prompt(expectations: dict,
                          + f") — expected state: {_c(p.get('expected_state')) or 'present'}"
                          + f", near anchor: {_c(p.get('expected_anchor_name')) or p.get('expected_anchor')}")
     lines.append("")
-    lines.append(
-        "Check exactly these seven dimensions:\n"
+    n_dims = 8 if style_expectation else 7
+    dim_block = (
+        f"Check exactly these {n_dims} dimensions:\n"
         "1. location_identity — same location as the identity description and the base "
         "reference (architecture, scale, atmosphere unchanged by the scene state).\n"
         "2. view_consistency — viewpoint matches the expected camera zone / look direction.\n"
@@ -166,23 +173,32 @@ def build_scene_instance_review_prompt(expectations: dict,
         "substituted). Report per prop.\n"
         "7. visual_defects — obvious defects: malformed geometry, artifacts, watermark or "
         "text, fused objects, AND any PEOPLE (this is an empty-scene plate: people are a "
-        "defect here).\n\n"
-        "Answer with ONLY a JSON object (no markdown fence) in exactly this schema:\n"
-        '{"location_identity": "pass|concern|fail", "location_notes": "...",\n'
-        ' "view_consistency": "pass|concern|fail", "view_notes": "...",\n'
-        ' "anchor_consistency": "pass|concern|fail", "anchor_notes": "...",\n'
-        ' "scene_state": {"time_of_day": "pass|concern|fail",\n'
-        '                 "weather": "pass|concern|fail",\n'
-        '                 "environment_conditions": "pass|concern|fail",\n'
-        '                 "anchor_states": [{"anchor_id": "<echo expected id>",\n'
-        '                                    "verdict": "pass|concern|fail", "notes": "..."}],\n'
-        '                 "notes": "..."},\n'
-        ' "lighting_weather": "pass|concern|fail", "lighting_notes": "...",\n'
-        ' "props": [{"prop_id": "<echo expected id>",\n'
-        '            "observed": "correct|wrong_place|missing|substituted",\n'
-        '            "verdict": "pass|concern|fail", "notes": "..."}],\n'
-        ' "visual_defects": "pass|concern|fail", "defect_notes": "...",\n'
-        ' "overall": "pass|needs_fix|uncertain", "summary": "..."}')
+        "defect here).\n")
+    if style_expectation:
+        dim_block += (
+            "8. project_style_consistency — the image must belong to the project's declared "
+            "visual production style/medium (hard dimension: a style mismatch must fail).\n"
+            + style_expectation + "\n")
+    schema = ('{"location_identity": "pass|concern|fail", "location_notes": "...",\n'
+              ' "view_consistency": "pass|concern|fail", "view_notes": "...",\n'
+              ' "anchor_consistency": "pass|concern|fail", "anchor_notes": "...",\n'
+              ' "scene_state": {"time_of_day": "pass|concern|fail",\n'
+              '                 "weather": "pass|concern|fail",\n'
+              '                 "environment_conditions": "pass|concern|fail",\n'
+              '                 "anchor_states": [{"anchor_id": "<echo expected id>",\n'
+              '                                    "verdict": "pass|concern|fail", "notes": "..."}],\n'
+              '                 "notes": "..."},\n'
+              ' "lighting_weather": "pass|concern|fail", "lighting_notes": "...",\n'
+              ' "props": [{"prop_id": "<echo expected id>",\n'
+              '            "observed": "correct|wrong_place|missing|substituted",\n'
+              '            "verdict": "pass|concern|fail", "notes": "..."}],\n')
+    if style_expectation:
+        schema += (' "project_style_consistency": "pass|concern|fail", "style_notes": "...",\n')
+    schema += (' "visual_defects": "pass|concern|fail", "defect_notes": "...",\n'
+               ' "overall": "pass|needs_fix|uncertain", "summary": "..."}')
+    lines.append(dim_block + "\n"
+                 "Answer with ONLY a JSON object (no markdown fence) in exactly this schema:\n"
+                 + schema)
     return "\n".join(lines)
 
 
@@ -267,16 +283,18 @@ def derive_prop_dimension(parsed_props: Any, expectations: dict) -> dict:
 
 def derive_scene_instance_overall(dims: Dict[str, Optional[str]], *,
                                   has_visible_props: bool,
-                                  has_state_expectation: bool) -> str:
-    """overall 确定性推导（§28）：任一 hard fail → needs_fix；七维度全 pass → pass；
-    其余 → uncertain。"""
+                                  has_state_expectation: bool,
+                                  dimensions: tuple = SIV_DIMENSIONS) -> str:
+    """overall 确定性推导（§28）：任一 hard fail → needs_fix；全维度 pass → pass；
+    其余 → uncertain。dimensions 可扩展（P1 §15：profile specified 时含
+    project_style_consistency——恒 hard，风格不符不得 approval）。"""
     hard = set(SIV_HARD_DIMENSIONS)
     if has_visible_props:
         hard.add("prop_placement_consistency")
     if has_state_expectation:
         hard.add("lighting_weather_consistency")
-    vals = [dims.get(d) for d in SIV_DIMENSIONS]
-    if any(v == "fail" and d in hard for d, v in zip(SIV_DIMENSIONS, vals)):
+    vals = [dims.get(d) for d in dimensions]
+    if any(v == "fail" and d in hard for d, v in zip(dimensions, vals)):
         return "needs_fix"
     if all(v == "pass" for v in vals):
         return "pass"
@@ -384,8 +402,19 @@ async def review_scene_instance_view_candidates(project_dir, scene_instance_view
         content_static.append({"type": "image_url", "image_url": {"url": ref}})
         ref_ids_used.append(e.get("asset_id"))
 
-    basis_fp = expectations_fingerprint(expectations, ref_ids_used)
-    prompt = build_scene_instance_review_prompt(expectations, image_labels)
+    # P1 §15：项目风格期望（unspecified → 该维度不进入本次审查，record 诚实标注）
+    from src.visual_profile import load_profile_or_none
+    from src.visual_profile.compiler import compile_project_style_review_expectation
+    from src.visual_profile.models import visual_profile_fingerprint as vp_fp_fn
+    visual_profile = load_profile_or_none(pdir)
+    style_expectation = compile_project_style_review_expectation(visual_profile)
+    all_dimensions = SIV_DIMENSIONS + ((STYLE_DIMENSION,) if visual_profile else ())
+    vp_fingerprint = vp_fp_fn(visual_profile) if visual_profile else None
+
+    basis_fp = expectations_fingerprint(expectations, ref_ids_used,
+                                        visual_profile_fingerprint=vp_fingerprint)
+    prompt = build_scene_instance_review_prompt(expectations, image_labels,
+                                                style_expectation=style_expectation)
     has_visible_props = bool(expectations.get("prop_expectations"))
     proj = expectations.get("scene_state") or {}
     has_state_exp = bool(_c(proj.get("time_of_day")) or _c(proj.get("weather"))
@@ -431,22 +460,30 @@ async def review_scene_instance_view_candidates(project_dir, scene_instance_view
             "prop_placement_consistency": pd["prop_placement_consistency"],
             "visual_defects": _normalize_dim(parsed.get("visual_defects")),
         }
-        return {"candidate_index": candidate_index, "candidate_file": candidate_file,
-                "status": "reviewed",
-                "dimensions": dims,
-                "location_notes": str(parsed.get("location_notes") or ""),
-                "view_notes": str(parsed.get("view_notes") or ""),
-                "anchor_notes": str(parsed.get("anchor_notes") or ""),
-                "scene_state_items": ss["scene_state_items"],
-                "scene_state_notes": str((parsed.get("scene_state") or {}).get("notes") or ""),
-                "lighting_notes": str(parsed.get("lighting_notes") or ""),
-                "per_prop": pd["per_prop"],
-                "defect_notes": str(parsed.get("defect_notes") or ""),
-                "overall": derive_scene_instance_overall(
-                    dims, has_visible_props=has_visible_props,
-                    has_state_expectation=has_state_exp),
-                "model_overall": str(parsed.get("overall") or ""),
-                "summary": str(parsed.get("summary") or "")}
+        if visual_profile is not None:
+            # P1 §15：hard 维度；unspecified → 维度不存在，不参与 overall
+            dims[STYLE_DIMENSION] = _normalize_dim(parsed.get(STYLE_DIMENSION))
+        result = {"candidate_index": candidate_index, "candidate_file": candidate_file,
+                  "status": "reviewed",
+                  "dimensions": dims,
+                  "location_notes": str(parsed.get("location_notes") or ""),
+                  "view_notes": str(parsed.get("view_notes") or ""),
+                  "anchor_notes": str(parsed.get("anchor_notes") or ""),
+                  "scene_state_items": ss["scene_state_items"],
+                  "scene_state_notes": str((parsed.get("scene_state") or {}).get("notes") or ""),
+                  "lighting_notes": str(parsed.get("lighting_notes") or ""),
+                  "per_prop": pd["per_prop"],
+                  "defect_notes": str(parsed.get("defect_notes") or ""),
+                  "overall": derive_scene_instance_overall(
+                      dims, has_visible_props=has_visible_props,
+                      has_state_expectation=has_state_exp,
+                      dimensions=all_dimensions),
+                  "model_overall": str(parsed.get("overall") or ""),
+                  "summary": str(parsed.get("summary") or "")}
+        if visual_profile is not None:
+            result[STYLE_DIMENSION] = dims[STYLE_DIMENSION]
+            result["style_notes"] = str(parsed.get("style_notes") or "")
+        return result
 
     for idx, f in enumerate(candidate_files):
         candidate_reviews.append(await review_one(idx, f))
@@ -463,6 +500,9 @@ async def review_scene_instance_view_candidates(project_dir, scene_instance_view
         "reference_asset_ids_used": ref_ids_used,
         "expected_state_projection": expectations.get("scene_state"),
         "candidate_reviews": candidate_reviews,
+        # P1 §15：项目风格审查口径（unspecified → not_applicable，维度未参与）
+        "visual_profile_fingerprint": vp_fingerprint,
+        "project_style_consistency": ("evaluated" if visual_profile else "not_applicable"),
         "usage": usage_total,
         "started_at": started_at, "completed_at": time.time(),
         "status": "completed", "error": None,

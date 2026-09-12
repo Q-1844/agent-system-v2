@@ -56,6 +56,7 @@ def _pass_reply(anchor_id: str) -> str:
         "layout_consistency": "pass", "layout_notes": "",
         "view_consistency": "pass", "view_notes": "",
         "visual_defects": "pass", "defect_notes": "",
+        "project_style_consistency": "pass", "style_notes": "ok",
         "overall": "pass", "summary": "ok"}, ensure_ascii=False)
 
 
@@ -65,6 +66,10 @@ def make_pdir(tmp_path: Path) -> Path:
     proj = Project(name=name)
     proj.scenes = [Scene(scene_id="s01", summary="x")]
     ProjectStore(pdir).save(proj)
+    # P1：生成路径 profile-aware（fail closed on unspecified）——测试环境默认写实
+    from src.visual_profile import VisualProfileService
+    VisualProfileService(pdir, pdir.name).update(render_family="photorealistic",
+                                                 expected_revision="")
     return pdir
 
 
@@ -120,6 +125,7 @@ def test_t29_approve_without_pass_rejected(tmp_path):
         bad = json.dumps({"location_identity": "fail", "anchors": [],
                           "anchor_consistency": "pass", "layout_consistency": "pass",
                           "view_consistency": "pass", "visual_defects": "pass",
+                          "project_style_consistency": "pass", "style_notes": "ok",
                           "overall": "needs_fix", "summary": ""}, ensure_ascii=False)
         rv = await view_review.review_location_view_candidates(
             pdir, vid, agnes_client=FakeVision(bad))

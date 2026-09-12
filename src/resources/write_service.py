@@ -588,6 +588,20 @@ class ResourceWriteService:
             if agnes_client is None:
                 from deps import get_agnes_client   # 惰性 import（避免 app 上下文依赖进入 resources 测试）
                 agnes_client = get_agnes_client()
+            # P1 §7/§20 fail closed：visual_profile unspecified → 不猜风格，拒绝生成。
+            # （仅 profile-aware 生成路径；Agent 路径本阶段不接，AGENT_INTEGRATION_DEFERRED）
+            from src.visual_profile import load_profile_or_none
+            from src.visual_profile.models import VisualProfileSchemaError
+            try:
+                visual_profile = load_profile_or_none(self.project_dir)
+            except VisualProfileSchemaError as e:
+                return _finish(ok=False, status="failed", error="visual_profile_unreadable",
+                               detail=f"project_profile.json 损坏（fail closed）：{e}")
+            if visual_profile is None:
+                return _finish(ok=False, status="failed",
+                               error="project_visual_profile_required",
+                               detail="项目未设置 ProjectVisualProfile（P1 §7 fail closed，"
+                                      "不猜测 realistic/anime/3D）；先设置项目视觉定义")
             model_id = agnes_client.models["image"]
             size_tier = "1K"
             ratio = "2:3"   # 全身参考竖图（与既有角色三视图同口径，非视频画幅）
@@ -595,7 +609,8 @@ class ResourceWriteService:
             basis = compute_generation_basis(
                 self.project_dir, doc, project, look,
                 model_id=model_id, size_tier=size_tier, ratio=ratio,
-                seed=seed, candidate_count=candidate_count, view_purpose=view_purpose)
+                seed=seed, candidate_count=candidate_count, view_purpose=view_purpose,
+                visual_profile=visual_profile)
             record_base["basis"] = basis
             record_base["prompt"] = basis["prompt"]
             record_base["model"] = basis["model"]
@@ -1347,6 +1362,19 @@ class ResourceWriteService:
             if agnes_client is None:
                 from deps import get_agnes_client
                 agnes_client = get_agnes_client()
+            # P1 §7/§20 fail closed：visual_profile unspecified → 不猜风格，拒绝生成。
+            from src.visual_profile import load_profile_or_none
+            from src.visual_profile.models import VisualProfileSchemaError
+            try:
+                visual_profile = load_profile_or_none(self.project_dir)
+            except VisualProfileSchemaError as e:
+                return _finish(ok=False, status="failed", error="visual_profile_unreadable",
+                               detail=f"project_profile.json 损坏（fail closed）：{e}")
+            if visual_profile is None:
+                return _finish(ok=False, status="failed",
+                               error="project_visual_profile_required",
+                               detail="项目未设置 ProjectVisualProfile（P1 §7 fail closed，"
+                                      "不猜测 realistic/anime/3D）；先设置项目视觉定义")
             model_id = agnes_client.models["image"]
             size_tier = "1K"
             ratio = "2:3"
@@ -1354,7 +1382,8 @@ class ResourceWriteService:
             basis = compute_composition_basis(
                 self.project_dir, doc, project, comp,
                 model_id=model_id, size_tier=size_tier, ratio=ratio,
-                seed=seed, candidate_count=candidate_count)
+                seed=seed, candidate_count=candidate_count,
+                visual_profile=visual_profile)
             basis["started_at"] = started_at   # 指纹之后追加（不参与重算比对）
             record_base["basis"] = basis
             record_base["prompt"] = basis["prompt"]

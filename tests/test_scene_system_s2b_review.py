@@ -53,6 +53,7 @@ def _reply(anchor_id: str, prop_id: str, overrides: dict | None = None) -> str:
         "props": [{"prop_id": prop_id, "observed": "correct", "verdict": "pass",
                    "notes": ""}],
         "visual_defects": "pass", "defect_notes": "",
+        "project_style_consistency": "pass", "style_notes": "ok",
         "overall": "pass", "summary": "ok",
     }
     d.update(overrides or {})
@@ -80,7 +81,9 @@ def test_t32_seven_dimensions_present(tmp_path):
     assert r["ok"], r.get("error")
     assert r["model"] == "agnes-3.0-flash", "S2B 使用 3.0-flash（探针实证切换）"
     for cr in r["candidate_reviews"]:
-        assert set(cr["dimensions"].keys()) == set(ivr.SIV_DIMENSIONS)
+        # P1 §15：profile specified 时追加 project_style_consistency（恒 hard 维度）
+        assert set(cr["dimensions"].keys()) == (
+            set(ivr.SIV_DIMENSIONS) | {"project_style_consistency"})
     # 每候选一次独立调用；对比图 = base（include_peer=False 无 peer）
     assert len(fv.calls) == 2
     assert all(c["n_images"] == 2 for c in fv.calls)   # candidate + base ref

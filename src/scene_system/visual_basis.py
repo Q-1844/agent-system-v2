@@ -202,19 +202,26 @@ def compute_location_visual_basis(project_dir, doc: SceneSystemDocument,
                                   location: Location, view: LocationView, *,
                                   model_id: str, size_tier: str, ratio: str,
                                   seed: Optional[int], candidate_count: int,
-                                  reference_selection: dict) -> dict:
+                                  reference_selection: dict,
+                                  visual_profile=None) -> dict:
     """从当前 canonical 状态构造一次 LocationView 生成的完整事实快照 + 语义指纹。
     同状态 + 同参数 → 同 basis（确定性）。纯函数：不写盘、不调网络。
     reference_selection = select_reference_views 的成功结果（含 mode/explicit_ids——
     重算时按同模式对当前状态重选，参考变化 → stale，同 Resources 语义）。
+    visual_profile（P1 §12）：项目级介质/艺术方向（非 Location 身份、非 SceneState）；
+    非 None 时编译后的 style 指令进 prompt 后缀，snapshot + fingerprint 入 basis。
     caller 在指纹计算之后自行追加 started_at（不入指纹）。"""
     anchors = sorted((a for a in doc.anchors.values() if a.location_id == location.location_id),
                      key=lambda a: a.anchor_id)
     layout = next((l for l in doc.layouts.values() if l.location_id == location.location_id), None)
 
-    prompt = build_location_view_prompt(
+    domain_prompt = build_location_view_prompt(
         location, anchors, layout, view,
         has_references=bool(reference_selection.get("selected")))
+    from src.visual_profile.compiler import append_style_instruction
+    from src.visual_profile.models import (profile_snapshot,
+                                           visual_profile_fingerprint)
+    prompt = append_style_instruction(domain_prompt, visual_profile)
 
     basis: Dict[str, Any] = {
         "view_id": view.view_id,
@@ -236,8 +243,26 @@ def compute_location_visual_basis(project_dir, doc: SceneSystemDocument,
                   "size_tier": size_tier, "ratio": ratio},
         "prompt": prompt,
     }
+    if visual_profile is not None:
+        basis["visual_profile"] = profile_snapshot(visual_profile)
+        basis["visual_profile_fingerprint"] = visual_profile_fingerprint(visual_profile)
     basis["basis_fingerprint"] = fingerprint(basis)
     return basis
+
+
+def _profile_stale_reason(project_dir, basis: dict) -> Optional[str]:
+    """P1 §13：basis 存有 visual_profile_fingerprint 且与当前 profile 不一致 →
+    project_visual_profile_changed。legacy basis（无该键）→ None（P1 §14 兼容语义）。"""
+    stored = basis.get("visual_profile_fingerprint")
+    if not stored:
+        return None
+    from src.visual_profile import load_profile_or_none
+    from src.visual_profile.models import visual_profile_fingerprint
+    profile = load_profile_or_none(project_dir)
+    current_fp = visual_profile_fingerprint(profile) if profile is not None else None
+    if current_fp != stored:
+        return "project_visual_profile_changed"
+    return None
 
 
 def recompute_location_visual_basis_still_holds(project_dir, doc: SceneSystemDocument,
@@ -247,11 +272,16 @@ def recompute_location_visual_basis_still_holds(project_dir, doc: SceneSystemDoc
     """§9/§13 阶段3：生成结束后【对当前 canonical 同参数重算】basis，比对语义指纹。
     参考按原模式（auto/explicit）对当前状态重选——approved 参考图变化/失效 → 指纹不同
     → stale（同 Resources 语义：recompute 用当前状态）。
-    view 已删除 → (False, "view_missing")；selection 失败/指纹不同 → (False, "basis_changed")。
-    绝不 runtime 偷偷替换 basis 后强行提交。"""
+    view 已删除 → (False, "view_missing")；profile 变更 → (False,
+    "project_visual_profile_changed")（P1 §13）；selection 失败/其余指纹不同
+    → (False, "basis_changed")。绝不 runtime 偷偷替换 basis 后强行提交。"""
     location = doc.locations.get(view.location_id) if view is not None else None
     if view is None or location is None:
         return False, "view_missing"
+    profile_reason = _profile_stale_reason(project_dir, basis)
+    if profile_reason:
+        return False, profile_reason
+    from src.visual_profile import load_profile_or_none
     mode = basis.get("reference_selection_mode", "auto")
     explicit_ids = basis.get("explicit_reference_view_ids") or []
     fresh_selection = select_reference_views(
@@ -266,7 +296,8 @@ def recompute_location_visual_basis_still_holds(project_dir, doc: SceneSystemDoc
         ratio=basis["model"]["ratio"],
         seed=basis["seed"],
         candidate_count=basis["candidate_count"],
-        reference_selection=fresh_selection)
+        reference_selection=fresh_selection,
+        visual_profile=load_profile_or_none(project_dir))
     if current["basis_fingerprint"] != basis["basis_fingerprint"]:
         return False, "basis_changed"
     return True, ""

@@ -66,7 +66,9 @@ def _pass_reply(anchor_id: str, prop_id: str) -> str:
         "lighting_weather": "pass",
         "props": [{"prop_id": prop_id, "observed": "correct", "verdict": "pass",
                    "notes": ""}],
-        "visual_defects": "pass", "overall": "pass", "summary": "ok"},
+        "visual_defects": "pass",
+        "project_style_consistency": "pass", "style_notes": "ok",
+        "overall": "pass", "summary": "ok"},
         ensure_ascii=False)
 
 

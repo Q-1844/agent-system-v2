@@ -39,7 +39,8 @@ def test_create_initializes_project_json(client):
     name = PREFIX + "init"
     _cleanup([name])
     try:
-        r = client.post("/api/projects/create", params={"name": name})
+        r = client.post("/api/projects/create",
+                        params={"name": name, "render_family": "2d_animation"})
         assert r.status_code == 200, r.text
         j = r.json()
         assert j["success"] is True
@@ -68,7 +69,9 @@ def test_new_project_shots_returns_200_empty(client):
     name = PREFIX + "shots"
     _cleanup([name])
     try:
-        assert client.post("/api/projects/create", params={"name": name}).status_code == 200
+        assert client.post("/api/projects/create",
+                           params={"name": name, "render_family": "photorealistic"}
+                           ).status_code == 200
         r = client.get(f"/api/project/{name}/shots")
         assert r.status_code == 200
         assert r.json()["scenes"] == []
@@ -80,11 +83,14 @@ def test_duplicate_create_returns_409(client):
     name = PREFIX + "dup"
     _cleanup([name])
     try:
-        assert client.post("/api/projects/create", params={"name": name}).status_code == 200
+        assert client.post("/api/projects/create",
+                           params={"name": name, "render_family": "stylized"}
+                           ).status_code == 200
         pj = _dir(name) / "output" / "project.json"
         before = pj.read_text(encoding="utf-8")
 
-        r2 = client.post("/api/projects/create", params={"name": name})
+        r2 = client.post("/api/projects/create",
+                         params={"name": name, "render_family": "stylized"})
         assert r2.status_code == 409
 
         # 重复创建后原 project.json 内容未变
@@ -108,12 +114,43 @@ def test_parsed_script_not_overwritten(client):
         }, ensure_ascii=False), encoding="utf-8")
         before = ps.read_text(encoding="utf-8")
 
-        r = client.post("/api/projects/create", params={"name": name})
+        r = client.post("/api/projects/create",
+                        params={"name": name, "render_family": "photorealistic"})
         assert r.status_code == 409
 
         # parsed_script.json 未变
         assert ps.read_text(encoding="utf-8") == before
         # 没有写入空 project.json（迁移入口保留）
         assert not (d / "output" / "project.json").exists()
+    finally:
+        _cleanup([name])
+
+
+def test_create_requires_render_family(client):
+    """P1 §6/T7：create contract 必须收到明确 render_family——缺省被请求校验拒绝
+    （FastAPI 422），不静默默认 photorealistic。"""
+    name = PREFIX + "nofamily"
+    _cleanup([name])
+    try:
+        r = client.post("/api/projects/create", params={"name": name})
+        assert r.status_code == 422, "缺 render_family 必须被契约拒绝"
+        assert not _dir(name).exists(), "缺 render_family 的 create 不得建目录"
+        # 显式空串同样拒绝（router 层 400，带 project_visual_profile_required 说明）
+        r2 = client.post("/api/projects/create", params={"name": name, "render_family": ""})
+        assert r2.status_code == 400
+        assert "render_family" in r2.json()["detail"]
+    finally:
+        _cleanup([name])
+
+
+def test_create_rejects_unknown_render_family(client):
+    """P1 §4：render_family 必须是 5 值 enum 之一——非法值 400。"""
+    name = PREFIX + "badfamily"
+    _cleanup([name])
+    try:
+        r = client.post("/api/projects/create",
+                        params={"name": name, "render_family": "watercolor"})
+        assert r.status_code == 400
+        assert not _dir(name).exists()
     finally:
         _cleanup([name])
