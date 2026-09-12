@@ -303,3 +303,36 @@ not_configured×3 + full/project_autopilot×13 + interface×2 + shot_request_rul
 
 五项全部通过。系统级补测收口；下一步交人工创作验收（场景相似度 / UI 流程 /
 Anchor 直观性 / 时间天气符合制作预期——这些应由创作者判断）。
+
+---
+
+# Phase S2B.2 附录（多样性实测批次：多地点多实例）
+
+起因：用户指出 S2B 为止真机只压过 1 个地点 1 个实例——真实生成的多样性未测。
+批次 `__scene_multi_e2e`（`_e2e_scene_multi.py` + `_e2e_scene_multi_cont.py`，真实 Agnes）：
+
+## 覆盖
+- **Location 1: Night Market Alley**（室外/霓虹/摊位——与灯塔完全不同空间性格）
+- **Location 2: Old Apartment Room**（室内/小空间/暖光）
+- 3 个 Story Scene + 3 个 SceneInstance（market×2 **同地点不同状态** + apartment×1）
+- 3 张状态视图**全部真实 approved**：Market·evening / Apartment·late / Market·festival-night
+- 跨地点隔离真机断言：market 状态变更 → apartment 视图不 stale；market 自身视图正确 stale
+- 三张状态图 basis 指纹互不相同
+
+## 过程中的夹具教训（第三次同类实证）
+1. **"early evening" 视觉歧义**（r1：唯一卡点 time_of_day=concern）——霓虹巷 base 本身
+   像夜景，审查无法确认傍晚；改 "night" 后一次通过。**时段词必须与空间性格可区分。**
+2. **负向移除/全局调暗是 i2i 最弱项**（r2+续篇 r1：关霓虹+收摊位+调暗 0/18）——
+   同向加法状态（节夜：挂灯+摊位全开）**一次通过（2/3 候选 PASS）**。
+   与 r10 "normal white at night 0/27" 同类。**结论沉淀为制作规范：状态描述尽量
+   写"要什么"（加法/正向），避免"关掉/移除/变暗"（减法/反向）；后者留人工修图。**
+
+## 真机覆盖总账（S2A+S2B+S2B.1+S2B.2）
+3 个地点（灯塔控制室/夜市小巷/旧公寓房间——室内室外+三种视觉性格）、4 张 approved
+base 视角、1 个道具视觉链、5 张 approved 状态视图（灯塔×2 含完整 refresh lifecycle、
+market×2 同地点不同状态、apartment×1）、全量回归 34 failed 与基线同构零新增。
+
+## 遗留 MODEL_LIMITATION（更新）
+负向移除/全局反向光照的状态（关霓虹/调暗/normal white at night）i2i 无法可靠渲染——
+此类状态建议人工修图或等局部重绘/图生图强度控制能力。系统数据与流程对该类状态
+完全兼容（stale/approve 机制与状态内容无关）。
