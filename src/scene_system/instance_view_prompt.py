@@ -65,17 +65,23 @@ def build_scene_instance_view_prompt(location: Location,
     else:
         parts.append("Current scene state: unchanged from the base reference (neutral state).")
 
-    # SECTION 4 — Visible Anchor State Changes（§19：正确 anchor 被改变）
+    # SECTION 4 — Visible Anchor State Changes（§19：正确 anchor 被改变）。
+    # 🔴 附 anchor 的语义位置描述（如 "the middle of the three west windows"）——
+    # E2E 实证：模型会把破损渲染在错误的山墙上（w01 而非 w02），仅凭 id/名字
+    # 无法绑定到正确的那一扇；description 中的方位词是唯一位置锚。
     changed: List[str] = []
     unchanged_note: List[str] = []
     anchor_states = projection.get("anchor_states") or {}
     for aid in sorted(anchor_states):
         a = by_id.get(aid)
         name = _c(a.name) if a else aid
+        desc = _c(a.description) if a else ""
         st = anchor_states[aid]
         line = f"{name.upper()} is {_c(st.get('condition')).upper()}"
         if _c(st.get("note")):
             line += f" ({_c(st['note'])})"
+        if desc:
+            line += f" — {desc}"
         changed.append(line + ".")
     for a in sorted((x for x in anchors if x.anchor_id in set(base_view.visible_anchor_ids or [])
                      and x.anchor_id not in set(anchor_states)), key=lambda x: x.anchor_id):
