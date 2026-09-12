@@ -357,3 +357,30 @@ market×2 同地点不同状态、apartment×1）、全量回归 34 failed 与�
   直接往里加，支持用户横向对照。
 - 生成风格载体 = Location.style_notes（每地点独立）——项目级 StyleAnchor 与
   场景生成的集成留给 Shot binding 阶段统一设计。
+
+---
+
+# Phase S2B.4 附录（素材模块写实链路：同项目 scene_style_gallery）
+
+起因：用户验收完场景风格后点名测试素材模块——写实人物 + 更换服装 + 两件武器/物品，
+不与此前重复（避开木剑/黄铜罗盘/提灯），仍在 scene_style_gallery 项目内（不开新项目）。
+
+批次 `_e2e_resources_photoreal.py`（真实 Agnes，幂等续跑）全部 **PASS（155s）**：
+- **Character "Ethan Cole"**：写实肖像 t2i → legacy front view 绑定（写实风格人物进入身份体系）
+- **Clothing ×2**：Charcoal Wool Overcoat / Weathered Leather Jacket（各带 t2i 参考并 attach）
+- **Look ×2 = 更换服装**：i2i（人物身份 + 服装参考）→ 审查 → 批准——Ethan·Charcoal Overcoat
+  与 Ethan·Leather Jacket 同主角双形态（r3 实证 Leather Jacket attempt 1 即 pass）
+- **Prop ×2**：Antique Flintlock Pistol（武器，**通过内容审核**）+ Doctor's Leather Satchel
+  （物品）——t2i → attach → 三维审查 pass → approve
+- 幂等修正：重跑对已批准 Look 跳过（不重复生成）
+
+## 验证要点
+- **写实风格完全可用**：人物肖像/服装/道具的 t2i 与 i2i 在写实域同样稳定
+  （Look 链 attempt 1-2 内通过；目检皮夹克 Look——同一男子+正确着装+产品级构图）
+- **同一项目混合存放**：3 个动画风格地点 + 写实人物/服装/道具/状态视图共存于
+  scene_style_gallery，Resources 与 Scene System 两模块在同一 canonical 生态内互不干扰
+- 内容审核注意：燧发枪（武器）一次通过；提示词避免 "pure white background" 的既有结论仍有效
+
+## 素材模块真机覆盖总账（含历史）
+Look 链（Alice·Black Coat + Ethan×2）、Prop 链（木剑/黄铜罗盘/木提灯/燧发枪/出诊包）、
+Composition 链（1C5）、Shared Library publish/import——Resources 全实体类型均有真实通过记录。
