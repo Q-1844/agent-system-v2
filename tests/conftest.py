@@ -30,5 +30,45 @@ def client():
         yield c
 
 
+# ============ deps 全局状态守卫（Freeze Stabilization 2026-09-13）============
+# startup() 会把 pipeline_controller/agnes_client/sensenova_text_client/
+# project_manager/job_queue 写进 deps 模块单例；client fixture 是 session 级——
+# 第一个 client 测试之后，整个进程的引擎级测试都继承「已配置」环境：
+#   - not_configured 分支不可达（依赖开发机恰好没配 API key）；
+#   - 「不联网」的控制/意图测试被改道到真 Agnes（intent 分类漂移）。
+# 守卫语义（两态模型）：
+#   - client 测试：进入前确保 configured 快照在位（session startup 只跑一次，
+#     中间的非 client 测试可能已把单例复位）；结束时把当前 configured 形态
+#     刷新进快照，供后续 client 测试复用。
+#   - 非 client 测试：结束后恢复 pristine（全 None）——引擎级测试的 canonical
+#     环境，杜绝跨测试环境污染。
+_DEPS_GUARD_KEYS = ("pipeline_controller", "agnes_client", "sensenova_text_client",
+                    "project_manager", "job_queue", "_rehost_host")
+_CONFIGURED_SNAPSHOT: dict = {}
+
+
+@pytest.fixture(autouse=True)
+def _deps_state_guard(request):
+    import deps
+    uses_client = "client" in getattr(request, "fixturenames", ())
+    if uses_client:
+        # configured 快照回灌（前一个非 client 测试可能已复位为 pristine）
+        for k, v in _CONFIGURED_SNAPSHOT.items():
+            if getattr(deps, k, None) is None and v is not None:
+                setattr(deps, k, v)
+    saved = {k: getattr(deps, k, None) for k in _DEPS_GUARD_KEYS}
+    yield
+    if uses_client:
+        for k in _DEPS_GUARD_KEYS:
+            cur = getattr(deps, k, None)
+            if cur is not None:
+                _CONFIGURED_SNAPSHOT[k] = cur
+        target = saved                     # client 测试：维持进入时形态
+    else:
+        target = {k: None for k in _DEPS_GUARD_KEYS}   # 非 client：pristine
+    for k, v in target.items():
+        setattr(deps, k, v)
+
+
 # 回归基准项目（阶段 4 跑通完整链路；Task8 全过后才删）
 P4 = "_p4_accept"

@@ -43,8 +43,18 @@ def _save_proj(tmp_path):
     return tmp_path
 
 
+def _raise_unconfigured():
+    """hermetic unconfigured（镜像生产 get_agnes_client 的 503 形态）：引擎级控制
+    测试的意图分类与接地回复不依赖运行机 credential 状态（Freeze Stabilization
+    §5：测试显式制造 NOT_CONFIGURED，杜绝 chunk 内 startup 泄漏改道真 Agnes）。"""
+    from fastapi import HTTPException
+    raise HTTPException(503, "agnes not configured (hermetic test)")
+
+
 def _runtime(tmp_path, **kw):
     kw.setdefault("settings_path", tmp_path / "agents_data" / "settings.json")
+    kw.setdefault("agnes_getter", _raise_unconfigured)
+    kw.setdefault("sensenova_getter", lambda: None)
     return AgentRuntime(project_dir_resolver=lambda name: tmp_path, **kw)
 
 

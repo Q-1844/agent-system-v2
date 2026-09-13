@@ -29,10 +29,17 @@ def _save_proj(tmp_path):
     return tmp_path
 
 
-def _runtime(tmp_path, client=None):
+def _runtime(tmp_path, client=None, **kw):
     return AgentRuntime(project_dir_resolver=lambda name: tmp_path,
                         settings_path=tmp_path / "agents_data" / "settings.json",
-                        client=client)
+                        client=client, **kw)
+
+def _raise_unconfigured():
+    """hermetic unconfigured（镜像生产 get_agnes_client 的 503 形态）：not_configured
+    契约测试显式构造未配置环境，不依赖运行机 credential（Freeze Stabilization §5）。"""
+    from fastapi import HTTPException
+    raise HTTPException(503, "agnes not configured (hermetic test)")
+
 
 
 class FakeClient:
@@ -177,7 +184,9 @@ def test_non_director_rejected(tmp_path):
 # ============ 未配置 Agnes → not_configured ============
 def test_not_configured_soft_fail(tmp_path):
     _save_proj(tmp_path)
-    rt = _runtime(tmp_path, client=None)
+    rt = _runtime(tmp_path, client=None,
+                  agnes_getter=_raise_unconfigured,
+                  sensenova_getter=lambda: None)
     sid = rt.get_or_create_session("demo", "director", "project", "demo")["session_id"]
     res = _run(director_turn(rt, "demo", sid, "拆剧本"))
     assert res["edited"] is False
