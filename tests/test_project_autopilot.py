@@ -525,23 +525,53 @@ def test_case6_run_consistency(project_2scenes, fake_agnes_swap, client):
 
 
 # ============ Case 7：source changed -> blocked ============
-def test_case7_source_changed_blocked(project_2scenes, fake_agnes_swap, client):
-    """§七十一 Case 7 / §十三/§十五：进入下一 Scene 前检测 source signature 变化 -> blocked。"""
+def test_case7_source_changed_blocked(project_2scenes, fake_agnes_swap, client,
+                                      monkeypatch):
+    """§七十一 Case 7 / §十三/§十五：进入下一 Scene 前检测 source signature 变化 -> blocked。
+
+    确定化（Freeze Stabilization §7）：FakeAgnes 下 scene 1 在测试 0.5s 轮询间隔内
+    即可跑完并越过 scene 2 校验点——原实现「等到 child_run_id 就改 source」与
+    「scene 2 校验」之间存在无同步竞态（改动落在校验之后 → completed）。
+    现用生产校验边界作同步 seam：第 1 次校验（scene 1）直接放行；第 2 次校验
+    （scene 2 边界=契约保护窗）先 Event 通知测试、等测试完成 source 改动后放行，
+    再执行**真实** _validate_source_for_scene——不 mock 校验器、不伪造 blocked，
+    业务判断完全由生产代码做出。"""
+    import threading
+    from src.ai.project_autopilot import ProjectProductionManager
+
+    entered = threading.Event()
+    proceed = threading.Event()
+    calls = {"n": 0}
+    orig_validate = ProjectProductionManager._validate_source_for_scene
+
+    def _synced_validate(self, project_name, run):
+        calls["n"] += 1
+        if calls["n"] >= 2:          # scene 2 边界 = 受保护执行窗
+            entered.set()
+            assert proceed.wait(timeout=30), "测试未在时限内完成 source 改动"
+        return orig_validate(self, project_name, run)
+
+    monkeypatch.setattr(ProjectProductionManager, "_validate_source_for_scene",
+                        _synced_validate)
+
     r = client.post(f"/api/project/{PROJECT_NAME}/production/start", json={"respect_locked": True})
     run_id = r.json()["run_id"]
-    # 等 scene 1 child 创建（保证 scene 1 已启动，source 改动要被 scene 2 校验捕获）
+    # 等 scene 1 child 创建（scene 1 已启动）
     deadline = time.time() + 30
     while time.time() < deadline:
         run = client.get(f"/api/project/{PROJECT_NAME}/production/run/{run_id}").json()
         if run["scenes"][0]["child_run_id"]:
             break
         time.sleep(0.5)
-    # 改 source：scene 2 的 shot description（创作态，signature 变）
+    # 等生产代码抵达 scene 2 校验边界（受保护窗开始），随后改 source：
+    # scene 2 的 shot description（创作态，signature 变）
+    assert entered.wait(timeout=60), "生产未抵达 scene 2 校验边界"
     pdir = get_project_manager().get_project_dir(PROJECT_NAME)
     store = ProjectStore(pdir)
     proj = store.load()
     proj.scenes[1].shots[0].description = "完全不同的镜头描述"
     store.save(proj)
+    proceed.set()                    # 放行 → 真实校验执行 → BLOCKED
     # 等待 blocked（scene 1 完成 -> 进 scene 2 前校验捕获）
     final = _wait_run_terminal(client, run_id, timeout=120)
     assert final["status"] == "blocked", f"应 blocked, got {final['status']}, error={final.get('error')}"
