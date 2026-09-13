@@ -354,6 +354,11 @@ async def get_project_timing(project_name: str):
 #   status=pending 等用户点选；choose 后 status=done，url_ready 才 True（视频唯一入口）。
 # last_frame：仅 keyframes，图生图用 first_frame.url；生成后若 split_next 非空，桥接拷贝给后继首帧。
 from src.core.prompt_builder import build_first_frame_prompt, build_last_frame_prompt
+from src.generation.image_adapter import (
+    BoundGenerationError,
+    build_bound_first_frame_input,
+    shot_has_binding,
+)
 
 
 def _shot_char_refs(project, shot):
@@ -524,15 +529,22 @@ async def _handler_first_frame(job, emit):
     variants = max(1, int(job.params.get("variants", 2)))
     size_tier = project.style.size_tier or "1K"
     ratio = project.style.aspect_ratio or "16:9"
-    typed_refs = _collect_first_frame_refs(project, shot)
-    refs = [r["url"] for r in typed_refs]
+    # S3C.1 双路径（§27）：BOUND shot 必须走 Binding-aware path（READY→Pack→Adapter；
+    # NOT_READY→BLOCK，绝不 fallback legacy）；UNBOUND shot 保持 legacy 行为逐字节不变。
+    if shot_has_binding(project_dir, shot.shot_id):
+        bound = build_bound_first_frame_input(project_dir, project, shot)
+        refs = bound.image_refs
+        prompt = bound.prompt
+    else:
+        typed_refs = _collect_first_frame_refs(project, shot)
+        refs = [r["url"] for r in typed_refs]
+        prompt = build_first_frame_prompt(project, shot)
+        # reference_previous：提示词表达「保持连续但允许换机位」，不要求逐像素复制
+        if any(r["type"] == "continuity" for r in typed_refs):
+            prompt += (". Maintain continuity with the previous shot's ending frame: keep character identity, "
+                       "environment, outfit and lighting direction; change shot size, camera angle, composition "
+                       "and subject action as specified; do not pixel-copy the previous frame")
     use_i2i = bool(refs)
-    prompt = build_first_frame_prompt(project, shot)
-    # reference_previous：提示词表达「保持连续但允许换机位」，不要求逐像素复制
-    if any(r["type"] == "continuity" for r in typed_refs):
-        prompt += (". Maintain continuity with the previous shot's ending frame: keep character identity, "
-                   "environment, outfit and lighting direction; change shot size, camera angle, composition "
-                   "and subject action as specified; do not pixel-copy the previous frame")
     frames_dir = project_dir / "output" / "frames"
     frames_dir.mkdir(parents=True, exist_ok=True)
 

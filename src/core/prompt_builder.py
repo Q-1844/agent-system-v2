@@ -29,14 +29,17 @@ def _char_identity(project: Project, shot: Shot) -> str:
                  if c.name in shot.characters and c.description_en)
 
 
-def build_first_frame_prompt(project: Project, shot: Shot) -> str:
+def build_first_frame_prompt(project: Project, shot: Shot,
+                             *, style_suffix: Optional[str] = None) -> str:
     """首帧英文 prompt（提示词.md §9）。
     优先级：first_frame_prompt_override > prompt_en（兼容）> 结构字段拼接。
     顺序：角色身份 -> 起始画面 -> 主体起始状态 -> 景别 -> 机位角度 -> 光线
           -> 构图 -> 重要细节 -> 必须出现的元素 -> [风格后缀]。
     camera_angle 是新字段（与运镜分离），不回退旧 camera（旧 camera 拆分到 video 运镜）。
-    """
-    suffix = project.style.suffix()
+    style_suffix（S3C.1）：None=legacy 行为（拼 project.style.suffix()）；
+    传 str 则用之（""=不拼后缀）——Binding-aware 生成路径用 Pack 的 VisualProfile
+    风格指令替代 StyleAnchor（§19），creative 拼接逻辑零改动。"""
+    suffix = project.style.suffix() if style_suffix is None else style_suffix
     if shot.first_frame_prompt_override:
         return _with_suffix(shot.first_frame_prompt_override.strip(), suffix)
     if shot.prompt_en:
