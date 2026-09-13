@@ -183,6 +183,11 @@ class ImageBatch:
     based_on_first_frame: Optional[str] = None   # 尾帧批次：基于的首帧 candidate_id
     candidates: List[Candidate] = field(default_factory=list)
     origin_run_id: Optional[str] = None  # AI-4B Autopilot：本批次由哪个 Run 生成（None=手工/旧）
+    # S3C.2 boundary-frame provenance（§1 Case C 最小 derived basis）：BOUND 生成路径
+    # 记录生成时的 ShotReferencePack basis（binding_revision / resolved SIV / 指纹）——
+    # 只描述「这个生成结果基于什么产生」，不是第二套 canonical、不替代 Binding、
+    # 不自动 refresh；{} = legacy/旧数据（消费方 fail closed 不得当作 fresh）。
+    generation_basis: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

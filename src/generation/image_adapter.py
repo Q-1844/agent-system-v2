@@ -99,19 +99,35 @@ def shot_has_binding(project_dir, shot_id: str) -> bool:
 
 
 # ============ temporal 过滤（§8/§13：先于 priority）============
+# S3C.2 §6：last-frame 的 temporal rule 与 first-frame 镜像对称——
+#   first: start/throughout/static 进、end 排除；last: end/throughout/static 进、
+#   start 排除。两者都是 temporal eligibility 先于 priority（primary 不得覆盖）。
+_FRAME_ELIGIBLE_TEMPORAL = {
+    "first": ("start", "throughout", "static"),
+    "last": ("end", "throughout", "static"),
+}
 
-def filter_first_frame_references(references: List[dict]) -> Tuple[List[dict], List[dict]]:
-    """Step 1 temporal eligibility：start/throughout/static 保留；end 排除。
-    返回 (eligible, excluded_end)。excluded_end 仅供 diagnostics——绝不因 primary
-    而回流（§8 硬规则）。单次遍历保持 Pack 原确定性顺序。"""
+
+def filter_frame_references(references: List[dict],
+                            temporal_target: str) -> Tuple[List[dict], List[dict]]:
+    """Step 1 temporal eligibility（S3C.2 §6 泛化）：temporal_target ∈ {first, last}。
+    返回 (eligible, excluded)。excluded 仅供 diagnostics——绝不因 primary 而回流。
+    单次遍历保持 Pack 原确定性顺序。"""
+    allowed = _FRAME_ELIGIBLE_TEMPORAL[temporal_target]
     eligible: List[dict] = []
     excluded: List[dict] = []
     for r in references:
-        if r.get("temporal_scope") in _FIRST_FRAME_ELIGIBLE_TEMPORAL:
+        if r.get("temporal_scope") in allowed:
             eligible.append(r)
         else:
             excluded.append(r)
     return eligible, excluded
+
+
+def filter_first_frame_references(references: List[dict]) -> Tuple[List[dict], List[dict]]:
+    """S3C.1 既有入口（first-frame 口径），保留名兼容；等价于
+    filter_frame_references(references, "first")。"""
+    return filter_frame_references(references, "first")
 
 
 # ============ 媒体解析（§23：权威 owner；§24 required/optional 分明）============
@@ -144,9 +160,16 @@ def _resolve_item_media(item: dict, rdoc: Any, project_dir: Path
     return to_agnes_image_ref(project_dir, url=asset.url, local=asset.local)
 
 
-# ============ 生产上下文文本（§21：确定性、无 LLM；§22：start 态 only）============
+# ============ 生产上下文文本（§21：确定性、无 LLM；§14：显式 temporal_target）============
 
-def _production_context_text(pack: dict, rdoc: Any) -> str:
+def _production_context_text(pack: dict, rdoc: Any,
+                             temporal_target: str = "first") -> str:
+    """Pack 生产上下文 → prompt 片段。temporal_target 显式传递（S3C.2 §14：
+    不靠调用方手工删字符串）——
+      first: 只含 action.start_state（🔴 end_state 绝不进入首帧，§22）；
+      last:  只含 action.end_state（🔴 start_state 绝不进入尾帧，§14）；
+      video: start_state + end_state 两行（motion 从 start 到 end，§14 允许）。
+    Scene/角色/组合关系行对三个 target 相同。"""
     parts: List[str] = []
     scene = pack.get("scene") or {}
     state = scene.get("view_relevant_scene_state") or {}
@@ -172,9 +195,13 @@ def _production_context_text(pack: dict, rdoc: Any) -> str:
             parts.append(f"{ch.get('character_name')} {cp.get('relation')} "
                          f"{pname} ({cp.get('anchor')}).")
     action = pack.get("action") or {}
-    # 🔴 §22：只输出 start_state；end_state 绝不进入首帧当前态约束。
-    if action.get("kind") not in (None, "", "none") and action.get("start_state"):
+    has_action = action.get("kind") not in (None, "", "none")
+    # 🔴 first：只输出 start_state；end_state 绝不进入首帧当前态约束（§22）。
+    if temporal_target in ("first", "video") and has_action and action.get("start_state"):
         parts.append(f"Action start state: {action['start_state']}.")
+    # 🔴 last：只输出 end_state；start_state 绝不进入尾帧当前态约束（S3C.2 §14）。
+    if temporal_target in ("last", "video") and has_action and action.get("end_state"):
+        parts.append(f"Action end state: {action['end_state']}.")
     return " ".join(p.strip() for p in parts if p and p.strip())
 
 
@@ -215,19 +242,66 @@ def _pre_dispatch_guard(svc: Any, shot_id: str, basis: dict) -> None:
                                             "显式重试整个 generation（不 auto refresh）"})
 
 
-# ============ 主入口 ============
+# ============ boundary-frame freshness（S3C.2 §1 Case C / §17）============
+# 现有 ImageBatch 历史上无 provenance（Case C 审计结论）——"Binding 现在 READY"≠
+# "磁盘上的旧 frame fresh"（T1 生成→T2 依赖变 stale→T3 refresh 后旧帧仍在盘上）。
+# 最小修复（generation-result metadata）：BOUND 生成路径把生成时 Pack basis 记入
+# ImageBatch.generation_basis；消费方（last-frame / video）dispatch 前比对——
+# 缺失/不一致 → 结构化失败，绝不静默当作 fresh，绝不 auto regenerate。
 
-def build_bound_first_frame_input(project_dir, project: Any, shot: Any) -> BoundImageRequest:
-    """BOUND shot 的首帧生成输入（§4.A/C；§27：BOUND 永不回落 legacy）。
-    顺序：validity gate → compile pack（自带 pre/post 守卫）→ temporal 过滤（先于
-    priority）→ 媒体解析 → prompt 组装 → pre-dispatch guard。"""
-    from src.shot_binding import ShotBindingService
+def selected_boundary_batch(shot: Any, slot: str) -> Tuple[Any, Any]:
+    """authoritative selection truth（§16）：selected_{first,last}_frame 指针 →
+    (owning batch, candidate)。绝不 glob / files[-1] / mtime / 文件名猜测。
+    找不到 → (None, None)。"""
+    cid = shot.selected_first_frame if slot == "first" else shot.selected_last_frame
+    if not cid:
+        return None, None
+    batches = shot.first_frame_batches if slot == "first" else shot.last_frame_batches
+    for b in batches or []:
+        for c in b.candidates or []:
+            if c.candidate_id == cid:
+                return b, c
+    return None, None
+
+
+# 对比键：binding_revision（本镜 binding 内容——refresh 翻动它）+ resolved SIV。
+# document_revision 覆盖整个 bindings 文档——别的 shot refresh 会误伤本镜 fresh
+# frame（违反 actual-dependencies-only），故不比；依赖内容变化 → validity NOT_READY
+# （gate 已挡）→ 显式 refresh → binding_revision 翻动——两键经传递覆盖全部依赖维度。
+_BOUNDARY_COMPARE_KEYS = ("binding_revision", "resolved_scene_instance_view_id")
+
+
+def boundary_stale_detail(batch: Any, pack_basis: dict) -> Optional[dict]:
+    """§17 boundary artifact freshness。batch.generation_basis（生成时 Pack basis
+    快照）vs 当前 pack basis。None = fresh；dict = stale detail。
+    missing basis（legacy / binding 前生成）→ fail closed（artifact_basis_missing），
+    绝不当作 fresh（J3）。"""
+    batch_id = getattr(batch, "batch_id", "")
+    recorded = dict(getattr(batch, "generation_basis", None) or {})
+    if not recorded:
+        return {"reason": "artifact_basis_missing", "batch_id": batch_id,
+                "hint": "boundary frame 无 generation provenance（legacy 或 binding 前"
+                        "生成）——显式重新生成，绝不静默当作 fresh"}
+    if str(recorded.get("binding_readiness") or "") != "READY":
+        return {"reason": "artifact_basis_mismatch", "batch_id": batch_id,
+                "field": "binding_readiness",
+                "hint": "provenance 记录的生成时 binding 非 READY——非合法 BOUND 产物"}
+    for k in _BOUNDARY_COMPARE_KEYS:
+        if recorded.get(k) != (pack_basis or {}).get(k):
+            return {"reason": "artifact_basis_mismatch", "batch_id": batch_id,
+                    "field": k, "recorded": recorded.get(k),
+                    "current": (pack_basis or {}).get(k),
+                    "hint": "boundary frame 基于旧 basis 生成——显式重新生成"
+                            "（绝不 auto regenerate）"}
+    return None
+
+
+# ============ 共享内核（S3C.2 §23：小步提取，不做 Universal Adapter 框架）============
+
+def _gate_ready_pack(svc: Any, sid: str) -> dict:
+    """validity gate → compile pack（自带 pre/post 守卫）→ pack dict。
+    BLOCKED → 结构化错误（BOUND 绝不回落 legacy）。"""
     from src.shot_binding.validity import READY
-
-    project_dir = Path(project_dir)
-    sid = str(shot.shot_id)
-    svc = ShotBindingService(project_dir, project_dir.name)
-
     validity = svc.read_validity(sid)
     if validity["readiness"] != READY:
         raise BoundGenerationError("binding_not_ready",
@@ -243,14 +317,14 @@ def build_bound_first_frame_input(project_dir, project: Any, shot: Any) -> Bound
         raise BoundGenerationError("binding_not_ready",
                                    {"shot_id": sid, "issues": compiled["issues"],
                                     "hint": "pack 编译被拒（语义歧义/依赖失效）"})
-    pack = compiled["pack"]
+    return compiled["pack"]
 
-    # ---- Step 1 temporal eligibility（先于 priority，§8/§13）----
-    eligible, excluded_end = filter_first_frame_references(pack.get("references") or [])
 
-    # ---- Step 2 媒体解析（§23；required primary 失败=结构化错误，optional 降级+diagnostic）----
-    from src.resources.store import ResourceStore
-    rdoc = ResourceStore(project_dir, project_dir.name).load()
+def _resolve_media_loop(eligible: List[dict], rdoc: Any, project_dir: Path
+                        ) -> Tuple[List[str], List[str], List[Dict[str, Any]],
+                                   List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """媒体解析（§23；required primary 失败=结构化错误，optional 降级+diagnostic）。
+    返回 (image_refs, used_ids, dropped, diagnostics, roles)。"""
     image_refs: List[str] = []
     used_ids: List[str] = []
     dropped: List[Dict[str, Any]] = []
@@ -279,6 +353,30 @@ def build_bound_first_frame_input(project_dir, project: Any, shot: Any) -> Bound
                       "temporal_scope": item.get("temporal_scope"),
                       "subject_character": item.get("subject_character"),
                       "prop_id": item.get("prop_id")})
+    return image_refs, used_ids, dropped, diagnostics, roles
+
+
+# ============ 主入口 ============
+
+def build_bound_first_frame_input(project_dir, project: Any, shot: Any) -> BoundImageRequest:
+    """BOUND shot 的首帧生成输入（§4.A/C；§27：BOUND 永不回落 legacy）。
+    顺序：validity gate → compile pack（自带 pre/post 守卫）→ temporal 过滤（先于
+    priority）→ 媒体解析 → prompt 组装 → pre-dispatch guard。"""
+    from src.shot_binding import ShotBindingService
+
+    project_dir = Path(project_dir)
+    sid = str(shot.shot_id)
+    svc = ShotBindingService(project_dir, project_dir.name)
+    pack = _gate_ready_pack(svc, sid)
+
+    # ---- Step 1 temporal eligibility（先于 priority，§8/§13）----
+    eligible, excluded_end = filter_first_frame_references(pack.get("references") or [])
+
+    # ---- Step 2 媒体解析（§23）----
+    from src.resources.store import ResourceStore
+    rdoc = ResourceStore(project_dir, project_dir.name).load()
+    image_refs, used_ids, dropped, diagnostics, roles = \
+        _resolve_media_loop(eligible, rdoc, project_dir)
     if excluded_end:
         diagnostics.append({
             "reason": "end_state_reference_excluded_from_first_frame",
@@ -308,7 +406,7 @@ def build_bound_first_frame_input(project_dir, project: Any, shot: Any) -> Bound
     # ---- prompt（§20/§21：creative builder 复用 + Pack 生产上下文 + P1 风格指令）----
     from src.core.prompt_builder import build_first_frame_prompt
     creative = build_first_frame_prompt(project, shot, style_suffix="")
-    ctx = _production_context_text(pack, rdoc)
+    ctx = _production_context_text(pack, rdoc, "first")
     style = _style_instruction_from_pack(pack)
     tail = " ".join(x for x in (ctx, style) if x)
     prompt = build_first_frame_prompt(project, shot, style_suffix=tail) if tail \
@@ -317,6 +415,83 @@ def build_bound_first_frame_input(project_dir, project: Any, shot: Any) -> Bound
 
     # ---- pre-dispatch race guard（§25：compile 之后的第二个时间窗）----
     basis = pack.get("basis") or {}
+    _pre_dispatch_guard(svc, sid, basis)
+
+    return BoundImageRequest(
+        shot_id=sid, prompt=prompt, image_refs=image_refs,
+        used_reference_ids=used_ids, dropped_optional=dropped,
+        diagnostics=diagnostics, semantic_roles=roles, basis=basis)
+
+
+def build_bound_last_frame_input(project_dir, project: Any, shot: Any, *,
+                                 first_frame_url: str) -> BoundImageRequest:
+    """BOUND shot 的尾帧生成输入（S3C.2 §3.A）。last-frame temporal rule（§6）：
+    end/throughout/static 进、**start 排除且先于 priority**。
+    refs = [已选首帧 URL（构图基础，creative 机制，保持第一位——提示词.md §11）]
+         + Pack last-eligible 参考。
+    🔴 构图基础首帧必须 fresh（§17）：stale 首帧派生的尾帧继承 stale——否则本尾帧
+    落盘的 generation_basis 就失去意义（传递新鲜度）。inherit_previous 的构图基础
+    = 来源镜头视频末帧（creative relay 物料，同 S3C.1 continuity 口径）→ diagnostic
+    不阻断。"""
+    from src.shot_binding import ShotBindingService
+    from src.core.models import OpeningSource
+
+    project_dir = Path(project_dir)
+    sid = str(shot.shot_id)
+    svc = ShotBindingService(project_dir, project_dir.name)
+    pack = _gate_ready_pack(svc, sid)
+    basis = pack.get("basis") or {}
+    diagnostics: List[Dict[str, Any]] = []
+
+    # ---- 构图基础首帧 freshness（§17；relay 物料除外）----
+    relay_base = (shot.opening_source == OpeningSource.INHERIT_PREVIOUS.value
+                  and shot.source_shot_id)
+    if relay_base:
+        diagnostics.append({
+            "reason": "boundary_relay_no_binding_basis",
+            "detail": {"slot": "first",
+                       "hint": "尾帧构图基础=来源镜头视频末帧（inherit_previous relay "
+                               "物料，非本镜 Binding 产物）——freshness 由既有接力机制管"}})
+    else:
+        fbatch, _fcand = selected_boundary_batch(shot, "first")
+        if fbatch is None:
+            raise BoundGenerationError(
+                "reference_media_unresolvable",
+                {"boundary_slot": "first",
+                 "hint": "尾帧构图基础=已选首帧，但 selected_first_frame 无法解析到批次"})
+        detail = boundary_stale_detail(fbatch, basis)
+        if detail:
+            raise BoundGenerationError("boundary_frame_stale", detail)
+
+    # ---- temporal eligibility：end/throughout/static 进、start 排除（先于 priority）----
+    eligible, excluded_start = filter_frame_references(
+        pack.get("references") or [], "last")
+
+    # ---- 媒体解析 ----
+    from src.resources.store import ResourceStore
+    rdoc = ResourceStore(project_dir, project_dir.name).load()
+    refs, used_ids, dropped, diag2, roles = _resolve_media_loop(eligible, rdoc, project_dir)
+    diagnostics.extend(diag2)
+    if excluded_start:
+        diagnostics.append({
+            "reason": "start_state_reference_excluded_from_last_frame",
+            "detail": {"count": len(excluded_start),
+                       "source_ids": [str(x.get("source_id")) for x in excluded_start]}})
+    dropped.extend({"source_id": str(x.get("source_id")),
+                    "reason": "temporal_start_excluded"} for x in excluded_start)
+    # 首帧（构图基础）始终第一张，不让参考图取代主构图参考（提示词.md §11 语义）
+    image_refs = [first_frame_url] + refs
+
+    # ---- prompt（creative builder 复用 + Pack 生产上下文 last 口径 + P1 风格指令）----
+    from src.core.prompt_builder import build_last_frame_prompt
+    creative = build_last_frame_prompt(project, shot, style_suffix="")
+    ctx = _production_context_text(pack, rdoc, "last")
+    style = _style_instruction_from_pack(pack)
+    tail = " ".join(x for x in (ctx, style) if x)
+    prompt = build_last_frame_prompt(project, shot, style_suffix=tail) if tail \
+        else creative
+
+    # ---- pre-dispatch race guard（§25）----
     _pre_dispatch_guard(svc, sid, basis)
 
     return BoundImageRequest(

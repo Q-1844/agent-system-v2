@@ -10,12 +10,17 @@ from .image_adapter import (
     BoundGenerationError,
     BoundImageRequest,
     build_bound_first_frame_input,
+    build_bound_last_frame_input,
     shot_has_binding,
 )
+from .video_adapter import BoundVideoRequest, build_bound_video_input
 
 __all__ = [
     "BoundGenerationError",
     "BoundImageRequest",
+    "BoundVideoRequest",
     "build_bound_first_frame_input",
+    "build_bound_last_frame_input",
+    "build_bound_video_input",
     "shot_has_binding",
 ]

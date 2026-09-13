@@ -58,12 +58,15 @@ def build_first_frame_prompt(project: Project, shot: Shot,
     return _with_suffix(_join(parts), suffix)
 
 
-def build_last_frame_prompt(project: Project, shot: Shot) -> str:
+def build_last_frame_prompt(project: Project, shot: Shot,
+                            *, style_suffix: Optional[str] = None) -> str:
     """尾帧英文 prompt（提示词.md §11）。基于已选首帧。
     优先级：last_frame_prompt_override > last_frame_prompt_en > 结构字段拼接。
     无角色时只声明基于首帧，不报错。frame_change 空时回退 motion（§14 兼容规则 7）。
-    """
-    suffix = project.style.suffix()
+    style_suffix（S3C.2）：None=legacy 行为（拼 project.style.suffix()）；
+    传 str 则用之（""=不拼后缀）——Binding-aware 尾帧路径用 Pack 的 VisualProfile
+    风格指令替代 StyleAnchor（同 S3C.1 首帧 seam 模式），creative 拼接逻辑零改动。"""
+    suffix = project.style.suffix() if style_suffix is None else style_suffix
     if shot.last_frame_prompt_override:
         return _with_suffix(shot.last_frame_prompt_override.strip(), suffix)
     if shot.last_frame_prompt_en:
@@ -87,13 +90,20 @@ def build_last_frame_prompt(project: Project, shot: Shot) -> str:
     return _with_suffix(_join(parts), suffix)
 
 
-def build_video_prompt(shot: Shot, mode: str) -> str:
+def build_video_prompt(shot: Shot, mode: str, *, style_suffix: str = "") -> str:
     """视频英文 prompt（提示词.md §13）。区分 i2v / keyframes（none 由 handler 映射为 i2v）。
     优先级：video_prompt_override > video_prompt_en > 结构字段拼接。
     seed/negative_prompt 不拼入正向 prompt（单独 API 参数）。不拼风格后缀（继承自输入帧）。
     无角色时不出现 face/outfit consistency。camera_movement 空时回退 camera（§14 规则 6）。
     固定镜头不自动追加 push-in/tracking（直接用字段值）。
-    """
+    style_suffix（S3C.2）：默认 ""（legacy 行为逐字节不变——legacy 视频从不拼后缀）；
+    Binding-aware 路径显式传 Pack 生产上下文+VisualProfile 指令（§13 seam；
+    legacy StyleAnchor 本就不进入视频 prompt，无需 fallback 抑制）。"""
+    prompt = _video_prompt_core(shot, mode)
+    return _with_suffix(prompt, style_suffix) if style_suffix else prompt
+
+
+def _video_prompt_core(shot: Shot, mode: str) -> str:
     if shot.video_prompt_override:
         return shot.video_prompt_override.strip()
     if shot.video_prompt_en:

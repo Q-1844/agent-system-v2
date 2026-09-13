@@ -357,8 +357,10 @@ from src.core.prompt_builder import build_first_frame_prompt, build_last_frame_p
 from src.generation.image_adapter import (
     BoundGenerationError,
     build_bound_first_frame_input,
+    build_bound_last_frame_input,
     shot_has_binding,
 )
+from src.generation.video_adapter import build_bound_video_input
 
 
 def _shot_char_refs(project, shot):
@@ -531,6 +533,7 @@ async def _handler_first_frame(job, emit):
     ratio = project.style.aspect_ratio or "16:9"
     # S3C.1 双路径（§27）：BOUND shot 必须走 Binding-aware path（READY→Pack→Adapter；
     # NOT_READY→BLOCK，绝不 fallback legacy）；UNBOUND shot 保持 legacy 行为逐字节不变。
+    bound = None
     if shot_has_binding(project_dir, shot.shot_id):
         bound = build_bound_first_frame_input(project_dir, project, shot)
         refs = bound.image_refs
@@ -574,7 +577,8 @@ async def _handler_first_frame(job, emit):
     new_batch = ImageBatch(batch_id=batch_id, kind="first_frame", created_at=now,
                            status=ShotStatus.PENDING.value, prompt_snapshot=prompt,
                            char_ref_snapshot=char_snap, candidates=cand_list,
-                           origin_run_id=job.params.get("origin_run_id"))
+                           origin_run_id=job.params.get("origin_run_id"),
+                           generation_basis=dict(bound.basis) if bound else {})
 
     def mut(s):
         s.first_frame_batches.append(new_batch)
@@ -610,12 +614,23 @@ async def _handler_last_frame(job, emit):
         raise RuntimeError("首帧缺少公网 URL（未选择候选或未生成），无法生成尾帧")
 
     await emit("gen", f"{shot.shot_id} 生成尾帧", 20)
-    prompt = build_last_frame_prompt(project, shot)
-    # image_refs 顺序（提示词.md §11）：1.已选首帧（场景/构图基础）2.角色参考图（身份保持）。
-    # 无角色时 char_refs 为空，只传首帧。首帧始终第一张，不让角色图取代主构图参考。
-    char_refs = _shot_char_refs(project, shot)
+    # S3C.2 双路径（§21）：BOUND 尾帧走 Binding-aware path（READY→Pack→Adapter：
+    # last-frame temporal 规则 end/throughout/static 进、start 排除；构图基础首帧
+    # freshness fail closed；绝不 legacy fallback）；UNBOUND 保持 legacy 行为逐字节不变。
+    bound_last = None
+    if shot_has_binding(project_dir, shot.shot_id):
+        bound_last = build_bound_last_frame_input(project_dir, project, shot,
+                                                  first_frame_url=ff_url)
+        prompt = bound_last.prompt
+        refs = bound_last.image_refs
+    else:
+        prompt = build_last_frame_prompt(project, shot)
+        # image_refs 顺序（提示词.md §11）：1.已选首帧（场景/构图基础）2.角色参考图（身份保持）。
+        # 无角色时 char_refs 为空，只传首帧。首帧始终第一张，不让角色图取代主构图参考。
+        char_refs = _shot_char_refs(project, shot)
+        refs = [ff_url] + char_refs
     res = await get_agnes_client().generate_image(
-        prompt=prompt, image_refs=[ff_url] + char_refs,
+        prompt=prompt, image_refs=refs,
         size_tier=project.style.size_tier or "1K", ratio=project.style.aspect_ratio or "16:9")
     url = res.get("url")
     if not url:
@@ -633,7 +648,8 @@ async def _handler_last_frame(job, emit):
                            status=ShotStatus.DONE.value, prompt_snapshot=prompt,
                            char_ref_snapshot=char_snap,
                            based_on_first_frame=shot.selected_first_frame, candidates=[cand],
-                           origin_run_id=job.params.get("origin_run_id"))
+                           origin_run_id=job.params.get("origin_run_id"),
+                           generation_basis=dict(bound_last.basis) if bound_last else {})
     def mut(s, b=new_batch, cid=cand.candidate_id, d=str(dest), u=url):
         s.last_frame_batches.append(b)
         s.selected_last_frame = cid
@@ -1171,6 +1187,11 @@ async def _handler_video(job, emit):
         shot = store.load().get_shot(job.shot_id)   # 取最新
 
     prompt = build_video_prompt(shot, mode)
+    # boundary frames：i2v 用 effective 首帧；keyframes 用 [首帧, 已选尾帧]。
+    # legacy 求值保持原位置（恢复路径不触碰；BOUND 路径由 Adapter 以 selection
+    # truth + freshness 解析后覆盖）。
+    first_url = eff_ff_url
+    last_url = None
 
     # 视频模型（2026-09-06 新契约接入）：job.params.video_model 显式选择时传给
     # create_video（agnes-video-2.5-flash 走 mode/seconds 新契约）；None=config
@@ -1186,13 +1207,26 @@ async def _handler_video(job, emit):
         vid = shot.video.video_id
         await emit("recover", f"{shot.shot_id} 续轮询 video_id={vid}（不重提交）", 10)
     else:
+        # S3C.2 双路径（§21）：BOUND 视频重提交走 Binding-aware path（READY→Pack→
+        # Adapter：boundary selection truth + generation_basis freshness + pre-dispatch
+        # race guard；NOT_READY→BLOCK，绝不 fallback legacy）；UNBOUND 保持 legacy 行为
+        # 逐字节不变。恢复/续轮询路径不做 Binding gate（无新生成输入，不阻断在途
+        # 视频的结果回收——轮询不是 generation dispatch）。
+        bound_video = None
+        if shot_has_binding(project_dir, shot.shot_id):
+            bound_video = build_bound_video_input(project_dir, project, shot)
+            prompt = bound_video.prompt
+            first_url = bound_video.first_frame
+            last_url = bound_video.last_frame
+        elif mode == "keyframes":
+            last_url = shot.last_frame.selected.url
         await emit("submit", f"{shot.shot_id} 提交中（视频 1 RPM，可能等约 60s）", 10)
         kwargs = dict(num_frames=shot.video.num_frames, frame_rate=shot.video.frame_rate,
                       width=w, height=h, seed=shot.seed, negative_prompt=shot.negative_prompt)
         if mode == "keyframes":
-            kwargs["image_urls"] = [eff_ff_url, shot.last_frame.selected.url]
+            kwargs["image_urls"] = [first_url, last_url]
         else:
-            kwargs["image_url"] = eff_ff_url
+            kwargs["image_url"] = first_url
         if video_model:
             kwargs["model"] = video_model
             # 2.5 契约时长（秒，4-12，client 内再夹取）：由既有 8n+1 帧规划反推
