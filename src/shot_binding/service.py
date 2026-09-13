@@ -42,6 +42,14 @@ class _ValidationError(Exception):
         super().__init__(f"{code}: {detail}")
 
 
+def _issue_text(issue: dict) -> str:
+    """validity issue → 可读错误文本（保留 stale_reasons 等结构化信息）。"""
+    d = dict(issue.get("detail") or {})
+    hint = str(d.pop("hint", "") or "")
+    extra = "; ".join(f"{k}={v}" for k, v in d.items())
+    return "; ".join(p for p in (hint, extra) if p)
+
+
 def _s(value: Any) -> str:
     return str(value or "").strip()
 
@@ -135,6 +143,123 @@ class ShotBindingService:
             del doc.bindings[sid]
             self.store.save(doc)
             return {"ok": True, "operation": op, "shot_id": sid,
+                    "document_revision": document_revision(doc)}
+        except _ValidationError as e:
+            return {"ok": False, "operation": op, "error": e.code, "detail": e.detail}
+
+    # ==================================================================
+    # S3B.2：Derived Validity read model（纯读零副作用——read 永不 refresh）
+    # ==================================================================
+    def read_validity(self, shot_id: str) -> dict:
+        """§4 read model：READY / NOT_READY / UNBOUND + 结构化 issues。
+        read → derive → return；绝不创建/修改 binding、绝不更新快照（§3）。"""
+        from .validity import compute_binding_validity
+        return compute_binding_validity(self.dir, self.store.project_name, shot_id)
+
+    # ==================================================================
+    # S3B.2：Explicit Refresh——本阶段唯一新增写行为（§20-§24）
+    # ==================================================================
+    async def refresh_binding_async(self, shot_id: str, *,
+                                    expected_binding_revision: str) -> dict:
+        async with self.store.write_lock():
+            return self.refresh_binding(shot_id,
+                                        expected_binding_revision=expected_binding_revision)
+
+    def refresh_binding(self, shot_id: str, *, expected_binding_revision: str) -> dict:
+        """唯一允许更新 dependency_fingerprints snapshot 的操作（§20）。
+        语义 =「确认保留当前 Binding Intent，接受当前依赖作为新 freshness basis」。
+        不是 repair / rebind / regenerate / approve / migrate（§20）：
+        - 只写 dependency_fingerprints + updated_at（§23 Intent 字段结构性不可变——
+          payload 直接取自现有 binding，不经用户输入）；
+        - unpinned 保持 unpinned（§24，仅把解析到的 SIV basis 记入快照）；
+        - 真正 invalid 的依赖（missing/revoked/unapproved/conflict/cast/orphan/
+          pinned SIV missing/Profile unspecified）→ fail closed 拒绝（§22：refresh
+          不能掩盖 invalid）；SIV stale 属"stale but currently valid"→ 可 refresh，
+          但 validity 诚实重报 stale_dependency（Scene 侧修复 + 再次 refresh 才 READY）；
+        - 复用 S3B.1 store/OCC/锁/原子写，无第二套写路径（§21）。"""
+        op = "shot_binding.refresh"
+        try:
+            from .validity import (resolve_scene_instance_view, siv_freshness_issue)
+            from src.visual_profile import load_profile_or_none
+            doc = self.store.load()
+            sid = _require_id(shot_id, "shot_id")
+            b = doc.bindings.get(sid)
+            if b is None:
+                return {"ok": False, "operation": op, "error": "binding_not_found",
+                        "detail": f"binding 不存在: {sid}"}
+            cur = binding_revision(b)
+            if _s(expected_binding_revision) != cur:
+                return {"ok": False, "operation": op, "error": "stale_binding_revision",
+                        "detail": "expected_binding_revision 与当前 binding revision 不一致",
+                        "expected_binding_revision": _s(expected_binding_revision),
+                        "current_binding_revision": cur}
+
+            project, rdoc, sdoc = self._load_canonicals()
+
+            # ---- §6：Binding 自身仍须与当前 Shot 一致（orphan / scene / cast）----
+            shot = project.get_shot(sid)
+            if shot is None:
+                return {"ok": False, "operation": op, "error": "orphan_binding",
+                        "detail": f"binding 存在但 Shot 已删除: {sid}（不 refresh orphan）"}
+            if b.scene_id != shot.scene_id:
+                raise _ValidationError(
+                    "scene_mismatch",
+                    f"binding.scene_id ({b.scene_id}) 与 Shot.scene_id "
+                    f"({shot.scene_id}) 不一致")
+            # Intent 字段直接取自现有 binding（§23：结构性保证 refresh 不改 Intent）
+            char_bindings = list(b.character_bindings)
+            prop_bindings = list(b.prop_bindings)
+            self._check_cast(char_bindings, shot.characters)
+            self._validate_resources(project, char_bindings, prop_bindings, rdoc)
+
+            # ---- Scene 结构校验（复用 S3B.1 管线，按当前 canonical 重查）----
+            scene_instance_rev = None
+            sciv_fp = None
+            if b.scene_binding is not None:
+                scene_instance_rev, _ = self._validate_scene(
+                    b.scene_binding, shot.scene_id, sdoc)
+                if b.scene_binding.pinned_scene_instance_view_id:
+                    sciv = sdoc.scene_instance_views[
+                        b.scene_binding.pinned_scene_instance_view_id]
+                else:
+                    sciv, issue = resolve_scene_instance_view(sdoc, b.scene_binding)
+                    if issue is not None:
+                        raise _ValidationError(issue["reason"], _issue_text(issue))
+                # §22 current-usability：approved + 指纹可得。🔴 SIV stale 不在拒绝清单
+                # （stale-but-valid 正是 refresh 的适用场景）；refresh 后 validity 诚实
+                # 重报 stale_dependency——Scene 侧重新生成/批准 + 再次 refresh 才 READY。
+                fresh_issue = siv_freshness_issue(
+                    self.dir, self.store.project_name, sciv,
+                    b.dependency_fingerprints.scene_instance_view,
+                    compare_snapshot=False, include_staleness=False)
+                if fresh_issue is not None:
+                    raise _ValidationError(fresh_issue["reason"],
+                                           _issue_text(fresh_issue))
+                sciv_fp = sciv.approved_basis_fingerprint
+
+            # ---- §19/§22：Profile unspecified / 不可读 → refresh 拒绝 ----
+            try:
+                profile = load_profile_or_none(self.dir)
+            except Exception as e:   # noqa: BLE001
+                raise _ValidationError("visual_profile_unreadable",
+                                       f"project_profile.json 不可读: {e}") from e
+            if profile is None:
+                raise _ValidationError(
+                    "project_visual_profile_unspecified",
+                    "项目未设置 ProjectVisualProfile（bound shot 必需，不 fallback）")
+
+            # ---- 计算当前指纹（含 unpinned 解析到的 SIV basis，§24）----
+            fps = self._compute_fingerprints(project, rdoc, char_bindings,
+                                             prop_bindings, b.scene_binding,
+                                             scene_instance_rev, sciv_fp)
+
+            # ---- 只写 freshness basis（§23；原子写，OCC 已在锁内通过）----
+            b.dependency_fingerprints = fps
+            b.updated_at = time.time()
+            self.store.save(doc)
+            return {"ok": True, "operation": op,
+                    "binding": b.to_dict(),
+                    "binding_revision": binding_revision(b),
                     "document_revision": document_revision(doc)}
         except _ValidationError as e:
             return {"ok": False, "operation": op, "error": e.code, "detail": e.detail}
@@ -426,8 +551,10 @@ class ShotBindingService:
     @staticmethod
     def _has_usable_approved(rdoc: Any, approved_ids: List[str]) -> bool:
         """存在至少一个 approved 且真实在 reference_assets 里的参考
-        （指向已删除 asset 的 approved id 不算可用——诚实 fail closed）。"""
-        return any(aid in rdoc.reference_assets for aid in (approved_ids or []))
+        （指向已删除 asset 的 approved id 不算可用——诚实 fail closed）。
+        S3B.2：实现移入 validity.has_usable_approved（与 validity read 共享）。"""
+        from .validity import has_usable_approved
+        return has_usable_approved(rdoc, approved_ids)
 
     @staticmethod
     def _validate_action(action: BindingAction, cast_names: set, rdoc: Any) -> None:
@@ -503,47 +630,14 @@ class ShotBindingService:
         return scene_instance_revision(inst), sciv_fp
 
     # ==================================================================
-    # dependency fingerprint 快照（bind 时刻一次性计算；S3B.2 才做重算对比）
+    # dependency fingerprint 快照（bind/refresh 时刻一次性计算；比对在 validity.py）
     # ==================================================================
     def _compute_fingerprints(self, project, rdoc, char_bindings, prop_bindings,
                               scene_binding, scene_instance_rev,
                               sciv_fingerprint) -> DependencyFingerprints:
-        from src.resources.generation import character_identity_fingerprint
-        from src.resources.models import (composition_revision, look_revision,
-                                          prop_revision)
-        from src.visual_profile import load_profile_or_none
-        from src.visual_profile.models import visual_profile_fingerprint
-
-        # project 侧角色存在性已在 _validate_resources 前置校验（character_missing）
-        chars: Dict[str, str] = {}
-        for cb in char_bindings:
-            c = project.get_character(cb.character_name)
-            fp = character_identity_fingerprint(c)
-            if fp:
-                chars[cb.character_name] = fp
-        looks = {cb.look_id: look_revision(rdoc.looks[cb.look_id])
-                 for cb in char_bindings if cb.look_id in rdoc.looks}
-        props = {pb.prop_id: prop_revision(rdoc.props[pb.prop_id])
-                 for pb in prop_bindings if pb.prop_id in rdoc.props}
-        comps = {cb.composition_id: composition_revision(rdoc.compositions[cb.composition_id])
-                 for cb in char_bindings
-                 if cb.composition_id and cb.composition_id in rdoc.compositions}
-
-        profile_fp = None
-        try:
-            profile = load_profile_or_none(self.dir)
-        except Exception as e:   # noqa: BLE001 —— 坏 profile 文件 bind 时诚实拒绝
-            raise _ValidationError("visual_profile_unreadable",
-                                   f"project_profile.json 不可读: {e}") from e
-        if profile is not None:
-            profile_fp = visual_profile_fingerprint(profile)
-
-        return DependencyFingerprints(
-            visual_profile=profile_fp,
-            characters=chars,
-            looks=looks,
-            props=props,
-            compositions=comps,
-            scene_instance=scene_instance_rev,
-            scene_instance_view=sciv_fingerprint,
-        )
+        # S3B.2：实现移入 validity.compute_fingerprints（create/replace/refresh 共享，
+        # 行为逐字节不变——S3B.1 回归保护）。
+        from .validity import compute_fingerprints
+        return compute_fingerprints(self.dir, project, rdoc, char_bindings,
+                                    prop_bindings, scene_binding,
+                                    scene_instance_rev, sciv_fingerprint)
