@@ -23,6 +23,18 @@ from .models import (
 )
 from .store import ShotBindingStore
 from .service import ShotBindingService
+from .reference_pack import (
+    PACK_VERSION,
+    ActionProjection,
+    CharacterPackEntry,
+    PackBasis,
+    PackBlockedError,
+    ProfileProjection,
+    PropPackEntry,
+    ReferenceItem,
+    SceneProjection,
+    ShotReferencePack,
+)
 
 __all__ = [
     "ACTION_KINDS_REQUIRING_PROP",
@@ -40,4 +52,14 @@ __all__ = [
     "ShotBindingService",
     "binding_revision",
     "document_revision",
+    "PACK_VERSION",
+    "PackBasis",
+    "PackBlockedError",
+    "ProfileProjection",
+    "SceneProjection",
+    "CharacterPackEntry",
+    "PropPackEntry",
+    "ActionProjection",
+    "ReferenceItem",
+    "ShotReferencePack",
 ]

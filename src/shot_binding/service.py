@@ -33,6 +33,7 @@ from .models import (
     document_revision,
 )
 from .store import ShotBindingStore
+from .reference_pack import PackBlockedError
 
 
 class _ValidationError(Exception):
@@ -263,6 +264,130 @@ class ShotBindingService:
                     "document_revision": document_revision(doc)}
         except _ValidationError as e:
             return {"ok": False, "operation": op, "error": e.code, "detail": e.detail}
+
+    # ==================================================================
+    # S3B.3：ShotReferencePack Compiler——derived / ephemeral / 只读（§6/§35/§36）
+    # ==================================================================
+    def compile_reference_pack(self, shot_id: str) -> dict:
+        """READY Binding + 当前 canonical → model-neutral ShotReferencePack。
+        Gate（§5，硬性）：复用 S3B.2 validity——UNBOUND→BLOCKED(binding_unbound)；
+        NOT_READY→BLOCKED（转发结构化 issues）；只有 READY 进入编译。
+        Compile 永不 refresh / 不写回 / 不落盘（无 pack store 文件，§36）。
+        一致性守卫（§37）：pre/post validity 对比（readiness + binding_revision +
+        document_revision + resolved SIV）——不一致 → BLOCKED
+        dependency_changed_during_compile，绝不输出 mixed-state Pack。
+        canonical 损坏（坏 JSON/未知 schema）按 store 规则显式异常，不伪装 BLOCKED（§39）。"""
+        sid = _s(shot_id)
+        pre = self.read_validity(sid)
+        if pre["readiness"] == "UNBOUND":
+            return {"shot_id": sid, "status": "BLOCKED", "ok": False,
+                    "binding_readiness": "UNBOUND", "pack": None,
+                    "issues": [{"dependency_type": "pack", "dependency_id": sid,
+                                "reason": "binding_unbound",
+                                "detail": {"hint": "无 binding——不猜、不自动建、不使用 legacy 参考（§5 Case A）"}}]}
+        if pre["readiness"] == "NOT_READY":
+            return {"shot_id": sid, "status": "BLOCKED", "ok": False,
+                    "binding_readiness": "NOT_READY", "pack": None,
+                    "issues": pre["issues"]}
+        # READY → compile（pre==READY 已由 validity 门保证）
+        try:
+            material = self._collect_pack_material(sid, pre)
+            from .reference_pack import build_pack
+            pack = build_pack(**material)
+        except PackBlockedError as e:
+            return {"shot_id": sid, "status": "BLOCKED", "ok": False,
+                    "binding_readiness": "READY", "pack": None,
+                    "issues": [e.issue()]}
+        post = self.read_validity(sid)
+        if post["readiness"] != "READY" \
+                or post["binding_revision"] != pre["binding_revision"] \
+                or post["document_revision"] != pre["document_revision"] \
+                or post["resolved_dependencies"] != pre["resolved_dependencies"]:
+            return {"shot_id": sid, "status": "BLOCKED", "ok": False,
+                    "binding_readiness": post["readiness"], "pack": None,
+                    "issues": post["issues"] + [
+                        {"dependency_type": "pack", "dependency_id": sid,
+                         "reason": "dependency_changed_during_compile",
+                         "detail": {"hint": "pre/post validity 基准不一致——拒绝 mixed-state Pack"}}]}
+        return {"shot_id": sid, "status": "COMPILED", "ok": True,
+                "binding_readiness": "READY",
+                "pack": pack.to_dict(), "issues": []}
+
+    def _collect_pack_material(self, shot_id: str, pre_validity: dict) -> dict:
+        """收集 build_pack 所需 canonical 实体（只读）。独立方法=确定性 race 测试的
+        patch seam（§61/§63/§64：在 pre 与 post 之间注入依赖变更）。
+        任何解析失败 → PackBlockedError（§38：绝不返回半完整材料）。"""
+        from .reference_pack import PackBlockedError
+        from src.core.store import ProjectStore
+        from src.resources.store import ResourceStore
+        from src.scene_system.store import SceneSystemStore
+        from src.visual_profile import load_profile_or_none
+        from src.visual_profile.models import visual_profile_fingerprint
+        from src.scene_system.visual_service import SceneVisualService
+
+        try:
+            project = ProjectStore(self.dir).load()
+            rdoc = ResourceStore(self.dir, self.store.project_name).load()
+            sdoc = SceneSystemStore(self.dir, self.store.project_name).load()
+        except Exception as e:   # noqa: BLE001 —— race 中 canonical 不可读 → fail closed
+            raise PackBlockedError("reference_asset_unresolvable",
+                                   {"hint": f"canonical 读取失败: {e}"}) from e
+        shot = project.get_shot(shot_id)
+        if shot is None:
+            raise PackBlockedError("reference_asset_unresolvable",
+                                   {"hint": "Shot 在 compile 期间消失"})
+        doc = self.store.load()
+        binding = doc.bindings.get(shot_id)
+        if binding is None:
+            raise PackBlockedError("reference_asset_unresolvable",
+                                   {"hint": "binding 在 compile 期间消失"})
+        profile = None
+        try:
+            profile = load_profile_or_none(self.dir)
+        except Exception as e:   # noqa: BLE001
+            raise PackBlockedError("project_visual_profile_unspecified",
+                                   {"hint": f"project_profile.json 不可读: {e}"}) from e
+        profile_fp = None
+        if profile is not None:
+            profile_fp = visual_profile_fingerprint(profile)
+
+        # SIV 解析（镜像 S3B.2 read model 规则；pinned 精确 / unpinned 按对唯一）
+        siv = None
+        base_view = None
+        location = None
+        siv_status = None
+        if binding.scene_binding is not None:
+            sb = binding.scene_binding
+            inst = sdoc.scene_instances.get(sb.scene_instance_id)
+            if sb.pinned_scene_instance_view_id:
+                siv = sdoc.scene_instance_views.get(sb.pinned_scene_instance_view_id)
+            else:
+                from .validity import resolve_scene_instance_view
+                siv, issue = resolve_scene_instance_view(sdoc, sb)
+                if issue is not None:
+                    raise PackBlockedError(issue["reason"], issue["detail"])
+            if siv is None:
+                raise PackBlockedError("reference_asset_unresolvable",
+                                       {"scene_instance_view_id": sb.pinned_scene_instance_view_id,
+                                        "hint": "SIV 在 compile 期间消失"})
+            base_view = sdoc.views.get(sb.location_view_id)
+            location = sdoc.locations.get(inst.location_id) if inst else None
+            siv_status = SceneVisualService(self.dir, self.store.project_name) \
+                .read_scene_instance_view_status(siv.scene_instance_view_id)
+            if siv_status is None:
+                raise PackBlockedError("reference_asset_unresolvable",
+                                       {"scene_instance_view_id": siv.scene_instance_view_id,
+                                        "hint": "Scene System read model 无法返回 SIV 状态"})
+
+        return {"shot": shot, "binding": binding, "rdoc": rdoc, "sdoc": sdoc,
+                "profile": profile, "profile_fingerprint": profile_fp,
+                "siv": siv, "base_view": base_view, "location": location,
+                "siv_status": siv_status,
+                "binding_revision": pre_validity["binding_revision"],
+                "document_revision": pre_validity["document_revision"],
+                "project_dir": self.dir,
+                "character_descriptions": {c.name: (c.description_en or "")
+                                           for c in (project.characters or [])}}
 
     # ------------------------------------------------------------------
     def _mutate(self, op: str, payload: dict, *, expect_existing: bool,
