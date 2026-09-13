@@ -199,10 +199,10 @@ def test_http_s2b_full_chain(client):
             d.views[v1["target"]].approval_status = "approved"
             d.views[v1["target"]].reference_asset_id = "ref_baseHTTP0001"
             st.save(d)
-        from src.scene_system.view_review import (build_review_expectations,
-                                                  expectations_fingerprint as ef)
+        from test_scene_system_s2b_generation import approval_record_fingerprint
         doc = st.load()
-        fp = ef(build_review_expectations(doc, doc.views[v1["target"]]), ["ref_baseHTTP0001"])
+        fp = approval_record_fingerprint(pdir, doc, doc.views[v1["target"]],
+                                         ["ref_baseHTTP0001"])
         from src.scene_system.generation_records import approval_records_path
         from src.scene_system import generation_records as gr
         gr.append_record(pdir, {"approval_id": "apv_h", "operation": "scene.approve_location_view",

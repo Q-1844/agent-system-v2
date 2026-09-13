@@ -71,10 +71,9 @@ async def _approve_base_view(pdir: Path, vid: str):
         d.views[vid].approval_status = "approved"
         d.views[vid].reference_asset_id = asset
         st.save(d)
-    from src.scene_system.view_review import (build_review_expectations,
-                                              expectations_fingerprint as ef)
+    from test_scene_system_s2b_generation import approval_record_fingerprint
     doc = st.load()
-    fp2 = ef(build_review_expectations(doc, doc.views[vid]), [asset])
+    fp2 = approval_record_fingerprint(pdir, doc, doc.views[vid], [asset])
     generation_records.append_record(pdir, {
         "approval_id": "apv_base", "operation": "scene.approve_location_view",
         "status": "approved", "view_id": vid, "asset_id": asset,
@@ -681,8 +680,13 @@ def test_i43_specified_profile_valid(bound):
 
 
 async def _regen_and_approve_siv(pdir: Path, sciv_id: str, anchor_id: str):
-    """Scene 侧恢复链：revoke → regen（同实体）→ review pass → approve（新 basis）。"""
+    """Scene 侧恢复链：base view 重批准（P1 同口径：profile 变化后 base view 的批准
+    语义一并 stale——check_base_location_view 与 review/approve 同口径，2026-09-13
+    Golden Path blocker 修正）→ SIV revoke → regen（同实体）→ review pass →
+    approve（新 basis）。"""
     vs = SceneVisualService(pdir, pdir.name)
+    _sciv = SceneSystemStore(pdir, pdir.name).load().scene_instance_views[sciv_id]
+    await _approve_base_view(pdir, _sciv.location_view_id)
     ap = await vs.revoke_scene_instance_view_approval(
         sciv_id, expected_revision=_sciv_rev(pdir, sciv_id), reason="profile changed")
     assert ap["ok"], ap

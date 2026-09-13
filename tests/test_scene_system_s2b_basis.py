@@ -115,10 +115,9 @@ def _approve_base_view(svc: SceneSystemService, pdir: Path, view_id: str, asset_
         # 补 approval record（§2.B base 审批证据检查需要）
         from src.scene_system.generation_records import approval_records_path
         from src.scene_system import generation_records
-        from src.scene_system.view_review import build_review_expectations, expectations_fingerprint
+        from test_scene_system_s2b_generation import approval_record_fingerprint
         doc = st.load()
-        exp = build_review_expectations(doc, doc.views[view_id])
-        fp = expectations_fingerprint(exp, [asset_id])
+        fp = approval_record_fingerprint(pdir, doc, doc.views[view_id], [asset_id])
         generation_records.append_record(pdir, {
             "approval_id": "apv_test", "operation": "scene.approve_location_view",
             "status": "approved", "view_id": view_id, "asset_id": asset_id,

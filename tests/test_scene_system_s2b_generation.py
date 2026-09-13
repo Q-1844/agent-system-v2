@@ -126,8 +126,8 @@ async def _seed(svc: SceneSystemService, pdir: Path, tmp_name: str):
         d.views[v_north["target"]].reference_asset_id = "ref_base0000001"
         st.save(d)
     doc = st.load()
-    fp = expectations_fingerprint(build_review_expectations(doc, doc.views[v_north["target"]]),
-                                  ["ref_base0000001"])
+    fp = approval_record_fingerprint(pdir, doc, doc.views[v_north["target"]],
+                                     ["ref_base0000001"])
     from src.scene_system import generation_records as gr
     gr.append_record(pdir, {"approval_id": "apv_t", "operation": "scene.approve_location_view",
                             "status": "approved", "view_id": v_north["target"],
@@ -150,6 +150,23 @@ def add_asset(pdir: Path, asset_id: str, local_rel: str):
 
 def _sciv_rev(pdir: Path, sciv_id: str) -> str:
     return view_revision(SceneSystemStore(pdir, pdir.name).load().scene_instance_views[sciv_id])
+
+
+def approval_record_fingerprint(pdir: Path, doc, view, asset_ids) -> str:
+    """快捷批准记录的期望指纹——与真实 review/approve 链**同口径**
+    （P1 §15：期望指纹含 visual_profile_fingerprint；unspecified → None）。
+    Golden Path blocker（2026-09-13）回归锁定的一部分：真实链 review+approve 写入的
+    记录含 profile 维度；快捷批准若仍用无 profile 旧口径，修复后的
+    check_base_location_view 会（正确地）把这类记录判 location_view_stale。"""
+    from src.scene_system.view_review import (build_review_expectations,
+                                              expectations_fingerprint)
+    from src.visual_profile import load_profile_or_none
+    from src.visual_profile.models import visual_profile_fingerprint
+    vp = load_profile_or_none(pdir)
+    return expectations_fingerprint(
+        build_review_expectations(doc, view), list(asset_ids),
+        visual_profile_fingerprint=(visual_profile_fingerprint(vp)
+                                    if vp is not None else None))
 
 
 # ============ §12 fail closed 家族 ============
@@ -288,8 +305,8 @@ def test_t21_different_state_views_concurrent(tmp_path):
             d.views[ids["v_south"]].reference_asset_id = "ref_baseB000001"
             st.save(d)
         doc = st.load()
-        fp = expectations_fingerprint(build_review_expectations(doc, doc.views[ids["v_south"]]),
-                                      ["ref_baseB000001"])
+        fp = approval_record_fingerprint(pdir, doc, doc.views[ids["v_south"]],
+                                         ["ref_baseB000001"])
         from src.scene_system import generation_records as gr
         gr.append_record(pdir, {"approval_id": "apv_b", "operation": "scene.approve_location_view",
                                 "status": "approved", "view_id": ids["v_south"],

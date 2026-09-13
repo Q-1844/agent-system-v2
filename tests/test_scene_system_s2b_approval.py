@@ -119,9 +119,8 @@ async def _seed_two_state_views(svc: SceneSystemService, vs: SceneVisualService,
                                                          ResourceStore(pdir, pdir.name).load()),
             [asset])
         # 用 location_view 的期望指纹（S2A check_base 用 view_review 的 build）：
-        from src.scene_system.view_review import (build_review_expectations,
-                                                  expectations_fingerprint as ef)
-        fp2 = ef(build_review_expectations(doc, doc.views[vid]), [asset])
+        from test_scene_system_s2b_generation import approval_record_fingerprint
+        fp2 = approval_record_fingerprint(pdir, doc, doc.views[vid], [asset])
         generation_records.append_record(pdir, {
             "approval_id": "apv_s", "operation": "scene.approve_location_view",
             "status": "approved", "view_id": vid, "asset_id": asset,

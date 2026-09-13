@@ -670,13 +670,28 @@ class SceneVisualService:
         # 参考组是空列表 []（falsy！`or` fallback 会把它替换成当前 ref 造成永远 mismatch，
         # E2E 两次实证后才抓到）。
         appr_ref_ids = latest_appr.get("reference_asset_ids_used")
+        # P1 §15 同口径：review/approve 记录的期望指纹含 visual_profile_fingerprint——
+        # 本门槛重算必须传同一维度（Golden Path 实证：漏传会让有 Profile 项目的已批准
+        # base view 永远误判 location_view_stale）。与 approve 侧 stale_approval_basis
+        # 校验（本文件 approve_location_view）逐字同模式；profile 变化 → 重新 review+approve。
+        from src.visual_profile import load_profile_or_none
+        from src.visual_profile.models import (visual_profile_fingerprint,
+                                               VisualProfileSchemaError)
+        try:
+            _vp = load_profile_or_none(self.project_dir)
+        except VisualProfileSchemaError as e:
+            return {"ok": False, "error": "visual_profile_unreadable",
+                    "detail": f"project_profile.json 损坏（fail closed）：{e}"}
         fp = expectations_fingerprint(
             expectations, list(appr_ref_ids) if appr_ref_ids is not None
-            else [base_view.reference_asset_id])
+            else [base_view.reference_asset_id],
+            visual_profile_fingerprint=(visual_profile_fingerprint(_vp)
+                                        if _vp is not None else None))
         if fp != latest_appr["reviewed_basis_fingerprint"]:
             return {"ok": False, "error": "location_view_stale",
-                    "detail": ("base LocationView 批准后语义已变化（期望指纹不一致）；"
-                               "重新 review+approve 后才能再作 SceneInstanceView 母版")}
+                    "detail": ("base LocationView 批准后语义已变化（期望指纹不一致，"
+                               "含项目风格维度）；重新 review+approve 后才能再作 "
+                               "SceneInstanceView 母版")}
         return {"ok": True}
 
     async def create_scene_instance_view(self, *, scene_instance_id: str,
