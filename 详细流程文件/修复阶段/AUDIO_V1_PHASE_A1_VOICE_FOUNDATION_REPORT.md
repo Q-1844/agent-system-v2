@@ -3,6 +3,7 @@
 Audio V1 — Phase A1：Voice Foundation + MiniMax Speech 2.8 Turbo Validation
 执行依据：`详细流程文件/修复阶段/15.md`
 日期：2026-09-14
+**状态：VOICE FOUNDATION A1 IMPLEMENTATION PASS + 人工听评通过（VOICE QUALITY 确认）**
 
 ---
 
@@ -196,6 +197,28 @@ detail 保留 provider status_code / status_msg（截断）/ **trace_id** / mode
 - `projects/__voice_foundation_a1/output/dialogue_audio/listening/LISTENING_MANIFEST.md`（逐段 dialogue_id / audio_version_id / voice_profile_id / text）
 - 同文本×3 时长散布（机测参考）：male 19.9%（av02 1440ms 为离群）、female 7.5%——自然生成方差；**同一性判断 = 用户人耳**
 
+### 听评网站（scratch 工具，已上线并完成一轮评审）
+
+`_voice_a1_listen_server.py`（standalone http.server，端口 8907，双击 `_voice_a1_listen.bat`）：逐段播放 + 评语按钮（可多选）+ 自由输入，反馈实时落盘 `listening/FEEDBACK.json`。零生产依赖、零冻结域触碰；后续需人耳评审的阶段（Agnes 音频架构 25 组 montage、未来表演/混音评审）复用此模式。
+
+### 人工听评结果（2026-09-14，用户真实提交，25 条反馈）
+
+| 评审项 | 用户判定 |
+|---|---|
+| 男声 7 句连续性 | **同一角色** ✓ |
+| 女声 7 句连续性 | **同一角色** ✓ |
+| 整体音质 | **Turbo 音质够用** ✓ |
+| 19 段逐段（A/B/C/D 全部版本） | 全部「自然」，零负面标签（无不像同一人/音色崩坏/不自然/咬字含糊） |
+| C3 读音（plain vs override） | 「读音相同」——人耳未分辨差异（默认读音已正确） |
+| C1 长句旁白 | 「旁白这样已经非常可以了」 |
+
+用户自由评语（原话，诚实留档）：
+1. 「我认为这个不需要再测试了，完全是没问题的，我估计重点搞错了」——TTS 音质方向确认收口，无需再投测试。
+2. 「我认为是可以的，就是有点像人机的声音，不过目前最重要的是要实现音画同步问题」——已接受，但存在轻微合成感（记录，不阻塞）；**用户指示下一重点 = 音画同步**。
+3. 「旁白这样已经非常可以了。」
+
+**VOICE QUALITY：人工听评通过（此前的 PENDING HUMAN REVIEW 已落定）。**
+
 ## 19. Freshness E2E（真机链）
 
 ```
@@ -235,13 +258,16 @@ explicit regenerate   → CURRENT（av03）
 **Voice Foundation architecture：PASS READY。**
 Dialogue 复用单一真相、CharacterVoiceProfile canonical + OCC、READY 门、deterministic Pack + basis、actual-dependencies-only freshness、显式再生成、显式 selection/approve、Visual 冻结域零触碰——自动测试 + 真机全链验证成立。
 
-**MiniMax speech-2.8-turbo 作为首个 Voice provider：技术上适合（TECHNICALLY SUITABLE）。**
-22/22 成功、HTTP 契约与官方 OpenAPI 一致、延迟 mean 3.5s、词级时间戳经 subtitle_file 可用、成本口径清晰（480 chars ≈ $0.029）、错误结构化可映射。文本可懂度机测优秀（15/16 CER=0）。
+**MiniMax speech-2.8-turbo 作为首个 Voice provider：技术上适合（TECHNICALLY SUITABLE）+ 人工听评通过（QUALITY CONFIRMED）。**
+22/22 成功、HTTP 契约与官方 OpenAPI 一致、延迟 mean 3.5s、词级时间戳经 subtitle_file 可用、成本口径清晰（480 chars ≈ $0.029）、文本可懂度机测优秀（15/16 CER=0）。
+人工听评：男女声连续性均「同一角色」、19 段全「自然」、整体「Turbo 音质够用」、C1 旁白「非常可以」。轻微合成感（「有点像人机」）被用户接受并记录，不阻塞。
 
-**VOICE QUALITY = PENDING HUMAN REVIEW**（§40）——音色同一性 / 自然度 / C3 读音正确性由用户听评：
-`projects/__voice_foundation_a1/output/dialogue_audio/listening/`（male/female continuity + manifest）。
+**方向结论（用户明确指示）：**
+- TTS 音质/音色方向**收口**——「不需要再测试了」；Voice Design/Clone/换 provider 均不启动（15.md §47 一致）。
+- **下一重点 = 音画同步**（用户原话「目前最重要的是要实现音画同步问题」）——属新阶段（15.md §2 明确 A1 不做 lip-sync / timeline / mux），本报告只记录方向，不展开。技术前提已由 A1 备齐：production WAV 48k/mono 统一规格 + 词级时间戳（subtitle_file）+ selected/approved artifact 指针。
 
 ---
 
 【最终回归】**1762 passed / 0 failed / 0 skipped**（全量 pytest，含 A1 voice 76 项与冻结基线 1537 项，零回归）——
-**VOICE FOUNDATION A1 IMPLEMENTATION PASS**（音质待人工听评，§40）
+**VOICE FOUNDATION A1 IMPLEMENTATION PASS + 人工听评通过（VOICE QUALITY 确认）。
+A1 全部收口。下一重点（用户指示）：音画同步——另立阶段规格后启动。**
