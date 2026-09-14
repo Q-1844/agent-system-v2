@@ -83,8 +83,12 @@ class MiniMaxVoiceAdapter:
                  client: Optional[httpx.AsyncClient] = None,
                  timeout_s: float = DEFAULT_TIMEOUT_S):
         # key 从项目现有 secret 机制读取：environ（.env 由 api_server 启动注入；
-        # 测试/驱动脚本自行加载 .env）。注入参数仅供测试。
-        self._api_key = str(api_key or os.environ.get("MINIMAX_API_KEY", ""))
+        # 测试/驱动脚本自行加载 .env）。注入参数语义：
+        #   api_key=None  → 读 environ（默认）
+        #   api_key=""    → 显式禁用（caller 裁决优先于环境——全量回归中 client
+        #                    fixture 会把 .env 灌进 environ，显式 "" 必须仍然禁用）
+        self._api_key = (str(api_key) if api_key is not None
+                         else os.environ.get("MINIMAX_API_KEY", ""))
         self.base_url = (base_url or DEFAULT_BASE_URL).rstrip("/")
         self._client = client            # 注入（测试 MockTransport / 复用连接池）
         self._owns_client = client is None
@@ -135,15 +139,23 @@ class MiniMaxVoiceAdapter:
         return request
 
     # ============ 调用（§13）============
-    async def synthesize(self, pack: VoiceGenerationPack) -> dict:
+    async def synthesize(self, pack: VoiceGenerationPack, *,
+                         pronunciation_dict: Optional[dict] = None) -> dict:
         """调用 t2a_v2。返回 {audio, provider_extra_info, request_snapshot,
-        latency_ms, word_timestamps, word_timestamps_note}。
-        失败 → VoiceProviderError（structured，§25）。"""
+        latency_ms, word_timestamps, word_timestamps_note, subtitle_file_url,
+        trace_id}。
+        失败 → VoiceProviderError（structured，§25）。
+
+        pronunciation_dict：MiniMax 官方发音替换（{"tone": ["处理/(chu3)(li3)"]}）。
+        显式 caller 参数（测试 fixture 用），Adapter 绝不从 Dialogue 文本自动注入
+        （§16：生产 text 不得被偷偷改写）。进 request_snapshot 留证。"""
         if not self._api_key:
             raise VoiceProviderError(
                 "provider_not_configured",
                 "MINIMAX_API_KEY 未配置（.env / environ）")
         request = self.build_request(pack)
+        if pronunciation_dict:
+            request["pronunciation_dict"] = dict(pronunciation_dict)
         url = self.base_url + T2A_PATH
         headers = {"Authorization": f"Bearer {self._api_key}",
                    "Content-Type": "application/json"}
@@ -182,7 +194,8 @@ class MiniMaxVoiceAdapter:
                                           str(base.get("status_msg", ""))[:300],
                                       "model": request["model"],
                                       "provider_voice_id":
-                                          request["voice_setting"]["voice_id"]})
+                                          request["voice_setting"]["voice_id"],
+                                      "trace_id": str(payload.get("trace_id") or "")})
 
         data = payload.get("data") or {}
         audio_hex = data.get("audio")
@@ -206,8 +219,13 @@ class MiniMaxVoiceAdapter:
         data_meta = _sanitize_meta({k: v for k, v in data.items() if k != "audio"})
         if data_meta:
             extra.setdefault("data_fields", data_meta)
+        subtitle_file_url = str(data.get("subtitle_file") or "")
+        trace_id = str(payload.get("trace_id") or "")
+        if trace_id:
+            extra.setdefault("trace_id", trace_id)   # §36：trace_id 进 artifact metadata
 
-        # 词级时间戳（§14）：response 有就存，没有记 diagnostic，绝不伪造、不失败
+        # 词级时间戳（§14）：subtitle_type=word 时 provider 经 subtitle_file 下发；
+        # response 内嵌列表有就存；都没有记 diagnostic，绝不伪造、不失败
         timestamps: List[Dict[str, Any]] = []
         note = "word_timestamps_unavailable"
         for k in ("audio_word_timestamps", "word_timestamps"):
@@ -216,6 +234,8 @@ class MiniMaxVoiceAdapter:
                 timestamps = v
                 note = ""
                 break
+        if not timestamps and subtitle_file_url:
+            note = "word_timestamps_via_subtitle_file"   # 有时间戳载体（URL），非缺失
 
         return {
             "audio": audio_bytes,
@@ -224,4 +244,6 @@ class MiniMaxVoiceAdapter:
             "latency_ms": latency_ms,
             "word_timestamps": timestamps,
             "word_timestamps_note": note,
+            "subtitle_file_url": subtitle_file_url,
+            "trace_id": trace_id,
         }
