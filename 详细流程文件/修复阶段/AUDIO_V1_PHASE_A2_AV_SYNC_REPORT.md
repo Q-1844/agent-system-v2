@@ -3,7 +3,7 @@
 Audio V1 — Phase A2：Dialogue Timing + Lip-sync Production + Duration / Speaker Adaptation
 执行依据：`详细流程文件/修复阶段/16.md`
 日期：2026-09-14
-**状态：REAL E2E 已执行（3/3 生成成功，技术检查 17/17 PASS，零代码改动）——A2 最终判定待人工验收（评审网站就绪）**
+**状态：A2 收口——REAL E2E 已执行（3/3 成功，技术 17/17 PASS）+ 人工验收完成：技术链路成立但外挂 lip-sync 路线判定「不太行」，用户裁定方向修正为 Agnes 原生音频生成（见 `AGNES_AUDIO_DIRECTION_CORRECTION_REPORT.md`）。A2 全部资产搁置留档为 fallback primitive。**
 
 ---
 
@@ -147,7 +147,7 @@ remap 本轮不测（§5）；audio>video 不烧 provider（deterministic policy
 评审网站已上线：`http://localhost:8908/`（`_voice_a2_review_server.py`，双击 `_voice_a2_review.bat`）。
 Source | Production 并排对比；每样本 PASS/ACCEPTABLE/FAIL + 十项重点快评（lip timing/mouth shape/teeth/face identity/jitter/edge·blending/angle robustness/expression damage/source identity/duration）+ 自由短评，反馈落盘 `REVIEW_FEEDBACK.json`。
 
-**A2 最终判定（FINAL PASS / PARTIAL / FAIL）待用户三项人工验收落定后填写。**
+**A2 最终判定（2026-09-15 用户评审落定）：REAL E2E 技术链路成立（3/3 成功、时长/artifact/provenance 全对），但外挂 lip-sync 成片质量用户判定「不太行」；结合 Agnes 原生配音的评审结果（口型同步好、声线同一性 5/4 分、音色参考成立），用户裁定方向修正为 Agnes 原生音频生成——A2 全部资产（models/store/adapter/service/55 测试/3 条真实样本）**搁置留档为 fallback primitive**，不删不改。详见 `AGNES_AUDIO_DIRECTION_CORRECTION_REPORT.md`。**
 
 ## 20. Regression（§41）
 
