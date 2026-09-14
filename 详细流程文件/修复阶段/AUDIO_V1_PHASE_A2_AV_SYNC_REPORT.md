@@ -3,7 +3,7 @@
 Audio V1 — Phase A2：Dialogue Timing + Lip-sync Production + Duration / Speaker Adaptation
 执行依据：`详细流程文件/修复阶段/16.md`
 日期：2026-09-14
-**状态：IMPLEMENTATION PASS（架构+实现+确定性测试+回归全过）；REAL LIPSYNC E2E PENDING — provider credential unavailable（§39 不阻塞）**
+**状态：REAL E2E 已执行（3/3 生成成功，技术检查 17/17 PASS，零代码改动）——A2 最终判定待人工验收（评审网站就绪）**
 
 ---
 
@@ -119,17 +119,35 @@ Mutation audit：generate_lipsync 对 project.json 字节恒等；新增文件�
 | `tests/test_av_sync_a2_pack_freshness.py` | 17 | pack determinism/无 ID/basis 13 键/actual-deps-only、freshness 八例、no-auto、selection/approve、store fail closed |
 | `tests/test_av_sync_a2_adapter.py` | 19 | sync_mode/ASD 映射、lifecycle 真契约、六类错误、race×3+evidence、mutation audit、key 纪律 |
 
-## 18. Real probe（§29-§33）
+## 18. Real probe（§29-§33）—— 2026-09-14 真机执行完毕
 
-**REAL LIPSYNC E2E PENDING — provider credential unavailable**（§39 允许：不阻塞 A2 implementation PASS）。
+**REAL E2E EXECUTED — 3/3 生成全部成功，技术检查 17/17 PASS，预算精确 3/3。**
 
-- `SYNC_API_KEY` 当前不在 `.env`（现有键：AGNES/REMOVEBG/MIMO/IMGBB/SENSENOVA/TAVILY_HUB/MINIMAX）
-- 已具备即刻开跑条件：官方契约已按 openapi.json 核对实现；素材池 68 条 authoritative 视频全部有 local+公网 URL+混合 AAC；probe 驱动待 key 到位后按 §31-§33 执行（4–6 条既有视频、lipsync-2 优先、困难角度最多追加 sync-3 对照、audio<video padding 主证、audio>video 本地确定性不烧 provider、remap 至多 1 样本）
-- §38：若 probe 发现静止嘴导致 lip-sync 失败，记 `future video-generation compatibility requirement`，不在 A2 改 Visual frozen path
+用户预算约束：免费档 3 次/月、单条 ≤20s。样本决策：3 calls = 3 样本最大化覆盖（A+D 合一、B/C、C2）；
+sync-3 对照保留至技术失败时启用（实际零失败未动用）；multi-face 样本轮空（fail-closed 契约已有确定性测试）；
+remap 本轮不测（§5）；audio>video 不烧 provider（deterministic policy 已证）。
 
-## 19. Human review（§34）
+| 样本 | shot | 源视频 | 台词（正式 A1 链 approved 音频） | audio | video | src=raw=prod | gen id | wall |
+|---|---|---|---|---|---|---|---|---|
+| A+D 主测试 | s01_c01 | gp_s01_c02（正面近中景/嘴清晰） | 「等一下，快好了，马上就好。」 | 3100ms | 4042ms | **4042=4042=4042ms** | ad38cfdf… | 232s |
+| B/C 角度 | s01_c02 | gp_s03_c01（3/4 角度/正常动作） | 「信号稳定了，把数据全部传回去。」 | 3750ms | 5042ms | **5042=5042=5042ms** | c2c600e3… | 394s |
+| C2 更难 | s01_c03 | sm_s01_c04（幼齿画风 3/4 张嘴） | 「爷爷，我们什么时候才能到家？」 | 2601ms | 5042ms | **5042=5042=5042ms** | 17aa6f50… | 293s |
 
-待真机 probe 后执行：每样本 PASS/ACCEPTABLE/FAIL + 短评（lip timing / mouth shape / teeth integrity / face identity / jitter / edge artifacts / angle robustness / expression damage / identity preservation / duration correctness）；评审走 A1 听评网站同款模式（评语按钮+自由输入落盘）。
+技术结论（§5/§9/§10/§21 逐项）：
+- **§5 duration 主测试成立**：三样本 src=raw=prod 逐毫秒一致——完整视觉镜头被保留（pad_audio + provider sync_mode=silence），没有因为对白较短而截视频
+- 全部经正式 A2 service 链（readiness→plan→pack→adapter→submit→poll→download→dependency recheck→version→production mux），无任何绕过（§8）
+- provider_generation_id / raw 留存 / production mux（h264 video copy + aac 我们 approved 的音频）/ basis 13 键 / working sync_input 全部在证（§9）
+- generate 后未自动 approve（selection 语义保持，§9/§15）
+- §10 freshness 真机抽查：s01_c01 = CURRENT（0 provider call）
+- 素材零重烧：3 条视频全部来自既有 authoritative Agnes 视频池（§3）
+- audio 侧全部经正式 A1 generation entry（阿默=male-qn-qingse / 小满=female-shaonv，approved+CURRENT，§4）
+
+## 19. Human review（§34）—— 评审网站就绪，待用户验收
+
+评审网站已上线：`http://localhost:8908/`（`_voice_a2_review_server.py`，双击 `_voice_a2_review.bat`）。
+Source | Production 并排对比；每样本 PASS/ACCEPTABLE/FAIL + 十项重点快评（lip timing/mouth shape/teeth/face identity/jitter/edge·blending/angle robustness/expression damage/source identity/duration）+ 自由短评，反馈落盘 `REVIEW_FEEDBACK.json`。
+
+**A2 最终判定（FINAL PASS / PARTIAL / FAIL）待用户三项人工验收落定后填写。**
 
 ## 20. Regression（§41）
 
