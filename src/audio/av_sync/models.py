@@ -48,6 +48,10 @@ AV_SYNC_VIDEO_TOO_SHORT = "video_too_short"        # audio 放不进 video（fai
 # —— provider 侧 ——
 AV_SYNC_UNSUPPORTED_PROVIDER = "unsupported_provider"
 
+# §17：V1 默认模型 lipsync-2；model 必须经 config/caller 传入（seam），不做
+# 未经真实测试的 heuristic routing；provider/model 进 generation_basis。
+LIPSYNC_DEFAULT_MODEL = "lipsync-2"
+
 BLOCKING_READINESS = (
     AV_SYNC_MISSING_AUDIO, AV_SYNC_AUDIO_NOT_APPROVED, AV_SYNC_AUDIO_STALE,
     AV_SYNC_MISSING_VIDEO, AV_SYNC_VIDEO_NOT_READY, AV_SYNC_UNSUPPORTED_VIDEO,
@@ -212,3 +216,168 @@ def resolve_speaker_target(shot_characters: list,
     if len(chars) <= 1:
         return LipSyncSpeakerTarget(mode=SPEAKER_TARGET_SINGLE_VISIBLE), "single_visible"
     return None, "multi_face_target_required"
+
+
+# ============ LipSyncGenerationPack（16.md §12，derived / ephemeral）============
+
+LIPSYNC_PACK_SCHEMA = "lipsync_generation_pack_v1"
+
+
+@dataclass
+class LipSyncGenerationPack:
+    """provider 面前的中性投影（16.md §12）。derived / ephemeral / read-only /
+    无 business ID / 不持久化。同输入 → 同 pack；不含 clock / random UUID /
+    temporary path（working 文件路径不进 semantic 字段）。"""
+    shot_id: str
+    dialogue_id: str
+    speaker_character_name: str
+    source_video: Dict[str, Any] = field(default_factory=dict)
+    source_audio: Dict[str, Any] = field(default_factory=dict)
+    timing: Dict[str, Any] = field(default_factory=dict)
+    speaker_target: Dict[str, Any] = field(default_factory=dict)
+    provider_binding: Dict[str, Any] = field(default_factory=dict)
+    generation_basis: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict:
+        return {
+            "schema": LIPSYNC_PACK_SCHEMA,
+            "shot_id": self.shot_id,
+            "dialogue_id": self.dialogue_id,
+            "speaker_character_name": self.speaker_character_name,
+            "source_video": dict(self.source_video),
+            "source_audio": dict(self.source_audio),
+            "timing": dict(self.timing),
+            "speaker_target": dict(self.speaker_target),
+            "provider_binding": dict(self.provider_binding),
+            "generation_basis": dict(self.generation_basis),
+        }
+
+
+def build_av_sync_basis(*, shot_id: str, dialogue_id: str,
+                        source_video_artifact_id: str, source_video_fingerprint: str,
+                        dialogue_audio_version_id: str,
+                        dialogue_audio_generation_basis_fingerprint: str,
+                        speaker_character_name: str,
+                        timing_fingerprint: str, speaker_target_fingerprint: str,
+                        provider: str, model: str,
+                        provider_options_fingerprint: str) -> dict:
+    """generation_basis（16.md §13）：actual dependencies only——绝不 hash
+    project.json / 整份 resources.json / 整份 dialogue_audio.json；无关 Shot /
+    无关角色变化不影响本 basis。"""
+    return {
+        "schema": AV_SYNC_BASIS_SCHEMA,
+        "shot_id": str(shot_id),
+        "dialogue_id": str(dialogue_id),
+        "source_video_artifact_id": str(source_video_artifact_id),
+        "source_video_fingerprint": str(source_video_fingerprint),
+        "dialogue_audio_version_id": str(dialogue_audio_version_id),
+        "dialogue_audio_generation_basis_fingerprint":
+            str(dialogue_audio_generation_basis_fingerprint),
+        "speaker_character_name": str(speaker_character_name),
+        "timing_fingerprint": str(timing_fingerprint),
+        "speaker_target_fingerprint": str(speaker_target_fingerprint),
+        "provider": str(provider),
+        "model": str(model),
+        "provider_options_fingerprint": str(provider_options_fingerprint),
+    }
+
+
+def timing_fingerprint(plan: DialogueTimingPlan) -> str:
+    """timing 语义指纹（§13）：policy 输入 + 关键时长。durations 本身也被
+    video/audio 指纹覆盖，此处重复携带为可检查性（inspectability）。"""
+    return fingerprint8({
+        "speech_start_ms": plan.speech_start_ms,
+        "adaptation_mode": plan.adaptation_mode,
+        "playback_ratio": plan.playback_ratio,
+        "sync_input_duration_ms": plan.video_duration_ms,
+        "audio_duration_ms": plan.audio_duration_ms,
+    })
+
+
+def provider_options_fingerprint(options: Optional[Dict[str, Any]]) -> str:
+    return fingerprint8(dict(options or {}))
+
+
+def basis_fingerprint(basis: Optional[Dict[str, Any]]) -> str:
+    """任意 basis dict 的整体指纹（audio 侧 basis 指纹用）。"""
+    return fingerprint8(dict(basis or {}))
+
+
+AV_SYNC_BASIS_KEYS = ("schema", "shot_id", "dialogue_id", "source_video_artifact_id",
+                      "source_video_fingerprint", "dialogue_audio_version_id",
+                      "dialogue_audio_generation_basis_fingerprint",
+                      "speaker_character_name", "timing_fingerprint",
+                      "speaker_target_fingerprint", "provider", "model",
+                      "provider_options_fingerprint")
+
+
+def basis_mismatches(basis: Optional[dict], expected: Optional[dict]) -> list:
+    """§24 freshness 对比：返回不一致键列表（空 = 一致 = CURRENT）。"""
+    return [k for k in AV_SYNC_BASIS_KEYS
+            if (basis or {}).get(k) != (expected or {}).get(k)]
+
+
+# ============ DialogueVideoSyncVersion（16.md §14，artifact + provenance）============
+
+@dataclass
+class DialogueVideoSyncVersion:
+    """一次显式 lip-sync 生成的 artifact metadata。不是新的 Visual canonical——
+    消费 authoritative video + approved DialogueAudio，产出可审核的 sync 结果。
+    secret 永不落盘（provider_request_snapshot 落盘前脱敏由 adapter 构造保证）。"""
+    sync_version_id: str
+    shot_id: str
+    dialogue_id: str
+    speaker_character_name: str
+    source_video_artifact_id: str
+    source_video_fingerprint: str
+    source_audio_version_id: str
+    source_audio_basis_fingerprint: str
+    provider: str
+    model: str
+    generation_basis: Dict[str, Any] = field(default_factory=dict)
+    provider_generation_id: str = ""
+    provider_metadata: Dict[str, Any] = field(default_factory=dict)
+    raw_output_path: str = ""                 # provider 原始 mp4（原样留存，§22）
+    production_output_path: str = ""          # production review mp4（正式音频 mux）
+    working_sync_input_path: str = ""         # derived working artifact（信息性，非 semantic）
+    video_probe: Dict[str, Any] = field(default_factory=dict)
+    audio_probe: Dict[str, Any] = field(default_factory=dict)
+    timing: Dict[str, Any] = field(default_factory=dict)
+    speaker_target: Dict[str, Any] = field(default_factory=dict)
+    created_at: float = 0.0
+
+    def to_dict(self) -> dict:
+        return {
+            "sync_version_id": self.sync_version_id,
+            "shot_id": self.shot_id,
+            "dialogue_id": self.dialogue_id,
+            "speaker_character_name": self.speaker_character_name,
+            "source_video_artifact_id": self.source_video_artifact_id,
+            "source_video_fingerprint": self.source_video_fingerprint,
+            "source_audio_version_id": self.source_audio_version_id,
+            "source_audio_basis_fingerprint": self.source_audio_basis_fingerprint,
+            "provider": self.provider,
+            "model": self.model,
+            "generation_basis": dict(self.generation_basis),
+            "provider_generation_id": self.provider_generation_id,
+            "provider_metadata": dict(self.provider_metadata),
+            "raw_output_path": self.raw_output_path,
+            "production_output_path": self.production_output_path,
+            "working_sync_input_path": self.working_sync_input_path,
+            "video_probe": dict(self.video_probe),
+            "audio_probe": dict(self.audio_probe),
+            "timing": dict(self.timing),
+            "speaker_target": dict(self.speaker_target),
+            "created_at": self.created_at,
+        }
+
+
+def parse_sync_version(raw: dict) -> DialogueVideoSyncVersion:
+    """从落盘 dict 解析（known-field 过滤前向兼容）。身份字段缺失 → fail closed。"""
+    if not isinstance(raw, dict):
+        raise ValueError("sync version 条目必须是对象")
+    for required in ("sync_version_id", "dialogue_id"):
+        if required not in raw:
+            raise ValueError(f"sync version 缺少 {required}（fail closed）")
+    known = {f for f in DialogueVideoSyncVersion.__dataclass_fields__}
+    return DialogueVideoSyncVersion(**{k: v for k, v in raw.items() if k in known})
