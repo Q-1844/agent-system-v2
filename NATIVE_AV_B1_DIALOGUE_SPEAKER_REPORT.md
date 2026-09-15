@@ -8,15 +8,14 @@
 ## 0. 当前状态
 
 ```text
-B1 IMPLEMENTATION PASS
-HUMAN QUALITY REVIEW REQUIRED
+B1 FINAL PASS（2026-09-15 用户人工评审裁定：方向确认，无大问题）
+Q1 台词/语言控制 = 明确正收益；Q2 speaker swap = 零出现（控制未引入 swap）；
+Q3 视觉不退化 = 通过
+§21 判定 = 情况 A（+E 成分）→ 下一步优先 productionize B1；Voice Reference 不做
+用户点名的后续方向：提示词优化 + 创作手法，做画面与声音的良好匹配
 ```
 
-🔴 本报告不包含任何质量结论。Q1（台词准确性）/Q2（speaker swap）/Q3（视觉不退化）
-三问的答案**必须来自用户对评审页面的真机听评**（§19）。在人评落定前：
-
-> 不进入 B2 Voice Reference；不加 audios[]/reference mode；不做 generation_basis；
-> 不做 §2 禁止清单里的任何一项。
+人评前曾维持 `B1 IMPLEMENTATION PASS / HUMAN QUALITY REVIEW PENDING`（§19/§23 口径）。
 
 ---
 
@@ -200,14 +199,37 @@ source separation / 新 Agent / Director 大改 / 自动 speaker 检测 / 自动
    块、无完整生产绑定的 shot 在 gate on + 走后端视频端点时仍会被 `shot_has_binding`
    路由进 BOUND 链并因 binding 不完整失败——B1 不改该语义（如实暴露给下一阶段）。
 
-## 13. 当前状态
+## 13. 当前状态（人评后收口）
 
 ```text
 实现（B1-A/B）：已提交 1ffffaa / 4e03885，全量回归 1861 passed 零新增 failure
-真机 E2E（B1-C）：12/12 成功，证据齐备，评审网站就绪
-待办：用户人工听评 → 按 §21 决策树选择下一步
-     （A=productionize B1；B=才进 B2 Voice Reference；C=先查 prompt layout；
-       D=停止扩展查耦合；E=不加架构也是合法结论）
+真机 E2E（B1-C）：12/12 成功，证据齐备
+人评（2026-09-15）：62 条点击 + 9 条短评 → B1 FINAL PASS，方向确认
+评审页空白修复：PAGE raw 字符串（195ee46）
 ```
 
-**在用户听评结果落定前，不继续下一刀（§24）。**
+## 14. 人工评审结果（§21 决策树输入）
+
+反馈源：`_b1_dialogue_probe/results/B1_REVIEW_FEEDBACK.json`（62 条）。
+
+| 样本 | A 侧（当前生产） | B 侧（B1 控制） |
+|---|---|---|
+| A 单角色长句 | PASS | PASS |
+| B 单角色短句 | **FAIL**——把 motion 提示词「它微微点头，转身欲行」当台词念出 + 自动加背景音乐 | PASS（"没问题"） |
+| C 三句对话 | **3/3 FAIL**——说日语（2 条明确标注日语 + 1 条 language=错误） | **3/3 PASS**（"中文，效果还不错，很好"；"声音效果最自然，可能是用了标点符号的原因"；B02 有背景音） |
+| D 沉默控制 | dialogue 正确但有背景音 | ACCEPTABLE（"没什么大问题"） |
+
+三问答案（人评口径）：
+* **Q1**：明确改善——A 侧台词样本 4/6 FAIL（日语 / 念提示词 / 语言错误），B 侧 **6/6 PASS**。
+* **Q2**：12 条 speaker 全部正确（零 swap）；B 侧控制未引入 swap。
+* **Q3**：无视觉负面标注；lip-sync 全部"可用"。
+
+**§21 判定 = 情况 A（含 E 成分）**：
+* 下一步优先 **productionize B1**（默认策略 / generation basis / freshness / 必要 UI——
+  待用户批准规格后另立阶段文档，勿自动开始）；
+* **Voice Reference（B2）不做**（A0 已证声线一致性可接受 + 本轮无跨镜漂移诉求）；
+* 用户点名的后续方向：**提示词优化 + 创作手法，做画面与声音的良好匹配**
+  （SC_B03"标点符号"短评与 A 侧"念提示词"现象均是直接输入）。
+
+背景音乐溢出（A 侧 B/D 样本、B 侧 SC_B02/SD）是 A0 已知边界（对白场景 BGM 层级
+控制不完美），本轮不为它扩控制面——归入后续提示词优化方向。
