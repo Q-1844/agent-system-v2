@@ -225,8 +225,12 @@ def test_block_same_speaker_consecutive_uses_then_says():
 def test_block_silent_character_instruction():
     shot = _shot(dialogue="林晚星：灯塔！灯塔灭了！", characters=["小满", "林晚星"])
     block = build_dialogue_block(resolve_native_dialogue(None, shot, language=LANG))
-    assert "小满 remain completely silent" in block
+    assert "小满 remains completely silent" in block, "单角色沉默用 remains"
     assert "no dialogue is invented for them" in block
+
+    shot2 = _shot(dialogue="林晚星：灯塔！灯塔灭了！", characters=["小满", "顾岩", "林晚星"])
+    block2 = build_dialogue_block(resolve_native_dialogue(None, shot2, language=LANG))
+    assert "小满, 顾岩 remain completely silent" in block2, "多角色沉默用 remain"
 
 
 def test_compile_appends_after_visual_prompt_verbatim():

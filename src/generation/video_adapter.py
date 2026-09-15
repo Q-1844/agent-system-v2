@@ -113,13 +113,19 @@ def _resolve_boundary_frame(shot: Any, pack_basis: dict, slot: str,
     return cand.url
 
 
-def build_bound_video_input(project_dir, project: Any, shot: Any) -> BoundVideoRequest:
+def build_bound_video_input(project_dir, project: Any, shot: Any, *,
+                            native_dialogue_control: bool = False,
+                            native_dialogue_language: Optional[str] = None
+                            ) -> BoundVideoRequest:
     """BOUND shot 的视频生成输入（§3.B；§21：BOUND 永不回落 legacy）。
     顺序：validity gate → compile pack（自带 pre/post 守卫）→ boundary frame 解析
     （selection truth + freshness）→ prompt（creative motion + Pack 生产上下文
-    video 口径 + P1 风格指令）→ pre-dispatch guard。
+    video 口径 + P1 风格指令 [+ Native AV B1 dialogue block]）→ pre-dispatch guard。
     provider_mode 沿用 handler 既有映射（keyframes=link_mode=='keyframes'，否则 i2v）
-    ——Adapter 不改变 mode 选择（creative 策略字段）。"""
+    ——Adapter 不改变 mode 选择（creative 策略字段）。
+    Native AV B1（17.md §10/§12）：native_dialogue_control 显式 opt-in（默认 False=
+    行为逐字节不变）；开启时 dialogue block 追加在最终 prompt 尾部，speaker 解析
+    fail closed（DialogueControlError → 零 provider 调用）。"""
     from src.shot_binding import ShotBindingService
     from src.core.models import OpeningSource
 
@@ -169,6 +175,22 @@ def build_bound_video_input(project_dir, project: Any, shot: Any) -> BoundVideoR
     style = _style_instruction_from_pack(pack)
     tail = " ".join(x for x in (ctx, style) if x)
     prompt = f"{creative}, {tail}" if (creative and tail) else (creative or tail)
+
+    # ---- Native AV B1 dialogue control（17.md §10/§12：gate off → 零执行）----
+    if native_dialogue_control:
+        from src.generation.dialogue_control import (
+            append_dialogue_block,
+            resolve_native_dialogue,
+        )
+        ctl = resolve_native_dialogue(project_dir, shot,
+                                      language=native_dialogue_language)
+        if ctl is not None:
+            prompt = append_dialogue_block(prompt, ctl)
+        diagnostics.append({
+            "reason": "native_dialogue_control_applied",
+            "detail": ({"resolution": ctl.resolution, "line_count": len(ctl.lines),
+                        "silent_characters": list(ctl.silent_characters)}
+                       if ctl is not None else {"resolution": "no_dialogue"})})
 
     # ---- provider capability 诚实诊断（§8/§22）----
     if mode == "i2v":

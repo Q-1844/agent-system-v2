@@ -1199,6 +1199,12 @@ async def _handler_video(job, emit):
     # 必须用同一 model_name 轮询，否则 2.5 任务查不到。
     video_model = (job.params or {}).get("video_model") or None
 
+    # Native AV B1（17.md §12）：对白控制显式 opt-in（默认 False=行为逐字节不变）。
+    # 开启时 Shot.dialogue+speaker 绑定编译进 prompt（fail closed，不猜 speaker）；
+    # language 显式传入（缺失 fail closed——B1 不建语言系统）。
+    ndc = bool((job.params or {}).get("native_dialogue_control"))
+    ndc_lang = (job.params or {}).get("native_dialogue_language") or None
+
     # 🔴 恢复：已有 video_id 且未 done/failed -> 续轮询，不重提交。
     #  recover_pending_videos 把轮询超时（仍在跑）的设为 queued 后入队，handler 在此续轮询；
     #  failed 的不进恢复分支 -> 走 else 重新提交，避免对失效 video_id 死循环轮询。
@@ -1214,12 +1220,20 @@ async def _handler_video(job, emit):
         # 视频的结果回收——轮询不是 generation dispatch）。
         bound_video = None
         if shot_has_binding(project_dir, shot.shot_id):
-            bound_video = build_bound_video_input(project_dir, project, shot)
+            bound_video = build_bound_video_input(project_dir, project, shot,
+                                                  native_dialogue_control=ndc,
+                                                  native_dialogue_language=ndc_lang)
             prompt = bound_video.prompt
             first_url = bound_video.first_frame
             last_url = bound_video.last_frame
         elif mode == "keyframes":
             last_url = shot.last_frame.selected.url
+        if ndc and bound_video is None:
+            # B1 legacy/UNBOUND 路径：dialogue block 追加在现有 prompt 后
+            #（BOUND 路径已在 adapter 内并入；17.md §10）。
+            from src.generation.dialogue_control import compile_prompt_with_native_dialogue
+            prompt = compile_prompt_with_native_dialogue(
+                prompt, project_dir, shot, language=ndc_lang)
         await emit("submit", f"{shot.shot_id} 提交中（视频 1 RPM，可能等约 60s）", 10)
         kwargs = dict(num_frames=shot.video.num_frames, frame_rate=shot.video.frame_rate,
                       width=w, height=h, seed=shot.seed, negative_prompt=shot.negative_prompt)
@@ -1313,16 +1327,26 @@ JOB_HANDLERS["video"] = _handler_video
 
 @router.post("/api/project/{project_name}/shot/{shot_id}/video")
 async def shot_video(project_name: str, shot_id: str,
-                     video_model: Optional[str] = None):
+                     video_model: Optional[str] = None,
+                     native_dialogue_control: bool = False,
+                     native_dialogue_language: Optional[str] = None):
     """生成单镜头视频（入队 video 任务，串行 worker，1 RPM）。
     video_model 可选：显式指定视频模型（如 agnes-video-2.5-flash，走新契约 mode/seconds）；
-    缺省 = config 默认（agnes-video-v2.0），行为不变。"""
+    缺省 = config 默认（agnes-video-v2.0），行为不变。
+    native_dialogue_control（Native AV B1，17.md §12）：显式 opt-in——把
+    Shot.dialogue + speaker 绑定编译进视频 prompt（默认 False=行为逐字节不变）；
+    native_dialogue_language：对白语言（如 "Mandarin Chinese"），开启时必填
+    （缺失/台词 speaker 无法唯一确定 → 任务 fail closed，不派发 provider）。"""
     try:
         project_dir = get_project_manager().get_project_dir(project_name)
         from src.core.store import ProjectStore
         if ProjectStore(project_dir).load().get_shot(shot_id) is None:
             raise HTTPException(404, f"镜头 {shot_id} 不存在")
         extra = {"video_model": video_model} if video_model else {}
+        if native_dialogue_control:
+            extra["native_dialogue_control"] = True
+            if native_dialogue_language:
+                extra["native_dialogue_language"] = native_dialogue_language
         q = get_job_queue()
         job = q.submit(project_name, "video", shot_id, **extra)
         return {"job_id": job.job_id, "shot_id": shot_id}

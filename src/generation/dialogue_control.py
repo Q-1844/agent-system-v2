@@ -233,10 +233,16 @@ def build_dialogue_block(control: NativeDialogueControl) -> str:
         parts.append(f"{i}. {ln.speaker_character_name} {verb}: {ln.text}")
         prev_speaker = ln.speaker_character_name
     if control.silent_characters:
-        parts.append(
-            ", ".join(control.silent_characters)
-            + " remain completely silent in this shot: they do not speak, "
-              "and no dialogue is invented for them.")
+        if len(control.silent_characters) == 1:
+            parts.append(
+                control.silent_characters[0]
+                + " remains completely silent in this shot: this character does "
+                  "not speak, and no dialogue is invented for them.")
+        else:
+            parts.append(
+                ", ".join(control.silent_characters)
+                + " remain completely silent in this shot: they do not speak, "
+                  "and no dialogue is invented for them.")
     parts.append("Keep every line assigned to its specified speaker. "
                  "Do not swap the speakers and do not invent any additional dialogue.")
     parts.append("The characters' mouths move naturally in sync with their own spoken lines.")
