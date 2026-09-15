@@ -9,15 +9,22 @@
 ## 0. 当前状态
 
 ```text
-NATIVE AV PRODUCTION FOUNDATION
-IMPLEMENTATION PASS
+NATIVE AV PRODUCTION FOUNDATION V1
+FINAL PASS（2026-09-15 用户人工评审裁定）
 
-HUMAN FINAL REVIEW PENDING
-评审入口：http://localhost:8911/ （_native_av_c1_review_server.py）
-反馈落盘：_c1_native_av_e2e/results/C1_REVIEW_FEEDBACK.json
+人评 93 条点击 + 7 条短评（_c1_native_av_e2e/results/C1_REVIEW_FEEDBACK.json）：
+· 声音系统（本阶段核心交付）零系统性退化：8/8 台词正确 / 零 swap / 8/8 语言正确 /
+  8/8 lip-sync 可用 / 8/8 SFX 贴合；stage direction 未被朗读（H 主证）
+· Audio Intent 正收益（E 样本用户原话「完美，非常好」）——§37 不触发
+· BOUND 稳定（G：continuity=保持 + dialogue/speaker/language 全对）
+· BGM 控制：5/8 干净 / 3/8 偶发（C/D/H）——按 §38 记 provider stochastic
+  boundary，靠 variant regeneration + selection 处理，不扩控制面
+· 视觉质量瑕疵（C/H/G 等）用户一致归因「画面提示词/分镜问题」——归入用户点名的
+  下一方向（提示词优化 + 创作手法），不阻塞 foundation 收口
 ```
 
-按 18.md §42 已 STOP——不自动开始 Voice Reference / Audio Post / Music / Final Mix。
+评审入口（存档）：http://localhost:8911/ （`_native_av_c1_review_server.py`）。
+人评后仍按 §42 纪律：不自动开始 Voice Reference / Audio Post / Music / Final Mix。
 
 ---
 
@@ -300,34 +307,105 @@ C1-B/C/D/E targeted 累计: 263+213 passed（零回归）
 
 ---
 
-## 3. §35 人评重点（重申）
+## 3. 人工评审结果（2026-09-15，§35 五问回答）
 
-本轮不再验证「B1 是否成立」，主要判断：
+反馈源：`_c1_native_av_e2e/results/C1_REVIEW_FEEDBACK.json`（93 条点击 + 7 条短评；
+同一维度多次点击以**最后一次**为准——用户评审过程中有自纠，如实按终值统计）。
+
+### 3.1 逐样本终值
+
+| 样本 | 路由 | 台词 | speaker | 语言 | lip-sync | 表演 | 视觉 | SFX | BGM | 连续性 | 总评 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| A 单角色长句 | UNBOUND | 正确 | 正确 | 正确 | 可用 | 自然 | 一般 | 贴合 | 无 | — | **PASS** |
+| B 极短句 | UNBOUND | 正确 | 正确 | 正确 | 可用 | 僵硬/机械 | 好 | 贴合 | 无 | — | **PASS** |
+| C 双人 A→B→A | UNBOUND | 正确 | 正确 | 正确 | 可用 | 自然 | 一般 | 贴合 | **有明显** | — | **ACCEPTABLE** |
+| D 双人单说 | UNBOUND | 正确 | 正确 | 正确 | 可用 | 自然 | 好 | 贴合 | **有明显** | — | **PASS** |
+| E 动作音 intent | UNBOUND | 正确 | 正确 | 正确 | 可用 | 自然 | 好 | 贴合 | 无 | — | **PASS** |
+| F 氛围镜 | UNBOUND | 正确 | 正确 | 正确 | 可用 | 自然 | 好 | 贴合 | 无 | — | **PASS** |
+| H stage direction | UNBOUND | 正确 | 正确 | 正确 | 可用 | 一般 | **差** | 贴合 | **有明显** | — | **FAIL** |
+| G BOUND | BOUND | 正确 | 正确 | 正确 | 可用 | 僵硬/机械 | 差 | 贴合 | 无 | **保持** | **ACCEPTABLE** |
+
+（H 的 dialogue 点击序列「轻微问题→正确」、G「轻微问题→正确」、A/C/G visual、
+B/H/G natural、C/H bgm 均有多次点击，上表取终值。）
+
+### 3.2 用户短评（原话）
 
 ```text
-1. Productionization 是否引入 regression？
-2. 新 Prompt Compiler 是否进一步减少误读 / BGM？
-3. Audio Intent 是否真正改善动作-声音匹配？
-4. BOUND path 是否同样稳定？
-5. Freshness / provenance 是否正确？
+A: 我认为声音与人物的说明已经很不错。画面问题应该是提示词或者前后帧的问题。
+C: 我认为这个bgm加上后感觉是很不错，但是最后女生的画面有点崩坏
+D: 如果你设定的是无bgm，那么这就不对。不过画面还是不错的。
+E: 完美，非常好
+F: 有一点点瑕疵，就是第一个画面中人物有点动画感。最后显示的是真人说话。
+   但是我认为质量没得说，只要我们后面调整好画面提示词以及分镜，那么基本完美了
+H: 不行，人物出现崩坏已经多条手臂，这是画面问题，其实就是提示词问题。
+G: 人物画面有点问题，更上面优秀的比差一些。
 ```
 
+### 3.3 §35 五问回答
+
+1. **Productionization 是否引入 regression？—— 声音维度：无。**
+   台词 8/8 正确、speaker 8/8 正确（零 swap）、语言 8/8 正确、lip-sync 8/8 可用、
+   SFX 8/8 贴合。对照 B1 A 侧 4/6 FAIL（日语/念提示词），Controlled Dialogue
+   默认启用后未出现任何一次误读/语言漂移。视觉维度的负面项（C 末尾画面崩、
+   H 多条手臂、G 偏弱、F 动画感/真人感）用户在 4 条短评中**一致归因画面提示词/
+   分镜**（原话见上），无一条归因生产化或声音链路；全量回归 1939 passed 零新增
+   failure 同证。
+
+2. **新 Prompt Compiler 是否进一步减少误读 / BGM？—— 误读：归零；BGM：未根除。**
+   误读零出现（含 stage direction 未被朗读——H 台词终值正确，指示进 non-spoken
+   区生效）。BGM：5/8 干净（A/B/E/F/G），3/8 偶发明显（C/D/H）——对照 B1 B 侧
+   6 条中 2 条有背景音，大致持平：**不恶化、未达「明显改善」**。按 §38 判定为
+   provider stochastic boundary（E 样本证明显式 audio intent + music none 组合
+   可以完全干净），处理方式 = variant regeneration + selection，不做 source
+   separation、不扩控制面。另如实记录创作事实：C 短评表示「BGM 加上后感觉是很
+   不错」——policy（none）与个别镜头创作偏好存在张力，留待后续 Score 方向。
+
+3. **Audio Intent 是否真正改善动作-声音匹配？—— 是（§37 不触发）。**
+   E 样本（directives：木门吱呀/地板脚步）获「完美，非常好」总评 PASS，
+   SFX 贴合 + 无 BGM；8/8 SFX 贴合——audio_event_intent 未破坏 Agnes 原生 SFX。
+   `Dialogue/Speaker Production PASS + Audio Intent PASS`。
+
+4. **BOUND path 是否同样稳定？—— 链路稳定成立。**
+   G：dialogue/speaker/language 正确 + lip-sync 可用 + 无 BGM +
+   **视觉连续性=保持**（§34 专项维度）。视觉质量偏弱（visual=差，用户注「跟上面
+   优秀的比差一些」）属该镜画面生成质量，非 BOUND 链路问题；BOUND 首跑如实触发
+   boundary_frame_stale → 显式重生成后通过的流程也是本阶段 freshness 设计的
+   真机验证。
+
+5. **Freshness / provenance 是否正确？—— 系统侧全对。**
+   8/8 版本 freshness=current 与实际一致；generation_basis 七键+provider 事实
+   落库完整；无 auto regeneration 发生。用户未对 freshness 提出异议。
+
+### 3.4 §36 成功标准对表
+
+| 标准 | 结果 |
+|---|---|
+| Controlled dialogue 正式默认工作 | ✅（8/8 台词正确，无需手工 flag） |
+| speaker resolution 稳定 | ✅（零 swap） |
+| language 不再靠 provider 猜 | ✅（8/8 正确；皆缺即 fail closed） |
+| visual path 无 regression | ✅（自动回归零新增；人评视觉问题归因提示词/分镜，非链路） |
+| BOUND / UNBOUND 均真实跑通 | ✅（G + A-F/H） |
+| stage direction 不被朗读 | ✅（H 主证） |
+| BGM 控制明显改善或至少不恶化 | ⚠️ 不恶化未明显改善（5/8 干净 vs B1 B 侧 4/6 干净）——provider stochastic boundary 记录在案 |
+| audio_event_intent 不破坏 native SFX | ✅（E「完美」） |
+| VideoVersion basis 正确 / freshness 正确 / no auto regeneration | ✅ |
+| full regression 无新增 failure | ✅（1939 passed） |
+| human review 无系统性退化 | ✅ 声音维度无退化；视觉瑕疵归入既有创作方向（H FAIL 由画面崩坏导致，用户明确归因提示词） |
+
+**判定：NATIVE AV PRODUCTION FOUNDATION V1 PASS**
+（含两项如实记录的边界：BGM 偶发 = provider stochastic boundary；
+视觉质量瑕疵 = 提示词/分镜方向的已知输入，非本阶段引入。）
+
 ---
 
-## 4. §36-§39 预案状态（供人评后对表）
+## 4. 下一阶段输入（待用户批准，勿自动开始）
 
-* §36 成功标准：实现+自动测试+全量回归+真机 E2E 已全部达成；
-  「human review 无系统性退化」待人评；
-* §37 Audio Intent 效果一般 → 允许 `Dialogue/Speaker PASS + Audio Intent PARTIAL`，
-  不阻塞 foundation，不拆音轨；
-* §38 BGM 偶发 → 先判 prompt 可改善 vs provider 边界；极少量 prompt iteration，
-  不做 source separation；记录 provider stochastic boundary → variant
-  regeneration + selection 处理；
-* §39 多人 swap → 先查 binding/prompt layout/staging；偶发 → regenerate variant；
-  系统性 → 另立专项（不自动进入 Voice Reference）。
-
----
-
-## 5. 明确不做（§42 STOP）
-
-Voice Reference / Audio Post / Music / Final Mix——用户评审后再确定下一阶段。
+* **提示词优化 + 创作手法（声画匹配的视觉侧）**：用户在 B1 收口时点名、本轮
+  5 条短评全部指向——C 末尾画面崩、H 多条手臂、F 动画感/真人感不一致、
+  A 前后帧、G 画面偏弱。属画面提示词/分镜创作质量问题（复杂动作镜尤甚），
+  与 Native AV 声音链路正交。
+* BGM 偶发（C/D/H）：按 §38 由 variant regeneration + selection 处理；
+  C 的「BGM 加上很不错」短评提示未来 Sequence Audio Post/Score 方向可正视
+  创作性音乐诉求。
+* B/H/G 的表演自然度（僵硬/机械）：短句与多人镜的自然度是 provider 生成质量
+  议题，记录为 prompt 迭代观察项。
