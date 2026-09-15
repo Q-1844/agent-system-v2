@@ -34,18 +34,27 @@ NATIVE_AV_GENERATION_PACK_SCHEMA = "native_av_generation_pack_v1"
 NATIVE_AV_GENERATION_BASIS_SCHEMA = "native_av_generation_basis_v1"
 # 21.md §13：prompt compiler 版本是 actual generation dependency（升级 v1→v2 即使
 # Shot 未改也可能改变行为）——进 basis；完整 compiled prompt 字符串不 hash 当依赖。
-NATIVE_AV_PROMPT_SCHEMA = "native_av_prompt_v1"
+# v1→v2（C1-R）：撤回 no-BGM/声音指令规则后生成语义已变——旧 v1 版本按 §13
+# 纪律诚实 STALE，而不是冒充与当前规则同语义。
+NATIVE_AV_PROMPT_SCHEMA = "native_av_prompt_v2"
 
-# 21.md §14：freshness 对比键 = canonical 依赖键（actual dependencies only）。
-# provider/model/provider_options 是 per-generation 事实（provenance）——
-# 记录进 basis 但不参与 freshness 对比（与 ImageBatch/PackBasis 先例同口径：
-# 模型切换不追溯作废旧产物；重生成即新版本）。
+# 21.md §14：freshness 对比键 = actual dependencies，明确包含 provider/model/
+# provider options（规格 STALE 触发清单逐项列出）——provider 事实变化 = 用当前
+# 事实重新生成会得到不同 generation，final 必须诚实暴露，绝不静默视为 fresh。
+# 对比窗口对齐：generation 窗口内（pre-dispatch/pre-commit）携带本次请求的
+# provider_options 同窗比较（与 language_override 同一机制）；freshness 读模型
+# 不带请求上下文 → 与「默认 dispatch 投影」比较（当前 UI 不传 video_model，
+# 默认投影即生产现实）。
 NATIVE_AV_DEPENDENCY_KEYS = (
     "dialogue_fingerprint",
     "speaker_map_fingerprint",
     "spoken_language",
     "visual_basis_fingerprint",
     "prompt_compiler_schema",
+    "provider",
+    "model",
+    "provider_mode",
+    "provider_options_fingerprint",
 )
 
 
@@ -254,14 +263,41 @@ def native_av_freshness(project_dir, project: Any, shot: Any) -> Dict[str, Any]:
     return _result("current", {"version_id": version.version_id})
 
 
+def _default_provider_options(project: Any, shot: Any) -> Dict[str, Any]:
+    """freshness 读模型（无请求上下文）的「当前 provider 事实」= 默认 dispatch
+    投影：与 _handler_video 既有默认路径逐字段同构（video_model 不传 → None、
+    不加 duration_s；16:9 走服务端实测 1280x704，与 handler 同一口径）。
+    当前 UI 不传 video_model——默认投影即生产现实（21.md §14）。"""
+    from src.api.agnes_client import resolve_size
+
+    style = getattr(project, "style", None)
+    ratio = getattr(style, "aspect_ratio", None) or "16:9"
+    if ratio == "16:9":
+        w, h = 1280, 704
+    else:
+        w, h = map(int, resolve_size(
+            getattr(style, "size_tier", None) or "1K", ratio).split("x"))
+    video = getattr(shot, "video", None)
+    return {"mode": "keyframes" if getattr(shot, "link_mode", "") == "keyframes"
+            else "i2v",
+            "model": None,
+            "num_frames": getattr(video, "num_frames", None),
+            "frame_rate": getattr(video, "frame_rate", None),
+            "width": w, "height": h,
+            "seed": getattr(shot, "seed", None),
+            "negative_prompt": getattr(shot, "negative_prompt", None)}
+
+
 def compute_current_dependency_keys(project_dir, project: Any, shot: Any, *,
-                                    language_override: Optional[str] = None
+                                    language_override: Optional[str] = None,
+                                    provider_options: Optional[Dict[str, Any]] = None
                                     ) -> Dict[str, Any]:
     """重算当前 canonical 的 Native AV 依赖键（freshness / race guard 共用）。
-    只重算依赖键——不触碰 provider 事实键（per-generation provenance）。
     language_override：§5 precedence 的一部分——pre-dispatch/pre-commit 与
     generation 同窗，必须携带同一 override（否则 override 生成会被误判变化）；
     freshness 读模型传 None（override 是 ephemeral request 事实，非 canonical）。
+    provider_options：generation 窗口内传本次请求完整 options（与 pack basis
+    同窗对齐，21.md §14）；None → 默认 dispatch 投影。
     language 不可确定（皆缺）→ spoken_language=None（诚实缺省，不 raise——
     与 stored 值对比即 STALE）。"""
     from src.generation.image_adapter import shot_has_visual_production_binding
@@ -305,6 +341,14 @@ def compute_current_dependency_keys(project_dir, project: Any, shot: Any, *,
         mode = "keyframes" if shot.link_mode == "keyframes" else "i2v"
         visual = unbound_visual_basis(shot, provider_mode=mode)
     keys["visual_basis_fingerprint"] = fingerprint(visual)
+
+    # ---- provider 事实（21.md §14：provider/model/options ∈ STALE 触发集）----
+    options = (dict(provider_options) if provider_options is not None
+               else _default_provider_options(project, shot))
+    keys["provider"] = "agnes"
+    keys["model"] = options.get("model")
+    keys["provider_mode"] = options.get("mode")
+    keys["provider_options_fingerprint"] = fingerprint(options) if options else None
     return keys
 
 
@@ -315,12 +359,15 @@ class NativeAVDependencyChangedError(NativeAVError):
 
 def native_av_pre_dispatch_check(project_dir, project: Any, shot: Any,
                                  basis: Dict[str, Any], *,
-                                 language_override: Optional[str] = None) -> None:
-    """§27 pre-dispatch：provider 调用前重算依赖键，与 pack basis 对齐比较。
-    不一致 → provider 不调用（零 provider 调用浪费）。language_override 必须
-    与本次 generation 编译时一致（§5 precedence 同窗对齐）。"""
+                                 language_override: Optional[str] = None,
+                                 provider_options: Optional[Dict[str, Any]] = None
+                                 ) -> None:
+    """21.md §16 pre-dispatch：provider 调用前重算依赖键，与 pack basis 对齐比较。
+    不一致 → provider 不调用（零 provider 调用浪费）。language_override /
+    provider_options 必须与本次 generation 编译时一致（同窗对齐）。"""
     current = compute_current_dependency_keys(project_dir, project, shot,
-                                              language_override=language_override)
+                                              language_override=language_override,
+                                              provider_options=provider_options)
     mismatched = [k for k in NATIVE_AV_DEPENDENCY_KEYS
                   if (basis or {}).get(k) != current.get(k)]
     if mismatched:
@@ -333,12 +380,16 @@ def native_av_pre_dispatch_check(project_dir, project: Any, shot: Any,
 
 def native_av_pre_commit_check(project_dir, project: Any, shot: Any,
                                basis: Dict[str, Any], *,
-                               language_override: Optional[str] = None) -> None:
-    """§27 pre-commit：provider 完成后、attach 前重算依赖键。不一致 →
+                               language_override: Optional[str] = None,
+                               provider_options: Optional[Dict[str, Any]] = None
+                               ) -> None:
+    """21.md §16 pre-commit：provider 完成后、attach 前重算依赖键。不一致 →
     拒绝 attach（不建 VideoVersion、不设 final_video、不冒充 CURRENT）。
-    language_override 必须 与本次 generation 编译时一致（§5 同窗对齐）。"""
+    language_override / provider_options 必须与本次 generation 编译时一致
+    （同窗对齐）。"""
     current = compute_current_dependency_keys(project_dir, project, shot,
-                                              language_override=language_override)
+                                              language_override=language_override,
+                                              provider_options=provider_options)
     mismatched = [k for k in NATIVE_AV_DEPENDENCY_KEYS
                   if (basis or {}).get(k) != current.get(k)]
     if mismatched:
@@ -346,5 +397,5 @@ def native_av_pre_commit_check(project_dir, project: Any, shot: Any,
             "native_dependency_changed_before_commit",
             {"shot_id": getattr(shot, "shot_id", ""),
              "mismatched_keys": mismatched,
-             "hint": "provider 输出不 attach、不设 final（§27：绝不静默作为 "
+             "hint": "provider 输出不 attach、不设 final（21.md §16：绝不静默作为 "
                      "CURRENT attach）——显式重新生成"})

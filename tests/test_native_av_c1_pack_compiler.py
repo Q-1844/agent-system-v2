@@ -98,14 +98,16 @@ def test_pack_basis_has_all_dependency_and_provider_keys():
         assert k not in basis, f"撤回键残留: {k}"
     assert basis["provider"] == "agnes"
     assert basis["model"] == "m1"
-    assert basis["prompt_compiler_schema"] == "native_av_prompt_v1"
+    assert basis["prompt_compiler_schema"] == "native_av_prompt_v2"
     assert set(NATIVE_AV_DEPENDENCY_KEYS) == {
         "dialogue_fingerprint", "speaker_map_fingerprint", "spoken_language",
-        "visual_basis_fingerprint", "prompt_compiler_schema"}
+        "visual_basis_fingerprint", "prompt_compiler_schema",
+        "provider", "model", "provider_mode", "provider_options_fingerprint"}
 
 
 def test_pack_basis_provider_keys_track_options_change():
-    """provider 事实随 options 变（provenance）；依赖键不随 options 变（§25 对比口径）。"""
+    """21.md §14：provider/model/options ∈ STALE 触发集——options 变 →
+    依赖键随之变（final 诚实暴露「换模型/换参数后与当前事实不一致」）。"""
     shot = _shot(dialogue="别过去。", characters=["林晚星"])
     p1 = build_native_av_pack(None, _project(), shot, visual_route="bound",
                               visual_basis=bound_visual_basis(BOUND_BASIS),
@@ -115,9 +117,8 @@ def test_pack_basis_provider_keys_track_options_change():
                               provider_options={"mode": "i2v", "model": "m2"})
     assert p1.generation_basis["model"] == "m1"
     assert p2.generation_basis["model"] == "m2"
-    dep = NATIVE_AV_DEPENDENCY_KEYS
-    assert {k: p1.generation_basis[k] for k in dep} == \
-           {k: p2.generation_basis[k] for k in dep}
+    assert p1.generation_basis["provider_options_fingerprint"] != \
+        p2.generation_basis["provider_options_fingerprint"]
 
 
 def test_pack_no_dialogue_fields_and_defaults():

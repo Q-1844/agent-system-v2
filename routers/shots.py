@@ -1199,8 +1199,9 @@ async def _handler_video(job, emit):
     # 必须用同一 model_name 轮询，否则 2.5 任务查不到。
     video_model = (job.params or {}).get("video_model") or None
 
-    # C1 §23：provider 事实（provenance）——两条路径共用的 options 集合，
-    # 指纹进 NativeAVGenerationPack.generation_basis（不参与 freshness 对比）。
+    # C1 §11（21.md）：provider 事实——两条路径共用的 options 集合，指纹进
+    # NativeAVGenerationPack.generation_basis（21.md §14：参与 freshness 对比，
+    # 变化 = STALE；race guard 同窗携带同一集合比较）。
     provider_options = {"mode": mode, "model": video_model,
                         "num_frames": shot.video.num_frames,
                         "frame_rate": shot.video.frame_rate,
@@ -1282,7 +1283,8 @@ async def _handler_video(job, emit):
             from src.generation.native_av_pack import native_av_pre_dispatch_check
             native_av_pre_dispatch_check(project_dir, project, shot,
                                          native_generation_basis,
-                                         language_override=ndc_lang)
+                                         language_override=ndc_lang,
+                                         provider_options=dict(provider_options))
         created = await get_agnes_client().create_video(prompt, mode=mode, **kwargs)
         vid = created.get("video_id") or created.get("task_id") or created.get("id")
         if not vid:
@@ -1316,8 +1318,8 @@ async def _handler_video(job, emit):
                           lambda s: setattr(s.video, "status", ShotStatus.FAILED.value))
         raise
 
-    # C1 §27 pre-commit：provider 完成后、attach 前重算 Native AV 依赖键——
-    # 生成窗口内 dialogue/speaker/language/audio intent/visual 已变 → 拒绝
+    # C1 §16 pre-commit（21.md）：provider 完成后、attach 前重算 Native AV 依赖键——
+    # 生成窗口内 dialogue/speaker/language/visual/provider 事实已变 → 拒绝
     # attach（不建 VideoVersion、不设 final_video、不冒充 CURRENT）。
     if native_generation_basis:
         from src.generation.native_av_pack import native_av_pre_commit_check
@@ -1325,7 +1327,8 @@ async def _handler_video(job, emit):
         project = store.load()
         native_av_pre_commit_check(project_dir, project, shot,
                                    native_generation_basis,
-                                   language_override=ndc_lang)
+                                   language_override=ndc_lang,
+                                   provider_options=dict(provider_options))
 
     # 下载
     dest = project_dir / "output" / "videos" / f"{shot.shot_id}.mp4"

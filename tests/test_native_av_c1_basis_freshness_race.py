@@ -101,7 +101,8 @@ def test_video_version_records_generation_basis(venv):
     assert b["spoken_language"] == LANG
     assert "music_policy" not in b, "撤回键不得残留（21.md §20/§21）"
     assert b["provider_mode"] == "i2v"
-    assert b["prompt_compiler_schema"] == "native_av_prompt_v1"
+    assert b["model"] is None, "UI 默认 dispatch 不传 video_model → model=None"
+    assert b["prompt_compiler_schema"] == "native_av_prompt_v2"
 
 
 def test_video_version_legacy_loads_with_empty_basis():
@@ -193,6 +194,44 @@ def test_freshness_stale_on_first_frame_reselect(venv):
     assert "visual_basis_fingerprint" in r["detail"]["mismatched_keys"]
 
 
+def test_freshness_stale_on_model_change(venv):
+    """21.md §14/§22：model 变 → STALE（provider 事实 ∈ 对比集——换模型后
+    旧 final 不再对应当前生成事实，必须诚实暴露）。"""
+    pdir, fake = venv
+    shot, version = _generate(pdir, fake)
+    assert version.generation_basis["model"] is None
+    PS(pdir).update_shot(
+        "s01_c01",
+        lambda s: s.video_versions[-1].generation_basis.update({"model": "m2"}))
+    r = _freshness(pdir, _load_project(pdir).get_shot("s01_c01"))
+    assert r["status"] == "stale"
+    assert "model" in r["detail"]["mismatched_keys"]
+
+
+def test_freshness_stale_on_provider_options_change(venv):
+    """21.md §14/§22：provider options（seed/尺寸/帧数…）变 → STALE。"""
+    pdir, fake = venv
+    shot, _v = _generate(pdir, fake)
+    PS(pdir).update_shot(
+        "s01_c01",
+        lambda s: s.video_versions[-1].generation_basis.update(
+            {"provider_options_fingerprint": "deadbeef"}))
+    r = _freshness(pdir, _load_project(pdir).get_shot("s01_c01"))
+    assert r["status"] == "stale"
+    assert "provider_options_fingerprint" in r["detail"]["mismatched_keys"]
+
+
+def test_freshness_current_default_projection_matches_dispatch(venv):
+    """21.md §14 读模型口径：默认 dispatch（UI 不传 video_model）落库的
+    provider 事实 == 无请求上下文时的默认投影 → CURRENT 不误报。"""
+    pdir, fake = venv
+    shot, version = _generate(pdir, fake)
+    b = version.generation_basis
+    keys = compute_current_dependency_keys(pdir, _load_project(pdir), shot)
+    for k in ("provider", "model", "provider_mode", "provider_options_fingerprint"):
+        assert b[k] == keys[k], f"默认投影与 dispatch 不一致: {k}"
+
+
 def test_freshness_unrelated_change_stays_current(venv):
     """21.md §11：无关变更（note 文本/另一镜）→ CURRENT（actual dependencies only）。"""
     pdir, fake = venv
@@ -236,6 +275,23 @@ def test_pre_dispatch_rejects_after_dialogue_change(venv):
         native_av_pre_dispatch_check(pdir, project,
                                      project.get_shot("s01_c01"), basis)
     assert ei.value.code == "native_dependency_changed_before_generation"
+
+
+def test_pre_dispatch_rejects_provider_options_drift(venv):
+    """21.md §14/§16：请求 options 与 pack basis 不一致（同窗错位）→
+    dispatch 前拒绝（零 provider 调用）。"""
+    pdir, fake = venv
+    _shot, version = _generate(pdir, fake)
+    basis = version.generation_basis
+    project = _load_project(pdir)
+    with pytest.raises(NativeAVDependencyChangedError) as ei:
+        native_av_pre_dispatch_check(
+            pdir, project, project.get_shot("s01_c01"), basis,
+            provider_options={"mode": "i2v", "model": "m2",
+                              "num_frames": 81, "frame_rate": 16,
+                              "width": 1280, "height": 704,
+                              "seed": None, "negative_prompt": None})
+    assert "model" in ei.value.detail["mismatched_keys"]
 
 
 def test_pre_commit_rejects_after_dialogue_change(venv):
