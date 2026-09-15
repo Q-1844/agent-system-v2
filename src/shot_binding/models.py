@@ -138,6 +138,48 @@ class BindingAction:
         return cls(**{k: v for k, v in d.items() if k in known})
 
 
+# ============ DialogueSpeakerBinding（Native AV B1：17.md §6 最小可选块）============
+@dataclass
+class DialogueSpeakerLine:
+    """「第 index 句 → 哪个角色」（0-based，index 按非空行序计）。
+    🔴 只表达句→角色映射——绝不复制台词正文（台词唯一真相=Shot.dialogue，
+    17.md §5/§6）。speaker 合法性（∈ Shot.characters）由解析侧 fail-closed 校验。"""
+    index: int
+    speaker_character_name: str
+
+    def to_dict(self) -> dict:
+        return {"index": self.index,
+                "speaker_character_name": self.speaker_character_name}
+
+    @classmethod
+    def from_dict(cls, d: Any) -> "DialogueSpeakerLine":
+        d = dict(d or {})
+        known = {f for f in cls.__dataclass_fields__}
+        return cls(**{k: v for k, v in d.items() if k in known})
+
+
+@dataclass
+class DialogueSpeakerBinding:
+    """多角色 Shot 的显式台词说话人绑定（可选；B1 17.md §6）。
+    lines 缺行 = 该句未显式裁决（解析侧回落内联前缀/单角色 auto，无法唯一确定
+    则 fail closed——绝不猜）。resolution（"single_auto" | "explicit"）是 advisory
+    记录；实际解析结论由 src/generation/dialogue_control.py 派生。"""
+    lines: List[DialogueSpeakerLine] = field(default_factory=list)
+    resolution: str = ""
+
+    def to_dict(self) -> dict:
+        return {"lines": [ln.to_dict() for ln in self.lines],
+                "resolution": self.resolution}
+
+    @classmethod
+    def from_dict(cls, d: Any) -> "DialogueSpeakerBinding":
+        d = dict(d or {})
+        return cls(
+            lines=[DialogueSpeakerLine.from_dict(ln)
+                   for ln in (d.get("lines") or []) if isinstance(ln, dict)],
+            resolution=str(d.get("resolution") or ""))
+
+
 # ============ DependencyFingerprints（S3A §19）============
 @dataclass
 class DependencyFingerprints:
@@ -183,6 +225,7 @@ class ShotProductionBinding:
     character_bindings: List[CharacterBinding] = field(default_factory=list)
     prop_bindings: List[PropBinding] = field(default_factory=list)
     action: Optional[BindingAction] = None
+    dialogue_speaker_binding: Optional[DialogueSpeakerBinding] = None   # B1 可选块（17.md §6）
     production_notes: str = ""
     dependency_fingerprints: DependencyFingerprints = field(default_factory=DependencyFingerprints)
     created_at: float = 0.0
@@ -196,6 +239,9 @@ class ShotProductionBinding:
             "character_bindings": [cb.to_dict() for cb in self.character_bindings],
             "prop_bindings": [pb.to_dict() for pb in self.prop_bindings],
             "action": self.action.to_dict() if self.action else None,
+            "dialogue_speaker_binding": (
+                self.dialogue_speaker_binding.to_dict()
+                if self.dialogue_speaker_binding else None),
             "production_notes": self.production_notes,
             "dependency_fingerprints": self.dependency_fingerprints.to_dict(),
             "created_at": self.created_at,
@@ -207,10 +253,11 @@ class ShotProductionBinding:
         d = dict(d or {})
         sb = d.get("scene_binding")
         action = d.get("action")
+        dsb = d.get("dialogue_speaker_binding")
         fps = d.get("dependency_fingerprints")
         known = {f for f in cls.__dataclass_fields__} - {
             "scene_binding", "character_bindings", "prop_bindings", "action",
-            "dependency_fingerprints"}
+            "dialogue_speaker_binding", "dependency_fingerprints"}
         kw = {k: v for k, v in d.items() if k in known}
         return cls(
             scene_binding=SceneBinding.from_dict(sb) if isinstance(sb, dict) else None,
@@ -221,6 +268,9 @@ class ShotProductionBinding:
                            for pb in (d.get("prop_bindings") or [])
                            if isinstance(pb, dict)],
             action=BindingAction.from_dict(action) if isinstance(action, dict) else None,
+            dialogue_speaker_binding=(
+                DialogueSpeakerBinding.from_dict(dsb)
+                if isinstance(dsb, dict) else None),
             dependency_fingerprints=DependencyFingerprints.from_dict(fps),
             **kw)
 

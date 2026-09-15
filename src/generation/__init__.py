@@ -14,13 +14,33 @@ from .image_adapter import (
     shot_has_binding,
 )
 from .video_adapter import BoundVideoRequest, build_bound_video_input
+from .dialogue_control import (
+    DialogueControlError,
+    DialogueLineControl,
+    NativeDialogueControl,
+    append_dialogue_block,
+    build_dialogue_block,
+    compile_prompt_with_native_dialogue,
+    resolve_native_dialogue,
+    split_dialogue_lines,
+    split_speaker_prefix,
+)
 
 __all__ = [
     "BoundGenerationError",
     "BoundImageRequest",
     "BoundVideoRequest",
+    "DialogueControlError",
+    "DialogueLineControl",
+    "NativeDialogueControl",
+    "append_dialogue_block",
     "build_bound_first_frame_input",
     "build_bound_last_frame_input",
     "build_bound_video_input",
+    "build_dialogue_block",
+    "compile_prompt_with_native_dialogue",
+    "resolve_native_dialogue",
     "shot_has_binding",
+    "split_dialogue_lines",
+    "split_speaker_prefix",
 ]
