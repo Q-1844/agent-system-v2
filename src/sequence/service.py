@@ -212,6 +212,8 @@ class SequenceService:
             rv.source_video_versions = [
                 {"shot_id": rc.shot_id, "version_id": rc.version_id} for rc in resolved]
             rv.planned_duration_ms = plan.total_duration_ms
+            # 输出路径 Phase 1 即确定（§9 minimum fields；review 页/导出按此播放）
+            rv.output_file = str(self._sequences_root() / sequence_id / f"{version_id}.mp4")
             rv.status = RSTATUS_RENDERING
             rv.error = None
             self.store.save(entries)

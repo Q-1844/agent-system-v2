@@ -158,6 +158,10 @@ def test_prepare_snapshots_truth(svc):
         {"shot_id": "s01_c02", "version_id": "vv_b1"}]
     assert rv.generation_basis["clips"][0]["resolved_video_version_id"] == "vv_a1"
     assert plan.total_duration_ms == 14000
+    # §9：output_file 必须 Phase 1 落盘（消费方按此播放/导出，不得为 None）
+    assert rv.output_file is not None
+    assert rv.output_file.replace("\\", "/").endswith(
+        f"output/sequences/{blk.sequence_id}/{rv.version_id}.mp4")
 
 
 def test_prepare_fail_closed_no_final(svc):
