@@ -17,10 +17,12 @@ from .image_adapter import (
 from .video_adapter import BoundVideoRequest, build_bound_video_input
 from .dialogue_control import (
     DialogueControlError,
+    DialogueDirection,
     DialogueLineControl,
     NativeDialogueControl,
     append_dialogue_block,
     build_dialogue_block,
+    classify_dialogue_body,
     compile_prompt_with_native_dialogue,
     resolve_dialogue_language,
     resolve_native_dialogue,
@@ -33,6 +35,7 @@ __all__ = [
     "BoundImageRequest",
     "BoundVideoRequest",
     "DialogueControlError",
+    "DialogueDirection",
     "DialogueLineControl",
     "NativeDialogueControl",
     "append_dialogue_block",
@@ -40,6 +43,7 @@ __all__ = [
     "build_bound_last_frame_input",
     "build_bound_video_input",
     "build_dialogue_block",
+    "classify_dialogue_body",
     "compile_prompt_with_native_dialogue",
     "resolve_dialogue_language",
     "resolve_native_dialogue",

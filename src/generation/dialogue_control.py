@@ -36,7 +36,7 @@ from typing import List, Optional, Tuple
 class DialogueControlError(Exception):
     """Native dialogue control 解析失败（17.md §7.2/§8 fail closed）。
     code：language_missing / ambiguous_speaker / speaker_not_in_characters /
-    invalid_binding。绝不静默继续生成。"""
+    invalid_binding / ambiguous_dialogue_markup。绝不静默继续生成。"""
 
     def __init__(self, code: str, detail: str):
         self.code = code
@@ -50,10 +50,20 @@ class DialogueControlError(Exception):
 # ============ derived / ephemeral 控制对象（§9：不持久化、无业务 ID）============
 @dataclass(frozen=True)
 class DialogueLineControl:
-    """一句台词的解析结论。text = Shot.dialogue 原始切片（仅剥离 speaker 前缀）。"""
-    index: int                       # 0-based，按非空行序
-    text: str                        # 原样切片（含「」）
+    """一句台词的解析结论。text = Shot.dialogue 原始切片（仅剥离 speaker 前缀与
+    C1 §7 舞台指示标记）。index = 原始非空行序（binding index 空间，B1 兼容）。"""
+    index: int                       # 0-based，按非空行序（含指示行占用）
+    text: str                        # 原样切片（含「」，不含 speaker 前缀/括号指示）
     speaker_character_name: str      # 已验证 ∈ Shot.characters
+    delivery_hints: Tuple[str, ...] = ()   # §7：行首（语气/表演提示），非台词
+
+
+@dataclass(frozen=True)
+class DialogueDirection:
+    """§7：整行舞台指示（non_spoken_direction）——绝不进入 spoken dialogue。"""
+    index: int                       # 原始非空行序
+    text: str                        # 括号内原文（确定性切片）
+    speaker_character_name: Optional[str] = None   # 行带 speaker 前缀时的归属（不做 ∈ 校验——指示不是台词）
 
 
 @dataclass(frozen=True)
@@ -64,12 +74,22 @@ class NativeDialogueControl:
     lines: Tuple[DialogueLineControl, ...]
     silent_characters: Tuple[str, ...]   # Shot.characters 中本镜不说话的角色
     resolution: str                  # "single_auto" | "explicit"
+    directions: Tuple[DialogueDirection, ...] = ()   # §7 整行舞台指示（C1）
 
 
-# ============ 确定性 dialogue parser（§7）============
+# ============ 确定性 dialogue parser（§7 + C1 §7 stage directions）============
 # 「角色名：台词」前缀（全角/半角冒号）。name=\S{1,20}? 非贪婪到第一个冒号——
 # 与 Director 既有约定一致（director.py:291「可带说话人，例如：小铃：…」）。
 _SPEAKER_PREFIX_RE = re.compile(r"^(?P<name>\S{1,20}?)[：:]\s*(?P<rest>\S.*)$", re.DOTALL)
+
+# §7 舞台指示（确定性规则，不用 LLM 解释字符串）：
+#   - 括号组：全角（…）或半角 (...)，内容不含任何括号字符（嵌套 → 无法唯一解析）；
+#   - 整行指示：剥 speaker 前缀后整个 body 是一个括号组；
+#   - 行首提示：一个或多个连续括号组后仍有正文 → delivery hint + spoken text；
+#   - 其余任何位置出现括号（句中/句尾/嵌套）→ ambiguous_dialogue_markup fail closed。
+_PAREN_GROUP_RE = re.compile(r"^(?P<group>（[^（）()]*）|\([^()]*\))")
+_FULL_PAREN_BODY_RE = re.compile(r"^(?P<groups>(?:（[^（）()]*）|\([^()]*\))+)$")
+_HAS_PAREN_RE = re.compile(r"[（(]|[）)]")
 
 
 def split_dialogue_lines(text: str) -> List[str]:
@@ -87,6 +107,40 @@ def split_speaker_prefix(line: str) -> Tuple[Optional[str], str]:
     if m:
         return m.group("name"), m.group("rest").strip()
     return None, line
+
+
+def classify_dialogue_body(body: str, *, line_ref: str) -> Tuple[str, Tuple[str, ...], str]:
+    """C1 §7：把一行 body 确定性分类为（kind, hints, text）。
+    - kind="direction"：整行是括号组 → non_spoken_direction；text = 括号内文字
+      （多组以空格连接）；
+    - kind="spoken"：行首连续括号组 = delivery hints，text = 其余 spoken 正文
+      （无括号 → 无 hint 原样）；
+    - 句中/句尾/嵌套括号等无法唯一解析的格式 → DialogueControlError
+      ambiguous_dialogue_markup（18.md §7：fail closed 或不生成，不用 LLM 临时解释）。"""
+    body = body.strip()
+    if not body:
+        return "spoken", (), ""
+    m_full = _FULL_PAREN_BODY_RE.match(body)
+    if m_full:
+        inners = [body[m.start():m.end()][1:-1].strip()
+                  for m in re.finditer(r"（[^（）()]*）|\([^()]*\)", body)]
+        return "direction", (), " ".join(s for s in inners if s)
+    hints: List[str] = []
+    rest = body
+    m = _PAREN_GROUP_RE.match(rest)
+    while m:
+        inner = rest[m.start("group") + 1:m.end("group") - 1].strip()
+        if inner:
+            hints.append(inner)
+        rest = rest[m.end("group"):].lstrip()
+        m = _PAREN_GROUP_RE.match(rest)
+    if _HAS_PAREN_RE.search(rest):
+        raise DialogueControlError(
+            "ambiguous_dialogue_markup",
+            f"台词行 {line_ref} 的括号标记无法唯一解析（句中/句尾/嵌套括号）：{body!r}"
+            f"（18.md §7：spoken content 与 non-spoken direction 必须可确定性切分——"
+            f"整行括号=舞台指示；行首括号=语气提示；其余格式 fail closed）")
+    return "spoken", tuple(hints), rest
 
 
 def _normalized_characters(shot) -> List[str]:
@@ -170,13 +224,16 @@ def resolve_dialogue_language(project, override: Optional[str]) -> str:
 def resolve_native_dialogue(project_dir, shot, *,
                             language: str) -> Optional[NativeDialogueControl]:
     """解析一镜的 native dialogue control。
-    - 无非空台词行 → None（无 block，现有行为不变；C1 §4：language 只对
-      有台词的 shot 有意义——先查台词再查 language，无台词镜头不需要语言）；
+    - 无非空台词行 / 全部行都是舞台指示 → None（无 block，现有行为不变；C1 §4：
+      language 只对有台词的 shot 有意义——先查台词再查 language）；
     - language 空 → language_missing（§5：不猜）；
-    - speaker 无法唯一确定（ambiguous_speaker）/ speaker ∉ Shot.characters
-      （speaker_not_in_characters）/ binding 块非法（invalid_binding）→ fail closed。
-    binding 显式裁决优先（§7.2）；其余句：单角色 single_auto；多角色读内联
-    「角色名：」前缀（解析辅助证据）；仍无法唯一确定 → fail closed。"""
+    - 括号标记无法唯一解析（ambiguous_dialogue_markup）/ speaker 无法唯一确定
+      （ambiguous_speaker）/ speaker ∉ Shot.characters（speaker_not_in_characters）/
+      binding 块非法（invalid_binding，含指向指示行）→ fail closed。
+    每行先分类（§7：整行括号=direction、行首括号=delivery hint、其余=spoken），
+    spoken 行再做 speaker 解析：binding 显式裁决优先（§7.2）；其余句：单角色
+    single_auto；多角色读内联「角色名：」前缀（解析辅助证据）；无法唯一确定 →
+    fail closed。directions（整行指示）随 control 派生返回，绝不进 spoken。"""
     raw_lines = split_dialogue_lines(getattr(shot, "dialogue", "") or "")
     if not raw_lines:
         return None
@@ -192,33 +249,56 @@ def resolve_native_dialogue(project_dir, shot, *,
                                        len(raw_lines), characters)
 
     resolved: List[DialogueLineControl] = []
+    directions: List[DialogueDirection] = []
     used_binding = False
     used_prefix = False
     for idx, raw in enumerate(raw_lines):
-        if idx in binding_map:
-            speaker = binding_map[idx]
-            text = raw
-            used_binding = True
-        else:
-            name, text = split_speaker_prefix(raw)
-            if name is not None:
-                if name not in characters:
-                    raise DialogueControlError(
-                        "speaker_not_in_characters",
-                        f"第 {idx} 句内联 speaker {name!r} 不在 Shot.characters "
-                        f"{characters} 中（17.md §8：reject，不自动加角色/不纠错）")
-                speaker = name
-                used_prefix = True
-            elif len(characters) == 1:
-                speaker = characters[0]          # single_auto（§7.1）
-            else:
+        name, body = split_speaker_prefix(raw)
+        kind, hints, text = classify_dialogue_body(body, line_ref=f"#{idx}")
+        if kind == "direction":
+            # §7：整行舞台指示——绝不放进 spoken dialogue。binding 裁决指向
+            # 指示行 = 索引空间错位（binding index 按 raw 非空行计），fail closed。
+            if idx in binding_map:
                 raise DialogueControlError(
-                    "ambiguous_speaker",
-                    f"第 {idx} 句（{raw[:40]!r}…）在多角色镜 {characters} 中无法唯一确定 "
-                    f"speaker：无 dialogue_speaker_binding 裁决、无内联「角色名：」前缀"
-                    f"（17.md §7.2：不猜，fail closed）")
+                    "invalid_binding",
+                    f"dialogue_speaker_binding index {idx} 指向舞台指示行（{raw[:30]!r}）"
+                    f"——binding 只裁决 spoken 台词行")
+            directions.append(DialogueDirection(index=idx, text=text,
+                                                speaker_character_name=name))
+            continue
+        if not text:
+            raise DialogueControlError(
+                "ambiguous_dialogue_markup",
+                f"台词行 #{idx} 分类为 spoken 但正文为空：{raw!r}")
+        if idx in binding_map:
+            # 显式裁决优先（§7.2）；内联前缀（若有）按 speaker 元数据剥离——
+            # 即便与裁决矛盾也以 binding 为准（显式 > 内联证据，不猜不一致来源）
+            speaker = binding_map[idx]
+            used_binding = True
+        elif name is not None:
+            if name not in characters:
+                raise DialogueControlError(
+                    "speaker_not_in_characters",
+                    f"第 {idx} 句内联 speaker {name!r} 不在 Shot.characters "
+                    f"{characters} 中（17.md §8：reject，不自动加角色/不纠错）")
+            speaker = name
+            used_prefix = True
+        elif len(characters) == 1:
+            speaker = characters[0]          # single_auto（§7.1）
+        else:
+            raise DialogueControlError(
+                "ambiguous_speaker",
+                f"第 {idx} 句（{raw[:40]!r}…）在多角色镜 {characters} 中无法唯一确定 "
+                f"speaker：无 dialogue_speaker_binding 裁决、无内联「角色名：」前缀"
+                f"（17.md §7.2：不猜，fail closed）")
         resolved.append(DialogueLineControl(index=idx, text=text,
-                                            speaker_character_name=speaker))
+                                            speaker_character_name=speaker,
+                                            delivery_hints=hints))
+
+    if not resolved:
+        # 全部行都是舞台指示 → 本镜无可念台词，按无 dialogue 处理（§4/§7：
+        # 指示绝不进 spoken dialogue，也不构成对白镜）
+        return None
 
     speakers = []
     for ln in resolved:
@@ -233,7 +313,8 @@ def resolve_native_dialogue(project_dir, shot, *,
         language=lang,
         lines=tuple(resolved),
         silent_characters=silent,
-        resolution=resolution)
+        resolution=resolution,
+        directions=tuple(directions))
 
 
 # ============ prompt 编译（§10）============

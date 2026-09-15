@@ -1199,6 +1199,17 @@ async def _handler_video(job, emit):
     # 必须用同一 model_name 轮询，否则 2.5 任务查不到。
     video_model = (job.params or {}).get("video_model") or None
 
+    # C1 §23：provider 事实（provenance）——两条路径共用的 options 集合，
+    # 指纹进 NativeAVGenerationPack.generation_basis（不参与 freshness 对比）。
+    provider_options = {"mode": mode, "model": video_model,
+                        "num_frames": shot.video.num_frames,
+                        "frame_rate": shot.video.frame_rate,
+                        "width": w, "height": h,
+                        "seed": shot.seed, "negative_prompt": shot.negative_prompt}
+    if video_model:
+        provider_options["duration_s"] = max(4, min(12, round(
+            shot.video.num_frames / max(shot.video.frame_rate, 1))))
+
     # Native AV C1（18.md §4/§5）：对白控制升为正式生产行为——Shot.dialogue 非空
     # → 默认启用 Native Dialogue Control；显式 native_dialogue_control=False 仅作
     # debug/compat override。language precedence：显式 request override >
@@ -1221,22 +1232,35 @@ async def _handler_video(job, emit):
         # 逐字节不变。恢复/续轮询路径不做 Binding gate（无新生成输入，不阻断在途
         # 视频的结果回收——轮询不是 generation dispatch）。
         bound_video = None
+        native_generation_basis: dict = {}
         if shot_has_visual_production_binding(project_dir, shot.shot_id):
             bound_video = build_bound_video_input(project_dir, project, shot,
                                                   native_dialogue_control=ndc,
-                                                  native_dialogue_language=ndc_lang)
+                                                  native_dialogue_language=ndc_lang,
+                                                  provider_options=dict(provider_options))
             prompt = bound_video.prompt
             first_url = bound_video.first_frame
             last_url = bound_video.last_frame
+            native_generation_basis = dict(bound_video.generation_basis)
         elif mode == "keyframes":
             last_url = shot.last_frame.selected.url
         if ndc and bound_video is None:
-            # C1 legacy/UNBOUND 路径（§4/§5/§21）：dialogue 非空 → 默认编译进
-            # prompt（language precedence 在 compile 入口内统一 resolve）；
-            # BOUND 路径已在 adapter 内并入——两条路径共用同一 dialogue 编译语义。
-            from src.generation.dialogue_control import compile_prompt_with_native_dialogue
-            prompt = compile_prompt_with_native_dialogue(
-                prompt, project_dir, project, shot, language_override=ndc_lang)
+            # C1 UNBOUND 路径（§21 统一编译点）：visual prompt 原样 + 同一
+            # NativeAVGenerationPack → Prompt Compiler（dialogue/language/
+            # audio intent/红线语义与 BOUND 完全一致，差别只在 visual 输入源）。
+            from src.generation.native_av_pack import (
+                build_native_av_pack,
+                unbound_visual_basis,
+            )
+            from src.generation.av_prompt_compiler import compile_native_av_prompt
+            nav_pack = build_native_av_pack(
+                project_dir, project, shot,
+                visual_route="unbound",
+                visual_basis=unbound_visual_basis(shot, provider_mode=mode),
+                provider_options=dict(provider_options),
+                language_override=ndc_lang)
+            prompt = compile_native_av_prompt(nav_pack, prompt)
+            native_generation_basis = dict(nav_pack.generation_basis)
         await emit("submit", f"{shot.shot_id} 提交中（视频 1 RPM，可能等约 60s）", 10)
         kwargs = dict(num_frames=shot.video.num_frames, frame_rate=shot.video.frame_rate,
                       width=w, height=h, seed=shot.seed, negative_prompt=shot.negative_prompt)

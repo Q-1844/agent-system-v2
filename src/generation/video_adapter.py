@@ -39,7 +39,6 @@ from src.generation.image_adapter import (
     boundary_stale_detail,
     selected_boundary_batch,
 )
-from src.generation.dialogue_control import split_dialogue_lines
 
 
 @dataclass
@@ -47,7 +46,11 @@ class BoundVideoRequest:
     """Adapter 结果（§24）：ephemeral、无业务 ID、不落盘、不写回任何 canonical。
     字段以真实 provider API 为准：i2v 只消费 first_frame；keyframes 消费
     first_frame + last_frame；无 invented 参数槽（seed/negative_prompt 属 Shot
-    creative/config，由 handler 既有路径传递，不在此伪造）。"""
+    creative/config，由 handler 既有路径传递，不在此伪造）。
+    generation_basis（C1 §22/§23）：Native AV 派生 basis（dialogue/speaker/
+    language/audio intent/visual/provider/compiler）——由 handler 写入
+    VideoVersion.generation_basis；空 dict = 本 generation 未走 Native AV
+    编译（显式 override off）。"""
     shot_id: str = ""
     prompt: str = ""
     provider_mode: str = ""                 # "i2v" | "keyframes"（shot.link_mode 既有映射）
@@ -58,6 +61,7 @@ class BoundVideoRequest:
     diagnostics: List[Dict[str, Any]] = field(default_factory=list)
     semantic_roles: List[Dict[str, Any]] = field(default_factory=list)
     basis: Dict[str, Any] = field(default_factory=dict)
+    generation_basis: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -71,6 +75,7 @@ class BoundVideoRequest:
             "diagnostics": list(self.diagnostics),
             "semantic_roles": list(self.semantic_roles),
             "basis": dict(self.basis),
+            "generation_basis": dict(self.generation_basis),
         }
 
 
@@ -116,17 +121,19 @@ def _resolve_boundary_frame(shot: Any, pack_basis: dict, slot: str,
 
 def build_bound_video_input(project_dir, project: Any, shot: Any, *,
                             native_dialogue_control: bool = True,
-                            native_dialogue_language: Optional[str] = None
+                            native_dialogue_language: Optional[str] = None,
+                            provider_options: Optional[Dict[str, Any]] = None
                             ) -> BoundVideoRequest:
     """BOUND shot 的视频生成输入（§3.B；§21：BOUND 永不回落 legacy）。
     顺序：validity gate → compile pack（自带 pre/post 守卫）→ boundary frame 解析
     （selection truth + freshness）→ prompt（creative motion + Pack 生产上下文
-    video 口径 + P1 风格指令 [+ Native AV dialogue block]）→ pre-dispatch guard。
+    video 口径 + P1 风格指令 [+ Native AV 编译区]）→ pre-dispatch guard。
     provider_mode 沿用 handler 既有映射（keyframes=link_mode=='keyframes'，否则 i2v）
     ——Adapter 不改变 mode 选择（creative 策略字段）。
-    Native AV C1（18.md §4/§5）：native_dialogue_control 默认 True=自动——
-    Shot.dialogue 非空即启用 Controlled Dialogue（正式生产行为）；显式 False =
-    debug/compat override（visual-only，dialogue 不进 prompt）。language =
+    Native AV C1（18.md §4/§21/§10-§15）：native_dialogue_control 默认 True=自动
+    ——visual prompt 与 dialogue/sound 语义区经同一 NativeAVGenerationPack →
+    Prompt Compiler（与 UNBOUND 共用唯一编译点）；显式 False = debug/compat
+    override（visual-only，零 Native AV 区、generation_basis 为空）。language =
     resolve_dialogue_language precedence（request override > project
     native_av.spoken_language；对有台词 shot 皆缺 → language_missing fail closed，
     零 provider 调用）；speaker 解析 fail closed（DialogueControlError）。"""
@@ -180,24 +187,28 @@ def build_bound_video_input(project_dir, project: Any, shot: Any, *,
     tail = " ".join(x for x in (ctx, style) if x)
     prompt = f"{creative}, {tail}" if (creative and tail) else (creative or tail)
 
-    # ---- Native AV C1 dialogue control（18.md §4/§5：dialogue 非空默认启用）----
+    # ---- Native AV C1（18.md §4/§21：pack + Prompt Compiler，与 UNBOUND 共用）----
+    generation_basis: Dict[str, Any] = {}
     if native_dialogue_control:
-        from src.generation.dialogue_control import (
-            append_dialogue_block,
-            resolve_dialogue_language,
-            resolve_native_dialogue,
+        from src.generation.native_av_pack import (
+            bound_visual_basis,
+            build_native_av_pack,
         )
-        ctl = None
-        if split_dialogue_lines(getattr(shot, "dialogue", "") or ""):
-            lang = resolve_dialogue_language(project, native_dialogue_language)
-            ctl = resolve_native_dialogue(project_dir, shot, language=lang)
-            if ctl is not None:
-                prompt = append_dialogue_block(prompt, ctl)
+        from src.generation.av_prompt_compiler import compile_native_av_prompt
+        nav_pack = build_native_av_pack(
+            project_dir, project, shot,
+            visual_route="bound", visual_basis=bound_visual_basis(basis),
+            provider_options=dict(provider_options or {}) | {"mode": mode},
+            language_override=native_dialogue_language)
+        prompt = compile_native_av_prompt(nav_pack, prompt)
+        generation_basis = nav_pack.generation_basis
+        dlg = nav_pack.dialogue
         diagnostics.append({
             "reason": "native_dialogue_control_applied",
-            "detail": ({"resolution": ctl.resolution, "line_count": len(ctl.lines),
-                        "silent_characters": list(ctl.silent_characters)}
-                       if ctl is not None else {"resolution": "no_dialogue"})})
+            "detail": ({"resolution": dlg["resolution"],
+                        "line_count": len(dlg["lines"]),
+                        "silent_characters": list(dlg["silent_characters"])}
+                       if dlg else {"resolution": "no_dialogue"})})
 
     # ---- provider capability 诚实诊断（§8/§22）----
     if mode == "i2v":
@@ -234,4 +245,4 @@ def build_bound_video_input(project_dir, project: Any, shot: Any, *,
         shot_id=sid, prompt=prompt, provider_mode=mode,
         first_frame=first_url, last_frame=last_url,
         used_reference_ids=used_ids, diagnostics=diagnostics,
-        semantic_roles=roles, basis=basis)
+        semantic_roles=roles, basis=basis, generation_basis=generation_basis)
