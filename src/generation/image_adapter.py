@@ -91,11 +91,37 @@ class BoundImageRequest:
 
 
 def shot_has_binding(project_dir, shot_id: str) -> bool:
-    """BOUND / UNBOUND 判定（§27 双路径开关）。
-    bindings.json 损坏 → ShotBindingSchemaError 显式异常（§39：损坏不静默当 UNBOUND）。"""
+    """「本镜存在任何 binding 元数据」（key-presence，保留 B1 语义供诊断）。
+    🔴 C1 18.md §3：生成路由不再使用本判定——dialogue_speaker_binding /
+    audio_event_intent / production_notes 等非视觉元数据的存在 ≠ 拥有完整
+    Visual Production Binding。视频/首尾帧 BOUND 路由用
+    shot_has_visual_production_binding。bindings.json 损坏 →
+    ShotBindingSchemaError 显式异常（§39：损坏不静默当 UNBOUND）。"""
     from src.shot_binding.store import ShotBindingStore
     doc = ShotBindingStore(project_dir).load()
     return str(shot_id or "").strip() in doc.bindings
+
+
+def shot_has_visual_production_binding(project_dir, shot_id: str) -> bool:
+    """C1 18.md §3：BOUND / UNBOUND 路由判定（首帧/尾帧/视频统一）。
+    只有 binding 携带**视觉生产内容**（scene_binding / character_bindings /
+    prop_bindings / action 任一）才算 Visual Production Binding；
+    仅 dialogue_speaker_binding / audio_event_intent / production_notes 的
+    binding 不触发 BOUND 路由（否则会路由进 BOUND 链后因视觉 binding 不完整
+    被 binding_not_ready 拦死）。dialogue metadata ≠ visual routing predicate。
+    bindings.json 损坏 → ShotBindingSchemaError 显式异常（与 shot_has_binding
+    同口径：损坏不静默当 UNBOUND）。"""
+    from src.shot_binding.store import ShotBindingStore
+    doc = ShotBindingStore(project_dir).load()
+    binding = doc.bindings.get(str(shot_id or "").strip())
+    if binding is None:
+        return False
+    return bool(
+        binding.scene_binding is not None
+        or binding.character_bindings
+        or binding.prop_bindings
+        or binding.action is not None
+    )
 
 
 # ============ temporal 过滤（§8/§13：先于 priority）============

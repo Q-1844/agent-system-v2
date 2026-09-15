@@ -39,6 +39,7 @@ from src.generation.image_adapter import (
     boundary_stale_detail,
     selected_boundary_batch,
 )
+from src.generation.dialogue_control import split_dialogue_lines
 
 
 @dataclass
@@ -114,18 +115,21 @@ def _resolve_boundary_frame(shot: Any, pack_basis: dict, slot: str,
 
 
 def build_bound_video_input(project_dir, project: Any, shot: Any, *,
-                            native_dialogue_control: bool = False,
+                            native_dialogue_control: bool = True,
                             native_dialogue_language: Optional[str] = None
                             ) -> BoundVideoRequest:
     """BOUND shot 的视频生成输入（§3.B；§21：BOUND 永不回落 legacy）。
     顺序：validity gate → compile pack（自带 pre/post 守卫）→ boundary frame 解析
     （selection truth + freshness）→ prompt（creative motion + Pack 生产上下文
-    video 口径 + P1 风格指令 [+ Native AV B1 dialogue block]）→ pre-dispatch guard。
+    video 口径 + P1 风格指令 [+ Native AV dialogue block]）→ pre-dispatch guard。
     provider_mode 沿用 handler 既有映射（keyframes=link_mode=='keyframes'，否则 i2v）
     ——Adapter 不改变 mode 选择（creative 策略字段）。
-    Native AV B1（17.md §10/§12）：native_dialogue_control 显式 opt-in（默认 False=
-    行为逐字节不变）；开启时 dialogue block 追加在最终 prompt 尾部，speaker 解析
-    fail closed（DialogueControlError → 零 provider 调用）。"""
+    Native AV C1（18.md §4/§5）：native_dialogue_control 默认 True=自动——
+    Shot.dialogue 非空即启用 Controlled Dialogue（正式生产行为）；显式 False =
+    debug/compat override（visual-only，dialogue 不进 prompt）。language =
+    resolve_dialogue_language precedence（request override > project
+    native_av.spoken_language；对有台词 shot 皆缺 → language_missing fail closed，
+    零 provider 调用）；speaker 解析 fail closed（DialogueControlError）。"""
     from src.shot_binding import ShotBindingService
     from src.core.models import OpeningSource
 
@@ -176,16 +180,19 @@ def build_bound_video_input(project_dir, project: Any, shot: Any, *,
     tail = " ".join(x for x in (ctx, style) if x)
     prompt = f"{creative}, {tail}" if (creative and tail) else (creative or tail)
 
-    # ---- Native AV B1 dialogue control（17.md §10/§12：gate off → 零执行）----
+    # ---- Native AV C1 dialogue control（18.md §4/§5：dialogue 非空默认启用）----
     if native_dialogue_control:
         from src.generation.dialogue_control import (
             append_dialogue_block,
+            resolve_dialogue_language,
             resolve_native_dialogue,
         )
-        ctl = resolve_native_dialogue(project_dir, shot,
-                                      language=native_dialogue_language)
-        if ctl is not None:
-            prompt = append_dialogue_block(prompt, ctl)
+        ctl = None
+        if split_dialogue_lines(getattr(shot, "dialogue", "") or ""):
+            lang = resolve_dialogue_language(project, native_dialogue_language)
+            ctl = resolve_native_dialogue(project_dir, shot, language=lang)
+            if ctl is not None:
+                prompt = append_dialogue_block(prompt, ctl)
         diagnostics.append({
             "reason": "native_dialogue_control_applied",
             "detail": ({"resolution": ctl.resolution, "line_count": len(ctl.lines),

@@ -50,6 +50,7 @@ def _build(pname):
                      selected_index=0, status="done")
     sh2 = Shot(shot_id="s02_c01", scene_id="s02", index=1,
                description="视频", prompt_en="a dog running", link_mode="i2v", dialogue="跑",
+               characters=["Alan"],
                first_frame=ff2,
                audio=AudioAsset(local=str(pdir/"output"/"audio"/"s02_c01.mp3"),
                                 status="done", duration_ms=2000),
@@ -68,7 +69,9 @@ def _build(pname):
     sh4 = Shot(shot_id="s04_c01", scene_id="s04", index=1,
                description="无角色尾帧", prompt_en="a scene", link_mode="keyframes",
                first_frame=ff4)
+    from src.core.models import NativeAVSettings
     proj = Project(name=pname, style=StyleAnchor(aspect_ratio="16:9", size_tier="1K"),
+                   native_av=NativeAVSettings(spoken_language="Mandarin Chinese"),
                    characters=[alan],
                    scenes=[Scene(scene_id="s01", shots=[sh1]), Scene(scene_id="s02", shots=[sh2]),
                            Scene(scene_id="s03", shots=[sh3]), Scene(scene_id="s04", shots=[sh4])])

@@ -379,11 +379,13 @@ def test_t16_frozen_modules_importable_and_isolated():
 def test_t17_project_json_shape_unchanged(tmp_path):
     # 1) dataclass 字段冻结：Asset 未被扩展（修正 A）
     assert set(Asset.__dataclass_fields__.keys()) == {"local", "url", "status", "error", "updated_at"}
-    # 2) Project.to_dict 顶层 shape
+    # 2) Project.to_dict 顶层 shape（C1 18.md §5：+native_av settings，除此之外不变）
     pdir = make_project(tmp_path, with_character=True)
     raw = json.loads((pdir / "output" / "project.json").read_text(encoding="utf-8"))
     assert set(raw.keys()) == {"name", "schema_version", "created_at", "updated_at",
-                               "style", "story_text", "characters", "scenes", "next_scene_seq"}
+                               "style", "native_av", "story_text", "characters",
+                               "scenes", "next_scene_seq"}
+    assert raw["native_av"] == {"spoken_language": ""}
     assert set(raw["characters"][0].keys()) == {"name", "description_en", "views"}
     assert set(raw["characters"][0]["views"]["front"].keys()) == {"local", "url", "status", "error", "updated_at"}
     assert raw["schema_version"] == 2

@@ -101,3 +101,50 @@ async def update_visual_profile(project: str, body: dict):
         status = 409 if receipt.get("error") == "stale_revision" else 400
         raise HTTPException(status_code=status, detail=receipt)
     return receipt
+
+
+# ============ Native AV 生产设置（C1 18.md §5：spoken_language = language truth）============
+@router.get("/api/project/{project}/native-av-settings")
+async def get_native_av_settings(project: str):
+    """读项目 Native AV 生产设置。任何项目恒可读（缺省 = 空 settings，
+    对白生成时按 §5 fail closed 提示需先设置）。"""
+    try:
+        from src.core.store import ProjectStore
+        project_dir = get_project_manager().get_project_dir(project)
+        p = ProjectStore(project_dir).load()
+        from dataclasses import asdict
+        return {"ok": True, "native_av": asdict(p.native_av)}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"项目不存在: {project}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/api/project/{project}/native-av-settings")
+async def update_native_av_settings(project: str, body: dict):
+    """更新项目 Native AV 生产设置（最小面：spoken_language）。
+    spoken_language 为空字符串 = 清除（清除后有台词 shot 生成将按 §5 fail closed）。
+    修改不自动重新生成任何资产（18.md §26：detect → inform → explicit regenerate）。"""
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="body 必须是 JSON 对象")
+    if "spoken_language" not in body:
+        raise HTTPException(status_code=400, detail="body 必须包含 spoken_language")
+    try:
+        from src.core.store import ProjectStore
+        from src.core.models import NativeAVSettings
+        project_dir = get_project_manager().get_project_dir(project)
+        store = ProjectStore(project_dir)
+        p = store.load()
+        p.native_av = NativeAVSettings(
+            spoken_language=str(body.get("spoken_language") or "").strip())
+        store.save(p)
+        return {"ok": True, "native_av": {
+            "spoken_language": p.native_av.spoken_language}}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"项目不存在: {project}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

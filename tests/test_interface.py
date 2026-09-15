@@ -42,12 +42,14 @@ def _build_project(pname: str) -> Path:
         selected_index=0, status="done")
     sh2 = Shot(shot_id="s02_c01", scene_id="s02", index=1,
                description="测试视频", prompt_en="a dog running, anime",
-               link_mode="i2v", dialogue="跑",
+               link_mode="i2v", dialogue="跑", characters=["小猫"],
                first_frame=ff2,
                audio=AudioAsset(local=str(pdir / "output" / "audio" / "s02_c01.mp3"),
                                 status="done", duration_ms=2000),
                video=VideoAsset(num_frames=81, frame_rate=24))
+    from src.core.models import NativeAVSettings
     proj = Project(name=pname, style=StyleAnchor(aspect_ratio="16:9", size_tier="1K"),
+                   native_av=NativeAVSettings(spoken_language="Mandarin Chinese"),
                    scenes=[Scene(scene_id="s01", shots=[sh1]),
                            Scene(scene_id="s02", shots=[sh2])])
     ProjectStore(pdir).save(proj)

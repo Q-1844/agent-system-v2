@@ -238,7 +238,8 @@ def test_compile_appends_after_visual_prompt_verbatim():
     shot.motion = "she turns and walks"
     visual = ("Animate this image: she turns and walks, "
               "keep character identity and outfit consistent")
-    compiled = compile_prompt_with_native_dialogue(visual, None, shot, language=LANG)
+    compiled = compile_prompt_with_native_dialogue(visual, None, None, shot,
+                                                   language_override=LANG)
     assert compiled.startswith(visual), "现有 visual prompt 原样保持在前"
     assert compiled[len(visual):].startswith(" ")
     assert "1. 陈默 says: 我们走。" in compiled, "台词原文原样（原文无「」则不加）"
@@ -248,14 +249,16 @@ def test_compile_no_dialogue_returns_prompt_unchanged():
     shot = _shot(dialogue="", characters=["陈默"])
     visual = "Animate this image: subtle motion"
     assert compile_prompt_with_native_dialogue(
-        visual, None, shot, language=LANG) == visual
+        visual, None, None, shot, language_override=LANG) == visual
 
 
 def test_compile_deterministic(tmp_path):
     shot = _shot(dialogue="林晚星：「门开了吗？」\n顾岩：「还没有。」",
                  characters=["林晚星", "顾岩"])
-    p1 = compile_prompt_with_native_dialogue("BASE", None, shot, language=LANG)
-    p2 = compile_prompt_with_native_dialogue("BASE", None, shot, language=LANG)
+    p1 = compile_prompt_with_native_dialogue("BASE", None, None, shot,
+                                             language_override=LANG)
+    p2 = compile_prompt_with_native_dialogue("BASE", None, None, shot,
+                                             language_override=LANG)
     assert p1 == p2
 
 

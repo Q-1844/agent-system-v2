@@ -426,9 +426,20 @@ class StyleAnchor:
 
 
 @dataclass
+class NativeAVSettings:
+    """Native AV 生产设置（C1 18.md §5：language 从 caller 实验参数升级为
+    Project Production Policy 的最小落地）。只放项目级生产事实，不放大系统。
+    spoken_language：正式对白语言（如 "Mandarin Chinese"）——Native Dialogue
+    Control 的 language authoritative source；显式 request override > 本值；
+    两者皆缺 + 台词非空 → language_missing fail closed（B1 已证伪让 provider 猜）。"""
+    spoken_language: str = ""
+
+
+@dataclass
 class Project:
     name: str
     style: StyleAnchor = field(default_factory=StyleAnchor)
+    native_av: NativeAVSettings = field(default_factory=NativeAVSettings)   # C1 §5（旧项目缺省 = 空 settings）
     story_text: str = ""             # 项目级完整故事（只存显，不解析/不拆分/不生成）
     characters: List[Character] = field(default_factory=list)
     scenes: List[Scene] = field(default_factory=list)
@@ -456,6 +467,7 @@ class Project:
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "style": asdict(self.style),
+            "native_av": asdict(self.native_av),
             "story_text": self.story_text,
             "characters": [
                 {"name": c.name, "description_en": c.description_en,
@@ -472,6 +484,11 @@ class Project:
         next_scene_seq 缺失时按已用 scene_id 最大数字 + 1 初始化（删除不回收）。"""
         raw = raw or {}
         style = StyleAnchor(**(raw.get("style") or {}))
+        # native_av settings：字段过滤解析（旧项目无此键 → 空 settings；未知键不炸——
+        # 与 video_end_frame/Asset 同口径，比 StyleAnchor 的直接 ** 更稳）
+        _nav = dict(raw.get("native_av") or {})
+        native_av = NativeAVSettings(**{k: v for k, v in _nav.items()
+                                        if k in NativeAVSettings.__dataclass_fields__})
         characters = []
         for c in raw.get("characters", []):
             views = {k: Asset(**v) for k, v in (c.get("views") or {}).items()}
@@ -495,6 +512,7 @@ class Project:
         return cls(
             name=raw.get("name", "untitled"),
             style=style,
+            native_av=native_av,
             story_text=raw.get("story_text", ""),
             characters=characters,
             scenes=scenes,

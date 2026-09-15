@@ -108,12 +108,13 @@ NDC_ON = {"native_dialogue_control": True, "native_dialogue_language": LANG}
 # ============ Legacy / UNBOUND handler（§14 regression）============
 
 def test_flag_off_dialogue_stays_out_of_prompt(venv):
-    """§12：gate 关闭（默认）→ 当前生成请求保持等价（dialogue 不进 prompt）。"""
+    """C1 18.md §4：显式 native_dialogue_control=False = debug/compat override
+    → dialogue 不进 prompt（visual-only 行为逐字节不变）。"""
     pdir, fake = venv
     _seed_first_frame(pdir)
     _set_video_ready(pdir)
     _set_dialogue(pdir, dialogue="我们现在出发。")
-    _run_video(pdir)
+    _run_video(pdir, params={"native_dialogue_control": False})
     assert len(fake.video_calls) == 1
     call = fake.video_calls[0]
     project = _load_project(pdir)
@@ -195,7 +196,7 @@ def test_flag_off_keyframes_behavior_unchanged(venv):
     _seed_last_frame(pdir, shot_id="s01_c02")
     _set_video_ready(pdir, shot_id="s01_c02", link_mode="keyframes")
     _set_dialogue(pdir, shot_id="s01_c02", dialogue="台词。")
-    _run_video(pdir, shot_id="s01_c02")
+    _run_video(pdir, shot_id="s01_c02", params={"native_dialogue_control": False})
     call = fake.video_calls[0]
     project = _load_project(pdir)
     assert call["mode"] == "keyframes"
@@ -210,7 +211,7 @@ def test_request_shape_unchanged_no_audio_slots(venv):
     _seed_first_frame(pdir)
     _set_video_ready(pdir)
     _set_dialogue(pdir, dialogue="我们现在出发。")
-    _run_video(pdir)                                   # A：flag off
+    _run_video(pdir, params={"native_dialogue_control": False})   # A：显式 override off
     _run_video(pdir, params=dict(NDC_ON))              # B：flag on
     off, on = fake.video_calls[0], fake.video_calls[1]
     assert set(off.keys()) == FAKE_VIDEO_KEYS
@@ -232,7 +233,8 @@ def test_bound_flag_off_identical(bound_venv):
     _set_dialogue(pdir, dialogue="我们现在出发。")
     project = _load_project(pdir)
     shot = project.get_shot("s01_c01")
-    req = build_bound_video_input(pdir, project, shot)   # 默认 kwargs = flag off
+    req = build_bound_video_input(pdir, project, shot,
+                                  native_dialogue_control=False)   # 显式 override off
     assert "我们现在出发" not in req.prompt
     assert "spoken dialogue" not in req.prompt
     assert set(req.to_dict().keys()) == BOUND_KEYS
@@ -246,7 +248,7 @@ def test_bound_flag_on_block_at_tail_with_diagnostic(bound_venv):
     _set_dialogue(pdir, dialogue="我们现在出发。")
     project = _load_project(pdir)
     shot = project.get_shot("s01_c01")
-    off = build_bound_video_input(pdir, project, shot)
+    off = build_bound_video_input(pdir, project, shot, native_dialogue_control=False)
     on = build_bound_video_input(pdir, project, shot,
                                  native_dialogue_control=True,
                                  native_dialogue_language=LANG)
@@ -265,7 +267,7 @@ def test_bound_flag_on_no_dialogue_no_block(bound_venv):
     _set_video_ready(pdir)
     project = _load_project(pdir)
     shot = project.get_shot("s01_c01")
-    off = build_bound_video_input(pdir, project, shot)
+    off = build_bound_video_input(pdir, project, shot, native_dialogue_control=False)
     on = build_bound_video_input(pdir, project, shot,
                                  native_dialogue_control=True,
                                  native_dialogue_language=LANG)
@@ -316,12 +318,12 @@ def test_bound_handler_flag_on_ambiguous_fail_closed_zero_calls(bound_venv):
     assert fake.video_calls == []
 
 
-# ============ 端点 gate 参数（§12 显式 opt-in）============
+# ============ 端点 gate 参数（C1 18.md §4：None=自动，False=override）============
 
 def test_endpoint_exposes_feature_gate_params():
     import inspect
     sig = inspect.signature(shot_video)
     assert "native_dialogue_control" in sig.parameters
-    assert sig.parameters["native_dialogue_control"].default is False
+    assert sig.parameters["native_dialogue_control"].default is None
     assert "native_dialogue_language" in sig.parameters
     assert sig.parameters["native_dialogue_language"].default is None

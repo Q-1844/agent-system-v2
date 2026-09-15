@@ -148,25 +148,44 @@ def _binding_speaker_map(project_dir, shot_id: str,
 
 
 # ============ speaker 解析（§7/§8）============
+def resolve_dialogue_language(project, override: Optional[str]) -> str:
+    """C1 §5：language production policy 的唯一 precedence 实现。
+    显式 request override > project.native_av.spoken_language；两者皆缺 →
+    language_missing fail closed（绝不恢复成让 provider 猜——B1 人评已证伪：
+    猜语言产生严重生产错误）。由调用方在确认 Shot.dialogue 非空之后调用。"""
+    lang = str(override or "").strip()
+    if lang:
+        return lang
+    settings = getattr(project, "native_av", None)
+    lang = str(getattr(settings, "spoken_language", "") or "").strip()
+    if lang:
+        return lang
+    raise DialogueControlError(
+        "language_missing",
+        "native dialogue control 需要可确定的对白语言：显式 request override 与 "
+        "project.native_av.spoken_language 均缺失（18.md §5：fail closed，"
+        "绝不恢复成让 Agnes 自己猜语言）")
+
+
 def resolve_native_dialogue(project_dir, shot, *,
                             language: str) -> Optional[NativeDialogueControl]:
     """解析一镜的 native dialogue control。
-    - 无非空台词行 → None（无 block，现有行为不变）；
-    - language 空 → language_missing（§10：显式 caller 输入，不猜）；
+    - 无非空台词行 → None（无 block，现有行为不变；C1 §4：language 只对
+      有台词的 shot 有意义——先查台词再查 language，无台词镜头不需要语言）；
+    - language 空 → language_missing（§5：不猜）；
     - speaker 无法唯一确定（ambiguous_speaker）/ speaker ∉ Shot.characters
       （speaker_not_in_characters）/ binding 块非法（invalid_binding）→ fail closed。
     binding 显式裁决优先（§7.2）；其余句：单角色 single_auto；多角色读内联
     「角色名：」前缀（解析辅助证据）；仍无法唯一确定 → fail closed。"""
+    raw_lines = split_dialogue_lines(getattr(shot, "dialogue", "") or "")
+    if not raw_lines:
+        return None
+
     lang = str(language or "").strip()
     if not lang:
         raise DialogueControlError(
             "language_missing",
-            "native dialogue control 需要显式 language（17.md §10：B1 不建语言系统，"
-            "由 caller/test 显式输入并记录来源）")
-
-    raw_lines = split_dialogue_lines(getattr(shot, "dialogue", "") or "")
-    if not raw_lines:
-        return None
+            "native dialogue control 需要显式 language（18.md §5：fail closed，不猜）")
 
     characters = _normalized_characters(shot)
     binding_map = _binding_speaker_map(project_dir, getattr(shot, "shot_id", ""),
@@ -256,12 +275,16 @@ def append_dialogue_block(prompt: str, control: NativeDialogueControl) -> str:
     return f"{prompt} {block}" if prompt else block
 
 
-def compile_prompt_with_native_dialogue(prompt: str, project_dir, shot, *,
-                                        language: str) -> str:
-    """flag-on 编译入口（§10）：现有 visual prompt 保持原样，dialogue block
-    追加在后。无台词 → 原样返回（§14：无 dialogue 行为不变）。
+def compile_prompt_with_native_dialogue(prompt: str, project_dir, project, shot, *,
+                                        language_override: Optional[str] = None) -> str:
+    """C1 生产编译入口（§4/§5）：dialogue 非空 → 默认启用 Native Dialogue Control
+    （§4 默认语义）；language = resolve_dialogue_language precedence（§5）。
+    无台词 → prompt 原样返回（§14：无 dialogue 行为不变——不触发 language 检查）。
     fail closed 时抛 DialogueControlError，调用方不得静默继续。"""
-    control = resolve_native_dialogue(project_dir, shot, language=language)
+    if not split_dialogue_lines(getattr(shot, "dialogue", "") or ""):
+        return prompt
+    lang = resolve_dialogue_language(project, language_override)
+    control = resolve_native_dialogue(project_dir, shot, language=lang)
     if control is None:
         return prompt
     return append_dialogue_block(prompt, control)
