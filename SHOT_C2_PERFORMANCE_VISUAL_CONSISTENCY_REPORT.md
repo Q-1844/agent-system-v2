@@ -195,3 +195,44 @@ HUMAN FINAL REVIEW PENDING（:8913）
 ```
 
 STOP——等待用户按 §26 三分支裁决。不自动进入 Sequence Assembly。
+
+## 8. 人评收口（2026-09-15 用户裁定）
+
+评审数据：`_c2_perf_e2e/results/C2_REVIEW_FEEDBACK.json`（36 条点击 + 5 短评）。
+
+### Sample C（动作顺序）——**明显净提升** ✅
+
+| | baseline | C2 v1 | C2 v3 |
+|---|---|---|---|
+| action_path | 正确 | 正确 | 正确 |
+| action_order | 部分正确 | 部分正确 | **正确** |
+| character_integrity | **有问题**（崩坏） | 完整 | 完整 |
+| overall | 相当 | **明显更好** | **明显更好** |
+
+短评：baseline「错误很多，嘴巴基本没动…男生只是个手并且崩坏」→ v1「无崩坏。很好」→
+v3「**基本完美**…说的音准也没问题」。C 侧控制面成立：动作顺序编译 + canonical 补写
+后，人物完整性与整体画面显著改善。
+
+### Sample E（表情 + 手枪连续性）——**无净提升** ⚠️
+
+| | baseline | C2 v1 | C2 v3 |
+|---|---|---|---|
+| expression | 没变化 | 略好 | 没变化 |
+| prop_continuity | 没变化 | 没变化 | 略好 |
+| identity | **稳定** | **漂移** | **漂移** |
+| overall | 相当 | 略好 | 相当 |
+
+短评：v1「手枪在拿到一刹那枪头变枪尾，嘴巴有一点点漂移」；v3「**枪的问题依然存在**」。
+连续性指令编译正确（prompt 实证在位），但 provider 未稳定执行——与 §21 预警一致。
+另出现 identity 漂移信号（baseline 稳定 → v1/v3 漂移；n=2 无法区分 provider 随机
+与系统性回退；baseline 与 variants 的 boundary 帧输入也不同——binding 变更后显式
+重生成）。
+
+### §26 三分支映射 → **情况 B**
+
+「其中一个改善明显（C），另一个没有（E）」→ 按规格只做 **C2.1 narrow follow-up
+（E 侧：prop continuity / expression）**，不重开整个 C2；C 侧成果保持。
+执行纪律按 §21：少量有针对性尝试后仍经常失败 → 记录 **provider capability
+boundary**，以 variant regeneration + selection 处置，不为绕过模型限制污染 canonical。
+
+C2.1 的具体规格待用户给出（或委托起草），不自动开始。
