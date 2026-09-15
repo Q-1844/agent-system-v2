@@ -307,16 +307,21 @@ def native_av_freshness(project_dir, project: Any, shot: Any) -> Dict[str, Any]:
     return _result("current", {"version_id": version.version_id})
 
 
-def compute_current_dependency_keys(project_dir, project: Any, shot: Any
+def compute_current_dependency_keys(project_dir, project: Any, shot: Any, *,
+                                    language_override: Optional[str] = None
                                     ) -> Dict[str, Any]:
     """重算当前 canonical 的 Native AV 依赖键（freshness / race guard 共用）。
-    只重算依赖键——不触碰 provider 事实键（per-generation provenance）。"""
+    只重算依赖键——不触碰 provider 事实键（per-generation provenance）。
+    language_override：§5 precedence 的一部分——pre-dispatch/pre-commit 与
+    generation 同窗，必须携带同一 override（否则 override 生成会被误判变化）；
+    freshness 读模型传 None（override 是 ephemeral request 事实，非 canonical）。
+    language 不可确定（皆缺）→ spoken_language=None（诚实缺省，不 raise——
+    与 stored 值对比即 STALE）。"""
     from src.generation.image_adapter import shot_has_visual_production_binding
 
+    has_spoken = bool(split_dialogue_lines(getattr(shot, "dialogue", "") or ""))
     audio_intent = read_audio_intent(project_dir, shot,
-                                     has_spoken_lines=bool(
-                                         split_dialogue_lines(
-                                             getattr(shot, "dialogue", "") or "")))
+                                     has_spoken_lines=has_spoken)
     keys: Dict[str, Any] = {
         "dialogue_fingerprint": None,
         "speaker_map_fingerprint": None,
@@ -327,9 +332,13 @@ def compute_current_dependency_keys(project_dir, project: Any, shot: Any
         "music_policy": audio_intent["music_policy"],
         "prompt_compiler_schema": NATIVE_AV_PROMPT_SCHEMA,
     }
-    if split_dialogue_lines(getattr(shot, "dialogue", "") or ""):
-        language = resolve_dialogue_language(project, None)
-        control = resolve_native_dialogue(project_dir, shot, language=language)
+    if has_spoken:
+        try:
+            language = resolve_dialogue_language(project, language_override)
+        except DialogueControlError:
+            language = None
+        control = (resolve_native_dialogue(project_dir, shot, language=language)
+                   if language else None)
         if control is not None:
             keys["dialogue_fingerprint"] = fingerprint(
                 str(getattr(shot, "dialogue", "") or ""))
@@ -364,10 +373,13 @@ class NativeAVDependencyChangedError(NativeAVError):
 
 
 def native_av_pre_dispatch_check(project_dir, project: Any, shot: Any,
-                                 basis: Dict[str, Any]) -> None:
+                                 basis: Dict[str, Any], *,
+                                 language_override: Optional[str] = None) -> None:
     """§27 pre-dispatch：provider 调用前重算依赖键，与 pack basis 对齐比较。
-    不一致 → provider 不调用（零 provider 调用浪费）。"""
-    current = compute_current_dependency_keys(project_dir, project, shot)
+    不一致 → provider 不调用（零 provider 调用浪费）。language_override 必须
+    与本次 generation 编译时一致（§5 precedence 同窗对齐）。"""
+    current = compute_current_dependency_keys(project_dir, project, shot,
+                                              language_override=language_override)
     mismatched = [k for k in NATIVE_AV_DEPENDENCY_KEYS
                   if (basis or {}).get(k) != current.get(k)]
     if mismatched:
@@ -379,10 +391,13 @@ def native_av_pre_dispatch_check(project_dir, project: Any, shot: Any,
 
 
 def native_av_pre_commit_check(project_dir, project: Any, shot: Any,
-                               basis: Dict[str, Any]) -> None:
+                               basis: Dict[str, Any], *,
+                               language_override: Optional[str] = None) -> None:
     """§27 pre-commit：provider 完成后、attach 前重算依赖键。不一致 →
-    拒绝 attach（不建 VideoVersion、不设 final_video、不冒充 CURRENT）。"""
-    current = compute_current_dependency_keys(project_dir, project, shot)
+    拒绝 attach（不建 VideoVersion、不设 final_video、不冒充 CURRENT）。
+    language_override 必须 与本次 generation 编译时一致（§5 同窗对齐）。"""
+    current = compute_current_dependency_keys(project_dir, project, shot,
+                                              language_override=language_override)
     mismatched = [k for k in NATIVE_AV_DEPENDENCY_KEYS
                   if (basis or {}).get(k) != current.get(k)]
     if mismatched:

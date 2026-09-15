@@ -209,6 +209,11 @@ class VideoVersion:
     frame_rate: int = 24
     origin_run_id: Optional[str] = None  # AI-4B Autopilot：本版本由哪个 Run 生成（None=手工/旧）
     model: Optional[str] = None          # 生成所用视频模型（None=旧数据/config 默认 v2.0）
+    # Native AV C1（18.md §22/§23）：可选 generation_basis（沿用 ImageBatch
+    # .generation_basis 兼容范式）——记录本版本基于什么产生（dialogue/speaker/
+    # language/audio intent/visual/provider/compiler 指纹）。{} = legacy/旧数据或
+    # 未走 Native AV 编译（消费方按 UNTRACKED_LEGACY 诚实处理，不当作 fresh）。
+    generation_basis: Dict[str, Any] = field(default_factory=dict)
 
 
 # ---- 批次解析/迁移 helper（Step 2 向后兼容：旧 first_frame/last_frame/video -> 批次）----

@@ -1221,6 +1221,9 @@ async def _handler_video(job, emit):
     # 🔴 恢复：已有 video_id 且未 done/failed -> 续轮询，不重提交。
     #  recover_pending_videos 把轮询超时（仍在跑）的设为 queued 后入队，handler 在此续轮询；
     #  failed 的不进恢复分支 -> 走 else 重新提交，避免对失效 video_id 死循环轮询。
+    # C1 §22/§25：recover 路径不带 Native AV generation basis（原始提交的编译输入
+    # 已不可考——诚实记 {}，freshness 判 untracked_legacy，不冒充 fresh）。
+    native_generation_basis: dict = {}
     if shot.video.video_id and shot.video.status not in (
             ShotStatus.DONE.value, ShotStatus.FAILED.value):
         vid = shot.video.video_id
@@ -1232,7 +1235,6 @@ async def _handler_video(job, emit):
         # 逐字节不变。恢复/续轮询路径不做 Binding gate（无新生成输入，不阻断在途
         # 视频的结果回收——轮询不是 generation dispatch）。
         bound_video = None
-        native_generation_basis: dict = {}
         if shot_has_visual_production_binding(project_dir, shot.shot_id):
             bound_video = build_bound_video_input(project_dir, project, shot,
                                                   native_dialogue_control=ndc,
@@ -1273,6 +1275,14 @@ async def _handler_video(job, emit):
             # 2.5 契约时长（秒，4-12，client 内再夹取）：由既有 8n+1 帧规划反推
             kwargs["duration_s"] = max(4, min(12, round(
                 shot.video.num_frames / max(shot.video.frame_rate, 1))))
+        # C1 §27 pre-dispatch：provider 调用前重算 Native AV 依赖键（dialogue/
+        # speaker/language/audio intent/visual/compiler）——canonical 已变 →
+        # 零 provider 调用，显式重试。
+        if native_generation_basis:
+            from src.generation.native_av_pack import native_av_pre_dispatch_check
+            native_av_pre_dispatch_check(project_dir, project, shot,
+                                         native_generation_basis,
+                                         language_override=ndc_lang)
         created = await get_agnes_client().create_video(prompt, mode=mode, **kwargs)
         vid = created.get("video_id") or created.get("task_id") or created.get("id")
         if not vid:
@@ -1306,6 +1316,17 @@ async def _handler_video(job, emit):
                           lambda s: setattr(s.video, "status", ShotStatus.FAILED.value))
         raise
 
+    # C1 §27 pre-commit：provider 完成后、attach 前重算 Native AV 依赖键——
+    # 生成窗口内 dialogue/speaker/language/audio intent/visual 已变 → 拒绝
+    # attach（不建 VideoVersion、不设 final_video、不冒充 CURRENT）。
+    if native_generation_basis:
+        from src.generation.native_av_pack import native_av_pre_commit_check
+        shot = store.load().get_shot(job.shot_id)
+        project = store.load()
+        native_av_pre_commit_check(project_dir, project, shot,
+                                   native_generation_basis,
+                                   language_override=ndc_lang)
+
     # 下载
     dest = project_dir / "output" / "videos" / f"{shot.shot_id}.mp4"
     await get_agnes_client().download(res["url"], dest)
@@ -1326,7 +1347,8 @@ async def _handler_video(job, emit):
                           seconds_returned=res["seconds"], size_returned=res["size"],
                           num_frames=shot.video.num_frames, frame_rate=shot.video.frame_rate,
                           origin_run_id=job.params.get("origin_run_id"),
-                          model=poll_model or getattr(shot.video, "model", None))
+                          model=poll_model or getattr(shot.video, "model", None),
+                          generation_basis=dict(native_generation_basis))
     def mut(s, vv=new_vv, d=str(dest), r=res):
         s.video_versions.append(vv)
         s.final_video = vv.version_id
@@ -1350,6 +1372,33 @@ async def _handler_video(job, emit):
 
 
 JOB_HANDLERS["video"] = _handler_video
+
+
+@router.get("/api/project/{project_name}/shot/{shot_id}/video/freshness")
+async def shot_video_freshness(project_name: str, shot_id: str):
+    """Native AV freshness 读模型（C1 18.md §25，只读绝不重生成——§26）。
+    current：stored generation_basis 与当前重算依赖键一致；
+    stale：dialogue/speaker/language/audio intent/visual/compiler 任一已变
+    （detail.mismatched_keys 逐键列出）；
+    untracked_legacy：旧版本无 basis（可继续播放/保留/手工选择，但系统诚实表示
+    无法证明其 Native AV freshness）；
+    missing：无 selected/final video（或版本未完成）。"""
+    try:
+        project_dir = get_project_manager().get_project_dir(project_name)
+        from src.core.store import ProjectStore
+        store = ProjectStore(project_dir)
+        project = store.load()
+        shot = project.get_shot(shot_id)
+        if shot is None:
+            raise HTTPException(404, f"镜头 {shot_id} 不存在")
+        from src.generation.native_av_pack import native_av_freshness
+        return native_av_freshness(project_dir, project, shot)
+    except HTTPException:
+        raise
+    except FileNotFoundError:
+        raise HTTPException(404, "项目不存在")
+    except Exception as e:
+        raise HTTPException(500, str(e))
 
 
 @router.post("/api/project/{project_name}/shot/{shot_id}/video")
