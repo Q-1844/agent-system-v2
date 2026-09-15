@@ -149,6 +149,24 @@ HUMAN FINAL REVIEW PENDING
 STOP——等待用户人评。不自动进入 C2（AV Prompt & Sound Staging）、Voice Reference、
 Music、Audio Post、Final Mix。
 
+## 7. 人评收口（2026-09-15 用户裁定）
+
+**C1（21.md）FINAL PASS**——productionization 未把 B1 已验证效果弄坏。
+
+评审点击（`_c1_prod_e2e/results/C1R_REVIEW_FEEDBACK.json`）：
+- **dialogue / speaker / language：5/5 样本全部「正确」**——声音维度零回退；
+- overall：B「更好」、D「更好」，A/C/E「相当」，**无「更差」**；
+- E（BOUND）continuity=「退化」；B/C 短评「声音确实更自然」；D「场景转换很优秀/非常好」。
+
+用户短评指认的剩余问题**全部为画面侧**（非 C1 引入）：
+- C：人物没有绕着楼梯走（动作与提示词/分镜不符）、男方只出现一只手——「提示词的问题」；
+- E：表情不够紧张、手枪方向拿起来后发生变化（镜内物体连续性）——「声音还好，画面问题」。
+
+**用户两条裁定（记录为后续阶段约束）**：
+1. 后续 E2E 只对**效果差的样本做专门测试**，不再跑全量样本套件；
+2. 当前问题主要是**画面问题**——下一方向为画面/提示词（人物-动作贴合、镜内物体
+   连续性、表情表演），具体规格待用户给出，不自动开始。
+
 ### 给 C2 的预留观察（不实施）
 - BGM：撤回 no-BGM 规则后恢复 B1 原生行为（本轮 5 样本未见异常 BGM——样本少不构成
   结论；C2 做 prompt-level no-music 实验时再评）。
