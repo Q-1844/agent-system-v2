@@ -116,6 +116,19 @@ def parse_peak_db(volumedetect_stderr: str) -> Optional[float]:
     return None
 
 
+def measure_peak_db(path: str) -> Optional[float]:
+    """实测混音输出峰值（§21 advisory 用）。探测失败 → None（不伪造）。"""
+    import subprocess
+    try:
+        proc = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-nostats", "-i", str(path),
+             "-af", "volumedetect", "-vn", "-f", "null", "-"],
+            capture_output=True, timeout=600)
+    except Exception:
+        return None
+    return parse_peak_db(proc.stderr.decode("utf-8", errors="replace"))
+
+
 def peak_warning(max_volume_db: Optional[float]) -> Optional[Dict[str, Any]]:
     """§21 clipping advisory：只报告，不自动改 gain（用户/Agent 决定调整）。"""
     if max_volume_db is None:

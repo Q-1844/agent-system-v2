@@ -160,6 +160,50 @@ def test_sequence_render_handler_registered():
     assert JOB_HANDLERS.get("sequence_render") is not None
 
 
+def test_audio_plan_get_put_occ(seq_project):
+    """25.md §37/§38：AudioPlan GET/PUT + OCC 409；空 layers = 清空（S1 语义恢复）。"""
+    client, name = seq_project
+    r = client.post(f"/api/project/{name}/sequences", json={
+        "title": "ap", "clips": [{"shot_id": "s01_c01"}, {"shot_id": "s01_c02"}]})
+    sid = r.json()["sequence_id"]
+    # 初始无 plan
+    r = client.get(f"/api/project/{name}/sequences/{sid}/audio-plan")
+    assert r.status_code == 200 and r.json()["audio_plan"] is None
+    # PUT 合法 plan
+    layer = {"role": "music",
+             "source": {"kind": "imported_audio", "file": "audio_imports/m.wav"},
+             "start_ms": 0, "duration_ms": 14000, "gain_db": -18.0,
+             "fade_in_ms": 2000, "fade_out_ms": 3000}
+    r = client.put(f"/api/project/{name}/sequences/{sid}/audio-plan",
+                   json={"layers": [layer]})
+    assert r.status_code == 200, r.text
+    rev = r.json()["revision"]
+    assert r.json()["audio_plan"]["layers"][0]["gain_db"] == -18.0
+    # GET 回读一致
+    r = client.get(f"/api/project/{name}/sequences/{sid}/audio-plan")
+    assert r.json()["revision"] == rev
+    # §38 OCC：错 revision → 409
+    r = client.put(f"/api/project/{name}/sequences/{sid}/audio-plan",
+                   json={"layers": [layer | {"gain_db": -8.0}], "expected_revision": rev})
+    assert r.status_code == 200
+    r = client.put(f"/api/project/{name}/sequences/{sid}/audio-plan",
+                   json={"layers": [layer], "expected_revision": rev})
+    assert r.status_code == 409
+    # §8：非法 role → 400；非法 source kind → 400
+    r = client.put(f"/api/project/{name}/sequences/{sid}/audio-plan",
+                   json={"layers": [layer | {"role": "sfx"}]})
+    assert r.status_code == 400
+    r = client.put(f"/api/project/{name}/sequences/{sid}/audio-plan",
+                   json={"layers": [layer | {"source": {"kind": "mystery"}}]})
+    assert r.status_code == 400
+    # 清空 → None（S1 语义恢复）
+    r = client.put(f"/api/project/{name}/sequences/{sid}/audio-plan", json={"layers": []})
+    assert r.status_code == 200 and r.json()["audio_plan"] is None
+    # No Auto Render：PUT 后无任何 render 行产生
+    r = client.get(f"/api/project/{name}/sequences/{sid}/renders")
+    assert r.json()["render_versions"] == []
+
+
 def test_freshness_endpoint_contract(seq_project):
     """§20/§21 读模型经 API 外显：missing →（服务层造 render）untracked_legacy。"""
     client, name = seq_project

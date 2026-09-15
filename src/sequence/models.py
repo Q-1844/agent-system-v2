@@ -222,6 +222,13 @@ class SequenceRenderVersion:
     source_video_versions: List[Dict[str, Any]] = field(default_factory=list)
     error: Optional[str] = None
     finished_at: Optional[float] = None
+    # ---- S2（25.md）----
+    # §21 clipping advisory（混音峰值；None=未混音或未检出）。只报告不自动改 gain。
+    audio_peak_warning: Optional[Dict[str, Any]] = None
+    # 方案 A 溯源：混音所用的 base render version（video stream copy 来源）；
+    # None = 本 render 自行重建视频（无可用 base 或无 AudioPlan）。provenance 非
+    # freshness 依赖（base 换了但 S1 键相同 → 视频比特一致 → 仍 CURRENT）。
+    base_render_version_id: Optional[str] = None
 
     def __post_init__(self) -> None:
         if not str(self.version_id or "").strip():
@@ -251,6 +258,8 @@ class SequenceRenderVersion:
             "source_video_versions": list(self.source_video_versions),
             "error": self.error,
             "finished_at": self.finished_at,
+            "audio_peak_warning": self.audio_peak_warning,
+            "base_render_version_id": self.base_render_version_id,
         }
 
     @classmethod

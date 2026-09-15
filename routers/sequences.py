@@ -40,7 +40,8 @@ def _http_error(e: Exception) -> HTTPException:
 
 async def _handler_sequence_render(job, emit):
     """sequence render（Phase 1 prepare → Phase 2 ffmpeg 线程 → Phase 3 commit）。
-    长工作全部 asyncio.to_thread，不阻塞事件循环；不持 project write lock（§23）。"""
+    长工作全部 asyncio.to_thread，不阻塞事件循环；不持 project write lock（24.md §23
+    + 25.md §30）。有 AudioPlan → 方案 A 混音（base video copy）；无 → S1 语义。"""
     from src.sequence.service import SequenceService
     project_dir = get_project_manager().get_project_dir(job.project)
     svc = SequenceService(project_dir, job.project)
@@ -49,17 +50,24 @@ async def _handler_sequence_render(job, emit):
     if not sequence_id or not version_id:
         raise RuntimeError("sequence_render job 缺 sequence_id/render_version_id")
 
-    await emit("prepare", f"{sequence_id} Phase1：源真相解析 + ffprobe + basis 快照", 5)
-    rv, plan = await asyncio.to_thread(svc.prepare_render, sequence_id, version_id)
+    await emit("prepare",
+               f"{sequence_id} Phase1：源真相解析 + ffprobe + basis 快照"
+               f"（含 AudioPlan 解析）", 5)
+    prep = await asyncio.to_thread(svc.prepare_render, sequence_id, version_id)
+    mix_note = (f"+{len(prep.resolved_audio)} 音频层混音" if prep.has_layers
+                else "无 AudioPlan（S1 语义）")
     await emit("render",
-               f"{sequence_id} Phase2：ffmpeg 渲染 {len(plan.clips)} clips"
-               f"（hard cut，计划 {plan.total_duration_ms}ms）", 20)
-    output = await asyncio.to_thread(svc.execute_render, sequence_id, version_id, plan)
-    await emit("commit", f"{sequence_id} Phase3：recompute basis + 输出校验", 90)
+               f"{sequence_id} Phase2：ffmpeg 渲染 {len(prep.timeline.clips)} clips"
+               f"（{mix_note}，计划 {prep.timeline.total_duration_ms}ms）", 20)
+    output = await asyncio.to_thread(svc.execute_render, sequence_id, version_id, prep)
+    await emit("commit", f"{sequence_id} Phase3：recompute basis + 输出校验"
+                         f"{' + 峰值检查' if prep.has_layers else ''}", 90)
     result = await asyncio.to_thread(svc.commit_render, sequence_id, version_id)
+    peak_note = (f"，⚠ {result['audio_peak_warning']['max_volume_db']}dB 峰值告警"
+                 if result.get("audio_peak_warning") else "")
     await emit("done",
                f"{sequence_id} 完成（{result['duration_ms']}ms，"
-               f"Δ{result['duration_delta_ms']:+d}ms）: {output}", 100)
+               f"Δ{result['duration_delta_ms']:+d}ms{peak_note}）: {output}", 100)
 
 
 # 模块加载即注册（早于 startup；compose handler 同先例）
@@ -91,6 +99,26 @@ class UpdateSequenceRequest(BaseModel):
 
 class SelectRenderRequest(BaseModel):
     version_id: str
+
+
+class AudioLayerItem(BaseModel):
+    """单层（25.md §7）。source 为引用对象（{kind, dialogue_id, audio_version_id}
+    或 {kind, file}）；媒体事实在 render Phase 1 以 ffprobe 校验。"""
+    role: str
+    source: dict
+    start_ms: int
+    duration_ms: int
+    source_in_ms: int = 0
+    gain_db: float = 0.0
+    fade_in_ms: int = 0
+    fade_out_ms: int = 0
+
+
+class PutAudioPlanRequest(BaseModel):
+    """25.md §37/§38：一个完整 AudioPlan PUT + OCC 足够第一版。
+    layers=[] = 清空 plan（canonical 归一化 → S1 语义）。"""
+    layers: List[AudioLayerItem]
+    expected_revision: Optional[str] = None
 
 
 def _clips_payload(clips: Optional[List[ClipItem]]) -> Optional[List[dict]]:
@@ -229,6 +257,39 @@ async def select_render(project_name: str, sequence_id: str, req: SelectRenderRe
     try:
         entry = _service(project_name).select_render(sequence_id, req.version_id)
         return {"sequence_id": sequence_id, "final_render": entry.final_render}
+    except FileNotFoundError:
+        raise HTTPException(404, "项目不存在")
+    except Exception as e:
+        raise _http_error(e)
+
+
+# ============ Audio Plan（25.md §7/§37/§38）============
+
+@router.get("/api/project/{project_name}/sequences/{sequence_id}/audio-plan")
+async def get_audio_plan(project_name: str, sequence_id: str):
+    """读 AudioPlan（None = 无 plan → 渲染为 S1 语义，25.md §25）。"""
+    try:
+        plan = _service(project_name).get_audio_plan(sequence_id)
+        return {"sequence_id": sequence_id,
+                "audio_plan": plan.to_dict() if plan else None,
+                "revision": plan.revision if plan else None}
+    except FileNotFoundError:
+        raise HTTPException(404, "项目不存在")
+    except Exception as e:
+        raise _http_error(e)
+
+
+@router.put("/api/project/{project_name}/sequences/{sequence_id}/audio-plan")
+async def put_audio_plan(project_name: str, sequence_id: str, req: PutAudioPlanRequest):
+    """整体替换 AudioPlan（§37 最小能力；expected_revision OCC → 409，§38）。
+    🔴 No Auto Render（§22）：PUT 只改 canonical，绝不触发渲染。"""
+    try:
+        plan = _service(project_name).put_audio_plan(
+            sequence_id, [l.model_dump() for l in req.layers],
+            expected_revision=req.expected_revision)
+        return {"sequence_id": sequence_id,
+                "audio_plan": plan.to_dict() if plan else None,
+                "revision": plan.revision if plan else None}
     except FileNotFoundError:
         raise HTTPException(404, "项目不存在")
     except Exception as e:

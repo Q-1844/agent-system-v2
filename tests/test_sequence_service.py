@@ -93,10 +93,10 @@ def _create(svc, clips=None):
 def _render_through_phase2(svc, sequence_id):
     """create → prepare → execute（Phase 1+2）。返回 (version_id, output)。"""
     rv = svc.create_render(sequence_id)
-    rv, plan = svc.prepare_render(sequence_id, rv.version_id)
-    assert rv.status == RSTATUS_RENDERING
-    output = svc.execute_render(sequence_id, rv.version_id, plan)
-    return rv.version_id, output
+    prep = svc.prepare_render(sequence_id, rv.version_id)
+    assert prep.render_version.status == RSTATUS_RENDERING
+    output = svc.execute_render(sequence_id, prep.render_version.version_id, prep)
+    return prep.render_version.version_id, output
 
 
 # ============ canonical ops ============
@@ -149,15 +149,17 @@ def test_delete_cleans_files(svc):
 def test_prepare_snapshots_truth(svc):
     blk = _create(svc)
     rv = svc.create_render(blk.sequence_id)
-    rv, plan = svc.prepare_render(blk.sequence_id, rv.version_id)
+    prep = svc.prepare_render(blk.sequence_id, rv.version_id)
+    rv = prep.render_version
     assert rv.status == RSTATUS_RENDERING
     assert rv.planned_duration_ms == 6000 + 8000              # §13 sum(effective)
     assert rv.sequence_revision == blk.revision
+    assert not prep.has_layers                                # 无 AudioPlan = S1 语义（25.md §25）
     assert rv.source_video_versions == [
         {"shot_id": "s01_c01", "version_id": "vv_a1"},
         {"shot_id": "s01_c02", "version_id": "vv_b1"}]
     assert rv.generation_basis["clips"][0]["resolved_video_version_id"] == "vv_a1"
-    assert plan.total_duration_ms == 14000
+    assert prep.timeline.total_duration_ms == 14000
     # §9：output_file 必须 Phase 1 落盘（消费方按此播放/导出，不得为 None）
     assert rv.output_file is not None
     assert rv.output_file.replace("\\", "/").endswith(
