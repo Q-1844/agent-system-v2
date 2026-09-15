@@ -1,20 +1,21 @@
 # src/generation/av_prompt_compiler.py
-# Native AV C1 — Audio-Visual Prompt Compiler V1（18.md §10-§15）。
+# Native AV C1 — AV Prompt Compiler（21.md §18：只保留 B1 已验证的
+# Dialogue/Speaker/Language 控制 + stage direction 不朗读补充；
+# 不做任何声音/BGM/表演创作 prompt——那属于 C2 Prompt & Sound Staging）。
 #
-# 职责：把 NativeAVGenerationPack 的四类语义事实编译成一条 Agnes 已验证的
-# 单行 prompt（§11：不要求多行格式，重要的是语义隔离）：
-#   1. Visual / performance intent —— 现有 visual prompt 原样（§15：不发明动作）
-#   2. Non-spoken action —— §7 舞台指示 + 语气提示（绝不进台词引用）
+# 职责：把 NativeAVGenerationPack 的语义事实编译成一条 Agnes 已验证的
+# 单行 prompt（语义隔离，不要求多行格式）：
+#   1. Visual / performance intent —— 现有 visual prompt 原样（不发明动作）
+#   2. Non-spoken action —— 舞台指示 + 语气提示（绝不进台词引用）
 #   3. Spoken dialogue —— B1 已验证的编号 speaker 行 + 红线
-#   4. Native sound environment —— music policy + shot-local 声音意图
 #
-# 🔴 Prompt 红线（Compiler invariant，不是某个 sample 的临时 patch）：
-#   - §12 第一条：只有显式台词可以被说出来——visual/camera/action/motion/SFX/
+# 🔴 Prompt 红线（Compiler invariant，不是某个 sample 的临时 patch；
+#    均有 B1 真机 A/B 证据，21.md §18 "只保留已验证的控制"）：
+#   - 红线一：只有显式台词可以被说出来——visual/camera/action/motion/
 #     production note 一律不得朗读（B1 A 侧已实测「念提示词」事故）；
-#   - §13 第二条：台词不得改写——不翻译/不润色/不总结/不补句/不加词
+#   - 红线二：台词不得改写——不翻译/不润色/不总结/不补句/不加词
 #     （自然语气/呼吸/非语言发声可由表演自然产生，不走向机械 TTS）；
-#   - §14 speaker assignment 确定性表达 + Do not swap + silent 声明（B1 已证有效）；
-#   - §17 music_policy=none → 显式 no-BGM 语句（去随机 BGM、保留 diegetic 声）。
+#   - speaker assignment 确定性表达 + Do not swap + silent 声明（B1 已证有效）。
 #
 # 确定性：同 pack → 同输出（无 LLM、无随机、无时间戳）。
 from __future__ import annotations
@@ -26,20 +27,16 @@ from src.generation.native_av_pack import (
     NativeAVGenerationPack,
 )
 
-# §12：只有台词可以被说出来（红线一——解决 B1 A 侧「把 motion prompt 当台词朗读」）
+# 红线一：只有台词可以被说出来（解决 B1 A 侧「把 motion prompt 当台词朗读」）
 _ONLY_DIALOGUE_SPOKEN_GUARD = (
     "Only the explicitly quoted dialogue is spoken aloud: do not speak, narrate, "
     "or read any visual description, camera instruction, action description, "
     "character motion, sound-effect instruction, or production note.")
-# §13：台词不得改写（红线二），保留自然表演空间
+# 红线二：台词不得改写，保留自然表演空间
 _EXACT_DIALOGUE_GUARD = (
     "Speak exactly the supplied dialogue: do not translate, paraphrase, summarize, "
     "or invent additional spoken lines; natural tone, breathing, and non-verbal "
     "vocalizations are allowed as long as the meaning of the lines is unchanged.")
-# §17：music_policy=none（解决 B1 人评「对白镜自动出现背景音乐」）
-_NO_BGM_GUARD = (
-    "No background music or musical score: use only natural dialogue, diegetic "
-    "sounds, and appropriate environmental ambience.")
 
 
 def _dialogue_zone(pack: NativeAVGenerationPack) -> List[str]:
@@ -95,28 +92,16 @@ def _dialogue_zone(pack: NativeAVGenerationPack) -> List[str]:
     return parts
 
 
-def _sound_zone(pack: NativeAVGenerationPack) -> List[str]:
-    """Zone 4：native sound environment（§16/§17/§18——意图，不是手工时间线）。"""
-    intent = pack.audio_intent or {}
-    parts: List[str] = []
-    if intent.get("music_policy") == "none":
-        parts.append(_NO_BGM_GUARD)
-    directives = [str(d) for d in (intent.get("directives") or []) if str(d).strip()]
-    if directives:
-        parts.append("Shot-local sound (generate natively within the scene, not as "
-                     "separate audio): " + "; ".join(directives) + ".")
-    return parts
-
-
 def compile_native_av_prompt(pack: NativeAVGenerationPack,
                              visual_prompt: str) -> str:
-    """唯一编译点（§10/§21）：visual prompt 原样在前（§15：不重排、不发明动作），
-    AV 语义区按 §11 顺序追加；整条保持单行形态（A0/B1 已验证形态）。
-    🔴 无 dialogue 且 sound zone 为空 → 返回 visual_prompt 逐字节原样
-    （§4：无 dialogue 的 visual-only 行为不变）。"""
+    """唯一编译点（21.md §17：BOUND/UNBOUND 共用）：visual prompt 原样在前
+    （不重排、不发明动作），dialogue 语义区追加；整条保持单行形态
+    （A0/B1 已验证形态）。
+    🔴 无 dialogue → 返回 visual_prompt 逐字节原样
+    （21.md §4：无 dialogue 的 visual-only 行为不变）。"""
     if not isinstance(pack, NativeAVGenerationPack):
         raise TypeError("compile_native_av_prompt 需要 NativeAVGenerationPack")
-    av_parts = _dialogue_zone(pack) + _sound_zone(pack)
+    av_parts = _dialogue_zone(pack)
     if not av_parts:
         return visual_prompt
     parts = [visual_prompt] if visual_prompt else []

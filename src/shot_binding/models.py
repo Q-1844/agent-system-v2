@@ -180,34 +180,6 @@ class DialogueSpeakerBinding:
             resolution=str(d.get("resolution") or ""))
 
 
-# ============ AudioEventIntent（Native AV C1：18.md §16/§17/§18 最小可选块）============
-@dataclass
-class AudioEventIntent:
-    """Shot-local 声音意图（挂 ShotProductionBinding；极薄，不是手工时间线）。
-    - music_policy："none"（默认；对白镜去随机 BGM，保留 diegetic 声/环境声）|
-      "allow_native"（特殊镜头显式允许原生音乐——非默认，正式 Score 属未来
-      Sequence Audio Post）；枚举校验在写入（service）与消费（native_av_pack
-      read_audio_intent）两侧 fail closed；
-    - directives：叙事上重要的 shot-local 声音意图短句（如 "rusty door creaks as
-      it opens"）——Agnes 原生负责生成；绝不写时间戳/SFX 资产引用（§18）。
-    不创建 SFXAsset/SFXVersion/AmbienceVersion/AudioStem/AudioTimeline。"""
-    music_policy: str = "none"
-    directives: List[str] = field(default_factory=list)
-
-    def to_dict(self) -> dict:
-        return {"music_policy": self.music_policy,
-                "directives": list(self.directives)}
-
-    @classmethod
-    def from_dict(cls, d: Any) -> "AudioEventIntent":
-        d = dict(d or {})
-        raw_directives = d.get("directives")
-        return cls(
-            music_policy=str(d.get("music_policy") or ""),
-            directives=[str(x) for x in raw_directives]
-            if isinstance(raw_directives, list) else [])
-
-
 # ============ DependencyFingerprints（S3A §19）============
 @dataclass
 class DependencyFingerprints:
@@ -254,7 +226,6 @@ class ShotProductionBinding:
     prop_bindings: List[PropBinding] = field(default_factory=list)
     action: Optional[BindingAction] = None
     dialogue_speaker_binding: Optional[DialogueSpeakerBinding] = None   # B1 可选块（17.md §6）
-    audio_event_intent: Optional[AudioEventIntent] = None   # C1 可选块（18.md §16）
     production_notes: str = ""
     dependency_fingerprints: DependencyFingerprints = field(default_factory=DependencyFingerprints)
     created_at: float = 0.0
@@ -271,8 +242,6 @@ class ShotProductionBinding:
             "dialogue_speaker_binding": (
                 self.dialogue_speaker_binding.to_dict()
                 if self.dialogue_speaker_binding else None),
-            "audio_event_intent": (self.audio_event_intent.to_dict()
-                                   if self.audio_event_intent else None),
             "production_notes": self.production_notes,
             "dependency_fingerprints": self.dependency_fingerprints.to_dict(),
             "created_at": self.created_at,
@@ -285,8 +254,9 @@ class ShotProductionBinding:
         sb = d.get("scene_binding")
         action = d.get("action")
         dsb = d.get("dialogue_speaker_binding")
-        aei = d.get("audio_event_intent")
         fps = d.get("dependency_fingerprints")
+        # "audio_event_intent" 保留在排除集：C1-R 撤回（21.md §20）前落库的
+        # binding 可能带此键——读取时静默忽略（legacy 容忍），不再恢复。
         known = {f for f in cls.__dataclass_fields__} - {
             "scene_binding", "character_bindings", "prop_bindings", "action",
             "dialogue_speaker_binding", "audio_event_intent",
@@ -304,8 +274,6 @@ class ShotProductionBinding:
             dialogue_speaker_binding=(
                 DialogueSpeakerBinding.from_dict(dsb)
                 if isinstance(dsb, dict) else None),
-            audio_event_intent=(AudioEventIntent.from_dict(aei)
-                                if isinstance(aei, dict) else None),
             dependency_fingerprints=DependencyFingerprints.from_dict(fps),
             **kw)
 

@@ -9,7 +9,6 @@
 from .models import (
     ACTION_KINDS_REQUIRING_PROP,
     SHOT_BINDING_SCHEMA_VERSION,
-    AudioEventIntent,
     BindingAction,
     BindingActionKind,
     CharacterBinding,
@@ -42,7 +41,6 @@ from .reference_pack import (
 __all__ = [
     "ACTION_KINDS_REQUIRING_PROP",
     "SHOT_BINDING_SCHEMA_VERSION",
-    "AudioEventIntent",
     "BindingAction",
     "BindingActionKind",
     "CharacterBinding",

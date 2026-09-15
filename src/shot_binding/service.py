@@ -22,7 +22,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from .models import (
     ACTION_KINDS_REQUIRING_PROP,
-    AudioEventIntent,
     BindingAction,
     BindingActionKind,
     CharacterBinding,
@@ -441,11 +440,9 @@ class ShotBindingService:
         prop_bindings = self._parse_prop_bindings(payload.get("prop_bindings"))
         action = self._parse_action(payload.get("action"))
         scene_binding = self._parse_scene_binding(payload.get("scene_binding"))
-        # Native AV 可选块（B1 §6 / C1 18.md §16：只表达 intent/裁决，不复制正文）
+        # Native AV 可选块（B1 §6：只表达 intent/裁决，不复制正文）
         dialogue_speaker_binding = self._parse_dialogue_speaker_binding(
             payload.get("dialogue_speaker_binding"))
-        audio_event_intent = self._parse_audio_event_intent(
-            payload.get("audio_event_intent"))
 
         # ---- 跨域校验：Resources（角色/Look/Prop/Composition + 冲突规则）----
         self._validate_resources(project, char_bindings, prop_bindings, rdoc)
@@ -473,7 +470,6 @@ class ShotBindingService:
             prop_bindings=prop_bindings,
             action=action,
             dialogue_speaker_binding=dialogue_speaker_binding,
-            audio_event_intent=audio_event_intent,
             production_notes=_s(payload.get("production_notes")),
             created_at=existing.created_at if (expect_existing and existing) else now,
             updated_at=now,
@@ -627,34 +623,6 @@ class ShotBindingService:
                                              speaker_character_name=speaker))
         return DialogueSpeakerBinding(lines=lines,
                                       resolution=_s(raw.get("resolution")))
-
-    @staticmethod
-    def _parse_audio_event_intent(raw: Any) -> Optional[AudioEventIntent]:
-        """C1 18.md §16 可选块：music_policy + directives（意图，不是时间线）。"""
-        if raw is None:
-            return None
-        if not isinstance(raw, dict):
-            raise _ValidationError("validation_error",
-                                   "audio_event_intent 必须是对象")
-        policy = _s(raw.get("music_policy")) or "none"
-        if policy not in ("none", "allow_native"):
-            raise _ValidationError(
-                "invalid_audio_intent",
-                f"audio_event_intent.music_policy 必须是 ['none', 'allow_native'] "
-                f"之一，得到: {policy!r}")
-        raw_directives = raw.get("directives")
-        if raw_directives is not None and not isinstance(raw_directives, list):
-            raise _ValidationError("validation_error",
-                                   "audio_event_intent.directives 必须是数组")
-        directives: List[str] = []
-        for d in (raw_directives or []):
-            s = _s(d)
-            if not s:
-                raise _ValidationError(
-                    "invalid_audio_intent",
-                    "audio_event_intent.directives 含空项（每项必须是非空文本）")
-            directives.append(s)
-        return AudioEventIntent(music_policy=policy, directives=directives)
 
     # ==================================================================
     # 语义校验（fail closed）

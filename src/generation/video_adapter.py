@@ -130,8 +130,8 @@ def build_bound_video_input(project_dir, project: Any, shot: Any, *,
     video 口径 + P1 风格指令 [+ Native AV 编译区]）→ pre-dispatch guard。
     provider_mode 沿用 handler 既有映射（keyframes=link_mode=='keyframes'，否则 i2v）
     ——Adapter 不改变 mode 选择（creative 策略字段）。
-    Native AV C1（18.md §4/§21/§10-§15）：native_dialogue_control 默认 True=自动
-    ——visual prompt 与 dialogue/sound 语义区经同一 NativeAVGenerationPack →
+    Native AV C1（21.md §4/§17）：native_dialogue_control 默认 True=自动
+    ——visual prompt 与 dialogue 语义区经同一 NativeAVGenerationPack →
     Prompt Compiler（与 UNBOUND 共用唯一编译点）；显式 False = debug/compat
     override（visual-only，零 Native AV 区、generation_basis 为空）。language =
     resolve_dialogue_language precedence（request override > project

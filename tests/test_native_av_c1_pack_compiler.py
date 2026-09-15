@@ -1,6 +1,7 @@
 # tests/test_native_av_c1_pack_compiler.py
-# Native AV C1 — Commit B：NativeAVGenerationPack（18.md §6/§8/§21/§23）
-# + Audio-Visual Prompt Compiler V1（§10-§15/§17 默认策略）。
+# Native AV C1-R — NativeAVGenerationPack（21.md §6/§7/§8/§17）
+# + AV Prompt Compiler（21.md §18：只保留 B1 已验证 Dialogue/Speaker/Language 控制；
+#   AudioEventIntent/music_policy 已按 §2/§20/§21 撤回）。
 import sys
 from pathlib import Path
 
@@ -88,17 +89,18 @@ def test_pack_basis_has_all_dependency_and_provider_keys():
     basis = _bound_pack(shot).generation_basis
     assert basis["schema"] == NATIVE_AV_GENERATION_BASIS_SCHEMA
     for k in ("dialogue_fingerprint", "speaker_map_fingerprint", "spoken_language",
-              "audio_event_intent_fingerprint", "music_policy",
               "visual_basis_fingerprint", "prompt_compiler_schema"):
-        assert k in basis, f"§23 依赖键缺失: {k}"
+        assert k in basis, f"§11 依赖键缺失: {k}"
     for k in ("provider", "model", "provider_mode", "provider_options_fingerprint"):
-        assert k in basis, f"§23 provider 事实键缺失: {k}"
+        assert k in basis, f"§11 provider 事实键缺失: {k}"
+    # 撤回键不得再出现（21.md §2/§20/§21）
+    for k in ("audio_event_intent_fingerprint", "music_policy"):
+        assert k not in basis, f"撤回键残留: {k}"
     assert basis["provider"] == "agnes"
     assert basis["model"] == "m1"
     assert basis["prompt_compiler_schema"] == "native_av_prompt_v1"
     assert set(NATIVE_AV_DEPENDENCY_KEYS) == {
         "dialogue_fingerprint", "speaker_map_fingerprint", "spoken_language",
-        "audio_event_intent_fingerprint", "music_policy",
         "visual_basis_fingerprint", "prompt_compiler_schema"}
 
 
@@ -119,22 +121,14 @@ def test_pack_basis_provider_keys_track_options_change():
 
 
 def test_pack_no_dialogue_fields_and_defaults():
-    """无台词：dialogue=None；§17 默认 music_policy=allow_native（visual-only 不加约束）。"""
+    """无台词：dialogue=None；不触发 language/speaker 解析（21.md §4）。"""
     shot = _shot(dialogue="")
     pack = _unbound_pack(shot)
     assert pack.dialogue is None
-    assert pack.audio_intent == {"music_policy": "allow_native", "directives": [],
-                                 "source": "default"}
     b = pack.generation_basis
     assert b["dialogue_fingerprint"] is None
     assert b["spoken_language"] is None
-    assert b["music_policy"] == "allow_native"
-
-
-def test_pack_dialogue_shot_music_default_none():
-    """§17：Dialogue Shot 默认 music_policy=none（去随机 BGM 保留环境声）。"""
-    pack = _unbound_pack(_shot(dialogue="别过去。", characters=["林晚星"]))
-    assert pack.audio_intent["music_policy"] == "none"
+    assert "audio_intent" not in pack.to_dict(), "撤回字段不得残留（21.md §20）"
 
 
 def test_unbound_vs_bound_visual_basis_differ():
@@ -217,15 +211,17 @@ def test_compiler_stage_directions_in_non_spoken_zone():
     assert out.index("Only the explicitly quoted dialogue") < out.index("别过去。")
 
 
-def test_compiler_no_bgm_line_for_dialogue_default():
-    """§17：dialogue 默认 music none → 显式 no-BGM 语句。"""
+def test_compiler_no_sound_instructions_ever():
+    """21.md §18/§21：撤回后 prompt 不含任何声音/BGM 指令（留给 C2 实验）。
+    （红线一里的 "sound-effect instruction" 是禁读清单词条，不是声音指令。）"""
     shot = _shot(dialogue="别过去。", characters=["林晚星"])
     out = compile_native_av_prompt(_bound_pack(shot), "V")
-    assert "No background music or musical score" in out
+    assert "music" not in out.lower()
+    assert "Shot-local sound" not in out
 
 
-def test_compiler_no_zones_when_no_dialogue_and_native_music():
-    """§4：无 dialogue（默认 allow_native）→ prompt 逐字节不变。"""
+def test_compiler_no_zones_when_no_dialogue():
+    """21.md §4：无 dialogue → prompt 逐字节不变。"""
     shot = _shot(dialogue="")
     visual = "Animate this image: subtle motion"
     assert compile_native_av_prompt(_unbound_pack(shot), visual) == visual
@@ -242,19 +238,19 @@ def test_compiler_requires_pack_type():
         compile_native_av_prompt({"dialogue": None}, "V")
 
 
-# ============ §21 两条路径共用同一 compiler ============
+# ============ 21.md §17 两条路径共用同一 compiler ============
 
 def test_bound_and_unbound_share_dialogue_zone():
-    """BOUND / UNBOUND 差别只能来自 visual input source——dialogue/sound 区逐字节一致。"""
+    """BOUND / UNBOUND 差别只能来自 visual input source——dialogue 区逐字节一致。"""
     shot = _shot(dialogue="林晚星：别过去。", characters=["林晚星"])
     bound_out = compile_native_av_prompt(_bound_pack(shot), "BOUND_VISUAL")
     unbound_out = compile_native_av_prompt(_unbound_pack(shot), "UNBOUND_VISUAL")
     tail_b = bound_out[len("BOUND_VISUAL"):]
     tail_u = unbound_out[len("UNBOUND_VISUAL"):]
-    assert tail_b == tail_u, "两条路径的 AV 语义区必须逐字节一致（§21）"
+    assert tail_b == tail_u, "两条路径的 AV 语义区必须逐字节一致（21.md §17）"
 
 
-# ============ freshness 读模型（§25/§26 Commit D 前置冒烟）============
+# ============ freshness 读模型（21.md §14/§15 前置冒烟）============
 
 def test_freshness_missing_without_final_video():
     shot = _shot(dialogue="别过去。", characters=["林晚星"])

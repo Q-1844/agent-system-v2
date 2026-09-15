@@ -1,6 +1,6 @@
 # tests/test_native_av_c1_basis_freshness_race.py
-# Native AV C1 — Commit D：VideoVersion generation_basis（18.md §22/§23）
-# + NativeAVFreshness（§25）+ No Auto Regeneration（§26）+ Race guard（§27）。
+# Native AV C1-R：VideoVersion generation_basis（21.md §10-§12）
+# + NativeAVFreshness（§14）+ No Auto Regeneration（§15）+ Race guard（§16）。
 import asyncio
 import sys
 from pathlib import Path
@@ -90,7 +90,7 @@ def _generate(pdir, fake, dialogue="我们现在出发。", characters=None):
     return shot, version
 
 
-# ============ §22 VideoVersion.generation_basis ============
+# ============ 21.md §10 VideoVersion.generation_basis ============
 
 def test_video_version_records_generation_basis(venv):
     pdir, fake = venv
@@ -99,13 +99,13 @@ def test_video_version_records_generation_basis(venv):
     assert b["schema"] == "native_av_generation_basis_v1"
     assert b["dialogue_fingerprint"]
     assert b["spoken_language"] == LANG
-    assert b["music_policy"] == "none"
+    assert "music_policy" not in b, "撤回键不得残留（21.md §20/§21）"
     assert b["provider_mode"] == "i2v"
     assert b["prompt_compiler_schema"] == "native_av_prompt_v1"
 
 
 def test_video_version_legacy_loads_with_empty_basis():
-    """§22：旧 VideoVersion JSON（无 generation_basis）→ {}，legacy 加载不破坏。"""
+    """21.md §10：旧 VideoVersion JSON（无 generation_basis）→ {}，legacy 加载不破坏。"""
     old = {"version_id": "vv_legacy01", "status": "done", "video_id": "vid_x"}
     vv = VideoVersion(**{k: v for k, v in old.items()
                          if k in VideoVersion.__dataclass_fields__})
@@ -134,7 +134,7 @@ def test_recover_attached_version_is_untracked(venv, monkeypatch):
     assert r["status"] == "untracked_legacy"
 
 
-# ============ §25 freshness 逐键 ============
+# ============ 21.md §14 freshness 逐键 ============
 
 def _freshness(pdir, shot):
     project = _load_project(pdir)
@@ -194,7 +194,7 @@ def test_freshness_stale_on_first_frame_reselect(venv):
 
 
 def test_freshness_unrelated_change_stays_current(venv):
-    """§30：无关变更（note 文本/另一镜）→ CURRENT（actual dependencies only）。"""
+    """21.md §11：无关变更（note 文本/另一镜）→ CURRENT（actual dependencies only）。"""
     pdir, fake = venv
     shot, _v = _generate(pdir, fake)
     PS(pdir).update_shot("s01_c01", lambda s: setattr(s, "note", "无关备注"))
@@ -212,7 +212,7 @@ def test_freshness_missing_without_final(venv):
 
 
 def test_freshness_is_pure_read_no_provider_call(venv):
-    """§26 No Auto Regeneration：freshness 是纯读模型——零 provider 调用、
+    """21.md §15 No Auto Regeneration：freshness 是纯读模型——零 provider 调用、
     零 canonical 写入。"""
     pdir, fake = venv
     shot, _v = _generate(pdir, fake)
@@ -224,7 +224,7 @@ def test_freshness_is_pure_read_no_provider_call(venv):
     assert (pdir / "output" / "project.json").read_bytes() == before
 
 
-# ============ §27 race guard ============
+# ============ 21.md §16 race guard ============
 
 def test_pre_dispatch_rejects_after_dialogue_change(venv):
     pdir, fake = venv
@@ -287,7 +287,7 @@ def test_handler_race_dialogue_changed_mid_generation_not_attached(venv):
     assert len(shot2.video_versions) == baseline_versions, "不建新 VideoVersion"
 
 
-# ============ §25 读端点 ============
+# ============ 21.md §14 读端点 ============
 
 def test_freshness_endpoint(venv):
     pdir, fake = venv

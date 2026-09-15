@@ -1247,9 +1247,9 @@ async def _handler_video(job, emit):
         elif mode == "keyframes":
             last_url = shot.last_frame.selected.url
         if ndc and bound_video is None:
-            # C1 UNBOUND 路径（§21 统一编译点）：visual prompt 原样 + 同一
+            # C1 UNBOUND 路径（21.md §17 统一编译点）：visual prompt 原样 + 同一
             # NativeAVGenerationPack → Prompt Compiler（dialogue/language/
-            # audio intent/红线语义与 BOUND 完全一致，差别只在 visual 输入源）。
+            # 红线语义与 BOUND 完全一致，差别只在 visual 输入源）。
             from src.generation.native_av_pack import (
                 build_native_av_pack,
                 unbound_visual_basis,
@@ -1275,8 +1275,8 @@ async def _handler_video(job, emit):
             # 2.5 契约时长（秒，4-12，client 内再夹取）：由既有 8n+1 帧规划反推
             kwargs["duration_s"] = max(4, min(12, round(
                 shot.video.num_frames / max(shot.video.frame_rate, 1))))
-        # C1 §27 pre-dispatch：provider 调用前重算 Native AV 依赖键（dialogue/
-        # speaker/language/audio intent/visual/compiler）——canonical 已变 →
+        # C1 §16 pre-dispatch（21.md）：provider 调用前重算 Native AV 依赖键
+        # （dialogue/speaker/language/visual/compiler）——canonical 已变 →
         # 零 provider 调用，显式重试。
         if native_generation_basis:
             from src.generation.native_av_pack import native_av_pre_dispatch_check
