@@ -289,6 +289,7 @@ DIRECTOR_SYSTEM = """你是 AGNES 的 Director（导演/分镜设计者），负
 - description（必填）：这一镜的【画面内容】——谁在哪里做什么、表情动作、视觉重点、构图氛围。中文，具体、可视化，不要抽象概括。🔴 只写能被画出来的视觉/动作/表演信息：可以写「小铃抬头对阿默说话」这种动作，但【不要】把角色实际说出的台词整句写进 description——台词一律归 dialogue 字段。
 - characters：出场角色名数组（来自 character.list 的真实名字，不认识的不要编）。
 - dialogue：本镜角色【实际开口说出】的台词——这是台词的【唯一归属字段】（配音 TTS 的输入）。谁说话就把那句台词原样写这里（可多句、可带说话人），例如：小铃：「奶奶说她的记忆盒能修好吗？」。🔴 不要把台词只埋在 description 里；有角色说话就必须填 dialogue。只有纯动作/空镜/无明确台词（旁白不算角色说话）才留空。
+- dialogue 纪律（原生音画生产，C1）：① 多角色同镜说话时，每句都带明确说话人前缀（林晚星：「别进去。」顾岩：「我必须去。」），不要让系统猜谁在说；② dialogue 只写真正会从角色嘴里说出来的文本——动作/动作说明/语气说明/镜头说明/音效说明一律放 description/motion 等视觉字段，不要用（舞台指示）括号塞进 dialogue（行首（低声）这类语气词可被系统识别，但不要依赖它表达动作）；③ 台词依赖明显动作时（如开门→停顿→说话），让 motion/action_sequence 与台词合理匹配节奏，不要堆砌互相冲突的动作；④ 没有明确价值时，不要在极短镜头里塞多个角色大量轮流说话；⑤ 声音克制——只有叙事上重要的声音才值得设计，不要给每个镜头填满琐碎音效。
 - target_duration_s：目标时长秒数，按镜头内容定（短特写可以 2~3 秒，动作段 5~8 秒），不要机械统一。
 - 景别 shot_size 用英文值：extreme wide shot / wide shot / full shot / medium shot / medium close-up / close-up / extreme close-up。
 - camera_angle 机位角度（如 eye level / low angle / high angle / dutch angle）、camera_movement 运镜（如 static / slow push in / pan left / handheld follow）、composition 构图、lighting 光线、motion 画面里什么在动、motion_pace 动作节奏、opening_state 主体起始状态、important_details 重要细节/情绪氛围——这些字段直接决定画面生成，把你的导演意图写具体；没有明确意图就留空，不要塞占位词。
@@ -343,7 +344,7 @@ _SHOT_FIELDS_PROPS = {
     "characters": {"type": "array", "items": {"type": "string"},
                    "description": "出场角色名数组（来自 character.list 的真实名字；名单里没有的名字不要写）。"},
     "dialogue": {"type": "string",
-                 "description": "本镜角色实际说出的台词（配音 TTS 输入，台词的唯一归属字段，可带说话人）。有角色说话必须填这里、不要只埋在 description；纯动作/空镜无台词才省略。"},
+                 "description": "本镜角色实际说出的台词（配音 TTS 输入，台词的唯一归属字段，可带说话人）。多角色同镜每句都带说话人前缀；只写真正说出口的文本，动作/语气/镜头/音效说明不要塞进来；有角色说话必须填这里、不要只埋在 description；纯动作/空镜无台词才省略。"},
     "target_duration_s": {"type": "number",
                           "description": "目标时长（秒）。按镜头内容定，不要机械统一。"},
     "shot_size": {"type": "string",
