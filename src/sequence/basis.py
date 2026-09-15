@@ -171,13 +171,17 @@ def basis_mismatched_keys(stored: Dict[str, Any], current: Dict[str, Any]) -> Li
 
 
 def sequence_render_freshness(project: Project, block: SequenceBlock,
-                              render_version: Optional[SequenceRenderVersion]) -> Dict[str, Any]:
-    """派生读模型（24.md §20）：final render 的 freshness。
+                              render_version: Optional[SequenceRenderVersion], *,
+                              plan=None, project_dir=None) -> Dict[str, Any]:
+    """派生读模型（24.md §20 + 25.md §27/§28/§29）：final render 的 freshness。
     - missing：无 final render / 指针悬空 / 非 done（或调用方传入 None）；
     - untracked_legacy：render version 无 basis（诚实表示无法证明其 freshness）；
     - current：stored basis 与当前重算依赖键一致；
-    - stale：sequence_revision / 任一 clip 的 resolved version / source 指纹 /
-      trim / render profile / renderer schema 任一不一致（detail.mismatched_keys）。
+    - stale：v1 键（revision/clip resolved version/源指纹/trim/profile/schema）
+      或 audio 段（plan revision/逐层语义/源 sha256/mixer schema）任一不一致。
+    plan 为 None 或空 layers → 纯 v1 语义（25.md §25：无 AudioPlan = S1，行为锁死）；
+    plan 存在而 stored 为 v1 → audio_plan_untracked STALE；plan 被清空而 stored 为
+    v2 → audio_plan_removed STALE。
     无关 Shot 变化不进 basis → 仍 CURRENT（24.md §20）。
     🔴 §22 No Auto Render：纯读模型，绝不触发任何重渲染。"""
     if render_version is None:
@@ -190,8 +194,11 @@ def sequence_render_freshness(project: Project, block: SequenceBlock,
                            "version_id": render_version.version_id,
                            "hint": "旧 render 无 generation provenance——可继续播放/保留，"
                                    "但无法证明其 freshness（24.md §20）"}}
-    current = compute_current_basis(project, block)
-    mismatched = basis_mismatched_keys(recorded, current)
+    # 函数内 import（避免 basis <-> audio_basis 循环依赖；S1 无 plan 路径不受影响）
+    from .audio_basis import compute_current_render_basis, full_basis_mismatched_keys
+    plan_present = plan is not None and bool(plan.layers)
+    current = compute_current_render_basis(project, project_dir, block, plan)
+    mismatched = full_basis_mismatched_keys(recorded, current, plan_present=plan_present)
     if mismatched:
         return {"status": FRESHNESS_STALE, "sequence_id": block.sequence_id,
                 "detail": {"reason": "dependency_keys_mismatch",
