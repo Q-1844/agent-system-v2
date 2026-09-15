@@ -136,3 +136,63 @@ HUMAN FINAL REVIEW PENDING（:8914）
 ```
 
 STOP——等待人评按 §12 决策树定性，然后按 §14 建议 freeze。
+
+## 14. 人评收口（2026-09-15 用户裁定）
+
+评审数据：`_c21_e2e/results/C2_1_REVIEW_FEEDBACK.json`（91 条点击 + 6 短评）。
+
+### 结果：三个测试全部未能解决枪械问题
+
+| | 枪械结构 | 枪口连续性 | identity | 人物完整 | expression | overall |
+|---|---|---|---|---|---|---|
+| C2 baseline | 变形/morph | 瞬时翻转 | 稳定 | 完整 | 可接受 | 相当/略好 |
+| **Test A**（corrected 尾帧）A1/A2 | **变形/morph** | **瞬时翻转** | 稳定 | 完整 | 可接受 | 相当/略好 |
+| **Test B**（显式中间动作）B1/B2 | **变形/morph** | **瞬时翻转** | 稳定 | 完整 | 可接受 | 略好 |
+| **Test C**（去尾帧约束）C1/C2 | **变形/morph** | **瞬时翻转** | 稳定 | 完整 | 可接受 | 明显更好/略好 |
+
+短评：A「枪还是不对」；B「枪问题还有」；C「枪还是变形了」。
+
+### 决定性归因（§12 决策树）
+
+- **Test C 关键**：**完全去掉尾帧约束后枪依然翻转/变形**——排除了「尾帧约束导致
+  interpolation morph」假说；
+- **Test A 关键**：corrected 尾帧把几何过渡做到最小（枪口两帧同向）仍翻转——排除了
+  「boundary 帧几何不一致」假说；
+- **Test B 关键**：显式四步中间动作（正向时序描述）仍翻转——排除了「transition
+  under-specified」假说（至此 prompt 侧所有表达手段用尽：几何一致边界帧、
+  positive 时序步骤、Do-not 约束均无效）。
+
+**§12 最终定性 = provider capability boundary**：
+
+> **Agnes prop-interaction provider capability boundary**——刚性道具（手枪）在
+> 人物手部交互过渡中的几何/朝向保持，超出当前 provider 在该风格下的稳定执行能力。
+
+处置（按 §12/§21）：**接受 variant regeneration + selection 作为当前生产策略**
+（VideoVersion 多版本 + 挑选已是生产既有能力）；不做音乐分离式的高阶修复、
+不建追踪系统、不为绕过它污染 canonical、停止 prompt tuning。
+
+附带结论：
+- **identity 漂移排除系统性**：本轮 6/6 全部「稳定」（C2 轮 n=2 的漂移信号 =
+  provider 随机性，非 C2 变更引入的回退）；
+- **人物完整/expression 全部可接受**；audio sanity 6/6 正常（dialogue 红线无回退）；
+- Test C 组 overall 被评「明显更好」×1——i2v 路线的整体观感不差，但**未解决目标
+  问题**，按 §8 不改变生产路由默认。
+
+## 15. 最终结论（§14）
+
+```text
+SHOT C2.1 — FINAL
+PRIMARY CAUSE = Agnes prop-interaction provider capability boundary
+生产策略 = variant regeneration + selection（既有能力，零新增系统）
+```
+
+**按 §14 正式建议：SHOT PRODUCTION BACKEND V1 FREEZE。**
+
+- C1（生产正确性）+ C2（C 样本动作顺序控制，明显净提升）+ C2.1（provider 边界
+  定界）三轮证据齐备；系统表达面完整（§4 审计证明 canonical 可表达全部必要事实），
+  剩余问题属 provider 执行边界，属「系统拥有表达能力但模型无法稳定执行」——
+  按规格原文，这与「系统根本表达不了」是两回事，不阻塞封板。
+- 本报告即 Shot-system expansion 的 STOP 点：除非出现新的明确 system-level
+  missing capability，不再扩 Shot backend。
+- 下一阶段候选：**Sequence Assembly Foundation**（跨 Shot 组装）——待用户规格，
+  不自动开始。
