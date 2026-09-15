@@ -156,6 +156,20 @@ def _clip_mismatches(stored_clips: List[Dict[str, Any]],
     return mismatched
 
 
+def basis_mismatched_keys(stored: Dict[str, Any], current: Dict[str, Any]) -> List[str]:
+    """stored basis vs 当前重算 basis 的不一致键（freshness 与 Phase 3 race guard
+    共用同一对比逻辑——24.md §20 STALE 触发清单 = §23 race 触发清单）。"""
+    mismatched: List[str] = []
+    for key in ("sequence_revision", "render_profile_fingerprint", "renderer_schema"):
+        if stored.get(key) != current.get(key):
+            mismatched.append(key)
+    mismatched += _clip_mismatches(stored.get("clips") or [], current.get("clips") or [])
+    if current.get("resolution_error"):
+        # 当前解析已失败（如 final_video 被清空）——依赖键已不可满足，诚实 STALE
+        mismatched.append("resolution_error")
+    return mismatched
+
+
 def sequence_render_freshness(project: Project, block: SequenceBlock,
                               render_version: Optional[SequenceRenderVersion]) -> Dict[str, Any]:
     """派生读模型（24.md §20）：final render 的 freshness。
@@ -177,14 +191,7 @@ def sequence_render_freshness(project: Project, block: SequenceBlock,
                            "hint": "旧 render 无 generation provenance——可继续播放/保留，"
                                    "但无法证明其 freshness（24.md §20）"}}
     current = compute_current_basis(project, block)
-    mismatched: List[str] = []
-    for key in ("sequence_revision", "render_profile_fingerprint", "renderer_schema"):
-        if recorded.get(key) != current.get(key):
-            mismatched.append(key)
-    mismatched += _clip_mismatches(recorded.get("clips") or [], current.get("clips") or [])
-    if current.get("resolution_error"):
-        # 当前解析已失败（如 final_video 被清空）——依赖键已不可满足，诚实 STALE
-        mismatched.append("resolution_error")
+    mismatched = basis_mismatched_keys(recorded, current)
     if mismatched:
         return {"status": FRESHNESS_STALE, "sequence_id": block.sequence_id,
                 "detail": {"reason": "dependency_keys_mismatch",

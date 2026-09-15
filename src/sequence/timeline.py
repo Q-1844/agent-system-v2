@@ -44,6 +44,7 @@ class TimelineClip:
     effective_ms: int                     # source_duration - trim_in - trim_out
     timeline_start_ms: int
     timeline_end_ms: int
+    has_audio: bool = True                # ffprobe 实测（Phase 2 决定是否补 silence）
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -57,6 +58,7 @@ class TimelineClip:
             "effective_ms": self.effective_ms,
             "timeline_start_ms": self.timeline_start_ms,
             "timeline_end_ms": self.timeline_end_ms,
+            "has_audio": self.has_audio,
         }
 
 
@@ -111,6 +113,7 @@ def build_timeline_plan(resolved: List[ResolvedClip]) -> SequenceTimelinePlan:
             effective_ms=effective,
             timeline_start_ms=cursor,
             timeline_end_ms=cursor + effective,
+            has_audio=rc.has_audio,
         ))
         cursor += effective
     return SequenceTimelinePlan(clips=clips, total_duration_ms=cursor)
