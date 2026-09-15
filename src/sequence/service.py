@@ -260,6 +260,10 @@ class SequenceService:
             for i, clip in enumerate(block.clips):
                 _shot, version = resolve_clip_source(project, clip)
                 probe = probe_video(str(version.local or ""))
+                if not probe.get("has_video", False):
+                    raise SequenceError(
+                        "source_unreadable",
+                        f"clip {clip.shot_id}: 源无视频流（Sequence 源必须是视频）")
                 resolved.append(ResolvedClip(
                     index=i, shot_id=clip.shot_id, version_id=version.version_id,
                     source_file=str(version.local), trim_in_ms=clip.trim_in_ms,

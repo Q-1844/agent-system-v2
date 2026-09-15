@@ -36,7 +36,7 @@ from src.sequence.models import (
 from src.sequence.timeline import ResolvedClip
 
 PROBE_OK = {"duration_ms": 4000, "width": None, "height": None, "fps": None,
-            "vcodec": None, "pix_fmt": None, "has_audio": True,
+            "vcodec": None, "pix_fmt": None, "has_video": True, "has_audio": True,
             "acodec": "pcm_s16le", "sample_rate": 48000, "channels": 1}
 PROBE_NO_AUDIO = {**PROBE_OK, "has_audio": False}
 

@@ -55,7 +55,7 @@ def svc(tmp_path, monkeypatch):
         name = str(path)
         dur = 6000 if "s01_c01" in name else 8000
         return {"duration_ms": dur, "width": 1280, "height": 704, "fps": 24.0,
-                "vcodec": "h264", "pix_fmt": "yuv420p", "has_audio": True,
+                "vcodec": "h264", "pix_fmt": "yuv420p", "has_video": True, "has_audio": True,
                 "acodec": "aac", "sample_rate": 48000, "channels": 2}
 
     def fake_render_clip(src, dst, *, trim_in_ms, trim_out_ms, source_duration_ms,

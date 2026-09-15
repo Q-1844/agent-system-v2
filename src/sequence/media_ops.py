@@ -44,7 +44,9 @@ def _run(cmd: List[str], *, timeout: int) -> str:
 # ============ probe（24.md §14）============
 
 def probe_video(path: str) -> Dict[str, Any]:
-    """ffprobe 真实媒体事实。文件不存在 / 无视频流 / 解析失败 → fail closed。"""
+    """ffprobe 真实媒体事实。文件不存在 / 解析失败 → fail closed。
+    🔴 S2 起：纯音频文件（无视频流）合法——返回 has_video=False（S1 视频源与
+    S2 混音输出对视频流的要求由各自消费点强制：prepare/validate_output）。"""
     p = Path(path)
     if not p.exists() or p.stat().st_size == 0:
         raise SequenceError("source_unreadable", f"媒体文件不存在或为空: {path}")
@@ -57,21 +59,20 @@ def probe_video(path: str) -> Dict[str, Any]:
     streams = info.get("streams") or []
     vstream = next((s for s in streams if s.get("codec_type") == "video"), None)
     astream = next((s for s in streams if s.get("codec_type") == "audio"), None)
-    if vstream is None:
-        raise SequenceError("probe_failed", f"无视频流: {path}")
 
     def _int(v: Any) -> Optional[int]:
         return int(v) if str(v or "").isdigit() else None
 
     fmt = info.get("format") or {}
-    duration_s = fmt.get("duration") or vstream.get("duration")
+    duration_src = fmt.get("duration") or (vstream or {}).get("duration") \
+        or (astream or {}).get("duration")
     try:
-        duration_ms = round(float(duration_s) * 1000)
+        duration_ms = round(float(duration_src) * 1000)
     except (TypeError, ValueError):
         raise SequenceError("probe_failed", f"无法读取 duration: {path}")
     # r_frame_rate 形如 "24/1"
     fps = None
-    rate = str(vstream.get("r_frame_rate") or "")
+    rate = str((vstream or {}).get("r_frame_rate") or "")
     if "/" in rate:
         num, _, den = rate.partition("/")
         try:
@@ -80,11 +81,12 @@ def probe_video(path: str) -> Dict[str, Any]:
             fps = None
     return {
         "duration_ms": duration_ms,
-        "width": _int(vstream.get("width")),
-        "height": _int(vstream.get("height")),
+        "has_video": vstream is not None,
+        "width": _int((vstream or {}).get("width")),
+        "height": _int((vstream or {}).get("height")),
         "fps": fps,
-        "vcodec": vstream.get("codec_name"),
-        "pix_fmt": vstream.get("pix_fmt"),
+        "vcodec": vstream.get("codec_name") if vstream else None,
+        "pix_fmt": vstream.get("pix_fmt") if vstream else None,
         "has_audio": astream is not None,
         "acodec": astream.get("codec_name") if astream else None,
         "sample_rate": _int(astream.get("sample_rate")) if astream else None,
@@ -186,6 +188,8 @@ def validate_output(path: str, planned_total_ms: int, n_clips: int) -> Dict[str,
     detect_black_segments / detect_silence_segments（advisory，不在此 fail）。"""
     info = probe_video(path)
     problems: List[str] = []
+    if not info.get("has_video", False):
+        problems.append("输出无视频流")
     if not info["has_audio"]:
         problems.append("输出无音频流（源均应有 native audio，§15）")
     tolerance = TOTAL_TOLERANCE_MS_PER_CLIP * max(n_clips, 1)
