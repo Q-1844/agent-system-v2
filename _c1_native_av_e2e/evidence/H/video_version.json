@@ -1,0 +1,24 @@
+{
+  "version_id": "vv_a0b456c0",
+  "prompt_snapshot": "Animate this image: 林晚星攀爬中回头说话，顾岩在下方抬头回应, keep character identity and outfit consistent Stage direction (not spoken, do not read aloud): 林晚星攀在铁梯上，梯架微微晃动 林晚星 delivery direction (not spoken): 喘着气 顾岩 delivery direction (not spoken): 在下方扶住梯架 On-screen spoken dialogue in Mandarin Chinese: Only the explicitly quoted dialogue is spoken aloud: do not speak, narrate, or read any visual description, camera instruction, action description, character motion, sound-effect instruction, or production note. 1. 林晚星 says: 再往上二十级就到了。 2. 顾岩 replies: 我数着，你慢慢来。 Keep every line assigned to its specified speaker. Do not swap the speakers. The characters' mouths move naturally in sync with their own spoken lines. Speak exactly the supplied dialogue: do not translate, paraphrase, summarize, or invent additional spoken lines; natural tone, breathing, and non-verbal vocalizations are allowed as long as the meaning of the lines is unchanged. No background music or musical score: use only natural dialogue, diegetic sounds, and appropriate environmental ambience.",
+  "generation_basis": {
+    "schema": "native_av_generation_basis_v1",
+    "shot_id": "s04_c01",
+    "visual_basis_fingerprint": "06187165",
+    "dialogue_fingerprint": "b5723a69",
+    "speaker_map_fingerprint": "1f13fd03",
+    "spoken_language": "Mandarin Chinese",
+    "audio_event_intent_fingerprint": "5202bac6",
+    "music_policy": "none",
+    "prompt_compiler_schema": "native_av_prompt_v1",
+    "provider": "agnes",
+    "model": null,
+    "provider_mode": "i2v",
+    "provider_options_fingerprint": "255626c7"
+  },
+  "model": null,
+  "num_frames": 145,
+  "seconds_returned": 6.0,
+  "size_returned": "1280x704",
+  "final_video": "vv_a0b456c0"
+}

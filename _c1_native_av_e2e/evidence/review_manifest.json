@@ -1,0 +1,450 @@
+{
+  "language": "Mandarin Chinese",
+  "samples": [
+    {
+      "key": "A",
+      "shot_id": "s01_c01",
+      "characters": [
+        "林晚星"
+      ],
+      "dialogue_truth": "林晚星：灯塔的灯不能灭，这是整片海域唯一的光源，我们绝不能就这么离开。",
+      "expected_speaker_sequence": {
+        "resolution": "explicit",
+        "lines": [
+          {
+            "index": 0,
+            "text": "灯塔的灯不能灭，这是整片海域唯一的光源，我们绝不能就这么离开。",
+            "speaker": "林晚星",
+            "delivery_hints": []
+          }
+        ],
+        "directions": [],
+        "silent": []
+      },
+      "route": "unbound",
+      "project": "__native_av_c1_e2e",
+      "video": "evidence/A/video.mp4",
+      "prompt_preview": "Animate this image: 林晚星微微摇头，双手紧握在胸前，目光恳切, keep character identity and outfit consistent On-screen spoken dialogue in Mandarin Chinese: Only the explicitly quoted dialogue is spoken aloud: do not speak, narrate, or read any visual description, camera instruction, action description, character motion, sound-effect instruction, or production note. 1. 林晚星 says: 灯塔的灯不能灭，这是整片海域唯一的光源，我们绝不能就这么离开。 Keep every line assigned to its specified speaker. Do not swap the speakers. The characters' mouths move naturally in sync with their own spoken lines. Speak exactly the supplied dialogue: do not translate, p",
+      "prompt_snapshot_full": "Animate this image: 林晚星微微摇头，双手紧握在胸前，目光恳切, keep character identity and outfit consistent On-screen spoken dialogue in Mandarin Chinese: Only the explicitly quoted dialogue is spoken aloud: do not speak, narrate, or read any visual description, camera instruction, action description, character motion, sound-effect instruction, or production note. 1. 林晚星 says: 灯塔的灯不能灭，这是整片海域唯一的光源，我们绝不能就这么离开。 Keep every line assigned to its specified speaker. Do not swap the speakers. The characters' mouths move naturally in sync with their own spoken lines. Speak exactly the supplied dialogue: do not translate, paraphrase, summarize, or invent additional spoken lines; natural tone, breathing, and non-verbal vocalizations are allowed as long as the meaning of the lines is unchanged. No background music or musical score: use only natural dialogue, diegetic sounds, and appropriate environmental ambience.",
+      "generation_basis": {
+        "schema": "native_av_generation_basis_v1",
+        "shot_id": "s01_c01",
+        "visual_basis_fingerprint": "06187165",
+        "dialogue_fingerprint": "267fa16a",
+        "speaker_map_fingerprint": "88108079",
+        "spoken_language": "Mandarin Chinese",
+        "audio_event_intent_fingerprint": "5202bac6",
+        "music_policy": "none",
+        "prompt_compiler_schema": "native_av_prompt_v1",
+        "provider": "agnes",
+        "model": null,
+        "provider_mode": "i2v",
+        "provider_options_fingerprint": "255626c7"
+      },
+      "freshness": {
+        "status": "current",
+        "shot_id": "s01_c01",
+        "detail": {
+          "version_id": "vv_d1dd4f18"
+        }
+      },
+      "duration_s": null,
+      "size": null
+    },
+    {
+      "key": "B",
+      "shot_id": "s01_c02",
+      "characters": [
+        "林晚星"
+      ],
+      "dialogue_truth": "林晚星：我们走。",
+      "expected_speaker_sequence": {
+        "resolution": "explicit",
+        "lines": [
+          {
+            "index": 0,
+            "text": "我们走。",
+            "speaker": "林晚星",
+            "delivery_hints": []
+          }
+        ],
+        "directions": [],
+        "silent": []
+      },
+      "route": "unbound",
+      "project": "__native_av_c1_e2e",
+      "video": "evidence/B/video.mp4",
+      "prompt_preview": "Animate this image: 林晚星转身，下颌微抬, keep character identity and outfit consistent On-screen spoken dialogue in Mandarin Chinese: Only the explicitly quoted dialogue is spoken aloud: do not speak, narrate, or read any visual description, camera instruction, action description, character motion, sound-effect instruction, or production note. 1. 林晚星 says: 我们走。 Keep every line assigned to its specified speaker. Do not swap the speakers. The characters' mouths move naturally in sync with their own spoken lines. Speak exactly the supplied dialogue: do not translate, paraphrase, summarize, or invent addit",
+      "prompt_snapshot_full": "Animate this image: 林晚星转身，下颌微抬, keep character identity and outfit consistent On-screen spoken dialogue in Mandarin Chinese: Only the explicitly quoted dialogue is spoken aloud: do not speak, narrate, or read any visual description, camera instruction, action description, character motion, sound-effect instruction, or production note. 1. 林晚星 says: 我们走。 Keep every line assigned to its specified speaker. Do not swap the speakers. The characters' mouths move naturally in sync with their own spoken lines. Speak exactly the supplied dialogue: do not translate, paraphrase, summarize, or invent additional spoken lines; natural tone, breathing, and non-verbal vocalizations are allowed as long as the meaning of the lines is unchanged. No background music or musical score: use only natural dialogue, diegetic sounds, and appropriate environmental ambience.",
+      "generation_basis": {
+        "schema": "native_av_generation_basis_v1",
+        "shot_id": "s01_c02",
+        "visual_basis_fingerprint": "06187165",
+        "dialogue_fingerprint": "60a32d94",
+        "speaker_map_fingerprint": "88108079",
+        "spoken_language": "Mandarin Chinese",
+        "audio_event_intent_fingerprint": "5202bac6",
+        "music_policy": "none",
+        "prompt_compiler_schema": "native_av_prompt_v1",
+        "provider": "agnes",
+        "model": null,
+        "provider_mode": "i2v",
+        "provider_options_fingerprint": "d1736802"
+      },
+      "freshness": {
+        "status": "current",
+        "shot_id": "s01_c02",
+        "detail": {
+          "version_id": "vv_ea907adb"
+        }
+      },
+      "duration_s": null,
+      "size": null
+    },
+    {
+      "key": "C",
+      "shot_id": "s02_c01",
+      "characters": [
+        "林晚星",
+        "顾岩"
+      ],
+      "dialogue_truth": "林晚星：「门开了吗？」\n顾岩：「还没有。」\n林晚星：「那就快一点。」",
+      "expected_speaker_sequence": {
+        "resolution": "explicit",
+        "lines": [
+          {
+            "index": 0,
+            "text": "「门开了吗？」",
+            "speaker": "林晚星",
+            "delivery_hints": []
+          },
+          {
+            "index": 1,
+            "text": "「还没有。」",
+            "speaker": "顾岩",
+            "delivery_hints": []
+          },
+          {
+            "index": 2,
+            "text": "「那就快一点。」",
+            "speaker": "林晚星",
+            "delivery_hints": []
+          }
+        ],
+        "directions": [],
+        "silent": []
+      },
+      "route": "unbound",
+      "project": "__native_av_c1_e2e",
+      "video": "evidence/C/video.mp4",
+      "prompt_preview": "Animate this image: 两人对视，林晚星先开口，顾岩回应后林晚星再追问, keep character identity and outfit consistent On-screen spoken dialogue in Mandarin Chinese: Only the explicitly quoted dialogue is spoken aloud: do not speak, narrate, or read any visual description, camera instruction, action description, character motion, sound-effect instruction, or production note. 1. 林晚星 says: 「门开了吗？」 2. 顾岩 replies: 「还没有。」 3. 林晚星 replies: 「那就快一点。」 Keep every line assigned to its specified speaker. Do not swap the speakers. The characters' mouths move naturally in sync with their own spoken lines. Speak exactly the supplied dia",
+      "prompt_snapshot_full": "Animate this image: 两人对视，林晚星先开口，顾岩回应后林晚星再追问, keep character identity and outfit consistent On-screen spoken dialogue in Mandarin Chinese: Only the explicitly quoted dialogue is spoken aloud: do not speak, narrate, or read any visual description, camera instruction, action description, character motion, sound-effect instruction, or production note. 1. 林晚星 says: 「门开了吗？」 2. 顾岩 replies: 「还没有。」 3. 林晚星 replies: 「那就快一点。」 Keep every line assigned to its specified speaker. Do not swap the speakers. The characters' mouths move naturally in sync with their own spoken lines. Speak exactly the supplied dialogue: do not translate, paraphrase, summarize, or invent additional spoken lines; natural tone, breathing, and non-verbal vocalizations are allowed as long as the meaning of the lines is unchanged. No background music or musical score: use only natural dialogue, diegetic sounds, and appropriate environmental ambience.",
+      "generation_basis": {
+        "schema": "native_av_generation_basis_v1",
+        "shot_id": "s02_c01",
+        "visual_basis_fingerprint": "06187165",
+        "dialogue_fingerprint": "75c82da8",
+        "speaker_map_fingerprint": "71d30f58",
+        "spoken_language": "Mandarin Chinese",
+        "audio_event_intent_fingerprint": "5202bac6",
+        "music_policy": "none",
+        "prompt_compiler_schema": "native_av_prompt_v1",
+        "provider": "agnes",
+        "model": null,
+        "provider_mode": "i2v",
+        "provider_options_fingerprint": "be4cc49d"
+      },
+      "freshness": {
+        "status": "current",
+        "shot_id": "s02_c01",
+        "detail": {
+          "version_id": "vv_4d380f99"
+        }
+      },
+      "duration_s": null,
+      "size": null
+    },
+    {
+      "key": "D",
+      "shot_id": "s02_c02",
+      "characters": [
+        "林晚星",
+        "顾岩"
+      ],
+      "dialogue_truth": "林晚星：风暴明天才会来，我们还有时间。",
+      "expected_speaker_sequence": {
+        "resolution": "explicit",
+        "lines": [
+          {
+            "index": 0,
+            "text": "风暴明天才会来，我们还有时间。",
+            "speaker": "林晚星",
+            "delivery_hints": []
+          }
+        ],
+        "directions": [],
+        "silent": [
+          "顾岩"
+        ]
+      },
+      "route": "unbound",
+      "project": "__native_av_c1_e2e",
+      "video": "evidence/D/video.mp4",
+      "prompt_preview": "Animate this image: 林晚星说话时目光望向远方，顾岩保持沉默只是看着她, keep character identity and outfit consistent On-screen spoken dialogue in Mandarin Chinese: Only the explicitly quoted dialogue is spoken aloud: do not speak, narrate, or read any visual description, camera instruction, action description, character motion, sound-effect instruction, or production note. 1. 林晚星 says: 风暴明天才会来，我们还有时间。 顾岩 remains completely silent in this shot: this character does not speak, and no dialogue is invented for them. Keep every line assigned to its specified speaker. Do not swap the speakers. The characters' mouths move nat",
+      "prompt_snapshot_full": "Animate this image: 林晚星说话时目光望向远方，顾岩保持沉默只是看着她, keep character identity and outfit consistent On-screen spoken dialogue in Mandarin Chinese: Only the explicitly quoted dialogue is spoken aloud: do not speak, narrate, or read any visual description, camera instruction, action description, character motion, sound-effect instruction, or production note. 1. 林晚星 says: 风暴明天才会来，我们还有时间。 顾岩 remains completely silent in this shot: this character does not speak, and no dialogue is invented for them. Keep every line assigned to its specified speaker. Do not swap the speakers. The characters' mouths move naturally in sync with their own spoken lines. Speak exactly the supplied dialogue: do not translate, paraphrase, summarize, or invent additional spoken lines; natural tone, breathing, and non-verbal vocalizations are allowed as long as the meaning of the lines is unchanged. No background music or musical score: use only natural dialogue, diegetic sounds, and appropriate environmental ambience.",
+      "generation_basis": {
+        "schema": "native_av_generation_basis_v1",
+        "shot_id": "s02_c02",
+        "visual_basis_fingerprint": "06187165",
+        "dialogue_fingerprint": "974776c6",
+        "speaker_map_fingerprint": "9119de3b",
+        "spoken_language": "Mandarin Chinese",
+        "audio_event_intent_fingerprint": "5202bac6",
+        "music_policy": "none",
+        "prompt_compiler_schema": "native_av_prompt_v1",
+        "provider": "agnes",
+        "model": null,
+        "provider_mode": "i2v",
+        "provider_options_fingerprint": "f9da00e9"
+      },
+      "freshness": {
+        "status": "current",
+        "shot_id": "s02_c02",
+        "detail": {
+          "version_id": "vv_bee22377"
+        }
+      },
+      "duration_s": null,
+      "size": null
+    },
+    {
+      "key": "E",
+      "shot_id": "s03_c01",
+      "characters": [
+        "顾岩"
+      ],
+      "dialogue_truth": "顾岩：这扇门每晚都要上油，不然整层楼都听得见。",
+      "expected_speaker_sequence": {
+        "resolution": "explicit",
+        "lines": [
+          {
+            "index": 0,
+            "text": "这扇门每晚都要上油，不然整层楼都听得见。",
+            "speaker": "顾岩",
+            "delivery_hints": []
+          }
+        ],
+        "directions": [],
+        "silent": []
+      },
+      "route": "unbound",
+      "project": "__native_av_c1_e2e",
+      "video": "evidence/E/video.mp4",
+      "prompt_preview": "Animate this image: 顾岩推门，门缓缓打开，他停顿一拍，转过头, keep character identity and outfit consistent On-screen spoken dialogue in Mandarin Chinese: Only the explicitly quoted dialogue is spoken aloud: do not speak, narrate, or read any visual description, camera instruction, action description, character motion, sound-effect instruction, or production note. 1. 顾岩 says: 这扇门每晚都要上油，不然整层楼都听得见。 Keep every line assigned to its specified speaker. Do not swap the speakers. The characters' mouths move naturally in sync with their own spoken lines. Speak exactly the supplied dialogue: do not translate, paraphrase, s",
+      "prompt_snapshot_full": "Animate this image: 顾岩推门，门缓缓打开，他停顿一拍，转过头, keep character identity and outfit consistent On-screen spoken dialogue in Mandarin Chinese: Only the explicitly quoted dialogue is spoken aloud: do not speak, narrate, or read any visual description, camera instruction, action description, character motion, sound-effect instruction, or production note. 1. 顾岩 says: 这扇门每晚都要上油，不然整层楼都听得见。 Keep every line assigned to its specified speaker. Do not swap the speakers. The characters' mouths move naturally in sync with their own spoken lines. Speak exactly the supplied dialogue: do not translate, paraphrase, summarize, or invent additional spoken lines; natural tone, breathing, and non-verbal vocalizations are allowed as long as the meaning of the lines is unchanged. No background music or musical score: use only natural dialogue, diegetic sounds, and appropriate environmental ambience. Shot-local sound (generate natively within the scene, not as separate audio): heavy wooden door creaks as it opens; floorboards creak softly under footsteps.",
+      "generation_basis": {
+        "schema": "native_av_generation_basis_v1",
+        "shot_id": "s03_c01",
+        "visual_basis_fingerprint": "06187165",
+        "dialogue_fingerprint": "17bb09ce",
+        "speaker_map_fingerprint": "4cea7fce",
+        "spoken_language": "Mandarin Chinese",
+        "audio_event_intent_fingerprint": "40a7449e",
+        "music_policy": "none",
+        "prompt_compiler_schema": "native_av_prompt_v1",
+        "provider": "agnes",
+        "model": null,
+        "provider_mode": "i2v",
+        "provider_options_fingerprint": "255626c7"
+      },
+      "freshness": {
+        "status": "current",
+        "shot_id": "s03_c01",
+        "detail": {
+          "version_id": "vv_3cdf9314"
+        }
+      },
+      "duration_s": null,
+      "size": null
+    },
+    {
+      "key": "F",
+      "shot_id": "s03_c02",
+      "characters": [
+        "林晚星"
+      ],
+      "dialogue_truth": "林晚星：这里安静得能听见自己的心跳，小满以前总说这样的夜里能听见海。",
+      "expected_speaker_sequence": {
+        "resolution": "explicit",
+        "lines": [
+          {
+            "index": 0,
+            "text": "这里安静得能听见自己的心跳，小满以前总说这样的夜里能听见海。",
+            "speaker": "林晚星",
+            "delivery_hints": []
+          }
+        ],
+        "directions": [],
+        "silent": []
+      },
+      "route": "unbound",
+      "project": "__native_av_c1_e2e",
+      "video": "evidence/F/video.mp4",
+      "prompt_preview": "Animate this image: 林晚星缓步前行，手抚过墙壁，低声说话, keep character identity and outfit consistent On-screen spoken dialogue in Mandarin Chinese: Only the explicitly quoted dialogue is spoken aloud: do not speak, narrate, or read any visual description, camera instruction, action description, character motion, sound-effect instruction, or production note. 1. 林晚星 says: 这里安静得能听见自己的心跳，小满以前总说这样的夜里能听见海。 Keep every line assigned to its specified speaker. Do not swap the speakers. The characters' mouths move naturally in sync with their own spoken lines. Speak exactly the supplied dialogue: do not translate, para",
+      "prompt_snapshot_full": "Animate this image: 林晚星缓步前行，手抚过墙壁，低声说话, keep character identity and outfit consistent On-screen spoken dialogue in Mandarin Chinese: Only the explicitly quoted dialogue is spoken aloud: do not speak, narrate, or read any visual description, camera instruction, action description, character motion, sound-effect instruction, or production note. 1. 林晚星 says: 这里安静得能听见自己的心跳，小满以前总说这样的夜里能听见海。 Keep every line assigned to its specified speaker. Do not swap the speakers. The characters' mouths move naturally in sync with their own spoken lines. Speak exactly the supplied dialogue: do not translate, paraphrase, summarize, or invent additional spoken lines; natural tone, breathing, and non-verbal vocalizations are allowed as long as the meaning of the lines is unchanged. No background music or musical score: use only natural dialogue, diegetic sounds, and appropriate environmental ambience.",
+      "generation_basis": {
+        "schema": "native_av_generation_basis_v1",
+        "shot_id": "s03_c02",
+        "visual_basis_fingerprint": "06187165",
+        "dialogue_fingerprint": "3e8b97ff",
+        "speaker_map_fingerprint": "88108079",
+        "spoken_language": "Mandarin Chinese",
+        "audio_event_intent_fingerprint": "5202bac6",
+        "music_policy": "none",
+        "prompt_compiler_schema": "native_av_prompt_v1",
+        "provider": "agnes",
+        "model": null,
+        "provider_mode": "i2v",
+        "provider_options_fingerprint": "255626c7"
+      },
+      "freshness": {
+        "status": "current",
+        "shot_id": "s03_c02",
+        "detail": {
+          "version_id": "vv_2422b3e2"
+        }
+      },
+      "duration_s": null,
+      "size": null
+    },
+    {
+      "key": "H",
+      "shot_id": "s04_c01",
+      "characters": [
+        "林晚星",
+        "顾岩"
+      ],
+      "dialogue_truth": "（林晚星攀在铁梯上，梯架微微晃动）\n林晚星：（喘着气）再往上二十级就到了。\n顾岩：（在下方扶住梯架）我数着，你慢慢来。",
+      "expected_speaker_sequence": {
+        "resolution": "explicit",
+        "lines": [
+          {
+            "index": 1,
+            "text": "再往上二十级就到了。",
+            "speaker": "林晚星",
+            "delivery_hints": [
+              "喘着气"
+            ]
+          },
+          {
+            "index": 2,
+            "text": "我数着，你慢慢来。",
+            "speaker": "顾岩",
+            "delivery_hints": [
+              "在下方扶住梯架"
+            ]
+          }
+        ],
+        "directions": [
+          {
+            "index": 0,
+            "text": "林晚星攀在铁梯上，梯架微微晃动",
+            "speaker": null
+          }
+        ],
+        "silent": []
+      },
+      "route": "unbound",
+      "project": "__native_av_c1_e2e",
+      "video": "evidence/H/video.mp4",
+      "prompt_preview": "Animate this image: 林晚星攀爬中回头说话，顾岩在下方抬头回应, keep character identity and outfit consistent Stage direction (not spoken, do not read aloud): 林晚星攀在铁梯上，梯架微微晃动 林晚星 delivery direction (not spoken): 喘着气 顾岩 delivery direction (not spoken): 在下方扶住梯架 On-screen spoken dialogue in Mandarin Chinese: Only the explicitly quoted dialogue is spoken aloud: do not speak, narrate, or read any visual description, camera instruction, action description, character motion, sound-effect instruction, or production note. 1. 林晚星 says: 再往上二十级就到了。 2. 顾岩 replies: 我数着，你慢慢来。 Keep every line assigned to its specified speaker. Do ",
+      "prompt_snapshot_full": "Animate this image: 林晚星攀爬中回头说话，顾岩在下方抬头回应, keep character identity and outfit consistent Stage direction (not spoken, do not read aloud): 林晚星攀在铁梯上，梯架微微晃动 林晚星 delivery direction (not spoken): 喘着气 顾岩 delivery direction (not spoken): 在下方扶住梯架 On-screen spoken dialogue in Mandarin Chinese: Only the explicitly quoted dialogue is spoken aloud: do not speak, narrate, or read any visual description, camera instruction, action description, character motion, sound-effect instruction, or production note. 1. 林晚星 says: 再往上二十级就到了。 2. 顾岩 replies: 我数着，你慢慢来。 Keep every line assigned to its specified speaker. Do not swap the speakers. The characters' mouths move naturally in sync with their own spoken lines. Speak exactly the supplied dialogue: do not translate, paraphrase, summarize, or invent additional spoken lines; natural tone, breathing, and non-verbal vocalizations are allowed as long as the meaning of the lines is unchanged. No background music or musical score: use only natural dialogue, diegetic sounds, and appropriate environmental ambience.",
+      "generation_basis": {
+        "schema": "native_av_generation_basis_v1",
+        "shot_id": "s04_c01",
+        "visual_basis_fingerprint": "06187165",
+        "dialogue_fingerprint": "b5723a69",
+        "speaker_map_fingerprint": "1f13fd03",
+        "spoken_language": "Mandarin Chinese",
+        "audio_event_intent_fingerprint": "5202bac6",
+        "music_policy": "none",
+        "prompt_compiler_schema": "native_av_prompt_v1",
+        "provider": "agnes",
+        "model": null,
+        "provider_mode": "i2v",
+        "provider_options_fingerprint": "255626c7"
+      },
+      "freshness": {
+        "status": "current",
+        "shot_id": "s04_c01",
+        "detail": {
+          "version_id": "vv_a0b456c0"
+        }
+      },
+      "duration_s": null,
+      "size": null
+    },
+    {
+      "key": "G",
+      "shot_id": "s01_c01",
+      "characters": [
+        "Alice"
+      ],
+      "dialogue_truth": "Alice：门后的东西在动，我们得马上离开这里。",
+      "expected_speaker_sequence": {
+        "resolution": "explicit",
+        "lines": [
+          {
+            "index": 0,
+            "text": "门后的东西在动，我们得马上离开这里。",
+            "speaker": "Alice",
+            "delivery_hints": []
+          }
+        ],
+        "directions": [],
+        "silent": []
+      },
+      "route": "bound",
+      "project": "__shot_binding_visual_final_gp",
+      "video": "evidence/G/video.mp4",
+      "prompt_preview": "Create a smooth cinematic transition from the first keyframe to the second keyframe, with this motion: Alice reaches out with her right hand and picks up the pistol from the desk, lifting it firmly, maintain consistency in character identity, scene layout, Scene: Old Harbormaster Office (evening, light rain outside, warm green desk lamp glow, dust motes in the lamp light). Alice wearing Alice · Field Explorer — brown leather field jacket, olive trousers, auburn braided hair, and a deep green wool scarf. Alice held Antique Flintlock Pistol (right_hand). Action start state: Alice right hand empt",
+      "prompt_snapshot_full": "Create a smooth cinematic transition from the first keyframe to the second keyframe, with this motion: Alice reaches out with her right hand and picks up the pistol from the desk, lifting it firmly, maintain consistency in character identity, scene layout, Scene: Old Harbormaster Office (evening, light rain outside, warm green desk lamp glow, dust motes in the lamp light). Alice wearing Alice · Field Explorer — brown leather field jacket, olive trousers, auburn braided hair, and a deep green wool scarf. Alice held Antique Flintlock Pistol (right_hand). Action start state: Alice right hand empty. Action end state: Alice right hand holding the pistol. Visual production style: 2D animated image. Do not render as live-action photography or 3D rendered CGI. Art direction: clean 2D animated adventure style with confident linework and warm cinematic lighting. Project style tags: 2d animation, cel shading, cinematic lighting. Negative style constraints (must avoid): photorealistic; 3d render. On-screen spoken dialogue in Mandarin Chinese: Only the explicitly quoted dialogue is spoken aloud: do not speak, narrate, or read any visual description, camera instruction, action description, character motion, sound-effect instruction, or production note. 1. Alice says: 门后的东西在动，我们得马上离开这里。 Keep every line assigned to its specified speaker. Do not swap the speakers. The characters' mouths move naturally in sync with their own spoken lines. Speak exactly the supplied dialogue: do not translate, paraphrase, summarize, or invent additional spoken lines; natural tone, breathing, and non-verbal vocalizations are allowed as long as the meaning of the lines is unchanged. No background music or musical score: use only natural dialogue, diegetic sounds, and appropriate environmental ambience.",
+      "generation_basis": {
+        "schema": "native_av_generation_basis_v1",
+        "shot_id": "s01_c01",
+        "visual_basis_fingerprint": "835bc39a",
+        "dialogue_fingerprint": "7a4c9b40",
+        "speaker_map_fingerprint": "f17c6937",
+        "spoken_language": "Mandarin Chinese",
+        "audio_event_intent_fingerprint": "5202bac6",
+        "music_policy": "none",
+        "prompt_compiler_schema": "native_av_prompt_v1",
+        "provider": "agnes",
+        "model": null,
+        "provider_mode": "keyframes",
+        "provider_options_fingerprint": "56bbbd6d"
+      },
+      "freshness": {
+        "status": "current",
+        "shot_id": "s01_c01",
+        "detail": {
+          "version_id": "vv_128560e7"
+        }
+      },
+      "duration_s": null,
+      "size": null
+    }
+  ],
+  "verdict_dimensions": [
+    "dialogue_correctness",
+    "speaker_correctness",
+    "language",
+    "lip_sync",
+    "natural_performance",
+    "visual_quality",
+    "sfx_ambience_fit",
+    "unexpected_bgm",
+    "overall_av",
+    "bound_continuity"
+  ]
+}

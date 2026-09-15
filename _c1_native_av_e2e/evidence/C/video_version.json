@@ -1,0 +1,24 @@
+{
+  "version_id": "vv_4d380f99",
+  "prompt_snapshot": "Animate this image: 两人对视，林晚星先开口，顾岩回应后林晚星再追问, keep character identity and outfit consistent On-screen spoken dialogue in Mandarin Chinese: Only the explicitly quoted dialogue is spoken aloud: do not speak, narrate, or read any visual description, camera instruction, action description, character motion, sound-effect instruction, or production note. 1. 林晚星 says: 「门开了吗？」 2. 顾岩 replies: 「还没有。」 3. 林晚星 replies: 「那就快一点。」 Keep every line assigned to its specified speaker. Do not swap the speakers. The characters' mouths move naturally in sync with their own spoken lines. Speak exactly the supplied dialogue: do not translate, paraphrase, summarize, or invent additional spoken lines; natural tone, breathing, and non-verbal vocalizations are allowed as long as the meaning of the lines is unchanged. No background music or musical score: use only natural dialogue, diegetic sounds, and appropriate environmental ambience.",
+  "generation_basis": {
+    "schema": "native_av_generation_basis_v1",
+    "shot_id": "s02_c01",
+    "visual_basis_fingerprint": "06187165",
+    "dialogue_fingerprint": "75c82da8",
+    "speaker_map_fingerprint": "71d30f58",
+    "spoken_language": "Mandarin Chinese",
+    "audio_event_intent_fingerprint": "5202bac6",
+    "music_policy": "none",
+    "prompt_compiler_schema": "native_av_prompt_v1",
+    "provider": "agnes",
+    "model": null,
+    "provider_mode": "i2v",
+    "provider_options_fingerprint": "be4cc49d"
+  },
+  "model": null,
+  "num_frames": 193,
+  "seconds_returned": 8.0,
+  "size_returned": "1280x704",
+  "final_video": "vv_4d380f99"
+}

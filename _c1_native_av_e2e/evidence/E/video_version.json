@@ -1,0 +1,24 @@
+{
+  "version_id": "vv_3cdf9314",
+  "prompt_snapshot": "Animate this image: 顾岩推门，门缓缓打开，他停顿一拍，转过头, keep character identity and outfit consistent On-screen spoken dialogue in Mandarin Chinese: Only the explicitly quoted dialogue is spoken aloud: do not speak, narrate, or read any visual description, camera instruction, action description, character motion, sound-effect instruction, or production note. 1. 顾岩 says: 这扇门每晚都要上油，不然整层楼都听得见。 Keep every line assigned to its specified speaker. Do not swap the speakers. The characters' mouths move naturally in sync with their own spoken lines. Speak exactly the supplied dialogue: do not translate, paraphrase, summarize, or invent additional spoken lines; natural tone, breathing, and non-verbal vocalizations are allowed as long as the meaning of the lines is unchanged. No background music or musical score: use only natural dialogue, diegetic sounds, and appropriate environmental ambience. Shot-local sound (generate natively within the scene, not as separate audio): heavy wooden door creaks as it opens; floorboards creak softly under footsteps.",
+  "generation_basis": {
+    "schema": "native_av_generation_basis_v1",
+    "shot_id": "s03_c01",
+    "visual_basis_fingerprint": "06187165",
+    "dialogue_fingerprint": "17bb09ce",
+    "speaker_map_fingerprint": "4cea7fce",
+    "spoken_language": "Mandarin Chinese",
+    "audio_event_intent_fingerprint": "40a7449e",
+    "music_policy": "none",
+    "prompt_compiler_schema": "native_av_prompt_v1",
+    "provider": "agnes",
+    "model": null,
+    "provider_mode": "i2v",
+    "provider_options_fingerprint": "255626c7"
+  },
+  "model": null,
+  "num_frames": 145,
+  "seconds_returned": 6.0,
+  "size_returned": "1280x704",
+  "final_video": "vv_3cdf9314"
+}

@@ -1,0 +1,107 @@
+{
+  "shot_id": "s02_c02",
+  "project": "__native_av_c1_e2e",
+  "wall_seconds": 89.4,
+  "progress": [
+    [
+      "submit",
+      "s02_c02 提交中（视频 1 RPM，可能等约 60s）",
+      10
+    ],
+    [
+      "submit",
+      "s02_c02 已提交 video_id=video_bGl0ZWxsbTpjdXN0b21fbGxtX3Byb3ZpZGVyOm9wZW5haTttb2RlbF9pZDphZ25lcy12aWRlby12Mi4wO3ZpZGVvX2lkOnZpZGVvXzljNjUyODZiZTBiNDRkMzliY2I5MzBhM",
+      15
+    ],
+    [
+      "poll",
+      "s02_c02 in_progress 30%（已等 5s）",
+      30
+    ],
+    [
+      "poll",
+      "s02_c02 in_progress 30%（已等 10s）",
+      30
+    ],
+    [
+      "poll",
+      "s02_c02 in_progress 30%（已等 15s）",
+      30
+    ],
+    [
+      "poll",
+      "s02_c02 in_progress 30%（已等 20s）",
+      30
+    ],
+    [
+      "poll",
+      "s02_c02 in_progress 30%（已等 25s）",
+      30
+    ],
+    [
+      "poll",
+      "s02_c02 in_progress 30%（已等 30s）",
+      30
+    ],
+    [
+      "poll",
+      "s02_c02 in_progress 30%（已等 35s）",
+      30
+    ],
+    [
+      "poll",
+      "s02_c02 in_progress 30%（已等 40s）",
+      30
+    ],
+    [
+      "poll",
+      "s02_c02 in_progress 30%（已等 45s）",
+      30
+    ],
+    [
+      "poll",
+      "s02_c02 in_progress 30%（已等 50s）",
+      30
+    ],
+    [
+      "poll",
+      "s02_c02 in_progress 30%（已等 55s）",
+      30
+    ],
+    [
+      "poll",
+      "s02_c02 in_progress 30%（已等 60s）",
+      30
+    ],
+    [
+      "poll",
+      "s02_c02 in_progress 30%（已等 65s）",
+      30
+    ],
+    [
+      "poll",
+      "s02_c02 in_progress 30%（已等 70s）",
+      30
+    ],
+    [
+      "poll",
+      "s02_c02 in_progress 30%（已等 75s）",
+      30
+    ],
+    [
+      "poll",
+      "s02_c02 completed 100%（已等 80s）",
+      100
+    ],
+    [
+      "done",
+      "s02_c02 完成（版本 vv_bee22377），实际 5.0s / 1280x704",
+      100
+    ],
+    [
+      "endframe",
+      "s02_c02 提取视频末帧",
+      null
+    ]
+  ]
+}

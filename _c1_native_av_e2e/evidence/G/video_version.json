@@ -1,0 +1,24 @@
+{
+  "version_id": "vv_128560e7",
+  "prompt_snapshot": "Create a smooth cinematic transition from the first keyframe to the second keyframe, with this motion: Alice reaches out with her right hand and picks up the pistol from the desk, lifting it firmly, maintain consistency in character identity, scene layout, Scene: Old Harbormaster Office (evening, light rain outside, warm green desk lamp glow, dust motes in the lamp light). Alice wearing Alice · Field Explorer — brown leather field jacket, olive trousers, auburn braided hair, and a deep green wool scarf. Alice held Antique Flintlock Pistol (right_hand). Action start state: Alice right hand empty. Action end state: Alice right hand holding the pistol. Visual production style: 2D animated image. Do not render as live-action photography or 3D rendered CGI. Art direction: clean 2D animated adventure style with confident linework and warm cinematic lighting. Project style tags: 2d animation, cel shading, cinematic lighting. Negative style constraints (must avoid): photorealistic; 3d render. On-screen spoken dialogue in Mandarin Chinese: Only the explicitly quoted dialogue is spoken aloud: do not speak, narrate, or read any visual description, camera instruction, action description, character motion, sound-effect instruction, or production note. 1. Alice says: 门后的东西在动，我们得马上离开这里。 Keep every line assigned to its specified speaker. Do not swap the speakers. The characters' mouths move naturally in sync with their own spoken lines. Speak exactly the supplied dialogue: do not translate, paraphrase, summarize, or invent additional spoken lines; natural tone, breathing, and non-verbal vocalizations are allowed as long as the meaning of the lines is unchanged. No background music or musical score: use only natural dialogue, diegetic sounds, and appropriate environmental ambience.",
+  "generation_basis": {
+    "schema": "native_av_generation_basis_v1",
+    "shot_id": "s01_c01",
+    "visual_basis_fingerprint": "835bc39a",
+    "dialogue_fingerprint": "7a4c9b40",
+    "speaker_map_fingerprint": "f17c6937",
+    "spoken_language": "Mandarin Chinese",
+    "audio_event_intent_fingerprint": "5202bac6",
+    "music_policy": "none",
+    "prompt_compiler_schema": "native_av_prompt_v1",
+    "provider": "agnes",
+    "model": null,
+    "provider_mode": "keyframes",
+    "provider_options_fingerprint": "56bbbd6d"
+  },
+  "model": null,
+  "num_frames": 97,
+  "seconds_returned": 4.0,
+  "size_returned": "1280x704",
+  "final_video": "vv_128560e7"
+}

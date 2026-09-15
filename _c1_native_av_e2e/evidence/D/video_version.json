@@ -1,0 +1,24 @@
+{
+  "version_id": "vv_bee22377",
+  "prompt_snapshot": "Animate this image: 林晚星说话时目光望向远方，顾岩保持沉默只是看着她, keep character identity and outfit consistent On-screen spoken dialogue in Mandarin Chinese: Only the explicitly quoted dialogue is spoken aloud: do not speak, narrate, or read any visual description, camera instruction, action description, character motion, sound-effect instruction, or production note. 1. 林晚星 says: 风暴明天才会来，我们还有时间。 顾岩 remains completely silent in this shot: this character does not speak, and no dialogue is invented for them. Keep every line assigned to its specified speaker. Do not swap the speakers. The characters' mouths move naturally in sync with their own spoken lines. Speak exactly the supplied dialogue: do not translate, paraphrase, summarize, or invent additional spoken lines; natural tone, breathing, and non-verbal vocalizations are allowed as long as the meaning of the lines is unchanged. No background music or musical score: use only natural dialogue, diegetic sounds, and appropriate environmental ambience.",
+  "generation_basis": {
+    "schema": "native_av_generation_basis_v1",
+    "shot_id": "s02_c02",
+    "visual_basis_fingerprint": "06187165",
+    "dialogue_fingerprint": "974776c6",
+    "speaker_map_fingerprint": "9119de3b",
+    "spoken_language": "Mandarin Chinese",
+    "audio_event_intent_fingerprint": "5202bac6",
+    "music_policy": "none",
+    "prompt_compiler_schema": "native_av_prompt_v1",
+    "provider": "agnes",
+    "model": null,
+    "provider_mode": "i2v",
+    "provider_options_fingerprint": "f9da00e9"
+  },
+  "model": null,
+  "num_frames": 121,
+  "seconds_returned": 5.0,
+  "size_returned": "1280x704",
+  "final_video": "vv_bee22377"
+}
