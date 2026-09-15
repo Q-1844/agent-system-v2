@@ -1,0 +1,41 @@
+{
+  "spec": {
+    "spec_id": "SC_A03",
+    "sample_key": "C",
+    "side": "A",
+    "variant": 3,
+    "shot_id": "s02_c01",
+    "frames": 193,
+    "image": "alice_bob_door"
+  },
+  "shot_id": "s02_c01",
+  "model": "agnes-video-v2.0(config default)",
+  "request_mode": "i2v",
+  "image_asset": "alice_bob_door",
+  "image_url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_VzQIlneXaUMR12YttLbEiTlrD0Wb5z0z/output_782e633fff24490f9d5dc7b2ac193979.png",
+  "num_frames": 193,
+  "language": "Mandarin Chinese",
+  "dialogue_truth": "林晚星：「门开了吗？」\n顾岩：「还没有。」\n林晚星：「那就快一点。」",
+  "speaker_map": {
+    "resolution": "explicit",
+    "lines": [
+      {
+        "index": 0,
+        "text": "「门开了吗？」",
+        "speaker": "林晚星"
+      },
+      {
+        "index": 1,
+        "text": "「还没有。」",
+        "speaker": "顾岩"
+      },
+      {
+        "index": 2,
+        "text": "「那就快一点。」",
+        "speaker": "林晚星"
+      }
+    ],
+    "silent": []
+  },
+  "compiled_prompt": "Animate this image: 两人站在门前，交替看向对方与木门。, keep character identity and outfit consistent"
+}

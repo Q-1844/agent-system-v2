@@ -1,0 +1,53 @@
+{
+  "completed_at": 1789444095,
+  "created_at": 1789444020,
+  "error": null,
+  "expires_at": null,
+  "id": "video_bf8492bb1d9a436db183ef8ef5cc9270",
+  "input_image_filename": "video_bf8492bb1d9a436db183ef8ef5cc9270.png",
+  "internal_progress": 100,
+  "internal_status": "completed",
+  "object": "video",
+  "perf_download_bytes": 1235645,
+  "perf_download_s": 0.18352848477662,
+  "perf_infer_s": 74.985462903976,
+  "perf_infer_t0": 12427061.496805,
+  "perf_output_size": 1879024,
+  "perf_params": {
+    "frame_rate": 24,
+    "height": 704,
+    "num_frames": 121,
+    "num_inference_steps": 8,
+    "seed": 59602,
+    "width": 1280
+  },
+  "perf_upload_s": 0.30287564359605,
+  "progress": 100,
+  "prompt_id": "ab4447a6-b625-4995-8906-6f0d249a1c48",
+  "remixed_from_video_id": null,
+  "request_params": {
+    "background_image": null,
+    "frame_rate": 24,
+    "global_prompt": "",
+    "height": 704,
+    "image": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_WJF4woN0csvVijdiRUtJt5dINBFcWfK8/output.png",
+    "image_list": [
+      "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_WJF4woN0csvVijdiRUtJt5dINBFcWfK8/output.png"
+    ],
+    "local_prompts": "",
+    "max_length": 256,
+    "mode": "ti2vid",
+    "negative_prompt": "pc game, console game, video game, cartoon, childish, ugly, worst quality, blurry, jittery, distorted, inconsistent appearance",
+    "num_frames": 121,
+    "num_inference_steps_first_stage": null,
+    "prompt": "Animate this image: 她微微点头，转身欲行。, keep character identity and outfit consistent On-screen spoken dialogue in Mandarin Chinese: 1. 林晚星 says: 我们走。 Keep every line assigned to its specified speaker. Do not swap the speakers and do not invent any additional dialogue. The characters' mouths move naturally in sync with their own spoken lines.",
+    "ratio": "16:9",
+    "resolution": "720p",
+    "seed": 59602,
+    "width": 1280
+  },
+  "seconds": "5.0",
+  "size": "1280x704",
+  "status": "completed",
+  "url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-v2.0/video_bf8492bb1d9a436db183ef8ef5cc9270.mp4"
+}

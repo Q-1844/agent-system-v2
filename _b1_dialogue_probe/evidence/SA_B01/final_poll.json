@@ -1,0 +1,53 @@
+{
+  "completed_at": 1789443909,
+  "created_at": 1789443808,
+  "error": null,
+  "expires_at": null,
+  "id": "video_e445fe61d08c4c7a86b5bb6fcd97e478",
+  "input_image_filename": "video_e445fe61d08c4c7a86b5bb6fcd97e478.png",
+  "internal_progress": 100,
+  "internal_status": "completed",
+  "object": "video",
+  "perf_download_bytes": 1246590,
+  "perf_download_s": 0.22764007374644,
+  "perf_infer_s": 100.16461421363,
+  "perf_infer_t0": 12426699.841446,
+  "perf_output_size": 1674591,
+  "perf_params": {
+    "frame_rate": 24,
+    "height": 704,
+    "num_frames": 193,
+    "num_inference_steps": 8,
+    "seed": 193887,
+    "width": 1280
+  },
+  "perf_upload_s": 0.28199087269604,
+  "progress": 100,
+  "prompt_id": "b3b9fa26-92b6-468a-a123-ec3b6ea255c2",
+  "remixed_from_video_id": null,
+  "request_params": {
+    "background_image": null,
+    "frame_rate": 24,
+    "global_prompt": "",
+    "height": 704,
+    "image": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_0p6yBgqDJzMmlJEnCvGSXPDCfDEwfoOx/output.png",
+    "image_list": [
+      "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_0p6yBgqDJzMmlJEnCvGSXPDCfDEwfoOx/output.png"
+    ],
+    "local_prompts": "",
+    "max_length": 256,
+    "mode": "ti2vid",
+    "negative_prompt": "pc game, console game, video game, cartoon, childish, ugly, worst quality, blurry, jittery, distorted, inconsistent appearance",
+    "num_frames": 193,
+    "num_inference_steps_first_stage": null,
+    "prompt": "Animate this image: 她神情急切地看向前方，油灯火苗轻微摇曳。, keep character identity and outfit consistent On-screen spoken dialogue in Mandarin Chinese: 1. 林晚星 says: 灯塔马上就要停电了，我们必须赶在暴风雨之前进去。 Keep every line assigned to its specified speaker. Do not swap the speakers and do not invent any additional dialogue. The characters' mouths move naturally in sync with their own spoken lines.",
+    "ratio": "16:9",
+    "resolution": "720p",
+    "seed": 193887,
+    "width": 1280
+  },
+  "seconds": "8.0",
+  "size": "1280x704",
+  "status": "completed",
+  "url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-v2.0/video_e445fe61d08c4c7a86b5bb6fcd97e478.mp4"
+}

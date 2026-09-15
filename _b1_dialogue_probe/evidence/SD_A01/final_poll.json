@@ -1,0 +1,53 @@
+{
+  "completed_at": 1789444561,
+  "created_at": 1789444480,
+  "error": null,
+  "expires_at": null,
+  "id": "video_616e62b1a3884dd8900d251de89d3a39",
+  "input_image_filename": "video_616e62b1a3884dd8900d251de89d3a39.png",
+  "internal_progress": 100,
+  "internal_status": "completed",
+  "object": "video",
+  "perf_download_bytes": 1358701,
+  "perf_download_s": 0.15560764819384,
+  "perf_infer_s": 80.743205254897,
+  "perf_infer_t0": 12000308.295332,
+  "perf_output_size": 1523719,
+  "perf_params": {
+    "frame_rate": 24,
+    "height": 704,
+    "num_frames": 121,
+    "num_inference_steps": 8,
+    "seed": 988049,
+    "width": 1280
+  },
+  "perf_upload_s": 0.36051033996046,
+  "progress": 100,
+  "prompt_id": "091143eb-24c4-4807-9ba1-bf876e6f9b08",
+  "remixed_from_video_id": null,
+  "request_params": {
+    "background_image": null,
+    "frame_rate": 24,
+    "global_prompt": "",
+    "height": 704,
+    "image": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_VzQIlneXaUMR12YttLbEiTlrD0Wb5z0z/output_782e633fff24490f9d5dc7b2ac193979.png",
+    "image_list": [
+      "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_VzQIlneXaUMR12YttLbEiTlrD0Wb5z0z/output_782e633fff24490f9d5dc7b2ac193979.png"
+    ],
+    "local_prompts": "",
+    "max_length": 256,
+    "mode": "ti2vid",
+    "negative_prompt": "pc game, console game, video game, cartoon, childish, ugly, worst quality, blurry, jittery, distorted, inconsistent appearance",
+    "num_frames": 121,
+    "num_inference_steps_first_stage": null,
+    "prompt": "Animate this image: 林晚星抬手指向窗外，小满在旁安静看着窗外。, keep character identity and outfit consistent",
+    "ratio": "16:9",
+    "resolution": "720p",
+    "seed": 988049,
+    "width": 1280
+  },
+  "seconds": "5.0",
+  "size": "1280x704",
+  "status": "completed",
+  "url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-v2.0/video_616e62b1a3884dd8900d251de89d3a39.mp4"
+}

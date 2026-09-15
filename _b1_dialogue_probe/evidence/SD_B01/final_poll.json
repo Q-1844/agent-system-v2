@@ -1,0 +1,53 @@
+{
+  "completed_at": 1789444490,
+  "created_at": 1789444409,
+  "error": null,
+  "expires_at": null,
+  "id": "video_df1b18e66bd349c1929c9af99abcb8c2",
+  "input_image_filename": "video_df1b18e66bd349c1929c9af99abcb8c2.png",
+  "internal_progress": 100,
+  "internal_status": "completed",
+  "object": "video",
+  "perf_download_bytes": 1358701,
+  "perf_download_s": 0.21925059519708,
+  "perf_infer_s": 80.311398535967,
+  "perf_infer_t0": 12000237.718551,
+  "perf_output_size": 1477379,
+  "perf_params": {
+    "frame_rate": 24,
+    "height": 704,
+    "num_frames": 121,
+    "num_inference_steps": 8,
+    "seed": 12012,
+    "width": 1280
+  },
+  "perf_upload_s": 0.37303341366351,
+  "progress": 100,
+  "prompt_id": "fbafb37b-988c-464f-926c-e4f23d161531",
+  "remixed_from_video_id": null,
+  "request_params": {
+    "background_image": null,
+    "frame_rate": 24,
+    "global_prompt": "",
+    "height": 704,
+    "image": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_VzQIlneXaUMR12YttLbEiTlrD0Wb5z0z/output_782e633fff24490f9d5dc7b2ac193979.png",
+    "image_list": [
+      "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_VzQIlneXaUMR12YttLbEiTlrD0Wb5z0z/output_782e633fff24490f9d5dc7b2ac193979.png"
+    ],
+    "local_prompts": "",
+    "max_length": 256,
+    "mode": "ti2vid",
+    "negative_prompt": "pc game, console game, video game, cartoon, childish, ugly, worst quality, blurry, jittery, distorted, inconsistent appearance",
+    "num_frames": 121,
+    "num_inference_steps_first_stage": null,
+    "prompt": "Animate this image: 林晚星抬手指向窗外，小满在旁安静看着窗外。, keep character identity and outfit consistent On-screen spoken dialogue in Mandarin Chinese: 1. 林晚星 says: 灯塔！灯塔灭了！ 小满 remains completely silent in this shot: this character does not speak, and no dialogue is invented for them. Keep every line assigned to its specified speaker. Do not swap the speakers and do not invent any additional dialogue. The characters' mouths move naturally in sync with their own spoken lines.",
+    "ratio": "16:9",
+    "resolution": "720p",
+    "seed": 12012,
+    "width": 1280
+  },
+  "seconds": "5.0",
+  "size": "1280x704",
+  "status": "completed",
+  "url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-v2.0/video_df1b18e66bd349c1929c9af99abcb8c2.mp4"
+}

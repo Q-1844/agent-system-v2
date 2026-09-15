@@ -1,0 +1,33 @@
+{
+  "spec": {
+    "spec_id": "SD_B01",
+    "sample_key": "D",
+    "side": "B",
+    "variant": 1,
+    "shot_id": "s02_c02",
+    "frames": 121,
+    "image": "alice_bob_door"
+  },
+  "shot_id": "s02_c02",
+  "model": "agnes-video-v2.0(config default)",
+  "request_mode": "i2v",
+  "image_asset": "alice_bob_door",
+  "image_url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_VzQIlneXaUMR12YttLbEiTlrD0Wb5z0z/output_782e633fff24490f9d5dc7b2ac193979.png",
+  "num_frames": 121,
+  "language": "Mandarin Chinese",
+  "dialogue_truth": "林晚星：灯塔！灯塔灭了！",
+  "speaker_map": {
+    "resolution": "explicit",
+    "lines": [
+      {
+        "index": 0,
+        "text": "灯塔！灯塔灭了！",
+        "speaker": "林晚星"
+      }
+    ],
+    "silent": [
+      "小满"
+    ]
+  },
+  "compiled_prompt": "Animate this image: 林晚星抬手指向窗外，小满在旁安静看着窗外。, keep character identity and outfit consistent On-screen spoken dialogue in Mandarin Chinese: 1. 林晚星 says: 灯塔！灯塔灭了！ 小满 remains completely silent in this shot: this character does not speak, and no dialogue is invented for them. Keep every line assigned to its specified speaker. Do not swap the speakers and do not invent any additional dialogue. The characters' mouths move naturally in sync with their own spoken lines."
+}

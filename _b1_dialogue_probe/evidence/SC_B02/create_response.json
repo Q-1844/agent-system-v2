@@ -1,0 +1,12 @@
+{
+  "id": "task_MWcb88tv7SRRmtcNCe3SJrHFBDJ7wPrK",
+  "video_id": "video_bGl0ZWxsbTpjdXN0b21fbGxtX3Byb3ZpZGVyOm9wZW5haTttb2RlbF9pZDphZ25lcy12aWRlby12Mi4wO3ZpZGVvX2lkOnZpZGVvXzU3M2UyNGVlZjU2MTQ3ZmQ5YjBlY2UzNGZiMjg1MmM0",
+  "task_id": "task_MWcb88tv7SRRmtcNCe3SJrHFBDJ7wPrK",
+  "object": "video",
+  "model": "agnes-video-v2.0",
+  "status": "queued",
+  "progress": 0,
+  "created_at": 1789444161,
+  "seconds": "8.0",
+  "size": "1280x704"
+}

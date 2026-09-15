@@ -1,0 +1,31 @@
+{
+  "spec": {
+    "spec_id": "SA_B01",
+    "sample_key": "A",
+    "side": "B",
+    "variant": 1,
+    "shot_id": "s01_c01",
+    "frames": 193,
+    "image": "alice_speak"
+  },
+  "shot_id": "s01_c01",
+  "model": "agnes-video-v2.0(config default)",
+  "request_mode": "i2v",
+  "image_asset": "alice_speak",
+  "image_url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_0p6yBgqDJzMmlJEnCvGSXPDCfDEwfoOx/output.png",
+  "num_frames": 193,
+  "language": "Mandarin Chinese",
+  "dialogue_truth": "灯塔马上就要停电了，我们必须赶在暴风雨之前进去。",
+  "speaker_map": {
+    "resolution": "single_auto",
+    "lines": [
+      {
+        "index": 0,
+        "text": "灯塔马上就要停电了，我们必须赶在暴风雨之前进去。",
+        "speaker": "林晚星"
+      }
+    ],
+    "silent": []
+  },
+  "compiled_prompt": "Animate this image: 她神情急切地看向前方，油灯火苗轻微摇曳。, keep character identity and outfit consistent On-screen spoken dialogue in Mandarin Chinese: 1. 林晚星 says: 灯塔马上就要停电了，我们必须赶在暴风雨之前进去。 Keep every line assigned to its specified speaker. Do not swap the speakers and do not invent any additional dialogue. The characters' mouths move naturally in sync with their own spoken lines."
+}

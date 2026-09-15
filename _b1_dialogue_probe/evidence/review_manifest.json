@@ -1,0 +1,197 @@
+{
+  "language": "Mandarin Chinese",
+  "samples": [
+    {
+      "key": "A",
+      "title": "单角色普通对白",
+      "goal": "台词准确性 / 中文稳定性 / 原生 lip-sync 保持",
+      "shot_id": "s01_c01",
+      "first_frame": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_0p6yBgqDJzMmlJEnCvGSXPDCfDEwfoOx/output.png",
+      "dialogue_truth": "灯塔马上就要停电了，我们必须赶在暴风雨之前进去。",
+      "expected_speaker_sequence": {
+        "resolution": "single_auto",
+        "lines": [
+          {
+            "index": 0,
+            "text": "灯塔马上就要停电了，我们必须赶在暴风雨之前进去。",
+            "speaker": "林晚星"
+          }
+        ],
+        "silent": []
+      },
+      "items": [
+        {
+          "spec_id": "SA_A01",
+          "side": "A",
+          "side_label": "当前生产方式（无台词控制）",
+          "variant": 1,
+          "video": "evidence/SA_A01/video.mp4",
+          "prompt_preview": "Animate this image: 她神情急切地看向前方，油灯火苗轻微摇曳。, keep character identity and outfit consistent"
+        },
+        {
+          "spec_id": "SA_B01",
+          "side": "B",
+          "side_label": "B1 台词+说话人控制",
+          "variant": 1,
+          "video": "evidence/SA_B01/video.mp4",
+          "prompt_preview": "Animate this image: 她神情急切地看向前方，油灯火苗轻微摇曳。, keep character identity and outfit consistent On-screen spoken dialogue in Mandarin Chinese: 1. 林晚星 says: 灯塔马上就要停电了，我们必须赶在暴风雨之前进去。 Keep every line assigned to its specified speaker. Do not swap the speakers and do not invent any additional dialogue. The characters' mouths move naturally in sync with their own spoken lines."
+        }
+      ]
+    },
+    {
+      "key": "B",
+      "title": "单角色短句（语言先验风险）",
+      "goal": "超短句是否仍目标语言；dialogue prompt 是否降低异常语言生成",
+      "shot_id": "s01_c02",
+      "first_frame": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_WJF4woN0csvVijdiRUtJt5dINBFcWfK8/output.png",
+      "dialogue_truth": "我们走。",
+      "expected_speaker_sequence": {
+        "resolution": "single_auto",
+        "lines": [
+          {
+            "index": 0,
+            "text": "我们走。",
+            "speaker": "林晚星"
+          }
+        ],
+        "silent": []
+      },
+      "items": [
+        {
+          "spec_id": "SB_A01",
+          "side": "A",
+          "side_label": "当前生产方式（无台词控制）",
+          "variant": 1,
+          "video": "evidence/SB_A01/video.mp4",
+          "prompt_preview": "Animate this image: 她微微点头，转身欲行。, keep character identity and outfit consistent"
+        },
+        {
+          "spec_id": "SB_B01",
+          "side": "B",
+          "side_label": "B1 台词+说话人控制",
+          "variant": 1,
+          "video": "evidence/SB_B01/video.mp4",
+          "prompt_preview": "Animate this image: 她微微点头，转身欲行。, keep character identity and outfit consistent On-screen spoken dialogue in Mandarin Chinese: 1. 林晚星 says: 我们走。 Keep every line assigned to its specified speaker. Do not swap the speakers and do not invent any additional dialogue. The characters' mouths move naturally in sync with their own spoken lines."
+        }
+      ]
+    },
+    {
+      "key": "C",
+      "title": "双角色三句 A→B→A（speaker swap 主样本）",
+      "goal": "speaker swap 是否降低——本轮最重要样本",
+      "shot_id": "s02_c01",
+      "first_frame": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_VzQIlneXaUMR12YttLbEiTlrD0Wb5z0z/output_782e633fff24490f9d5dc7b2ac193979.png",
+      "dialogue_truth": "林晚星：「门开了吗？」\n顾岩：「还没有。」\n林晚星：「那就快一点。」",
+      "expected_speaker_sequence": {
+        "resolution": "explicit",
+        "lines": [
+          {
+            "index": 0,
+            "text": "「门开了吗？」",
+            "speaker": "林晚星"
+          },
+          {
+            "index": 1,
+            "text": "「还没有。」",
+            "speaker": "顾岩"
+          },
+          {
+            "index": 2,
+            "text": "「那就快一点。」",
+            "speaker": "林晚星"
+          }
+        ],
+        "silent": []
+      },
+      "items": [
+        {
+          "spec_id": "SC_A01",
+          "side": "A",
+          "side_label": "当前生产方式（无台词控制）",
+          "variant": 1,
+          "video": "evidence/SC_A01/video.mp4",
+          "prompt_preview": "Animate this image: 两人站在门前，交替看向对方与木门。, keep character identity and outfit consistent"
+        },
+        {
+          "spec_id": "SC_A02",
+          "side": "A",
+          "side_label": "当前生产方式（无台词控制）",
+          "variant": 2,
+          "video": "evidence/SC_A02/video.mp4",
+          "prompt_preview": "Animate this image: 两人站在门前，交替看向对方与木门。, keep character identity and outfit consistent"
+        },
+        {
+          "spec_id": "SC_A03",
+          "side": "A",
+          "side_label": "当前生产方式（无台词控制）",
+          "variant": 3,
+          "video": "evidence/SC_A03/video.mp4",
+          "prompt_preview": "Animate this image: 两人站在门前，交替看向对方与木门。, keep character identity and outfit consistent"
+        },
+        {
+          "spec_id": "SC_B01",
+          "side": "B",
+          "side_label": "B1 台词+说话人控制",
+          "variant": 1,
+          "video": "evidence/SC_B01/video.mp4",
+          "prompt_preview": "Animate this image: 两人站在门前，交替看向对方与木门。, keep character identity and outfit consistent On-screen spoken dialogue in Mandarin Chinese: 1. 林晚星 says: 「门开了吗？」 2. 顾岩 replies: 「还没有。」 3. 林晚星 replies: 「那就快一点。」 Keep every line assigned to its specified speaker. Do not swap the speakers and do not invent any additional dialogue. The characters' mouths move naturally in sync with their own spoken lines."
+        },
+        {
+          "spec_id": "SC_B02",
+          "side": "B",
+          "side_label": "B1 台词+说话人控制",
+          "variant": 2,
+          "video": "evidence/SC_B02/video.mp4",
+          "prompt_preview": "Animate this image: 两人站在门前，交替看向对方与木门。, keep character identity and outfit consistent On-screen spoken dialogue in Mandarin Chinese: 1. 林晚星 says: 「门开了吗？」 2. 顾岩 replies: 「还没有。」 3. 林晚星 replies: 「那就快一点。」 Keep every line assigned to its specified speaker. Do not swap the speakers and do not invent any additional dialogue. The characters' mouths move naturally in sync with their own spoken lines."
+        },
+        {
+          "spec_id": "SC_B03",
+          "side": "B",
+          "side_label": "B1 台词+说话人控制",
+          "variant": 3,
+          "video": "evidence/SC_B03/video.mp4",
+          "prompt_preview": "Animate this image: 两人站在门前，交替看向对方与木门。, keep character identity and outfit consistent On-screen spoken dialogue in Mandarin Chinese: 1. 林晚星 says: 「门开了吗？」 2. 顾岩 replies: 「还没有。」 3. 林晚星 replies: 「那就快一点。」 Keep every line assigned to its specified speaker. Do not swap the speakers and do not invent any additional dialogue. The characters' mouths move naturally in sync with their own spoken lines."
+        }
+      ]
+    },
+    {
+      "key": "D",
+      "title": "双角色仅一人说话（沉默控制）",
+      "goal": "「谁应该沉默」控制是否有效",
+      "shot_id": "s02_c02",
+      "first_frame": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_VzQIlneXaUMR12YttLbEiTlrD0Wb5z0z/output_782e633fff24490f9d5dc7b2ac193979.png",
+      "dialogue_truth": "林晚星：灯塔！灯塔灭了！",
+      "expected_speaker_sequence": {
+        "resolution": "explicit",
+        "lines": [
+          {
+            "index": 0,
+            "text": "灯塔！灯塔灭了！",
+            "speaker": "林晚星"
+          }
+        ],
+        "silent": [
+          "小满"
+        ]
+      },
+      "items": [
+        {
+          "spec_id": "SD_A01",
+          "side": "A",
+          "side_label": "当前生产方式（无台词控制）",
+          "variant": 1,
+          "video": "evidence/SD_A01/video.mp4",
+          "prompt_preview": "Animate this image: 林晚星抬手指向窗外，小满在旁安静看着窗外。, keep character identity and outfit consistent"
+        },
+        {
+          "spec_id": "SD_B01",
+          "side": "B",
+          "side_label": "B1 台词+说话人控制",
+          "variant": 1,
+          "video": "evidence/SD_B01/video.mp4",
+          "prompt_preview": "Animate this image: 林晚星抬手指向窗外，小满在旁安静看着窗外。, keep character identity and outfit consistent On-screen spoken dialogue in Mandarin Chinese: 1. 林晚星 says: 灯塔！灯塔灭了！ 小满 remains completely silent in this shot: this character does not speak, and no dialogue is invented for them. Keep every line assigned to its specified speaker. Do not swap the speakers and do not invent any additional dialogue. The characters' mouths move naturally in sync with their own spoken lines."
+        }
+      ]
+    }
+  ]
+}

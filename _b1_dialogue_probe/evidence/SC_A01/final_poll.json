@@ -1,0 +1,53 @@
+{
+  "completed_at": 1789443989,
+  "created_at": 1789443878,
+  "error": null,
+  "expires_at": null,
+  "id": "video_0d6fadcfc22f40efa57eaeff3d8be54d",
+  "input_image_filename": "video_0d6fadcfc22f40efa57eaeff3d8be54d.png",
+  "internal_progress": 100,
+  "internal_status": "completed",
+  "object": "video",
+  "perf_download_bytes": 1358701,
+  "perf_download_s": 0.1957150939852,
+  "perf_infer_s": 109.44211282209,
+  "perf_infer_t0": 11236750.190144,
+  "perf_output_size": 1871596,
+  "perf_params": {
+    "frame_rate": 24,
+    "height": 704,
+    "num_frames": 193,
+    "num_inference_steps": 8,
+    "seed": 733970,
+    "width": 1280
+  },
+  "perf_upload_s": 0.30070725269616,
+  "progress": 100,
+  "prompt_id": "4994c726-8dab-4f1d-a282-cbf839ac2dcf",
+  "remixed_from_video_id": null,
+  "request_params": {
+    "background_image": null,
+    "frame_rate": 24,
+    "global_prompt": "",
+    "height": 704,
+    "image": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_VzQIlneXaUMR12YttLbEiTlrD0Wb5z0z/output_782e633fff24490f9d5dc7b2ac193979.png",
+    "image_list": [
+      "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_VzQIlneXaUMR12YttLbEiTlrD0Wb5z0z/output_782e633fff24490f9d5dc7b2ac193979.png"
+    ],
+    "local_prompts": "",
+    "max_length": 256,
+    "mode": "ti2vid",
+    "negative_prompt": "pc game, console game, video game, cartoon, childish, ugly, worst quality, blurry, jittery, distorted, inconsistent appearance",
+    "num_frames": 193,
+    "num_inference_steps_first_stage": null,
+    "prompt": "Animate this image: 两人站在门前，交替看向对方与木门。, keep character identity and outfit consistent",
+    "ratio": "16:9",
+    "resolution": "720p",
+    "seed": 733970,
+    "width": 1280
+  },
+  "seconds": "8.0",
+  "size": "1280x704",
+  "status": "completed",
+  "url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-v2.0/video_0d6fadcfc22f40efa57eaeff3d8be54d.mp4"
+}

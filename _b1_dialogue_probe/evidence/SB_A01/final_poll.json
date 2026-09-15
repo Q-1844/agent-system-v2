@@ -1,0 +1,53 @@
+{
+  "completed_at": 1789443815,
+  "created_at": 1789443737,
+  "error": null,
+  "expires_at": null,
+  "id": "video_d04a4bc501fe477796eddb5710f9e4e9",
+  "input_image_filename": "video_d04a4bc501fe477796eddb5710f9e4e9.png",
+  "internal_progress": 100,
+  "internal_status": "completed",
+  "object": "video",
+  "perf_download_bytes": 1235645,
+  "perf_download_s": 0.17800907045603,
+  "perf_infer_s": 76.651291487738,
+  "perf_infer_t0": 8786461.6461042,
+  "perf_output_size": 1631924,
+  "perf_params": {
+    "frame_rate": 24,
+    "height": 704,
+    "num_frames": 121,
+    "num_inference_steps": 8,
+    "seed": 885963,
+    "width": 1280
+  },
+  "perf_upload_s": 0.27835965529084,
+  "progress": 100,
+  "prompt_id": "a902b828-92f7-4c24-961f-1ad173b627e7",
+  "remixed_from_video_id": null,
+  "request_params": {
+    "background_image": null,
+    "frame_rate": 24,
+    "global_prompt": "",
+    "height": 704,
+    "image": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_WJF4woN0csvVijdiRUtJt5dINBFcWfK8/output.png",
+    "image_list": [
+      "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_WJF4woN0csvVijdiRUtJt5dINBFcWfK8/output.png"
+    ],
+    "local_prompts": "",
+    "max_length": 256,
+    "mode": "ti2vid",
+    "negative_prompt": "pc game, console game, video game, cartoon, childish, ugly, worst quality, blurry, jittery, distorted, inconsistent appearance",
+    "num_frames": 121,
+    "num_inference_steps_first_stage": null,
+    "prompt": "Animate this image: 她微微点头，转身欲行。, keep character identity and outfit consistent",
+    "ratio": "16:9",
+    "resolution": "720p",
+    "seed": 885963,
+    "width": 1280
+  },
+  "seconds": "5.0",
+  "size": "1280x704",
+  "status": "completed",
+  "url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-v2.0/video_d04a4bc501fe477796eddb5710f9e4e9.mp4"
+}

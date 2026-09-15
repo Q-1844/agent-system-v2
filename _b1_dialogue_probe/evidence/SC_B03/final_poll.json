@@ -1,0 +1,53 @@
+{
+  "completed_at": 1789444414,
+  "created_at": 1789444303,
+  "error": null,
+  "expires_at": null,
+  "id": "video_6bd6f2e0598542bc9ab453fd4ca990f7",
+  "input_image_filename": "video_6bd6f2e0598542bc9ab453fd4ca990f7.png",
+  "internal_progress": 100,
+  "internal_status": "completed",
+  "object": "video",
+  "perf_download_bytes": 1358701,
+  "perf_download_s": 0.13793890550733,
+  "perf_infer_s": 110.41765371617,
+  "perf_infer_t0": 7560503.9527163,
+  "perf_output_size": 2097952,
+  "perf_params": {
+    "frame_rate": 24,
+    "height": 704,
+    "num_frames": 193,
+    "num_inference_steps": 8,
+    "seed": 125306,
+    "width": 1280
+  },
+  "perf_upload_s": 0.30474880337715,
+  "progress": 100,
+  "prompt_id": "81595c47-3f95-4f07-9878-7e84e4b6ed92",
+  "remixed_from_video_id": null,
+  "request_params": {
+    "background_image": null,
+    "frame_rate": 24,
+    "global_prompt": "",
+    "height": 704,
+    "image": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_VzQIlneXaUMR12YttLbEiTlrD0Wb5z0z/output_782e633fff24490f9d5dc7b2ac193979.png",
+    "image_list": [
+      "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_VzQIlneXaUMR12YttLbEiTlrD0Wb5z0z/output_782e633fff24490f9d5dc7b2ac193979.png"
+    ],
+    "local_prompts": "",
+    "max_length": 256,
+    "mode": "ti2vid",
+    "negative_prompt": "pc game, console game, video game, cartoon, childish, ugly, worst quality, blurry, jittery, distorted, inconsistent appearance",
+    "num_frames": 193,
+    "num_inference_steps_first_stage": null,
+    "prompt": "Animate this image: 两人站在门前，交替看向对方与木门。, keep character identity and outfit consistent On-screen spoken dialogue in Mandarin Chinese: 1. 林晚星 says: 「门开了吗？」 2. 顾岩 replies: 「还没有。」 3. 林晚星 replies: 「那就快一点。」 Keep every line assigned to its specified speaker. Do not swap the speakers and do not invent any additional dialogue. The characters' mouths move naturally in sync with their own spoken lines.",
+    "ratio": "16:9",
+    "resolution": "720p",
+    "seed": 125306,
+    "width": 1280
+  },
+  "seconds": "8.0",
+  "size": "1280x704",
+  "status": "completed",
+  "url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-v2.0/video_6bd6f2e0598542bc9ab453fd4ca990f7.mp4"
+}
