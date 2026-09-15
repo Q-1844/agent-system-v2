@@ -4,7 +4,7 @@ Sequence S1 — Assembly Foundation 执行报告（24.md）。
 
 日期：2026-09-16（实现跨 09-15/09-16）
 状态：**IMPLEMENTATION + E2E PASS，待人评**（§34 STOP 已遵守——Music/Narration/Audio Mixing/Sequence Agent/Editor Agent/Final Film Export 一概未动）
-分支：master @ `2e0c1cf`
+分支：子仓库当前分支 `feat/scene-system-v1-s1`（与 C1/C2/C2.1 各阶段同分支连续提交；父仓库按 commit 指针跟踪）@ `ef96b2e`
 
 ---
 
@@ -183,3 +183,8 @@ review page（scratch）：`http://localhost:8915/_sequence_s1_review.html?proje
 ## 10. STOP（§34）
 
 Music / Narration / Audio Mixing / Sequence Agent / Editor Agent / Final Film Export **均未开始**。等待用户评审本报告与人评五项后再定 S2（Audio Layer Foundation）规格。
+
+## 11. 人评返修记录
+
+- **[2026-09-16] 播放无反应 bug（用户发现）**：`SequenceRenderVersion.output_file` 从未持久化（§9 minimum fields 漏实现）——review 页拿 None 拼播放地址 → 空地址。E2E 未抓到：驱动自拼文件路径、未读该字段（教训：E2E 断言应走消费方视角）。修复 = Phase 1 prepare 即落盘 `output_file`（`ef96b2e`）+ 测试钉死；两条既有渲染行元数据已回填；后端已重启加载修复。
+- 顺带发现：用户试播期间重复点击「渲染」按钮产生 12 个冗余渲染版本（每次都真实渲染成功——pipeline 稳定性顺带得证；已清理，保留首个正式版本与 final 指针）。review 页已中文化 + 渲染中禁用按钮 + 自动轮询 + 播放失败可见提示（用户反馈）。
