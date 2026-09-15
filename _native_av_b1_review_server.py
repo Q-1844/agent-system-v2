@@ -48,7 +48,7 @@ def page_html():
     return PAGE.replace("__MANIFEST__", json.dumps(data, ensure_ascii=False))
 
 
-PAGE = """<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8">
+PAGE = r"""<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8">
 <title>Native AV B1 评审 — Dialogue + Speaker Control</title><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
  body{font-family:system-ui,"Microsoft YaHei",sans-serif;margin:0;background:#141619;color:#e8eaed}
