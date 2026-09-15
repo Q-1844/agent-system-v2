@@ -188,3 +188,13 @@ Music / Narration / Audio Mixing / Sequence Agent / Editor Agent / Final Film Ex
 
 - **[2026-09-16] 播放无反应 bug（用户发现）**：`SequenceRenderVersion.output_file` 从未持久化（§9 minimum fields 漏实现）——review 页拿 None 拼播放地址 → 空地址。E2E 未抓到：驱动自拼文件路径、未读该字段（教训：E2E 断言应走消费方视角）。修复 = Phase 1 prepare 即落盘 `output_file`（`ef96b2e`）+ 测试钉死；两条既有渲染行元数据已回填；后端已重启加载修复。
 - 顺带发现：用户试播期间重复点击「渲染」按钮产生 12 个冗余渲染版本（每次都真实渲染成功——pipeline 稳定性顺带得证；已清理，保留首个正式版本与 final 指针）。review 页已中文化 + 渲染中禁用按钮 + 自动轮询 + 播放失败可见提示（用户反馈）。
+
+## 12. 人评结论（2026-09-16，用户）
+
+**S1 五项人评全部通过**：镜头顺序 ✓ / 裁切点 ✓ / 声音没有消失 ✓ / 切镜无技术错误 ✓ / 整体连续播放正常 ✓（用户原话：「全都接上了……没什么大问题……总之目前接的不错」）。
+
+→ **SEQUENCE ASSEMBLY S1 FOUNDATION PASS = FINAL**。
+
+用户同时观察：**分镜间人物模样存在不一致**——已定性为 Shot 画面生产域课题（非 Sequence 域，§36：Sequence 不重新导演 Shot）。该课题与既有系统对应：Visual V1（视觉档案）+ Shot Binding V1（S3 系列 BOUND 路径把角色/场景参考钉进每镜）；E2E 所用 `__native_av_c1_e2e` 镜头为 C1 时代 UNBOUND i2v 镜，跨镜漂移属预期内信号，无需在本阶段处置。
+
+按 §34：本阶段到此 STOP，等待用户拟定下一阶段（S2 Audio Layer Foundation 或其他方向）规格，不自动开始。
