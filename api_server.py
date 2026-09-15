@@ -84,6 +84,7 @@ from routers import workspaces  # noqa: E402  AI-6A Creative Workspace / ChangeS
 from routers import agents  # noqa: E402  AI-6B Multi-Agent Foundation
 from routers import resources  # noqa: E402  Production Resources V1 Phase 1B (read-only)
 from routers import scene_system  # noqa: E402  Scene System V1 Phase S1（空间事实系统；不与 /scenes 冲突）
+from routers import sequences  # noqa: E402  Sequence S1 Assembly Foundation（24.md；Shot Production 的消费者）
 app.include_router(system.router)
 app.include_router(projects.router)
 app.include_router(script.router)
@@ -103,6 +104,7 @@ app.include_router(workspaces.router)
 app.include_router(agents.router)   # AI-6B Multi-Agent Foundation
 app.include_router(resources.router)   # Production Resources V1 Phase 1B (read-only)
 app.include_router(scene_system.router)   # Scene System V1 Phase S1（Location/Anchor/Layout/View/SceneInstance）
+app.include_router(sequences.router)   # Sequence S1 Assembly Foundation（24.md；hard cut + trim + render versioning）
 
 
 @app.on_event("startup")
