@@ -102,7 +102,7 @@ def test_video_version_records_generation_basis(venv):
     assert "music_policy" not in b, "撤回键不得残留（21.md §20/§21）"
     assert b["provider_mode"] == "i2v"
     assert b["model"] is None, "UI 默认 dispatch 不传 video_model → model=None"
-    assert b["prompt_compiler_schema"] == "native_av_prompt_v2"
+    assert b["prompt_compiler_schema"] == "native_av_prompt_v3"
 
 
 def test_video_version_legacy_loads_with_empty_basis():

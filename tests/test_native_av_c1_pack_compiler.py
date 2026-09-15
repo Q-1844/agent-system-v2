@@ -98,11 +98,12 @@ def test_pack_basis_has_all_dependency_and_provider_keys():
         assert k not in basis, f"撤回键残留: {k}"
     assert basis["provider"] == "agnes"
     assert basis["model"] == "m1"
-    assert basis["prompt_compiler_schema"] == "native_av_prompt_v2"
+    assert basis["prompt_compiler_schema"] == "native_av_prompt_v3"
     assert set(NATIVE_AV_DEPENDENCY_KEYS) == {
         "dialogue_fingerprint", "speaker_map_fingerprint", "spoken_language",
         "visual_basis_fingerprint", "prompt_compiler_schema",
-        "provider", "model", "provider_mode", "provider_options_fingerprint"}
+        "provider", "model", "provider_mode", "provider_options_fingerprint",
+        "performance_intent_fingerprint", "video_prompt_creative_fingerprint"}
 
 
 def test_pack_basis_provider_keys_track_options_change():

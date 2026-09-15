@@ -345,6 +345,7 @@ _SHOT_WRITABLE_FIELDS = (
     "shot_size", "camera", "camera_angle", "camera_movement",
     "composition", "lighting", "motion", "motion_pace",
     "environment_motion", "action_sequence",
+    "performance_intent",   # C2 22.md §13：表演意图（dict{emotion,intensity,note}）
     "opening_state", "important_details", "required_elements",
     "last_frame_description", "end_state", "frame_change",
     "add_elements", "remove_elements", "end_composition",
@@ -371,6 +372,7 @@ _VIDEO_FIELDS = frozenset({
     "motion", "camera", "camera_movement", "motion_pace",
     "environment_motion", "action_sequence", "transition_description",
     "video_preserve_elements", "video_preserve_custom", "characters",
+    "performance_intent",   # C2 22.md §13：表演意图进视频编译——变更使旧 prompt 失效
 })
 
 
@@ -483,6 +485,11 @@ def update_shot_fields(project: Project, shot_id: str, fields: Optional[dict] = 
             continue
         if key == "target_duration_s":
             setattr(shot, key, _coerce_duration(val))
+        elif key == "performance_intent":
+            # C2 22.md §13：dict → PerformanceIntent（{} = 清空为未表达）
+            from src.core.models import PerformanceIntent
+            setattr(shot, key,
+                    PerformanceIntent.from_dict(val) if isinstance(val, dict) else None)
         elif key in ("characters", "required_elements", "preserve_elements",
                      "video_preserve_elements"):
             setattr(shot, key, list(val) if isinstance(val, (list, tuple)) else [val])

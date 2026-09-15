@@ -218,8 +218,26 @@ def _production_context_text(pack: dict, rdoc: Any,
         for cp in ch.get("covered_props") or []:
             prop = rdoc.props.get(cp.get("prop_id"))
             pname = (prop.name if prop else "") or str(cp.get("prop_id"))
-            parts.append(f"{ch.get('character_name')} {cp.get('relation')} "
-                         f"{pname} ({cp.get('anchor')}).")
+            seg = f"{ch.get('character_name')} {cp.get('relation')} " \
+                  f"{pname} ({cp.get('anchor')})."
+            # C2（22.md §9-§10）：镜内连续性要求此前在 pack 中但被丢弃——编译它。
+            # 只进 video target（连续性是镜内过程约束；first/last 帧语义不变）。
+            note = str(cp.get("visual_state_note") or "").strip().rstrip(".")
+            if note and temporal_target == "video":
+                seg += f" Keep this consistent throughout the shot: {note}."
+            parts.append(seg)
+    # ---- C2（22.md §9-§10）：direct PropBinding 投影此前整体未编译（§5.B 丢失）——
+    #      关系/锚点/镜内状态要求进 video prompt。first/last target 保持原行为。----
+    if temporal_target == "video":
+        for p in pack.get("props") or []:
+            pname = str(p.get("name") or "") or str(p.get("prop_id") or "")
+            seg = f"{p.get('subject_character') or 'the scene'} " \
+                  f"{p.get('relation') or 'held'} {pname} " \
+                  f"({p.get('anchor') or 'in hand'})."
+            note = str(p.get("visual_state_note") or "").strip().rstrip(".")
+            if note:
+                seg += f" Keep this consistent throughout the shot: {note}."
+            parts.append(seg)
     action = pack.get("action") or {}
     has_action = action.get("kind") not in (None, "", "none")
     # 🔴 first：只输出 start_state；end_state 绝不进入首帧当前态约束（§22）。
@@ -228,6 +246,12 @@ def _production_context_text(pack: dict, rdoc: Any,
     # 🔴 last：只输出 end_state；start_state 绝不进入尾帧当前态约束（S3C.2 §14）。
     if temporal_target in ("last", "video") and has_action and action.get("end_state"):
         parts.append(f"Action end state: {action['end_state']}.")
+    # C2（22.md §10）：action.note = 导演写的镜内连续性要求（如道具朝向）——
+    # 此前在 pack 中但被丢弃。只进 video target（过程约束）。
+    if temporal_target == "video" and has_action:
+        anote = str(action.get("note") or "").strip().rstrip(".")
+        if anote:
+            parts.append(f"Important continuity: {anote}.")
     return " ".join(p.strip() for p in parts if p and p.strip())
 
 

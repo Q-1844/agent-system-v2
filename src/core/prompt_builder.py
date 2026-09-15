@@ -127,7 +127,9 @@ def _video_prompt_core(shot: Shot, mode: str) -> str:
         if pace:
             parts.append(f"pace: {pace}")
         if seq:
-            parts.append(f"sequence: {seq}")
+            # C2（22.md §7）：canonical 动作顺序不得在编译中弱化——原文 verbatim
+            # 保留，只加强时序框架（绝不发明/改写动作内容，22.md §8）。
+            parts.append(f"The actions must unfold in this exact order: {seq}")
         consist = (["character identity"] if has_char else []) + ["scene layout"]
         parts.append("maintain consistency in " + ", ".join(consist))
         if preserve:
@@ -145,7 +147,9 @@ def _video_prompt_core(shot: Shot, mode: str) -> str:
     if pace:
         parts.append(f"pace: {pace}")
     if seq:
-        parts.append(f"action sequence: {seq}")
+        # C2（22.md §7）：canonical 动作顺序不得在编译中弱化——原文 verbatim
+        # 保留，只加强时序框架（绝不发明/改写动作内容，22.md §8）。
+        parts.append(f"The actions must unfold in this exact order: {seq}")
     if preserve:
         parts.append("keep stable: " + ", ".join(preserve))
     if preserve_custom:

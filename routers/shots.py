@@ -1629,6 +1629,7 @@ class UpdateShotRequest(BaseModel):
     motion_pace: Optional[str] = None
     environment_motion: Optional[str] = None
     action_sequence: Optional[str] = None
+    performance_intent: Optional[dict] = None   # C2 22.md §13：{emotion,intensity,note}；{}=清空
     camera_movement_detail: Optional[str] = None
     transition_description: Optional[str] = None
     video_preserve_elements: Optional[List[str]] = None
@@ -1681,6 +1682,11 @@ async def update_shot(project_name: str, shot_id: str, req: UpdateShotRequest):
                 s.dialogue = req.dialogue
             if req.characters is not None:
                 s.characters = list(req.characters)
+            # C2 22.md §13：表演意图（dict→数据类；{} 清空；None 不改）
+            if req.performance_intent is not None:
+                from src.core.models import PerformanceIntent
+                s.performance_intent = (PerformanceIntent.from_dict(req.performance_intent)
+                                        if isinstance(req.performance_intent, dict) else None)
             # 结构化字段（提示词.md）：None 不改，否则覆盖（list 拷贝；允许传 [] 清空）
             for f in (
                 "opening_state", "camera_angle", "composition", "important_details",

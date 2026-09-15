@@ -256,6 +256,35 @@ def _legacy_video_version(old: "VideoAsset") -> List["VideoVersion"]:
 
 
 @dataclass
+class PerformanceIntent:
+    """Shot 表演意图（C2 22.md §13：最小 production-level 表演意图）。
+    - 挂 Shot（创作 canonical：与 motion/description 同属导演填写；BOUND/UNBOUND
+      两路通用——挂 binding 会把无 binding 的镜排除在外）；
+    - 三项自由文本，全空 = 未表达（编译零改动，22.md §23）；
+    - 编译（av_prompt_compiler v3 统一表演指令，§14：动作/表情/对白属同一场表演），
+      进 generation_basis（performance_intent_fingerprint，actual dependency）。
+    🔴 明确不建：EmotionVersion / FacialAnimationTrack / PerformanceTimeline /
+      Emotion Agent（22.md §13）。"""
+    emotion: str = ""          # e.g. "tense"（情绪）
+    intensity: str = ""        # e.g. "high"（强度）
+    note: str = ""             # 可选：身体/台词表达补充（delivery note）
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: Any) -> "PerformanceIntent":
+        d = dict(d or {})
+        return cls(
+            emotion=str(d.get("emotion") or "").strip(),
+            intensity=str(d.get("intensity") or "").strip(),
+            note=str(d.get("note") or "").strip())
+
+    def is_empty(self) -> bool:
+        return not (self.emotion or self.intensity or self.note)
+
+
+@dataclass
 class Shot:
     shot_id: str                    # "s01_c02"
     scene_id: str                    # "s01"
@@ -296,6 +325,7 @@ class Shot:
     motion_pace: str = ""             # 动作节奏
     environment_motion: str = ""      # 环境运动（专业）
     action_sequence: str = ""         # 动作发生顺序（专业）
+    performance_intent: Optional[PerformanceIntent] = None  # 表演意图（C2 22.md §13；全空=未表达）
     camera_movement_detail: str = ""  # 摄影机运动细节（专业）
     transition_description: str = ""  # 首尾帧过渡关系（仅 keyframes，专业）
     video_preserve_elements: List[str] = field(default_factory=list)  # 视频保持稳定
@@ -374,6 +404,9 @@ class Shot:
             d["selected_last_frame"] = _legacy_selected(d["last_frame"], d["last_frame_batches"][0])
         if d.get("final_video") is None and d["video_versions"] and d["video"].status == ShotStatus.DONE.value:
             d["final_video"] = d["video_versions"][0].version_id
+        # 表演意图（C2 §13）：dict → 数据类；缺省/空 → None（全空 = 未表达）
+        pi = d.get("performance_intent")
+        d["performance_intent"] = PerformanceIntent.from_dict(pi) if isinstance(pi, dict) else None
         known = {f for f in cls.__dataclass_fields__}
         return cls(**{k: v for k, v in d.items() if k in known})
 

@@ -32,11 +32,13 @@ from src.resources.generation import fingerprint
 
 NATIVE_AV_GENERATION_PACK_SCHEMA = "native_av_generation_pack_v1"
 NATIVE_AV_GENERATION_BASIS_SCHEMA = "native_av_generation_basis_v1"
-# 21.md §13：prompt compiler 版本是 actual generation dependency（升级 v1→v2 即使
-# Shot 未改也可能改变行为）——进 basis；完整 compiled prompt 字符串不 hash 当依赖。
-# v1→v2（C1-R）：撤回 no-BGM/声音指令规则后生成语义已变——旧 v1 版本按 §13
-# 纪律诚实 STALE，而不是冒充与当前规则同语义。
-NATIVE_AV_PROMPT_SCHEMA = "native_av_prompt_v2"
+# 21.md §13 / 22.md §15：prompt compiler 版本是 actual generation dependency
+# （升级即使 Shot 未改也可能改变行为）——进 basis；完整 compiled prompt 字符串
+# 不 hash 当依赖。
+# v1→v2（C1-R）：撤回 no-BGM/声音指令规则后生成语义已变。
+# v2→v3（C2 22.md §15）：动作时序框架（§7）+ 镜内连续性编译（§9-§11）+
+# 统一表演指令（§12-§14）——旧 v2 版本按既有机制诚实 STALE。
+NATIVE_AV_PROMPT_SCHEMA = "native_av_prompt_v3"
 
 # 21.md §14：freshness 对比键 = actual dependencies，明确包含 provider/model/
 # provider options（规格 STALE 触发清单逐项列出）——provider 事实变化 = 用当前
@@ -45,6 +47,14 @@ NATIVE_AV_PROMPT_SCHEMA = "native_av_prompt_v2"
 # provider_options 同窗比较（与 language_override 同一机制）；freshness 读模型
 # 不带请求上下文 → 与「默认 dispatch 投影」比较（当前 UI 不传 video_model，
 # 默认投影即生产现实）。
+# C2（22.md §23）：performance_intent_fingerprint 增为 actual dependency——
+# 表演意图变化 = 生成语义变化；缺省 None（旧版本不误报）。
+# C2：video_prompt_creative_fingerprint——视频 prompt 实际消费的创作文本字段
+# （motion/action_sequence/pace/env/cam/transition/preserve/characters/overrides/
+# link_mode）的指纹。C1 时代只跟踪 dialogue 侧文本，视觉侧创作文本未跟踪；
+# C2 的动作顺序控制成为正式能力后，按 actual-dependencies 原则补齐（否则
+# action_sequence 变更后旧 final 谎报 CURRENT）。无关字段（note/description 等
+# 不进视频 prompt 者）不哈希——无关变更不误报（22.md §23）。
 NATIVE_AV_DEPENDENCY_KEYS = (
     "dialogue_fingerprint",
     "speaker_map_fingerprint",
@@ -55,6 +65,8 @@ NATIVE_AV_DEPENDENCY_KEYS = (
     "model",
     "provider_mode",
     "provider_options_fingerprint",
+    "performance_intent_fingerprint",
+    "video_prompt_creative_fingerprint",
 )
 
 
@@ -79,6 +91,7 @@ class NativeAVGenerationPack:
     scene_id: str
     visual: Dict[str, Any]                 # 视觉输入身份（BOUND=PackBasis 对比键；UNBOUND=frame 身份）
     dialogue: Optional[Dict[str, Any]]     # 无 spoken 台词 → None（§8：非第二真相）
+    performance: Optional[Dict[str, Any]]  # C2 §13：表演意图投影（None=未表达）
     provider_binding: Dict[str, Any]       # §11：provider/model/mode/options_fingerprint
     compiler: Dict[str, Any]               # prompt_compiler_schema（§13：进 basis）
     generation_basis: Dict[str, Any]       # §10-§11 派生 basis（写入 VideoVersion）
@@ -90,6 +103,7 @@ class NativeAVGenerationPack:
             "scene_id": self.scene_id,
             "visual": dict(self.visual),
             "dialogue": dict(self.dialogue) if self.dialogue else None,
+            "performance": dict(self.performance) if self.performance else None,
             "provider_binding": dict(self.provider_binding),
             "compiler": dict(self.compiler),
             "generation_basis": dict(self.generation_basis),
@@ -129,6 +143,42 @@ def unbound_visual_basis(shot: Any, *, provider_mode: str) -> Dict[str, Any]:
             "end_source_version": getattr(shot, "video_end_source_version", None),
         }
     return b
+
+
+# ============ 表演意图（C2 22.md §13：最小投影；全空 = None）============
+def _performance_dict(shot: Any) -> Optional[Dict[str, Any]]:
+    """Shot.performance_intent → pack 投影。全空/缺失 → None（22.md §23：
+    空 intent 不改变既有语义——basis 键为 None，编译零改动）。"""
+    pi = getattr(shot, "performance_intent", None)
+    if pi is None:
+        return None
+    d = {"emotion": str(getattr(pi, "emotion", "") or "").strip(),
+         "intensity": str(getattr(pi, "intensity", "") or "").strip(),
+         "note": str(getattr(pi, "note", "") or "").strip()}
+    if not any(d.values()):
+        return None
+    return d
+
+
+def _video_creative_dict(shot: Any) -> Dict[str, Any]:
+    """C2：视频 prompt 实际消费的创作字段集合（与 prompt_builder._video_prompt_core
+    消费面 + AV 编译一致性严格对齐；actual dependencies only——description/note/
+    首尾帧专用字段不进视频 prompt，不哈希）。"""
+    return {
+        "motion": str(getattr(shot, "motion", "") or ""),
+        "environment_motion": str(getattr(shot, "environment_motion", "") or ""),
+        "camera": str(getattr(shot, "camera", "") or ""),
+        "camera_movement": str(getattr(shot, "camera_movement", "") or ""),
+        "motion_pace": str(getattr(shot, "motion_pace", "") or ""),
+        "action_sequence": str(getattr(shot, "action_sequence", "") or ""),
+        "transition_description": str(getattr(shot, "transition_description", "") or ""),
+        "video_preserve_elements": list(getattr(shot, "video_preserve_elements", None) or []),
+        "video_preserve_custom": str(getattr(shot, "video_preserve_custom", "") or ""),
+        "characters": list(getattr(shot, "characters", None) or []),
+        "video_prompt_override": str(getattr(shot, "video_prompt_override", "") or ""),
+        "video_prompt_en": str(getattr(shot, "video_prompt_en", "") or ""),
+        "link_mode": str(getattr(shot, "link_mode", "") or ""),
+    }
 
 
 # ============ pack 组装（§6 schema；§17 两条路径唯一入口）============
@@ -183,6 +233,7 @@ def build_native_av_pack(project_dir, project: Any, shot: Any, *,
         "options_fingerprint": fingerprint(options) if options else None,
     }
 
+    performance = _performance_dict(shot)
     visual = dict(visual_basis or {})
     basis: Dict[str, Any] = {
         "schema": NATIVE_AV_GENERATION_BASIS_SCHEMA,
@@ -192,6 +243,8 @@ def build_native_av_pack(project_dir, project: Any, shot: Any, *,
         "speaker_map_fingerprint": (dialogue_dict or {}).get("speaker_map_fingerprint"),
         "spoken_language": (dialogue_dict or {}).get("spoken_language"),
         "prompt_compiler_schema": NATIVE_AV_PROMPT_SCHEMA,
+        "performance_intent_fingerprint": fingerprint(performance) if performance else None,
+        "video_prompt_creative_fingerprint": fingerprint(_video_creative_dict(shot)),
         # ---- per-generation provider 事实（provenance；不参与 freshness 对比）----
         "provider": provider_binding["provider"],
         "model": provider_binding["model"],
@@ -205,6 +258,7 @@ def build_native_av_pack(project_dir, project: Any, shot: Any, *,
         scene_id=str(getattr(shot, "scene_id", "") or ""),
         visual=visual,
         dialogue=dialogue_dict,
+        performance=performance,
         provider_binding=provider_binding,
         compiler={"prompt_compiler_schema": NATIVE_AV_PROMPT_SCHEMA},
         generation_basis=basis)
@@ -303,11 +357,14 @@ def compute_current_dependency_keys(project_dir, project: Any, shot: Any, *,
     from src.generation.image_adapter import shot_has_visual_production_binding
 
     has_spoken = bool(split_dialogue_lines(getattr(shot, "dialogue", "") or ""))
+    performance = _performance_dict(shot)
     keys: Dict[str, Any] = {
         "dialogue_fingerprint": None,
         "speaker_map_fingerprint": None,
         "spoken_language": None,
         "prompt_compiler_schema": NATIVE_AV_PROMPT_SCHEMA,
+        "performance_intent_fingerprint": fingerprint(performance) if performance else None,
+        "video_prompt_creative_fingerprint": fingerprint(_video_creative_dict(shot)),
     }
     if has_spoken:
         try:
