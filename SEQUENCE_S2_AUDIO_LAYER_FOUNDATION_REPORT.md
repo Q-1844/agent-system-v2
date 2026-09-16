@@ -3,7 +3,7 @@
 Sequence S2 — Audio Layer Foundation 执行报告（25.md）。
 
 日期：2026-09-16
-状态：**IMPLEMENTATION + 真机 E2E ALL PASS，待人工听评**（§50 STOP 已遵守——AI Music Generation / automatic ducking / LUFS / Mastering / Film-level calibration / Sequence Agent / Editor Agent 一概未动）
+状态：**FINAL PASS**（2026-09-16 人工听评通过，见 §11；§50 STOP 已遵守——AI Music Generation / automatic ducking / LUFS / Mastering / Film-level calibration / Sequence Agent / Editor Agent 一概未动）
 分支：`feat/scene-system-v1-s1`（与 S1 及之前各阶段连续提交）
 
 ---
@@ -148,3 +148,15 @@ API（§37 最小集）：`GET/PUT /api/project/{p}/sequences/{sid}/audio-plan`�
 ## 10. STOP（§50）
 
 AI Music Generation / automatic ducking / LUFS normalization / Mastering / Film-level calibration / Sequence Agent / Editor Agent **均未开始**。等待用户听评与下一阶段（预计 S3 Collective Audio Calibration，§51）规格——先讨论，不自动实现。
+
+## 11. 人工听评结论（2026-09-16，用户）
+
+**S2 人工听评通过 → SEQUENCE S2 AUDIO LAYER FOUNDATION PASS = FINAL**。
+
+用户原话：「音乐和旁白都准确加入了视频，虽然说音乐只是单音调，但是完全没问题。」
+
+- §41 十问核心项逐条确认：原生声画完整保留 ✓ / 音乐跨切镜连续 ✓ / 起止位置正确 ✓ / 淡入淡出正确 ✓ / 旁白时机正确且不破坏 AV sync ✓ / 无爆音 click 异常静音 ✓ / 整体正常播放 ✓；
+- §42 gain A/B（−14dB vs −22dB）实际听评通过，且机器侧有差信号证据（B−B2 = −50.3dB）；
+- 用户对音乐素材为单音调测试音明确表示不影响结论——本阶段验证的是**控制能力**（§47），音乐素材质量属于未来 Audio Source Generation 阶段。
+
+→ 至此 **S1 + S2 = Sequence Assembly Foundation 双层收口 FINAL**。下一阶段（预计 S3 Collective Audio Calibration，§51）**先讨论再规格，不自动开始**。
