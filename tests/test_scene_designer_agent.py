@@ -969,7 +969,8 @@ def test_S48_cannot_create_prop(tmp_path):
     assert resource_tools <= allowed_resource_reads, resource_tools
     assert not any("prop" in n and "scene" in n for n in names)
     # 工具面总数在 14~18 区间（28.md §6）
-    assert 14 <= len(names) <= 18, names
+    # Phase D §35：+scene.instance.delete（服务层既有能力接线；C2 §6 预算 14~18 → 14~19）
+    assert 14 <= len(names) <= 19, names
 
 
 # ============ Commit G：scene.state_view.prepare（S49-S55）============
@@ -1342,3 +1343,33 @@ def test_S65_producer_zero_direct_writes():
     reg = Registries().agents
     assert reg.can_delegate("producer", "scene_designer")
     assert not reg.can_delegate("scene_designer", "director")   # specialist 不互委派
+
+
+# ============ Phase D §35：scene.instance.delete（悬空实例清理）============
+def test_PD35_instance_delete_and_stale_guard(tmp_path):
+    """删除成功 + OCC 保护 + 删除后 canonical 真实消失。"""
+    rt = _runtime(tmp_path)
+    _save_proj(tmp_path)
+    svc, pdir = _mk_svc(tmp_path)
+    loc, a1 = _seed_loc_anchor(svc)
+    r = _run_exec(sd._execute_scene_instance_prepare(
+        rt, "s2demo", json.dumps({
+            "story_scene_id": "s02", "location_id": loc,
+            "expected_document_revision": _drev(svc)}), None, "m1"))
+    inst_id = r["scene_instance_id"]
+    # stale revision 被拒
+    r_bad = _run_exec(sd._execute_scene_instance_delete(
+        rt, "s2demo", json.dumps({
+            "instance_id": inst_id, "expected_revision": "00000000"}), None, "m2"))
+    assert not r_bad["ok"] and r_bad["error"] == "stale_revision"
+    # 正确 revision → 删除成功且 canonical 消失
+    from src.scene_system.models import scene_instance_revision
+    doc = sd._scene_system_read(tmp_path)
+    cur = scene_instance_revision(doc.scene_instances[inst_id])
+    r_ok = _run_exec(sd._execute_scene_instance_delete(
+        rt, "s2demo", json.dumps({
+            "instance_id": inst_id, "expected_revision": cur}), None, "m3"))
+    assert r_ok["ok"] and r_ok["verified"], r_ok
+    assert {"kind": "scene_instance", "id": inst_id} in r_ok["changed_resources"]
+    doc2 = sd._scene_system_read(tmp_path)
+    assert inst_id not in doc2.scene_instances

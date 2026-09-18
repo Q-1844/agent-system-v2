@@ -564,6 +564,23 @@ async def create_scene_instance(project: str, req: CreateSceneInstanceRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.delete("/api/project/{project}/scene-system/scene-instances/{instance_id}")
+async def delete_scene_instance(project: str, instance_id: str, expected_revision: str = Query(...)):
+    """删除 SceneInstance（连同嵌入 SceneState；Phase D §35：服务层既有能力补齐 HTTP 面，
+    与 locations/anchors/layouts/views 的 delete 对齐）。OCC：expected_revision 必传。"""
+    try:
+        receipt = await _service(project).delete_scene_instance(
+            instance_id, expected_revision=expected_revision)
+        _raise_for_receipt(receipt)
+        return receipt
+    except SceneSystemSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"scene_system.json 数据错误: {e}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.patch("/api/project/{project}/scene-system/scene-instances/{instance_id}/location")
 async def update_scene_instance_location(project: str, instance_id: str,
                                          patch: dict = Body(...)):

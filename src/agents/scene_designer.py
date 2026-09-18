@@ -1313,6 +1313,54 @@ SCENE_STATE_UPDATE_TOOL = {
 }
 
 
+SCENE_INSTANCE_DELETE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "scene.instance.delete",
+        "description": ("删除一个 SceneInstance（连同其嵌入的 SceneState；Phase D §35："
+                        "把服务层既有 delete_scene_instance 能力接入 Agent 工具面）。"
+                        "用途：清理悬空实例——其 story_scene_id 已不在当前 Story canonical "
+                        "中（故事段被删除/重组）。正在被 approved Sciv 或 Shot binding 引用的"
+                        "实例不要删；先 scene.production.inspect 确认悬空再删。一次调用只删一个。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "instance_id": {"type": "string", "description": "SceneInstance id（scin_xxx）。"},
+                "expected_revision": {"type": "string",
+                                      "description": "必传：该 instance 当前 revision。"},
+            },
+            "required": ["instance_id", "expected_revision"],
+        },
+    },
+}
+
+
+async def _execute_scene_instance_delete(rt: AgentRuntime, project: str, arguments: str,
+                                         instruction, message_id) -> dict:
+    """scene.instance.delete（Phase D §35）：删除 SceneInstance（连同嵌入 SceneState）。
+    服务层 delete_scene_instance 接线：OCC 保护、真实落盘校验、回执与其它写工具同构。
+    纯删除 mutation：不生成、不改 Story/Resources。"""
+    args = _parse_args(arguments)
+    instance_id = str(args.get("instance_id") or "").strip()
+    expected = str(args.get("expected_revision") or "").strip()
+    if not instance_id:
+        return {"ok": False, "operation": "scene.instance.delete",
+                "error": "validation_error", "detail": "instance_id 必填"}
+    if not expected:
+        return {"ok": False, "operation": "scene.instance.delete",
+                "error": "expected_revision_required",
+                "detail": "必传 expected_revision（先 scene.production.inspect 拿该 "
+                          "instance 的 revision）"}
+    pdir = rt._resolve_project_dir(project)
+    svc = _svc(pdir, project)
+    r = await svc.delete_scene_instance(instance_id, expected_revision=expected)
+    out = _scene_write_receipt(r, "scene.instance.delete", kind="scene_instance",
+                               entity_id=instance_id)
+    if not r.get("ok"):
+        out["instance_id"] = instance_id
+    return out
+
+
 async def _execute_scene_instance_prepare(rt: AgentRuntime, project: str, arguments: str,
                                           instruction, message_id) -> dict:
     """scene.instance.prepare（28.md §13）：Story Scene → SceneInstance → Location。
@@ -1688,7 +1736,8 @@ async def _execute_scene_state_view_prepare(rt: AgentRuntime, project: str, argu
 SCENE_DESIGNER_TOOLS: list = [SCENE_INVENTORY_TOOL, SCENE_PRODUCTION_INSPECT_TOOL,
                               SCENE_LOCATION_UPSERT_TOOL, SCENE_ANCHOR_UPSERT_TOOL,
                               SCENE_LAYOUT_SET_TOOL, SCENE_VIEW_PREPARE_TOOL,
-                              SCENE_INSTANCE_PREPARE_TOOL, SCENE_STATE_UPDATE_TOOL,
+                              SCENE_INSTANCE_PREPARE_TOOL, SCENE_INSTANCE_DELETE_TOOL,
+                              SCENE_STATE_UPDATE_TOOL,
                               SCENE_STATE_VIEW_PREPARE_TOOL]
 
 TOOL_EXECUTORS["scene.inventory"] = _execute_scene_inventory
@@ -1698,6 +1747,7 @@ TOOL_EXECUTORS["scene.anchor.upsert"] = _execute_scene_anchor_upsert
 TOOL_EXECUTORS["scene.layout.set"] = _execute_scene_layout_set
 TOOL_EXECUTORS["scene.view.prepare"] = _execute_scene_view_prepare
 TOOL_EXECUTORS["scene.instance.prepare"] = _execute_scene_instance_prepare
+TOOL_EXECUTORS["scene.instance.delete"] = _execute_scene_instance_delete
 TOOL_EXECUTORS["scene.state.update"] = _execute_scene_state_update
 TOOL_EXECUTORS["scene.state_view.prepare"] = _execute_scene_state_view_prepare
 TOOL_LABELS["scene.inventory"] = "列出场景系统地图"
