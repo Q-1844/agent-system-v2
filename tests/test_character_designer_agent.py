@@ -239,9 +239,11 @@ def test_no_story_write_capability(tmp_path):
     _save_proj(tmp_path)
     tool_names = {t["function"]["name"] for t in CHARACTER_DESIGNER_TOOLS}
     # 工具集只有角色写工具；story/script 工具一个都不出现在工具定义里
+    # （Phase B：+ project.visual_profile.read 只读工具）
     assert tool_names == {"character.list", "character.read", "character.create",
                           "character.update", "character.delete",
-                          "character.generate_views", "web.search"}
+                          "character.generate_views", "web.search",
+                          "project.visual_profile.read"}
     # 执行器表也只暴露只读的 story/script 执行器，绝无写执行器
     assert "story.create" not in TOOL_EXECUTORS and "story.update" not in TOOL_EXECUTORS
     assert "story.delete" not in TOOL_EXECUTORS and "script.update" not in TOOL_EXECUTORS

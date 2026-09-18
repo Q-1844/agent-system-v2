@@ -349,11 +349,14 @@ def test_t15_character_designer_tools_intact():
                                                CHARACTER_WRITE_OPERATIONS,
                                                TOOL_EXECUTORS)
     names = {t["function"]["name"] for t in CHARACTER_DESIGNER_TOOLS}
+    # Agent System V2 Phase B：+ project.visual_profile.read（只读；profile 无 mutation 工具）。
+    # （resource.* 工具在 Phase B Commit D/E 加入；加入时本断言随新冻结面更新。）
     assert names == {"character.list", "character.read", "character.create",
                      "character.update", "character.delete",
-                     "character.generate_views", "web.search"}
+                     "character.generate_views", "web.search",
+                     "project.visual_profile.read"}
     assert {"character.create", "character.update", "character.delete"} <= CHARACTER_WRITE_OPERATIONS
-    # resource 工具不得混入
+    # resource 写工具仍不得混入（Commit D 前的中间态）
     assert not any(n.startswith("resource.") or n.startswith("look.") for n in names)
     # receipt 复用链完好
     from src.agents.script_writer import _base_receipt

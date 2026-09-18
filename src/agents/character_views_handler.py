@@ -31,13 +31,18 @@ def _safe_filename(name: str) -> str:
     return re.sub(r"[^A-Za-z0-9_-]+", "_", name) or "char"
 
 
-def character_appearance_sig(description_en: str, art_style: str) -> str:
-    """K1：角色外观语义签名。description_en（批准后创作身份，§45）+ art_style（参与每张
-    view 生成的全局风格）共同决定三视图的语义版本。确定性、0 LLM。"""
+def character_appearance_sig(description_en: str, art_style: str,
+                             visual_profile_fingerprint: str = "") -> str:
+    """K1：角色外观语义签名。description_en（批准后创作身份，§45）+ art_style（legacy
+    风格短语）+ visual_profile_fingerprint（Agent System V2 Phase B §3.2：ProjectVisualProfile
+    是全项目风格真相，参与每张 view 生成的 prompt 后缀，其指纹必须参与签名——profile
+    变更 ⇒ 旧 views 是陈旧输入，必须重生成）共同决定三视图的语义版本。确定性、0 LLM。"""
     h = hashlib.sha256()
     h.update((description_en or "").strip().encode("utf-8"))
     h.update(b"\x00")
     h.update((art_style or "").strip().encode("utf-8"))
+    h.update(b"\x00")
+    h.update((visual_profile_fingerprint or "").strip().encode("utf-8"))
     return h.hexdigest()
 
 
@@ -118,6 +123,20 @@ async def handler_character_views(job, emit):
     segmentor = _get_segmentor()
     proxy = getattr(agnes, "_proxy", None) or getattr(agnes, "proxy", None)
 
+    # ---- Phase B §3.2：Agent 路径与正式 HTTP Character generation 同一风格真相 ----
+    # HTTP 链路 _apply_project_style（routers/characters.py）对 chain 全部 prompt 追加
+    # ProjectVisualProfile 的唯一编译点风格指令（append_style_instruction）；profile
+    # 未设置/读取失败 → 原样返回（宽容降级，与 HTTP 行为一致，不再另造第三种行为）。
+    from src.visual_profile import load_profile_or_none
+    from src.visual_profile.compiler import append_style_instruction
+    try:
+        visual_profile = load_profile_or_none(project_dir)
+    except Exception:
+        visual_profile = None   # noqa: BLE001 - 与 _apply_project_style 的宽容语义一致
+
+    def _styled(prompt: str) -> str:
+        return append_style_instruction(prompt, visual_profile)
+
     # ---- K1：外观语义版本判定 ----
     target_sig = (job.params.get("appearance_sig") or "").strip()
     meta_sig = (_read_views_meta(project_dir, char_name).get("appearance_sig") or "")
@@ -149,13 +168,14 @@ async def handler_character_views(job, emit):
         return Asset(url=url, local=local, status="done")
 
     views: dict = {}
-    front = await _gen("front", _build_view_prompt(char.description_en, style, "front"), None, 15)
+    front = await _gen("front", _styled(_build_view_prompt(char.description_en, style, "front")),
+                       None, 15)
     views["front"] = front
     front_url = front.url
-    side = await _gen("side", _build_img2img_prompt(char.description_en, style, "side"),
+    side = await _gen("side", _styled(_build_img2img_prompt(char.description_en, style, "side")),
                       refs=[front_url], pct=45)
     views["side"] = side
-    back = await _gen("back", _build_img2img_prompt(char.description_en, style, "back"),
+    back = await _gen("back", _styled(_build_img2img_prompt(char.description_en, style, "back")),
                      refs=[side.url], pct=75)
     views["back"] = back
 

@@ -1275,7 +1275,11 @@ async def _real_character_view_generator(rt: AgentRuntime, project: str,
         if ch is None:
             raise AgentError("CHARACTER_SYNC_FAILED",
                              f"角色 {char_name} 不存在于 canonical（K1 提交前校验）")
-        sig = character_appearance_sig(ch.description_en, p.style.art_style or "anime")
+        # Phase B §3.2：外观签名与 Agent 路径同式——ProjectVisualProfile 指纹参与
+        # （profile 变更 ⇒ 旧 views 陈旧，须重生成；读取失败/unspecified 宽容降级为 ""）。
+        from ..character_designer import _visual_profile_fingerprint_or_empty
+        sig = character_appearance_sig(ch.description_en, p.style.art_style or "anime",
+                                       _visual_profile_fingerprint_or_empty(pdir))
         jq.submit(project, "character_views", shot_id=None,
                   origin_run_id=execution_id, autopilot_stage_key=stage_key,
                   character_name=char_name, appearance_sig=sig)

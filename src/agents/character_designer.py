@@ -83,7 +83,7 @@ CHARACTER_WRITE_OPERATIONS = {"character.create", "character.update", "character
                               "character.generate_views"}
 # 只读工具（不占写槽、可一次多个；用于「写后重读最终状态」的收尾判定）。
 CHARACTER_READ_TOOLS = {"character.list", "character.read", "story.list",
-                        "story.read", "script.read"}
+                        "story.read", "script.read", "project.visual_profile.read"}
 
 # 三视图生成超时（2026-08-30 用户规格）：生图很慢——单角色三视图链（front t2i → side/back
 # i2i → 各自抠图）给 10 分钟兜底；一次最多 3 个角色并发（链间并发、链内串行；Agnes 图片
@@ -155,14 +155,47 @@ def _delete_design_draft(pdir, name: str) -> bool:
         return False
 
 
+# ============ ProjectVisualProfile（Phase B §3.1/§3.3：唯一风格真相的最小认知）============
+def _visual_profile_fingerprint_or_empty(pdir) -> str:
+    """项目 profile 语义指纹（读取失败/unspecified → ""，不抛——sig/摘要均宽容降级）。"""
+    try:
+        from src.visual_profile import load_profile_or_none
+        from src.visual_profile.models import visual_profile_fingerprint
+        vp = load_profile_or_none(pdir)
+        return visual_profile_fingerprint(vp) if vp is not None else ""
+    except Exception:
+        return ""
+
+
+def _visual_profile_summary(pdir) -> str:
+    """system 注入的最小 profile 摘要（§3.3：不给双风格真相，只锚定 render_family 与
+    有无 profile；全文按需用 project.visual_profile.read 工具取）。"""
+    try:
+        from src.visual_profile import load_profile_or_none
+        vp = load_profile_or_none(pdir)
+    except Exception:
+        return "读取失败（project_profile.json 损坏？）"
+    if vp is None:
+        return ("未设置（unspecified）。注意：Look/Composition 等资源生成会因无风格真相 "
+                "fail closed；角色三视图当前不会追加项目风格指令")
+    tags = ", ".join(vp.style_tags[:6]) if vp.style_tags else "-"
+    neg = "; ".join(vp.negative_style_constraints[:4]) if vp.negative_style_constraints else "-"
+    return (f"render_family={vp.render_family}；art_direction={(vp.art_direction or '-')[:80]}；"
+            f"style_tags={tags}；负面约束={neg}。生成前如需全文用 project.visual_profile.read")
+
+
 # ============ system ============
-def _build_system(proj) -> str:
+def _build_system(proj, pdir=None) -> str:
     """精简 system：职责/权限/工具说明/项目元信息。不注入角色全文或剧情——按需用工具取。"""
+    vp_summary = "（未知）"
+    if pdir is not None:
+        vp_summary = _visual_profile_summary(pdir)
     return CHARACTER_DESIGNER_SYSTEM.format(
         project_name=proj.name or "（未命名）",
         story_len=len(proj.story_text or ""),
         scenes_count=len(proj.scenes or []),
         characters_count=len(proj.characters or []),
+        visual_profile_summary=vp_summary,
     )
 
 
@@ -170,6 +203,7 @@ CHARACTER_DESIGNER_SYSTEM = """你是 AGNES 的 Character Designer，负责项�
 你【只写角色】：不修改剧本正文、不增删改故事段、不创建/修改镜头、不生成图片。剧本与故事段是你的参考资料，不是写入对象。
 
 项目：{project_name}（剧本正文 {story_len} 字，{scenes_count} 个故事段，现有 {characters_count} 个角色）。
+项目视觉定义（ProjectVisualProfile——全项目唯一风格真相，你只能读不能改）：{visual_profile_summary}
 
 角色 canonical 字段（现有数据模型，只有这些；不要假设存在其它字段）：
 - name：角色名。项目内唯一标识，故事段/镜头按【名字】引用角色。创建后不要试图改名。
@@ -186,6 +220,7 @@ CHARACTER_DESIGNER_SYSTEM = """你是 AGNES 的 Character Designer，负责项�
 - story.list()：故事段轻量全局地图（position/scene_id/摘要/角色/镜头数）。根据剧情理解人物时【第一步】用。
 - story.read(scene_id)：读取一个故事段完整内容。按需读该角色首次登场、关键剧情、性格体现、服装/时代相关段；信息不足再扩大范围。
 - script.read()：读取剧本正文全文 + 版本指纹。仅当局部故事段不足以支撑全局性角色设计（人物完整弧光、全篇身份梳理）且确有需要时才读；不要默认读全文。
+- project.visual_profile.read()：读取项目视觉定义（ProjectVisualProfile）全文：render_family / art_direction / style_tags / 负面风格约束 + 指纹与 revision。设计涉及风格取向（介质、画风、时代质感）或用户要求与当前风格可能冲突时先读它；你的视觉生成遵守该定义，不得假设其它风格，也不得试图修改它（它由用户拥有）。
 - web.search(query)：搜索现实世界资料，返回约 3 条「标题+摘要+链接」。仅当①用户明确要求查资料，或②设计涉及真实世界知识明显影响可信度（历史时期服装、民族服饰、职业制服、年代发型、真实文化背景、地域审美）时使用。普通修改（改发型/换配色）不搜索。每轮最多 3 次，超限会被系统拒绝。
 
 🔴 最重要的铁律（违反即失败）：
@@ -369,6 +404,20 @@ CHARACTER_GENERATE_VIEWS_TOOL = {
     },
 }
 
+VISUAL_PROFILE_READ_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "project.visual_profile.read",
+        "description": ("读取项目视觉定义（ProjectVisualProfile）全文：render_family / "
+                        "art_direction / style_tags / 负面风格约束 + 指纹与 revision。"
+                        "只读工具：profile 由用户拥有，你没有修改它的工具。设计涉及风格取向"
+                        "（介质/画风/时代质感）或用户要求可能与当前项目风格冲突时先读；"
+                        "资源类视觉生成（Look/Composition）在未设置 profile 的项目会被系统 "
+                        "fail closed 拒绝。"),
+        "parameters": {"type": "object", "properties": {}},
+    },
+}
+
 WEB_SEARCH_TOOL = {
     "type": "function",
     "function": {
@@ -391,6 +440,7 @@ CHARACTER_DESIGNER_TOOLS = [
     CHARACTER_LIST_TOOL, CHARACTER_READ_TOOL,
     CHARACTER_CREATE_TOOL, CHARACTER_UPDATE_TOOL, CHARACTER_DELETE_TOOL,
     CHARACTER_GENERATE_VIEWS_TOOL,
+    VISUAL_PROFILE_READ_TOOL,
     WEB_SEARCH_TOOL,
 ]
 
@@ -744,9 +794,12 @@ async def _generate_one_char_views(rt: AgentRuntime, project: str, name: str,
         return {"character_name": name, "ok": False, "verified": False,
                 "error": f"角色 {name} 的 description_en 为空，先完善文本设定再生成图片"}
 
-    # 外观签名 = sha256(description_en + art_style)：描述未变且已有图 → handler 自动跳过
-    #（不重复生成）；描述已改 → sig 变化 → 全部重新生成（一致性语义）。
-    sig = character_appearance_sig(char.description_en or "", proj.style.art_style or "")
+    # 外观签名 = sha256(description_en + art_style + visual_profile_fingerprint)：
+    # 描述未变且已有图 → handler 自动跳过（不重复生成）；描述或项目视觉定义已改 →
+    # sig 变化 → 全部重新生成（一致性语义，Phase B §3.2：profile 参与风格真相）。
+    profile_fp = _visual_profile_fingerprint_or_empty(pdir)
+    sig = character_appearance_sig(char.description_en or "", proj.style.art_style or "",
+                                   profile_fp)
     job = SimpleNamespace(project=project,
                           params={"character_name": name, "appearance_sig": sig})
     try:
@@ -880,6 +933,37 @@ async def _execute_character_generate_views(rt: AgentRuntime, project: str, argu
                  if ok_chars else "没有角色完成生成，角色数据未被改动。")))
 
 
+def _execute_visual_profile_read(rt: AgentRuntime, project: str, arguments: str,
+                                 instruction, message_id) -> dict:
+    """读取 ProjectVisualProfile（Phase B §3.1：高信号紧凑返回——内容+指纹+revision+
+    specified 状态；不返回无关项目大块 JSON）。只读；profile 由用户拥有，Agent 无 mutation。"""
+    pdir = rt._resolve_project_dir(project)
+    from src.visual_profile import load_profile_or_none
+    from src.visual_profile.models import (VisualProfileSchemaError,
+                                           visual_profile_fingerprint,
+                                           profile_revision)
+    try:
+        vp = load_profile_or_none(pdir)
+    except VisualProfileSchemaError as e:
+        return {"ok": False, "operation": "project.visual_profile.read",
+                "error": "visual_profile_unreadable",
+                "note": f"project_profile.json 损坏（fail closed）：{e}"}
+    if vp is None:
+        return {"ok": True, "operation": "project.visual_profile.read",
+                "specified": False, "visual_profile": None,
+                "fingerprint": "", "revision": "",
+                "note": "项目未设置视觉定义。资源类视觉生成（Look/Composition）会被系统 "
+                        "fail closed 拒绝；角色三视图当前不追加项目风格指令。可建议用户在"
+                        "项目设置里配置。"}
+    return {"ok": True, "operation": "project.visual_profile.read",
+            "specified": True,
+            "visual_profile": vp.to_dict(),
+            "fingerprint": visual_profile_fingerprint(vp),
+            "revision": profile_revision(vp),
+            "note": "项目视觉定义即全项目风格真相：你的视觉生成遵守它；如用户要求与它冲突，"
+                    "指出冲突而不是默默照做或试图修改它。"}
+
+
 TOOL_EXECUTORS = {
     "character.list": _execute_character_list,
     "character.read": _execute_character_read,
@@ -887,6 +971,7 @@ TOOL_EXECUTORS = {
     "character.update": _execute_character_update,
     "character.delete": _execute_character_delete,
     "character.generate_views": _execute_character_generate_views,
+    "project.visual_profile.read": _execute_visual_profile_read,
     "story.list": _execute_story_list,
     "story.read": _execute_story_read,
     "script.read": _execute_script_read,
@@ -899,6 +984,7 @@ _TOOL_LABELS = {
     "character.list": "读取角色列表", "character.read": "读取角色",
     "character.create": "创建角色", "character.update": "修改角色",
     "character.delete": "删除角色", "character.generate_views": "生成角色三视图",
+    "project.visual_profile.read": "读取项目视觉定义",
     "story.list": "读取故事段", "story.read": "读取故事段",
     "script.read": "读取剧本", "web.search": "搜索资料",
 }
@@ -1112,7 +1198,7 @@ def _refresh_system(messages: list, rt: AgentRuntime, project: str) -> None:
     try:
         pdir = rt._resolve_project_dir(project)
         proj = ProjectStore(pdir).load()
-        messages[0] = {"role": "system", "content": _build_system(proj)}
+        messages[0] = {"role": "system", "content": _build_system(proj, pdir)}
     except Exception:
         pass
 
@@ -1521,7 +1607,7 @@ async def character_designer_turn(rt: AgentRuntime, project: str, session_id: st
         status = ResultStatus.NOT_CONFIGURED.value
     else:
         proj = ProjectStore(pdir).load()
-        system = _build_system(proj)
+        system = _build_system(proj, pdir)
         mem = rt._memory_supplement(project, "character_designer")
         if mem:
             system += "\n\n" + mem
