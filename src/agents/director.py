@@ -1686,9 +1686,11 @@ def _claimed_shot_count_mismatch(text: str, real_count: int) -> Optional[int]:
 
 # zero-write recovery 的分镜域补充措辞（「设计分镜/做分镜/出分镜」是明确写入请求，
 # 通用正则只部分覆盖）。与 _is_explicit_write_request 取并集，宁窄勿误。
+# Phase C1：补生产域措辞（刷新绑定/正式生成/出首帧——真机 §23 stale2 幻觉轮实证缺失）。
 _DIRECTOR_WRITE_EXTRA_RE = re.compile(
     r"设计分镜|做分镜|做成分镜|分镜设计|生成分镜|出分镜|拆成分镜|拆成镜头|分镜拆分|"
-    r"补一?个?镜头|加一?个?镜头|新建镜头")
+    r"补一?个?镜头|加一?个?镜头|新建镜头|"
+    r"刷新绑定|刷新.{0,6}绑定|绑定刷新|正式生成|生成首帧|出首帧|生成.{0,4}帧|bound_required")
 
 
 def _is_director_write_request(instruction: str) -> bool:
@@ -1711,7 +1713,9 @@ def _is_director_write_request(instruction: str) -> bool:
 _DIRECTOR_CLAIM_RE = re.compile(
     r"(删除|创建|新建|重建|重做|修改|更新|移动|调整|拆分|替换)\s*[*：:*]\s*"
     r"|(重新?设计|重做|重建|重构|推翻)[^。！？\n]{0,16}(了|完成|好)"
-    r"|(重新)?(设计|创建|新建|拆分|拆成|生成)\s*(了)?\s*\d+\s*(个|组)?\s*(新?镜头|分镜)",
+    r"|(重新)?(设计|创建|新建|拆分|拆成|生成)\s*(了)?\s*\d+\s*(个|组)?\s*(新?镜头|分镜)"
+    r"|(刷新|绑定|生成|出图|生成首帧)[^。！？\n]{0,10}(成功|完成|✅)"
+    r"|(✅|job_id\s*`?[a-f0-9]{6,})",
     re.IGNORECASE)
 _DIRECTOR_CLAIM_NEGATION_RE = re.compile(r"(没有|没|并未|并没有|尚未|未|未能|无法|不能|不要|先别|别)")
 
@@ -1725,6 +1729,9 @@ def _director_claims_success(text: str) -> bool:
     for m in _DIRECTOR_CLAIM_RE.finditer(text):
         window = text[max(0, m.start() - 6):m.start()]
         if _DIRECTOR_CLAIM_NEGATION_RE.search(window):
+            continue
+        # 否定词也可能出现在匹配 span 内部（「刷新失败：无法完成」）——同样不算声称成功
+        if _DIRECTOR_CLAIM_NEGATION_RE.search(m.group(0)):
             continue
         return True
     return False
