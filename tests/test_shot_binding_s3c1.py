@@ -46,7 +46,8 @@ from test_shot_binding_s3b2 import (  # noqa: E402
 from test_shot_binding_s3b3 import (  # noqa: E402
     PISTOL, _add_pistol_with_comp, _give_plate,
 )
-from routers.shots import _collect_first_frame_refs, _handler_first_frame  # noqa: E402
+from routers.shots import (_collect_first_frame_refs, _handler_first_frame,  # noqa: E402
+                           _legacy_vp_style_suffix)
 
 PISTOL_COMP = "comp_pistol000001"
 
@@ -147,14 +148,18 @@ def test_b2_b3_not_ready_provider_never_called_no_legacy_fallback(cenv):
 
 def test_q1_unbound_legacy_behavior_identical(cenv):
     pdir, ids, svc, fake = cenv
-    # UNBOUND：不建 binding → legacy 行为逐字节
+    # UNBOUND：不建 binding → legacy 链路行为逐字节。
+    # （2026-09-18 P1 seam：legacy 链路消费 ProjectVisualProfile——profile specified 时
+    # 期望 prompt = builder + 编译点风格后缀；unspecified 时 = 原 StyleAnchor 后缀。
+    # 本测试环境 make_pdir 指定 photorealistic profile，故期望值带 profile 后缀。）
     _run_handler(pdir)
     assert len(fake.calls) == 1
     project = ProjectStore(pdir).load()
     shot = _load_shot(pdir)
-    legacy_prompt = build_first_frame_prompt(project, shot)
+    legacy_prompt = build_first_frame_prompt(project, shot,
+                                             style_suffix=_legacy_vp_style_suffix(pdir))
     legacy_refs = [r["url"] for r in _collect_first_frame_refs(project, shot)]
-    assert fake.calls[0]["prompt"] == legacy_prompt, "UNBOUND prompt = legacy（含 StyleAnchor 后缀）"
+    assert fake.calls[0]["prompt"] == legacy_prompt, "UNBOUND prompt = legacy 链路（profile specified → 编译点风格后缀）"
     assert fake.calls[0]["image_refs"] == legacy_refs
     assert shot_has_binding(pdir, "s01_c01") is False
 

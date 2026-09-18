@@ -56,6 +56,7 @@ from routers.shots import (  # noqa: E402
     _handler_first_frame,
     _handler_last_frame,
     _handler_video,
+    _legacy_vp_style_suffix,
     _shot_char_refs,
 )
 
@@ -841,7 +842,9 @@ def test_q1_unbound_last_frame_legacy_identical(venv):
     project = _load_project(pdir)
     shot = project.get_shot("s01_c01")
     ff_url = _effective_first_frame_url(project, shot)
-    assert fake.image_calls[0]["prompt"] == build_last_frame_prompt(project, shot)
+    # 2026-09-18 P1 seam：legacy 链路消费 ProjectVisualProfile（specified → 编译点风格后缀）。
+    assert fake.image_calls[0]["prompt"] == build_last_frame_prompt(
+        project, shot, style_suffix=_legacy_vp_style_suffix(pdir))
     assert fake.image_calls[0]["image_refs"] == [ff_url] + _shot_char_refs(project, shot)
 
 
