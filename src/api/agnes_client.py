@@ -307,8 +307,10 @@ class AgnesClient:
                     last = AgnesError(f"{r.status_code}: {r.text[:200]}", r.status_code, r.text)
                     log.warning("[%s] 可重试错误 %d（第 %d/%d 次）", bucket,
                                 r.status_code, attempt + 1, max_attempts)
-            # 退避在限流槽之外做，避免占着令牌睡觉
-            backoff = min(60, (2 ** attempt) * 3) + random.uniform(0, 2)
+            # 退避在限流槽之外做，避免占着令牌睡觉。
+            # Phase D 校准：基值 3→6（429 风暴下 10 并发各自短退避会互相顶住服务端
+            # 速率窗口；更长退避让窗口排空，总耐心 6+12+24+48+60≈150s）。
+            backoff = min(60, (2 ** attempt) * 6) + random.uniform(0, 2)
             await asyncio.sleep(backoff)
         # 保留末次错误的 status/body：上层（如 producer loop 的瞬态恢复）需要区分
         # 「可重试错误耗尽」（429/5xx，值得再等一轮）与「配置/配额类永久失败」。

@@ -11,11 +11,14 @@ from typing import Dict
 log = logging.getLogger("RateLimiter")
 
 # 依据 AGNES_API_FACTS §4.1（免费/默认用户的"实际 RPM"），再乘 0.85 保险系数
+# Phase D 实测校准（2026-09-19，_phase_d_backend.log）：image_2k 按 10×0.85=8.5 RPM
+# 仍持续 429（Turn 1 内 95 次，05:36-04:14 每分钟最高 6 次拒绝）——文档 10 RPM
+# 在持续批量下不可持续，校准到实测保守值 4（详见 AGNES_API_FACTS §4.1 Phase D 勘误）。
 SAFETY = 0.85
 DEFAULT_RPM = {
     "text":     20,
     "image_1k": 20,
-    "image_2k": 10,
+    "image_2k": 4,
     "image_3k": 1,
     "image_4k": 1,
     "video":    1,     # 🔴 就是 1，不要试图调大

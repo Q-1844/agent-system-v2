@@ -79,3 +79,13 @@ def test_split_dialogue_returns_list():
 
 def test_split_dialogue_empty():
     assert split_dialogue("", 24) == [""]
+
+
+# ---------- Phase D：2K 档限速实测校准（29.md §35 运行中系统修复）----------
+def test_rate_limiter_2k_calibrated():
+    """image_2k 文档 10 RPM 在持续批量下实测不可持续（Phase D Turn 1：95×429），
+    DEFAULT_RPM 校准为 4；桶容量仍为 1（不突发）。"""
+    from src.core.rate_limiter import DEFAULT_RPM
+    assert DEFAULT_RPM["image_2k"] == 4
+    assert DEFAULT_RPM["image_1k"] == 20
+    assert DEFAULT_RPM["video"] == 1
