@@ -82,7 +82,7 @@ def _real_png_b64():
     """生成一张真实的小 PNG（PIL），供 provider 参考/资产落盘（真实可解码）。"""
     from PIL import Image
     import base64, io
-    img = Image.new("RGB", (64, 96), (188, 172, 152))
+    img = Image.new("RGB", (256, 384), (188, 172, 152))
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return base64.b64encode(buf.getvalue()).decode()
@@ -94,19 +94,30 @@ def setup_common(name, shots_spec, with_looks_for=("Alice", "Bob")):
     from src.core.models import Project, Scene, Shot, Character, Asset, ShotStatus
     from src.core.store import ProjectStore
     from src.resources.store import ResourceStore
-    from src.resources.models import (CharacterLook, ResourceProp,
+    from src.resources.models import (CharacterLook, Prop,
                                       ReferenceAsset, CompositionPropBinding,
                                       CharacterReferenceComposition)
     from src.visual_profile import VisualProfileService
     from src.core.write_lock import _clear_for_test
     _clear_for_test()
+    # 🔴 setup 专用：Fake provider 的图必须换成【真实可解码】PNG——这些图会作为
+    # BOUND pack 参考真实发给 Agnes（测试桩 19 字节假图会被 Agnes 400 "unknown format"
+    # 拒收，Phase C1 E2E 首轮实证）。
+    import test_scene_system_s2b_generation as _s2bg
+    _s2bg.PNG_B64 = _real_png_b64()
 
+    from pathlib import Path
     r = httpx.post(f"{BASE}/api/projects/create",
                    params={"name": name, "render_family": "2d_animation",
                            "art_direction": "清末山驿水墨 2D 动画"},
                    timeout=30)
-    print("create:", r.status_code)
-    pdir = f"projects/{name}"
+    print("create:", r.status_code, "(409=复用既有项目并重置 setup 数据)")
+    pdir = Path(f"projects/{name}")
+    for stale in ("output/scene_system.json", "output/resources.json",
+                  "output/shot_production_bindings.json"):
+        f = pdir / stale
+        if f.exists():
+            f.unlink()
     store = ProjectStore(pdir)
     proj = store.load()
     proj.story_text = ("短篇《山驿灯影》：清末民初南方山间驿站。行脚商林晚为寻找失踪的兄长"
@@ -283,8 +294,8 @@ def missing():
     print(f"  generate 提交={sum(1 for r in gen for it in (r.get('results') or []) if it.get('status') == 'done' and it.get('verified'))} 次")
     legacy_fallback = any(
         it.get("status") == "done" for r in gen for it in (r.get("results") or []))
-    prereq = any("resource_prerequisite" in json.dumps(r.get("prerequisite_warnings") or "")
-                 for r in (final or {}).get("receipts") or [])
+    tw = (final or {}).get("prerequisite_warnings") or []
+    prereq = any(w.get("code") == "resource_prerequisite" for w in tw)
     DATA["phases"]["missing_verdict"] = {"legacy_fallback": legacy_fallback,
                                          "prereq_reported": prereq}
     _save()
