@@ -30,6 +30,7 @@ from src.resources.generation import fingerprint, to_agnes_image_ref
 from src.resources.look_review import _extract_json, _normalize_dim, vision_json_call
 
 from . import generation_records
+from .camera_review import camera_expectation_block, derive_camera_view_consistency
 from .generation_records import review_records_path
 from .models import (
     GenerationStatus, LocationView, SceneInstance, SceneInstanceView,
@@ -119,6 +120,11 @@ def build_scene_instance_review_prompt(expectations: dict,
     lines.append(
         f"Expected viewpoint: viewed from the {_c(view.get('camera_zone')) or '(base)'} "
         f"looking toward the {_c(view.get('look_direction')) or '(base)'}.")
+    # C2 Work A（28.md §2.3）：SceneInstanceView 必须继承 base view 的机位——状态变化后
+    # 相机不得漂回 hero/front。同一机位语义块 + observed 机位报告。
+    lines.append("")
+    lines.append(camera_expectation_block(_c(view.get("camera_zone")),
+                                          _c(view.get("look_direction"))))
     lines.append("")
     lines.append(
         "IMPORTANT: the scene state changes CONDITIONS (light, weather, damage, objects), "
@@ -180,6 +186,8 @@ def build_scene_instance_review_prompt(expectations: dict,
             "visual production style/medium (hard dimension: a style mismatch must fail).\n"
             + style_expectation + "\n")
     schema = ('{"location_identity": "pass|concern|fail", "location_notes": "...",\n'
+              ' "camera_observed_zone": "front|side|rear|overhead|other|uncertain",\n'
+              ' "camera_evidence": "...",\n'
               ' "view_consistency": "pass|concern|fail", "view_notes": "...",\n'
               ' "anchor_consistency": "pass|concern|fail", "anchor_notes": "...",\n'
               ' "scene_state": {"time_of_day": "pass|concern|fail",\n'
@@ -451,9 +459,15 @@ async def review_scene_instance_view_candidates(project_dir, scene_instance_view
                     "raw_head": ((res or {}).get("content") or "")[:200]}
         ss = derive_scene_state_dimension(parsed.get("scene_state"), expectations)
         pd = derive_prop_dimension(parsed.get("props"), expectations)
+        # C2 Work A（28.md §2.3）：view_consistency 确定性推导——base view 机位 vs
+        # 模型报告的 observed 机位（状态变化后相机漂回 hero → fail）。
+        cam_verdict, cam_note = derive_camera_view_consistency(
+            str((expectations.get("view") or {}).get("camera_zone") or ""),
+            parsed.get("camera_observed_zone"),
+            _normalize_dim(parsed.get("view_consistency")))
         dims = {
             "location_identity": _normalize_dim(parsed.get("location_identity")),
-            "view_consistency": _normalize_dim(parsed.get("view_consistency")),
+            "view_consistency": cam_verdict,
             "anchor_consistency": _normalize_dim(parsed.get("anchor_consistency")),
             "scene_state_consistency": ss["scene_state_consistency"],
             "lighting_weather_consistency": _normalize_dim(parsed.get("lighting_weather")),
@@ -467,6 +481,9 @@ async def review_scene_instance_view_candidates(project_dir, scene_instance_view
                   "status": "reviewed",
                   "dimensions": dims,
                   "location_notes": str(parsed.get("location_notes") or ""),
+                  "camera_observed_zone": str(parsed.get("camera_observed_zone") or ""),
+                  "camera_evidence": str(parsed.get("camera_evidence") or ""),
+                  "camera_derivation_note": cam_note,
                   "view_notes": str(parsed.get("view_notes") or ""),
                   "anchor_notes": str(parsed.get("anchor_notes") or ""),
                   "scene_state_items": ss["scene_state_items"],

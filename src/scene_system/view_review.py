@@ -43,6 +43,7 @@ from src.resources.look_review import _extract_json, _normalize_dim, vision_json
 VISION_MODEL = "agnes-3.0-flash"
 
 from . import generation_records
+from .camera_review import camera_expectation_block, derive_camera_view_consistency
 from .generation_records import review_records_path
 from .models import GenerationStatus, SceneSystemDocument, LocationView
 from .store import SceneSystemStore
@@ -142,6 +143,10 @@ def build_view_review_prompt(expectations: dict, image_labels: List[str],
     lines.append(
         f"Camera expectation: viewed from the {_c(view.get('camera_zone')) or '(unspecified)'} "
         f"of the space, looking toward the {_c(view.get('look_direction')) or '(unspecified)'}.")
+    # C2 Work A（28.md §2.2）：机位正确性语义块——相机位置先于/独立于 anchor 可见性判断。
+    lines.append("")
+    lines.append(camera_expectation_block(_c(view.get("camera_zone")),
+                                          _c(view.get("look_direction"))))
     lines.append("")
     n_dims = 7 if style_expectation else 6
     dim_block = (
@@ -177,6 +182,8 @@ def build_view_review_prompt(expectations: dict, image_labels: List[str],
               '              "visibility": "clearly_visible|partially|missing", "notes": "..."}],\n'
               ' "anchor_consistency": "pass|concern|fail", "anchor_notes": "...",\n'
               ' "layout_consistency": "pass|concern|fail", "layout_notes": "...",\n'
+              ' "camera_observed_zone": "front|side|rear|overhead|other|uncertain",\n'
+              ' "camera_evidence": "...",\n'
               ' "view_consistency": "pass|concern|fail", "view_notes": "...",\n')
     if style_expectation:
         schema += (' "project_style_consistency": "pass|concern|fail", "style_notes": "...",\n')
@@ -366,12 +373,18 @@ async def review_location_view_candidates(project_dir, view_id: str, *,
                     "raw_head": ((res or {}).get("content") or "")[:200]}
         derived = derive_anchor_visibility(parsed.get("anchors") or [],
                                            expectations["required_anchors"])
+        # C2 Work A（28.md §2.2）：view_consistency 确定性推导——requested camera zone
+        # （词元可识别时）对照模型报告的 observed 机位；矛盾 → fail、无证据 → 不判 pass。
+        cam_verdict, cam_note = derive_camera_view_consistency(
+            str((expectations.get("view") or {}).get("camera_zone") or ""),
+            parsed.get("camera_observed_zone"),
+            _normalize_dim(parsed.get("view_consistency")))
         dims = {
             "location_identity": _normalize_dim(parsed.get("location_identity")),
             "anchor_visibility": derived["anchor_visibility"],
             "anchor_consistency": _normalize_dim(parsed.get("anchor_consistency")),
             "layout_consistency": _normalize_dim(parsed.get("layout_consistency")),
-            "view_consistency": _normalize_dim(parsed.get("view_consistency")),
+            "view_consistency": cam_verdict,
             "visual_defects": _normalize_dim(parsed.get("visual_defects")),
         }
         if visual_profile is not None:
@@ -385,6 +398,10 @@ async def review_location_view_candidates(project_dir, view_id: str, *,
                   "per_anchor": derived["per_anchor"],
                   "anchor_notes": str(parsed.get("anchor_notes") or ""),
                   "layout_notes": str(parsed.get("layout_notes") or ""),
+                  # C2 Work A：机位正确性证据与确定性推导注记（requested vs observed）
+                  "camera_observed_zone": str(parsed.get("camera_observed_zone") or ""),
+                  "camera_evidence": str(parsed.get("camera_evidence") or ""),
+                  "camera_derivation_note": cam_note,
                   "view_notes": str(parsed.get("view_notes") or ""),
                   "defect_notes": str(parsed.get("defect_notes") or ""),
                   "overall": derive_view_overall(dims, all_dimensions),
