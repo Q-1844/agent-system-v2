@@ -550,10 +550,12 @@ class _FakeSceneClient:
         self.vision_calls = 0
         self.vision_content = vision_content
         self.models = {"image": "fake-image-model"}
+        self.sizes_seen: list = []
 
     async def generate_image(self, prompt, *, image_refs=None, size_tier="1K",
                              ratio="16:9", seed=None, want_b64=False):
         self.gen_calls += 1
+        self.sizes_seen.append(size_tier)
         return {"url": None, "b64": _PNG_B64}
 
     async def chat_completion_vision(self, msgs, *, model):
@@ -1098,6 +1100,52 @@ def test_S52_sciv_needs_fix_not_approve(_gen_env, monkeypatch):
     assert r["ok"] and r["review_overall"] == "needs_fix", \
         (r.get("review_overall"), r.get("candidate_reviews"))
     assert r["approved"] is False
+
+
+# ============ Phase D §2：图片质量档跟随项目生产设置（29.md §2 最小接线）============
+def test_PD2_location_view_size_tier_follows_project_style(_gen_env, monkeypatch):
+    """project.style.size_tier 缺省 1K；设为 2K 后 scene.view.prepare 生成请求透传 2K。"""
+    from src.core.store import ProjectStore
+    rt, svc, tmp_path, fake = _gen_env
+    loc, a1 = _seed_location_and_view(rt, svc, tmp_path)
+    fake.vision_content = _view_reply(a1)
+    r = _run_exec(sd._execute_scene_view_prepare(
+        rt, tmp_path.name, _prepare_args(
+            location_id=loc, label="plan", camera_zone="overhead",
+            look_direction="site center", visible_anchor_ids=[a1],
+            expected_document_revision=_drev(svc)), None, "m1"))
+    assert r["ok"], r.get("error") or r.get("detail")
+    assert fake.sizes_seen == ["1K"]            # 缺省项目：行为不变
+    proj = ProjectStore(tmp_path).load()
+    proj.style.size_tier = "2K"
+    ProjectStore(tmp_path).save(proj)
+    fake.vision_content = _view_reply(a1)
+    r2 = _run_exec(sd._execute_scene_view_prepare(
+        rt, tmp_path.name, _prepare_args(
+            location_id=loc, view_id=r["view_id"], label="plan",
+            camera_zone="overhead", visible_anchor_ids=[a1],
+            approval_mode="review_only", expected_revision=r["revision"]),
+        None, "m2"))
+    assert r2["ok"], r2.get("error") or r2.get("detail")
+    assert fake.sizes_seen[-1] == "2K"          # 生产设置透传
+
+
+def test_PD2_sciv_size_tier_follows_project_style(_gen_env, monkeypatch):
+    """scene.state_view.prepare 同口径：project.style.size_tier=2K → 生成透传 2K。"""
+    from src.core.store import ProjectStore
+    rt, svc, tmp_path, fake, loc, a1, view, r_inst = _gen_env_ready(_gen_env, None)
+    proj = ProjectStore(tmp_path).load()
+    proj.style.size_tier = "2K"
+    ProjectStore(tmp_path).save(proj)
+    fake.vision_content = _view_reply(a1)
+    r = _run_exec(sd._execute_scene_state_view_prepare(
+        rt, "s2demo", json.dumps({
+            "scene_instance_id": r_inst["scene_instance_id"],
+            "base_location_view_id": view, "approval_mode": "review_only",
+            "expected_document_revision": _drev(svc)}), None, "m1"))
+    assert r["ok"], (r.get("error"), r.get("detail"))
+    assert fake.gen_calls == 1
+    assert fake.sizes_seen == ["2K"]
 
 
 def test_S53_S54_state_change_new_basis(_gen_env, monkeypatch):

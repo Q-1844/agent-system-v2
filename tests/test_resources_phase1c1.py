@@ -1073,3 +1073,32 @@ def test_http_generate_endpoint(wclient, monkeypatch):
     r4 = c.post(f"/api/project/{name}/looks/look_none/generate", json={
         "expected_revision": "whatever"})
     assert r4.status_code == 404
+
+
+# ---- Phase D §2：Look 生成质量档跟随项目生产设置（29.md §2 最小接线）----
+def test_PD2_look_generation_size_tier_follows_project_style(env):
+    """project.style.size_tier 缺省 1K（行为不变）；设 2K 后 Look 生成
+    basis/请求均记录 2K（同 2:3 竖图 ratio，SIZE_TIERS 已扩 2K 2:3）。"""
+    from src.core.store import ProjectStore
+    look_id, _ = run(_seed_look(env))
+    fake = FakeAgnes()
+    r = run(env["ws"].generate_look_candidates(
+        look_id, expected_revision=_current_look_rev(env, look_id),
+        candidate_count=2, agnes_client=fake))
+    assert r["ok"] is True and r["status"] == "committed", r
+    rec_default = [x for x in _read_records(env["pdir"], look_id=look_id)
+                   if x.get("status") == "committed"]
+    assert rec_default and rec_default[-1]["model"]["size_tier"] == "1K"
+    # 切 2K 后重新生成：新 record basis 记录 2K
+    proj = ProjectStore(env["pdir"]).load()
+    proj.style.size_tier = "2K"
+    ProjectStore(env["pdir"]).save(proj)
+    fake2 = FakeAgnes()
+    r2 = run(env["ws"].generate_look_candidates(
+        look_id, expected_revision=_current_look_rev(env, look_id),
+        candidate_count=1, agnes_client=fake2))
+    assert r2["ok"] is True and r2["status"] == "committed", r2
+    rec_2k = [x for x in _read_records(env["pdir"], look_id=look_id)
+              if x.get("status") == "committed"]
+    assert rec_2k[-1]["model"]["size_tier"] == "2K"
+    assert rec_2k[-1]["model"]["ratio"] == "2:3"

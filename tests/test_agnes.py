@@ -208,3 +208,20 @@ def test_video_model_field_roundtrip(client):
         assert old.model is None
     vv = VideoVersion(version_id="vv_1", model="agnes-video-2.5-flash")
     assert vv.model == "agnes-video-2.5-flash"
+
+
+# ---------- Phase D §2：2K 档全 ratio 扩展（真机探针 _phase_d_2k_probe 佐证）----------
+def test_resolve_size_2k_extended_ratios(client):
+    """2K 档覆盖全部既有 ratio：官方表（1:1/3:4/4:3/16:9/9:16/21:9）
+    + 真机探针 PASS 的 2:3（角色三视图竖图）与按族对称的 3:2。
+    未知 tier 仍回落 1K（既有语义不变）。"""
+    from src.api.agnes_client import resolve_size
+    assert resolve_size("2K", "1:1") == "2048x2048"
+    assert resolve_size("2K", "16:9") == "2624x1472"
+    assert resolve_size("2K", "9:16") == "1472x2624"
+    assert resolve_size("2K", "2:3") == "1664x2496"
+    assert resolve_size("2K", "3:2") == "2496x1664"
+    assert resolve_size("2K", "3:4") == "1728x2304"
+    assert resolve_size("2K", "4:3") == "2304x1728"
+    assert resolve_size("2K", "21:9") == "3136x1344"
+    assert resolve_size("9K", "16:9") == "1312x736"

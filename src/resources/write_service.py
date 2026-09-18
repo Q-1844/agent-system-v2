@@ -603,9 +603,10 @@ class ResourceWriteService:
                                detail="项目未设置 ProjectVisualProfile（P1 §7 fail closed，"
                                       "不猜测 realistic/anime/3D）；先设置项目视觉定义")
             model_id = agnes_client.models["image"]
-            size_tier = "1K"
             ratio = "2:3"   # 全身参考竖图（与既有角色三视图同口径，非视频画幅）
             project = ProjectStore(self.project_dir).load()
+            # Phase D §2：图片质量档跟随项目生产设置（project.style.size_tier；缺省 1K）
+            size_tier = project.style.size_tier or "1K"
             basis = compute_generation_basis(
                 self.project_dir, doc, project, look,
                 model_id=model_id, size_tier=size_tier, ratio=ratio,
@@ -1376,9 +1377,10 @@ class ResourceWriteService:
                                detail="项目未设置 ProjectVisualProfile（P1 §7 fail closed，"
                                       "不猜测 realistic/anime/3D）；先设置项目视觉定义")
             model_id = agnes_client.models["image"]
-            size_tier = "1K"
             ratio = "2:3"
             project = ProjectStore(self.project_dir).load()
+            # Phase D §2：图片质量档跟随项目生产设置（project.style.size_tier；缺省 1K）
+            size_tier = project.style.size_tier or "1K"
             basis = compute_composition_basis(
                 self.project_dir, doc, project, comp,
                 model_id=model_id, size_tier=size_tier, ratio=ratio,

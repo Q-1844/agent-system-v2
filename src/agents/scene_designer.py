@@ -1160,9 +1160,12 @@ async def _execute_scene_view_prepare(rt: AgentRuntime, project: str, arguments:
         candidate_count = 1
     _view_prepare_progress(event_cb, "view.generate",
                            f"生成候选图 ×{candidate_count}（{view_id}，约 1 分钟）")
+    # Phase D §2：图片质量档跟随项目生产设置（project.style.size_tier；缺省 1K）
+    _proj_size_tier = (ProjectStore(pdir).load().style.size_tier or "1K")
     r_gen = await vs.generate_location_view(
         view_id, expected_revision=view_revision,
-        candidate_count=max(1, min(candidate_count, 2)))
+        candidate_count=max(1, min(candidate_count, 2)),
+        size_tier=_proj_size_tier)
     if not r_gen.get("ok"):
         out = _scene_write_receipt(r_gen, "scene.view.prepare",
                                    kind="location_view", entity_id=view_id)
@@ -1586,9 +1589,12 @@ async def _execute_scene_state_view_prepare(rt: AgentRuntime, project: str, argu
         from src.scene_system.models import scene_instance_view_revision
         _prog("sciv.generate", f"生成场景状态候选图 ×{max(1, min(candidate_count, 2))}"
                                "（约 1 分钟）")
+        # Phase D §2：图片质量档跟随项目生产设置（project.style.size_tier；缺省 1K）
+        _sciv_size_tier = (ProjectStore(pdir).load().style.size_tier or "1K")
         r_gen = await vs.generate_scene_instance_view(
             sciv_id, expected_revision=scene_instance_view_revision(sciv_now),
-            candidate_count=max(1, min(candidate_count, 2)))
+            candidate_count=max(1, min(candidate_count, 2)),
+            size_tier=_sciv_size_tier)
         if not r_gen.get("ok"):
             out = _scene_write_receipt(r_gen, "scene.state_view.prepare",
                                        kind="scene_instance_view", entity_id=sciv_id)
