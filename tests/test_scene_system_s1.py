@@ -651,14 +651,15 @@ def test_t24_t25_frozen_canonical_bytes_unchanged(svc, pdir):
         "resources.json 字节不变（T25）"
 
 
-# ============ T26：Agent 源引用边界（Agent System V2 Phase C1 演进版）============
+# ============ T26：Agent 源引用边界（Agent System V2 Phase C2 演进版）============
 def test_t26_no_agent_source_references_scene_system():
-    """原 S1 冻结（src/agents 与 src/ai 零 scene_system 引用）由 27.md §6.5 合法演进：
-    Director 需只读消费 Scene 生产事实——允许引用的【唯一】位置 =
-    src/agents/production_context.py（共享只读投影层）。其余任何 Agent 源文件仍禁止
-    scene_system 引用；且投影层不得出现 scene 写/生成类 API（只读边界）。"""
+    """原 S1 冻结（零引用）由 27.md §6.5 演进为「只读经 production_context」；
+    再由 28.md §0.3（Phase C2）演进：Scene Agent（scene_designer.py）是 Scene System
+    【唯一合法写入者】（经 SceneSystemService/SceneVisualService 正式链路），
+    project_events.py 仅持锁/事件域常量。其余任何 Agent 源文件仍禁止 scene_system
+    引用；production_context 投影层不得出现 scene 写/生成类 API（只读边界）。"""
     root = Path(__file__).resolve().parent.parent
-    allowed = {"production_context.py"}
+    allowed = {"production_context.py", "scene_designer.py", "project_events.py"}
     for rel in ("src/agents", "src/ai"):
         pkg = root / rel
         assert pkg.exists()
@@ -667,7 +668,10 @@ def test_t26_no_agent_source_references_scene_system():
             if "scene_system" not in text:
                 continue
             assert py.name in allowed, \
-                f"Agent 源出现 scene_system 引用（只允许 production_context.py）: {py}"
+                (f"Agent 源出现 scene_system 引用（只允许 production_context.py / "
+                 f"scene_designer.py / project_events.py）: {py}")
+            if py.name == "scene_designer.py":
+                continue   # 唯一写入者：允许 service/生成/审批 API 全集
             for banned in ("patch_scene_state", "create_scene_instance",
                            "create_location", "create_anchor", "create_view",
                            "generate_location_view", "generate_scene_instance_view",

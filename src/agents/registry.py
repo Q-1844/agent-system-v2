@@ -68,7 +68,7 @@ def _build_agents() -> List[AgentDefinition]:
             # 原生 tool-loop Agent（同 script_writer/character_designer/director/producer），
             # 能力走工具面而非 capability dispatch；这里只登记语义 id 供查询展示。
             allowed_capabilities=["scene.inspect", "scene.prepare"],
-            read_scopes=["scenes", "characters", "shots", "style", "scene_system"],
+            read_scopes=["scenes", "characters", "shots", "style", "scene_production"],
             write_scopes=["scene_production"],
             can_delegate_to=[], default_model_profile="scene_profile"),
         AgentDefinition(

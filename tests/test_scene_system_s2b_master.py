@@ -146,10 +146,12 @@ def test_t44_resources_schema_unchanged(tmp_path):
 
 # ============ T47：Agent source zero modification ============
 def test_t47_no_agent_source_references_scene_system():
-    """Phase C1 演进版（27.md §6.5）：scene_system 引用只允许 production_context.py
-    （共享只读投影层，禁止写/生成 API——详见 test_scene_system_s1.T26 同款边界）。"""
+    """Phase C2 演进版（28.md §0.3）：scene_system 引用只允许
+    production_context.py（共享只读投影层）+ scene_designer.py（Scene System 唯一
+    合法写入者）+ project_events.py（锁/事件域常量）——
+    详见 test_scene_system_s1.T26 同款边界。"""
     root = Path(__file__).resolve().parent.parent
-    allowed = {"production_context.py"}
+    allowed = {"production_context.py", "scene_designer.py", "project_events.py"}
     for rel in ("src/agents", "src/ai"):
         pkg = root / rel
         assert pkg.exists()

@@ -76,7 +76,7 @@ SCENE_READ_TOOLS = {
     "project.visual_profile.read",
     "shot.list", "shot.read",
     "web.search",
-    # C 域只读（scene.inventory / scene.production.inspect 在 Commit C 加入）
+    "scene.inventory", "scene.production.inspect",   # Commit C（28.md §8/§9）
 }
 
 # 写工具 → 资源锁域（唯一权威映射；流式端点与 Producer Bridge 的锁接线都从这张表取）。
@@ -319,13 +319,384 @@ def _refresh_system(messages: list, rt: AgentRuntime, project: str) -> None:
         pass
 
 
-# ============ C 域工具 schema 与执行器（后续 Commit 逐个落地）============
-# scene.inventory / scene.production.inspect（Commit C）
+# ============ C 域只读工具（28.md §8/§9，Commit C）============
+SCENE_INVENTORY_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "scene.inventory",
+        "description": ("列出项目 Scene System（场景系统）轻量地图：Location（地点）/"
+                        "SceneInstance（场景实例）/已批准 LocationView 与 "
+                        "SceneInstanceView 数量/stale 概况 + 当前 document_revision。"
+                        "开销很小，不返回图片/prompt/历史。"
+                        "场景任务【第一步】用它定位与防重复创建（同一地点绝不重复建）。"
+                        "filter：all（默认）/location/instance。只读工具。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "filter": {
+                    "type": "string", "enum": ["all", "location", "instance"],
+                    "description": "列出范围（默认 all）。",
+                },
+            },
+        },
+    },
+}
+
+SCENE_PRODUCTION_INSPECT_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "scene.production.inspect",
+        "description": ("读取一个故事段（story_scene_id）的完整场景生产准备摘要："
+                        "剧情输入（地点提示/时间/角色/剧情事实）+ 场景系统现状"
+                        "（SceneInstance/Location/anchors/layout/SceneState/LocationViews/"
+                        "SceneInstanceViews 及 stale）+ 项目视觉定义摘要 + 资源依赖"
+                        "（prop 引用是否缺失/失效）+ 生产状态判定"
+                        "（NO_LOCATION/INSTANCE_MISSING/LOCATION_INCOMPLETE/"
+                        "BASE_VIEW_MISSING/STATE_INCOMPLETE/SCIV_MISSING/SCIV_STALE/READY）。"
+                        "场景准备任务的【第一步】；只读工具。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "story_scene_id": {"type": "string",
+                                   "description": "故事段 id（来自 story.list，如 s01）。"},
+            },
+            "required": ["story_scene_id"],
+        },
+    },
+}
+
+
+def _scene_system_read(pdir):
+    """SceneSystemStore 只读加载（轻量；service 的 OCC/锁只在 mutation 用）。"""
+    from src.scene_system.store import SceneSystemStore
+    return SceneSystemStore(pdir).load()
+
+
+def _sciv_status_map(pdir, project: str, doc) -> Dict[str, dict]:
+    """全部 SceneInstanceView 的 read 模型状态（复用 SceneVisualService.read_scene_
+    instance_view_status——stale/readiness 唯一权威，绝不重实现 freshness 规则）。
+    单个失败降级为 unknown（诚实标注，不阻塞整体）。"""
+    from src.scene_system.visual_service import SceneVisualService
+    vs = SceneVisualService(pdir, project)
+    out: Dict[str, dict] = {}
+    for v in doc.scene_instance_views.values():
+        try:
+            st = vs.read_scene_instance_view_status(v.scene_instance_view_id)
+        except Exception as e:   # noqa: BLE001 - 单个失败不拖垮 inventory/inspect
+            st = {"scene_instance_view_id": v.scene_instance_view_id,
+                  "is_stale": None, "stale_reasons": [],
+                  "error": f"status_unavailable:{type(e).__name__}"}
+        out[v.scene_instance_view_id] = st or {}
+    return out
+
+
+def _execute_scene_inventory(rt: AgentRuntime, project: str, arguments: str,
+                             instruction, message_id) -> dict:
+    """scene.inventory（28.md §8）：compact 列出 Locations / SceneInstances /
+    approved views 数量 / stale 概况 / document_revision。filter: all|location|instance。"""
+    args = _parse_args(arguments)
+    flt = str(args.get("filter") or "all").strip().lower() or "all"
+    if flt not in ("all", "location", "instance"):
+        return {"ok": False, "operation": "scene.inventory",
+                "error": "validation_error", "detail": "filter 只支持 all|location|instance"}
+    pdir = rt._resolve_project_dir(project)
+    doc = _scene_system_read(pdir)
+    sciv_status = _sciv_status_map(pdir, project, doc)
+
+    loc_rows = []
+    if flt in ("all", "location"):
+        for loc in sorted(doc.locations.values(), key=lambda x: x.location_id):
+            anchors = [a for a in doc.anchors.values() if a.location_id == loc.location_id]
+            views = [v for v in doc.views.values() if v.location_id == loc.location_id]
+            approved_views = [v for v in views
+                              if v.approval_status == "approved" and v.reference_asset_id]
+            loc_rows.append({
+                "location_id": loc.location_id, "name": loc.name,
+                "identity": (loc.identity_description or loc.description or "")[:80],
+                "anchors": len(anchors),
+                "views": len(views),
+                "approved_views": len(approved_views),
+                "view_labels": [v.label or v.view_id for v in
+                                sorted(views, key=lambda x: x.view_id)][:8],
+            })
+
+    inst_rows = []
+    if flt in ("all", "instance"):
+        for inst in sorted(doc.scene_instances.values(),
+                           key=lambda x: x.scene_instance_id):
+            loc = doc.locations.get(inst.location_id)
+            scivs = [v for v in doc.scene_instance_views.values()
+                     if v.scene_instance_id == inst.scene_instance_id]
+            approved = [v for v in scivs
+                        if v.approval_status == "approved" and v.reference_asset_id]
+            stale = [v.scene_instance_view_id for v in approved
+                     if sciv_status.get(v.scene_instance_view_id, {}).get("is_stale")]
+            state = inst.state
+            inst_rows.append({
+                "scene_instance_id": inst.scene_instance_id,
+                "story_scene_id": inst.story_scene_id,
+                "location_id": inst.location_id,
+                "location_name": loc.name if loc else "(missing location)",
+                "status": inst.status,
+                "state_summary": {
+                    "time_of_day": state.time_of_day or "",
+                    "weather": state.weather or "",
+                    "lighting": (state.lighting or "")[:40],
+                },
+                "prop_placements": len(state.prop_placements),
+                "scivs": len(scivs),
+                "approved_scivs": len(approved),
+                "stale_scivs": stale,
+                "missing_story_scene": inst.story_scene_id not in {
+                    s.scene_id for s in ProjectStore(pdir).load().scenes or []},
+            })
+
+    n_views = sum(1 for v in doc.views.values()
+                  if v.approval_status == "approved" and v.reference_asset_id)
+    n_scivs = sum(1 for v in doc.scene_instance_views.values()
+                  if v.approval_status == "approved" and v.reference_asset_id)
+    n_stale = sum(1 for st in sciv_status.values() if st.get("is_stale"))
+    from src.scene_system.models import document_revision as _doc_rev
+    return {"ok": True, "operation": "scene.inventory", "filter": flt,
+            "document_revision": _doc_rev(doc),
+            "summary": (f"场景系统：{len(doc.locations)} 地点 / {len(doc.scene_instances)} "
+                        f"实例 / {n_views} approved LocationView / {n_scivs} approved "
+                        f"SceneInstanceView / {n_stale} stale"),
+            "locations": loc_rows,
+            "scene_instances": inst_rows,
+            "totals": {"locations": len(doc.locations),
+                       "anchors": len(doc.anchors),
+                       "views": len(doc.views),
+                       "approved_views": n_views,
+                       "scene_instances": len(doc.scene_instances),
+                       "approved_scivs": n_scivs,
+                       "stale_scivs": n_stale}}
+
+
+_PRODUCTION_STATUSES = ("NO_LOCATION", "LOCATION_INCOMPLETE", "INSTANCE_MISSING",
+                        "BASE_VIEW_MISSING", "STATE_INCOMPLETE", "SCIV_MISSING",
+                        "SCIV_STALE", "READY")
+
+
+def _derive_production_status(doc, inst, location) -> tuple:
+    """生产状态判定（28.md §9 阶梯；staleness 复用 sciv read 模型，不重实现）。"""
+    if inst is None:
+        if not doc.locations:
+            return "NO_LOCATION", "场景系统还没有任何 Location——先创建地点。"
+        return "INSTANCE_MISSING", ("场景系统已有 Location，但该故事段还没有 active "
+                                    "SceneInstance——复用现有地点或建新地点后绑定。")
+    if location is None:
+        return "LOCATION_INCOMPLETE", ("SceneInstance 绑定的 Location 不存在"
+                                       "（数据不一致，先修复绑定）。")
+    anchors = [a for a in doc.anchors.values() if a.location_id == location.location_id]
+    if not anchors:
+        return "LOCATION_INCOMPLETE", ("Location 还没有任何 SpatialAnchor——多视角识别与"
+                                       "机位规划缺空间结构，先建结构性锚点。")
+    views = [v for v in doc.views.values() if v.location_id == location.location_id]
+    approved_views = [v for v in views
+                      if v.approval_status == "approved" and v.reference_asset_id]
+    if not approved_views:
+        return "BASE_VIEW_MISSING", ("Location 没有 approved LocationView——"
+                                     "先生成并批准基础视角。")
+    state = inst.state
+    state_empty = not (state.time_of_day or state.weather or state.lighting
+                       or state.environment_conditions or state.anchor_states
+                       or state.prop_placements)
+    if state_empty:
+        return "STATE_INCOMPLETE", ("SceneState 完全为空——按剧情推导该场戏的时间/天气/"
+                                    "灯光/anchor 状态/prop 摆放。")
+    scivs = [v for v in doc.scene_instance_views.values()
+             if v.scene_instance_id == inst.scene_instance_id]
+    approved_scivs = [v for v in scivs
+                      if v.approval_status == "approved" and v.reference_asset_id]
+    if not approved_scivs:
+        return "SCIV_MISSING", ("有基础视角与状态，但没有 approved SceneInstanceView——"
+                                "场景状态图还没生成/批准。")
+    return None, ""   # 具体 READY/SCIV_STALE 由调用方结合 stale 判定
+
+
+def _execute_scene_production_inspect(rt: AgentRuntime, project: str, arguments: str,
+                                      instruction, message_id) -> dict:
+    """scene.production.inspect（28.md §9）：一个工具返回该故事段的完整场景生产准备
+    摘要。复用 SceneVisualService stale read 模型与共享 VisualProfile 投影，零重实现。"""
+    args = _parse_args(arguments)
+    story_scene_id = str(args.get("story_scene_id") or "").strip()
+    if not story_scene_id:
+        raise AgentError("bad_arguments", "缺少 story_scene_id")
+    pdir = rt._resolve_project_dir(project)
+    proj = ProjectStore(pdir).load()
+    scene = next((s for s in (proj.scenes or []) if s.scene_id == story_scene_id), None)
+    if scene is None:
+        return {"ok": False, "operation": "scene.production.inspect",
+                "error": "story_scene_not_found",
+                "detail": f"故事段不存在: {story_scene_id}"}
+    doc = _scene_system_read(pdir)
+    sciv_status = _sciv_status_map(pdir, project, doc)
+
+    # ---- Story input（剧情事实，只读）----
+    story_input = {
+        "story_scene_id": scene.scene_id,
+        "title": scene.title or "",
+        "summary": (scene.summary or "")[:400],
+        "location_hint": scene.location or "",
+        "time_of_day": scene.time_of_day or "",
+        # weather/environment 无独立字段——只存在于剧情文本中，需要时读 summary 判断
+        "characters": list(scene.characters or []),
+        "shot_count": len(scene.shots or []),
+        "note": ("weather/environment 等环境事实如未在上方字段中，需从剧情文本（summary）"
+                 "自行判断；Story 本身不归 Scene Agent 修改。"),
+    }
+
+    # ---- Scene System 现状 ----
+    inst = next((i for i in doc.scene_instances.values()
+                 if i.story_scene_id == story_scene_id and i.status == "active"), None)
+    location = doc.locations.get(inst.location_id) if inst else None
+    anchors = []
+    layout = None
+    views = []
+    state_read = None
+    if inst is not None:
+        if location is not None:
+            anchors = [{"anchor_id": a.anchor_id, "name": a.name, "kind": a.kind,
+                        "description": (a.description or "")[:100],
+                        "semantic_zone": a.semantic_zone or ""}
+                       for a in sorted((a for a in doc.anchors.values()
+                                        if a.location_id == location.location_id),
+                                       key=lambda x: x.anchor_id)]
+            lay = next((l for l in doc.layouts.values()
+                        if l.location_id == location.location_id), None)
+            if lay is not None:
+                layout = {"layout_id": lay.layout_id,
+                          "orientation_convention": lay.orientation_convention,
+                          "placements": [{"anchor_id": p.anchor_id, "zone": p.zone,
+                                          "x": p.x, "y": p.y}
+                                         for p in lay.placements]}
+        for v in sorted((v for v in doc.views.values()
+                         if v.location_id == (location.location_id if location else "")),
+                        key=lambda x: x.view_id):
+            views.append({
+                "view_id": v.view_id, "label": v.label,
+                "camera_zone": v.camera_zone, "look_direction": v.look_direction,
+                "visible_anchor_ids": list(v.visible_anchor_ids),
+                "generation_status": v.generation_status,
+                "approval_status": v.approval_status,
+                "usable": bool(v.approval_status == "approved" and v.reference_asset_id),
+            })
+        st = inst.state
+        state_read = {
+            "time_of_day": st.time_of_day, "weather": st.weather,
+            "lighting": st.lighting,
+            "environment_conditions": st.environment_conditions,
+            "notes": (st.notes or "")[:120],
+            "anchor_states": {k: v.condition for k, v in st.anchor_states.items()},
+            "prop_placements": {pid: {"anchor_id": pp.anchor_id, "state": pp.state}
+                                for pid, pp in st.prop_placements.items()},
+        }
+    scene_system = {
+        "scene_instance": ({"scene_instance_id": inst.scene_instance_id,
+                            "location_id": inst.location_id,
+                            "location_name": location.name if location else "",
+                            "status": inst.status} if inst else None),
+        "location": ({"location_id": location.location_id, "name": location.name,
+                      "identity": (location.identity_description
+                                   or location.description or "")[:160],
+                      "style_notes": location.style_notes or ""} if location else None),
+        "anchors": anchors,
+        "layout": layout,
+        "scene_state": state_read,
+        "location_views": views,
+        "scene_instance_views": [
+            {"scene_instance_view_id": st_["scene_instance_view_id"],
+             "location_view_id": st_.get("location_view_id", ""),
+             "approval_status": st_.get("approval_status", ""),
+             "is_stale": st_.get("is_stale"),
+             "stale_reasons": st_.get("stale_reasons") or [],
+             "has_pass_review_evidence": st_.get("has_pass_review_evidence"),
+             "usable": bool(st_.get("approval_status") == "approved"
+                            and not st_.get("is_stale"))}
+            for st_ in sciv_status.values()
+            if st_.get("scene_instance_id") == inst.scene_instance_id
+        ] if inst is not None else [],
+    }
+
+    # ---- VisualProfile（复用 C1 共享只读层）----
+    from .production_context import read_visual_profile_projection
+    profile_proj = read_visual_profile_projection(pdir)
+    profile_compact = {
+        "specified": profile_proj.get("specified"),
+        "fingerprint": profile_proj.get("fingerprint", ""),
+        "summary": (profile_proj.get("visual_profile") or {}).get("render_family")
+                   if profile_proj.get("specified") else None,
+    }
+
+    # ---- Resource dependencies（§9/§15：prop 引用核验，零越权）----
+    prop_deps: list = []
+    missing_props: list = []
+    if inst is not None and inst.state.prop_placements:
+        from src.scene_system.visual_basis import load_resources_doc_or_none
+        rdoc = load_resources_doc_or_none(pdir)
+        for pid, pp in sorted(inst.state.prop_placements.items()):
+            prop = rdoc.props.get(pid) if rdoc else None
+            if prop is None:
+                missing_props.append({
+                    "prop_id": pid, "reason": "prop_not_found",
+                    "detail": "Resources 中不存在该 Prop",
+                    "target_field": f"SceneState.prop_placements[{pid}]",
+                })
+            elif prop.approval_status != "approved":
+                missing_props.append({
+                    "prop_id": pid, "reason": "prop_not_approved",
+                    "detail": "Prop 存在但没有 approved 参考图（生产不可用）",
+                    "target_field": f"SceneState.prop_placements[{pid}]",
+                })
+            prop_deps.append({
+                "prop_id": pid, "anchor_id": pp.anchor_id, "state": pp.state,
+                "found": prop is not None,
+                "approval_status": prop.approval_status if prop else None,
+                "prop_name": prop.name if prop else None,
+            })
+    resource_dependencies = {"prop_dependencies": prop_deps,
+                             "missing_or_invalid_props": missing_props}
+
+    # ---- Production status（阶梯判定 + stale）----
+    status, reason = _derive_production_status(doc, inst, location)
+    if status is None:
+        approved_scivs = [v for v in doc.scene_instance_views.values()
+                          if v.scene_instance_id == inst.scene_instance_id
+                          and v.approval_status == "approved" and v.reference_asset_id]
+        if any(sciv_status.get(v.scene_instance_view_id, {}).get("is_stale")
+               for v in approved_scivs):
+            status = "SCIV_STALE"
+            reason = ("approved SceneInstanceView 已 stale（SceneState/base view 变化后"
+                      "未重新生成）——重新生成对应视角。")
+        else:
+            status = "READY"
+            reason = "场景生产事实与 approved 场景参考齐备，可供 Director 建场景 binding。"
+
+    return {"ok": True, "operation": "scene.production.inspect",
+            "story_scene_id": story_scene_id,
+            "story_input": story_input,
+            "scene_system": scene_system,
+            "visual_profile": profile_compact,
+            "resource_dependencies": resource_dependencies,
+            "production_status": status,
+            "status_reason": reason,
+            "summary": f"{story_scene_id} 场景生产状态：{status}（{reason[:80]}）",
+            "note": ("只读摘要。按 production_status 推进：复用优先，绝不重复创建 Location；"
+                     "缺 Prop 时报告 resource_prerequisite，不自己创建。")}
+
+
+# ============ D-G 域写工具 schema 与执行器（后续 Commit 逐个落地）============
 # scene.location.upsert / scene.anchor.upsert / scene.layout.set（Commit D）
 # scene.view.prepare（Commit E，含共享 review retry guard）
 # scene.instance.prepare / scene.state.update（Commit F）
 # scene.state_view.prepare（Commit G）
-SCENE_DESIGNER_TOOLS: list = []
+SCENE_DESIGNER_TOOLS: list = [SCENE_INVENTORY_TOOL, SCENE_PRODUCTION_INSPECT_TOOL]
+
+TOOL_EXECUTORS["scene.inventory"] = _execute_scene_inventory
+TOOL_EXECUTORS["scene.production.inspect"] = _execute_scene_production_inspect
+TOOL_LABELS["scene.inventory"] = "列出场景系统地图"
+TOOL_LABELS["scene.production.inspect"] = "检查场景生产准备"
 
 
 # ============ tool-loop（镜像 character_designer 结构，场景域语义）============
