@@ -26,6 +26,7 @@ from src.agents.runtime import AgentRuntime, AgentError
 from src.agents.character_designer import (
     character_designer_turn, CHARACTER_DESIGNER_TOOLS, TOOL_EXECUTORS,
     CHARACTER_WRITE_OPERATIONS, _characters_token, _character_token,
+    _tool_surface,
 )
 from src.agents.script_writer import WRITE_OPERATIONS
 from src.agents.revision_audit import DirectEditAuditStore
@@ -129,7 +130,7 @@ def test_chat_no_mutation(tmp_path):
     assert res["created"] is False and res["updated"] is False and res["deleted"] is False
     assert (tmp_path / "output" / "project.json").read_bytes() == before
     assert len(client.calls) == 1
-    assert client.calls[0]["kw"]["tools"] == CHARACTER_DESIGNER_TOOLS
+    assert client.calls[0]["kw"]["tools"] == _tool_surface()
 
 
 # ============ B 根据故事创建角色 ============
@@ -239,11 +240,15 @@ def test_no_story_write_capability(tmp_path):
     _save_proj(tmp_path)
     tool_names = {t["function"]["name"] for t in CHARACTER_DESIGNER_TOOLS}
     # 工具集只有角色写工具；story/script 工具一个都不出现在工具定义里
-    # （Phase B：+ project.visual_profile.read 只读工具）
+    # （Phase B：+ project.visual_profile.read / resource.inventory / resource.read 只读工具；
+    #   shot.list/shot.read 经 _tool_surface() 从 Director 过滤并入）
     assert tool_names == {"character.list", "character.read", "character.create",
                           "character.update", "character.delete",
                           "character.generate_views", "web.search",
-                          "project.visual_profile.read"}
+                          "project.visual_profile.read",
+                          "resource.inventory", "resource.read"}
+    surface_names = {t["function"]["name"] for t in _tool_surface()}
+    assert {"shot.list", "shot.read"} <= surface_names
     # 执行器表也只暴露只读的 story/script 执行器，绝无写执行器
     assert "story.create" not in TOOL_EXECUTORS and "story.update" not in TOOL_EXECUTORS
     assert "story.delete" not in TOOL_EXECUTORS and "script.update" not in TOOL_EXECUTORS

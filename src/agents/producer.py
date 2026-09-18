@@ -593,13 +593,16 @@ async def _delegate_specialist(rt, project: str, agent_id: str,
                 "changed_refs": _empty_changed_refs()}
 
     # lazy import Specialist turn + write ops（避免本模块 import 时拖入）
+    write_domain_map = None
     if agent_id == "script_writer":
         from src.agents.script_writer import script_writer_turn, WRITE_OPERATIONS
         turn_fn, writes = script_writer_turn, WRITE_OPERATIONS
     elif agent_id == "character_designer":
         from src.agents.character_designer import (character_designer_turn,
-                                                   CHARACTER_WRITE_OPERATIONS)
-        turn_fn, writes = character_designer_turn, CHARACTER_WRITE_OPERATIONS
+                                                   WRITE_TOOL_DOMAIN)
+        # Phase B：Resource Agent 双写域——锁按工具查 WRITE_TOOL_DOMAIN 逐域挂。
+        turn_fn, writes = character_designer_turn, frozenset(WRITE_TOOL_DOMAIN)
+        write_domain_map = WRITE_TOOL_DOMAIN
     elif agent_id == "director":
         from src.agents.director import director_turn, DIRECTOR_WRITE_OPERATIONS
         turn_fn, writes = director_turn, DIRECTOR_WRITE_OPERATIONS
@@ -638,17 +641,24 @@ async def _delegate_specialist(rt, project: str, agent_id: str,
 
     # ⑤ event_cb 包装 _cb（三层职责，逐条照抄 routers/agents.py 的 _cb 语义）
     bus = get_project_bus()
-    state = {"locked": False}
+    state = {"locked": False, "locked_doms": set()}
 
     def _bridge_cb(ev: dict) -> None:
         t = ev.get("type")
         name = ev.get("name") or ""
         # b) 锁接线：tool.started 且 name ∈ 该 Specialist writes 且未锁 → bus.lock
-        if t == "tool.started" and name in writes and not state["locked"]:
-            bus.lock(project, resource, by=agent_id, session_id=sid)
-            state["locked"] = True
-        elif t == "tool.completed" and name in writes and ev.get("ok"):
-            emit_changed(bus, project, resource, by=agent_id, session_id=sid, operation=name)
+        #    Phase B：write_domain_map 非 None（character_designer 双写域）时按工具查域逐域挂。
+        dom = (write_domain_map.get(name)
+               if write_domain_map is not None
+               else (resource if name in writes else None))
+        if dom is not None:
+            if t == "tool.started" and dom not in state["locked_doms"]:
+                bus.lock(project, dom, by=agent_id, session_id=sid)
+                state["locked_doms"].add(dom)
+                state["locked"] = True
+            elif t == "tool.completed" and ev.get("ok"):
+                emit_changed(bus, project, dom, by=agent_id, session_id=sid,
+                             operation=name)
         # a) 转发 Specialist 全部 tool/reasoning/assistant 事件到 Producer SSE 流
         #    （用户在 Producer 页面能看到 Specialist 的工具时间线；step_id 冲突无害，
         #     前端按 call_id/type 渲染，这里附 agent 字段标注来源）
@@ -679,9 +689,14 @@ async def _delegate_specialist(rt, project: str, agent_id: str,
         log.exception("producer delegate %s 异常（project=%s）", agent_id, project)
         err = f"{type(e).__name__}: {e}"
     finally:
-        # ⑦ finally：若已锁 bus.unlock；turn_registry.pop（异常路径也要）
+        # ⑦ finally：若已锁 bus.unlock（Phase B 按域逐个释放）；turn_registry.pop（异常路径也要）
         if state["locked"]:
-            bus.unlock(project, resource)
+            if state["locked_doms"]:
+                for _dom in list(state["locked_doms"]):
+                    bus.unlock(project, _dom)
+                state["locked_doms"].clear()
+            else:
+                bus.unlock(project, resource)
             state["locked"] = False
         turn_registry.pop(project, sid)
 

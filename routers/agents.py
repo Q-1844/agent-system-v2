@@ -310,17 +310,22 @@ async def agent_turn_stream(project_name: str, sid: str, req: StreamTurnReq):
         from src.agents.project_events import RESOURCE_STORY, emit_changed
         _turn_fn, _writes, _resource, _emit = (
             script_writer_turn, WRITE_OPERATIONS, RESOURCE_STORY, emit_changed)
+        _write_domain_map = None   # 单写域 Agent：走 _writes/_resource 旧路径
     elif session.agent_id == "character_designer":
         from src.agents.character_designer import (character_designer_turn,
-                                                   CHARACTER_WRITE_OPERATIONS)
-        from src.agents.project_events import RESOURCE_CHARACTER, emit_changed
+                                                   WRITE_TOOL_DOMAIN)
+        from src.agents.project_events import emit_changed
+        # Phase B：Resource Agent 双写域（character + resources）——锁按工具查
+        # WRITE_TOOL_DOMAIN 逐域挂（_writes 仍给旧单域路径兼容；_resource 不再用于该分支）。
         _turn_fn, _writes, _resource, _emit = (
-            character_designer_turn, CHARACTER_WRITE_OPERATIONS, RESOURCE_CHARACTER, emit_changed)
+            character_designer_turn, frozenset(WRITE_TOOL_DOMAIN), None, emit_changed)
+        _write_domain_map = WRITE_TOOL_DOMAIN
     elif session.agent_id == "director":
         from src.agents.director import director_turn, DIRECTOR_WRITE_OPERATIONS
         from src.agents.project_events import RESOURCE_STORYBOARD, emit_changed
         _turn_fn, _writes, _resource, _emit = (
             director_turn, DIRECTOR_WRITE_OPERATIONS, RESOURCE_STORYBOARD, emit_changed)
+        _write_domain_map = None
     elif session.agent_id == "producer":
         # Producer V1 Phase 1：流式端点支持 Producer tool-loop。Producer 自身不锁任何资源
         # （_writes 空集）——锁由 Bridge 内 Specialist 接线（_cb 复制 §5.3-⑤b 语义）负责；
@@ -330,6 +335,7 @@ async def agent_turn_stream(project_name: str, sid: str, req: StreamTurnReq):
         from src.agents.producer import producer_turn
         _turn_fn, _writes, _resource, _emit = (
             producer_turn, set(), None, lambda *a, **k: None)
+        _write_domain_map = None
     else:
         _raise(AgentError("permission_denied",
                           "流式 turn 仅支持 Script Writer / Character Designer / Director / Producer 会话"))
@@ -353,14 +359,30 @@ async def agent_turn_stream(project_name: str, sid: str, req: StreamTurnReq):
     async def event_gen():
         q: asyncio.Queue = asyncio.Queue(maxsize=512)
         SENTINEL = object()
-        state = {"connected": True, "locked": False}
+        state = {"connected": True, "locked": False, "locked_doms": set()}
+
+        def _lock_emit(dom: str, start: bool, ok: bool, op: str) -> None:
+            # Phase B：按域锁/发事件（character_designer 双写域；其它 Agent 单域旧路径）。
+            if start and dom not in state["locked_doms"]:
+                bus.lock(project_name, dom, by=agent_id, session_id=sid)
+                state["locked_doms"].add(dom)
+                state["locked"] = True
+            elif not start and ok:
+                _emit(bus, project_name, dom, by=agent_id, session_id=sid, operation=op)
 
         def _cb(ev):
             # 同 loop 同线程同步操作（agent turn 与 consumer 共享同一事件循环）。
             t = ev.get("type")
             name = ev.get("name") or ""
             # 资源事件 → 项目总线（始终发，后台跑也要让其它页面看到锁/变更）
-            if t == "tool.started" and name in _writes and not state["locked"]:
+            if _write_domain_map is not None:
+                dom = _write_domain_map.get(name)
+                if dom is not None:
+                    if t == "tool.started":
+                        _lock_emit(dom, True, False, name)
+                    elif t == "tool.completed":
+                        _lock_emit(dom, False, bool(ev.get("ok")), name)
+            elif t == "tool.started" and name in _writes and not state["locked"]:
                 bus.lock(project_name, _resource, by=agent_id, session_id=sid)
                 state["locked"] = True
             elif t == "tool.completed" and name in _writes and ev.get("ok"):
@@ -394,12 +416,17 @@ async def agent_turn_stream(project_name: str, sid: str, req: StreamTurnReq):
                 if state["connected"]:
                     _put_terminal({"type": "turn.failed", "error": str(e)[:300]})
             finally:
-                # 资源锁释放（成功/失败/停止/断开都要释放）。
+                # 资源锁释放（成功/失败/停止/断开都要释放；Phase B 按域逐个释放）。
                 # 🔴 用 _resource（当前 Agent 的写入域资源），不能用任何分支里的局部 import 名
                 #（character_designer 分支没有 RESOURCE_STORY 绑定，闭包会 NameError →
                 # 锁泄漏 + SSE 流不收尾）。
                 if state["locked"]:
-                    bus.unlock(project_name, _resource)
+                    if state["locked_doms"]:
+                        for _dom in list(state["locked_doms"]):
+                            bus.unlock(project_name, _dom)
+                        state["locked_doms"].clear()
+                    else:
+                        bus.unlock(project_name, _resource)
                     state["locked"] = False
                 _ACTIVE_TURN_EVENTS.pop(key, None)
                 if state["connected"]:

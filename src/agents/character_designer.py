@@ -40,6 +40,7 @@ from src.core.models import Character
 from src.core.store import ProjectStore
 
 from .models import AgentMessage, ResultStatus
+from .project_events import RESOURCE_CHARACTER, RESOURCE_RESOURCES
 from .runtime import AgentRuntime, AgentError
 from .revision_audit import DirectEditAuditStore
 from .character_views_handler import (handler_character_views,
@@ -83,7 +84,21 @@ CHARACTER_WRITE_OPERATIONS = {"character.create", "character.update", "character
                               "character.generate_views"}
 # 只读工具（不占写槽、可一次多个；用于「写后重读最终状态」的收尾判定）。
 CHARACTER_READ_TOOLS = {"character.list", "character.read", "story.list",
-                        "story.read", "script.read", "project.visual_profile.read"}
+                        "story.read", "script.read", "project.visual_profile.read",
+                        "resource.inventory", "resource.read",
+                        "shot.list", "shot.read"}
+
+# Phase B §15：写工具 → 资源锁域（唯一权威映射；流式端点与 Producer Bridge 的锁接线
+# 都从这张表取）。Resource Agent 是双写域 Agent：Character canonical（project.json）
+# 与 Production Resources（resources.json）各挂各的锁——改角色不锁资源页，反之亦然，
+# 且一次 mutation 只锁自己的域（绝不因一个 Look 在生成锁整个项目）。
+# （resource.* mutation 工具在 Commit E/F 逐个落地时加入本表。）
+WRITE_TOOL_DOMAIN = {
+    "character.create": RESOURCE_CHARACTER,
+    "character.update": RESOURCE_CHARACTER,
+    "character.delete": RESOURCE_CHARACTER,
+    "character.generate_views": RESOURCE_CHARACTER,
+}
 
 # 三视图生成超时（2026-08-30 用户规格）：生图很慢——单角色三视图链（front t2i → side/back
 # i2i → 各自抠图）给 10 分钟兜底；一次最多 3 个角色并发（链间并发、链内串行；Agnes 图片
@@ -221,6 +236,10 @@ CHARACTER_DESIGNER_SYSTEM = """你是 AGNES 的 Character Designer，负责项�
 - story.read(scene_id)：读取一个故事段完整内容。按需读该角色首次登场、关键剧情、性格体现、服装/时代相关段；信息不足再扩大范围。
 - script.read()：读取剧本正文全文 + 版本指纹。仅当局部故事段不足以支撑全局性角色设计（人物完整弧光、全篇身份梳理）且确有需要时才读；不要默认读全文。
 - project.visual_profile.read()：读取项目视觉定义（ProjectVisualProfile）全文：render_family / art_direction / style_tags / 负面风格约束 + 指纹与 revision。设计涉及风格取向（介质、画风、时代质感）或用户要求与当前风格可能冲突时先读它；你的视觉生成遵守该定义，不得假设其它风格，也不得试图修改它（它由用户拥有）。
+- resource.inventory(filter)：列出项目生产资源（服装/Look 造型/道具/组合参考）轻量地图：id/名称/所属角色/审批与生成状态/参考图数 + document_revision。准备或修改任何生产资源前【第一步】用它定位与防重复创建。
+- resource.read(kind, resource_id)：读取一个生产资源的高信号详情（参考图/审批状态/最近审查结论/关联关系）+ document_revision。对 Look/Prop/Composition 修改或再生成前必须先 read 拿到版本指纹。
+- shot.list(scene_id)：列出某故事段（或全部）镜头的轻量地图。仅当用户要求「把当前分镜需要的资源准备好」之类任务时用它看各镜头用到哪些角色/动作/道具线索，判断缺哪些资源；你不是分镜设计者，绝不修改镜头。
+- shot.read(shot_id)：读取一个镜头的完整内容（描述/角色/动作/提示词/绑定状态线索）。同上，只读，用于判断资源缺口。
 - web.search(query)：搜索现实世界资料，返回约 3 条「标题+摘要+链接」。仅当①用户明确要求查资料，或②设计涉及真实世界知识明显影响可信度（历史时期服装、民族服饰、职业制服、年代发型、真实文化背景、地域审美）时使用。普通修改（改发型/换配色）不搜索。每轮最多 3 次，超限会被系统拒绝。
 
 🔴 最重要的铁律（违反即失败）：
@@ -404,6 +423,54 @@ CHARACTER_GENERATE_VIEWS_TOOL = {
     },
 }
 
+RESOURCE_INVENTORY_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "resource.inventory",
+        "description": ("列出项目当前的生产资源（Production Resources，resources.json 域）"
+                        "轻量地图：每个资源的 id/名称/所属角色/审批状态/生成状态/参考图数/"
+                        "封面/资源版本指纹 + 当前 document_revision。开销很小。支持 filter："
+                        "all（默认）/clothing/look/prop/composition。"
+                        "准备或修改任何资源前先看这里，避免重复创建、定位目标资源。"
+                        "不返回图片内容与完整历史。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "filter": {
+                    "type": "string",
+                    "enum": ["all", "clothing", "look", "prop", "composition"],
+                    "description": "资源类型过滤（默认 all）。",
+                },
+            },
+        },
+    },
+}
+
+RESOURCE_READ_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "resource.read",
+        "description": ("读取一个生产资源的高信号详情（含参考图/审批状态/最近审查结论/"
+                        "关联关系）+ 当前 document_revision。kind：clothing（服装）/"
+                        "look（角色造型）/prop（道具）/composition（角色+道具组合参考）/"
+                        "reference_asset（参考图资产）。【对 Look/Prop/Composition 做"
+                        "修改或再生成前必须先 read 目标拿到其版本指纹】。只读工具。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "kind": {"type": "string",
+                         "enum": ["clothing", "look", "prop", "composition",
+                                  "reference_asset"],
+                         "description": "资源类型。"},
+                "resource_id": {"type": "string",
+                                "description": "资源 id（来自 resource.inventory，如 look_xxx/prop_xxx）。",
+                                },
+            },
+            "required": ["kind", "resource_id"],
+        },
+    },
+}
+
 VISUAL_PROFILE_READ_TOOL = {
     "type": "function",
     "function": {
@@ -440,9 +507,42 @@ CHARACTER_DESIGNER_TOOLS = [
     CHARACTER_LIST_TOOL, CHARACTER_READ_TOOL,
     CHARACTER_CREATE_TOOL, CHARACTER_UPDATE_TOOL, CHARACTER_DELETE_TOOL,
     CHARACTER_GENERATE_VIEWS_TOOL,
+    RESOURCE_INVENTORY_TOOL, RESOURCE_READ_TOOL,
     VISUAL_PROFILE_READ_TOOL,
     WEB_SEARCH_TOOL,
 ]
+
+# shot.list / shot.read（Phase B §12：让 Agent 能看到当前分镜需要哪些资源——只读，
+# 不设计分镜、绝不写 Shot）。schema 从 Director 过滤复用（禁止发明第二套 schema）；
+# 执行器 lazy 复用 Director 实现（director.py 模块级 import 本模块的
+# _execute_character_list/read，本文件若模块级反向 import director 会成环——
+# turn 时 director 已完全加载，安全）。
+
+def _tool_surface() -> list:
+    """Resource Agent 实际下发给 LLM 的工具面（turn 开始时构建一次）：
+    模块常量（character/resource/profile/web 域）+ Director 的 shot.list/shot.read schema。
+    director 不可加载时降级为基础面（Agent 仍可用，只是看不到分镜）。"""
+    try:
+        from .director import DIRECTOR_TOOLS
+    except Exception:   # noqa: BLE001 - 防御：partial-import 等极端场景降级基础面
+        return list(CHARACTER_DESIGNER_TOOLS)
+    names = {"shot.list", "shot.read"}
+    return CHARACTER_DESIGNER_TOOLS + [t for t in DIRECTOR_TOOLS
+                                       if t["function"]["name"] in names]
+
+
+def _execute_shot_list_via_director(rt: AgentRuntime, project: str, arguments: str,
+                                    instruction, message_id) -> dict:
+    """shot.list 只读执行器（复用 Director 实现；lazy import 防环）。"""
+    from .director import _execute_shot_list
+    return _execute_shot_list(rt, project, arguments, instruction, message_id)
+
+
+def _execute_shot_read_via_director(rt: AgentRuntime, project: str, arguments: str,
+                                    instruction, message_id) -> dict:
+    """shot.read 只读执行器（复用 Director 实现；lazy import 防环）。"""
+    from .director import _execute_shot_read
+    return _execute_shot_read(rt, project, arguments, instruction, message_id)
 
 
 # ============ 工具执行 ============
@@ -964,6 +1064,61 @@ def _execute_visual_profile_read(rt: AgentRuntime, project: str, arguments: str,
                     "指出冲突而不是默默照做或试图修改它。"}
 
 
+# ============ Production Resources 只读（Phase B §7：inventory / read）============
+_RESOURCE_KIND_TO_READER = {
+    "clothing": "read_clothing", "look": "read_look", "prop": "read_prop",
+    "composition": "read_composition", "reference_asset": "read_reference_asset",
+}
+
+
+def _execute_resource_inventory(rt: AgentRuntime, project: str, arguments: str,
+                                instruction, message_id) -> dict:
+    """列出项目生产资源轻量地图（Phase B §7.2）。复用 ResourceService 的紧凑 summary
+    （无 base64/无长 prompt/无 generation history）+ document_revision。只读。"""
+    args = _parse_args(arguments)
+    flt = (args.get("filter") or "all").strip() or "all"
+    type_map = {"all": None, "clothing": "clothing", "look": "look",
+                "prop": "prop", "composition": "composition"}
+    if flt not in type_map:
+        raise AgentError("bad_arguments",
+                         f"filter 必须是 all|clothing|look|prop|composition，得到: {flt}")
+    from src.resources.service import ResourceService
+    from src.resources.models import document_revision
+    pdir = rt._resolve_project_dir(project)
+    svc = ResourceService(pdir, project)
+    items = svc.list_resources(type_map[flt])
+    return {"ok": True, "operation": "resource.inventory", "filter": flt,
+            "count": len(items),
+            "resources": items,
+            "document_revision": document_revision(svc.store.load()),
+            "note": "status=approved 的资源才可用于生产 binding；未生成/未审批的不能直接进"
+                    "分镜。资源 id 用于 resource.read 与资源类写工具。"}
+
+
+def _execute_resource_read(rt: AgentRuntime, project: str, arguments: str,
+                           instruction, message_id) -> dict:
+    """读取一个生产资源高信号详情（Phase B §7.3）。kind 明确 enum，未知/不存在 fail closed。
+    只读；绝不返回 base64（ResourceService 本就不返回）。"""
+    args = _parse_args(arguments)
+    kind = (args.get("kind") or "").strip()
+    rid = (args.get("resource_id") or "").strip()
+    if kind not in _RESOURCE_KIND_TO_READER:
+        raise AgentError("bad_arguments",
+                         f"kind 必须是 clothing|look|prop|composition|reference_asset，得到: {kind or '（空）'}")
+    if not rid:
+        raise AgentError("bad_arguments", "缺少 resource_id")
+    from src.resources.service import ResourceService
+    from src.resources.models import document_revision
+    pdir = rt._resolve_project_dir(project)
+    svc = ResourceService(pdir, project)
+    detail = getattr(svc, _RESOURCE_KIND_TO_READER[kind])(rid)
+    if detail is None:
+        raise AgentError("not_found", f"{kind} 不存在: {rid}（先 resource.inventory 核对 id）")
+    return {"ok": True, "operation": "resource.read", "kind": kind,
+            "resource_id": rid, "resource": detail,
+            "document_revision": document_revision(svc.store.load())}
+
+
 TOOL_EXECUTORS = {
     "character.list": _execute_character_list,
     "character.read": _execute_character_read,
@@ -972,6 +1127,10 @@ TOOL_EXECUTORS = {
     "character.delete": _execute_character_delete,
     "character.generate_views": _execute_character_generate_views,
     "project.visual_profile.read": _execute_visual_profile_read,
+    "resource.inventory": _execute_resource_inventory,
+    "resource.read": _execute_resource_read,
+    "shot.list": _execute_shot_list_via_director,
+    "shot.read": _execute_shot_read_via_director,
     "story.list": _execute_story_list,
     "story.read": _execute_story_read,
     "script.read": _execute_script_read,
@@ -985,6 +1144,8 @@ _TOOL_LABELS = {
     "character.create": "创建角色", "character.update": "修改角色",
     "character.delete": "删除角色", "character.generate_views": "生成角色三视图",
     "project.visual_profile.read": "读取项目视觉定义",
+    "resource.inventory": "列出生产资源", "resource.read": "读取生产资源",
+    "shot.list": "列出镜头", "shot.read": "读取镜头",
     "story.list": "读取故事段", "story.read": "读取故事段",
     "script.read": "读取剧本", "web.search": "搜索资料",
 }
@@ -1212,7 +1373,8 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                          thinking: bool = False,
                          event_cb=None,
                          state: Optional[dict] = None,
-                         cancel_event=None) -> dict:
+                         cancel_event=None,
+                         tool_surface: Optional[list] = None) -> dict:
     """原生 function-calling 循环 + 执行真实性收口（结构性，非提示词）。"""
     created = updated = deleted = views_generated = False
     if state is None:
@@ -1224,6 +1386,7 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
     zero_write_recovery_used = False
     trace: list = state.setdefault("trace", [])
     reasonings: list = state.setdefault("reasonings", [])
+    tools_offered = tool_surface if tool_surface is not None else CHARACTER_DESIGNER_TOOLS
     last_read_after_write = -1
     search_count = 0
     search_sources: list = state.setdefault("search_sources", [])
@@ -1280,7 +1443,7 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                 step_content_buf: list[str] = []
                 async for ev in client.chat_completion_stream(
                         messages, temperature=0.7, max_tokens=65536,
-                        thinking=thinking, tools=CHARACTER_DESIGNER_TOOLS,
+                        thinking=thinking, tools=tools_offered,
                         tool_choice="auto"):
                     k = ev["kind"]
                     if k == "content_delta":
@@ -1312,7 +1475,7 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
             else:
                 resp = await client.chat_completion(
                     messages, temperature=0.7, max_tokens=65536,
-                    tools=CHARACTER_DESIGNER_TOOLS, tool_choice="auto")
+                    tools=tools_offered, tool_choice="auto")
                 tool_calls = resp.get("tool_calls")
                 content = resp.get("content")
         except httpx.ReadTimeout:
@@ -1408,7 +1571,7 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                 event_cb({"type": "tool.started", "step_id": step, "call_id": call_id,
                           "name": name, "label": _tool_label(name)})
 
-            is_write_tool = (name in CHARACTER_WRITE_OPERATIONS)
+            is_write_tool = (name in WRITE_TOOL_DOMAIN)
             if is_write_tool and write_done_this_step:
                 obs = {
                     "ok": False, "operation": name,
@@ -1501,9 +1664,12 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                                       "summary": _tool_summary(name, obs)})
                     break
 
-            # 写域调用记入账本（含拼错的 character.* 未知工具：也算写尝试失败）。
-            is_write_domain = (name in CHARACTER_WRITE_OPERATIONS
-                               or name.startswith("character."))
+            # 写域调用记入账本（含拼错的 character.*/resource.* 未知工具：也算写尝试失败；
+            # 已注册的 resource 只读工具不属于写域——Phase B 资源域账本分类以
+            # WRITE_TOOL_DOMAIN 为唯一权威）。
+            is_write_domain = (name not in CHARACTER_READ_TOOLS
+                               and (name.startswith("character.")
+                                    or name.startswith("resource.")))
             if is_write_domain and name not in ("character.list", "character.read"):
                 write_attempts += 1
                 obs.setdefault("operation", name)
@@ -1619,7 +1785,8 @@ async def character_designer_turn(rt: AgentRuntime, project: str, session_id: st
         try:
             final = await _run_tool_loop(rt, client, project, messages, content, user_msg.message_id,
                                          thinking=thinking, event_cb=event_cb,
-                                         state=loop_state, cancel_event=cancel_event)
+                                         state=loop_state, cancel_event=cancel_event,
+                                         tool_surface=_tool_surface())
             assistant_text = final["text"]
             created = final["created"]
             updated = final["updated"]

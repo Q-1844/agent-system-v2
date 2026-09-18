@@ -19,6 +19,12 @@
       <button class="dismiss" @click="errorMsg = ''">×</button>
     </div>
 
+    <!-- Phase B：Resource Agent 正在修改角色/生产资源时的只读横幅（识别 character + resources 两类锁；
+         改动经 SSE 实时同步进来，完成后自动恢复编辑） -->
+    <div v-if="agentLockActive" class="agent-lock-banner">
+      Resource Agent 正在修改{{ agentLockDomain === 'both' ? '角色与生产资源' : agentLockDomain === 'resources' ? '生产资源' : '角色' }}，页面暂为只读；改动会实时同步进来，完成后自动恢复编辑。
+    </div>
+
     <!-- ================= 角色（卡片 → 角色工作台弹窗） ================= -->
     <section v-if="scope === 'project' && tab === 'characters'" class="tab-surface">
       <div class="surface-head">
@@ -59,7 +65,7 @@
         <h3>服装 <span class="count mono-num">{{ clothings.length }}</span></h3>
         <span class="meta">点击卡片查看详情、参考图与发布</span>
         <span class="spacer"></span>
-        <button class="btn btn-primary btn-sm" @click="showCreateClothing = !showCreateClothing">＋ 新建服装</button>
+        <button class="btn btn-primary btn-sm" :disabled="resourcesLocked" @click="showCreateClothing = !showCreateClothing">＋ 新建服装</button>
       </div>
       <form v-if="showCreateClothing" class="create-form" @submit.prevent="createClothingAction">
         <input v-model="newClothing.name" placeholder="名称（如 Black Coat）" required />
@@ -82,7 +88,7 @@
         <h3>道具 <span class="count mono-num">{{ props.length }}</span></h3>
         <span class="meta">点击卡片查看参考图、审查与批准</span>
         <span class="spacer"></span>
-        <button class="btn btn-primary btn-sm" @click="showCreateProp = !showCreateProp">＋ 新建道具</button>
+        <button class="btn btn-primary btn-sm" :disabled="resourcesLocked" @click="showCreateProp = !showCreateProp">＋ 新建道具</button>
       </div>
       <form v-if="showCreateProp" class="create-form" @submit.prevent="createPropAction">
         <input v-model="newProp.name" placeholder="名称（如 Lantern）" required />
@@ -389,12 +395,24 @@ function onWorkbenchRefresh() {
 
 // ---- 角色域只读锁 + 顶栏状态 ----
 const charactersLocked = computed(() => pev.charactersLocked);
+// Phase B：生产资源域锁（resource.look.prepare 等期间 resources 只读，实时刷新）
+const resourcesLocked = computed(() => pev.resourcesLocked);
+// 页面同时承载角色与生产资源两类域 → 两类锁都识别（§15）
+const agentLockActive = computed(() => charactersLocked.value || resourcesLocked.value);
+const agentLockDomain = computed<'characters' | 'resources' | 'both'>(() =>
+  (charactersLocked.value && resourcesLocked.value) ? 'both'
+    : resourcesLocked.value ? 'resources' : 'characters');
 watch(charactersLocked, () => { if (projectName.value) store.loadProjectCharacters(projectName.value); });
+watch(resourcesLocked, () => { if (projectName.value) refreshBase(); });
+// Agent 改生产资源落盘 → 静默刷新（resources.changed）
+watch(() => pev.resourcesVersion, () => { if (projectName.value) refreshBase(); });
 watch(() => pev.charactersVersion, () => {
   if (projectName.value && pev.charactersLocked) { store.loadProjectCharacters(projectName.value); loadDesigns(); }
 });
-useTopbarStatus('resources', () => (charactersLocked.value
-  ? { text: 'AI 正在修改角色', tone: 'fail' as const }
+useTopbarStatus('resources', () => (agentLockActive.value
+  ? { text: agentLockDomain.value === 'both' ? 'AI 正在修改角色与生产资源'
+        : agentLockDomain.value === 'resources' ? 'AI 正在修改生产资源' : 'AI 正在修改角色',
+      tone: 'fail' as const }
   : { text: '已同步', tone: 'idle' as const }));
 
 // ---- 深链：/characters?xxx → /resources?tab=characters&...；?design= 直接开工作台+工作室 ----
@@ -445,6 +463,9 @@ watch(projectName, () => {
 .res-error { background: rgba(248, 113, 113, 0.12); border: 1px solid rgba(248, 113, 113, 0.4); border-radius: 8px;
   padding: 8px 12px; display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: #f87171;
   .dismiss { border: 0; background: none; color: inherit; cursor: pointer; font-size: 15px; } }
+.agent-lock-banner { flex-shrink: 0; display: flex; align-items: center; gap: 8px;
+  background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px;
+  padding: 8px 12px; font-size: 12px; color: var(--text-muted); }
 
 .tab-surface { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
 .surface-head { flex-shrink: 0; display: flex; align-items: center; gap: 12px;

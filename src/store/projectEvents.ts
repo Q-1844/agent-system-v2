@@ -12,6 +12,8 @@ import { ref, computed } from 'vue';
 export const RESOURCE_STORY = 'story';
 export const RESOURCE_CHARACTER = 'character';
 export const RESOURCE_STORYBOARD = 'storyboard';
+/** Agent System V2 Phase B：生产资源域（resources.json——Look/Clothing/Prop/Composition） */
+export const RESOURCE_RESOURCES = 'resources';
 
 export interface ProjectEvent {
   type: string;
@@ -36,10 +38,13 @@ export const useProjectEventsStore = defineStore('projectEvents', () => {
   const charactersVersion = ref(0);
   /** storyboard.changed 自增版本号（分镜域内容变化信号，Director 写入后 +1） */
   const storyboardVersion = ref(0);
+  /** resources.changed 自增版本号（生产资源域内容变化信号，Resource Agent 写入后 +1） */
+  const resourcesVersion = ref(0);
 
   const storyLocked = computed(() => !!lockedResources.value[RESOURCE_STORY]);
   const charactersLocked = computed(() => !!lockedResources.value[RESOURCE_CHARACTER]);
   const storyboardLocked = computed(() => !!lockedResources.value[RESOURCE_STORYBOARD]);
+  const resourcesLocked = computed(() => !!lockedResources.value[RESOURCE_RESOURCES]);
 
   function setProject(p: string) {
     if (currentProject.value !== p) {
@@ -50,6 +55,7 @@ export const useProjectEventsStore = defineStore('projectEvents', () => {
       // 版本号同样按项目隔离：切项目清零，避免旧项目的变化信号触发新项目页面刷新
       storyVersion.value = 0;
       storyboardVersion.value = 0;
+      resourcesVersion.value = 0;
     }
   }
   function setConnected(c: boolean) { connected.value = c; }
@@ -77,12 +83,15 @@ export const useProjectEventsStore = defineStore('projectEvents', () => {
       charactersVersion.value += 1;
     } else if (ev.type === 'storyboard.changed') {
       storyboardVersion.value += 1;
+    } else if (ev.type === 'resources.changed') {
+      resourcesVersion.value += 1;
     }
   }
 
   return {
     currentProject, connected, lockedResources, storyVersion, lastStoryChange,
-    charactersVersion, storyboardVersion, storyLocked, charactersLocked, storyboardLocked,
+    charactersVersion, storyboardVersion, resourcesVersion,
+    storyLocked, charactersLocked, storyboardLocked, resourcesLocked,
     setProject, setConnected, applySnapshot, applyEvent,
   };
 });
