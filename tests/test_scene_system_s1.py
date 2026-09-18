@@ -651,19 +651,29 @@ def test_t24_t25_frozen_canonical_bytes_unchanged(svc, pdir):
         "resources.json 字节不变（T25）"
 
 
-# ============ T26：Agent 源零修改 ============
+# ============ T26：Agent 源引用边界（Agent System V2 Phase C1 演进版）============
 def test_t26_no_agent_source_references_scene_system():
-    """src/agents 与 src/ai 任何源文件不得 import / 引用 scene_system
-    （本轮禁止 Agent 接入——工具注册表/system prompts/工具实现全部不碰）。"""
+    """原 S1 冻结（src/agents 与 src/ai 零 scene_system 引用）由 27.md §6.5 合法演进：
+    Director 需只读消费 Scene 生产事实——允许引用的【唯一】位置 =
+    src/agents/production_context.py（共享只读投影层）。其余任何 Agent 源文件仍禁止
+    scene_system 引用；且投影层不得出现 scene 写/生成类 API（只读边界）。"""
     root = Path(__file__).resolve().parent.parent
+    allowed = {"production_context.py"}
     for rel in ("src/agents", "src/ai"):
         pkg = root / rel
         assert pkg.exists()
         for py in pkg.rglob("*.py"):
             text = py.read_text(encoding="utf-8", errors="ignore")
-            assert "scene_system" not in text, \
-                f"Agent 源出现 scene_system 引用: {py}"
-            assert "from src.scene_system" not in text
+            if "scene_system" not in text:
+                continue
+            assert py.name in allowed, \
+                f"Agent 源出现 scene_system 引用（只允许 production_context.py）: {py}"
+            for banned in ("patch_scene_state", "create_scene_instance",
+                           "create_location", "create_anchor", "create_view",
+                           "generate_location_view", "generate_scene_instance_view",
+                           "approve_scene_instance_view"):
+                assert banned not in text, \
+                    f"投影层出现 scene 写/生成 API {banned}: {py}"
 
 
 # ============ HTTP 层冒烟（router + status mapping）============

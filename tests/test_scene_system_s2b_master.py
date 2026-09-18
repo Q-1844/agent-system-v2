@@ -146,13 +146,18 @@ def test_t44_resources_schema_unchanged(tmp_path):
 
 # ============ T47：Agent source zero modification ============
 def test_t47_no_agent_source_references_scene_system():
+    """Phase C1 演进版（27.md §6.5）：scene_system 引用只允许 production_context.py
+    （共享只读投影层，禁止写/生成 API——详见 test_scene_system_s1.T26 同款边界）。"""
     root = Path(__file__).resolve().parent.parent
+    allowed = {"production_context.py"}
     for rel in ("src/agents", "src/ai"):
         pkg = root / rel
         assert pkg.exists()
         for py in pkg.rglob("*.py"):
             text = py.read_text(encoding="utf-8", errors="ignore")
-            assert "scene_system" not in text, f"Agent 源出现 scene_system 引用: {py}"
+            if "scene_system" not in text:
+                continue
+            assert py.name in allowed, f"Agent 源出现 scene_system 引用: {py}"
 
 
 # ============ HTTP S2B 全链冒烟 ============
