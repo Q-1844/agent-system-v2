@@ -56,6 +56,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Body, HTTPException, Query
 from pydantic import BaseModel
 
+import deps
 from deps import get_project_manager
 from src.scene_system.service import SceneSystemService
 from src.scene_system.models import SceneSystemSchemaError
@@ -627,6 +628,8 @@ class GenerateLocationViewRequest(BaseModel):
     reference_view_ids: Optional[List[str]] = None   # 显式参考（approved views）；缺省=自动确定性选择
     size_tier: str = "1K"
     ratio: str = "16:9"
+    # 2026-09-17 验收轮：image provider 覆盖（agnes 默认；sensenova=商汤 u1.5-lite）
+    image_provider: str = "agnes"
 
 
 @router.post("/api/project/{project}/scene-system/views/{view_id}/generate")
@@ -639,7 +642,8 @@ async def generate_location_view(project: str, view_id: str,
             view_id, expected_revision=req.expected_revision,
             candidate_count=req.candidate_count, seed=req.seed,
             reference_view_ids=req.reference_view_ids,
-            size_tier=req.size_tier, ratio=req.ratio)
+            size_tier=req.size_tier, ratio=req.ratio,
+            agnes_client=deps.resolve_image_client(req.image_provider))
         _raise_for_receipt(receipt)
         return receipt
     except SceneSystemSchemaError as e:
@@ -864,6 +868,8 @@ class GenerateSceneInstanceViewRequest(BaseModel):
     include_peer: bool = True
     size_tier: str = "1K"
     ratio: str = "16:9"
+    # 2026-09-17 验收轮：image provider 覆盖（agnes 默认；sensenova=商汤 u1.5-lite）
+    image_provider: str = "agnes"
 
 
 @router.post("/api/project/{project}/scene-system/scene-instance-views/{sciv_id}/generate")
@@ -874,7 +880,8 @@ async def generate_scene_instance_view(project: str, sciv_id: str,
         receipt = await _visual_service(project).generate_scene_instance_view(
             sciv_id, expected_revision=req.expected_revision,
             candidate_count=req.candidate_count, seed=req.seed,
-            include_peer=req.include_peer, size_tier=req.size_tier, ratio=req.ratio)
+            include_peer=req.include_peer, size_tier=req.size_tier, ratio=req.ratio,
+            agnes_client=deps.resolve_image_client(req.image_provider))
         _raise_for_receipt(receipt)
         return receipt
     except SceneSystemSchemaError as e:
@@ -943,6 +950,80 @@ async def revoke_scene_instance_view(project: str, sciv_id: str,
         return receipt
     except SceneSystemSchemaError as e:
         raise HTTPException(status_code=500, detail=f"scene_system.json 数据错误: {e}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ 实例视图证据流只读端点（generation/review/approval records；S-1/S-8）============
+# 与 LocationView 的同名端点同口径；仅读证据流文件，canonical 零写入。
+@router.get("/api/project/{project}/scene-system/scene-instance-views/{sciv_id}/generations")
+async def read_instance_view_generation_records(project: str, sciv_id: str,
+                                                limit: Optional[int] = Query(default=None)):
+    try:
+        from src.scene_system import generation_records as _gr
+        pdir = get_project_manager().get_project_dir(project)
+        recs = _gr.read_records(pdir, scene_instance_view_id=sciv_id, limit=limit)
+        # P1 §13/§14：附加 computed style 兼容结论（不落盘、不 mutation）——与 views 端点同口径。
+        from src.visual_profile import load_profile_or_none
+        from src.visual_profile.models import (style_compatibility_of_basis,
+                                               VisualProfileSchemaError)
+        try:
+            vp = load_profile_or_none(pdir)
+            cur_fp = None
+            from src.visual_profile.models import visual_profile_fingerprint
+            if vp is not None:
+                cur_fp = visual_profile_fingerprint(vp)
+        except VisualProfileSchemaError:
+            cur_fp = "__unreadable__"
+        for rec in recs:
+            basis = rec.get("basis") or {}
+            if cur_fp == "__unreadable__":
+                rec["style_compatibility"] = {
+                    "style_compatibility": "visual_profile_unreadable",
+                    "generated_before_visual_profile": None,
+                    "visual_profile_fingerprint": basis.get("visual_profile_fingerprint")}
+            else:
+                rec["style_compatibility"] = style_compatibility_of_basis(basis, cur_fp)
+        return {"generation_records": recs}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"项目不存在: {project}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api/project/{project}/scene-system/scene-instance-views/{sciv_id}/reviews")
+async def read_instance_view_review_records(project: str, sciv_id: str,
+                                            limit: Optional[int] = Query(default=None)):
+    try:
+        from src.scene_system.instance_view_review import (
+            read_instance_view_review_records as _impl)
+        recs = _impl(get_project_manager().get_project_dir(project),
+                     scene_instance_view_id=sciv_id)
+        if limit is not None and limit >= 0:
+            recs = recs[-limit:]
+        return {"review_records": recs}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"项目不存在: {project}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api/project/{project}/scene-system/scene-instance-views/{sciv_id}/approvals")
+async def read_instance_view_approval_records(project: str, sciv_id: str):
+    try:
+        from src.scene_system import generation_records as _gr
+        pdir = get_project_manager().get_project_dir(project)
+        recs = _gr.read_records(pdir, scene_instance_view_id=sciv_id,
+                                path=_gr.approval_records_path(pdir))
+        return {"approval_records": recs}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"项目不存在: {project}")
     except HTTPException:
         raise
     except Exception as e:

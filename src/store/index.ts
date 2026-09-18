@@ -2,11 +2,12 @@ import { defineStore } from 'pinia';
 import { ref, reactive } from 'vue';
 import { apiClient } from '@/api';
 import type { Scene, Character } from '@/api';
-import { createDiscreteApi, darkTheme } from 'naive-ui';
+import { createDiscreteApi } from 'naive-ui';
+import { discreteConfigProviderProps } from '@/styles/naiveTheme';
 
 // 全局通知（Naive UI discrete message，支持队列/手动关闭，替代单 ref 通知）
 const { message: naiveMessage } = createDiscreteApi(['message'], {
-  configProviderProps: { theme: darkTheme },
+  configProviderProps: discreteConfigProviderProps,
 });
 
 export const useProjectStore = defineStore('project', () => {

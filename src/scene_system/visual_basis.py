@@ -217,7 +217,8 @@ def compute_location_visual_basis(project_dir, doc: SceneSystemDocument,
 
     domain_prompt = build_location_view_prompt(
         location, anchors, layout, view,
-        has_references=bool(reference_selection.get("selected")))
+        has_references=bool(reference_selection.get("selected")),
+        reference_view_ids=list(reference_selection.get("reference_view_ids") or []))
     from src.visual_profile.compiler import append_style_instruction
     from src.visual_profile.models import (profile_snapshot,
                                            visual_profile_fingerprint)
@@ -239,7 +240,9 @@ def compute_location_visual_basis(project_dir, doc: SceneSystemDocument,
         "input_budget": dict(reference_selection.get("input_budget") or {}),
         "candidate_count": candidate_count,
         "seed": seed,
-        "model": {"provider": "agnes", "model_id": model_id,
+        "model": {"provider": ("sensenova" if str(model_id).startswith("sensenova")
+                               else "agnes"),
+                  "model_id": model_id,
                   "size_tier": size_tier, "ratio": ratio},
         "prompt": prompt,
     }

@@ -10,6 +10,7 @@
         <button v-for="t in PROJECT_TABS" :key="t.key" :class="{ active: tab === t.key }" @click="tab = t.key">{{ t.label }}</button>
       </nav>
       <span v-else class="shared-hint">跨项目复用母版（Publish → Shared / Import → Project snapshot，修改互不污染）</span>
+      <span class="spacer"></span>
       <span class="proj-name">{{ projectName }}</span>
     </header>
 
@@ -18,389 +19,252 @@
       <button class="dismiss" @click="errorMsg = ''">×</button>
     </div>
 
-    <!-- ================= 项目 / 角色（+Look 工作区） ================= -->
-    <section v-if="scope === 'project' && tab === 'characters'" class="split">
-      <aside class="side-list">
-        <div class="side-head">
-          <span>角色（Click 查看 Look）</span>
-          <button class="mini" @click="publishSelectedCharacter" :disabled="!selectedCharacter">发布此角色</button>
-        </div>
-        <button v-for="c in characters" :key="c.name" class="side-item" :class="{ active: selectedCharacter === c.name }" @click="selectCharacter(c.name)">
-          {{ c.name }}<span class="sub">{{ (c.views && Object.keys(c.views).length) || 0 }} 视图</span>
+    <!-- ================= 角色（卡片 → 角色工作台弹窗） ================= -->
+    <section v-if="scope === 'project' && tab === 'characters'" class="tab-surface">
+      <div class="surface-head">
+        <h3>角色 <span class="count mono-num">{{ characters.length }}</span></h3>
+        <span class="meta">点击卡片打开角色工作台（身份 · 三视图 · Looks · 组合参考）</span>
+        <span class="spacer"></span>
+        <button class="btn btn-quiet btn-sm" :disabled="!characters.length" @click="openDesignStudio(null)">AI 批量设计</button>
+        <button class="btn btn-quiet btn-sm" @click="openLibrary">角色库</button>
+        <button class="btn btn-primary btn-sm" :disabled="charactersLocked" @click="showAddDialog = true">＋ 新建角色</button>
+      </div>
+
+      <div class="card-grid" v-if="characters.length">
+        <button v-for="c in characters" :key="c.name" class="char-card" @click="openWorkbench(c.name)">
+          <span class="char-avatar">
+            <img v-if="avatarUrl(c.name)" :src="avatarUrl(c.name)" alt="" />
+            <span v-else class="char-avatar-ph">{{ c.name.slice(0, 1) }}</span>
+          </span>
+          <span class="char-info">
+            <span class="char-name">{{ c.name }}<span class="ai-mark" v-if="designNeedsAi(c.name)" title="尚未应用 AI 设定">AI</span></span>
+            <span class="char-status"><span class="dot" :class="statusDot(c)"></span>{{ statusText(c) }}</span>
+            <span class="char-meta">视图 {{ (c.views && Object.keys(c.views).length) || 0 }} · {{ descSnippet(c) }}</span>
+          </span>
         </button>
-        <p v-if="!characters.length" class="empty">项目还没有角色（去「角色管理」页创建）</p>
-      </aside>
-
-      <div class="main-area">
-        <div class="panel-head">
-          <h3>{{ selectedCharacter ? `${selectedCharacter} · Looks` : 'Looks' }}</h3>
-          <button class="mini primary" :disabled="!selectedCharacter" @click="showCreateLook = !showCreateLook">＋ 新建 Look</button>
-        </div>
-        <form v-if="showCreateLook && selectedCharacter" class="inline-form" @submit.prevent="createLookAction">
-          <input v-model="newLook.label" placeholder="显示名（如 Alice · Black Coat）" required />
-          <select v-model="newLook.clothing_id">
-            <option :value="''">无服装</option>
-            <option v-for="cl in clothings" :key="cl.id" :value="cl.id">{{ cl.name }}</option>
-          </select>
-          <input v-model="newLook.appearance_delta" placeholder="外观差异（可选）" />
-          <button class="mini primary" type="submit">创建</button>
-        </form>
-
-        <div class="look-cards">
-          <button v-for="lk in looks" :key="lk.id" class="look-card" :class="{ active: selectedLook?.look_id === lk.id }" @click="openLook(lk.id)">
-            <img v-if="lookCoverUrl(lk)" :src="lookCoverUrl(lk)" class="cover" />
-            <div v-else class="cover placeholder">无图</div>
-            <span class="look-name">{{ lk.name || '(未命名)' }}</span>
-            <span class="badges">
-              <em :class="'gs-' + lk.generation_status">{{ lk.generation_status }}</em>
-              <em :class="'as-' + lk.status">{{ lk.status }}</em>
-            </span>
-          </button>
-          <p v-if="selectedCharacter && !looks.length" class="empty">该角色还没有 Look</p>
-        </div>
-
-        <!-- Look 详情 -->
-        <div v-if="selectedLook" class="look-detail">
-          <div class="detail-head">
-            <h4>{{ selectedLook.label || selectedLook.look_id }}</h4>
-            <span class="meta">服装: {{ selectedLook.clothing?.name || '-' }}</span>
-            <span class="meta">候选 {{ selectedLook.reference_asset_ids?.length || 0 }}</span>
-            <div class="actions">
-              <select v-model="genCount"><option v-for="n in 4" :key="n" :value="n">{{ n }} 张</option></select>
-              <button class="mini primary" :disabled="busy" @click="generateAction">生成候选</button>
-              <button class="mini" :disabled="busy || !selectedLook.reference_asset_ids?.length" @click="reviewAction">视觉审查</button>
-              <button class="mini" :disabled="busy" @click="publishLookAction">发布到共享库</button>
-            </div>
-          </div>
-          <div class="cand-grid">
-            <div v-for="a in selectedLook.reference_assets" :key="a.asset_id" class="cand">
-              <img v-if="assetUrl(a)" :src="assetUrl(a)" class="zoomable" @click.stop="openPreview(assetUrl(a))" />
-              <div v-else-if="a.missing" class="img placeholder missing">缺失</div>
-              <div v-else class="img placeholder">无图</div>
-              <div class="cand-info">
-                <span v-if="selectedLook.cover_asset_id === a.asset_id" class="star" title="封面">★</span>
-                <span v-if="selectedLook.approved_reference_asset_ids?.includes(a.asset_id)" class="badge approved">已批准</span>
-                <span v-else-if="reviewBadge(a) === 'pass'" class="badge pass">审查通过</span>
-                <span v-else-if="reviewBadge(a)" class="badge" :class="reviewBadge(a)">{{ reviewBadge(a) }}</span>
-              </div>
-              <div class="cand-actions">
-                <button v-if="!selectedLook.approved_reference_asset_ids?.includes(a.asset_id)"
-                        class="mini primary" :disabled="busy" :title="reviewBadge(a) === 'pass' ? '' : '需要审查通过后才能批准'"
-                        @click="approveAction(a)">批准</button>
-                <button v-else class="mini" :disabled="busy" @click="revokeAction(a)">撤销批准</button>
-              </div>
-              <p v-if="reviewNote(a)" class="review-note">{{ reviewNote(a) }}</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- ======== Approved Compositions（组合参考，Phase 1C5）======== -->
-        <div class="comp-section">
-          <div class="panel-head">
-            <h4>Approved Compositions（组合参考）</h4>
-            <button class="mini primary" :disabled="!selectedCharacter" @click="showCreateComp = !showCreateComp">＋ 新建组合</button>
-          </div>
-          <p class="hint">Character + Approved Look + 1~3 道具 + 视觉关系 → 提前批准的组合参考图版。是 Reference，不是剧情持有事实。</p>
-          <form v-if="showCreateComp" class="inline-form col" @submit.prevent="createCompAction">
-            <select v-model="newComp.look_id" required>
-              <option value="" disabled>选择 approved Look（必选）</option>
-              <option v-for="lk in approvedLooks" :key="lk.id" :value="lk.id">{{ lk.name || lk.id }}（{{ lk.status }}）</option>
-            </select>
-            <div v-for="(b, i) in newComp.bindings" :key="i" class="binding-row">
-              <select v-model="b.prop_id">
-                <option value="" disabled>道具</option>
-                <option v-for="p in props" :key="p.id" :value="p.id">{{ p.name }}</option>
-              </select>
-              <select v-model="b.relation" title="relation">
-                <option v-for="r in RELATIONS" :key="r" :value="r">{{ r }}</option>
-              </select>
-              <select v-model="b.anchor" title="anchor">
-                <option v-for="an in ANCHORS" :key="an" :value="an">{{ an }}</option>
-              </select>
-              <input v-model="b.visual_state_note" placeholder="状态备注（可选，如 sheathed）" />
-              <button class="mini danger" type="button" @click="newComp.bindings.splice(i, 1)">移除</button>
-            </div>
-            <div class="form-row">
-              <button class="mini" type="button" :disabled="newComp.bindings.length >= 3"
-                      @click="newComp.bindings.push({ prop_id: '', relation: 'held', anchor: 'right_hand', visual_state_note: '' })">＋ 加道具（最多 3）</button>
-              <input v-model="newComp.label" placeholder="显示名（可选）" />
-              <input v-model="newComp.pose_note" placeholder="姿态备注（可选）" />
-              <button class="mini primary" type="submit" :disabled="busy">创建组合</button>
-            </div>
-          </form>
-          <div class="comp-cards">
-            <button v-for="c in compositions" :key="c.id" class="side-item" :class="{ active: selectedComp?.composition_id === c.id }" @click="openComp(c.id)">
-              {{ c.name || '(未命名)' }}<span class="sub">{{ c.relationship_summary }}</span>
-            </button>
-            <p v-if="selectedCharacter && !compositions.length" class="empty">该角色还没有组合参考（先批准 Look 与道具参考图）</p>
-          </div>
-
-          <div v-if="selectedComp" class="look-detail">
-            <div class="detail-head">
-              <h4>{{ selectedComp.label || selectedComp.composition_id }}</h4>
-              <span class="meta">Look: {{ selectedComp.look?.label || selectedComp.look_id }}</span>
-              <span v-for="b in selectedComp.prop_bindings_resolved" :key="b.prop_id" class="meta">
-                {{ b.prop?.name || b.prop_id }} · {{ b.relation }} @ {{ b.anchor }}
-              </span>
-              <div class="actions">
-                <select v-model="compGenCount"><option v-for="n in 4" :key="n" :value="n">{{ n }} 张</option></select>
-                <button class="mini primary" :disabled="busy" @click="generateCompAction">生成候选</button>
-                <button class="mini" :disabled="busy || !selectedComp.reference_asset_ids?.length" @click="reviewCompAction">视觉审查</button>
-                <button class="mini" :disabled="busy" @click="publishCompAction">发布到共享库</button>
-              </div>
-            </div>
-            <div class="cand-grid">
-              <div v-for="a in selectedComp.reference_assets" :key="a.asset_id" class="cand">
-                <img v-if="assetUrl(a)" :src="assetUrl(a)" class="zoomable" @click.stop="openPreview(assetUrl(a))" />
-                <div v-else-if="a.missing" class="img placeholder missing">缺失</div>
-                <div v-else class="img placeholder">无图</div>
-                <div class="cand-info">
-                  <span v-if="selectedComp.cover_asset_id === a.asset_id" class="star" title="封面">★</span>
-                  <span v-if="selectedComp.approved_reference_asset_ids?.includes(a.asset_id)" class="badge approved">已批准</span>
-                  <span v-else-if="compReviewBadge(a)" class="badge" :class="compReviewBadge(a)">{{ compReviewBadge(a) }}</span>
-                </div>
-                <div v-if="compReview(a)" class="dims">
-                  <em v-for="d in COMP_DIMS" :key="d.k">{{ d.label }}: {{ compReview(a)[d.k] || '?' }}</em>
-                </div>
-                <div v-for="pb in compReview(a)?.per_binding || []" :key="pb.prop_id" class="binding-review">
-                  {{ pb.prop_id }}: 对象 {{ pb.object_correct || '?' }} / 持有 {{ pb.holder_correct || '?' }} / 位置 {{ pb.anchor_correct || '?' }} / {{ pb.visibility }}
-                </div>
-                <p v-if="compReview(a)?.summary" class="review-note">{{ compReview(a).summary }}</p>
-                <div class="cand-actions">
-                  <button v-if="!selectedComp.approved_reference_asset_ids?.includes(a.asset_id)"
-                          class="mini primary" :disabled="busy"
-                          :title="compReviewBadge(a) === 'pass' ? '' : '需要六维度审查通过后才能批准'"
-                          @click="approveCompAction(a)">批准</button>
-                  <button v-else class="mini" :disabled="busy" @click="revokeCompAction(a)">撤销批准</button>
-                </div>
-              </div>
-            </div>
-          </div>
+      </div>
+      <div v-else class="guide">
+        <div class="guide-title">创建第一个角色</div>
+        <div class="guide-desc">输入名称与外观描述，或用 AI 从剧本整理出角色，<br />再由一张设定图裁剪出正 / 侧 / 背三视图。</div>
+        <div class="guide-actions">
+          <button class="btn btn-primary" @click="showAddDialog = true">+ 新建角色</button>
+          <button class="btn btn-outline" @click="openLibrary">从角色库导入</button>
         </div>
       </div>
     </section>
 
-    <!-- ================= 项目 / 服装 ================= -->
-    <section v-if="scope === 'project' && tab === 'clothings'" class="split">
-      <aside class="side-list">
-        <div class="side-head"><span>服装</span><button class="mini primary" @click="showCreateClothing = !showCreateClothing">＋ 新建</button></div>
-        <form v-if="showCreateClothing" class="inline-form col" @submit.prevent="createClothingAction">
-          <input v-model="newClothing.name" placeholder="名称（如 Black Coat）" required />
-          <input v-model="newClothing.description" placeholder="描述" />
-          <button class="mini primary" type="submit">创建</button>
-        </form>
-        <button v-for="cl in clothings" :key="cl.id" class="side-item" :class="{ active: selectedClothing?.clothing_id === cl.id }" @click="openClothing(cl.id)">
-          {{ cl.name }}<span class="sub">{{ cl.relationship_summary }}</span>
-        </button>
-        <p v-if="!clothings.length" class="empty">还没有服装</p>
-      </aside>
-      <div v-if="selectedClothing" class="main-area">
-        <div class="detail-head">
-          <h4>{{ selectedClothing.name }}</h4>
-          <span class="meta">被 {{ selectedClothing.used_by_looks?.length || 0 }} 个 Look 引用</span>
-          <div class="actions">
-            <button class="mini" @click="renameClothingAction">重命名</button>
-            <button class="mini" :disabled="busy" @click="publishClothingAction">发布到共享库</button>
-            <button class="mini danger" :disabled="busy" @click="deleteClothingAction">删除</button>
-          </div>
-        </div>
-        <p class="desc">{{ selectedClothing.description }} {{ selectedClothing.design_traits }}</p>
-        <div class="ref-row">
-          <div v-for="a in selectedClothing.reference_assets" :key="a.asset_id" class="cand small">
-            <img v-if="assetUrl(a)" :src="assetUrl(a)" class="zoomable" @click.stop="openPreview(assetUrl(a))" />
-            <div v-else class="img placeholder">无图</div>
-            <button class="mini danger" :disabled="busy" @click="detachClothingRef(a)">解绑</button>
-          </div>
-        </div>
-        <form class="inline-form" @submit.prevent="attachClothingRef">
-          <input v-model="newRef.local" placeholder="项目内相对路径（如 o/coat.png）或留空用 URL" />
-          <input v-model="newRef.url" placeholder="或公网 URL" />
-          <button class="mini primary" type="submit" :disabled="busy">注册并绑定参考图</button>
-        </form>
+    <!-- ================= 服装（卡片 → 详情弹窗） ================= -->
+    <section v-if="scope === 'project' && tab === 'clothings'" class="tab-surface">
+      <div class="surface-head">
+        <h3>服装 <span class="count mono-num">{{ clothings.length }}</span></h3>
+        <span class="meta">点击卡片查看详情、参考图与发布</span>
+        <span class="spacer"></span>
+        <button class="btn btn-primary btn-sm" @click="showCreateClothing = !showCreateClothing">＋ 新建服装</button>
       </div>
-      <p v-else class="empty main-area">选择左侧服装查看详情</p>
+      <form v-if="showCreateClothing" class="create-form" @submit.prevent="createClothingAction">
+        <input v-model="newClothing.name" placeholder="名称（如 Black Coat）" required />
+        <input v-model="newClothing.description" placeholder="描述（可选）" />
+        <button class="btn btn-sm btn-primary" type="submit" :disabled="busy">创建</button>
+      </form>
+      <div class="card-grid" v-if="clothings.length">
+        <button v-for="cl in clothings" :key="cl.id" class="asset-card" @click="openClothing(cl.id)">
+          <span class="asset-name">{{ cl.name }}</span>
+          <span class="asset-sub">{{ cl.relationship_summary || '未被引用' }}</span>
+          <span class="asset-meta">被 {{ cl.used_by_looks?.length || 0 }} 个 Look 引用</span>
+        </button>
+      </div>
+      <p v-else class="tab-empty">还没有服装——服装给 Look 提供一致性参考。</p>
     </section>
 
-    <!-- ================= 项目 / 其他（道具） ================= -->
-    <section v-if="scope === 'project' && tab === 'props'" class="split">
-      <aside class="side-list">
-        <div class="side-head"><span>道具（Prop）</span><button class="mini primary" @click="showCreateProp = !showCreateProp">＋ 新建</button></div>
-        <form v-if="showCreateProp" class="inline-form col" @submit.prevent="createPropAction">
-          <input v-model="newProp.name" placeholder="名称（如 Lantern）" required />
-          <input v-model="newProp.description" placeholder="描述" />
-          <button class="mini primary" type="submit">创建</button>
-        </form>
-        <button v-for="p in props" :key="p.id" class="side-item" :class="{ active: selectedProp?.prop_id === p.id }" @click="openProp(p.id)">
-          {{ p.name }}<span class="sub">{{ p.relationship_summary }}</span>
-        </button>
-        <p v-if="!props.length" class="empty">还没有道具</p>
-      </aside>
-      <div v-if="selectedProp" class="main-area">
-        <div class="detail-head">
-          <h4>{{ selectedProp.name }}</h4>
-          <div class="actions">
-            <button class="mini" :disabled="busy || !selectedProp.reference_asset_ids?.length" @click="reviewPropAction">视觉审查参考图</button>
-            <button class="mini" @click="renamePropAction">重命名</button>
-            <button class="mini danger" :disabled="busy" @click="deletePropAction">删除</button>
-          </div>
-        </div>
-        <p class="desc">{{ selectedProp.description }}</p>
-        <p class="hint">组合参考（Composition）只使用「已批准」的道具参考图——先审查通过再批准。</p>
-        <div class="ref-row">
-          <div v-for="a in selectedProp.reference_assets" :key="a.asset_id" class="cand small">
-            <img v-if="assetUrl(a)" :src="assetUrl(a)" class="zoomable" @click.stop="openPreview(assetUrl(a))" />
-            <div v-else class="img placeholder">无图</div>
-            <div class="cand-info">
-              <span v-if="selectedProp.cover_asset_id === a.asset_id" class="star" title="封面">★</span>
-              <span v-if="selectedProp.approved_reference_asset_ids?.includes(a.asset_id)" class="badge approved">已批准</span>
-              <span v-else-if="propReviewBadge(a)" class="badge" :class="propReviewBadge(a)">{{ propReviewBadge(a) }}</span>
-            </div>
-            <p v-if="propReviewNote(a)" class="review-note">{{ propReviewNote(a) }}</p>
-            <div class="cand-actions">
-              <button v-if="!selectedProp.approved_reference_asset_ids?.includes(a.asset_id)"
-                      class="mini primary" :disabled="busy"
-                      :title="propReviewBadge(a) === 'pass' ? '' : '需要审查通过后才能批准'"
-                      @click="approvePropRefAction(a)">批准</button>
-              <button v-else class="mini" :disabled="busy" @click="revokePropRefAction(a)">撤销批准</button>
-              <button class="mini danger" :disabled="busy" @click="detachPropRef(a)">解绑</button>
-            </div>
-          </div>
-        </div>
-        <form class="inline-form" @submit.prevent="attachPropRef">
-          <input v-model="newRef.local" placeholder="项目内相对路径或留空用 URL" />
-          <input v-model="newRef.url" placeholder="或公网 URL" />
-          <button class="mini primary" type="submit" :disabled="busy">注册并绑定参考图</button>
-        </form>
+    <!-- ================= 道具（卡片 → 详情弹窗） ================= -->
+    <section v-if="scope === 'project' && tab === 'props'" class="tab-surface">
+      <div class="surface-head">
+        <h3>道具 <span class="count mono-num">{{ props.length }}</span></h3>
+        <span class="meta">点击卡片查看参考图、审查与批准</span>
+        <span class="spacer"></span>
+        <button class="btn btn-primary btn-sm" @click="showCreateProp = !showCreateProp">＋ 新建道具</button>
       </div>
-      <p v-else class="empty main-area">选择左侧道具查看详情</p>
+      <form v-if="showCreateProp" class="create-form" @submit.prevent="createPropAction">
+        <input v-model="newProp.name" placeholder="名称（如 Lantern）" required />
+        <input v-model="newProp.description" placeholder="描述（可选）" />
+        <button class="btn btn-sm btn-primary" type="submit" :disabled="busy">创建</button>
+      </form>
+      <div class="card-grid" v-if="props.length">
+        <button v-for="pt in props" :key="pt.id" class="asset-card" @click="openProp(pt.id)">
+          <span class="asset-name">{{ pt.name }}</span>
+          <span class="asset-sub">{{ pt.relationship_summary || pt.description || ' ' }}</span>
+          <span class="asset-meta">参考图 {{ pt.reference_asset_ids?.length || 0 }} · 已批准 {{ pt.approved_reference_asset_ids?.length || 0 }}</span>
+        </button>
+      </div>
+      <p v-else class="tab-empty">还没有道具——道具参与组合参考（Composition）。</p>
     </section>
 
     <!-- ================= 共享库 ================= -->
-    <section v-if="scope === 'shared'" class="shared-grid">
-      <div class="panel-head wide">
-        <h3>共享库（{{ sharedList.length }}）</h3>
+    <section v-if="scope === 'shared'" class="tab-surface">
+      <div class="surface-head">
+        <h3>共享库 <span class="count mono-num">{{ sharedList.length }}</span></h3>
         <span class="meta">导入会复制副本进当前项目「{{ projectName }}」，origin 记录来源与版本</span>
       </div>
-      <div class="card-grid">
+      <div class="card-grid" v-if="sharedList.length">
         <div v-for="s in sharedList" :key="s.id" class="shared-card">
           <span class="badge kind">{{ s.type }}</span>
           <strong>{{ s.name }}</strong>
-          <span class="meta">v{{ s.version }} · 来自 {{ s.origin_project || '?' }}</span>
-          <span v-if="s.character_snapshot" class="meta">角色: {{ s.character_snapshot.name }}</span>
-          <button class="mini primary" :disabled="busy" @click="importAction(s)">导入到项目</button>
+          <span class="asset-meta">v{{ s.version }} · 来自 {{ s.origin_project || '?' }}</span>
+          <span v-if="s.character_snapshot" class="asset-meta">角色: {{ s.character_snapshot.name }}</span>
+          <button class="btn btn-sm btn-primary" :disabled="busy" @click="importAction(s)">导入到项目</button>
         </div>
-        <p v-if="!sharedList.length" class="empty">共享库为空（在项目资源里点「发布到共享库」）</p>
       </div>
+      <p v-else class="tab-empty">共享库为空（在项目资源里点「发布到共享库」）</p>
     </section>
 
-    <!-- ================= 图片放大预览（lightbox） ================= -->
+    <!-- ================= 角色工作台弹窗 ================= -->
+    <CharacterWorkbenchDialog v-if="wbChar" :project-name="projectName" :character-name="wbChar"
+                              :characters="characters" :clothings="clothings" :prop-options="props"
+                              :doc-ret="docRev" @close="wbChar = ''" @refresh="onWorkbenchRefresh" />
+
+    <!-- ================= 服装 / 道具详情弹窗 ================= -->
+    <ClothingDialog v-if="clothingId" :project-name="projectName" :clothing-id="clothingId"
+                    :doc-ret="docRev" @close="clothingId = ''" @refresh="refreshBase" />
+    <PropDialog v-if="propId" :project-name="projectName" :prop-id="propId"
+                :doc-ret="docRev" @close="propId = ''" @refresh="refreshBase" />
+
+    <!-- ================= 新建角色 ================= -->
+    <div v-if="showAddDialog" class="dlg-overlay" @click.self="showAddDialog = false">
+      <div class="dlg">
+        <div class="dlg-head"><h3>新建角色</h3><button class="dlg-close" @click="showAddDialog = false">✕</button></div>
+        <div class="dlg-body">
+          <label class="dlg-field"><span>名称</span>
+            <input v-model="newCharName" placeholder="角色名" ref="addNameInput" @keyup.enter="addCharacter" />
+          </label>
+          <label class="dlg-field"><span>外观描述（生成用）</span>
+            <textarea v-model="newCharDesc" rows="3" placeholder="如：短发女生，穿米色风衣…"></textarea>
+          </label>
+        </div>
+        <div class="dlg-foot">
+          <button class="btn btn-quiet btn-sm" @click="showAddDialog = false">取消</button>
+          <button class="btn btn-primary btn-sm" @click="addCharacter">确认</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= 角色库 ================= -->
+    <div v-if="showLibrary" class="dlg-overlay" @click.self="showLibrary = false">
+      <div class="dlg">
+        <div class="dlg-head"><h3>角色库</h3><button class="dlg-close" @click="showLibrary = false">✕</button></div>
+        <div class="dlg-body">
+          <p class="meta">已保存的角色，点击导入到当前项目</p>
+          <div class="lib-list">
+            <button v-for="char in store.savedCharacters" :key="char.id" class="lib-item" @click="loadFromLibrary(char.id)">
+              <span class="lib-name">{{ char.name }}</span>
+              <span class="meta">{{ formatDate(char.saved_at) }}</span>
+            </button>
+            <p v-if="!store.savedCharacters.length" class="tab-empty">角色库为空（工作台里「存入角色库」后出现）</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= AI 角色设计工作室（批量/深链，全屏层） ================= -->
+    <CharacterDesignStudio v-if="showDesignStudio" :project-name="projectName"
+                           :initial-character-name="designInitialName"
+                           @close="showDesignStudio = false" @applied="onDesignChanged" @generated="onDesignChanged" />
+
+    <!-- ================= 图片放大预览 ================= -->
     <div v-if="previewImg" class="img-lightbox" @click="previewImg = ''">
       <img :src="previewImg" @click.stop />
       <button class="lightbox-close" @click="previewImg = ''">×</button>
-      <span class="lightbox-hint">点击空白处或 × 关闭</span>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, nextTick, watch } from 'vue';
 import { storeToRefs } from 'pinia';
+import { useRoute } from 'vue-router';
 import { useProjectStore } from '@/store';
+import { useProjectEventsStore } from '@/store/projectEvents';
+import { useTopbarStatus } from '@/store/topbarStatus';
 import { apiClient } from '@/api';
+import CharacterWorkbenchDialog from '@/components/resources/CharacterWorkbenchDialog.vue';
+import ClothingDialog from '@/components/resources/ClothingDialog.vue';
+import PropDialog from '@/components/resources/PropDialog.vue';
+import CharacterDesignStudio from '@/components/CharacterDesignStudio.vue';
 
+const route = useRoute();
 const store = useProjectStore();
-const { projectName } = storeToRefs(store);
+const pev = useProjectEventsStore();
+const { characters, projectName } = storeToRefs(store);
 
 const scope = ref<'project' | 'shared'>('project');
 const tab = ref<'characters' | 'clothings' | 'props'>('characters');
 const PROJECT_TABS = [
-  { key: 'characters', label: '角色 / Look' },
+  { key: 'characters', label: '角色' },
   { key: 'clothings', label: '服装' },
-  { key: 'props', label: '其他（道具）' },
+  { key: 'props', label: '道具' },
 ] as const;
 
 const previewImg = ref('');
-function openPreview(url: string) { if (url) previewImg.value = url; }
 const busy = ref(false);
 const errorMsg = ref('');
 function fail(e: any) {
   errorMsg.value = e?.detail ? `${e.error || '错误'}: ${e.detail || e.detail?.detail || ''}` : (e?.message || String(e));
 }
 
-const characters = ref<any[]>([]);
-const looks = ref<any[]>([]);
 const clothings = ref<any[]>([]);
 const props = ref<any[]>([]);
-const selectedCharacter = ref('');
-const selectedLook = ref<any>(null);
-const selectedClothing = ref<any>(null);
-const selectedProp = ref<any>(null);
 const docRev = ref('');
-const genCount = ref(1);
-const showCreateLook = ref(false);
 const showCreateClothing = ref(false);
 const showCreateProp = ref(false);
-const newLook = ref({ label: '', clothing_id: '', appearance_delta: '' });
 const newClothing = ref({ name: '', description: '' });
 const newProp = ref({ name: '', description: '' });
-const newRef = ref({ local: '', url: '' });
 const sharedList = ref<any[]>([]);
 
-// ===== Phase 1C5：Composition + Prop review =====
-const RELATIONS = ['held', 'carried', 'worn', 'attached', 'near'];
-const ANCHORS = ['right_hand', 'left_hand', 'back', 'waist', 'neck', 'beside_character'];
-const COMP_DIMS = [
-  { k: 'character_identity', label: '身份' },
-  { k: 'look_consistency', label: 'Look' },
-  { k: 'prop_fidelity', label: '道具' },
-  { k: 'prop_binding_correctness', label: '绑定' },
-  { k: 'required_prop_visibility', label: '可见' },
-  { k: 'visual_defects', label: '缺陷' },
-] as const;
-const compositions = ref<any[]>([]);
-const selectedComp = ref<any>(null);
-const showCreateComp = ref(false);
-const compGenCount = ref(1);
-const newComp = ref({ look_id: '', label: '', pose_note: '',
-  bindings: [{ prop_id: '', relation: 'held', anchor: 'right_hand', visual_state_note: '' }] as any[] });
-const approvedLooks = computed(() => looks.value.filter((l: any) => l.status === 'approved'));
+// ---- 角色工作台 / 详情弹窗 ----
+const wbChar = ref('');
+const clothingId = ref('');
+const propId = ref('');
+function openWorkbench(name: string) { wbChar.value = name; }
+function openClothing(id: string) { clothingId.value = id; }
+function openProp(id: string) { propId.value = id; }
 
-function propReviewBadge(a: any): string {
-  return selectedProp.value?.latest_reviews?.[a.asset_id]?.overall || '';
+// ---- 角色卡片（store 缓存）----
+function avatarUrl(name: string): string {
+  const views = store.getCharacterCache(name)?.views || {};
+  const src = views.front?.seg || views.front?.raw || views.side?.seg || views.side?.raw || views.back?.seg || views.back?.raw;
+  return src ? `data:image/png;base64,${src}` : '';
 }
-function propReviewNote(a: any): string {
-  return selectedProp.value?.latest_reviews?.[a.asset_id]?.summary || '';
+function doneCount(char: any): number {
+  const views = store.getCharacterCache(char?.name)?.views || {};
+  return (['front', 'side', 'back'] as const).filter(k => views[k]?.seg || views[k]?.raw).length;
 }
-function compReview(a: any): any {
-  return selectedComp.value?.latest_reviews?.[a.asset_id] || null;
+function statusText(char: any): string {
+  const gen = store.getGeneratingState(char.name);
+  if (gen && Object.values(gen.busy || {}).some(Boolean)) return '生成中…';
+  const done = doneCount(char);
+  if (done === 0) return '未生成三视图';
+  return `三视图 ${done}/3`;
 }
-function compReviewBadge(a: any): string {
-  return compReview(a)?.overall || '';
+function statusDot(char: any): string {
+  const gen = store.getGeneratingState(char.name);
+  if (gen && Object.values(gen.busy || {}).some(Boolean)) return '';
+  const done = doneCount(char);
+  if (done === 3) return 'live';
+  if (done === 0) return '';
+  return 'on';
 }
-
-function assetUrl(a: any): string {
-  if (!a || a.missing) return '';
-  const local: string = a.local || '';
-  if (local && !/^https?:/.test(local)) {
-    if (local.startsWith('shared_library/')) return `/${local}`;           // /shared_library 静态挂载
-    return `/projects/${encodeURIComponent(projectName.value)}/${local.replace(/^\/+/, '')}`;
-  }
-  return a.url || '';
+function descSnippet(c: any): string { return (c.description || '').slice(0, 18) || ' '; }
+const designs = ref<Record<string, any>>({});
+function designNeedsAi(name: string): boolean {
+  const d = designs.value[name];
+  return !d || d.status !== 'applied';
 }
-function lookCoverUrl(lk: any): string {
-  if (!lk.cover_asset_id) return '';
-  const hit = (selectedLook.value?.reference_assets || []).find((x: any) => x.asset_id === lk.cover_asset_id);
-  return hit ? assetUrl(hit) : '';
-}
-function reviewBadge(a: any): string {
-  const r = selectedLook.value?.latest_reviews?.[a.asset_id];
-  return r?.overall || '';
-}
-function reviewNote(a: any): string {
-  const r = selectedLook.value?.latest_reviews?.[a.asset_id];
-  return r?.summary || '';
+async function loadDesigns() {
+  if (!projectName.value) { designs.value = {}; return; }
+  try { designs.value = (await apiClient.getCharacterDesigns(projectName.value)).designs || {}; }
+  catch { designs.value = {}; }
 }
 
+// ---- 数据加载 ----
 async function refreshBase() {
   const [chars, cls, prs, list] = await Promise.all([
     apiClient.getProjectCharactersFull(projectName.value).catch(() => ({ characters: [] })),
@@ -408,116 +272,15 @@ async function refreshBase() {
     apiClient.listProps(projectName.value).catch(() => ({ props: [] })),
     apiClient.resourcesList(projectName.value).catch(() => ({ resources: [], document_revision: '' })),
   ]);
-  characters.value = chars.characters || [];
   clothings.value = cls.clothings || [];
   props.value = prs.props || [];
   docRev.value = list.document_revision || '';
-}
-async function refreshLooks() {
-  if (!selectedCharacter.value) { looks.value = []; return; }
-  const r = await apiClient.listLooks(projectName.value, selectedCharacter.value);
-  looks.value = r.looks || [];
-}
-async function refreshCompositions() {
-  if (!selectedCharacter.value) { compositions.value = []; return; }
-  const r = await apiClient.listCompositions(projectName.value, selectedCharacter.value)
-    .catch(() => ({ compositions: [] }));
-  compositions.value = r.compositions || [];
-}
-
-async function selectCharacter(name: string) {
-  selectedCharacter.value = name;
-  selectedLook.value = null;
-  selectedComp.value = null;
-  await refreshLooks();
-  await refreshCompositions();
-}
-async function openLook(id: string) {
-  selectedLook.value = await apiClient.readLook(projectName.value, id);
-}
-async function openClothing(id: string) {
-  selectedClothing.value = await apiClient.readClothing(projectName.value, id);
-}
-async function openProp(id: string) {
-  selectedProp.value = await apiClient.readProp(projectName.value, id);
-}
-
-async function createLookAction() {
-  busy.value = true; errorMsg.value = '';
-  try {
-    const r = await apiClient.createLook(projectName.value, {
-      character_name: selectedCharacter.value,
-      label: newLook.value.label,
-      clothing_id: newLook.value.clothing_id || null,
-      appearance_delta: newLook.value.appearance_delta,
-      expected_document_revision: docRev.value,
-    });
-    newLook.value = { label: '', clothing_id: '', appearance_delta: '' };
-    showCreateLook.value = false;
-    await Promise.all([refreshBase(), refreshLooks()]);
-    await openLook(r.target);
-  } catch (e) { fail(e); } finally { busy.value = false; }
-}
-async function generateAction() {
-  if (!selectedLook.value) return;
-  busy.value = true; errorMsg.value = '';
-  try {
-    await apiClient.generateLookCandidates(projectName.value, selectedLook.value.look_id, {
-      expected_revision: selectedLook.value.revision,
-      candidate_count: genCount.value,
-    });
-    await openLook(selectedLook.value.look_id);
-    await refreshLooks();
-  } catch (e) { fail(e); } finally { busy.value = false; }
-}
-async function reviewAction() {
-  busy.value = true; errorMsg.value = '';
-  try {
-    await apiClient.reviewLookCandidates(projectName.value, selectedLook.value.look_id, {});
-    await openLook(selectedLook.value.look_id);
-  } catch (e) { fail(e); } finally { busy.value = false; }
-}
-async function approveAction(a: any) {
-  busy.value = true; errorMsg.value = '';
-  try {
-    await apiClient.approveLookReference(projectName.value, selectedLook.value.look_id, {
-      asset_id: a.asset_id, expected_revision: selectedLook.value.revision,
-    });
-    await openLook(selectedLook.value.look_id);
-    await refreshLooks();
-  } catch (e) { fail(e); } finally { busy.value = false; }
-}
-async function revokeAction(a: any) {
-  busy.value = true; errorMsg.value = '';
-  try {
-    await apiClient.revokeLookApproval(projectName.value, selectedLook.value.look_id, {
-      asset_id: a.asset_id, expected_revision: selectedLook.value.revision,
-    });
-    await openLook(selectedLook.value.look_id);
-    await refreshLooks();
-  } catch (e) { fail(e); } finally { busy.value = false; }
-}
-async function publishLookAction() {
-  busy.value = true; errorMsg.value = '';
-  try {
-    await apiClient.publishResource(projectName.value, selectedLook.value.look_id);
-  } catch (e: any) {
-    if (e?.error === 'clothing_not_published' && selectedLook.value.clothing_id) {
-      if (confirm('Look 依赖的服装尚未发布，先发布服装再发布 Look？')) {
-        try {
-          await apiClient.publishResource(projectName.value, selectedLook.value.clothing_id);
-          await apiClient.publishResource(projectName.value, selectedLook.value.look_id);
-          errorMsg.value = '';
-        } catch (e2) { fail(e2); }
-      }
-    } else fail(e);
-  } finally { busy.value = false; }
-}
-async function publishSelectedCharacter() {
-  if (!selectedCharacter.value) return;
-  busy.value = true; errorMsg.value = '';
-  try { await apiClient.publishCharacter(projectName.value, selectedCharacter.value); }
-  catch (e) { fail(e); } finally { busy.value = false; }
+  if (!chars.characters?.length) return;
+  // 与 store 角色表对齐（store 是工作台/卡片的数据源）
+  const known = new Set(characters.value.map((c: any) => c.name));
+  for (const c of chars.characters) {
+    if (!known.has(c.name)) characters.value.push({ name: c.name, description: c.description || '', reference_images: {} });
+  }
 }
 
 async function createClothingAction() {
@@ -532,56 +295,6 @@ async function createClothingAction() {
     await refreshBase();
   } catch (e) { fail(e); } finally { busy.value = false; }
 }
-async function renameClothingAction() {
-  const name = prompt('新名称', selectedClothing.value.name);
-  if (!name) return;
-  busy.value = true;
-  try {
-    await apiClient.updateClothing(projectName.value, selectedClothing.value.clothing_id,
-      { name, expected_revision: selectedClothing.value.revision });
-    await refreshBase();
-    await openClothing(selectedClothing.value.clothing_id);
-  } catch (e) { fail(e); } finally { busy.value = false; }
-}
-async function deleteClothingAction() {
-  if (!confirm('删除该服装？（被 Look 引用时会被拒绝）')) return;
-  busy.value = true;
-  try {
-    await apiClient.deleteClothing(projectName.value, selectedClothing.value.clothing_id, selectedClothing.value.revision);
-    selectedClothing.value = null;
-    await refreshBase();
-  } catch (e) { fail(e); } finally { busy.value = false; }
-}
-async function attachClothingRef() {
-  busy.value = true; errorMsg.value = '';
-  try {
-    const reg = await apiClient.registerReferenceAsset(projectName.value, {
-      local: newRef.value.local || null, url: newRef.value.url || null,
-      expected_document_revision: docRev.value,
-    });
-    await apiClient.attachClothingReference(projectName.value, selectedClothing.value.clothing_id, {
-      asset_id: reg.target, expected_revision: selectedClothing.value.revision,
-    });
-    newRef.value = { local: '', url: '' };
-    await refreshBase();
-    await openClothing(selectedClothing.value.clothing_id);
-  } catch (e) { fail(e); } finally { busy.value = false; }
-}
-async function detachClothingRef(a: any) {
-  busy.value = true;
-  try {
-    await apiClient.detachClothingReference(projectName.value, selectedClothing.value.clothing_id,
-      a.asset_id, selectedClothing.value.revision);
-    await refreshBase();
-    await openClothing(selectedClothing.value.clothing_id);
-  } catch (e) { fail(e); } finally { busy.value = false; }
-}
-async function publishClothingAction() {
-  busy.value = true; errorMsg.value = '';
-  try { await apiClient.publishResource(projectName.value, selectedClothing.value.clothing_id); }
-  catch (e) { fail(e); } finally { busy.value = false; }
-}
-
 async function createPropAction() {
   busy.value = true; errorMsg.value = '';
   try {
@@ -593,168 +306,6 @@ async function createPropAction() {
     showCreateProp.value = false;
     await refreshBase();
   } catch (e) { fail(e); } finally { busy.value = false; }
-}
-async function renamePropAction() {
-  const name = prompt('新名称', selectedProp.value.name);
-  if (!name) return;
-  busy.value = true;
-  try {
-    await apiClient.updateProp(projectName.value, selectedProp.value.prop_id,
-      { name, expected_revision: selectedProp.value.revision });
-    await refreshBase();
-    await openProp(selectedProp.value.prop_id);
-  } catch (e) { fail(e); } finally { busy.value = false; }
-}
-async function deletePropAction() {
-  if (!confirm('删除该道具？')) return;
-  busy.value = true;
-  try {
-    await apiClient.deleteProp(projectName.value, selectedProp.value.prop_id, selectedProp.value.revision);
-    selectedProp.value = null;
-    await refreshBase();
-  } catch (e) { fail(e); } finally { busy.value = false; }
-}
-async function attachPropRef() {
-  busy.value = true; errorMsg.value = '';
-  try {
-    const reg = await apiClient.registerReferenceAsset(projectName.value, {
-      local: newRef.value.local || null, url: newRef.value.url || null,
-      expected_document_revision: docRev.value,
-    });
-    await apiClient.attachPropReference(projectName.value, selectedProp.value.prop_id, {
-      asset_id: reg.target, expected_revision: selectedProp.value.revision,
-    });
-    newRef.value = { local: '', url: '' };
-    await refreshBase();
-    await openProp(selectedProp.value.prop_id);
-  } catch (e) { fail(e); } finally { busy.value = false; }
-}
-async function detachPropRef(a: any) {
-  busy.value = true;
-  try {
-    await apiClient.detachPropReference(projectName.value, selectedProp.value.prop_id,
-      a.asset_id, selectedProp.value.revision);
-    await refreshBase();
-    await openProp(selectedProp.value.prop_id);
-  } catch (e) { fail(e); } finally { busy.value = false; }
-}
-
-// ===== Phase 1C5 actions =====
-async function reviewPropAction() {
-  if (!selectedProp.value) return;
-  busy.value = true; errorMsg.value = '';
-  try {
-    await apiClient.reviewPropReference(projectName.value, selectedProp.value.prop_id, {});
-    await openProp(selectedProp.value.prop_id);
-  } catch (e) { fail(e); } finally { busy.value = false; }
-}
-async function approvePropRefAction(a: any) {
-  busy.value = true; errorMsg.value = '';
-  try {
-    await apiClient.approvePropReference(projectName.value, selectedProp.value.prop_id, {
-      asset_id: a.asset_id, expected_revision: selectedProp.value.revision,
-    });
-    await openProp(selectedProp.value.prop_id);
-    await refreshBase();
-  } catch (e) { fail(e); } finally { busy.value = false; }
-}
-async function revokePropRefAction(a: any) {
-  busy.value = true; errorMsg.value = '';
-  try {
-    await apiClient.revokePropApproval(projectName.value, selectedProp.value.prop_id, {
-      asset_id: a.asset_id, expected_revision: selectedProp.value.revision,
-    });
-    await openProp(selectedProp.value.prop_id);
-    await refreshBase();
-  } catch (e) { fail(e); } finally { busy.value = false; }
-}
-async function openComp(id: string) {
-  selectedComp.value = await apiClient.readComposition(projectName.value, id);
-}
-async function createCompAction() {
-  busy.value = true; errorMsg.value = '';
-  try {
-    const bindings = newComp.value.bindings
-      .filter((b: any) => b.prop_id)
-      .map((b: any) => ({ prop_id: b.prop_id, relation: b.relation, anchor: b.anchor,
-                          visual_state_note: b.visual_state_note || '' }));
-    const r = await apiClient.createComposition(projectName.value, {
-      character_name: selectedCharacter.value,
-      look_id: newComp.value.look_id,
-      prop_bindings: bindings,
-      label: newComp.value.label,
-      pose_note: newComp.value.pose_note,
-      expected_document_revision: docRev.value,
-    });
-    showCreateComp.value = false;
-    newComp.value = { look_id: '', label: '', pose_note: '',
-      bindings: [{ prop_id: '', relation: 'held', anchor: 'right_hand', visual_state_note: '' }] };
-    await refreshBase();
-    await refreshCompositions();
-    await openComp(r.target);
-  } catch (e) { fail(e); } finally { busy.value = false; }
-}
-async function generateCompAction() {
-  if (!selectedComp.value) return;
-  busy.value = true; errorMsg.value = '';
-  try {
-    await apiClient.generateCompositionCandidates(projectName.value, selectedComp.value.composition_id, {
-      expected_revision: selectedComp.value.revision,
-      candidate_count: compGenCount.value,
-    });
-    await openComp(selectedComp.value.composition_id);
-    await refreshCompositions();
-  } catch (e) { fail(e); } finally { busy.value = false; }
-}
-async function reviewCompAction() {
-  if (!selectedComp.value) return;
-  busy.value = true; errorMsg.value = '';
-  try {
-    await apiClient.reviewCompositionCandidates(projectName.value, selectedComp.value.composition_id, {});
-    await openComp(selectedComp.value.composition_id);
-  } catch (e) { fail(e); } finally { busy.value = false; }
-}
-async function approveCompAction(a: any) {
-  busy.value = true; errorMsg.value = '';
-  try {
-    await apiClient.approveCompositionCandidate(projectName.value, selectedComp.value.composition_id, {
-      asset_id: a.asset_id, expected_revision: selectedComp.value.revision,
-    });
-    await openComp(selectedComp.value.composition_id);
-    await refreshCompositions();
-  } catch (e) { fail(e); } finally { busy.value = false; }
-}
-async function revokeCompAction(a: any) {
-  busy.value = true; errorMsg.value = '';
-  try {
-    await apiClient.revokeCompositionApproval(projectName.value, selectedComp.value.composition_id, {
-      asset_id: a.asset_id, expected_revision: selectedComp.value.revision,
-    });
-    await openComp(selectedComp.value.composition_id);
-    await refreshCompositions();
-  } catch (e) { fail(e); } finally { busy.value = false; }
-}
-async function publishCompAction() {
-  if (!selectedComp.value) return;
-  busy.value = true; errorMsg.value = '';
-  try {
-    await apiClient.publishResource(projectName.value, selectedComp.value.composition_id);
-  } catch (e: any) {
-    if (e?.error === 'dependency_not_published' && Array.isArray(e?.missing_dependencies)) {
-      const prio: Record<string, number> = { character: 0, clothing: 1, prop: 2, look: 3 };
-      const deps = [...e.missing_dependencies].sort((a: any, b: any) => (prio[a.kind] ?? 9) - (prio[b.kind] ?? 9));
-      if (confirm(`组合依赖尚未发布（${deps.map((d: any) => `${d.kind}:${d.id}`).join('、')}）。\n按顺序自动发布全部依赖，然后发布组合？`)) {
-        try {
-          for (const d of deps) {
-            if (d.kind === 'character') await apiClient.publishCharacter(projectName.value, d.id);
-            else await apiClient.publishResource(projectName.value, d.id);
-          }
-          await apiClient.publishResource(projectName.value, selectedComp.value.composition_id);
-          errorMsg.value = '';
-        } catch (e2) { fail(e2); }
-      }
-    } else fail(e);
-  } finally { busy.value = false; }
 }
 
 async function switchShared() {
@@ -774,85 +325,224 @@ async function importAction(s: any) {
   } catch (e) { fail(e); } finally { busy.value = false; }
 }
 
-onMounted(refreshBase);
+// ---- 新建角色 / 角色库（并入自原角色页）----
+const showAddDialog = ref(false);
+const showLibrary = ref(false);
+const newCharName = ref('');
+const newCharDesc = ref('');
+const addNameInput = ref<HTMLInputElement | null>(null);
+watch(showAddDialog, (v) => { if (v) nextTick(() => addNameInput.value?.focus()); });
+
+async function addCharacter() {
+  if (charactersLocked.value) { store.showNotification('Agent 正在修改角色，请稍候', 'info'); return; }
+  if (!newCharName.value.trim()) { store.showNotification('请输入角色名称', 'error'); return; }
+  if (!newCharDesc.value.trim()) { store.showNotification('请输入角色描述', 'error'); return; }
+  const name = newCharName.value.trim();
+  const description = newCharDesc.value.trim();
+  try {
+    await apiClient.bindCharacterToProject(projectName.value, { name, description, views: {} });
+    characters.value.push({ name, description, reference_images: {} });
+    newCharName.value = ''; newCharDesc.value = '';
+    showAddDialog.value = false;
+    openWorkbench(name);
+  } catch (e: any) { store.showNotification(`创建失败: ${e.message}`, 'error'); }
+}
+
+async function openLibrary() { await store.loadSavedCharacters(); showLibrary.value = true; }
+async function loadFromLibrary(characterId: string) {
+  const result = await store.loadSavedCharacter(characterId);
+  if (!result) return;
+  try {
+    await apiClient.bindCharacterToProject(projectName.value, {
+      name: result.name, description: result.description, views: result.views,
+    });
+    const existing = characters.value.find((c: any) => c.name === result.name);
+    if (!existing) characters.value.push({ name: result.name, description: result.description, reference_images: {} });
+    store.cacheCharacterState(result.name, result.description, result.views);
+    showLibrary.value = false;
+    openWorkbench(result.name);
+  } catch (e: any) { store.showNotification(`导入失败: ${e.message}`, 'error'); }
+}
+function formatDate(dateStr: string) {
+  if (!dateStr) return '';
+  return new Date(dateStr).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+// ---- AI 设计工作室（批量 / 深链）----
+const showDesignStudio = ref(false);
+const designInitialName = ref<string | null>(null);
+function openDesignStudio(char: any) {
+  designInitialName.value = char?.name || null;
+  showDesignStudio.value = true;
+}
+function onDesignChanged() {
+  store.loadProjectCharacters(projectName.value);
+  loadDesigns();
+  refreshBase();
+}
+
+function onWorkbenchRefresh() {
+  store.loadProjectCharacters(projectName.value);
+  loadDesigns();
+  refreshBase();
+}
+
+// ---- 角色域只读锁 + 顶栏状态 ----
+const charactersLocked = computed(() => pev.charactersLocked);
+watch(charactersLocked, () => { if (projectName.value) store.loadProjectCharacters(projectName.value); });
+watch(() => pev.charactersVersion, () => {
+  if (projectName.value && pev.charactersLocked) { store.loadProjectCharacters(projectName.value); loadDesigns(); }
+});
+useTopbarStatus('resources', () => (charactersLocked.value
+  ? { text: 'AI 正在修改角色', tone: 'fail' as const }
+  : { text: '已同步', tone: 'idle' as const }));
+
+// ---- 深链：/characters?xxx → /resources?tab=characters&...；?design= 直接开工作台+工作室 ----
+onMounted(async () => {
+  await refreshBase();
+  store.loadProjectCharacters(projectName.value);
+  store.loadSavedCharacters();
+  loadDesigns();
+  const q: any = route.query || {};
+  if (q.tab === 'clothings' || q.tab === 'props') tab.value = q.tab;
+  else tab.value = 'characters';
+  if (q.char && typeof q.char === 'string') {
+    const stop = watch(characters, (list) => {
+      if (list.some((c: any) => c.name === q.char)) { openWorkbench(q.char); stop(); }
+    }, { immediate: true });
+  }
+  if (q.design && typeof q.design === 'string') {
+    designInitialName.value = q.design;
+    const stop = watch(characters, (list) => {
+      if (list.some((c: any) => c.name === q.design)) {
+        openWorkbench(q.design);
+        openDesignStudio({ name: q.design });
+        stop();
+      }
+    }, { immediate: true });
+  }
+});
+
+// 切项目：重载
+watch(projectName, () => {
+  wbChar.value = ''; clothingId.value = ''; propId.value = '';
+  refreshBase();
+  store.loadProjectCharacters(projectName.value);
+  loadDesigns();
+});
 </script>
 
-<style scoped>
-.resources-page { padding: 20px 24px; color: var(--text-1, #e8e8ea); display: flex; flex-direction: column; gap: 14px; }
-.res-header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-.scope-toggle, .type-tabs { display: flex; gap: 4px; background: rgba(128,128,128,.12); border-radius: 8px; padding: 3px; }
-.scope-toggle button, .type-tabs button { border: 0; background: transparent; color: inherit; padding: 5px 14px; border-radius: 6px; cursor: pointer; opacity: .7; }
-.scope-toggle button.active, .type-tabs button.active { background: var(--bg-3, rgba(255,255,255,.14)); opacity: 1; font-weight: 600; }
-.shared-hint { opacity: .6; font-size: 12px; }
-.proj-name { margin-left: auto; opacity: .55; font-size: 13px; }
-.res-error { background: rgba(220,80,80,.14); border: 1px solid rgba(220,80,80,.4); border-radius: 8px; padding: 8px 12px; display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
-.res-error .dismiss { border: 0; background: none; color: inherit; cursor: pointer; font-size: 15px; }
-.split { display: flex; gap: 18px; align-items: flex-start; min-height: 300px; }
-.side-list { width: 260px; flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; }
-.side-head { display: flex; justify-content: space-between; align-items: center; font-size: 13px; opacity: .8; margin-bottom: 4px; }
-.side-item { text-align: left; border: 1px solid rgba(128,128,128,.25); background: transparent; color: inherit; border-radius: 8px; padding: 8px 10px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
-.side-item.active, .look-card.active { border-color: #6ea8ff; box-shadow: 0 0 0 1px #6ea8ff inset; }
-.side-item .sub { font-size: 11px; opacity: .55; }
-.main-area { flex: 1; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.panel-head { display: flex; align-items: center; gap: 12px; }
-.panel-head.wide { justify-content: space-between; }
-.panel-head h3, .detail-head h4 { margin: 0; font-size: 15px; }
-.inline-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; background: rgba(128,128,128,.08); padding: 10px; border-radius: 8px; }
-.inline-form.col { flex-direction: column; align-items: stretch; }
-.inline-form input, .inline-form select, .detail-head select { background: rgba(128,128,128,.12); border: 1px solid rgba(128,128,128,.3); color: inherit; border-radius: 6px; padding: 6px 9px; font-size: 13px; min-width: 0; }
-.inline-form input { flex: 1; }
-.mini { border: 1px solid rgba(128,128,128,.35); background: transparent; color: inherit; border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
-.mini.primary { border-color: #5a8dee; color: #9ec2ff; }
-.mini.danger { border-color: rgba(220,90,90,.6); color: #ff9d9d; }
-.mini:disabled { opacity: .4; cursor: not-allowed; }
-.look-cards { display: flex; gap: 12px; flex-wrap: wrap; }
-.look-card { width: 150px; border: 1px solid rgba(128,128,128,.25); background: transparent; color: inherit; border-radius: 10px; padding: 8px; cursor: pointer; display: flex; flex-direction: column; gap: 6px; }
-.look-card .cover { width: 100%; height: 120px; object-fit: contain; border-radius: 6px; background: rgba(0,0,0,.25); }
-.cover.placeholder, .img.placeholder { display: flex; align-items: center; justify-content: center; opacity: .4; font-size: 12px; }
-.img.placeholder.missing { color: #ff9d9d; }
-.look-name { font-size: 13px; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.badges { display: flex; gap: 4px; }
-.badges em, .badge { font-style: normal; font-size: 10px; padding: 1px 6px; border-radius: 8px; background: rgba(128,128,128,.2); }
-.badge.approved { background: rgba(90,180,90,.25); color: #9fe0a8; }
-.badge.pass { background: rgba(90,160,255,.2); color: #a9c9ff; }
-.badge.needs_fix { background: rgba(230,120,90,.25); color: #ffb59d; }
-.badge.uncertain { background: rgba(220,190,90,.2); color: #ffe6a1; }
-.badge.kind { background: rgba(140,120,255,.2); color: #c9bcff; }
-.gs-generating { color: #ffe6a1; } .gs-failed { color: #ff9d9d; } .gs-ready { color: #9fe0a8; }
-.look-detail { border-top: 1px solid rgba(128,128,128,.2); padding-top: 12px; }
-.detail-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.detail-head .meta { font-size: 12px; opacity: .6; }
-.detail-head .actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
-.cand-grid, .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
-.cand { border: 1px solid rgba(128,128,128,.25); border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
-.cand img, .cand .img { width: 100%; height: 150px; object-fit: contain; border-radius: 6px; background: rgba(0,0,0,.25); }
-.cand.small img, .cand.small .img { height: 96px; }
-.cand-info { display: flex; gap: 6px; align-items: center; min-height: 18px; }
-.star { color: #ffd75e; }
-.cand-actions { display: flex; gap: 6px; }
-.review-note { margin: 0; font-size: 11px; opacity: .6; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.desc { margin: 0; font-size: 13px; opacity: .7; }
-.ref-row { display: flex; gap: 10px; flex-wrap: wrap; }
-.empty { opacity: .5; font-size: 13px; padding: 12px 4px; }
-.shared-card { border: 1px solid rgba(128,128,128,.25); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
-/* Phase 1C5：Composition 区 */
-.comp-section { border-top: 1px solid rgba(128,128,128,.2); margin-top: 6px; padding-top: 12px; display: flex; flex-direction: column; gap: 10px; }
-.hint { margin: 0; font-size: 12px; opacity: .5; }
-.comp-cards { display: flex; gap: 10px; flex-wrap: wrap; }
-.comp-cards .side-item { min-width: 220px; }
-.binding-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.binding-row select, .binding-row input { background: rgba(128,128,128,.12); border: 1px solid rgba(128,128,128,.3); color: inherit; border-radius: 6px; padding: 5px 8px; font-size: 12px; }
-.binding-row input { flex: 1; min-width: 140px; }
-.form-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.form-row input { flex: 1; min-width: 120px; }
-.dims { display: flex; gap: 6px; flex-wrap: wrap; }
-.dims em { font-style: normal; font-size: 10px; opacity: .75; background: rgba(128,128,128,.12); border-radius: 6px; padding: 1px 5px; }
-.binding-review { font-size: 10px; opacity: .65; }
-.badge.held, .badge.comp { background: rgba(140,120,255,.2); color: #c9bcff; }
-.zoomable { cursor: zoom-in; }
-.zoomable:hover { outline: 1px solid #6ea8ff; }
-.img-lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.86); z-index: 9999; display: flex; align-items: center; justify-content: center; cursor: zoom-out; }
-.img-lightbox img { max-width: 92vw; max-height: 92vh; object-fit: contain; border-radius: 8px; box-shadow: 0 8px 60px rgba(0,0,0,.6); cursor: default; }
-.lightbox-close { position: absolute; right: 18px; top: 12px; border: 1px solid rgba(255,255,255,.4); background: transparent; color: #fff; font-size: 20px; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; }
-.lightbox-hint { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; color: rgba(255,255,255,.5); font-size: 12px; }
+<style lang="scss" scoped>
+.resources-page { height: calc(100vh - 52px); display: flex; flex-direction: column; padding: 16px 24px 20px; gap: 14px; }
+.res-header { flex-shrink: 0; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.scope-toggle, .type-tabs { display: flex; gap: 4px; background: var(--bg-hover); border-radius: 8px; padding: 3px; }
+.scope-toggle button, .type-tabs button { border: 0; background: transparent; color: var(--text-secondary); padding: 5px 14px; border-radius: 6px; cursor: pointer; opacity: 0.7;
+  &:hover { opacity: 1; } }
+.scope-toggle button.active, .type-tabs button.active { background: var(--bg-active, var(--bg-hover)); opacity: 1; font-weight: 600; color: var(--text-primary); }
+.shared-hint { font-size: 12px; color: var(--text-faint); }
+.spacer { flex: 1; }
+.proj-name { font-size: 13px; color: var(--text-muted); }
+.res-error { background: rgba(248, 113, 113, 0.12); border: 1px solid rgba(248, 113, 113, 0.4); border-radius: 8px;
+  padding: 8px 12px; display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: #f87171;
+  .dismiss { border: 0; background: none; color: inherit; cursor: pointer; font-size: 15px; } }
+
+.tab-surface { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+.surface-head { flex-shrink: 0; display: flex; align-items: center; gap: 12px;
+  h3 { margin: 0; font-size: 15px; color: var(--text-primary); }
+  .count { color: var(--text-faint); font-weight: 500; } }
+.meta { font-size: 11px; color: var(--text-faint); }
+.mono-num { font-variant-numeric: tabular-nums; font-family: monospace; }
+
+.card-grid { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(216px, 1fr)); gap: 12px; align-content: start; padding-bottom: 8px; }
+
+.char-card {
+  display: flex; align-items: center; gap: 12px; text-align: left;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--bg-surface);
+  padding: 12px; cursor: pointer; transition: border-color 0.15s ease;
+  &:hover { border-color: var(--text-muted); }
+}
+.char-avatar {
+  width: 56px; height: 56px; flex-shrink: 0; border-radius: 10px; overflow: hidden;
+  background: var(--bg-root); border: 1px solid var(--border);
+  img { width: 100%; height: 100%; object-fit: cover; display: block; }
+}
+.char-avatar-ph { display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; font-size: 20px; color: var(--text-faint); }
+.char-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.char-name { font-size: 14px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 6px; }
+.ai-mark { font-size: 10px; border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; color: var(--text-faint); }
+.char-status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
+.char-meta { font-size: 11px; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-faint); flex-shrink: 0;
+  &.live { background: var(--text-primary); } &.on { background: var(--text-secondary); } }
+
+.asset-card {
+  display: flex; flex-direction: column; gap: 6px; text-align: left; align-items: flex-start;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--bg-surface);
+  padding: 14px; cursor: pointer; transition: border-color 0.15s ease;
+  &:hover { border-color: var(--text-muted); }
+}
+.asset-name { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.asset-sub { font-size: 12px; color: var(--text-secondary); line-height: 1.5;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.asset-meta { font-size: 11px; color: var(--text-faint); }
+
+.shared-card {
+  display: flex; flex-direction: column; gap: 6px; align-items: flex-start;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--bg-surface); padding: 14px;
+  strong { font-size: 14px; color: var(--text-primary); } }
+.badge.kind { font-size: 10px; border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; color: var(--text-muted); }
+
+.create-form { flex-shrink: 0; display: flex; gap: 8px; flex-wrap: wrap;
+  input { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text-primary); font-size: 12px; padding: 6px 10px; font-family: inherit;
+    &:focus { outline: none; border-color: var(--border-hover); } } }
+.tab-empty { font-size: 13px; color: var(--text-faint); padding: 20px 4px; }
+
+.guide { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; }
+.guide-title { font-size: 16px; font-weight: 600; color: var(--text-primary); }
+.guide-desc { font-size: 13px; color: var(--text-muted); line-height: 1.8; }
+.guide-actions { display: flex; gap: 10px; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 28px; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px;
+  background: none; color: var(--text-secondary); font-size: 12px; cursor: pointer;
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+  &.btn-sm { height: 26px; padding: 0 10px; font-size: 12px; }
+  &.btn-primary { border: none; background: var(--accent); color: var(--accent-text, #fff); &:hover:not(:disabled) { background: var(--accent-hover); } }
+  &.btn-outline { &:hover:not(:disabled) { border-color: var(--border-hover); color: var(--text-primary); } }
+  &.btn-quiet { border-color: transparent; color: var(--text-muted); &:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); } }
+}
+
+/* 通用小弹窗（新建角色 / 角色库） */
+.dlg-overlay { position: fixed; inset: 0; z-index: 1200; background: rgba(0, 0, 0, 0.6);
+  display: flex; align-items: center; justify-content: center; backdrop-filter: blur(3px); }
+.dlg {
+  width: min(460px, 92vw); max-height: 80vh; background: var(--bg-surface);
+  border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.dlg-head { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 18px; border-bottom: 1px solid var(--border);
+  h3 { margin: 0; font-size: 14px; color: var(--text-primary); } }
+.dlg-close { border: none; background: none; color: var(--text-muted); cursor: pointer; font-size: 14px;
+  width: 26px; height: 26px; border-radius: 6px;
+  &:hover { background: var(--bg-hover); color: var(--text-primary); } }
+.dlg-body { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 18px; display: flex; flex-direction: column; gap: 12px; }
+.dlg-field { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--text-muted);
+  input, textarea { background: var(--bg-root); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text-primary); font-size: 13px; padding: 7px 10px; font-family: inherit; resize: vertical;
+    &:focus { outline: none; border-color: var(--border-hover); } } }
+.dlg-foot { flex-shrink: 0; display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border); }
+.lib-list { display: flex; flex-direction: column; gap: 6px; }
+.lib-item { display: flex; align-items: center; justify-content: space-between; text-align: left;
+  border: 1px solid var(--border); border-radius: 8px; background: none;
+  padding: 9px 12px; cursor: pointer; color: var(--text-secondary); font-size: 13px;
+  &:hover { background: var(--bg-hover); color: var(--text-primary); } }
+.lib-name { font-weight: 600; color: var(--text-primary); }
+
+.img-lightbox { position: fixed; inset: 0; z-index: 1400; background: rgba(0, 0, 0, 0.85);
+  display: flex; align-items: center; justify-content: center; cursor: zoom-out;
+  img { max-width: 90vw; max-height: 90vh; object-fit: contain; }
+  .lightbox-close { position: absolute; right: 18px; top: 14px; border: none; background: none; color: #d4d4d4; font-size: 22px; cursor: pointer; } }
 </style>

@@ -7,10 +7,11 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { apiClient } from '@/api';
 import type { Job, QueueStats } from '@/api';
-import { createDiscreteApi, darkTheme } from 'naive-ui';
+import { createDiscreteApi } from 'naive-ui';
+import { discreteConfigProviderProps } from '@/styles/naiveTheme';
 
 const { message: naiveMessage } = createDiscreteApi(['message'], {
-  configProviderProps: { theme: darkTheme },
+  configProviderProps: discreteConfigProviderProps,
 });
 
 export const useJobStore = defineStore('jobs', () => {

@@ -111,12 +111,13 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
-import { createDiscreteApi, darkTheme } from 'naive-ui';
+import { createDiscreteApi } from 'naive-ui';
+import { discreteConfigProviderProps } from '@/styles/naiveTheme';
 import { apiClient } from '@/api';
 import type { CharacterDesignDraft, CharacterDesignDraftState } from '@/api';
 import { useProjectStore } from '@/store';
 
-const { message, dialog } = createDiscreteApi(['message', 'dialog'], { configProviderProps: { theme: darkTheme } });
+const { message, dialog } = createDiscreteApi(['message', 'dialog'], { configProviderProps: discreteConfigProviderProps });
 const store = useProjectStore();
 
 const props = defineProps<{ projectName: string; initialCharacterName?: string | null }>();

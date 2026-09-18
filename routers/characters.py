@@ -45,6 +45,9 @@ class SingleViewRequest(BaseModel):
     style: str = "anime"      # 风格
     size_tier: str = "1K"
     ratio: str = "2:3"        # 竖图（角色三视图：正面/侧面/背面）
+    # P1 修复：传项目名时把该项目 ProjectVisualProfile 风格指令追加进 prompt
+    # （消除角色链路与 profile-aware 链路的风格锚不一致）
+    project: Optional[str] = None
 
 
 class SegmentOnlyRequest(BaseModel):
@@ -60,6 +63,7 @@ class RegenerateViewRequest(BaseModel):
     size_tier: str = "1K"
     ratio: str = "2:3"        # 竖图（角色三视图：正面/侧面/背面）
     ref_images: list[str] = []   # 参考图 base64 列表
+    project: Optional[str] = None   # P1 修复：项目风格锚定
 
 
 class ChainViewRequest(BaseModel):
@@ -68,6 +72,7 @@ class ChainViewRequest(BaseModel):
     style: str = "anime"
     size_tier: str = "1K"
     ratio: str = "2:3"        # 竖图（角色三视图：正面/侧面/背面）
+    project: Optional[str] = None   # P1 修复：项目风格锚定
 
 
 class SheetViewRequest(BaseModel):
@@ -76,9 +81,28 @@ class SheetViewRequest(BaseModel):
     style: str = "anime"
     size_tier: str = "1K"
     ratio: str = "3:2"        # 横图（设定图：三视角并排）
+    project: Optional[str] = None   # P1 修复：项目风格锚定
 
 
 # ============ prompt 构建 ============
+def _apply_project_style(prompt: str, project_name: Optional[str]) -> str:
+    """P1 修复（2026-09-18）：legacy 角色链路风格锚定——请求带 project 时，
+    把该项目 ProjectVisualProfile 的唯一编译点风格指令追加到 prompt
+    （否则角色 hero 与 Look/场景等 profile-aware 链路风格锚不一致，
+    实测同一角色先写实后国风）。project 未传 / 读取失败 / unspecified → 原样返回。"""
+    if not project_name or not prompt:
+        return prompt
+    try:
+        from deps import get_project_manager
+        pdir = get_project_manager().get_project_dir(project_name)
+        from src.visual_profile import load_profile_or_none
+        from src.visual_profile.compiler import append_style_instruction
+        return append_style_instruction(prompt, load_profile_or_none(pdir))
+    except Exception as e:   # noqa: BLE001
+        logger.warning(f"project 风格指令追加失败（原样返回）: {e}")
+        return prompt
+
+
 def _build_view_prompt(description: str, style: str, view: str) -> str:
     """构建单视角 prompt"""
     base = (
@@ -173,7 +197,8 @@ async def character_generate_view(req: SingleViewRequest):
     """
     agnes = get_agnes_client()
 
-    prompt = _build_view_prompt(req.description, req.style, req.view)
+    prompt = _apply_project_style(
+        _build_view_prompt(req.description, req.style, req.view), req.project)
 
     try:
         result = await agnes.generate_image(
@@ -245,6 +270,7 @@ async def character_regenerate_view(req: RegenerateViewRequest):
     prompt = _build_img2img_prompt(req.description, req.style, req.view)
     if not prompt:
         prompt = _build_view_prompt(req.description, req.style, req.view)
+    prompt = _apply_project_style(prompt, req.project)
 
     # 构建参考图列表（转成白底）
     image_refs = []
@@ -304,7 +330,8 @@ async def character_generate_chain(req: ChainViewRequest):
     try:
         # 1. 生成正面
         steps.append({"step": 1, "action": "生成正面", "status": "processing"})
-        front_prompt = _build_view_prompt(req.description, req.style, "front")
+        front_prompt = _apply_project_style(
+            _build_view_prompt(req.description, req.style, "front"), req.project)
         front_result = await agnes.generate_image(prompt=front_prompt, size_tier=req.size_tier, ratio=req.ratio)
         front_url = front_result["url"]
         async with httpx.AsyncClient(proxy=_AGNES_PROXY) as client:
@@ -321,7 +348,8 @@ async def character_generate_chain(req: ChainViewRequest):
 
         # 3. 生成侧面（正面作参考）
         steps.append({"step": 3, "action": "生成侧面(参考正面)", "status": "processing"})
-        side_prompt = _build_img2img_prompt(req.description, req.style, "side")
+        side_prompt = _apply_project_style(
+            _build_img2img_prompt(req.description, req.style, "side"), req.project)
         side_ref = _transparent_to_white_bg_bytes(front_seg)
         side_result = await agnes.generate_image(
             prompt=side_prompt, size_tier=req.size_tier, ratio=req.ratio, image_refs=[f"data:image/png;base64,{side_ref}"]
@@ -341,7 +369,8 @@ async def character_generate_chain(req: ChainViewRequest):
 
         # 5. 生成背面（正面作参考）
         steps.append({"step": 5, "action": "生成背面(参考正面)", "status": "processing"})
-        back_prompt = _build_img2img_prompt(req.description, req.style, "back")
+        back_prompt = _apply_project_style(
+            _build_img2img_prompt(req.description, req.style, "back"), req.project)
         back_ref = _transparent_to_white_bg_bytes(front_seg)
         back_result = await agnes.generate_image(
             prompt=back_prompt, size_tier=req.size_tier, ratio=req.ratio, image_refs=[f"data:image/png;base64,{back_ref}"]
@@ -406,7 +435,8 @@ async def character_generate_sheet(req: SheetViewRequest):
     try:
         # 1. 生成设定图
         steps.append({"step": 1, "action": "生成设定图", "status": "processing"})
-        prompt = _build_sheet_prompt(req.description, req.style)
+        prompt = _apply_project_style(
+            _build_sheet_prompt(req.description, req.style), req.project)
         sheet_result = await agnes.generate_image(prompt=prompt, size_tier=req.size_tier, ratio=req.ratio)
         sheet_url = sheet_result["url"]
         async with httpx.AsyncClient(proxy=_AGNES_PROXY) as client:

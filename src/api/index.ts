@@ -2398,10 +2398,17 @@ class ApiClient {
     return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/views/${encodeURIComponent(viewId)}/generations?limit=${limit}`);
   }
   async sceneInstanceViewGenerations(projectName: string, scivId: string, limit = 6): Promise<any> {
-    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/scene-instance-views/${encodeURIComponent(scivId)}/generations`).catch(() => ({ generation_records: [] }));
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/scene-instance-views/${encodeURIComponent(scivId)}/generations?limit=${limit}`).catch(() => ({ generation_records: [] }));
+  }
+  async sceneInstanceViewReviews(projectName: string, scivId: string, limit = 5): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/scene-instance-views/${encodeURIComponent(scivId)}/reviews?limit=${limit}`).catch(() => ({ review_records: [] }));
   }
   async sceneViewApprovals(projectName: string, viewId: string): Promise<any> {
     return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/views/${encodeURIComponent(viewId)}/approvals`).catch(() => ({ approval_records: [] }));
+  }
+  // 历史审查记录（用于刷新后恢复"哪些候选已审查通过"→ 决定批准按钮可用性）
+  async sceneViewReviews(projectName: string, viewId: string, limit = 5): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/views/${encodeURIComponent(viewId)}/reviews?limit=${limit}`).catch(() => ({ review_records: [] }));
   }
   async sceneInstanceViewApprovals(projectName: string, scivId: string): Promise<any> {
     return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/scene-instance-views/${encodeURIComponent(scivId)}/approvals`).catch(() => ({ approval_records: [] }));
@@ -2469,6 +2476,69 @@ class ApiClient {
   }
   async sceneRevokeInstanceView(projectName: string, scivId: string, body: any): Promise<any> {
     return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/scene-system/scene-instance-views/${encodeURIComponent(scivId)}/revoke`, { method: 'POST', body: JSON.stringify(body) });
+  }
+
+  // ==================== Sequence Assembly（镜头合成出片；后端 routers/sequences.py）====================
+  async listSequences(projectName: string): Promise<{ sequences: any[] }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/sequences`);
+  }
+  async createSequence(projectName: string, body: {
+    title?: string; scene_id?: string | null;
+    clips: Array<{ shot_id: string; trim_in_ms?: number; trim_out_ms?: number }>;
+  }): Promise<any> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/sequences`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async getSequence(projectName: string, sequenceId: string): Promise<{ sequence: any }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/sequences/${encodeURIComponent(sequenceId)}`);
+  }
+  async updateSequence(projectName: string, sequenceId: string, body: {
+    title?: string; scene_id?: string | null;
+    clips?: Array<{ shot_id: string; trim_in_ms?: number; trim_out_ms?: number }>;
+    expected_revision?: string;
+  }): Promise<any> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/sequences/${encodeURIComponent(sequenceId)}`, { method: 'PUT', body: JSON.stringify(body) });
+  }
+  async deleteSequence(projectName: string, sequenceId: string): Promise<any> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/sequences/${encodeURIComponent(sequenceId)}`, { method: 'DELETE' });
+  }
+  async renderSequence(projectName: string, sequenceId: string): Promise<{ job_id: string; render_version_id: string; status: string }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/sequences/${encodeURIComponent(sequenceId)}/render`, { method: 'POST' });
+  }
+  async listSequenceRenders(projectName: string, sequenceId: string): Promise<{ final_render: string | null; render_versions: any[] }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/sequences/${encodeURIComponent(sequenceId)}/renders`);
+  }
+  async selectSequenceRender(projectName: string, sequenceId: string, versionId: string): Promise<any> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/sequences/${encodeURIComponent(sequenceId)}/renders/select`, { method: 'POST', body: JSON.stringify({ version_id: versionId }) });
+  }
+  async getSequenceFreshness(projectName: string, sequenceId: string, versionId?: string): Promise<any> {
+    const q = versionId ? `?version_id=${encodeURIComponent(versionId)}` : '';
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/sequences/${encodeURIComponent(sequenceId)}/freshness${q}`);
+  }
+
+  // ==================== Shot Production Binding（镜头生产绑定；后端 routers/shot_binding.py）====================
+  // 复用 sceneRequest 的 receipt 解析（transport-only）：ok=False 时抛 {error, detail} 对象
+  async listShotBindings(projectName: string): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/shot-bindings`);
+  }
+  async getShotBinding(projectName: string, shotId: string): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/shot-bindings/${encodeURIComponent(shotId)}`);
+  }
+  async getShotBindingValidity(projectName: string, shotId: string): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/shot-bindings/${encodeURIComponent(shotId)}/validity`);
+  }
+  async createShotBinding(projectName: string, payload: any): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/shot-bindings`, { method: 'POST', body: JSON.stringify(payload) });
+  }
+  async replaceShotBinding(projectName: string, shotId: string, payload: any, expectedBindingRevision: string): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/shot-bindings/${encodeURIComponent(shotId)}`,
+      { method: 'PUT', body: JSON.stringify({ ...payload, expected_binding_revision: expectedBindingRevision }) });
+  }
+  async deleteShotBinding(projectName: string, shotId: string, expectedBindingRevision: string): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/shot-bindings/${encodeURIComponent(shotId)}?expected_binding_revision=${encodeURIComponent(expectedBindingRevision)}`, { method: 'DELETE' });
+  }
+  async refreshShotBinding(projectName: string, shotId: string, expectedBindingRevision: string): Promise<any> {
+    return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/shot-bindings/${encodeURIComponent(shotId)}/refresh`,
+      { method: 'POST', body: JSON.stringify({ expected_binding_revision: expectedBindingRevision }) });
   }
 }
 

@@ -14,12 +14,6 @@
 
     <!-- 主体：左故事段列表 + 右当前故事段 -->
     <div v-else class="board">
-      <!-- 项目级顶部：AI 完整制作（Phase AI-5B，主入口）+ 自动制作完整影片（AI-5A，高级/精确模式）-->
-      <div class="proj-head">
-        <span class="proj-name">{{ projectName }}</span>
-        <button class="ai-full-btn primary" @click="openFullProduction">✨ AI 完整制作</button>
-        <button class="ai-full-btn" @click="openProduction">🎬 自动制作完整影片</button>
-      </div>
       <button v-if="listCollapsed" class="expand-fab" @click="listCollapsed = false" title="展开故事段列表">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6" /></svg>
         <span>故事段</span>
@@ -39,49 +33,78 @@
           :class="{ active: selected?.scene_id === seg.scene_id }"
           @click="selected = seg"
         >
-          <div class="seg-row1">
-            <span class="seg-seq">{{ i + 1 }}</span>
-            <span class="seg-title">{{ seg.summary.trim() ? seg.summary.trim().slice(0, 14) : '未填写故事' }}</span>
-          </div>
-          <div class="seg-row2">
-            <span class="seg-count">{{ shotDone(seg) }}/{{ seg.shots.length }} 镜</span>
-            <img v-if="segThumb(seg)" :src="segThumb(seg)" class="seg-thumb" />
+          <img v-if="segThumb(seg)" :src="segThumb(seg)" class="seg-thumb" />
+          <div class="seg-main">
+            <div class="seg-row1">
+              <span class="seg-seq">{{ i + 1 }}</span>
+              <span class="seg-title">{{ seg.summary.trim() ? seg.summary.trim().slice(0, 14) : '未填写故事' }}</span>
+            </div>
+            <div class="seg-row2">
+              <span class="seg-count">{{ shotDone(seg) }}/{{ seg.shots.length }} 镜</span>
+            </div>
           </div>
         </div>
+        </div>
+        <div class="seg-list-foot">
+          <button class="ai-full-btn primary" @click="openFullProduction">AI 完整制作</button>
+          <button class="ai-full-btn" @click="openProduction">自动制作完整影片</button>
         </div>
       </aside>
 
       <section class="seg-detail" v-if="selected">
         <!-- 2026-08-31：Agent 正在修改分镜时的只读横幅（复用 Project SSE resource.locked） -->
         <div v-if="storyboardLocked" class="agent-lock-banner">
-          🔒 Director 正在修改分镜，页面暂为只读；改动会实时同步进来，完成后自动恢复编辑。
+          Director 正在修改分镜，页面暂为只读；改动会实时同步进来，完成后自动恢复编辑。
         </div>
-        <!-- 故事段顶部：原文(只读) + 角色 + 覆盖 + 返回剧本 -->
+        <!-- 故事段顶部：收成一行（号 + 标题 + 展开箭头 + 操作），原文与角色默认隐藏 -->
         <div class="seg-head">
           <div class="seg-head-top">
             <span class="seg-no">故事段 {{ selected.scene_id }}</span>
+            <span class="seg-head-title">{{ selected.summary.trim() || '未填写故事' }}</span>
+            <button class="icon-btn story-toggle" :class="{ open: segHeadOpen }"
+                    :title="segHeadOpen ? '收起故事原文与角色' : '展开故事原文与角色'"
+                    @click="segHeadOpen = !segHeadOpen">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9" /></svg>
+            </button>
             <div class="seg-head-actions">
               <button class="ai-direct-btn" @click="openDirector">AI 设计分镜</button>
-              <button class="link-btn" @click="askDirectorStory" title="以当前故事段为上下文，打开 Director 对话">Director 对话</button>
-              <button class="ai-direct-btn" @click="openPropose('scene')" title="以当前故事段为 scope 生成 Director 修改提案（经 Workspace/ChangeSet，官方分镜不变）">✂ Director 修改提案</button>
-              <button class="ai-direct-btn"
-                      :disabled="!selected.shots.length"
-                      :title="selected.shots.length ? '' : '请先创建镜头或使用 AI 设计分镜。'"
-                      @click="openPlanner">AI 制作规划</button>
-              <button class="ai-direct-btn"
-                      :disabled="!selected.shots.length"
-                      :title="selected.shots.length ? '' : '请先创建镜头。'"
-                      @click="openAutopilot">自动制作本故事段</button>
-              <button class="link-btn" @click="goScript">返回剧本修改</button>
+              <div class="menu-wrap">
+                <button class="ai-direct-btn menu-trigger" @click.stop="toggleMenu('prod')">
+                  制作
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="6 9 12 15 18 9" /></svg>
+                </button>
+                <div v-if="openMenu === 'prod'" class="menu-pop" @click.stop>
+                  <button class="menu-item"
+                          :disabled="!selected.shots.length"
+                          :title="selected.shots.length ? '' : '请先创建镜头或使用 AI 设计分镜。'"
+                          @click="closeMenus(); openPlanner()">AI 制作规划</button>
+                  <button class="menu-item"
+                          :disabled="!selected.shots.length"
+                          :title="selected.shots.length ? '' : '请先创建镜头。'"
+                          @click="closeMenus(); openAutopilot()">自动制作本故事段</button>
+                </div>
+              </div>
+              <div class="menu-wrap">
+                <button class="icon-btn more-btn" title="更多" @click.stop="toggleMenu('more')">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" /></svg>
+                </button>
+                <div v-if="openMenu === 'more'" class="menu-pop" @click.stop>
+                  <button class="menu-item" title="以当前故事段为上下文，打开 Director 对话" @click="closeMenus(); askDirectorStory()">Director 对话</button>
+                  <button class="menu-item" title="以当前故事段为 scope 生成 Director 修改提案（经 Workspace/ChangeSet，官方分镜不变）" @click="closeMenus(); openPropose('scene')">Director 修改提案</button>
+                  <div class="menu-sep"></div>
+                  <button class="menu-item" @click="closeMenus(); goScript()">返回剧本修改</button>
+                </div>
+              </div>
             </div>
           </div>
-          <p class="seg-story">{{ selected.summary || '（未填写故事）' }}</p>
-          <div class="seg-chars">
-            <span class="seg-chars-label">出场角色：</span>
-            <span v-if="!selected.characters.length" class="muted">无</span>
-            <span v-for="name in selected.characters" :key="name" class="seg-char" :class="{ miss: !charCovered(name) }">
-              {{ name }} {{ charCovered(name) ? '✓' : '⚠' }}
-            </span>
+          <div v-if="segHeadOpen" class="seg-head-body">
+            <p class="seg-story">{{ selected.summary || '（未填写故事）' }}</p>
+            <div class="seg-chars">
+              <span class="seg-chars-label">出场角色：</span>
+              <span v-if="!selected.characters.length" class="muted">无</span>
+              <span v-for="name in selected.characters" :key="name" class="seg-char" :class="{ miss: !charCovered(name) }"
+                    :title="charCovered(name) ? '已在镜头中出现' : '未出现在任何镜头'">{{ name }}</span>
+            </div>
           </div>
         </div>
 
@@ -110,7 +133,7 @@
 
         <!-- AI-6D.1 §14 apply 后：克制成功反馈，明确只改创作版本 -->
         <div v-if="appliedProposal" class="applied-proposal-banner">
-          <span class="apb-ok">✓ 已应用到创作版本</span>
+          <span class="apb-ok">已应用到创作版本</span>
           <span class="apb-sub">官方分镜未变</span>
           <button class="link-btn" @click="openCreativeVersion(appliedProposal.workspace_id)">打开创作版本</button>
           <button class="link-btn" @click="appliedProposal = null">继续查看官方分镜</button>
@@ -125,13 +148,7 @@
 
         <!-- 镜头列表 -->
         <div class="shot-list">
-          <template v-for="(sh, i) in selected.shots" :key="sh.shot_id">
-            <div v-if="i > 0" class="shot-connector" :class="connClass(sh)">
-              <span class="conn-line"></span>
-              <span class="conn-label" v-if="sh.opening_source !== 'independent'">{{ connLabel(sh) }}</span>
-              <span v-else class="conn-label muted">独立</span>
-              <span class="conn-line"></span>
-            </div>
+          <template v-for="sh in selected.shots" :key="sh.shot_id">
           <div
             class="shot-item"
             :class="{ active: selectedShotId === sh.shot_id }"
@@ -150,6 +167,8 @@
               <span class="shot-desc">{{ (sh.description || '').slice(0, 24) || '未填写画面' }}</span>
               <span class="shot-chars" v-if="sh.characters.length">{{ sh.characters.join('、') }}</span>
               <span v-if="sh.opening_source !== 'independent'" class="shot-cont" :class="connClass(sh)">{{ connLabel(sh) }}</span>
+              <span v-if="boundShotIds.has(sh.shot_id)" class="shot-cont"
+                    title="已绑定生产场景参考（生成时使用场景图与角色 Look）">场景</span>
               <span class="shot-status" :class="shotStatusClass(sh)">{{ shotStatusText(sh) }}</span>
               <button class="open-btn" @click="openWorkbench(sh)">打开工作台</button>
             </div>
@@ -350,7 +369,13 @@ interface Segment {
 const segments = ref<Segment[]>([]);
 const selected = ref<Segment | null>(null);
 const listCollapsed = ref(false);
+const segHeadOpen = ref(false);                       // 故事原文与角色默认收起，点标题旁箭头展开
+const openMenu = ref<'prod' | 'more' | null>(null);   // 故事段头「制作▾」「⋯」下拉菜单
+function toggleMenu(m: 'prod' | 'more') { openMenu.value = openMenu.value === m ? null : m; }
+function closeMenus() { openMenu.value = null; }
 const workbenchShot = ref<ShotData | null>(null);
+// 已绑定生产场景参考的镜头（分镜卡角标；Workbench 内绑定/解除后经 @refresh 重取）
+const boundShotIds = ref<Set<string>>(new Set());
 const previewUrl = ref('');
 const previewType = ref<'image' | 'video'>('image');
 const showDirector = ref(false);
@@ -374,6 +399,10 @@ async function load() {
     projectCharacters.value = data.characters || [];
     projectStyleLabel.value = (data.style && data.style.art_style) || '';
     projectRatio.value = (data.style && data.style.aspect_ratio) || '';
+    // 绑定角标（非阻塞；失败静默——角标是辅助信息）
+    apiClient.listShotBindings(projectName.value)
+      .then((r: any) => { boundShotIds.value = new Set(Object.keys(r?.bindings || {})); })
+      .catch(() => {});
     segments.value = (data.scenes || []).map((s: any) => ({
       scene_id: s.scene_id, summary: s.summary || '', characters: s.characters || [], shots: s.shots || [],
     }));
@@ -535,7 +564,7 @@ function openPlanner() {
   showPlanner.value = true;
 }
 function onPlannerApproved() {
-  // 🔴 approve 不改 Shot（opening_source 仍默认 independent），无需 reload。
+  // 注意：approve 不改 Shot（opening_source 仍默认 independent），无需 reload。
   // 正式 opening_source 由 AI-4B Executor 执行时生效。
   showPlanner.value = false;
 }
@@ -657,7 +686,7 @@ watch(() => pev.storyboardVersion, () => {
   if (projectName.value && storyboardLocked.value) load();
 });
 
-function onDocClick() { closeCtxMenu(); }
+function onDocClick() { closeCtxMenu(); closeMenus(); }
 function onKey(e: KeyboardEvent) { if (e.key === 'Escape') closeCtxMenu(); }
 onMounted(() => {
   load();
@@ -670,7 +699,7 @@ onUnmounted(() => {
 });
 watch(projectName, () => { selected.value = null; load(); });
 // AI-6C：切故事段时清空 shot 级 selection；AI-6D：并恢复该故事段的 active Proposal
-watch(selected, () => { selectedShotId.value = null; restoreProposal(); });
+watch(selected, () => { selectedShotId.value = null; segHeadOpen.value = false; closeMenus(); restoreProposal(); });
 </script>
 
 <style lang="scss" scoped>
@@ -713,31 +742,32 @@ watch(selected, () => { selectedShotId.value = null; restoreProposal(); });
   &:hover { background: var(--bg-hover); color: var(--text-secondary); }
 }
 .seg-item {
-  padding: 10px 12px; border-radius: 6px; cursor: pointer; border-left: 2px solid transparent;
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: 6px; cursor: pointer; border-left: 2px solid transparent;
   &:hover { background: var(--bg-hover); }
   &.active { background: var(--bg-hover); border-left-color: var(--accent); }
 }
+.seg-thumb { width: 56px; height: 32px; flex-shrink: 0; object-fit: cover; border-radius: 4px; background: var(--bg-root); border: 1px solid var(--border); }
+.seg-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .seg-row1 { display: flex; align-items: center; gap: 8px; }
 .seg-seq { font-size: 11px; color: var(--text-faint); }
 .seg-title { font-size: 13px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.seg-row2 { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; }
+.seg-row2 { display: flex; align-items: center; }
 .seg-count { font-size: 11px; color: var(--text-muted); }
-.seg-thumb { width: 40px; height: 22px; object-fit: cover; border-radius: 3px; background: var(--bg-root); }
+.seg-list-foot {
+  flex-shrink: 0; display: flex; flex-direction: column; gap: 6px;
+  border-top: 1px solid var(--border); padding: 8px 2px 2px;
+  .ai-full-btn { width: 100%; }
+}
 
 .seg-detail { flex: 1; min-width: 0; overflow-y: auto; }
 /* Agent 修改分镜期只读横幅（与 script-editor/characters 页的 lock 提示同风格） */
 .agent-lock-banner {
   display: flex; align-items: center; gap: 8px;
-  background: rgba(96, 165, 250, 0.1); border: 1px solid rgba(96, 165, 250, 0.35);
+  background: var(--bg-surface); border: 1px solid var(--border);
   border-radius: 6px; padding: 8px 12px; margin-bottom: 12px;
-  font-size: 12px; color: #60a5fa;
+  font-size: 12px; color: var(--text-muted);
 }
-.proj-head {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 14px; background: var(--bg-surface); border: 1px solid var(--border);
-  border-radius: 8px; margin-bottom: 14px;
-}
-.proj-name { font-size: 14px; font-weight: 600; color: var(--text-primary); margin-right: auto; }
 .ai-full-btn {
   padding: 6px 16px; border-radius: 6px; border: 1px solid var(--border);
   background: var(--bg-surface); color: var(--text-secondary); font-size: 13px; cursor: pointer;
@@ -747,10 +777,14 @@ watch(selected, () => { selectedShotId.value = null; restoreProposal(); });
   border: none; background: var(--accent); color: var(--accent-text, #fff);
   &:hover { background: var(--accent-hover); }
 }
-.seg-head { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; }
-.seg-head-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.seg-head-actions { display: flex; align-items: center; gap: 10px; }
-.seg-no { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.seg-head { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; margin-bottom: 14px; }
+.seg-head-top { display: flex; align-items: center; gap: 10px; }
+.seg-head-title { font-size: 13px; color: var(--text-secondary); max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.story-toggle svg { transition: transform 0.15s ease; }
+.story-toggle.open svg { transform: rotate(180deg); }
+.seg-head-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.seg-head-body { margin-top: 10px; }
+.seg-no { font-size: 13px; font-weight: 600; color: var(--text-primary); flex-shrink: 0; }
 .ai-direct-btn {
   padding: 4px 12px; border-radius: 6px; border: 1px solid var(--accent);
   background: transparent; color: var(--accent); font-size: 12px; cursor: pointer;
@@ -758,10 +792,27 @@ watch(selected, () => { selectedShotId.value = null; restoreProposal(); });
   &:disabled { opacity: 0.4; cursor: not-allowed; border-color: var(--border); color: var(--text-muted); }
 }
 .link-btn { background: none; border: none; color: var(--text-muted); font-size: 12px; cursor: pointer; &:hover { color: var(--accent); } }
+/* 故事段头「制作▾」「⋯」下拉菜单（沿用系统卡片/右键菜单风格） */
+.menu-wrap { position: relative; }
+.menu-trigger { display: inline-flex; align-items: center; gap: 4px; }
+.more-btn { width: 26px; height: 26px; }
+.menu-pop {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 100; min-width: 176px;
+  background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.25); padding: 4px;
+}
+.menu-item {
+  display: block; width: 100%; text-align: left; padding: 7px 10px;
+  border: none; background: none; color: var(--text-secondary); font-size: 12px;
+  border-radius: 4px; cursor: pointer;
+  &:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); }
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+}
+.menu-sep { height: 1px; background: var(--border); margin: 4px 2px; }
 .applied-hint {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  background: rgba(74, 222, 128, 0.1); border: 1px solid #4ade80; border-radius: 6px;
-  padding: 8px 12px; margin-bottom: 12px; font-size: 12px; color: #4ade80;
+  background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px;
+  padding: 8px 12px; margin-bottom: 12px; font-size: 12px; color: var(--text-secondary);
   .link-btn { color: var(--accent); margin-left: auto; }
 }
 /* AI-6D.1 Director 修改提案 触发条（revision-layer 感：accent 左边框）+ apply 后提示 */
@@ -783,9 +834,9 @@ watch(selected, () => { selectedShotId.value = null; restoreProposal(); });
 .propose-error { font-size: 11px; color: var(--error); }
 .applied-proposal-banner {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.35); border-radius: 6px;
+  background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px;
   padding: 7px 12px; margin-bottom: 12px; font-size: 12px;
-  .apb-ok { color: var(--success); font-weight: 600; }
+  .apb-ok { color: var(--text-primary); font-weight: 600; }
   .apb-sub { color: var(--text-muted); font-size: 11px; }
   .link-btn { color: var(--accent); }
   .link-btn:last-child { margin-left: auto; }
@@ -793,8 +844,8 @@ watch(selected, () => { selectedShotId.value = null; restoreProposal(); });
 .seg-story { font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin: 0 0 10px; }
 .seg-chars { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .seg-chars-label { font-size: 11px; color: var(--text-muted); }
-.seg-char { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: rgba(74,222,128,0.15); color: #4ade80;
-  &.miss { background: rgba(251,191,36,0.15); color: #fbbf24; } }
+.seg-char { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--bg-hover); color: var(--text-secondary);
+  &.miss { background: transparent; border: 1px dashed var(--border); color: var(--text-faint); } }
 .muted { font-size: 11px; color: var(--text-faint); }
 
 .shot-list { display: flex; flex-direction: column; gap: 10px; }
@@ -803,22 +854,16 @@ watch(selected, () => { selectedShotId.value = null; restoreProposal(); });
   &:hover { border-color: var(--text-muted); }
   &.active { border-color: var(--accent); background: var(--bg-hover); }
 }
-.shot-connector { display: flex; align-items: center; gap: 8px; padding: 2px 0 2px 14px; }
-.conn-line { flex: 0 0 18px; height: 1px; background: var(--border); }
-.conn-label { font-size: 10px; color: var(--text-muted); padding: 1px 7px; border-radius: 8px; border: 1px solid var(--border); white-space: nowrap;
-  &.muted { color: var(--text-faint); } }
-.shot-connector.ref .conn-label, .shot-cont.ref { color: #60a5fa; border-color: rgba(96,165,250,0.4); }
-.shot-connector.inherit .conn-label, .shot-cont.inherit { color: #4ade80; border-color: rgba(74,222,128,0.4); }
-.shot-cont { font-size: 10px; padding: 1px 7px; border-radius: 8px; border: 1px solid var(--border); white-space: nowrap; }
+.shot-cont { font-size: 10px; padding: 1px 7px; border-radius: 8px; border: 1px solid var(--border); white-space: nowrap; color: var(--text-muted); }
 .shot-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
 .shot-seq { font-size: 12px; font-weight: 600; color: var(--text-primary); font-family: monospace; }
 .shot-size { font-size: 11px; color: var(--text-muted); padding: 1px 6px; border-radius: 3px; background: var(--bg-hover); }
 .shot-desc { font-size: 12px; color: var(--text-secondary); flex: 1; min-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .shot-chars { font-size: 11px; color: var(--text-faint); }
 .shot-status { font-size: 11px; padding: 1px 6px; border-radius: 3px;
-  &.done { background: rgba(74,222,128,0.15); color: #4ade80; }
+  &.done { background: var(--bg-hover); color: var(--text-secondary); }
   &.failed { background: rgba(248,113,113,0.15); color: #f87171; }
-  &.busy { background: rgba(96,165,250,0.15); color: #60a5fa; }
+  &.busy { background: var(--bg-hover); color: var(--text-muted); }
   &.pending { background: var(--bg-hover); color: var(--text-muted); }
 }
 .open-btn {

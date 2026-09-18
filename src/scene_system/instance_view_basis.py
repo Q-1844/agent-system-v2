@@ -251,7 +251,9 @@ def compute_scene_instance_visual_basis(project_dir, doc: SceneSystemDocument,
         # 其它 view 变化不应 stale——peer 是可选增强，后来出现的 peer 不追溯作废）
         "candidate_count": candidate_count,
         "seed": seed,
-        "model": {"provider": "agnes", "model_id": model_id,
+        "model": {"provider": ("sensenova" if str(model_id).startswith("sensenova")
+                               else "agnes"),
+                  "model_id": model_id,
                   "size_tier": size_tier, "ratio": ratio},
         "prompt": prompt,
     }

@@ -116,6 +116,95 @@
         <!-- 参数面板（主体，单一纵向滚动；核心字段始终可见） -->
         <div class="editor-panel" v-show="!narrow || narrowView === 'editor'">
           <div class="editor-scroll">
+            <!-- 生产绑定（场景参考）：BOUND 生成走 Binding-aware 路径，READY 才可生成 -->
+            <div class="binding-panel">
+              <div class="bp-head" @click="bindingOpen = !bindingOpen">
+                <span class="dot" :class="bindingDotClass"></span>
+                <span class="bp-title">场景参考</span>
+                <span class="bp-sum">{{ bindingSummary }}</span>
+                <span class="spacer"></span>
+                <svg class="bp-chev" :class="{ open: bindingOpen }" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9" /></svg>
+              </div>
+              <div v-if="bindingOpen" class="bp-body">
+                <div v-if="bindingLoading" class="bp-muted">加载中…</div>
+
+                <!-- 未绑定：说明 + 绑定表单 -->
+                <template v-else-if="!binding">
+                  <p class="bp-muted">未绑定——生成走原有流程。绑定后，本镜生成将以「已批准的场景实例视图 + 角色 Look」为生产参考（BOUND 不回退旧流程，未就绪时生成会被阻断）。</p>
+                  <button v-if="!bindingFormOpen" class="mini-btn primary" :disabled="bindingBusy" @click="openBindingForm">绑定场景参考</button>
+                  <template v-else>
+                    <div v-if="bpInstances.length" class="bp-field">
+                      <label>布景状态</label>
+                      <select v-model="bpInstanceId" @change="onBpInstanceChange">
+                        <option v-for="i in bpInstances" :key="i.scene_instance_id" :value="i.scene_instance_id">{{ bpInstanceLabel(i) }}</option>
+                      </select>
+                    </div>
+                    <p v-else class="bp-warn">本项目还没有与故事段 {{ shot.scene_id }} 关联的 active 布景状态——先去「场景系统」创建并批准场景图。</p>
+                    <div v-if="bpInstanceId && bpViews.length" class="bp-field">
+                      <label>机位方向</label>
+                      <select v-model="bpViewId" @change="onBpViewChange">
+                        <option v-for="v in bpViews" :key="v.view_id" :value="v.view_id">
+                          {{ v.label || v.view_id }}<template v-if="v.camera_zone">（{{ v.camera_zone }}<template v-if="v.look_direction"> · 看向 {{ v.look_direction }}</template>）</template>
+                        </option>
+                      </select>
+                    </div>
+                    <div v-if="bpViewId && bpApprovedSivs.length" class="bp-field">
+                      <label>场景图（可选钉住；不选则自动解析该方向唯一已批准图）</label>
+                      <select v-model="bpPinnedSivId">
+                        <option value="">不钉住（自动解析）</option>
+                        <option v-for="s in bpApprovedSivs" :key="s.scene_instance_view_id" :value="s.scene_instance_view_id">{{ s.label || s.scene_instance_view_id }}（已批准）</option>
+                      </select>
+                    </div>
+                    <p v-else-if="bpViewId && !bpApprovedSivs.length" class="bp-warn">该方向还没有已批准的场景图——绑定会处于「未就绪」，生成会被阻断；建议先在场景系统批准。</p>
+                    <div v-for="name in (shot.characters || [])" :key="name" class="bp-field">
+                      <label>{{ name }} · Look（必选）</label>
+                      <select v-model="bpLookByChar[name]">
+                        <option v-if="!(bpLooksByChar[name] || []).length" value="">（无已批准 Look——去「生产资源」创建并批准）</option>
+                        <option v-for="lk in (bpLooksByChar[name] || [])" :key="lk.id" :value="lk.id">{{ lk.name || lk.id }}</option>
+                      </select>
+                    </div>
+                    <p v-if="!shot.characters?.length" class="bp-muted">本镜无出场角色（无需绑定 Look）。</p>
+                    <div class="bp-actions">
+                      <button class="mini-btn primary" :disabled="bindingBusy || !canCreateBinding" @click="createBinding">创建绑定</button>
+                      <button class="mini-btn" :disabled="bindingBusy" @click="bindingFormOpen = false">取消</button>
+                    </div>
+                  </template>
+                </template>
+
+                <!-- 已绑定：摘要 + validity + 操作 -->
+                <template v-else>
+                  <div class="bp-bound">
+                    <div class="bp-scene">
+                      <div class="bp-thumb" :class="{ empty: !bpCoverUrl }">
+                        <img v-if="bpCoverUrl" :src="bpCoverUrl" @error="bpCoverUrl = ''" />
+                        <span v-else>无图</span>
+                      </div>
+                      <div class="bp-scene-info">
+                        <div class="bp-line"><span class="k">场景</span>{{ bpBoundSceneText }}</div>
+                        <div class="bp-line" v-for="cb in (binding.character_bindings || [])" :key="cb.character_name">
+                          <span class="k">{{ cb.character_name }}</span>{{ bpLookLabel(cb.look_id) || cb.look_id }}
+                        </div>
+                        <div class="bp-line" v-if="!binding.character_bindings?.length && !binding.scene_binding"><span class="k">空绑定</span>仅占位（生成会被阻断）</div>
+                      </div>
+                    </div>
+                    <div class="bp-validity" v-if="validity">
+                      <div class="bp-v-line" :class="{ bad: validity.readiness === 'NOT_READY' }">
+                        {{ validity.readiness === 'READY' ? '参考就绪——生成将使用上述绑定的生产参考'
+                          : validity.readiness === 'NOT_READY' ? '未就绪——生成会被阻断（BOUND 绝不回退旧流程）'
+                          : '状态未知' }}
+                      </div>
+                      <div class="bp-issue" v-for="(iss, i) in (validity.issues || [])" :key="i">· {{ bpIssueText(iss) }}</div>
+                    </div>
+                    <div class="bp-actions">
+                      <button class="mini-btn" :disabled="bindingBusy" @click="refreshBinding"
+                              title="接受当前依赖作为新的 freshness 基准（只刷新指纹，不改绑定意图；失效依赖会被拒绝）">刷新基准</button>
+                      <button class="mini-btn danger" :disabled="bindingBusy" @click="unbindBinding">解除绑定</button>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+
             <!-- inherit 接力面板（标准+专业都显示；仅首帧标签 + inherit 模式） -->
             <div v-if="stage === 'first' && shot.opening_source === 'inherit_previous'" class="inherit-panel" :class="continuityStatus.status">
               <div class="inherit-title">开场沿用上一镜末帧</div>
@@ -399,9 +488,10 @@ import PromptEditor from './PromptEditor.vue';
 import Collapsible from './Collapsible.vue';
 import { useJobStore } from '@/store/jobs';
 import { useTaskStream } from '@/composables/useTaskStream';
-import { createDiscreteApi, darkTheme } from 'naive-ui';
+import { createDiscreteApi } from 'naive-ui';
+import { discreteConfigProviderProps } from '@/styles/naiveTheme';
 
-const { message, dialog } = createDiscreteApi(['message', 'dialog'], { configProviderProps: { theme: darkTheme } });
+const { message, dialog } = createDiscreteApi(['message', 'dialog'], { configProviderProps: discreteConfigProviderProps });
 
 const props = defineProps<{
   shot: ShotData; projectName: string;
@@ -969,6 +1059,266 @@ async function refreshVideoEnd() {
   catch (e: any) { message.error(`提取失败: ${e.message || e}`); }
 }
 
+// ---------- 生产绑定（场景参考） ----------
+// BOUND shot 的生成走 Binding-aware 路径（READY→Pack→Adapter；NOT_READY 结构化拒绝，
+// 绝不回退 legacy——src/generation/image_adapter._gate_ready_pack）。本面板 = 绑定 /
+// 解绑 / 刷新基准 + validity 展示；业务与校验收口在后端 src/shot_binding。
+const binding = ref<any>(null);              // ShotProductionBinding（null = UNBOUND）
+const bindingRevision = ref('');
+const validity = ref<any>(null);
+const bindingLoading = ref(true);
+const bindingBusy = ref(false);
+const bindingOpen = ref(false);
+const bindingFormOpen = ref(false);
+
+const bpInstanceId = ref('');
+const bpViewId = ref('');
+const bpPinnedSivId = ref('');
+const bpLookByChar = ref<Record<string, string>>({});
+const bpInstances = ref<any[]>([]);
+const bpViews = ref<any[]>([]);
+const bpApprovedSivs = ref<any[]>([]);
+const bpLooksByChar = ref<Record<string, any[]>>({});
+const bpLocations = ref<any[]>([]);
+const bpCoverUrl = ref('');
+
+const bindingDotClass = computed(() => {
+  if (bindingLoading.value || !binding.value) return '';
+  return validity.value?.readiness === 'READY' ? 'on' : 'fail';
+});
+const bindingSummary = computed(() => {
+  if (bindingLoading.value) return '';
+  if (!binding.value) return '未绑定';
+  const r = validity.value?.readiness;
+  return r === 'READY' ? '已绑定 · 参考就绪' : r === 'NOT_READY' ? '已绑定 · 未就绪' : '已绑定';
+});
+const canCreateBinding = computed(() => {
+  if (!bpInstanceId.value || !bpViewId.value) return false;
+  // cast 规则：binding 角色集合必须与 shot.characters 完全一致，每个角色都要有 Look
+  for (const name of (props.shot.characters || [])) {
+    if (!bpLookByChar.value[name]) return false;
+  }
+  return true;
+});
+
+const BINDING_ISSUE_LABELS: Record<string, string> = {
+  fingerprint_mismatch: '依赖已变更（点「刷新基准」接受当前状态）',
+  stale_dependency: '场景图被场景系统判定过期（重新生成/批准后刷新基准）',
+  project_visual_profile_unspecified: '项目未设置视觉风格档案（bound 生成必需）',
+  visual_profile_unreadable: '风格档案不可读',
+  cast_mismatch: '镜头角色与绑定不一致（改角色后需重新绑定）',
+  scene_mismatch: '镜头已换故事段，绑定失效（解除后重新绑定）',
+  story_scene_mismatch: '布景状态与镜头故事段不一致',
+  scene_instance_missing: '布景状态已删除',
+  scene_instance_not_active: '布景状态非 active',
+  location_view_missing: '机位方向已删除',
+  scene_instance_view_missing: '场景图不存在（先在场景系统生成并批准）',
+  scene_instance_view_not_approved: '场景图未批准',
+  scene_instance_view_ambiguous: '场景图数据异常（同方向多个实体）',
+  fingerprint_unavailable: '场景图缺批准基准指纹',
+  look_missing: '绑定的 Look 已删除',
+  look_not_approved: 'Look 无可用已批准参考',
+  character_missing: '角色不存在',
+  prop_missing: '绑定的道具已删除',
+  prop_not_approved: '道具无可用已批准参考',
+  composition_not_approved: '组合参考未批准',
+  binding_conflict: '道具被组合与直绑同时声明',
+  orphan_binding: '镜头已删除（孤儿绑定）',
+};
+function bpIssueText(iss: any): string {
+  const label = BINDING_ISSUE_LABELS[String(iss?.reason)] || String(iss?.reason || '未知问题');
+  const id = iss?.dependency_id && iss.dependency_id !== props.shot.shot_id ? ` [${iss.dependency_id}]` : '';
+  const hint = iss?.detail?.hint ? `：${iss.detail.hint}` : '';
+  return `${label}${id}${hint}`;
+}
+function bindingErrText(e: any): string {
+  if (e && typeof e === 'object' && ('error' in e || 'detail' in e)) {
+    return `[${(e as any).error || 'error'}] ${typeof (e as any).detail === 'string' ? (e as any).detail : JSON.stringify((e as any).detail)}`;
+  }
+  return String(e?.message || e);
+}
+
+function bpInstanceLabel(i: any): string {
+  const loc = bpLocations.value.find(l => l.location_id === i.location_id);
+  const tod = i.state?.time_of_day ? ` · ${i.state.time_of_day}` : '';
+  return `${loc?.name || i.location_id} · ${i.story_scene_id || ''}${tod}`;
+}
+function bpLookLabel(lookId: string): string {
+  for (const ls of Object.values(bpLooksByChar.value)) {
+    const hit = (ls || []).find((l: any) => l.id === lookId);
+    if (hit) return hit.name || lookId;
+  }
+  return '';
+}
+
+async function loadBindingState() {
+  bindingLoading.value = true;
+  try {
+    const [r, v] = await Promise.all([
+      apiClient.getShotBinding(props.projectName, props.shot.shot_id).catch(() => null),
+      apiClient.getShotBindingValidity(props.projectName, props.shot.shot_id).catch((e: any) => ({
+        readiness: 'UNKNOWN', issues: [{ reason: 'validity_unreadable', detail: { hint: bindingErrText(e) } }],
+      })),
+    ]);
+    binding.value = r?.binding || null;
+    bindingRevision.value = r?.binding_revision || '';
+    validity.value = v;
+    if (binding.value) {
+      await loadBoundCover();
+      // Look 名称显示（bound 摘要行用；失败静默——仅装饰）
+      const names = (binding.value.character_bindings || []).map((cb: any) => cb.character_name);
+      await Promise.all(names.map(async (n: string) => {
+        if (bpLooksByChar.value[n]) return;
+        try {
+          const r2 = await apiClient.listLooks(props.projectName, n);
+          bpLooksByChar.value[n] = (r2.looks || []).filter((l: any) => l.status === 'approved');
+        } catch { bpLooksByChar.value[n] = []; }
+      }));
+    }
+  } finally { bindingLoading.value = false; }
+}
+/** 已绑定时的场景图封面（最新已提交候选；失败静默——纯装饰） */
+async function loadBoundCover() {
+  bpCoverUrl.value = '';
+  const sb = binding.value?.scene_binding;
+  if (!sb) return;
+  try {
+    const target = sb.pinned_scene_instance_view_id
+      || validity.value?.resolved_dependencies?.scene_instance_view_id;
+    if (!target) return;
+    const g = await apiClient.sceneInstanceViewGenerations(props.projectName, target, 4);
+    const committed = (g.generation_records || []).filter((x: any) => x.status === 'committed');
+    const f = (committed[committed.length - 1]?.candidate_files || [])[0];
+    if (f) bpCoverUrl.value = `/projects/${encodeURIComponent(props.projectName)}/${String(f).replace(/^\/+/, '')}`;
+  } catch { /* 封面失败不影响功能 */ }
+}
+
+async function openBindingForm() {
+  bindingFormOpen.value = true;
+  bindingBusy.value = true;
+  try {
+    const [insts, locs] = await Promise.all([
+      apiClient.sceneListSceneInstances(props.projectName),
+      apiClient.sceneListLocations(props.projectName).catch(() => ({ locations: [] })),
+    ]);
+    bpInstances.value = (insts.scene_instances || []).filter((i: any) =>
+      i.status === 'active' && (!props.shot.scene_id || i.story_scene_id === props.shot.scene_id));
+    bpLocations.value = locs.locations || [];
+    if (bpInstances.value.length) {
+      bpInstanceId.value = bpInstances.value[0].scene_instance_id;
+      await onBpInstanceChange();
+    }
+    // cast 规则：shot.characters 每个角色都要绑定一个已批准 Look
+    const names = props.shot.characters || [];
+    const pairs = await Promise.all(names.map((n: string) =>
+      apiClient.listLooks(props.projectName, n)
+        .then((r: any) => [n, (r.looks || []).filter((l: any) => l.status === 'approved')] as const)
+        .catch(() => [n, [] as any[]] as const)));
+    bpLooksByChar.value = Object.fromEntries(pairs.map(([n, ls]) => [n, ls as any[]]));
+    const picked: Record<string, string> = {};
+    for (const [n, ls] of pairs) picked[n] = (ls as any[])[0]?.id || '';
+    bpLookByChar.value = picked;
+  } catch (e: any) {
+    message.error(`加载绑定选项失败: ${bindingErrText(e)}`);
+  } finally { bindingBusy.value = false; }
+}
+async function onBpInstanceChange() {
+  bpViewId.value = ''; bpPinnedSivId.value = '';
+  bpApprovedSivs.value = []; bpViews.value = [];
+  const inst = bpInstances.value.find(i => i.scene_instance_id === bpInstanceId.value);
+  if (!inst) return;
+  try {
+    const vs = await apiClient.sceneListViews(props.projectName, inst.location_id);
+    bpViews.value = (vs.views || []).filter((v: any) => v.approval_status === 'approved');
+    if (bpViews.value.length) {
+      bpViewId.value = bpViews.value[0].view_id;
+      await onBpViewChange();
+    }
+  } catch (e: any) { message.error(`加载机位失败: ${bindingErrText(e)}`); }
+}
+async function onBpViewChange() {
+  bpPinnedSivId.value = '';
+  bpApprovedSivs.value = [];
+  if (!bpInstanceId.value || !bpViewId.value) return;
+  try {
+    const s = await apiClient.sceneListInstanceViews(props.projectName, bpInstanceId.value);
+    bpApprovedSivs.value = (s.scene_instance_views || []).filter((x: any) =>
+      x.location_view_id === bpViewId.value && x.approval_status === 'approved');
+  } catch { /* 列表失败时允许不钉住创建 */ }
+}
+
+async function createBinding() {
+  bindingBusy.value = true;
+  try {
+    const payload: any = {
+      shot_id: props.shot.shot_id,
+      scene_id: props.shot.scene_id,
+      scene_binding: {
+        scene_instance_id: bpInstanceId.value,
+        location_view_id: bpViewId.value,
+        ...(bpPinnedSivId.value ? { pinned_scene_instance_view_id: bpPinnedSivId.value } : {}),
+      },
+      character_bindings: (props.shot.characters || [])
+        .filter((n: string) => bpLookByChar.value[n])
+        .map((n: string) => ({ character_name: n, look_id: bpLookByChar.value[n] })),
+      prop_bindings: [],
+    };
+    const r = await apiClient.createShotBinding(props.projectName, payload);
+    message.success('已绑定场景参考（生成将使用绑定的生产参考）');
+    bindingFormOpen.value = false;
+    await reloadBindingAfterMutation(r);
+  } catch (e: any) {
+    message.error(`绑定失败: ${bindingErrText(e)}`);
+  } finally { bindingBusy.value = false; }
+}
+async function refreshBinding() {
+  bindingBusy.value = true;
+  try {
+    const r = await apiClient.refreshShotBinding(props.projectName, props.shot.shot_id, bindingRevision.value);
+    message.success('已刷新 freshness 基准');
+    await reloadBindingAfterMutation(r);
+  } catch (e: any) {
+    message.error(`刷新失败: ${bindingErrText(e)}`);
+  } finally { bindingBusy.value = false; }
+}
+async function unbindBinding() {
+  if (!window.confirm('解除本镜头的场景参考绑定？解除后生成恢复原有流程（绑定记录删除，可重新绑定）。')) return;
+  bindingBusy.value = true;
+  try {
+    await apiClient.deleteShotBinding(props.projectName, props.shot.shot_id, bindingRevision.value);
+    message.success('已解除绑定');
+    binding.value = null;
+    bindingRevision.value = '';
+    validity.value = null;
+    bpCoverUrl.value = '';
+    emit('refresh');
+  } catch (e: any) {
+    message.error(`解除失败: ${bindingErrText(e)}`);
+  } finally { bindingBusy.value = false; }
+}
+/** 变更后：以 receipt 回填 → 重读 validity → 刷新封面 → 通知父级刷新卡片角标 */
+async function reloadBindingAfterMutation(r?: any) {
+  if (r?.binding) {
+    binding.value = r.binding;
+    bindingRevision.value = r.binding_revision || '';
+  } else {
+    const rd = await apiClient.getShotBinding(props.projectName, props.shot.shot_id).catch(() => null);
+    binding.value = rd?.binding || null;
+    bindingRevision.value = rd?.binding_revision || '';
+  }
+  validity.value = await apiClient.getShotBindingValidity(props.projectName, props.shot.shot_id)
+    .catch(() => null);
+  if (binding.value) await loadBoundCover(); else bpCoverUrl.value = '';
+  emit('refresh');
+}
+
+watch(() => props.shot.shot_id, () => {
+  binding.value = null; validity.value = null; bindingRevision.value = '';
+  bindingFormOpen.value = false; bindingOpen.value = false;
+  loadBindingState();
+});
+loadBindingState();
+
 // ---------- 配音 ----------
 const audioBusy = ref(false);
 const audioStatusText = computed(() => {
@@ -1302,6 +1652,35 @@ function vidUrl(p: string) { return getVideoUrl(p); }
 .save-status { font-size: 12px; color: var(--text-muted); &.saved { color: #4ade80; } &.failed { color: #f87171; } &.saving { color: var(--text-secondary); } }
 .pre-hint { font-size: 12px; color: #fbbf24; }
 .main-gen-btn { margin-left: auto; padding: 9px 24px; border-radius: 6px; border: none; background: var(--accent); color: var(--accent-text); font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; &:hover:not(:disabled) { background: var(--accent-hover); } &:disabled { opacity: 0.5; cursor: not-allowed; } }
+
+/* 生产绑定（场景参考） */
+.binding-panel { border: 1px solid var(--border); border-radius: 8px; background: var(--bg-surface); margin-bottom: 12px; }
+.bp-head { display: flex; align-items: center; gap: 8px; padding: 9px 12px; cursor: pointer; &:hover { background: var(--bg-hover); border-radius: 8px; } }
+.bp-title { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+.bp-sum { font-size: 11px; color: var(--text-muted); }
+.bp-chev { color: var(--text-faint); transition: transform 0.15s ease; &.open { transform: rotate(180deg); } }
+.bp-body { padding: 4px 12px 12px; border-top: 1px solid var(--border); }
+.bp-muted { font-size: 12px; color: var(--text-muted); line-height: 1.7; margin: 8px 0; }
+.bp-warn { font-size: 12px; color: var(--text-secondary); background: var(--bg-root); border: 1px dashed var(--border); border-radius: 6px; padding: 7px 10px; line-height: 1.6; margin: 8px 0; }
+.bp-field { display: flex; flex-direction: column; gap: 4px; margin: 8px 0;
+  label { font-size: 11px; color: var(--text-muted); }
+  select { background: var(--bg-root); border: 1px solid var(--border); border-radius: 5px; color: var(--text-primary); font-size: 12px; padding: 6px 8px; font-family: inherit;
+    &:focus { outline: none; border-color: var(--border-hover); } } }
+.bp-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.mini-btn.primary { border-color: var(--accent); color: var(--accent); &:hover:not(:disabled) { background: var(--accent); color: var(--accent-text); } }
+.mini-btn.danger { color: #f87171; &:hover:not(:disabled) { border-color: #f87171; color: #f87171; } }
+.bp-bound { display: flex; flex-direction: column; gap: 10px; padding-top: 8px; }
+.bp-scene { display: flex; gap: 10px; align-items: flex-start; }
+.bp-thumb { width: 96px; aspect-ratio: 16 / 9; flex-shrink: 0; border-radius: 5px; overflow: hidden; border: 1px solid var(--border); background: #000;
+  img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  &.empty { display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--text-faint); } }
+.bp-scene-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.bp-line { font-size: 12px; color: var(--text-secondary); line-height: 1.5;
+  .k { display: inline-block; min-width: 42px; font-size: 11px; color: var(--text-faint); } }
+.bp-validity { border-top: 1px dashed var(--border); padding-top: 8px; }
+.bp-v-line { font-size: 12px; color: var(--text-secondary);
+  &.bad { color: #f87171; } }
+.bp-issue { font-size: 11px; color: var(--text-muted); line-height: 1.6; margin-top: 3px; }
 
 /* 低高度：压缩非必要 padding，action bar 始终可见 */
 @media (max-height: 720px) {

@@ -75,10 +75,11 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { createDiscreteApi, darkTheme } from 'naive-ui';
+import { createDiscreteApi } from 'naive-ui';
+import { discreteConfigProviderProps } from '@/styles/naiveTheme';
 import type { CharacterResolutionItem } from '@/api';
 
-const { message } = createDiscreteApi(['message'], { configProviderProps: { theme: darkTheme } });
+const { message } = createDiscreteApi(['message'], { configProviderProps: discreteConfigProviderProps });
 
 interface ResolveParams {
   mention: string;

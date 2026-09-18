@@ -96,11 +96,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
-import { createDiscreteApi, darkTheme } from 'naive-ui';
+import { createDiscreteApi } from 'naive-ui';
+import { discreteConfigProviderProps } from '@/styles/naiveTheme';
 import { apiClient } from '@/api';
 import type { SceneAutopilotRun, ShotExecutionState, SceneProductionPlan } from '@/api';
 
-const { message, dialog } = createDiscreteApi(['message', 'dialog'], { configProviderProps: { theme: darkTheme } });
+const { message, dialog } = createDiscreteApi(['message', 'dialog'], { configProviderProps: discreteConfigProviderProps });
 
 interface ShotInfo { shot_id: string; description: string; }
 

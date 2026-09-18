@@ -11,7 +11,7 @@ import base64 as _base64
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
+from fastapi import APIRouter, Body, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel
 
 import deps
@@ -386,6 +386,23 @@ def _shot_char_refs(project, shot):
 # ==================== Phase 6A：镜头接力 / 开场来源 ====================
 # opening_source 与 link_mode 独立：link_mode 控制「镜头内部如何生成视频」，
 # opening_source 控制「开场画面从哪来」。参考图收集按来源类型组织，便于未来加 environment/prop。
+def _legacy_vp_style_suffix(project_dir):
+    """P1 修复（2026-09-18）：legacy 分镜链路消费 ProjectVisualProfile。
+    profile specified → 返回唯一编译点产出的 style instruction（替代 StyleAnchor）；
+    unspecified → None = 原 legacy 行为（project.style.suffix()），存量项目零影响。"""
+    try:
+        from src.visual_profile import load_profile_or_none
+        from src.visual_profile.compiler import compile_project_style_instruction
+        profile = load_profile_or_none(project_dir)
+        if profile is None:
+            return None
+        instruction = compile_project_style_instruction(profile).strip()
+        return instruction or None
+    except Exception as e:   # noqa: BLE001 - profile 读取问题不阻塞生成（record 侧另 fail closed）
+        logger.warning(f"legacy visual_profile 风格读取失败，回落 StyleAnchor: {e}")
+        return None
+
+
 def _collect_first_frame_refs(project, shot):
     """收集首帧参考图（带来源类型）。本轮实现 character + continuity。
     返回 [{'type','url','label'}, ...]。未来加 environment/prop 在此追加，不改首帧生成入口。
@@ -517,6 +534,13 @@ async def _handler_first_frame(job, emit):
     """生成 N 候选分镜图 -> 新首帧批次（append）+ 同步旧 first_frame（过渡兼容）。status=pending 等用户选。"""
     from src.core.store import ProjectStore
     from src.core.models import Asset, Candidate, ImageBatch, ShotStatus
+
+    def _image_client_for(provider: str):
+        """2026-09-17 验收轮：image provider 覆盖。sensenova → 商汤 u1.5-lite（b64 返回）。"""
+        return deps.get_sensenova_image_client() \
+            if (provider or "agnes").lower() == "sensenova" else get_agnes_client()
+
+    provider = (job.params.get("image_provider") or "agnes").lower()
     project_dir = get_project_manager().get_project_dir(job.project)
     store = ProjectStore(project_dir)
     project = store.load()
@@ -541,7 +565,11 @@ async def _handler_first_frame(job, emit):
     else:
         typed_refs = _collect_first_frame_refs(project, shot)
         refs = [r["url"] for r in typed_refs]
-        prompt = build_first_frame_prompt(project, shot)
+        # P1 根因修复（2026-09-18）：legacy 链路同样消费 ProjectVisualProfile——
+        # StyleAnchor 默认 'anime' 曾污染非动漫项目分镜。profile unspecified → None
+        # = 原行为（StyleAnchor.suffix），已 specified 项目的存量语义不受影响。
+        prompt = build_first_frame_prompt(
+            project, shot, style_suffix=_legacy_vp_style_suffix(project_dir))
         # reference_previous：提示词表达「保持连续但允许换机位」，不要求逐像素复制
         if any(r["type"] == "continuity" for r in typed_refs):
             prompt += (". Maintain continuity with the previous shot's ending frame: keep character identity, "
@@ -558,14 +586,19 @@ async def _handler_first_frame(job, emit):
     for i in range(variants):
         await emit("gen", f"{shot.shot_id} 生成候选 {i+1}/{variants}", int(i / variants * 100))
         # 🔴 图片接口不支持 seed（AGNES_API_FACTS §2.1 / 提示词.md §4.1）：多候选不靠 seed 区分
-        res = await get_agnes_client().generate_image(
+        client = _image_client_for(provider)
+        res = await client.generate_image(
             prompt=prompt, image_refs=refs if use_i2i else None,
             size_tier=size_tier, ratio=ratio)
         url = res.get("url")
-        if not url:
-            raise RuntimeError("图片生成未返回公网 URL")
+        b64 = res.get("b64")
+        if not url and not b64:
+            raise RuntimeError("图片生成未返回 URL/b64（sensenova 恒 b64）")
         dest = frames_dir / f"{shot.shot_id}_first_v{i+1}.png"
-        await get_agnes_client().download(url, dest)   # 无认证 client，复用于图片资产
+        if b64:
+            dest.write_bytes(_base64.b64decode(b64))   # sensenova：b64 直存，免图床
+        else:
+            await client.download(url, dest)   # 无认证 client，复用于图片资产
         cid = f"{batch_id}_{i+1}"
         cand_list.append(Candidate(candidate_id=cid, local=str(dest), url=url,
                                    status=ShotStatus.DONE.value, created_at=now))
@@ -578,7 +611,8 @@ async def _handler_first_frame(job, emit):
                            status=ShotStatus.PENDING.value, prompt_snapshot=prompt,
                            char_ref_snapshot=char_snap, candidates=cand_list,
                            origin_run_id=job.params.get("origin_run_id"),
-                           generation_basis=dict(bound.basis) if bound else {})
+                           generation_basis={**(dict(bound.basis) if bound else {}),
+                                             "image_provider": provider})
 
     def mut(s):
         s.first_frame_batches.append(new_batch)
@@ -624,19 +658,28 @@ async def _handler_last_frame(job, emit):
         prompt = bound_last.prompt
         refs = bound_last.image_refs
     else:
-        prompt = build_last_frame_prompt(project, shot)
+        # P1 根因修复：同首帧——legacy 尾帧消费 ProjectVisualProfile（unspecified → 原行为）
+        prompt = build_last_frame_prompt(
+            project, shot, style_suffix=_legacy_vp_style_suffix(project_dir))
         # image_refs 顺序（提示词.md §11）：1.已选首帧（场景/构图基础）2.角色参考图（身份保持）。
         # 无角色时 char_refs 为空，只传首帧。首帧始终第一张，不让角色图取代主构图参考。
         char_refs = _shot_char_refs(project, shot)
         refs = [ff_url] + char_refs
-    res = await get_agnes_client().generate_image(
+    provider = (job.params.get("image_provider") or "agnes").lower()
+    client = deps.get_sensenova_image_client() \
+        if provider == "sensenova" else get_agnes_client()
+    res = await client.generate_image(
         prompt=prompt, image_refs=refs,
         size_tier=project.style.size_tier or "1K", ratio=project.style.aspect_ratio or "16:9")
     url = res.get("url")
-    if not url:
-        raise RuntimeError("尾帧生成未返回公网 URL")
+    b64 = res.get("b64")
+    if not url and not b64:
+        raise RuntimeError("尾帧生成未返回 URL/b64（sensenova 恒 b64）")
     dest = project_dir / "output" / "frames" / f"{shot.shot_id}_last.png"
-    await get_agnes_client().download(url, dest)
+    if b64:
+        dest.write_bytes(_base64.b64decode(b64))   # sensenova：b64 直存
+    else:
+        await client.download(url, dest)
     # 写尾帧批次（基于当前 selected_first_frame）+ 设 selected_last_frame + 同步旧 last_frame
     batch_id = f"lf_{uuid.uuid4().hex[:8]}"
     now = _time.time()
@@ -649,7 +692,8 @@ async def _handler_last_frame(job, emit):
                            char_ref_snapshot=char_snap,
                            based_on_first_frame=shot.selected_first_frame, candidates=[cand],
                            origin_run_id=job.params.get("origin_run_id"),
-                           generation_basis=dict(bound_last.basis) if bound_last else {})
+                           generation_basis={**(dict(bound_last.basis) if bound_last else {}),
+                                             "image_provider": provider})
     def mut(s, b=new_batch, cid=cand.candidate_id, d=str(dest), u=url):
         s.last_frame_batches.append(b)
         s.selected_last_frame = cid
@@ -681,10 +725,16 @@ JOB_HANDLERS["last_frame"] = _handler_last_frame
 class FirstFrameRequest(BaseModel):
     variants: int = 2
     force: bool = False
+    # 2026-09-17 验收轮：image provider 覆盖（sensenova = 商汤 u1.5-lite；默认 agnes 不变）
+    image_provider: str = "agnes"
 
 
 class ChooseFrameRequest(BaseModel):
     candidate_id: str   # 跨批次选择（支持从旧批次选，GPT §四）
+
+
+class LastFrameRequest(BaseModel):
+    image_provider: str = "agnes"   # 2026-09-17 验收轮 provider 覆盖
 
 
 @router.post("/api/project/{project_name}/shot/{shot_id}/first-frame")
@@ -697,7 +747,8 @@ async def shot_first_frame(project_name: str, shot_id: str, req: FirstFrameReque
             raise HTTPException(404, f"镜头 {shot_id} 不存在")
         q = get_job_queue()
         job = q.submit(project_name, "first_frame", shot_id,
-                       variants=req.variants, force=req.force)
+                       variants=req.variants, force=req.force,
+                       image_provider=req.image_provider)
         return {"job_id": job.job_id, "shot_id": shot_id}
     except FileNotFoundError:
         raise HTTPException(404, "项目不存在")
@@ -829,9 +880,12 @@ async def rehost_first_frame(project_name: str, shot_id: str):
 
 
 @router.post("/api/project/{project_name}/shot/{shot_id}/last-frame")
-async def shot_last_frame(project_name: str, shot_id: str):
-    """生成单镜头尾帧（仅 keyframes；入队 last_frame 任务）"""
+async def shot_last_frame(project_name: str, shot_id: str,
+                          req: Optional[LastFrameRequest] = Body(None)):
+    """生成单镜头尾帧（仅 keyframes；入队 last_frame 任务）。
+    req 可省（兼容旧前端）；image_provider 覆盖仅验收对比用。"""
     try:
+        provider = (req.image_provider if req else None) or "agnes"
         project_dir = get_project_manager().get_project_dir(project_name)
         from src.core.store import ProjectStore
         shot = ProjectStore(project_dir).load().get_shot(shot_id)
@@ -840,7 +894,7 @@ async def shot_last_frame(project_name: str, shot_id: str):
         if shot.link_mode != "keyframes":
             raise HTTPException(400, f"仅 keyframes 模式需要尾帧（当前 {shot.link_mode}）")
         q = get_job_queue()
-        job = q.submit(project_name, "last_frame", shot_id)
+        job = q.submit(project_name, "last_frame", shot_id, image_provider=provider)
         return {"job_id": job.job_id, "shot_id": shot_id}
     except FileNotFoundError:
         raise HTTPException(404, "项目不存在")

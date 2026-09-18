@@ -158,11 +158,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
-import { createDiscreteApi, darkTheme } from 'naive-ui';
+import { createDiscreteApi } from 'naive-ui';
+import { discreteConfigProviderProps } from '@/styles/naiveTheme';
 import { apiClient } from '@/api';
 import type { ProjectProductionRun, ProjectProductionPreflight, ScenePreflightResult } from '@/api';
 
-const { message, dialog } = createDiscreteApi(['message', 'dialog'], { configProviderProps: { theme: darkTheme } });
+const { message, dialog } = createDiscreteApi(['message', 'dialog'], { configProviderProps: discreteConfigProviderProps });
 
 const API_BASE = 'http://localhost:8000';
 

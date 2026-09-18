@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional
 from .generation import fingerprint, select_composition_inputs, to_agnes_image_ref
 from .generation_records import append_record, read_records, review_records_path
 from .look_prompt import _clean
-from .look_review import VISION_MODEL, _extract_json, _normalize_dim
+from .look_review import VISION_MODEL, _extract_json, _normalize_dim, vision_json_call
 from .models import CharacterReferenceComposition
 
 _COMP_DIMENSIONS = ("character_identity", "look_consistency", "prop_fidelity",
@@ -381,7 +381,7 @@ async def review_composition_candidates(project_dir, composition_id: str, *,
                    *content_static]
         msgs = [{"role": "user", "content": content}]
         try:
-            res = await agnes_client.chat_completion_vision(msgs, model=VISION_MODEL)
+            res = await vision_json_call(agnes_client, msgs, model=VISION_MODEL)
         except Exception as e:
             return {"asset_id": asset_id, "status": "provider_error", "overall": "uncertain",
                     "summary": f"{type(e).__name__}: {e}"}

@@ -87,6 +87,36 @@ def get_sensenova_text_client():
     return sensenova_text_client
 
 
+# SenseNova 图片客户端（2026-09-17 全链路验收轮：image provider 对比路径）
+_sensenova_image_client = None
+
+
+def get_sensenova_image_client():
+    """SenseNova 图片客户端单例（job.params image_provider="sensenova" 时使用）。
+    惰性构造：首次调用读 SENSENOVA_API_KEY 环境变量（.env 已在 startup 注入）。
+    未配置抛 503（明确 fail fast，不静默回落 Agnes）。"""
+    global _sensenova_image_client
+    if _sensenova_image_client is None:
+        import os
+        key = os.environ.get("SENSENOVA_API_KEY", "").strip()
+        if not key:
+            raise HTTPException(503, "SENSENOVA_API_KEY 未配置（.env）")
+        from src.api.sensenova_client import SensenovaImageClient
+        _sensenova_image_client = SensenovaImageClient(key)
+    return _sensenova_image_client
+
+
+def resolve_image_client(provider: str):
+    """image_provider → 图片客户端实例（生成端点/handler 统一入口）。
+    agnes（默认）| sensenova（商汤 u1.5-lite）。未知值 400。"""
+    p = (provider or "agnes").lower()
+    if p == "sensenova":
+        return get_sensenova_image_client()
+    if p == "agnes":
+        return get_agnes_client()
+    raise HTTPException(400, f"未知 image_provider: {provider}（可选 agnes|sensenova）")
+
+
 def get_project_manager():
     """安全获取 ProjectManager 单例（项目目录管理）。未就绪抛 503。"""
     if project_manager is None:

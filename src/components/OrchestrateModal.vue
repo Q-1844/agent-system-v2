@@ -58,9 +58,10 @@ import { ref, computed } from 'vue';
 import { apiClient } from '@/api';
 import type { OrchestrateResult } from '@/api';
 import { useProjectStore } from '@/store';
-import { createDiscreteApi, darkTheme } from 'naive-ui';
+import { createDiscreteApi } from 'naive-ui';
+import { discreteConfigProviderProps } from '@/styles/naiveTheme';
 
-const { message } = createDiscreteApi(['message'], { configProviderProps: { theme: darkTheme } });
+const { message } = createDiscreteApi(['message'], { configProviderProps: discreteConfigProviderProps });
 
 defineProps<{ show: boolean }>();
 const emit = defineEmits<{ (e: 'update:show', v: boolean): void }>();

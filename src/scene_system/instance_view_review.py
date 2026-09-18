@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from src.resources.generation import fingerprint, to_agnes_image_ref
-from src.resources.look_review import _extract_json, _normalize_dim
+from src.resources.look_review import _extract_json, _normalize_dim, vision_json_call
 
 from . import generation_records
 from .generation_records import review_records_path
@@ -435,7 +435,7 @@ async def review_scene_instance_view_candidates(project_dir, scene_instance_view
                    *content_static]
         msgs = [{"role": "user", "content": content}]
         try:
-            res = await agnes_client.chat_completion_vision(msgs, model=VISION_MODEL)
+            res = await vision_json_call(agnes_client, msgs, model=VISION_MODEL)
         except Exception as e:
             return {"candidate_index": candidate_index, "candidate_file": candidate_file,
                     "status": "provider_error", "overall": "uncertain",

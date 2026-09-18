@@ -85,6 +85,7 @@ from routers import agents  # noqa: E402  AI-6B Multi-Agent Foundation
 from routers import resources  # noqa: E402  Production Resources V1 Phase 1B (read-only)
 from routers import scene_system  # noqa: E402  Scene System V1 Phase S1（空间事实系统；不与 /scenes 冲突）
 from routers import sequences  # noqa: E402  Sequence S1 Assembly Foundation（24.md；Shot Production 的消费者）
+from routers import shot_binding  # noqa: E402  Shot Production Binding HTTP 层（S3B.4；业务在 src/shot_binding）
 app.include_router(system.router)
 app.include_router(projects.router)
 app.include_router(script.router)
@@ -105,6 +106,7 @@ app.include_router(agents.router)   # AI-6B Multi-Agent Foundation
 app.include_router(resources.router)   # Production Resources V1 Phase 1B (read-only)
 app.include_router(scene_system.router)   # Scene System V1 Phase S1（Location/Anchor/Layout/View/SceneInstance）
 app.include_router(sequences.router)   # Sequence S1 Assembly Foundation（24.md；hard cut + trim + render versioning）
+app.include_router(shot_binding.router)   # Shot Production Binding（S3B.4；BOUND 生成参考）
 
 
 @app.on_event("startup")

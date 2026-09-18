@@ -40,10 +40,11 @@ def append_record(project_dir, record: dict, *, path: Optional[Path] = None) -> 
 def read_records(project_dir, *, view_id: Optional[str] = None,
                  location_id: Optional[str] = None,
                  generation_id: Optional[str] = None,
+                 scene_instance_view_id: Optional[str] = None,
                  limit: Optional[int] = None,
                  path: Optional[Path] = None) -> List[dict]:
     """读取 records（append 顺序）。容错尾部损坏行（append 半行崩溃 → 跳过）。
-    view_id/location_id/generation_id 过滤；limit 取最近 N 条。"""
+    view_id/location_id/generation_id/scene_instance_view_id 过滤；limit 取最近 N 条。"""
     p = path or generation_records_path(project_dir)
     if not p.exists():
         return []
@@ -62,6 +63,9 @@ def read_records(project_dir, *, view_id: Optional[str] = None,
             if location_id is not None and rec.get("location_id") != location_id:
                 continue
             if generation_id is not None and rec.get("generation_id") != generation_id:
+                continue
+            if scene_instance_view_id is not None \
+                    and rec.get("scene_instance_view_id") != scene_instance_view_id:
                 continue
             out.append(rec)
     if limit is not None and limit >= 0:

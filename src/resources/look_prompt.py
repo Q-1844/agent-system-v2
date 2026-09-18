@@ -59,8 +59,9 @@ def build_look_candidate_prompt(*, character_description: str,
     lines: list = []
 
     lines.append(
-        f"Production character reference illustration, single character, full body, "
-        f"standing in a neutral relaxed pose, {view_line}."
+        f"Production character reference illustration, single character, full body "
+        f"head-to-toe with both feet visible in frame, standing in a neutral relaxed pose, "
+        f"{view_line}."
     )
     lines.append(
         f"Character identity (match the attached reference images faithfully; keep the "

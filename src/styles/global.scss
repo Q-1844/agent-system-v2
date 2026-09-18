@@ -75,6 +75,20 @@ a {
   color: inherit;
 }
 
+::selection {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
+:focus-visible {
+  outline: 2px solid var(--border-hover);
+  outline-offset: 1px;
+}
+
+button {
+  font-family: inherit;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

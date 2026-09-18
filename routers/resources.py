@@ -34,6 +34,7 @@ from typing import Optional, List
 from fastapi import APIRouter, Body, HTTPException, Query
 from pydantic import BaseModel
 
+import deps
 from deps import get_project_manager
 from src.resources.service import ResourceService
 from src.resources.models import ResourceSchemaError
@@ -296,6 +297,8 @@ class GenerateCompositionRequest(BaseModel):
     expected_revision: str              # composition 的 resource revision（entry OCC）
     candidate_count: int = 1
     seed: Optional[int] = None
+    # 2026-09-17 验收轮：image provider 覆盖（agnes 默认；sensenova=商汤 u1.5-lite）
+    image_provider: str = "agnes"
 
 
 @router.get("/api/project/{project}/compositions")
@@ -376,7 +379,8 @@ async def generate_composition_candidates(project: str, composition_id: str,
     try:
         result = await _write_service(project).generate_composition_candidates(
             composition_id, expected_revision=req.expected_revision,
-            candidate_count=req.candidate_count, seed=req.seed)
+            candidate_count=req.candidate_count, seed=req.seed,
+            agnes_client=deps.resolve_image_client(req.image_provider))
         _raise_for_receipt(result)
         return result
     except HTTPException:
@@ -647,6 +651,8 @@ class GenerateLookCandidatesRequest(BaseModel):
     candidate_count: int = 1            # 硬上限 4（service 校验）
     view_purpose: str = ""
     seed: Optional[int] = None
+    # 2026-09-17 验收轮：image provider 覆盖（agnes 默认；sensenova=商汤 u1.5-lite）
+    image_provider: str = "agnes"
 
 
 @router.post("/api/project/{project}/clothings")
@@ -803,7 +809,7 @@ async def generate_look_candidates(project: str, look_id: str,
         result = await _write_service(project).generate_look_candidates(
             look_id, expected_revision=req.expected_revision,
             candidate_count=req.candidate_count, view_purpose=req.view_purpose,
-            seed=req.seed)
+            seed=req.seed, agnes_client=deps.resolve_image_client(req.image_provider))
         _raise_for_receipt(result)
         return result
     except HTTPException:

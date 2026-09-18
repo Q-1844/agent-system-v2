@@ -48,12 +48,23 @@ def sha256_bytes(data: bytes) -> str:
 
 # ============ 本地文件解析 / 读取 ============
 def resolve_local_file(project_dir, local: Optional[str]) -> Optional[Path]:
-    """项目相对 → 绝对；绝对原样。必须存在为文件，否则 None。"""
+    """项目相对 → 绝对；绝对原样。必须存在为文件，否则 None。
+    相对路径的基准回退：project_dir → project_dir.parent → CWD。
+    🔴 背景（真实项目实测发现）：character bind 端点（routers/characters.py）落盘的
+    views.local 是相对**后端工作目录**的路径（projects/{name}/output/characters/…），
+    而 project_dir 是 output 目录——只按 project_dir 解析必然 miss，导致 Look 生成
+    missing_character_reference。多基准回退对已可解析的输入（绝对/相对 project_dir）
+    行为逐字节不变，只增加回退。"""
     if not local:
         return None
     p = Path(local)
     if not p.is_absolute():
-        p = Path(project_dir) / p
+        bases = [Path(project_dir), Path(project_dir).parent, Path.cwd()]
+        for base in bases:
+            cand = base / p
+            if cand.is_file():
+                return cand
+        return None
     return p if p.is_file() else None
 
 
@@ -208,7 +219,9 @@ def compute_generation_basis(project_dir, doc, project, look: CharacterLook, *,
         "view_purpose": view_purpose or "",
         "candidate_count": candidate_count,
         "seed": seed,
-        "model": {"provider": "agnes", "model_id": model_id,
+        "model": {"provider": ("sensenova" if str(model_id).startswith("sensenova")
+                               else "agnes"),
+                  "model_id": model_id,
                   "size_tier": size_tier, "ratio": ratio},
         "prompt": prompt,
     }
@@ -456,7 +469,9 @@ def compute_composition_basis(project_dir, doc, project, composition, *,
         "input_budget": selection["input_budget"],
         "candidate_count": candidate_count,
         "seed": seed,
-        "model": {"provider": "agnes", "model_id": model_id,
+        "model": {"provider": ("sensenova" if str(model_id).startswith("sensenova")
+                               else "agnes"),
+                  "model_id": model_id,
                   "size_tier": size_tier, "ratio": ratio},
         "prompt": prompt,
     }

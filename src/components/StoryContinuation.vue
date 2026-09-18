@@ -168,13 +168,14 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
-import { createDiscreteApi, darkTheme } from 'naive-ui';
+import { createDiscreteApi } from 'naive-ui';
+import { discreteConfigProviderProps } from '@/styles/naiveTheme';
 import { apiClient } from '@/api';
 import type { StoryContinuationDraft, DraftScene, ContinuationScale } from '@/api';
 import CharacterResolutionPanel from './CharacterResolutionPanel.vue';
 
 const { message, dialog } = createDiscreteApi(['message', 'dialog'], {
-  configProviderProps: { theme: darkTheme },
+  configProviderProps: discreteConfigProviderProps,
 });
 
 const props = defineProps<{ projectName: string }>();

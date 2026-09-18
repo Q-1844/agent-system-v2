@@ -84,9 +84,10 @@ import type { ShotData } from '@/api';
 import { getImageUrl, getVideoUrl } from '@/utils/media';
 import SafeFrameOverlay from './SafeFrameOverlay.vue';
 import { useJobStore } from '@/store/jobs';
-import { createDiscreteApi, darkTheme } from 'naive-ui';
+import { createDiscreteApi } from 'naive-ui';
+import { discreteConfigProviderProps } from '@/styles/naiveTheme';
 
-const { message } = createDiscreteApi(['message'], { configProviderProps: { theme: darkTheme } });
+const { message } = createDiscreteApi(['message'], { configProviderProps: discreteConfigProviderProps });
 
 const props = defineProps<{ shot: ShotData; projectName: string }>();
 const emit = defineEmits<{ (e: 'refresh'): void }>();

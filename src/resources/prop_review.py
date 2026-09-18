@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Optional
 from .generation import fingerprint, to_agnes_image_ref
 from .generation_records import append_record, review_records_path, read_records
 from .look_prompt import _clean
-from .look_review import VISION_MODEL, _extract_json, _normalize_dim
+from .look_review import VISION_MODEL, _extract_json, _normalize_dim, vision_json_call
 
 _PROP_DIMENSIONS = ("prop_fidelity", "visual_clarity", "visual_defects")
 # P1 §15：项目风格一致性维度（profile specified 时追加；hard——fail → overall 不得 pass）
@@ -178,7 +178,7 @@ async def review_prop_reference(project_dir, prop_id: str, *,
             {"type": "image_url", "image_url": {"url": image_ref}},
         ]}]
         try:
-            res = await agnes_client.chat_completion_vision(msgs, model=VISION_MODEL)
+            res = await vision_json_call(agnes_client, msgs, model=VISION_MODEL)
         except Exception as e:   # 单候选 provider 错误隔离
             return {"asset_id": asset_id, "status": "provider_error", "overall": "uncertain",
                     "summary": f"{type(e).__name__}: {e}"}

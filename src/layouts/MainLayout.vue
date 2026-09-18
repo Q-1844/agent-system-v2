@@ -24,7 +24,26 @@
         </button>
       </div>
 
+      <button
+        class="project-switch"
+        @click="goProjectPicker"
+        :title="projectName ? `${projectName} · 返回项目序列` : '选择项目'"
+      >
+        <svg class="ps-lead" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
+        </svg>
+        <span v-if="!sidebarCollapsed" class="ps-text">
+          <span class="ps-caption">当前项目</span>
+          <span class="ps-name">{{ projectName || '未选择' }}</span>
+        </span>
+        <svg v-if="!sidebarCollapsed" class="ps-swap" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+      </button>
+
       <nav class="nav">
+        <div v-if="!sidebarCollapsed" class="nav-section">创作流程</div>
         <router-link
           v-for="item in menuItems"
           :key="item.path"
@@ -56,7 +75,7 @@
             </svg>
           </span>
           <span v-if="!sidebarCollapsed" class="nav-label">
-            {{ theme === 'dark' ? 'Light Mode' : 'Dark Mode' }}
+            {{ theme === 'dark' ? '浅色模式' : '深色模式' }}
           </span>
         </button>
 
@@ -67,7 +86,7 @@
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
             </svg>
           </span>
-          <span v-if="!sidebarCollapsed" class="nav-label">Settings</span>
+          <span v-if="!sidebarCollapsed" class="nav-label">设置</span>
         </router-link>
       </div>
     </aside>
@@ -75,7 +94,7 @@
     <main class="main">
       <header class="topbar">
         <div class="topbar-left">
-          <span class="page-title">{{ currentRoute?.meta?.title || 'Dashboard' }}</span>
+          <span class="page-title">{{ currentRoute?.meta?.title }}</span>
         </div>
         <div class="topbar-right">
           <button class="btn btn-ghost" @click="orchestrateShow = true">编排</button>
@@ -83,14 +102,22 @@
             队列
             <span v-if="runningCount" class="badge">{{ runningCount }}</span>
           </button>
-          <button class="btn btn-ghost" :disabled="exporting" @click="handleExport">
-            {{ exporting ? '合成中...' : '导出视频' }}
+          <button class="btn btn-primary" :disabled="exporting" @click="handleExport">
+            {{ exporting ? '合成中…' : '导出视频' }}
           </button>
           <div class="avatar">{{ (projectName || 'U').charAt(0) }}</div>
+          <!-- 页面级保存/同步状态（页面经 useTopbarStatus 上报，位于最右上角） -->
+          <div v-if="topbarStatus" class="topbar-status">
+            <span class="save-state">
+              <span class="dot" :class="topbarStatus.tone === 'fail' ? 'fail' : topbarStatus.tone === 'idle' ? 'on' : ''"></span>
+              <span>{{ topbarStatus.text }}</span>
+              <a v-if="topbarStatus.action" @click="topbarStatus.action()">· {{ topbarStatus.actionText }}</a>
+            </span>
+          </div>
         </div>
       </header>
 
-      <div class="content">
+      <div class="content" :class="{ 'no-pad': fullBleed }">
         <router-view />
       </div>
     </main>
@@ -103,9 +130,10 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useTheme } from '@/composables/useTheme';
 import { useProjectStore } from '@/store';
+import { topbarStatus } from '@/store/topbarStatus';
 import { apiClient } from '@/api';
 import { useTaskStream } from '@/composables/useTaskStream';
 import { useJobStream } from '@/composables/useJobStream';
@@ -116,8 +144,15 @@ import OrchestrateModal from '@/components/OrchestrateModal.vue';
 import FloatingAgentHost from '@/components/agent/FloatingAgentHost.vue';
 
 const route = useRoute();
+const router = useRouter();
 const currentRoute = computed(() => route);
 const sidebarCollapsed = ref(false);
+// 工作台类页面（如剧本编辑）需要通栏铺满，去掉外层内边距
+const fullBleed = computed(() => !!(route.meta as any)?.fullBleed);
+
+const goProjectPicker = () => {
+  router.push('/projects');
+};
 
 const { theme, toggleTheme } = useTheme();
 
@@ -165,21 +200,12 @@ async function handleExport() {
   }
 }
 
+// 菜单顺序 = 创作工作流顺序：剧本 → 场景 → 分镜 → 合成 → 资源（含角色/Look）→ 版本
 const menuItems = [
   {
-    path: '/dashboard',
-    title: 'Dashboard',
-    icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg>'
-  },
-  {
-    path: '/characters',
-    title: 'Characters',
-    icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>'
-  },
-  {
-    path: '/resources',
-    title: '生产资源',
-    icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1" /><rect x="13" y="3" width="8" height="8" rx="1" /><rect x="3" y="13" width="8" height="8" rx="1" /><path d="M17 13v8M13 17h8" /></svg>'
+    path: '/script-editor',
+    title: '剧本编辑',
+    icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="8" y1="13" x2="16" y2="13" /><line x1="8" y1="17" x2="16" y2="17" /></svg>'
   },
   {
     path: '/scene-system',
@@ -187,14 +213,19 @@ const menuItems = [
     icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>'
   },
   {
-    path: '/script-editor',
-    title: '剧本',
-    icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="8" y1="13" x2="16" y2="13" /><line x1="8" y1="17" x2="16" y2="17" /></svg>'
+    path: '/storyboard',
+    title: '分镜画廊',
+    icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="3" y1="15" x2="21" y2="15" /><line x1="9" y1="3" x2="9" y2="21" /></svg>'
   },
   {
-    path: '/storyboard',
-    title: 'Storyboard',
-    icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="3" y1="15" x2="21" y2="15" /><line x1="9" y1="3" x2="9" y2="21" /></svg>'
+    path: '/sequences',
+    title: '影片合成',
+    icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2" /><polygon points="10 9 15 12 10 15 10 9" fill="currentColor" stroke="none" /></svg>'
+  },
+  {
+    path: '/resources',
+    title: '生产资源',
+    icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1" /><rect x="13" y="3" width="8" height="8" rx="1" /><rect x="3" y="13" width="8" height="8" rx="1" /><path d="M17 13v8M13 17h8" /></svg>'
   },
   {
     path: '/workspace',
@@ -217,15 +248,16 @@ const menuItems = [
 }
 
 .sidebar {
-  width: 200px;
+  width: 208px;
   background-color: var(--bg-root);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   transition: width 0.2s ease;
+  flex-shrink: 0;
 
   .collapsed & {
-    width: 52px;
+    width: 56px;
   }
 }
 
@@ -286,17 +318,28 @@ const menuItems = [
   display: flex;
   flex-direction: column;
   gap: 2px;
+  overflow-y: auto;
+}
+
+.nav-section {
+  padding: 10px 10px 6px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  user-select: none;
 }
 
 .nav-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
+  padding: 7px 10px;
   border-radius: 6px;
   color: var(--text-muted);
   font-size: 13px;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
   text-decoration: none;
 
   &:hover {
@@ -305,8 +348,20 @@ const menuItems = [
   }
 
   &.active {
-    background-color: var(--bg-hover);
+    background-color: var(--bg-active);
     color: var(--text-primary);
+    font-weight: 500;
+
+    &::before {
+      content: '';
+      position: absolute;
+      left: -8px;
+      top: 7px;
+      bottom: 7px;
+      width: 2px;
+      border-radius: 0 2px 2px 0;
+      background: var(--accent);
+    }
   }
 
   .collapsed & {
@@ -350,13 +405,14 @@ const menuItems = [
 }
 
 .topbar {
-  height: 48px;
+  height: 52px;
   border-bottom: 1px solid var(--border);
-  padding: 0 20px;
+  padding: 0 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-shrink: 0;
+  background-color: var(--bg-root);
 }
 
 .topbar-left {
@@ -366,14 +422,114 @@ const menuItems = [
 
 .page-title {
   font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+}
+
+// 返回项目序列：克制无边框，两行信息（标签+项目名），悬停才揭示切换箭头
+.project-switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 8px 2px;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+
+    .ps-swap {
+      opacity: 1;
+      transform: translateX(2px);
+    }
+  }
+
+  .collapsed & {
+    justify-content: center;
+    padding: 10px;
+    margin: 4px 8px 2px;
+  }
+}
+
+.ps-lead {
+  flex-shrink: 0;
+  color: var(--icon);
+}
+
+.ps-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.ps-caption {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+}
+
+.ps-name {
+  font-size: 13px;
   font-weight: 500;
   color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ps-swap {
+  flex-shrink: 0;
+  color: var(--icon);
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
 .topbar-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+}
+
+.topbar-status {
+  display: flex;
+  align-items: center;
+  margin-left: 4px;
+
+  .save-state {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-muted);
+
+    a {
+      color: var(--text-primary);
+      text-decoration: underline;
+      cursor: pointer;
+    }
+  }
+
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-faint);
+    flex-shrink: 0;
+
+    &.on { background: var(--text-secondary); }
+    &.fail { background: var(--error); }
+  }
 }
 
 .btn {
@@ -382,8 +538,13 @@ const menuItems = [
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
   border: none;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 
   &-ghost {
     background: none;
@@ -394,18 +555,30 @@ const menuItems = [
       color: var(--text-secondary);
     }
   }
+
+  &-primary {
+    background: var(--accent);
+    color: var(--accent-text);
+
+    &:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
+  }
 }
 
 .avatar {
   width: 28px;
   height: 28px;
-  border-radius: 50%;
-  background-color: var(--bg-hover);
+  border-radius: 6px;
+  background-color: var(--bg-active);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 12px;
-  color: var(--text-muted);
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-left: 6px;
+  text-transform: uppercase;
 }
 
 .queue-btn {
@@ -413,14 +586,14 @@ const menuItems = [
 }
 .badge {
   position: absolute;
-  top: -2px;
-  right: -6px;
+  top: -4px;
+  right: -8px;
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
   border-radius: 8px;
-  background: #60a5fa;
-  color: #fff;
+  background: var(--text-primary);
+  color: var(--bg-root);
   font-size: 10px;
   line-height: 16px;
   text-align: center;
@@ -429,7 +602,12 @@ const menuItems = [
 
 .content {
   flex: 1;
-  padding: 20px;
+  padding: 24px;
   overflow-y: auto;
+}
+
+.content.no-pad {
+  padding: 0;
+  overflow: hidden;
 }
 </style>

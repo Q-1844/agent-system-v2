@@ -65,7 +65,7 @@ def _require_id(value: Any, field: str) -> str:
 
 
 class ShotBindingService:
-    """shot_production_bindings.json 读/写服务（HTTP 层 S3B.4 才接入）。"""
+    """shot_production_bindings.json 读/写服务（HTTP 层见 routers/shot_binding.py）。"""
 
     def __init__(self, project_dir, project_name: Optional[str] = None):
         self.dir = Path(project_dir)

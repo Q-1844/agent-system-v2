@@ -3,27 +3,27 @@ import type { RouteRecordRaw } from 'vue-router';
 
 const routes: RouteRecordRaw[] = [
   {
+    // 全屏项目选择页（无侧边栏布局）
+    path: '/projects',
+    name: 'ProjectPicker',
+    component: () => import('@/views/project-picker/index.vue'),
+    meta: { title: '选择项目' }
+  },
+  {
     path: '/',
     component: () => import('@/layouts/MainLayout.vue'),
-    redirect: '/dashboard',
+    redirect: '/projects',
     children: [
-      {
-        path: 'dashboard',
-        name: 'Dashboard',
-        component: () => import('@/views/dashboard/index.vue'),
-        meta: { title: '仪表盘', icon: 'dashboard' }
-      },
       {
         path: 'script-editor',
         name: 'ScriptEditor',
         component: () => import('@/views/script-editor/index.vue'),
-        meta: { title: '剧本编辑', icon: 'script' }
+        meta: { title: '剧本编辑', icon: 'script', fullBleed: true }
       },
       {
+        // 角色模块已并入「生产资源」（角色卡片 → 角色工作台弹窗）；旧链重定向保兼容
         path: 'characters',
-        name: 'Characters',
-        component: () => import('@/views/characters/index.vue'),
-        meta: { title: '角色管理', icon: 'characters' }
+        redirect: (to) => ({ path: '/resources', query: { ...(to.query as Record<string, string>), tab: 'characters' } })
       },
       {
         path: 'resources',
@@ -44,6 +44,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '分镜画廊', icon: 'storyboard' }
       },
       {
+        path: 'sequences',
+        name: 'Sequences',
+        component: () => import('@/views/sequences/index.vue'),
+        meta: { title: '影片合成', icon: 'sequences' }
+      },
+      {
         path: 'workspace',
         name: 'Workspace',
         component: () => import('@/views/workspace/index.vue'),
@@ -62,6 +68,11 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '设置', icon: 'settings' }
       }
     ]
+  },
+  {
+    // 旧仪表盘路径兼容
+    path: '/dashboard',
+    redirect: '/projects'
   }
 ];
 

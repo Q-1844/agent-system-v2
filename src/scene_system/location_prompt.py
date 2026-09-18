@@ -26,6 +26,11 @@ from .models import Location, LocationView, SetLayout, SpatialAnchor
 _MAX_STRUCTURES = 12
 _MAX_RELATIONS = 8
 
+# 正交俯视机位词表（camera_zone 命中即走专用 top-down camera 句式；
+# 未命中保持既有 "viewed from ... / looking toward ..." 通用句式逐字节不变，
+# 以免改变存量 view 的 basis 指纹）。
+_OVERHEAD_CAMERA_ZONES = {"overhead", "top_down", "top-down", "topdown", "above"}
+
 
 def _clean(s: Optional[str]) -> str:
     return " ".join(str(s or "").split())
@@ -53,11 +58,17 @@ def _xy_zone_words(x: Optional[float], y: Optional[float],
 
 def build_location_view_prompt(location: Location, anchors: List[SpatialAnchor],
                                layout: Optional[SetLayout], view: LocationView,
-                               *, has_references: bool = False) -> str:
+                               *, has_references: bool = False,
+                               reference_view_ids: Optional[List[str]] = None) -> str:
     """确定性编译 LocationView 生成 prompt（S2A §11）。
     anchors = 该 location 的全部 anchors（调用方保证；本函数按 id 排序使用）。
     has_references：本次生成是否附 approved LocationView 参考图（由参考选择决定，
-    与选择结果一同记录进 basis；prompt 文本随之确定性变化）。"""
+    与选择结果一同记录进 basis；prompt 文本随之确定性变化）。
+    reference_view_ids：本次实际参考的 view id 集合。若参考全部来自**其它** view
+    （cross-view），插入"换机位构图"指令——参考图只作身份/材质/地标依据，
+    构图必须来自本 view 的机位（真实项目实测：否则 i2i 把新机位锚死成参考图
+    视角，"侧面"生成出与正面同构的图）。参考包含自身（同 view 重刷）时文案
+    与旧版逐字节一致（重刷必须保持机位）。"""
     loc_name = _clean(location.name)
     identity = _clean(location.identity_description) or _clean(location.description)
     style = _clean(location.style_notes)
@@ -88,7 +99,14 @@ def build_location_view_prompt(location: Location, anchors: List[SpatialAnchor],
         parts.append("Key fixed structures that must appear exactly as specified:\n" + "\n".join(lines))
 
     if others:
-        names = ", ".join(_clean(a.name) or a.anchor_id for a in others[:_MAX_STRUCTURES])
+        # 重名 anchor 去重：同名列出 N 次会被模型理解为 N 个实例
+        # （实测：4 个重名 east_chimney anchor → 模型稳定画出双/多烟囱）。
+        other_names: List[str] = []
+        for a in others:
+            n = _clean(a.name) or a.anchor_id
+            if n not in other_names:
+                other_names.append(n)
+        names = ", ".join(other_names[:_MAX_STRUCTURES])
         parts.append(f"Other stable structures of the same location (context): {names}.")
 
     # 空间关系（anchor.relations，语义层）
@@ -125,19 +143,66 @@ def build_location_view_prompt(location: Location, anchors: List[SpatialAnchor],
                          + "; ".join(ph) + ".")
 
     cam = []
-    if _clean(view.camera_zone):
-        cam.append(f"viewed from the {_clean(view.camera_zone)} of the space")
-    if _clean(view.look_direction):
-        cam.append(f"looking toward the {_clean(view.look_direction)}")
-    if cam:
-        parts.append("Camera: " + ", ".join(cam) + ".")
+    cam_zone = _clean(view.camera_zone)
+    look_dir = _clean(view.look_direction)
+    cross_view = bool(reference_view_ids) and view.view_id not in set(reference_view_ids)
+    if cam_zone.lower() in _OVERHEAD_CAMERA_ZONES:
+        # 正交俯视机位：专用强指令句式（2026-09-17 实测两轮：
+        # R1 通用句式把 look_direction 整句嵌进 "looking toward the ..." 产生病句，
+        #    航拍先验把 "orthographic top-down" 稀释成 ~45° 斜拍，view_consistency=fail；
+        # R2 中段强指令仍被航拍先验压过（高角 3/4，concern/fail）。
+        # R3 对策：指令前移到 prompt 开头 + 换 "2D game map / floor plan" 正语义锚
+        #    （训练数据里 map/floor-plan 天然是正俯视），并用正向描述替代否定句。）
+        cam_parts = [
+            "Viewpoint: nadir view looking straight down from directly overhead at a "
+            "90-degree angle, as in satellite imagery or an architectural floor plan "
+            "seen from above; the image is a flat vertical projection of the site: "
+            "the roof plane fills the center seen from above, the fence and the path "
+            "lie flat around it on the ground, and the ground fills the whole canvas "
+            "to all four edges; no horizon, no sky, no oblique perspective; vertical "
+            "walls and facades are not visible, only roofs and ground.",
+        ]
+        if look_dir:
+            cam_parts.append(f"Top-down view notes: {look_dir}.")
+        parts[1:1] = cam_parts   # 前移：紧随 clean-reference 引言之后，压过航拍先验
+        if cross_view:
+            parts.append(
+                "The approved reference images show the SAME location from DIFFERENT camera "
+                "positions: treat them strictly as identity, material, landmark and layout "
+                "reference. Compose THIS image from the NEW camera position described above — "
+                "a different physical position and a different viewing direction are REQUIRED; "
+                "do NOT copy the reference camera angle or its perspective.")
+    else:
+        if cam_zone:
+            cam.append(f"viewed from the {cam_zone} of the space")
+        if look_dir:
+            cam.append(f"looking toward the {look_dir}")
+        if cam:
+            parts.append("Camera: " + ", ".join(cam) + ".")
+            if cross_view:
+                parts.append(
+                    "The approved reference images show the SAME location from DIFFERENT camera "
+                    "positions: treat them strictly as identity, material, landmark and layout "
+                    "reference. Compose THIS image from the NEW camera position described above — "
+                    "a different physical position and a different viewing direction are REQUIRED; "
+                    "do NOT copy the reference camera angle or its perspective.")
 
     if visible:
-        parts.append("Clearly visible in frame: "
-                     + ", ".join(_clean(a.name) or a.anchor_id for a in visible) + ".")
+        vis_names: List[str] = []
+        for a in visible:
+            n = _clean(a.name) or a.anchor_id
+            if n not in vis_names:
+                vis_names.append(n)
+        parts.append("Clearly visible in frame: " + ", ".join(vis_names) + ".")
 
     parts.append(
         "Maintain the same location identity: architectural consistency, stable materials, "
         "stable landmark positions matching the specification"
+        + (" as seen from this new camera position (same spatial arrangement, not the same "
+           "camera angle)" if cross_view else "")
         + (" and the approved reference images of this same location." if has_references else "."))
+    if cam_zone.lower() in _OVERHEAD_CAMERA_ZONES:
+        # R4：尾部二次强调（首尾呼应提升指令依从；仅 overhead 分支，非 overhead 逐字节不变）
+        parts.append(
+            "The entire image is seen straight from above, like a map lying flat on a table.")
     return " ".join(p.strip() for p in parts if p.strip())

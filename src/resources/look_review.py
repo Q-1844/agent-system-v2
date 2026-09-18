@@ -133,6 +133,36 @@ def _normalize_dim(v: Any) -> Optional[str]:
     return s if s in ("pass", "concern", "fail") else None
 
 
+async def vision_json_call(agnes_client, msgs: list, *, model: str,
+                           max_attempts: int = 2) -> dict:
+    """Vision 调用 + 宽容 JSON 解析稳定性 wrapper（P1 修复，2026-09-18）。
+    首次回复无法解析为 JSON 时，追加『只输出 JSON』硬提醒重试一次；
+    两次都失败返回首次结果（调用方按 uncertain 诚实记录，不伪造）。
+    实测背景：偶发 vision 回复夹带散文导致 parse_failed → uncertain，
+    重试即可恢复（验收轮 A hero sensenova 首轮即此情形）。"""
+    res = await agnes_client.chat_completion_vision(msgs, model=model)
+    if _extract_json((res or {}).get("content")) is not None:
+        return res
+    import copy as _copy
+    retry_msgs = _copy.deepcopy(msgs)
+    try:
+        for part in retry_msgs[0]["content"]:
+            if isinstance(part, dict) and part.get("type") == "text":
+                part["text"] += ("\n\nIMPORTANT: your previous reply could not be parsed as JSON. "
+                                 "Reply again with ONLY the raw JSON object itself — no prose, "
+                                 "no markdown fences, no explanation before or after.")
+                break
+    except Exception:
+        pass
+    try:
+        res2 = await agnes_client.chat_completion_vision(retry_msgs, model=model)
+        if _extract_json((res2 or {}).get("content")) is not None:
+            return res2
+    except Exception:
+        pass
+    return res
+
+
 def derive_overall(dims: Dict[str, Optional[str]],
                    dimensions: tuple = _DIMENSIONS) -> str:
     """overall 确定性推导：任何 fail→needs_fix；全 pass→pass；其余（concern/缺失）→uncertain。
@@ -253,7 +283,7 @@ async def review_look_candidates(project_dir, look_id: str, *,
             {"type": "image_url", "image_url": {"url": image_ref}},
         ]}]
         try:
-            res = await agnes_client.chat_completion_vision(msgs, model=VISION_MODEL)
+            res = await vision_json_call(agnes_client, msgs, model=VISION_MODEL)
         except Exception as e:   # 单候选 provider 错误隔离
             return {"asset_id": asset_id, "status": "provider_error", "overall": "uncertain",
                     "summary": f"{type(e).__name__}: {e}"}

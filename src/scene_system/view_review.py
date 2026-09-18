@@ -33,7 +33,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from src.resources.generation import fingerprint, to_agnes_image_ref
-from src.resources.look_review import _extract_json, _normalize_dim
+from src.resources.look_review import _extract_json, _normalize_dim, vision_json_call
 
 # Scene System 域自含视觉审查模型常量（同 Resources 惯例：本域自含，不 import agents）。
 # S2B 起：agnes-3.0-flash（2026-09-11 探针实证：视觉+JSON 遵从 OK、延迟不劣于 2.5、
@@ -159,7 +159,9 @@ def build_view_review_prompt(expectations: dict, image_labels: List[str],
         "3. anchor_consistency — the major landmarks match the specification: no substitution, "
         "no drift in their defining details (door count, window shape, console form, stairs).\n"
         "4. layout_consistency — the relative spatial arrangement of landmarks is consistent "
-        "with the specification/layout hints (e.g. door behind console, windows left).\n"
+        "with the specification/layout hints (e.g. the door sits behind the console; windows sit "
+        "on whichever side the layout specifies — judge by the stated layout, not by screen "
+        "left/right).\n"
         "5. view_consistency — the viewpoint matches the expected camera zone and look "
         "direction (we are looking from where the view says, toward what it says).\n"
         "6. visual_defects — obvious defects: malformed geometry, artifacts, watermark or text, "
@@ -348,7 +350,7 @@ async def review_location_view_candidates(project_dir, view_id: str, *,
                    *content_static]
         msgs = [{"role": "user", "content": content}]
         try:
-            res = await agnes_client.chat_completion_vision(msgs, model=VISION_MODEL)
+            res = await vision_json_call(agnes_client, msgs, model=VISION_MODEL)
         except Exception as e:
             return {"candidate_index": candidate_index, "candidate_file": candidate_file,
                     "status": "provider_error", "overall": "uncertain",
