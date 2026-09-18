@@ -248,7 +248,8 @@ def test_no_story_write_capability(tmp_path):
                           "project.visual_profile.read",
                           "resource.inventory", "resource.read",
                           "resource.clothing.upsert", "resource.look.prepare",
-                          "resource.prop.register", "resource.composition.prepare"}
+                          "resource.prop.register", "resource.composition.prepare",
+                          "resource.library.publish", "resource.library.import"}
     surface_names = {t["function"]["name"] for t in _tool_surface()}
     assert {"shot.list", "shot.read"} <= surface_names
     # 执行器表也只暴露只读的 story/script 执行器，绝无写执行器

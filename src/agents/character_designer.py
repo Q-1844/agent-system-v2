@@ -103,6 +103,8 @@ WRITE_TOOL_DOMAIN = {
     "resource.look.prepare": RESOURCE_RESOURCES,
     "resource.prop.register": RESOURCE_RESOURCES,
     "resource.composition.prepare": RESOURCE_RESOURCES,
+    "resource.library.publish": RESOURCE_RESOURCES,
+    "resource.library.import": RESOURCE_RESOURCES,
 }
 
 # 三视图生成超时（2026-08-30 用户规格）：生图很慢——单角色三视图链（front t2i → side/back
@@ -622,6 +624,53 @@ COMPOSITION_PREPARE_TOOL = {
     },
 }
 
+LIBRARY_PUBLISH_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "resource.library.publish",
+        "description": ("把项目资源发布到共享库（copy-on-publish：项目资源零改动；同源重复"
+                        "发布=共享库版本+1）。resource_kind=character 时 resource_id 传角色名"
+                        "（发布角色母版）；其它 kind 传资源 id。发布前需先确认 Clothing 依赖已"
+                        "发布（Look 依赖其 clothing）。expected_resources_revision 传最近一次 "
+                        "resource.inventory 的 document_revision（确保发布的是你看到的源状态）。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "resource_kind": {"type": "string",
+                                  "enum": ["clothing", "look", "prop", "composition",
+                                           "character"]},
+                "resource_id": {"type": "string",
+                                "description": "资源 id（character 域传角色名）。"},
+                "expected_resources_revision": {"type": "string"},
+                "destination": {"type": "string", "description": "仅支持 default 共享库。"},
+            },
+            "required": ["resource_kind", "resource_id", "expected_resources_revision"],
+        },
+    },
+}
+
+LIBRARY_IMPORT_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "resource.library.import",
+        "description": ("从共享库导入资源快照到当前项目（copy-on-import：新 id、媒体复制、"
+                        "origin 记录；共享库原资源不受影响）。look 导入自动捆绑其共享 clothing"
+                        "（项目内已有同源副本时不重复导入）；character 导入要求项目内无同名角色。"
+                        "expected_resources_revision 传 resource.inventory 的 document_revision，"
+                        "stale 会被拒绝。导入失败一律 fail closed，不产生半途状态。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "shared_resource_id": {"type": "string",
+                                       "description": "共享资源 id（来自共享库列表）。"},
+                "expected_resources_revision": {"type": "string",
+                                                "description": "项目 resources document_revision。"},
+            },
+            "required": ["shared_resource_id", "expected_resources_revision"],
+        },
+    },
+}
+
 VISUAL_PROFILE_READ_TOOL = {
     "type": "function",
     "function": {
@@ -661,6 +710,7 @@ CHARACTER_DESIGNER_TOOLS = [
     RESOURCE_INVENTORY_TOOL, RESOURCE_READ_TOOL,
     CLOTHING_UPSERT_TOOL, LOOK_PREPARE_TOOL, PROP_REGISTER_TOOL,
     COMPOSITION_PREPARE_TOOL,
+    LIBRARY_PUBLISH_TOOL, LIBRARY_IMPORT_TOOL,
     VISUAL_PROFILE_READ_TOOL,
     WEB_SEARCH_TOOL,
 ]
@@ -2033,6 +2083,132 @@ async def _execute_resource_composition_prepare(rt: AgentRuntime, project: str,
                  "；review_only 模式不自动批准，等待用户验收。")))
 
 
+# ---- §9 resource.library.publish / import ----
+async def _execute_resource_library_publish(rt: AgentRuntime, project: str, arguments: str,
+                                            instruction, message_id) -> dict:
+    """把项目资源发布到共享库（§9：copy-on-publish，项目 canonical 只读零改动；
+    幂等 republish=同 shared id 版本+1）。character 走母版发布（publish_character）。"""
+    args = _parse_args(arguments)
+    kind = (args.get("resource_kind") or "").strip()
+    rid = (args.get("resource_id") or "").strip()
+    expected = args.get("expected_resources_revision")
+    destination = (args.get("destination") or "default").strip() or "default"
+    if kind not in ("clothing", "look", "prop", "composition", "character"):
+        raise AgentError("bad_arguments",
+                         "resource_kind 必须是 clothing|look|prop|composition|character")
+    if not rid:
+        raise AgentError("bad_arguments", "缺少 resource_id（character 域传角色名）")
+    if destination != "default":
+        raise AgentError("bad_arguments",
+                         f"当前系统只有 default 共享库，不支持: {destination}")
+    if not expected or not isinstance(expected, str):
+        raise AgentError("bad_arguments",
+                         "缺少 expected_resources_revision（传 resource.inventory 返回的"
+                         " document_revision，确保发布的是你看到的源状态）")
+    from src.resources.write_service import ResourceWriteService
+    from src.resources.shared_library import SharedLibraryService
+    pdir = _resolve_pdir(rt, project)
+    # 发布前源状态校验（发布动作本身只读项目 canonical——OCC 防的是「基于过期快照发布」）
+    cur_doc = document_revision_safe(ResourceWriteService(pdir, project))
+    if expected != cur_doc:
+        return _base_receipt("resource.library.publish", ok=False, target=rid,
+                             before=None, after=None, revision=cur_doc, verified=False,
+                             error="stale_revision", stale=True,
+                             expected_revision=expected, current_revision=cur_doc,
+                             changed_resources=[], op_summary="发布被拒（源状态过期）",
+                             note="你看到的 resources document 已过期，未发布。请重新 "
+                                  "resource.inventory 后再试。")
+    svc = SharedLibraryService(pdir, project)
+    if kind == "character":
+        r = await svc.publish_character(rid)
+    else:
+        r = await svc.publish(rid)
+    if not r.get("ok"):
+        return _base_receipt("resource.library.publish", ok=False, target=rid,
+                             before=None, after=None, revision=None, verified=False,
+                             error=r.get("error") or "publish_failed",
+                             detail=r.get("detail"), changed_resources=[],
+                             op_summary="发布失败",
+                             note=f"发布未完成：{r.get('detail') or r.get('error')}")
+    shared_id = r.get("shared_id") or r.get("schar_id") or r.get("id")
+    return _base_receipt("resource.library.publish", ok=True, target=rid,
+                         before=None, after={"shared_id": shared_id,
+                                             "version": r.get("version")},
+                         revision=cur_doc, verified=True,
+                         resource_kind=kind, resource_id=rid,
+                         shared_id=shared_id, version=r.get("version"),
+                         published=True,
+                         changed_resources=[],   # 项目 canonical 零改动（copy 进共享库）
+                         op_summary=f"已发布 {rid} → 共享库（v{r.get('version')}）",
+                         note=f"已发布到共享库：shared_id={shared_id}（版本 "
+                              f"{r.get('version')}）。项目内资源保持不变（copy-on-publish）。")
+
+
+async def _execute_resource_library_import(rt: AgentRuntime, project: str, arguments: str,
+                                           instruction, message_id) -> dict:
+    """从共享库导入资源快照（§9：copy-on-import 新 id + 媒体复制 + origin；look 自动捆绑
+    clothing；character 要求项目内无同名）。OCC：expected_resources_revision 对照项目
+    document revision，stale fail closed；绝不手工 remap 依赖 id。"""
+    args = _parse_args(arguments)
+    shared_id = (args.get("shared_resource_id") or "").strip()
+    expected = args.get("expected_resources_revision")
+    if not shared_id:
+        raise AgentError("bad_arguments", "缺少 shared_resource_id")
+    if not expected or not isinstance(expected, str):
+        raise AgentError("bad_arguments",
+                         "缺少 expected_resources_revision（传 resource.inventory 返回的"
+                         " document_revision）")
+    from src.resources.shared_library import SharedLibraryService
+    pdir = _resolve_pdir(rt, project)
+    svc = SharedLibraryService(pdir, project)
+    r = await svc.import_resource(shared_id, expected_document_revision=expected)
+    if r.get("error") == "stale_revision":
+        return _base_receipt("resource.library.import", ok=False, target=shared_id,
+                             before=None, after=None,
+                             revision=r.get("current_revision"), verified=False,
+                             error="stale_revision", stale=True,
+                             expected_revision=r.get("expected_revision"),
+                             current_revision=r.get("current_revision"),
+                             changed_resources=[], op_summary="导入被拒（项目状态过期）",
+                             note="项目 resources document 已被并发修改，未导入。重新 "
+                                  "resource.inventory 后再试。")
+    if not r.get("ok"):
+        return _base_receipt("resource.library.import", ok=False, target=shared_id,
+                             before=None, after=None, revision=None, verified=False,
+                             error=r.get("error") or "import_failed",
+                             detail=r.get("detail"), changed_resources=[],
+                             op_summary="导入失败",
+                             note=f"导入未完成：{r.get('detail') or r.get('error')}"
+                                  + ("（fail closed，不半途导入）" if r.get("error") else ""))
+    kind = r.get("kind")
+    imported_id = r.get("imported_id")
+    changes: list = []
+    seen: set = set()
+    bundle = r.get("imported_bundle") or {}
+    if kind == "character":
+        # 母版导入 = 新 Character 进 project.json（Resource Agent 自有域）
+        changes.append({"kind": "character", "id": imported_id})
+    else:
+        _chg(changes, seen, kind, imported_id)
+    for sid_, new_id in bundle.items():
+        if sid_ != shared_id:
+            _chg(changes, seen, "clothing", new_id)   # look 导入自动捆绑的 clothing
+    first = dict(changes[0]) if changes else {}
+    return _base_receipt(
+        "resource.library.import", ok=True, target=imported_id,
+        before=None, after=None, revision=None, verified=True,
+        resource_kind=(first.get("kind") or kind), resource_id=imported_id,
+        imported_id=imported_id,
+        character_name=(imported_id if kind == "character" else None),
+        shared_id=shared_id, kind=kind,
+        imported_bundle=bundle,
+        resources_document_revision=r.get("document_revision_after"),
+        changed_resources=changes,
+        op_summary=f"已从共享库导入 {kind} {imported_id}（来源 {shared_id}）",
+        note=f"导入完成（copy-on-import，新 id={imported_id}，origin 已记录）。"
+             f"共享库原资源不受影响。")
+
+
 TOOL_EXECUTORS = {
     "character.list": _execute_character_list,
     "character.read": _execute_character_read,
@@ -2047,6 +2223,8 @@ TOOL_EXECUTORS = {
     "resource.look.prepare": _execute_resource_look_prepare,
     "resource.prop.register": _execute_resource_prop_register,
     "resource.composition.prepare": _execute_resource_composition_prepare,
+    "resource.library.publish": _execute_resource_library_publish,
+    "resource.library.import": _execute_resource_library_import,
     "shot.list": _execute_shot_list_via_director,
     "shot.read": _execute_shot_read_via_director,
     "story.list": _execute_story_list,
@@ -2067,6 +2245,7 @@ _TOOL_LABELS = {
     "resource.look.prepare": "准备角色造型（生成+审查）",
     "resource.prop.register": "登记道具参考",
     "resource.composition.prepare": "准备组合参考（生成+审查）",
+    "resource.library.publish": "发布到共享库", "resource.library.import": "从共享库导入",
     "shot.list": "列出镜头", "shot.read": "读取镜头",
     "story.list": "读取故事段", "story.read": "读取故事段",
     "script.read": "读取剧本", "web.search": "搜索资料",

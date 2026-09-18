@@ -382,6 +382,7 @@ _RESOURCE_KIND_TO_REF = {
     "prop": "props",
     "composition": "compositions",
     "reference_asset": "reference_assets",
+    "character": "characters",   # 共享库角色母版导入（copy-on-import 进 project.json）
 }
 # 兼容扫描的单数 id 字段（generation / write-service 原始 receipt 形态）。
 _RESOURCE_ID_FIELDS = (("clothing_id", "clothings"), ("look_id", "looks"),

@@ -357,7 +357,8 @@ def test_t15_character_designer_tools_intact():
                      "project.visual_profile.read",
                      "resource.inventory", "resource.read",
                      "resource.clothing.upsert", "resource.look.prepare",
-                     "resource.prop.register", "resource.composition.prepare"}
+                     "resource.prop.register", "resource.composition.prepare",
+                     "resource.library.publish", "resource.library.import"}
     assert {"character.create", "character.update", "character.delete"} <= CHARACTER_WRITE_OPERATIONS
     # 越权写工具仍不得出现（Scene/Story/Shot/Binding/底层细碎 API）
     assert not any(n in ("look.approve", "prop.approve", "revoke_look_approval",
