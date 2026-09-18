@@ -1576,6 +1576,26 @@ async def _execute_resource_look_prepare(rt: AgentRuntime, project: str, argumen
 
     # ---- 阶段1：create / update ----
     if look_id is None:
+        # 复用护栏（真机 E2E 发现的失败模式矫正）：同 character+label 的 Look 已存在时
+        # 拒绝盲目 create，结构化引导走 look_id 更新/再生成——防止审查失败后无限重建同名
+        # 资源（26.md §8.2「明确区分 create 和 update」的确定性执行）。
+        existing = ws.store.load().looks
+        dup = next((lk for lk in existing.values()
+                    if lk.character_name == character_name
+                    and (label or "").strip()
+                    and (lk.label or "") == (label or "")), None)
+        if dup is not None:
+            return _base_receipt(
+                "resource.look.prepare", ok=False, target=dup.look_id,
+                before=None, after=None, revision=None, verified=False,
+                error="look_label_exists", stale=False,
+                look_id=dup.look_id, existing_look_id=dup.look_id,
+                existing_look_revision=None,
+                changed_resources=[], op_summary="Look 创建被拒（同名已存在）",
+                note=f"角色 {character_name} 已有同名 Look「{label or '(无标签)'}」"
+                     f"（look_id={dup.look_id}）。绝不要重复创建同名资源：要更新或再生成它，"
+                     "就带 look_id 调用本工具（expected_resources_revision 传该 look 的 "
+                     "revision，来自 resource.read(kind=look)；纯再生成可不传描述字段）。")
         r = await _svc(ws, "create_look", character_name=character_name, label=label,
                        clothing_id=clothing_id,
                        appearance_description=appearance_description,
@@ -1759,6 +1779,22 @@ async def _execute_resource_prop_register(rt: AgentRuntime, project: str, argume
     seen: set = set()
     # ---- 阶段1：create / update 元数据 ----
     if prop_id is None:
+        # 复用护栏（真机 E2E 失败模式矫正）：同名 Prop 已存在时拒绝盲目 create，
+        # 结构化引导走 prop_id 更新/重审——防止审查失败后无限重建同名道具。
+        existing_props = ws.store.load().props
+        dup = next((p for p in existing_props.values()
+                    if (p.name or "") == (name or "")), None)
+        if dup is not None:
+            return _base_receipt(
+                "resource.prop.register", ok=False, target=dup.prop_id,
+                before=None, after=None, revision=None, verified=False,
+                error="prop_name_exists", stale=False,
+                prop_id=dup.prop_id, existing_prop_id=dup.prop_id,
+                changed_resources=[], op_summary="Prop 创建被拒（同名已存在）",
+                note=f"项目里已有同名 Prop「{name}」（prop_id={dup.prop_id}）。绝不要重复"
+                     "创建同名道具：要对它换参考或重审，就带 prop_id 调用本工具"
+                     "（expected_resources_revision 传该 prop 的 revision，来自 "
+                     "resource.read(kind=prop)），并给出新的 reference_local/reference_url。")
         r = await _svc(ws, "create_prop", name=name, description=description,
                        tags=tags if isinstance(tags, list) else None,
                        expected_document_revision=expected)
@@ -1970,6 +2006,23 @@ async def _execute_resource_composition_prepare(rt: AgentRuntime, project: str,
 
     # ---- 阶段1：create / update ----
     if composition_id is None:
+        # 复用护栏（同 look/prop）：同 character+label 的 Composition 已存在时拒绝盲目 create。
+        existing_comps = ws.store.load().compositions
+        dup = next((c for c in existing_comps.values()
+                    if c.character_name == character_name
+                    and (label or "").strip()
+                    and (c.label or "") == (label or "")), None)
+        if dup is not None:
+            return _base_receipt(
+                "resource.composition.prepare", ok=False, target=dup.composition_id,
+                before=None, after=None, revision=None, verified=False,
+                error="composition_label_exists", stale=False,
+                composition_id=dup.composition_id, existing_composition_id=dup.composition_id,
+                changed_resources=[], op_summary="Composition 创建被拒（同名已存在）",
+                note=f"角色 {character_name} 已有同名组合参考「{label or '(无标签)'}」"
+                     f"（composition_id={dup.composition_id}）。绝不要重复创建同名资源："
+                     "要更新或再生成它，就带 composition_id 调用本工具"
+                     "（expected_resources_revision 传该 composition 的 revision）。")
         r = await _svc(ws, "create_composition", character_name=character_name,
                        look_id=look_id, prop_bindings=raw_bindings, label=label,
                        pose_note=pose_note, composition_description=comp_desc,

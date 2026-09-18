@@ -653,3 +653,85 @@ class _Scripted:
                                else ("（脚本已耗尽）", None))
         self.calls.append({"messages": messages, "kw": kw})
         yield {"kind": "finish", "content": content, "tool_calls": tool_calls}
+
+
+# ============ 复用护栏（真机 E2E 失败模式矫正：审查失败后重建同名资源）============
+def test_reuse_guard_look_label_exists(tmp_path, monkeypatch):
+    pdir = _env(tmp_path)
+    rt = _runtime(pdir)
+    monkeypatch.setattr("deps.agnes_client", FakeProvider(LOOK_PASS_JSON), raising=False)
+    first = asyncio.run(_execute_resource_look_prepare(
+        rt, pdir.name, json.dumps({
+            "character_name": "Alice", "label": "hero look",
+            "appearance_description": "wearing a cape",
+            "expected_resources_revision": _doc_rev(pdir),
+            "approval_mode": "review_only"}), None, None))
+    assert first["ok"]
+    second = asyncio.run(_execute_resource_look_prepare(
+        rt, pdir.name, json.dumps({
+            "character_name": "Alice", "label": "hero look",
+            "appearance_description": "wearing a cape v2",
+            "expected_resources_revision": _doc_rev(pdir),
+            "approval_mode": "review_only"}), None, None))
+    assert second["ok"] is False and second["error"] == "look_label_exists"
+    assert second["existing_look_id"] == first["look_id"]
+    assert second["changed_resources"] == []
+    doc = ResourceService(pdir, pdir.name).store.load()
+    assert len(doc.looks) == 1, "零重复创建"
+
+
+def test_reuse_guard_prop_name_exists(tmp_path, monkeypatch):
+    pdir = _env(tmp_path)
+    rt = _runtime(pdir)
+    monkeypatch.setattr("deps.agnes_client", FakeProvider(PROP_PASS_JSON), raising=False)
+    ref_local = _seed_ref_image(pdir, "guard_prop.png")
+    first = asyncio.run(_execute_resource_prop_register(
+        rt, pdir.name, json.dumps({
+            "name": "Lantern", "reference_local": ref_local,
+            "expected_resources_revision": _doc_rev(pdir),
+            "approval_mode": "review_only"}), None, None))
+    assert first["ok"]
+    second = asyncio.run(_execute_resource_prop_register(
+        rt, pdir.name, json.dumps({
+            "name": "Lantern", "reference_local": ref_local,
+            "expected_resources_revision": _doc_rev(pdir),
+            "approval_mode": "review_only"}), None, None))
+    assert second["ok"] is False and second["error"] == "prop_name_exists"
+    assert second["existing_prop_id"] == first["prop_id"]
+    assert ResourceService(pdir, pdir.name).store.load().props, ""
+    from src.resources.service import ResourceService as RS
+    assert len(RS(pdir, pdir.name).store.load().props) == 1, "零重复创建"
+
+
+def test_reuse_guard_composition_label_exists(tmp_path, monkeypatch):
+    pdir = _env(tmp_path)
+    rt = _runtime(pdir)
+    look_id = _approved_look(pdir, rt, monkeypatch)
+    fake = FakeProvider(PROP_PASS_JSON)
+    monkeypatch.setattr("deps.agnes_client", fake, raising=False)
+    ref = _seed_ref_image(pdir, "G1.png")
+    pr = asyncio.run(_execute_resource_prop_register(
+        rt, pdir.name, json.dumps({
+            "name": "Lantern", "reference_local": ref,
+            "expected_resources_revision": _doc_rev(pdir),
+            "approval_mode": "approve_if_pass"}), None, None))
+    assert pr["approval"]["status"] == "approved"
+    monkeypatch.setattr("deps.agnes_client", FakeProvider(_comp_pass_json([pr["prop_id"]])),
+                        raising=False)
+    bindings = [{"prop_id": pr["prop_id"], "relation": "held", "anchor": "right_hand"}]
+    c1 = asyncio.run(_execute_resource_composition_prepare(
+        rt, pdir.name, json.dumps({
+            "character_name": "Alice", "look_id": look_id, "label": "carry comp",
+            "prop_bindings": bindings,
+            "expected_resources_revision": _doc_rev(pdir),
+            "approval_mode": "review_only"}), None, None))
+    assert c1["ok"]
+    c2 = asyncio.run(_execute_resource_composition_prepare(
+        rt, pdir.name, json.dumps({
+            "character_name": "Alice", "look_id": look_id, "label": "carry comp",
+            "prop_bindings": bindings,
+            "expected_resources_revision": _doc_rev(pdir),
+            "approval_mode": "review_only"}), None, None))
+    assert c2["ok"] is False and c2["error"] == "composition_label_exists"
+    assert c2["existing_composition_id"] == c1["composition_id"]
+    assert len(ResourceService(pdir, pdir.name).store.load().compositions) == 1
