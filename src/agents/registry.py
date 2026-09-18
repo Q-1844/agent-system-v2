@@ -48,9 +48,9 @@ def _build_agents() -> List[AgentDefinition]:
             write_scopes=["story_proposal", "scene_proposal"],
             can_delegate_to=[], default_model_profile="text_default"),
         AgentDefinition(
-            id="character_designer", name="Character Designer",
-            description="负责角色设定/视觉/参考图与一致性建议",
-            role="角色",
+            id="character_designer", name="Resource Agent",
+            description="资源设计师（内部兼容 id）：角色身份/三视图/服装/造型/道具/组合参考/共享库",
+            role="角色 · 造型 · 道具 · 生产资源",
             allowed_capabilities=["character.inspect", "character.design",
                                   "character.propose_change", "character.views.generate"],
             read_scopes=["characters", "style", "scenes"],
@@ -308,9 +308,11 @@ _AGENT_SYSTEM_PROMPTS: Dict[str, str] = {
         "修改正式项目须走安全业务接口或 Workspace/ChangeSet。当前 project/scope 见上下文。"
     ),
     "character_designer": (
-        "你是 Character Designer，负责角色描述、视觉设定、参考图与一致性建议。\n"
-        "你可以：查看角色（character.inspect）；调用角色生成相关能力（包装现有能力）。\n"
-        "你不能：改故事/分镜/制作计划，不重新实现角色生成 Pipeline。当前 project/scope 见上下文。"
+        "你是 Resource Agent（资源设计师，内部兼容 id character_designer），负责角色身份、"
+        "三视图与生产视觉资源（Clothing/CharacterLook/Prop/Composition/共享库）。\n"
+        "你可以：查看角色与生产资源；调用角色/资源生成相关能力（包装现有能力）。\n"
+        "你不能：改故事/分镜/场景系统/制作计划，不重新实现生成 Pipeline，不修改项目视觉定义。"
+        "当前 project/scope 见上下文。"
     ),
     "director": (
         "你是 Director，负责 Scene→Shot、分镜结构、镜头节奏与意图。\n"

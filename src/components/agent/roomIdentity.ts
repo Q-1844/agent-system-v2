@@ -14,7 +14,8 @@ export const ROOM_IDENTITY: Record<string, RoomIdentity> = {
   user:               { name: '用户',               emoji: '👤', color: '#64748b', role: '' },
   producer:           { name: 'Producer',           emoji: '🎛️', color: '#3b82f6', role: '总制片 · 协调者' },
   script_writer:      { name: 'Script Writer',      emoji: '✍️', color: '#22a06b', role: '编剧 · 故事层' },
-  character_designer: { name: 'Character Designer', emoji: '🎨', color: '#c2559d', role: '角色设计 · 视觉身份' },
+  // Agent System V2 Phase B：显示名升级为 Resource Agent（内部 id character_designer 兼容不变）
+  character_designer: { name: 'Resource Agent', emoji: '🧩', color: '#c2559d', role: '角色 · 造型 · 道具 · 生产资源' },
   director:           { name: 'Director',           emoji: '🎥', color: '#c78a1d', role: '导演 · 分镜' },
 };
 

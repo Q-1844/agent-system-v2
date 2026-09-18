@@ -87,7 +87,8 @@ _MODULE_KEYWORDS: List[Tuple[str, re.Pattern]] = [
     ("character", re.compile(
         r"角色|角色设定|外貌|外观|造型|头发|发型|发色|短发|长发|发式|"
         r"服装|衣服|衣着|穿着|装束|战衣|制服|盔甲|装甲|铠甲|披风|"
-        r"hair|appearance|outfit|armor\b|costume|look\b|character\b", re.IGNORECASE)),
+        r"道具|资源准备|生产资源|"
+        r"hair|appearance|outfit|armor\b|costume|look\b|character\b|prop\b", re.IGNORECASE)),
     ("script", re.compile(r"剧本|故事|结局|ending|剧情|台词|script", re.IGNORECASE)),
     ("storyboard", re.compile(r"分镜|场景|节奏|storyboard|镜头节奏", re.IGNORECASE)),
     ("production", re.compile(r"镜头生成|视频生成|首帧|尾帧|video|first\s*frame|生成视频", re.IGNORECASE)),

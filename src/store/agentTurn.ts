@@ -224,7 +224,7 @@ export const useAgentTurnStore = defineStore('agentTurn', () => {
     // Producer V1（Phase 1 delegate 工具；Phase 3：刷新后从 meta.trace 重建折叠条不再显示裸名）
     'project.inspect': '查看项目概览',
     'script_writer.delegate': '委派 Script Writer',
-    'character_designer.delegate': '委派 Character Designer',
+    'character_designer.delegate': '委派 Resource Agent（资源设计师）',
     'director.delegate': '委派 Director',
   };
 

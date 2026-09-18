@@ -90,7 +90,7 @@ PRODUCER_SYSTEM = """你是 AGNES 的 Producer Supervisor——动画项目的�
 
 【硬边界（物理保证，不是提示词约束）】你的工具面里【根本没有】story/character/shot 的写工具与生成工具——只有只读工具与三个 *.delegate 委派工具。修改必须经对应 *.delegate 委派给 owner。
 - Script Writer（script_writer.delegate）→ Story / 剧本正文 / 故事段结构 / 情节逻辑 / 人物动机在故事层的成立 / 对白 / Scene 的叙事内容
-- Character Designer（character_designer.delegate）→ Character canonical / 外貌 / 服装 / 发型 / 视觉身份 / 三视图基础
+- Resource Agent（character_designer.delegate——兼容工具名，内部历史 id）→ Character identity（是谁/外貌/发型）+ 三视图 + 生产视觉资源全套：Clothing 服装 / CharacterLook 造型 / Prop 道具参考 / Composition 组合参考 / 共享库。production-ready 的资源准备（角色→身份参考→服装→造型→道具→组合）是它的招牌任务。
 - Director（director.delegate）→ Shot / Storyboard / 镜头结构 / 构图 / 景别 / 运镜 / 分镜连续性 / 分镜图 / 视频
 
 【决策循环】每个 Specialist 返回后，不要机械执行原计划——回到原始目标、对照当前项目真实状态、重新判断下一步最佳动作。这个循环贯穿整个 turn：理解目标 → 观察现状 → 决定下一步 → 委派 → 读真实 Task Result → 评估影响 → 重新规划 → 完成检查 → 继续/结束/问用户。
@@ -232,12 +232,19 @@ def _build_producer_tools() -> tuple:
                          "【不适用】角色外貌/服装/视觉身份（→ Character Designer）；镜头/构图/分镜图（→ Director）。\n"
                          "【要点】Script Writer 会自己读最新 canonical——situation 写发生了什么+为什么找它，不要把剧本全文复制进去。\n"
                          "若任务是检查并修改：发现真实问题就用写工具直接执行，不要只返回分析报告；若确认无值得修改的问题，明确说明无需修改。"),
-        _delegate_schema("character_designer", "Character Designer",
-                         "委派任务给 Character Designer。\n"
-                         "【owns】Character canonical / 外貌 / 服装 / 发型 / 视觉身份 / 三视图基础。\n"
-                         "【适用】改角色外貌/服装/发型、调整视觉设定一致性、补三视图基础。\n"
-                         "【不适用】剧情/动机/对白（→ Script Writer）；镜头/分镜图（→ Director）。\n"
-                         "【要点】Character Designer 会自己读最新 canonical——situation 写发生了什么+为什么找它，不要把角色设定全文复制进去。\n"
+        _delegate_schema("character_designer", "Resource Agent",
+                         "委派任务给 Resource Agent（资源设计师；兼容工具名，内部历史 id "
+                         "character_designer）。\n"
+                         "【owns】Character identity（是谁/外貌/发型）+ 三视图 + Production "
+                         "Resources 全套：Clothing 服装 / CharacterLook 造型 / Prop 道具参考 / "
+                         "CharacterReferenceComposition 组合参考 / Shared Library。\n"
+                         "【适用】创建/修改角色身份、生成三视图；生产资源准备（服装/造型/道具/"
+                         "组合参考，含 production-ready 一条龙）；资源审查与按档批准；共享库发布导入。\n"
+                         "【不适用】剧情/动机/对白（→ Script Writer）；镜头/分镜/构图（→ Director）；"
+                         "场景系统（Location/SceneInstance）与项目视觉定义（无写权）。\n"
+                         "【要点】Resource Agent 会自己读最新 canonical——situation 写发生了什么+为什么找它，"
+                         "不要把资源清单全文复制进去。用户要求 production-ready 时在 envelope 里明说，"
+                         "让它用 approve_if_pass；只要看效果时明说 review_only。\n"
                          "若任务是检查并修改：发现真实问题就直接执行，不要只返回分析报告；无值得修改的问题则明确说明无需修改。"),
         _delegate_schema("director", "Director",
                          "委派任务给 Director。\n"
@@ -257,7 +264,7 @@ _TOOL_LABELS = {
     "character.list": "列出角色", "character.read": "读取角色",
     "shot.list": "列出镜头", "shot.read": "读取镜头",
     "script_writer.delegate": "委派 Script Writer",
-    "character_designer.delegate": "委派 Character Designer",
+    "character_designer.delegate": "委派 Resource Agent（资源设计师）",
     "director.delegate": "委派 Director",
 }
 
