@@ -98,6 +98,11 @@ WRITE_TOOL_DOMAIN = {
     "character.update": RESOURCE_CHARACTER,
     "character.delete": RESOURCE_CHARACTER,
     "character.generate_views": RESOURCE_CHARACTER,
+    # Phase B：resources.json 域（§8/§9 mutation 工具）
+    "resource.clothing.upsert": RESOURCE_RESOURCES,
+    "resource.look.prepare": RESOURCE_RESOURCES,
+    "resource.prop.register": RESOURCE_RESOURCES,
+    "resource.composition.prepare": RESOURCE_RESOURCES,
 }
 
 # 三视图生成超时（2026-08-30 用户规格）：生图很慢——单角色三视图链（front t2i → side/back
@@ -238,6 +243,10 @@ CHARACTER_DESIGNER_SYSTEM = """你是 AGNES 的 Character Designer，负责项�
 - project.visual_profile.read()：读取项目视觉定义（ProjectVisualProfile）全文：render_family / art_direction / style_tags / 负面风格约束 + 指纹与 revision。设计涉及风格取向（介质、画风、时代质感）或用户要求与当前风格可能冲突时先读它；你的视觉生成遵守该定义，不得假设其它风格，也不得试图修改它（它由用户拥有）。
 - resource.inventory(filter)：列出项目生产资源（服装/Look 造型/道具/组合参考）轻量地图：id/名称/所属角色/审批与生成状态/参考图数 + document_revision。准备或修改任何生产资源前【第一步】用它定位与防重复创建。
 - resource.read(kind, resource_id)：读取一个生产资源的高信号详情（参考图/审批状态/最近审查结论/关联关系）+ document_revision。对 Look/Prop/Composition 修改或再生成前必须先 read 拿到版本指纹。
+- resource.clothing.upsert(...)：创建（不带 clothing_id）或更新（带 clothing_id）一件服装。服装是 Look 的一致性参考。
+- resource.look.prepare(...)：为角色完成一次造型（Look）生产准备：建/改 Look → 生成 1 张候选图 → 正式视觉审查 → approve_if_pass 且审查 pass 时自动批准。一次调用 = 一次生成尝试（生成约 1 分钟，耐心等真实返回）；审查不通过会返回真实原因，你要么调整描述后再试，要么如实报告用户——绝不在未修改任何内容的情况下反复重试；同一问题连续失败按停止纪律处理。
+- resource.prop.register(...)：登记道具（元数据 + 参考图绑定 + 审查 + 可选批准）。系统没有道具生成端点：没有参考图时工具返回 reference_required，你要向用户要参考图或用已有资产，绝不假装生成了道具图。
+- resource.composition.prepare(...)：生产角色+道具组合参考（需要 Look 已批准、每个绑定 prop 已有 approved 参考）。审查画错会如实 needs_fix——组合参考是生产参考，不是故事事实。
 - shot.list(scene_id)：列出某故事段（或全部）镜头的轻量地图。仅当用户要求「把当前分镜需要的资源准备好」之类任务时用它看各镜头用到哪些角色/动作/道具线索，判断缺哪些资源；你不是分镜设计者，绝不修改镜头。
 - shot.read(shot_id)：读取一个镜头的完整内容（描述/角色/动作/提示词/绑定状态线索）。同上，只读，用于判断资源缺口。
 - web.search(query)：搜索现实世界资料，返回约 3 条「标题+摘要+链接」。仅当①用户明确要求查资料，或②设计涉及真实世界知识明显影响可信度（历史时期服装、民族服饰、职业制服、年代发型、真实文化背景、地域审美）时使用。普通修改（改发型/换配色）不搜索。每轮最多 3 次，超限会被系统拒绝。
@@ -471,6 +480,148 @@ RESOURCE_READ_TOOL = {
     },
 }
 
+CLOTHING_UPSERT_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "resource.clothing.upsert",
+        "description": ("创建或更新一件服装（Clothing）。不传 clothing_id = 创建（"
+                        "expected_resources_revision 传 resource.inventory 看到的 "
+                        "document_revision）；传 clothing_id = 更新（传该 clothing 的 "
+                        "revision）。服装是 Look 的一致性参考，不是独立图片任务。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "clothing_id": {"type": "string",
+                                "description": "要更新的 Clothing id（更新时必传；创建时省略）。"},
+                "name": {"type": "string", "description": "服装名称（创建必填，如 Black Coat）。"},
+                "description": {"type": "string", "description": "服装描述（外观/穿着方式/时代感）。"},
+                "design_traits": {"type": "string", "description": "设计特征（剪裁/结构/装饰）。"},
+                "materials": {"type": "array", "items": {"type": "string"},
+                              "description": "材质列表（如 wool/silk/leather）。"},
+                "colors": {"type": "array", "items": {"type": "string"},
+                           "description": "配色列表。"},
+                "tags": {"type": "array", "items": {"type": "string"}, "description": "标签。"},
+                "expected_resources_revision": {"type": "string",
+                                                "description": "OCC 期望 revision（见描述）。"},
+            },
+            "required": ["expected_resources_revision"],
+        },
+    },
+}
+
+LOOK_PREPARE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "resource.look.prepare",
+        "description": ("为角色完成一次 CharacterLook 生产准备尝试：新建或更新 Look → "
+                        "生成候选图（1 张）→ 正式 vision 审查 → approval_mode=approve_if_pass "
+                        "且审查 pass 时自动批准。一次调用 = 一次生产尝试；审查不通过时返回"
+                        "真实原因，由你决定调整后重试或报告 blocker——工具不会偷偷重试。"
+                        "生成很慢（约 1 分钟），调用后等真实返回。新建需 appearance_description；"
+                        "更新传 look_id + 要改的字段（expected_resources_revision 传该 look 的 "
+                        "revision；纯再生成可不传字段）。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "character_name": {"type": "string", "description": "角色名（必须已存在）。"},
+                "look_id": {"type": "string",
+                            "description": "既有 Look id（更新/再生成时传；新建时省略）。"},
+                "label": {"type": "string", "description": "Look 名称（如 rain look / night cloak）。"},
+                "clothing_id": {"type": "string", "description": "绑定的服装 id（可选）。"},
+                "appearance_description": {"type": "string",
+                                           "description": "该造型下的完整外观描述（英文，含默认身份差异与服装）。"},
+                "appearance_delta": {"type": "string",
+                                     "description": "相对角色默认身份的增量描述（英文，可选）。"},
+                "expected_resources_revision": {"type": "string",
+                                                "description": "OCC 期望 revision（创建=document_revision，"
+                                                               "更新/再生成=该 look 的 revision）。"},
+                "approval_mode": {"type": "string", "enum": ["review_only", "approve_if_pass"],
+                                  "description": "review_only=只生成审查等用户验收；approve_if_pass=审查 "
+                                                 "pass 即正式批准（仅在用户要求 production-ready 时用）。"},
+                "conflict_acknowledged": {"type": "boolean",
+                                          "description": "预检发现遮面/面具等与身份参考的冲突后，用户明确确认坚持时传 true。"},
+            },
+            "required": ["character_name", "expected_resources_revision", "approval_mode"],
+        },
+    },
+}
+
+PROP_REGISTER_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "resource.prop.register",
+        "description": ("登记道具（Prop）：创建/更新元数据 + 绑定参考图（reference_local="
+                        "项目内相对路径 / reference_url=公网 URL / reference_asset_id=已注册"
+                        "资产三选一）→ 正式 vision 审查 → approve_if_pass 且 pass 时批准。"
+                        "系统没有道具生成端点——没有参考图时本工具会诚实返回 reference_required，"
+                        "绝不偷偷生成图片。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "prop_id": {"type": "string", "description": "既有 Prop id（更新时传；新建时省略）。"},
+                "name": {"type": "string", "description": "道具名（新建必填）。"},
+                "description": {"type": "string", "description": "道具描述（形状/材质/用途/时代感）。"},
+                "tags": {"type": "array", "items": {"type": "string"}, "description": "标签。"},
+                "reference_local": {"type": "string",
+                                    "description": "参考图的项目内相对路径（如 input/prop_sword.png）。"},
+                "reference_url": {"type": "string", "description": "参考图公网 URL（http/https）。"},
+                "reference_asset_id": {"type": "string",
+                                       "description": "已注册 ReferenceAsset id（复用项目内已有图）。"},
+                "expected_resources_revision": {"type": "string",
+                                                "description": "OCC 期望 revision（创建=document_revision，"
+                                                               "更新=该 prop 的 revision）。"},
+                "approval_mode": {"type": "string", "enum": ["review_only", "approve_if_pass"],
+                                  "description": "同 resource.look.prepare。"},
+            },
+            "required": ["expected_resources_revision", "approval_mode"],
+        },
+    },
+}
+
+COMPOSITION_PREPARE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "resource.composition.prepare",
+        "description": ("生产角色+道具组合参考（CharacterReferenceComposition）：新建或更新 → "
+                        "生成候选图 → 六维度审查（角色身份/Look 一致/道具保真/binding 正确/"
+                        "道具可见性/缺陷）→ approve_if_pass 且 pass 时批准。前置要求：Look 已 "
+                        "approved 且至少一个 approved 参考；每个绑定的 prop 已有 approved 参考。"
+                        "一次调用 = 一次生成尝试，画错会如实 needs_fix。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "character_name": {"type": "string", "description": "角色名（新建必填）。"},
+                "look_id": {"type": "string", "description": "已 approved 的 Look id（新建必填）。"},
+                "composition_id": {"type": "string",
+                                   "description": "既有 Composition id（更新/再生成时传）。"},
+                "prop_bindings": {
+                    "type": "array",
+                    "items": {"type": "object",
+                              "properties": {
+                                  "prop_id": {"type": "string"},
+                                  "relation": {"type": "string",
+                                               "description": "attached|carried|held|near|worn"},
+                                  "anchor": {"type": "string",
+                                             "description": "如 right_hand/left_hand/back/head 等"},
+                                  "visual_state_note": {"type": "string"},
+                                  "required_visibility": {"type": "string",
+                                                          "description": "required|optional"},
+                              },
+                              "required": ["prop_id"]},
+                    "description": "道具绑定列表（1~3 个）。"},
+                "label": {"type": "string"},
+                "pose_note": {"type": "string", "description": "姿态备注。"},
+                "composition_description": {"type": "string", "description": "组合描述。"},
+                "expected_resources_revision": {"type": "string",
+                                                "description": "OCC 期望 revision（创建=document_revision，"
+                                                               "更新/再生成=该 composition 的 revision）。"},
+                "approval_mode": {"type": "string", "enum": ["review_only", "approve_if_pass"]},
+            },
+            "required": ["expected_resources_revision", "approval_mode"],
+        },
+    },
+}
+
 VISUAL_PROFILE_READ_TOOL = {
     "type": "function",
     "function": {
@@ -508,6 +659,8 @@ CHARACTER_DESIGNER_TOOLS = [
     CHARACTER_CREATE_TOOL, CHARACTER_UPDATE_TOOL, CHARACTER_DELETE_TOOL,
     CHARACTER_GENERATE_VIEWS_TOOL,
     RESOURCE_INVENTORY_TOOL, RESOURCE_READ_TOOL,
+    CLOTHING_UPSERT_TOOL, LOOK_PREPARE_TOOL, PROP_REGISTER_TOOL,
+    COMPOSITION_PREPARE_TOOL,
     VISUAL_PROFILE_READ_TOOL,
     WEB_SEARCH_TOOL,
 ]
@@ -1071,6 +1224,89 @@ _RESOURCE_KIND_TO_READER = {
 }
 
 
+# ============ Production Resources mutation（Phase B §8/§14：任务型工具）============
+# 原则（§8/§19）：
+#   - 所有写入走 ResourceWriteService / review service / approval service，绝不自己拼
+#     JSON 写盘、绝不直连图片 provider；
+#   - 一次工具调用 = 一次明确生产尝试（generate→review→approve_if_pass 链一次跑完），
+#     review needs_fix/uncertain 绝不 approve，也绝不在工具内偷偷重试生成；
+#   - OCC：expected_resources_revision 原样透传给 write service（create 对照 document
+#     revision、update 对照目标资源 revision——由 svc 判定 stale，工具不无声读新覆盖）；
+#     链内后续阶段（generate→approve）使用上一阶段真实回执返回的 revision 衔接；
+#   - changed_resources 只从 ok+verified 的真实 service 回执聚合（Producer
+#     _derive_changed_refs 的确定性来源）。
+#
+# receipt 分层语义：ok = 本次生产尝试是否有真实 canonical 变更（部分成功也算 True，
+# 与 character.generate_views 同语义）；generation/review/approval 各阶段结论独立字段
+# 如实呈现——「生成失败但 Look 已创建」必须同时可见，不允许任何一层吞掉。
+
+# §14 prompt-reference 冲突信号（高信号规则，不做 AI judge）。英文 appearance 文本。
+_LOOK_CONFLICT_PATTERNS = (
+    (r"face\s+(?:is\s+|are\s+)?(?:hidden|obscured|concealed|not\s+visible|invisible|covered)",
+     "face_hidden", "描述要求面部不可见"),
+    (r"\bmask(?:ed)?\b|\bface[- ]?cover(?:ing)?\b", "mask",
+     "描述包含面具/面部遮盖"),
+    (r"\bsilhouette\s+(?:figure|form|only)\b|\bas\s+a\s+silhouette\b", "silhouette",
+     "描述要求剪影形态"),
+    (r"\bfaceless\b|\bno\s+face\b|\bwithout\s+a\s+face\b", "faceless",
+     "描述要求无脸"),
+    (r"\b(?:head|face)\s+fully\s+covered\b|\bfully\s+(?:veiled|wrapped)\b", "fully_covered",
+     "描述要求头/面完全覆盖"),
+    (r"\bhood\b[^.]{0,40}\b(?:shadow|shadows|darkness|hidden|obscured)\b|"
+     r"\b(?:shadow|shadows|darkness)\b[^.]{0,30}\b(?:hides?|covering)\s+(?:the\s+)?face\b",
+     "face_in_shadow", "描述要求阴影遮面"),
+)
+
+
+def _look_reference_conflicts(appearance_text: str) -> list:
+    """Look 外观描述 vs Character identity reference（三视图，脸可见）的冲突预检。
+    返回 [{signal, label}]（空 = 无冲突）。确定性 0 LLM——语义判断由 Agent 自己做。"""
+    t = (appearance_text or "").lower()
+    out = []
+    for pat, signal, label in _LOOK_CONFLICT_PATTERNS:
+        if signal in {s for s, _ in out}:
+            continue
+        if re.search(pat, t):
+            out.append({"signal": signal, "label": label})
+    return out
+
+
+def _chg(changes: list, seen: set, kind: str, rid) -> None:
+    """把一条 ok+verified 的真实变更加入 changed_resources（去重保序）。"""
+    if not rid:
+        return
+    key = (kind, rid)
+    if key not in seen:
+        seen.add(key)
+        changes.append({"kind": kind, "id": rid})
+
+
+def _resource_stale_receipt(op: str, svc_receipt: dict, op_summary: str) -> dict:
+    """write service stale receipt → Agent 域 stale 回执（形状对齐 character 域 stale）。"""
+    return _base_receipt(
+        op, ok=False, target=svc_receipt.get("target"),
+        before=None, after=None,
+        revision=svc_receipt.get("current_revision"), verified=False,
+        error="stale_revision", stale=True,
+        expected_revision=svc_receipt.get("expected_revision"),
+        current_revision=svc_receipt.get("current_revision"),
+        current=svc_receipt.get("current"),
+        changed_resources=[], op_summary=op_summary,
+        note="你读取的资源状态已过期（期间被改动），本次未写入。请 resource.inventory / "
+             "resource.read 读取最新状态与 revision 后重新判断再试。")
+
+
+def _resolve_pdir(rt: AgentRuntime, project: str):
+    return rt._resolve_project_dir(project)
+
+
+async def _svc(ws, method: str, **kw) -> dict:
+    """调用 ResourceWriteService 方法（全部返回结构化 receipt，不抛业务异常）。"""
+    return await getattr(ws, method)(**kw)
+
+
+
+
 def _execute_resource_inventory(rt: AgentRuntime, project: str, arguments: str,
                                 instruction, message_id) -> dict:
     """列出项目生产资源轻量地图（Phase B §7.2）。复用 ResourceService 的紧凑 summary
@@ -1119,6 +1355,684 @@ def _execute_resource_read(rt: AgentRuntime, project: str, arguments: str,
             "document_revision": document_revision(svc.store.load())}
 
 
+# ---- §8.1 resource.clothing.upsert ----
+async def _execute_resource_clothing_upsert(rt: AgentRuntime, project: str, arguments: str,
+                                            instruction, message_id) -> dict:
+    """创建或更新 Clothing（§8.1）。无 clothing_id = 创建（OCC 对照 document revision）；
+    带 clothing_id = 更新（OCC 对照该 clothing revision）。绝不开新图。"""
+    args = _parse_args(arguments)
+    clothing_id = (args.get("clothing_id") or "").strip() or None
+    name = (args.get("name") or "").strip()
+    expected = args.get("expected_resources_revision")
+    if not expected or not isinstance(expected, str):
+        raise AgentError("bad_arguments",
+                         "缺少 expected_resources_revision（应传 resource.inventory / "
+                         "resource.read 返回的对应 revision：创建=document_revision，"
+                         "更新=该 clothing 的 revision）")
+    if not clothing_id and not name:
+        raise AgentError("bad_arguments", "创建 Clothing 需要 name")
+    patch = {}
+    for f in ("name", "description", "design_traits"):
+        if args.get(f) is not None:
+            patch[f] = str(args[f])
+    for f in ("materials", "colors", "tags"):
+        if args.get(f) is not None:
+            v = _loose_json(args[f])
+            if not isinstance(v, list):
+                raise AgentError("bad_arguments", f"{f} 必须是字符串数组")
+            patch[f] = v
+    if clothing_id and not patch:
+        raise AgentError("bad_arguments", "更新 Clothing 需要至少一个要改的字段")
+
+    from src.resources.write_service import ResourceWriteService
+    pdir = _resolve_pdir(rt, project)
+    ws = ResourceWriteService(pdir, project)
+    changes: list = []
+    seen: set = set()
+    if clothing_id is None:
+        r = await _svc(ws, "create_clothing", name=name,
+                       description=str(patch.get("description") or ""),
+                       design_traits=str(patch.get("design_traits") or ""),
+                       materials=patch.get("materials"), colors=patch.get("colors"),
+                       tags=patch.get("tags"),
+                       expected_document_revision=expected)
+        if r.get("error") == "stale_revision":
+            return _resource_stale_receipt("resource.clothing.upsert", r,
+                                           "创建 Clothing（stale，未写入）")
+        if not r.get("ok"):
+            return _base_receipt("resource.clothing.upsert", ok=False,
+                                 target=None, before=None, after=None,
+                                 revision=None, verified=False,
+                                 error=r.get("error") or "create_failed",
+                                 detail=r.get("detail"), changed_resources=[],
+                                 op_summary="创建 Clothing 失败",
+                                 note=f"Clothing 未创建：{r.get('detail') or r.get('error')}")
+        cid = r["target"]
+        _chg(changes, seen, "clothing", cid)
+        return _base_receipt("resource.clothing.upsert", ok=True, target=cid,
+                             before=None, after=r.get("after"),
+                             revision=r.get("revision"), verified=bool(r.get("verified")),
+                             clothing_id=cid, resource_kind="clothing", resource_id=cid,
+                             changed_resources=changes,
+                             resources_document_revision=r.get("document_revision_after"),
+                             op_summary=f"创建服装 {name}（{cid}）",
+                             note=f"Clothing {cid}（{name}）已创建。用 resource.read(kind=clothing) "
+                                  "查看详情。")
+    # update 路径
+    r = await _svc(ws, "update_clothing", clothing_id=clothing_id, patch=patch,
+                   expected_revision=expected)
+    if r.get("error") == "stale_revision":
+        return _resource_stale_receipt("resource.clothing.upsert", r,
+                                       f"更新 Clothing {clothing_id}（stale，未写入）")
+    if r.get("error") == "not_found":
+        raise AgentError("not_found",
+                         f"Clothing 不存在: {clothing_id}（先 resource.inventory 核对 id）")
+    if not r.get("ok"):
+        return _base_receipt("resource.clothing.upsert", ok=False, target=clothing_id,
+                             before=None, after=None, revision=None, verified=False,
+                             error=r.get("error") or "update_failed",
+                             detail=r.get("detail"), changed_resources=[],
+                             op_summary="更新 Clothing 失败",
+                             note=f"Clothing 未更新：{r.get('detail') or r.get('error')}")
+    if r.get("unchanged"):
+        return _base_receipt("resource.clothing.upsert", ok=True, target=clothing_id,
+                             before=r.get("before"), after=r.get("after"),
+                             revision=r.get("revision"), verified=True, unchanged=True,
+                             clothing_id=clothing_id, resource_kind="clothing",
+                             resource_id=clothing_id, changed_resources=[],
+                             resources_document_revision=r.get("document_revision_after"),
+                             op_summary="更新 Clothing（无变化）",
+                             note="提供的内容与当前完全一致，未产生变化。")
+    _chg(changes, seen, "clothing", clothing_id)
+    return _base_receipt("resource.clothing.upsert", ok=True, target=clothing_id,
+                         before=r.get("before"), after=r.get("after"),
+                         revision=r.get("revision"), verified=bool(r.get("verified")),
+                         clothing_id=clothing_id, resource_kind="clothing",
+                         resource_id=clothing_id, changed_resources=changes,
+                         resources_document_revision=r.get("document_revision_after"),
+                         op_summary=f"更新服装 {clothing_id}（{'、'.join(patch.keys())}）",
+                         note=f"Clothing {clothing_id} 已更新（{'、'.join(patch.keys())}）。")
+
+
+# ---- §8.2 resource.look.prepare ----
+async def _execute_resource_look_prepare(rt: AgentRuntime, project: str, arguments: str,
+                                         instruction, message_id) -> dict:
+    """CharacterLook 的一次生产准备尝试（§8.2）：create/update → generate → review →
+    approve_if_pass。一次调用 = 一次明确生产尝试；needs_fix 如实返回，由 Agent 决定
+    下一步（调整描述/改 Look/再生成/报告 blocker），工具内绝不偷偷重试生成。"""
+    args = _parse_args(arguments)
+    character_name = (args.get("character_name") or "").strip()
+    look_id = (args.get("look_id") or "").strip() or None
+    label = str(args.get("label") or "")
+    clothing_id = (args.get("clothing_id") or "").strip() or None
+    appearance_description = str(args.get("appearance_description") or "")
+    appearance_delta = str(args.get("appearance_delta") or "")
+    expected = args.get("expected_resources_revision")
+    approval_mode = (args.get("approval_mode") or "review_only").strip()
+    conflict_ack = bool(args.get("conflict_acknowledged"))
+    if not character_name:
+        raise AgentError("bad_arguments", "缺少 character_name")
+    if approval_mode not in ("review_only", "approve_if_pass"):
+        raise AgentError("bad_arguments",
+                         "approval_mode 必须是 review_only | approve_if_pass")
+    if not expected or not isinstance(expected, str):
+        raise AgentError("bad_arguments",
+                         "缺少 expected_resources_revision（创建=document_revision，"
+                         "更新=该 look 的 revision，来自 resource.inventory/read）")
+    if look_id is None and not appearance_description.strip():
+        raise AgentError("bad_arguments", "新建 Look 需要 appearance_description（外观描述）")
+
+    # ---- §14 预检：appearance 文本 vs 身份参考（三视图脸可见）冲突 ----
+    conflict_text = " ".join(x for x in (appearance_description, appearance_delta) if x)
+    conflicts = _look_reference_conflicts(conflict_text)
+    if conflicts and not conflict_ack:
+        return _base_receipt(
+            "resource.look.prepare", ok=False, target=None, before=None, after=None,
+            revision=None, verified=False, error="reference_conflict", stale=False,
+            conflicts=conflicts, changed_resources=[], op_summary="Look 准备被预检拦截",
+            note=("外观描述与角色 identity reference（三视图，面部可见）存在已知冲突："
+                  + "；".join(f"[{c['signal']}] {c['label']}" for c in conflicts)
+                  + "。按冲突处理流程：①向用户说明冲突；②判断是否需要新的身份参考"
+                    "（如遮面版三视图——当前系统没有该生成能力，需用户处理）；③或调整 Look "
+                    "目标描述；④或用户确认坚持后，带 conflict_acknowledged=true 重试。"
+                    "不要无意义连续重试生成——模型无法同时满足矛盾约束。"))
+
+    from src.resources.write_service import ResourceWriteService
+    from src.resources.models import look_revision
+    from src.resources import look_review as look_review_mod
+    pdir = _resolve_pdir(rt, project)
+    ws = ResourceWriteService(pdir, project)
+    changes: list = []
+    seen: set = set()
+
+    # ---- 阶段1：create / update ----
+    if look_id is None:
+        r = await _svc(ws, "create_look", character_name=character_name, label=label,
+                       clothing_id=clothing_id,
+                       appearance_description=appearance_description,
+                       appearance_delta=appearance_delta,
+                       expected_document_revision=expected)
+        if r.get("error") == "stale_revision":
+            return _resource_stale_receipt("resource.look.prepare", r,
+                                           "创建 Look（stale，未写入）")
+        if not r.get("ok"):
+            return _base_receipt("resource.look.prepare", ok=False, target=None,
+                                 before=None, after=None, revision=None, verified=False,
+                                 error=r.get("error") or "create_failed",
+                                 detail=r.get("detail"), changed_resources=[],
+                                 op_summary="创建 Look 失败",
+                                 note=f"Look 未创建：{r.get('detail') or r.get('error')}")
+        look_id = r["target"]
+        look_rev = r["revision"]
+        _chg(changes, seen, "look", look_id)
+    else:
+        patch = {}
+        for f in ("label", "clothing_id", "appearance_description", "appearance_delta"):
+            if args.get(f) is not None:
+                patch[f] = args.get(f)
+        if patch:
+            r = await _svc(ws, "update_look", look_id=look_id, patch=patch,
+                           expected_revision=expected)
+            if r.get("error") == "stale_revision":
+                return _resource_stale_receipt("resource.look.prepare", r,
+                                               f"更新 Look {look_id}（stale，未写入）")
+            if r.get("error") == "not_found":
+                raise AgentError("not_found",
+                                 f"Look 不存在: {look_id}（先 resource.inventory 核对 id）")
+            if not r.get("ok"):
+                return _base_receipt("resource.look.prepare", ok=False, target=look_id,
+                                     before=None, after=None, revision=None, verified=False,
+                                     error=r.get("error") or "update_failed",
+                                     detail=r.get("detail"), changed_resources=[],
+                                     op_summary="更新 Look 失败",
+                                     note=f"Look 未更新：{r.get('detail') or r.get('error')}")
+            look_rev = r["revision"]
+            if r.get("verified") and not r.get("unchanged"):
+                _chg(changes, seen, "look", look_id)
+        else:
+            # 纯再生成尝试：expected 必须就是当前 look revision（Agent 从 resource.read 拿）
+            look_rev = expected
+
+    # ---- 阶段2：generate（一次）----
+    gen = await _svc(ws, "generate_look_candidates", look_id=look_id,
+                     expected_revision=look_rev, candidate_count=1)
+    gen_ok = bool(gen.get("ok") and gen.get("status") == "committed")
+    gen_summary = {"ok": gen_ok, "status": gen.get("status"), "error": gen.get("error"),
+                   "detail": (gen.get("detail") or "")[:300],
+                   "generation_id": gen.get("generation_id"),
+                   "candidate_asset_ids": gen.get("candidate_asset_ids") or []}
+    if not gen_ok:
+        # Look 本体已创建/更新（真实变更），生成失败如实报告——部分成功语义。
+        return _base_receipt(
+            "resource.look.prepare", ok=bool(changes), target=look_id,
+            before=None, after=None, revision=None,
+            verified=bool(changes), look_id=look_id, resource_kind="look",
+            resource_id=look_id, changed_resources=changes,
+            generation=gen_summary, review=None, approval=None,
+            approval_mode=approval_mode,
+            op_summary=(f"Look {look_id} 已创建/更新，但候选图生成失败"
+                        if changes else f"Look {look_id} 生成失败（无变更）"),
+            note=(f"生成未完成：{gen.get('error')}（{(gen.get('detail') or '')[:200]}）。"
+                  if not gen_ok else "")
+            + "这是本次唯一一次生成尝试；如需再试请再次调用本工具（同一错误连续出现时"
+              "按 repeat-failure 纪律停止，不要反复烧图）。")
+    for aid in gen.get("candidate_asset_ids") or []:
+        _chg(changes, seen, "reference_asset", aid)
+
+    # ---- 阶段3：review（正式 vision review）----
+    new_assets = gen.get("candidate_asset_ids") or []
+    review = await look_review_mod.review_look_candidates(pdir, look_id,
+                                                          asset_ids=list(new_assets),
+                                                          agnes_client=None)
+    rev_rows = {cr.get("asset_id"): cr for cr in (review.get("candidate_reviews") or [])}
+    target_asset = new_assets[0] if new_assets else None
+    cr = rev_rows.get(target_asset) or {}
+    review_overall = cr.get("overall")
+    review_summary = {"overall": review_overall,
+                      "asset_id": target_asset,
+                      "identity_consistency": cr.get("identity_consistency"),
+                      "costume_consistency": cr.get("costume_consistency"),
+                      "visual_defects": cr.get("visual_defects"),
+                      "project_style_consistency": cr.get("project_style_consistency"),
+                      "summary": cr.get("summary") or review.get("detail") or "",
+                      "review_id": review.get("review_id"),
+                      "status": review.get("status")}
+
+    # ---- 阶段4：approve_if_pass（review pass 是证据，approve 是显式 mutation）----
+    approval_summary = {"attempted": False, "ok": None, "status": None}
+    if approval_mode == "approve_if_pass":
+        approval_summary["attempted"] = True
+        if review.get("status") != "completed":
+            approval_summary["status"] = "review_failed"
+        elif review_overall != "pass":
+            approval_summary["status"] = f"review_{review_overall}_no_approve"
+        else:
+            look_rev_now = look_revision(ws.store.load().looks[look_id])
+            ar = await _svc(ws, "approve_look_reference", look_id=look_id,
+                            asset_id=target_asset, expected_revision=look_rev_now)
+            approval_summary["ok"] = bool(ar.get("ok"))
+            approval_summary["status"] = (ar.get("error") or "approved")
+            if ar.get("ok") and ar.get("verified") and not ar.get("unchanged"):
+                _chg(changes, seen, "look", look_id)
+
+    approved = approval_summary.get("status") == "approved"
+    return _base_receipt(
+        "resource.look.prepare", ok=bool(changes), target=look_id,
+        before=None, after=None, revision=None, verified=bool(changes),
+        look_id=look_id, resource_kind="look", resource_id=look_id,
+        changed_resources=changes,
+        generation=gen_summary, review=review_summary, approval=approval_summary,
+        approval_mode=approval_mode,
+        op_summary=(f"Look {look_id} 生成完成，review={review_overall}"
+                    + ("，已批准" if approved else "，未批准")),
+        note=(f"Look {look_id}：生成 committed；审查 overall={review_overall}"
+              + (f"（{review_summary.get('summary') or '无备注'}）" if review_summary.get("summary") else "")
+              + ("；approval_mode=approve_if_pass 且审查通过 → 已正式批准（可直接进生产绑定）。"
+                 if approved else
+                 "；审查未通过 → 未批准（approve 需要真实 pass 证据）。请依据审查原因决定："
+                 "调整描述后再次调用本工具，或向用户报告 blocker；不要在未改描述的情况下重试。"
+                 if review_overall != "pass" else
+                 "；review_only 模式不自动批准，等待用户验收。")))
+
+
+# ---- §8.3 resource.prop.register ----
+async def _execute_resource_prop_register(rt: AgentRuntime, project: str, arguments: str,
+                                          instruction, message_id) -> dict:
+    """Prop 登记（§8.3）：create/update 元数据 + attach/import 已有参考 + review +
+    optional approve_if_pass。系统没有 Prop 生成端点——本工具绝不偷偷生图假装正式管线。
+    无参考可用时诚实返回 reference_required（不写任何 canonical）。"""
+    args = _parse_args(arguments)
+    prop_id = (args.get("prop_id") or "").strip() or None
+    name = (args.get("name") or "").strip()
+    description = str(args.get("description") or "")
+    tags = _loose_json(args.get("tags")) if args.get("tags") is not None else None
+    ref_local = (args.get("reference_local") or "").strip() or None
+    ref_url = (args.get("reference_url") or "").strip() or None
+    ref_asset_id = (args.get("reference_asset_id") or "").strip() or None
+    expected = args.get("expected_resources_revision")
+    approval_mode = (args.get("approval_mode") or "review_only").strip()
+    if approval_mode not in ("review_only", "approve_if_pass"):
+        raise AgentError("bad_arguments",
+                         "approval_mode 必须是 review_only | approve_if_pass")
+    if not expected or not isinstance(expected, str):
+        raise AgentError("bad_arguments",
+                         "缺少 expected_resources_revision（创建=document_revision，"
+                         "更新=该 prop 的 revision，来自 resource.inventory/read）")
+    if prop_id is None and not name:
+        raise AgentError("bad_arguments", "新建 Prop 需要 name")
+    if (ref_local is None) == (ref_url is None) and ref_asset_id is None:
+        pass   # 无新参考提供——可能 attach 已有 asset 或用 prop 既有参考
+    if ref_local is not None and ref_url is not None:
+        raise AgentError("bad_arguments", "reference_local 与 reference_url 二选一")
+
+    from src.resources.write_service import ResourceWriteService
+    from src.resources.models import prop_revision
+    from src.resources import prop_review as prop_review_mod
+    pdir = _resolve_pdir(rt, project)
+    ws = ResourceWriteService(pdir, project)
+
+    # ---- 参考可用性预检（§8.3：诚实 reference_required，不做无参考登记）----
+    doc = ws.store.load()
+    existing_ref_ids = (doc.props[prop_id].reference_asset_ids
+                        if prop_id and prop_id in doc.props else [])
+    has_new_ref = bool(ref_local or ref_url)
+    if not has_new_ref and ref_asset_id is None and not existing_ref_ids:
+        return _base_receipt(
+            "resource.prop.register", ok=False, target=None, before=None, after=None,
+            revision=None, verified=False, error="reference_required", stale=False,
+            changed_resources=[], op_summary="Prop 登记被拒（无参考）",
+            note="没有可用的道具参考图：未提供 reference_local/reference_url/"
+                 "reference_asset_id，且该 Prop（或新建目标）没有任何既有参考。"
+                 "系统没有 Prop 生成端点——请先向用户提供参考图（本地项目内相对路径或"
+                 "URL），或用 resource.read 确认既有参考后再试。未写入任何数据。")
+
+    changes: list = []
+    seen: set = set()
+    # ---- 阶段1：create / update 元数据 ----
+    if prop_id is None:
+        r = await _svc(ws, "create_prop", name=name, description=description,
+                       tags=tags if isinstance(tags, list) else None,
+                       expected_document_revision=expected)
+        if r.get("error") == "stale_revision":
+            return _resource_stale_receipt("resource.prop.register", r,
+                                           "创建 Prop（stale，未写入）")
+        if not r.get("ok"):
+            return _base_receipt("resource.prop.register", ok=False, target=None,
+                                 before=None, after=None, revision=None, verified=False,
+                                 error=r.get("error") or "create_failed",
+                                 detail=r.get("detail"), changed_resources=[],
+                                 op_summary="创建 Prop 失败",
+                                 note=f"Prop 未创建：{r.get('detail') or r.get('error')}")
+        prop_id = r["target"]
+        prop_rev = r["revision"]
+        _chg(changes, seen, "prop", prop_id)
+    else:
+        patch = {}
+        if args.get("name") is not None:
+            patch["name"] = name
+        if args.get("description") is not None:
+            patch["description"] = description
+        if args.get("tags") is not None:
+            patch["tags"] = tags if isinstance(tags, list) else None
+        if patch:
+            r = await _svc(ws, "update_prop", prop_id=prop_id, patch=patch,
+                           expected_revision=expected)
+            if r.get("error") == "stale_revision":
+                return _resource_stale_receipt("resource.prop.register", r,
+                                               f"更新 Prop {prop_id}（stale，未写入）")
+            if r.get("error") == "not_found":
+                raise AgentError("not_found",
+                                 f"Prop 不存在: {prop_id}（先 resource.inventory 核对 id）")
+            if not r.get("ok"):
+                return _base_receipt("resource.prop.register", ok=False, target=prop_id,
+                                     before=None, after=None, revision=None,
+                                     verified=False, error=r.get("error") or "update_failed",
+                                     detail=r.get("detail"), changed_resources=[],
+                                     op_summary="更新 Prop 失败",
+                                     note=f"Prop 未更新：{r.get('detail') or r.get('error')}")
+            prop_rev = r["revision"]
+            if r.get("verified") and not r.get("unchanged"):
+                _chg(changes, seen, "prop", prop_id)
+        else:
+            prop_rev = expected
+
+    # ---- 阶段2：参考图注册 / attach ----
+    target_asset = None
+    attach_summary = {"attempted": False, "ok": None, "error": None}
+    if ref_local or ref_url:
+        attach_summary["attempted"] = True
+        doc_rev_now = document_revision_safe(ws)
+        rr = await _svc(ws, "register_reference_asset",
+                        local=ref_local, url=ref_url,
+                        view="hero", purpose="prop", source="agent_import",
+                        expected_document_revision=doc_rev_now)
+        if not rr.get("ok"):
+            attach_summary["ok"] = False
+            attach_summary["error"] = rr.get("error")
+            return _base_receipt(
+                "resource.prop.register", ok=bool(changes), target=prop_id,
+                before=None, after=None, revision=None, verified=bool(changes),
+                prop_id=prop_id, resource_kind="prop", resource_id=prop_id,
+                changed_resources=changes, reference=attach_summary,
+                review=None, approval=None, approval_mode=approval_mode,
+                op_summary=(f"Prop {prop_id} 已登记，但参考图注册失败"
+                            if changes else "参考图注册失败"),
+                note=f"参考图注册失败：{rr.get('detail') or rr.get('error')}。"
+                     "Prop 元数据状态见 changed_resources；修正参考来源后重试。")
+        target_asset = rr["target"]
+        _chg(changes, seen, "reference_asset", target_asset)
+        ar = await _svc(ws, "attach_prop_reference", prop_id=prop_id,
+                        asset_id=target_asset,
+                        expected_revision=prop_revision(ws.store.load().props[prop_id]))
+        if not ar.get("ok"):
+            attach_summary["ok"] = False
+            attach_summary["error"] = ar.get("error")
+            return _base_receipt(
+                "resource.prop.register", ok=bool(changes), target=prop_id,
+                before=None, after=None, revision=None, verified=bool(changes),
+                prop_id=prop_id, resource_kind="prop", resource_id=prop_id,
+                changed_resources=changes, reference=attach_summary,
+                review=None, approval=None, approval_mode=approval_mode,
+                op_summary="参考图 attach 失败",
+                note=f"参考已注册（{target_asset}）但 attach 失败：{ar.get('detail') or ar.get('error')}。")
+        attach_summary["ok"] = True
+        prop_rev = prop_revision(ws.store.load().props[prop_id])
+    elif ref_asset_id is not None:
+        attach_summary["attempted"] = True
+        ar = await _svc(ws, "attach_prop_reference", prop_id=prop_id,
+                        asset_id=ref_asset_id,
+                        expected_revision=prop_revision(ws.store.load().props[prop_id]))
+        if not ar.get("ok"):
+            if ar.get("error") == "asset_not_found":
+                raise AgentError("not_found",
+                                 f"ReferenceAsset 不存在: {ref_asset_id}（resource.read "
+                                 "kind=reference_asset 核对）")
+            attach_summary["ok"] = False
+            attach_summary["error"] = ar.get("error")
+            return _base_receipt(
+                "resource.prop.register", ok=bool(changes), target=prop_id,
+                before=None, after=None, revision=None, verified=bool(changes),
+                prop_id=prop_id, resource_kind="prop", resource_id=prop_id,
+                changed_resources=changes, reference=attach_summary,
+                review=None, approval=None, approval_mode=approval_mode,
+                op_summary="参考图 attach 失败",
+                note=f"attach 失败：{ar.get('detail') or ar.get('error')}。")
+        target_asset = ref_asset_id
+        attach_summary["ok"] = True
+        if ar.get("verified") and not ar.get("unchanged"):
+            _chg(changes, seen, "prop", prop_id)
+        prop_rev = prop_revision(ws.store.load().props[prop_id])
+    else:
+        target_asset = (doc.props[prop_id].approved_reference_asset_ids
+                        or doc.props[prop_id].reference_asset_ids or [None])[0]
+
+    # ---- 阶段3：review ----
+    review = await prop_review_mod.review_prop_reference(pdir, prop_id,
+                                                         asset_ids=[target_asset],
+                                                         agnes_client=None)
+    cr = (review.get("candidate_reviews") or [{}])[0]
+    review_overall = cr.get("overall")
+    review_summary = {"overall": review_overall, "asset_id": target_asset,
+                      "prop_fidelity": cr.get("prop_fidelity"),
+                      "visual_clarity": cr.get("visual_clarity"),
+                      "visual_defects": cr.get("visual_defects"),
+                      "project_style_consistency": cr.get("project_style_consistency"),
+                      "summary": cr.get("summary") or review.get("detail") or "",
+                      "review_id": review.get("review_id"),
+                      "status": review.get("status")}
+
+    # ---- 阶段4：approve_if_pass ----
+    approval_summary = {"attempted": False, "ok": None, "status": None}
+    if approval_mode == "approve_if_pass":
+        approval_summary["attempted"] = True
+        if review.get("status") != "completed":
+            approval_summary["status"] = "review_failed"
+        elif review_overall != "pass":
+            approval_summary["status"] = f"review_{review_overall}_no_approve"
+        else:
+            ar = await _svc(ws, "approve_prop_reference", prop_id=prop_id,
+                            asset_id=target_asset,
+                            expected_revision=prop_revision(ws.store.load().props[prop_id]))
+            approval_summary["ok"] = bool(ar.get("ok"))
+            approval_summary["status"] = (ar.get("error") or "approved")
+            if ar.get("ok") and ar.get("verified") and not ar.get("unchanged"):
+                _chg(changes, seen, "prop", prop_id)
+
+    approved = approval_summary.get("status") == "approved"
+    return _base_receipt(
+        "resource.prop.register", ok=bool(changes), target=prop_id,
+        before=None, after=None, revision=None, verified=bool(changes),
+        prop_id=prop_id, resource_kind="prop", resource_id=prop_id,
+        changed_resources=changes, reference=attach_summary,
+        review=review_summary, approval=approval_summary, approval_mode=approval_mode,
+        op_summary=(f"Prop {prop_id} 参考已登记，review={review_overall}"
+                    + ("，已批准" if approved else "，未批准")),
+        note=(f"Prop {prop_id}：参考图 {target_asset} 已绑定；审查 overall={review_overall}"
+              + (f"（{review_summary.get('summary') or '无备注'}）" if review_summary.get("summary") else "")
+              + ("；已正式批准（可进 Composition / 生产绑定）。" if approved else
+                 "；审查未通过 → 未批准。请依据审查原因决定下一步（换参考/改描述/报告用户）。"
+                 if review_overall != "pass" else
+                 "；review_only 模式不自动批准，等待用户验收。")))
+
+
+def document_revision_safe(ws) -> str:
+    """当前 resources document revision（工具链内阶段衔接用；OCC 判定仍由 svc 做）。"""
+    from src.resources.models import document_revision
+    return document_revision(ws.store.load())
+
+
+# ---- §8.4 resource.composition.prepare ----
+async def _execute_resource_composition_prepare(rt: AgentRuntime, project: str,
+                                                arguments: str,
+                                                instruction, message_id) -> dict:
+    """CharacterReferenceComposition 的一次生产准备尝试（§8.4）：create/update →
+    generate → review → approve_if_pass。Review 保留 identity/look/prop fidelity/
+    binding 正确性——模型画错 = needs_fix，不是文字宣布成功。"""
+    args = _parse_args(arguments)
+    character_name = (args.get("character_name") or "").strip()
+    look_id = (args.get("look_id") or "").strip()
+    composition_id = (args.get("composition_id") or "").strip() or None
+    label = str(args.get("label") or "")
+    pose_note = str(args.get("pose_note") or "")
+    comp_desc = str(args.get("composition_description") or "")
+    raw_bindings = _loose_json(args.get("prop_bindings"))
+    expected = args.get("expected_resources_revision")
+    approval_mode = (args.get("approval_mode") or "review_only").strip()
+    if approval_mode not in ("review_only", "approve_if_pass"):
+        raise AgentError("bad_arguments",
+                         "approval_mode 必须是 review_only | approve_if_pass")
+    if not expected or not isinstance(expected, str):
+        raise AgentError("bad_arguments",
+                         "缺少 expected_resources_revision（创建=document_revision，"
+                         "更新=该 composition 的 revision）")
+    if composition_id is None and (not character_name or not look_id):
+        raise AgentError("bad_arguments", "新建 Composition 需要 character_name + look_id")
+    if composition_id is None and not isinstance(raw_bindings, list):
+        raise AgentError("bad_arguments",
+                         "prop_bindings 必须是数组（1~3 个 {prop_id, relation, anchor}）")
+
+    from src.resources.write_service import ResourceWriteService
+    from src.resources.models import composition_revision
+    from src.resources import composition_review as comp_review_mod
+    pdir = _resolve_pdir(rt, project)
+    ws = ResourceWriteService(pdir, project)
+    changes: list = []
+    seen: set = set()
+
+    # ---- 阶段1：create / update ----
+    if composition_id is None:
+        r = await _svc(ws, "create_composition", character_name=character_name,
+                       look_id=look_id, prop_bindings=raw_bindings, label=label,
+                       pose_note=pose_note, composition_description=comp_desc,
+                       expected_document_revision=expected)
+        if r.get("error") == "stale_revision":
+            return _resource_stale_receipt("resource.composition.prepare", r,
+                                           "创建 Composition（stale，未写入）")
+        if not r.get("ok"):
+            return _base_receipt("resource.composition.prepare", ok=False, target=None,
+                                 before=None, after=None, revision=None, verified=False,
+                                 error=r.get("error") or "create_failed",
+                                 detail=r.get("detail"), changed_resources=[],
+                                 op_summary="创建 Composition 失败",
+                                 note=f"Composition 未创建：{r.get('detail') or r.get('error')}"
+                                      f"（look 未批准 / prop 无 approved 参考 / binding 非法等"
+                                      f"——先准备好前置资源再试）")
+        composition_id = r["target"]
+        comp_rev = r["revision"]
+        _chg(changes, seen, "composition", composition_id)
+    else:
+        patch = {}
+        if args.get("label") is not None:
+            patch["label"] = label
+        if args.get("pose_note") is not None:
+            patch["pose_note"] = pose_note
+        if args.get("composition_description") is not None:
+            patch["composition_description"] = comp_desc
+        if raw_bindings is not None:
+            patch["prop_bindings"] = raw_bindings
+        if patch:
+            r = await _svc(ws, "update_composition", composition_id=composition_id,
+                           patch=patch, expected_revision=expected)
+            if r.get("error") == "stale_revision":
+                return _resource_stale_receipt("resource.composition.prepare", r,
+                                               f"更新 Composition {composition_id}（stale，未写入）")
+            if r.get("error") == "not_found":
+                raise AgentError("not_found",
+                                 f"Composition 不存在: {composition_id}")
+            if not r.get("ok"):
+                return _base_receipt("resource.composition.prepare", ok=False,
+                                     target=composition_id, before=None, after=None,
+                                     revision=None, verified=False,
+                                     error=r.get("error") or "update_failed",
+                                     detail=r.get("detail"), changed_resources=[],
+                                     op_summary="更新 Composition 失败",
+                                     note=f"Composition 未更新：{r.get('detail') or r.get('error')}")
+            comp_rev = r["revision"]
+            if r.get("verified") and not r.get("unchanged"):
+                _chg(changes, seen, "composition", composition_id)
+        else:
+            comp_rev = expected
+
+    # ---- 阶段2：generate（一次）----
+    gen = await _svc(ws, "generate_composition_candidates", composition_id=composition_id,
+                     expected_revision=comp_rev, candidate_count=1)
+    gen_ok = bool(gen.get("ok") and gen.get("status") == "committed")
+    gen_summary = {"ok": gen_ok, "status": gen.get("status"), "error": gen.get("error"),
+                   "detail": (gen.get("detail") or "")[:300],
+                   "generation_id": gen.get("generation_id"),
+                   "candidate_asset_ids": gen.get("candidate_asset_ids") or []}
+    if not gen_ok:
+        return _base_receipt(
+            "resource.composition.prepare", ok=bool(changes), target=composition_id,
+            before=None, after=None, revision=None, verified=bool(changes),
+            composition_id=composition_id, resource_kind="composition",
+            resource_id=composition_id, changed_resources=changes,
+            generation=gen_summary, review=None, approval=None,
+            approval_mode=approval_mode,
+            op_summary=(f"Composition {composition_id} 已创建/更新，但候选图生成失败"
+                        if changes else f"Composition {composition_id} 生成失败（无变更）"),
+            note=(f"生成未完成：{gen.get('error')}（{(gen.get('detail') or '')[:200]}）。"
+                  "这是本次唯一一次生成尝试；前置资源状态变化时先 resource.read 核对再试。"))
+
+    new_assets = gen.get("candidate_asset_ids") or []
+    for aid in new_assets:
+        _chg(changes, seen, "reference_asset", aid)
+
+    # ---- 阶段3：review（六维度）----
+    review = await comp_review_mod.review_composition_candidates(pdir, composition_id,
+                                                                 asset_ids=list(new_assets),
+                                                                 agnes_client=None)
+    cr = (review.get("candidate_reviews") or [{}])[0]
+    review_overall = cr.get("overall")
+    review_summary = {"overall": review_overall, "asset_id": new_assets[0] if new_assets else None,
+                      "character_identity": cr.get("character_identity"),
+                      "look_consistency": cr.get("look_consistency"),
+                      "prop_fidelity": cr.get("prop_fidelity"),
+                      "prop_binding_correctness": cr.get("prop_binding_correctness"),
+                      "required_prop_visibility": cr.get("required_prop_visibility"),
+                      "visual_defects": cr.get("visual_defects"),
+                      "per_binding": cr.get("per_binding"),
+                      "summary": cr.get("summary") or review.get("detail") or "",
+                      "review_id": review.get("review_id"),
+                      "status": review.get("status")}
+
+    # ---- 阶段4：approve_if_pass ----
+    approval_summary = {"attempted": False, "ok": None, "status": None}
+    if approval_mode == "approve_if_pass":
+        approval_summary["attempted"] = True
+        if review.get("status") != "completed":
+            approval_summary["status"] = "review_failed"
+        elif review_overall != "pass":
+            approval_summary["status"] = f"review_{review_overall}_no_approve"
+        else:
+            comp_rev_now = composition_revision(ws.store.load().compositions[composition_id])
+            ar = await _svc(ws, "approve_composition_candidate",
+                            composition_id=composition_id, asset_id=new_assets[0],
+                            expected_revision=comp_rev_now)
+            approval_summary["ok"] = bool(ar.get("ok"))
+            approval_summary["status"] = (ar.get("error") or "approved")
+            if ar.get("ok") and ar.get("verified") and not ar.get("unchanged"):
+                _chg(changes, seen, "composition", composition_id)
+
+    approved = approval_summary.get("status") == "approved"
+    return _base_receipt(
+        "resource.composition.prepare", ok=bool(changes), target=composition_id,
+        before=None, after=None, revision=None, verified=bool(changes),
+        composition_id=composition_id, resource_kind="composition",
+        resource_id=composition_id, changed_resources=changes,
+        generation=gen_summary, review=review_summary, approval=approval_summary,
+        approval_mode=approval_mode,
+        op_summary=(f"Composition {composition_id} 生成完成，review={review_overall}"
+                    + ("，已批准" if approved else "，未批准")),
+        note=(f"Composition {composition_id}：生成 committed；审查 overall={review_overall}"
+              + (f"（{review_summary.get('summary') or '无备注'}）" if review_summary.get("summary") else "")
+              + ("；已正式批准（正式生产组合参考）。" if approved else
+                 "；审查未通过 → 未批准（画错 = needs_fix，不是成功）。依据原因调整 binding/"
+                 "描述或换 Look 后再试；不要无依据重试。"
+                 if review_overall != "pass" else
+                 "；review_only 模式不自动批准，等待用户验收。")))
+
+
 TOOL_EXECUTORS = {
     "character.list": _execute_character_list,
     "character.read": _execute_character_read,
@@ -1129,6 +2043,10 @@ TOOL_EXECUTORS = {
     "project.visual_profile.read": _execute_visual_profile_read,
     "resource.inventory": _execute_resource_inventory,
     "resource.read": _execute_resource_read,
+    "resource.clothing.upsert": _execute_resource_clothing_upsert,
+    "resource.look.prepare": _execute_resource_look_prepare,
+    "resource.prop.register": _execute_resource_prop_register,
+    "resource.composition.prepare": _execute_resource_composition_prepare,
     "shot.list": _execute_shot_list_via_director,
     "shot.read": _execute_shot_read_via_director,
     "story.list": _execute_story_list,
@@ -1145,6 +2063,10 @@ _TOOL_LABELS = {
     "character.delete": "删除角色", "character.generate_views": "生成角色三视图",
     "project.visual_profile.read": "读取项目视觉定义",
     "resource.inventory": "列出生产资源", "resource.read": "读取生产资源",
+    "resource.clothing.upsert": "创建/更新服装",
+    "resource.look.prepare": "准备角色造型（生成+审查）",
+    "resource.prop.register": "登记道具参考",
+    "resource.composition.prepare": "准备组合参考（生成+审查）",
     "shot.list": "列出镜头", "shot.read": "读取镜头",
     "story.list": "读取故事段", "story.read": "读取故事段",
     "script.read": "读取剧本", "web.search": "搜索资料",
@@ -1228,20 +2150,22 @@ def _trace_entry(step: int, name: str, args: str, obs: dict) -> dict:
 def _ledger_brief(receipts: list) -> str:
     """把本轮真实写工具结果渲染成给模型看的账本（确定性，来自回执而非模型叙述）。"""
     if not receipts:
-        return "本轮没有任何写工具被真正调用（没有 character.create / character.update / character.delete 的工具调用记录）。"
+        return "本轮没有任何写工具被真正调用（没有写工具的工具调用记录）。"
     lines = []
     for r in receipts:
         op = r.get("operation")
+        target = r.get("character_name") or r.get("look_id") or r.get("prop_id") \
+            or r.get("clothing_id") or r.get("composition_id") or ""
         if r.get("ok"):
             if r.get("unchanged"):
                 lines.append(f"- {op}：ok=true，但内容无变化（unchanged），canonical 未改动。")
             else:
-                lines.append(f"- {op}（{r.get('character_name')}）：ok=true，已重新读取 canonical 确认落盘。")
+                lines.append(f"- {op}（{target}）：ok=true，已重新读取 canonical 确认落盘。")
         else:
             why = r.get("error") or "未知错误"
             if r.get("stale"):
                 why = "stale（版本过期，被拒绝，未写入）"
-            lines.append(f"- {op}（{r.get('character_name')}）：ok=false，原因：{why}。canonical 未被该调用改动。")
+            lines.append(f"- {op}（{target}）：ok=false，原因：{why}。canonical 未被该调用改动。")
     return "\n".join(lines)
 
 
@@ -1377,6 +2301,7 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                          tool_surface: Optional[list] = None) -> dict:
     """原生 function-calling 循环 + 执行真实性收口（结构性，非提示词）。"""
     created = updated = deleted = views_generated = False
+    resources_mutated = False
     if state is None:
         state = {}
     events: list = state.setdefault("events", [])
@@ -1553,6 +2478,7 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
             return {"text": text or "已完成。",
                     "created": created, "updated": updated, "deleted": deleted,
                     "views_generated": views_generated,
+                    "resources_mutated": resources_mutated,
                     "events": events, "receipts": receipts, "trace": trace,
                     "reasonings": reasonings, "search_sources": search_sources,
                     "window_renewals": window_renewals}
@@ -1686,8 +2612,12 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                                                    "url": s.get("url") or ""})
 
             # 据【真实回执】设置 mutated 标志 + 事件。
-            if (name in CHARACTER_WRITE_OPERATIONS and obs.get("ok")
+            if (name in WRITE_TOOL_DOMAIN and obs.get("ok")
                     and obs.get("verified") and not obs.get("unchanged")):
+                if name.startswith("resource."):
+                    resources_mutated = True
+                    events.append({"kind": "resource_change", "summary":
+                                   obs.get("op_summary") or f"资源变更（{name}）"})
                 cname = obs.get("character_name")
                 if name == "character.create":
                     created = True
@@ -1762,6 +2692,7 @@ async def character_designer_turn(rt: AgentRuntime, project: str, session_id: st
     assistant_text: str
     status: Optional[str] = None
     created = updated = deleted = views_generated = False
+    resources_mutated = False
     events: list = []
     receipts: list = []
     reasoning: list = []
@@ -1792,6 +2723,7 @@ async def character_designer_turn(rt: AgentRuntime, project: str, session_id: st
             updated = final["updated"]
             deleted = final["deleted"]
             views_generated = final.get("views_generated", False)
+            resources_mutated = final.get("resources_mutated", False)
             events = final["events"]
             receipts = final.get("receipts", [])
             trace = final.get("trace", [])
@@ -1828,6 +2760,8 @@ async def character_designer_turn(rt: AgentRuntime, project: str, session_id: st
         intent = "character_delete"
     elif views_generated:
         intent = "character_views"
+    elif resources_mutated:
+        intent = "resource_change"
     else:
         intent = "conversation"
 
@@ -1886,6 +2820,7 @@ async def character_designer_turn(rt: AgentRuntime, project: str, session_id: st
     return {"assistant_message": assistant_text,
             "created": created, "updated": updated, "deleted": deleted,
             "views_generated": views_generated,
+            "resources_mutated": resources_mutated,
             "events": events, "message": asst.to_dict(),
             "intent": intent, "receipts": receipts_meta, "trace": trace,
             "search_sources": search_sources,

@@ -240,13 +240,15 @@ def test_no_story_write_capability(tmp_path):
     _save_proj(tmp_path)
     tool_names = {t["function"]["name"] for t in CHARACTER_DESIGNER_TOOLS}
     # 工具集只有角色写工具；story/script 工具一个都不出现在工具定义里
-    # （Phase B：+ project.visual_profile.read / resource.inventory / resource.read 只读工具；
-    #   shot.list/shot.read 经 _tool_surface() 从 Director 过滤并入）
+    # （Phase B 最终面：+ profile/inventory/read 只读 + clothing/look/prop/composition
+    #   mutation 工具；shot.list/shot.read 经 _tool_surface() 从 Director 过滤并入）
     assert tool_names == {"character.list", "character.read", "character.create",
                           "character.update", "character.delete",
                           "character.generate_views", "web.search",
                           "project.visual_profile.read",
-                          "resource.inventory", "resource.read"}
+                          "resource.inventory", "resource.read",
+                          "resource.clothing.upsert", "resource.look.prepare",
+                          "resource.prop.register", "resource.composition.prepare"}
     surface_names = {t["function"]["name"] for t in _tool_surface()}
     assert {"shot.list", "shot.read"} <= surface_names
     # 执行器表也只暴露只读的 story/script 执行器，绝无写执行器

@@ -349,18 +349,19 @@ def test_t15_character_designer_tools_intact():
                                                CHARACTER_WRITE_OPERATIONS,
                                                TOOL_EXECUTORS)
     names = {t["function"]["name"] for t in CHARACTER_DESIGNER_TOOLS}
-    # Agent System V2 Phase B：+ project.visual_profile.read / resource.inventory /
-    # resource.read（全部只读；profile 无 mutation 工具）。
+    # Agent System V2 Phase B 最终工具面（14 基础 + shot.list/read 过滤并入）：
+    # + profile/inventory/read 只读 + clothing/look/prop/composition 任务型 mutation
     assert names == {"character.list", "character.read", "character.create",
                      "character.update", "character.delete",
                      "character.generate_views", "web.search",
                      "project.visual_profile.read",
-                     "resource.inventory", "resource.read"}
+                     "resource.inventory", "resource.read",
+                     "resource.clothing.upsert", "resource.look.prepare",
+                     "resource.prop.register", "resource.composition.prepare"}
     assert {"character.create", "character.update", "character.delete"} <= CHARACTER_WRITE_OPERATIONS
-    # resource 生成/审批类写工具仍不得混入（Commit E 落地时以 WRITE_TOOL_DOMAIN 为准）
-    assert not any(n in ("look.generate", "look.approve", "prop.generate",
-                         "resource.look.prepare", "resource.prop.register",
-                         "resource.clothing.upsert", "resource.composition.prepare")
+    # 越权写工具仍不得出现（Scene/Story/Shot/Binding/底层细碎 API）
+    assert not any(n in ("look.approve", "prop.approve", "revoke_look_approval",
+                         "scene_instance.create", "binding.create", "story.update")
                    for n in names)
     # receipt 复用链完好
     from src.agents.script_writer import _base_receipt

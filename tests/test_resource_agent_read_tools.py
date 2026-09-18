@@ -153,10 +153,17 @@ def test_D6_character_mutation_locks_character_domain_only(tmp_path):
 
 
 def test_D6b_write_tool_domain_mapping_shape():
-    """§15 映射表：character.* → character 域；resource.* mutation 落地后进 resources 域。"""
-    assert set(WRITE_TOOL_DOMAIN.values()) == {RESOURCE_CHARACTER}
+    """§15 映射表：character.* → character 域；resource.* mutation → resources 域。"""
+    from src.agents.project_events import RESOURCE_CHARACTER
+    assert set(WRITE_TOOL_DOMAIN.values()) == {RESOURCE_CHARACTER, RESOURCE_RESOURCES}
     assert set(WRITE_TOOL_DOMAIN) == {"character.create", "character.update",
-                                      "character.delete", "character.generate_views"}
+                                      "character.delete", "character.generate_views",
+                                      "resource.clothing.upsert", "resource.look.prepare",
+                                      "resource.prop.register",
+                                      "resource.composition.prepare"}
+    for k in ("resource.clothing.upsert", "resource.look.prepare",
+              "resource.prop.register", "resource.composition.prepare"):
+        assert WRITE_TOOL_DOMAIN[k] == RESOURCE_RESOURCES
 
 
 import pytest  # noqa: E402  （文件尾 import 供上方 raises 使用）
