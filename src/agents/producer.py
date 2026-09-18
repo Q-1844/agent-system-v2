@@ -33,6 +33,7 @@ import secrets
 import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
+import re
 
 import httpx
 
@@ -68,6 +69,14 @@ _WINDOW_SELF_CHECK_NUDGE = (
     "③ 如果任务尚未完成且仍有明确、合理的下一步，请继续执行——不要因为执行步数"
     "而停止，系统会自动为你续接新的执行窗口。"
 )
+
+# Phase D（29.md §35）零工具谎报闸门：本轮【零工具调用】且回复声称完成写动作 →
+# 纠正 nudge（一次）；仍谎报 → 结果带 zero_tool_claim 标记。宁窄勿宽：只匹配
+# 「完成态断言 + 具体写动作」组合；纯提问/澄清/如实说明未完成不触发。
+_PRODUCER_ZERO_TOOL_CLAIM_RE = re.compile(
+    r"(已完成|已批准|已删除|已清理|已登记|已挂上|已生成|已创建|已修复|已收敛|"
+    r"全部完成|准备就绪|✅.{0,24}(approved|批准|删除|清理|登记))")
+
 
 # Producer 的写工具集合 = 空（物理不持任何 canonical 写工具）。用于 _cb 锁接线判断。
 PRODUCER_WRITE_OPERATIONS: set = set()
@@ -866,6 +875,7 @@ async def _producer_tool_loop(rt, client, project: str, messages: list,
     trace: list = state.setdefault("trace", [])
     reasonings: list = state.setdefault("reasonings", [])
     offered = offered_tools or []
+    zero_tool_claim_nudged = {"used": False}   # Phase D：谎报纠正 nudge 每 turn 至多一次
 
     step = -1
     window_used = 0
@@ -959,9 +969,38 @@ async def _producer_tool_loop(rt, client, project: str, messages: list,
 
         if not tool_calls:
             text = (content or "").strip() or "已完成。"
+            # ---- Phase D（29.md §35）：零工具谎报闸门 ----
+            # Producer loop 无 Specialist 写域真相闸门（文件头 §5.2 设计取舍），
+            # 真机 Turn 4 暴露缺口：多清单目标下模型可零工具直接产出「全部完成」的
+            # 详细汇报（伪造 ref id / 虚构批准与清理）——canonical 零变化。
+            # 修复：本轮零工具调用（trace 全空）且回复声称完成具体写动作时，
+            # 打一次纠正 nudge（镜像 Specialist 语义，每 turn 一次防循环）；
+            # 仍谎报则照实返回但打 zero_tool_claim 标记（fail-closed 诚实上报，
+            # 绝不静默当作已验证结果）。
+            if not trace and not zero_tool_claim_nudged["used"]:
+                if _PRODUCER_ZERO_TOOL_CLAIM_RE.search(text):
+                    zero_tool_claim_nudged["used"] = True
+                    log.warning("producer 零工具谎报闸门触发（project=%s）："
+                                "回复声称完成写动作但本轮零工具调用，打纠正 nudge", project)
+                    messages.append({"role": "assistant", "content": content or ""})
+                    messages.append({"role": "user", "content":
+                        "[系统提示] 你本轮没有调用任何工具或 *.delegate，但你上面的回复声称"
+                        "完成了具体工作（批准/登记/删除/清理/生成等）。你的工具面里没有写"
+                        "工具——未委派即未发生，canonical 没有变化。请二选一："
+                        "(1) 现在实际调用对应的 *.delegate 完成这些工作；"
+                        "(2) 如实说明本轮尚未执行任何修改，只基于真实读取给出当前状态与计划。"
+                        "不要声称未发生的事情。"})
+                    _refresh_producer_system(messages, rt, project)
+                    continue
+            zero_tool_claim = bool(
+                not trace and _PRODUCER_ZERO_TOOL_CLAIM_RE.search(text))
+            if zero_tool_claim:
+                log.warning("producer 零工具谎报闸门二次触发（project=%s）："
+                            "纠正后仍零工具声称完成，结果带 zero_tool_claim 标记返回", project)
             return {"text": text, "events": events, "receipts": receipts,
                     "trace": trace, "reasonings": reasonings,
-                    "window_renewals": window_renewals}
+                    "window_renewals": window_renewals,
+                    "zero_tool_claim": zero_tool_claim}
 
         messages.append({"role": "assistant", "content": content or "", "tool_calls": tool_calls})
 
@@ -1091,6 +1130,7 @@ async def producer_turn(rt, project: str, session_id: str, content: str, *,
     reasonings: list = []
     window_renewals = 0
     linked_task_ids: list = []
+    zero_tool_claim = False   # Phase D：零工具谎报闸门结果（fail-closed 诚实上报）
     # Compaction 遥测（镜像 director_turn）：本轮上下文规模度量，只观察不做压缩。
     tel_history_chars = sum(len(m.get("content") or "") for m in history)
     tel_system_chars = 0
@@ -1147,6 +1187,13 @@ async def producer_turn(rt, project: str, session_id: str, content: str, *,
             trace = final["trace"]
             reasonings = final.get("reasonings", [])
             window_renewals = final.get("window_renewals", 0)
+            # Phase D：零工具谎报闸门结果（fail-closed 诚实上报；nudge 一次后仍谎报 → true）
+            zero_tool_claim = bool(final.get("zero_tool_claim"))
+            if zero_tool_claim:
+                meta_extra = {"warning": "zero_tool_claim",
+                              "detail": "本轮零工具/零委派，但回复声称完成具体工作——"
+                                        "内容未经 canonical 验证，不可作为执行事实引用。"}
+                events.append({"kind": "zero_tool_claim", **meta_extra})
         except _TurnStopped:
             log.info("producer_turn 被停止（project=%s session=%s）", project, session_id)
             done = [r.get("agent") for r in loop_state.get("receipts", []) if r.get("ok")]
@@ -1196,7 +1243,8 @@ async def producer_turn(rt, project: str, session_id: str, content: str, *,
 
     meta = {"intent": intent, "events": events, "evidence_refs": [],
             "receipts": receipts, "trace": trace, "reasonings": reasonings,
-            "linked_task_ids": linked_task_ids, "window_renewals": window_renewals}
+            "linked_task_ids": linked_task_ids, "window_renewals": window_renewals,
+            "zero_tool_claim": zero_tool_claim}
     asst_msg = AgentMessage(role="assistant", content=assistant_text,
                             status=status, meta=meta)
     store.append_message(session_id, asst_msg)
@@ -1220,6 +1268,7 @@ async def producer_turn(rt, project: str, session_id: str, content: str, *,
         "receipts": receipts,
         "trace": trace,
         "window_renewals": window_renewals,
+        "zero_tool_claim": zero_tool_claim,
         "session_id": session_id,
         "agent_id": "producer",
         "linked_task_ids": linked_task_ids,

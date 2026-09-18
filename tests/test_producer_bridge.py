@@ -1007,3 +1007,62 @@ def test_P2_prompt_unmodified_handling_principles():
                 for t in offered if t["function"]["name"] == "director.delegate")
     assert "审查报告" in dir_d or "只返回" in dir_d
 
+
+
+# ============ Phase D（29.md §35）：Producer 零工具谎报闸门 ============
+def test_PD35_zero_tool_claim_gets_one_nudge_then_flagged(tmp_path):
+    """零工具 + 完成态断言：第一次 nudge 纠正；仍谎报 → zero_tool_claim=True 返回。"""
+    _save_proj(tmp_path)
+    lie = ("## 完成汇报\n\n- 玉佩 ✅ approved（ref_5a3b98211bb6）\n"
+           "- 密信 ✅ 已批准\n- 悬空实例已删除清理")
+    client = ScriptedClient([
+        (lie, None),      # 第一次：零工具谎报 → 闸门 nudge
+        (lie, None),      # 第二次：仍谎报 → zero_tool_claim 标记返回
+    ])
+    rt = _runtime(tmp_path, client=client)
+    sid = rt.get_or_create_session("demo", "producer", "project", "demo")["session_id"]
+    res = _run(producer.producer_turn(rt, "demo", sid, "把道具和造型全部收口"))
+
+    assert res["zero_tool_claim"] is True
+    # nudge 恰好注入一次（第二次 LLM 调用的 messages 里有系统纠正）
+    assert len(client.calls) == 2
+    second_msgs = client.calls[1]["messages"]
+    nudges = [m for m in second_msgs
+              if m.get("role") == "user" and "你本轮没有调用任何工具" in (m.get("content") or "")]
+    assert len(nudges) == 1
+
+
+def test_PD35_zero_tool_honest_reply_not_nudged(tmp_path):
+    """零工具但如实说明未执行（无完成态断言）→ 不触发闸门。"""
+    _save_proj(tmp_path)
+    honest = "我本轮尚未执行任何修改：道具登记和造型审批还需要先委派专业部门，请确认优先级。"
+    client = ScriptedClient([(honest, None)])
+    rt = _runtime(tmp_path, client=client)
+    sid = rt.get_or_create_session("demo", "producer", "project", "demo")["session_id"]
+    res = _run(producer.producer_turn(rt, "demo", sid, "继续收口生产准备"))
+
+    assert res["zero_tool_claim"] is False
+    assert len(client.calls) == 1          # 无二次调用
+    assert "你本轮没有调用任何工具" not in json.dumps(
+        client.calls[0]["messages"], ensure_ascii=False)
+
+
+def test_PD35_nudge_leads_to_real_delegation(tmp_path):
+    """纠正后模型改为真实委派 → 正常完成，zero_tool_claim=False。"""
+    _save_proj(tmp_path)
+    env = _envelope("script_writer", objective="把剧本正文再打磨一轮",
+                    situation="用户要求继续完善剧本",
+                    user_intent="继续收口生产准备")
+    client = ScriptedClient([
+        ("道具已批准、造型已清理完毕。", None),     # 第一次：谎报 → nudge
+        (None, [_tool_call("script_writer.delegate", env, "call_fix")]),   # 改为真实委派
+        (None, [_tool_call("story.list", {}, "sw1")]),
+        ("已打磨完成。", None),                     # SW final
+        ("本轮已实际委派 Script Writer 完成剧本打磨。", None),  # producer final
+    ])
+    rt = _runtime(tmp_path, client=client)
+    sid = rt.get_or_create_session("demo", "producer", "project", "demo")["session_id"]
+    res = _run(producer.producer_turn(rt, "demo", sid, "继续收口生产准备"))
+
+    assert res["zero_tool_claim"] is False
+    assert len(res["receipts"]) == 1 and res["receipts"][0]["agent"] == "script_writer"
