@@ -2014,9 +2014,12 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
             # ---- 真相闸门 ----
             real_changes = [r for r in receipts
                             if r.get("ok") and r.get("verified") and not r.get("unchanged")]
+            # Phase C1（27.md §15）：真实 tool result 携带的结构化 production
+            # prerequisite——Agent「如实报告前置缺失并停止」是合法收口，不算假成功。
+            prerequisite_blocked = bool(state.get("prerequisite_warnings"))
             chat_turn = (write_attempts == 0 and _is_chat_turn(instruction))
             false_claim = (_director_claims_success(text) and not real_changes
-                           and not chat_turn)
+                           and not chat_turn and not prerequisite_blocked)
             real_searches = [t for t in trace if t["tool"] == "web.search" and t.get("ok")]
             search_false_claim = (_claims_search_success(text) and not real_searches
                                   and not chat_turn)
@@ -2038,7 +2041,7 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                                 and last_read_after_write < last_write_step)
             if (not zero_write_recovery_used
                     and write_attempts == 0 and not real_changes
-                    and not read_only
+                    and not read_only and not prerequisite_blocked
                     and _is_director_write_request(instruction)):
                 zero_write_recovery_used = True
                 log.info("director zero-write recovery 触发（project=%s）", project)
@@ -2107,6 +2110,7 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
             return {"text": text or "已完成。",
                     "created": created, "updated": updated, "deleted": deleted,
                     "moved": moved,
+                    "prerequisite_warnings": state.get("prerequisite_warnings", []),
                     "events": events, "receipts": receipts, "trace": trace,
                     "reasonings": reasonings, "search_sources": search_sources,
                     "window_renewals": window_renewals}
@@ -2203,6 +2207,12 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                            "operation": name}
 
             ok_now = bool(obs.get("ok"))
+            # Phase C1（27.md §15）：收集真实 tool result 的结构化 production
+            # prerequisite（inspect/bind/生成拒绝都携带）——供 turn 收口豁免真相闸门
+            # 的假成功判定 + 进 TaskResult.warnings（Producer 路由依据）。
+            if isinstance(obs, dict) and obs.get("prerequisite_warnings"):
+                state.setdefault("prerequisite_warnings", []).extend(
+                    w for w in obs["prerequisite_warnings"] if isinstance(w, dict))
             # 防失控（需求 #11）：同一工具连续以同样方式失败 → 诚实停止。计数【按工具】
             # （交叉的成功只读调用不重置该工具的失败连击——真机 2026-08-30 实测模型会
             # 「create_many stale → shot.list → create_many stale」循环 9 次绕过连击护栏）。
@@ -2556,6 +2566,8 @@ async def director_turn(rt: AgentRuntime, project: str, session_id: str,
     created = updated = deleted = moved = False
     events: list = []
     receipts: list = []
+    prerequisite_warnings: list = []   # Phase C1（27.md §15）：真实 tool result 派生的
+                                       # 结构化 production prerequisite（turn 级聚合）
     reasoning: list = []
     trace: list = []
     search_sources: list = []
@@ -2606,6 +2618,7 @@ async def director_turn(rt: AgentRuntime, project: str, session_id: str,
             trace = final.get("trace", [])
             reasoning = final.get("reasonings", [])
             search_sources = final.get("search_sources", [])
+            prerequisite_warnings = final.get("prerequisite_warnings", [])
         except _TurnStopped:
             log.info("director_turn 被停止（project=%s session=%s）", project, session_id)
             done = _committed_shot_ids(loop_state.get("receipts", []))
@@ -2617,6 +2630,7 @@ async def director_turn(rt: AgentRuntime, project: str, session_id: str,
             trace = loop_state.get("trace", [])
             reasoning = loop_state.get("reasonings", [])
             search_sources = loop_state.get("search_sources", [])
+            prerequisite_warnings = loop_state.get("prerequisite_warnings", [])
         except Exception as e:
             log.exception("director_turn 工具循环异常（project=%s session=%s）",
                           project, session_id)
@@ -2628,6 +2642,7 @@ async def director_turn(rt: AgentRuntime, project: str, session_id: str,
             trace = loop_state.get("trace", [])
             reasoning = loop_state.get("reasonings", [])
             search_sources = loop_state.get("search_sources", [])
+            prerequisite_warnings = loop_state.get("prerequisite_warnings", [])
         # 本轮 tool I/O 规模估算：tool 消息内容 + assistant tool_calls 参数
         finally:
             try:
@@ -2770,6 +2785,7 @@ async def director_turn(rt: AgentRuntime, project: str, session_id: str,
             "reasonings": reasoning,
             "search_sources": search_sources,
             "generated_assets": generated_assets,   # 本轮真实生成的分镜图/视频（路径，窗口渲染用）
+            "prerequisite_warnings": prerequisite_warnings,   # Phase C1：生产前置（turn 级聚合）
             "pending_delete_scenes": []}
     asst = AgentMessage(role="assistant", content=assistant_text, status=status, meta=meta)
     store.append_message(session_id, asst)
@@ -2784,6 +2800,7 @@ async def director_turn(rt: AgentRuntime, project: str, session_id: str,
 
     return {"assistant_message": assistant_text,
             "created": created, "updated": updated, "deleted": deleted, "moved": moved,
+            "prerequisite_warnings": prerequisite_warnings,
             "events": events, "message": asst.to_dict(),
             "intent": intent, "receipts": receipts_meta, "trace": trace,
             "search_sources": search_sources,

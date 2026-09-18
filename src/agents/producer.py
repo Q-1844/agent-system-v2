@@ -509,12 +509,24 @@ def _wrap_task_result(turn_result: Optional[dict], err: Optional[str],
     # 与各 Specialist 自身的 write_success 公式一致（ok and verified and not unchanged）。
     verified = any(r.get("ok") and r.get("verified") and not r.get("unchanged")
                    for r in receipts)
+    warnings = _derive_warnings(receipts)
+    # Phase C1（27.md §15）：turn 级结构化 production prerequisite（Specialist
+    # *_turn 返回，真实 tool result 派生）并入 warnings——Resource/Scene 前置缺失对
+    # Producer 可见，绝不依赖模型自然语言自报。
+    for pw in (tr.get("prerequisite_warnings") or [])[:6]:
+        if isinstance(pw, dict):
+            code = pw.get("code") or "prerequisite"
+            sid_ = pw.get("shot_id") or ""
+            detail = str(pw.get("detail") or "")[:160]
+            line = f"prerequisite[{code}] {sid_}: {detail}".strip()
+            if line not in warnings:
+                warnings.append(line)
     return {
         "task_id": task_id, "workflow_id": workflow_id, "agent": agent_id,
         "status": status,
         "summary": summary[:800], "assistant_message": summary,
         "changed_refs": changed,
-        "warnings": _derive_warnings(receipts),
+        "warnings": warnings,
         "verified": verified,
         "n_tool_calls": len(tr.get("trace") or []),
         "session_id": sid, "execution_ref": f"agent_task:{task_id}",
