@@ -1374,6 +1374,65 @@ async def _svc(ws, method: str, **kw) -> dict:
     return await getattr(ws, method)(**kw)
 
 
+# ---- Phase C1 Work A（27.md §3）：per-resource review failure guard ----
+# 只限「同一资源 + 同一语义 basis + 连续 needs_fix」的重复烧图；不做
+# MAX_AGENT_STEPS / MAX_WORKFLOW_DURATION / MAX_GENERATIONS_TOTAL 一类总闸。
+# 状态是 Agent runtime safeguard：进程内存、per-turn（message_id 维度），绝不写
+# canonical（27.md §3.1：不是资源 ontology）。
+_REVIEW_RETRY_LIMIT = 3
+_REVIEW_RETRY_STATE: Dict[Tuple[str, str, str, str], int] = {}
+
+
+def _reset_review_retry_state() -> None:
+    """测试/新 turn 边界清理（进程内存态，无持久化）。"""
+    _REVIEW_RETRY_STATE.clear()
+
+
+def _review_basis_sig(**inputs: Any) -> str:
+    """语义 basis 指纹（sha8）：决定「同一语义输入」的判定。任何有效输入变化 →
+    新 basis → 计数归零（27.md §3.1：改 appearance/换 reference/改 clothing 都算变化）。"""
+    payload = json.dumps({k: v for k, v in sorted(inputs.items())},
+                         ensure_ascii=False, sort_keys=True, default=str)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:8]
+
+
+def _review_retry_check(project: str, message_id: Optional[str],
+                        resource_key: str, basis_sig: str, op: str) -> Optional[dict]:
+    """入口检查：同 basis 已连续 needs_fix ≥ 3 → 返回 review_retry_exhausted 回执
+    （不再 generate/review）。否则 None = 放行。"""
+    key = (project, message_id or "", resource_key, basis_sig)
+    if _REVIEW_RETRY_STATE.get(key, 0) >= _REVIEW_RETRY_LIMIT:
+        return _base_receipt(
+            op, ok=False, target=resource_key, before=None, after=None,
+            revision=None, verified=False, error="review_retry_exhausted",
+            stale=False, resource_key=resource_key, changed_resources=[],
+            op_summary="审查重试已收敛（同一输入连续 needs_fix）",
+            note=(f"同一资源（{resource_key}）在【相同语义输入】下已连续 "
+                  f"{_REVIEW_RETRY_LIMIT} 次审查 needs_fix——继续原样 regenerate 不会成功"
+                  "（不是随机失败，是当前约束下的系统性结果）。必须先改变输入之一："
+                  "①修改 appearance/design 描述；②更换 reference；③改 clothing 绑定；"
+                  "④解决 prompt-reference 冲突（必要时向用户说明并请其选择）；"
+                  "⑤或停止并如实向用户报告 blocker。")
+            )
+    return None
+
+
+def _review_retry_record(project: str, message_id: Optional[str],
+                         resource_key: str, basis_sig: str,
+                         review_overall: Optional[str]) -> None:
+    """审查结果记账：needs_fix → 连续计数 +1；pass（成功）→ 清零（C58）；
+   其它（uncertain/provider_error 等）→ 不计入连续 needs_fix，但也保留原计数。"""
+    key = (project, message_id or "", resource_key, basis_sig)
+    if review_overall == "pass":
+        _REVIEW_RETRY_STATE.pop(key, None)
+        return
+    if review_overall == "needs_fix":
+        if len(_REVIEW_RETRY_STATE) > 4096:   # 防泄漏：超限清最旧（dict 保插入序）
+            for k in list(_REVIEW_RETRY_STATE.keys())[:1024]:
+                _REVIEW_RETRY_STATE.pop(k, None)
+        _REVIEW_RETRY_STATE[key] = _REVIEW_RETRY_STATE.get(key, 0) + 1
+
+
 
 
 def _execute_resource_inventory(rt: AgentRuntime, project: str, arguments: str,
@@ -1574,6 +1633,16 @@ async def _execute_resource_look_prepare(rt: AgentRuntime, project: str, argumen
     changes: list = []
     seen: set = set()
 
+    # ---- Phase C1 Work A：review failure guard 入口检查（§3.1）----
+    retry_resource_key = look_id or f"new:{character_name}:{(label or '').strip()}"
+    retry_basis = _review_basis_sig(appearance_description=appearance_description,
+                                    appearance_delta=appearance_delta,
+                                    clothing_id=clothing_id)
+    blocked = _review_retry_check(project, message_id, retry_resource_key,
+                                  retry_basis, "resource.look.prepare")
+    if blocked is not None:
+        return blocked
+
     # ---- 阶段1：create / update ----
     if look_id is None:
         # 复用护栏（真机 E2E 发现的失败模式矫正）：同 character+label 的 Look 已存在时
@@ -1704,6 +1773,12 @@ async def _execute_resource_look_prepare(rt: AgentRuntime, project: str, argumen
             if ar.get("ok") and ar.get("verified") and not ar.get("unchanged"):
                 _chg(changes, seen, "look", look_id)
 
+    # ---- Phase C1 Work A：审查结果记账（needs_fix 连续计数 / pass 清零）----
+    # 记账用 create/update 后的确定 look_id（后续重试按 reuse guard 引导会带同一 id，
+    # 入口检查的 key 与记账 key 对齐）。
+    _review_retry_record(project, message_id, look_id, retry_basis,
+                         review_overall if review.get("status") == "completed" else None)
+
     approved = approval_summary.get("status") == "approved"
     return _base_receipt(
         "resource.look.prepare", ok=bool(changes), target=look_id,
@@ -1777,6 +1852,16 @@ async def _execute_resource_prop_register(rt: AgentRuntime, project: str, argume
 
     changes: list = []
     seen: set = set()
+    # ---- Phase C1 Work A：review failure guard 入口检查（§3.1）----
+    # basis = 参考图来源（换图 = 新 basis = 计数归零）。
+    retry_basis = _review_basis_sig(reference_local=ref_local, reference_url=ref_url,
+                                    reference_asset_id=ref_asset_id)
+    blocked = _review_retry_check(project, message_id,
+                                  prop_id or f"new:{(name or '').strip()}",
+                                  retry_basis, "resource.prop.register")
+    if blocked is not None:
+        return blocked
+
     # ---- 阶段1：create / update 元数据 ----
     if prop_id is None:
         # 复用护栏（真机 E2E 失败模式矫正）：同名 Prop 已存在时拒绝盲目 create，
@@ -1944,6 +2029,9 @@ async def _execute_resource_prop_register(rt: AgentRuntime, project: str, argume
                 _chg(changes, seen, "prop", prop_id)
 
     approved = approval_summary.get("status") == "approved"
+    # ---- Phase C1 Work A：审查结果记账（用确定 prop_id 对齐后续重试 key）----
+    _review_retry_record(project, message_id, prop_id, retry_basis,
+                         review_overall if review.get("status") == "completed" else None)
     return _base_receipt(
         "resource.prop.register", ok=bool(changes), target=prop_id,
         before=None, after=None, revision=None, verified=bool(changes),
@@ -2003,6 +2091,17 @@ async def _execute_resource_composition_prepare(rt: AgentRuntime, project: str,
     ws = ResourceWriteService(pdir, project)
     changes: list = []
     seen: set = set()
+
+    # ---- Phase C1 Work A：review failure guard 入口检查（§3.1）----
+    retry_basis = _review_basis_sig(look_id=look_id, prop_bindings=raw_bindings,
+                                    composition_description=comp_desc,
+                                    pose_note=pose_note)
+    blocked = _review_retry_check(
+        project, message_id,
+        composition_id or f"new:{character_name}:{(label or '').strip()}",
+        retry_basis, "resource.composition.prepare")
+    if blocked is not None:
+        return blocked
 
     # ---- 阶段1：create / update ----
     if composition_id is None:
@@ -2137,6 +2236,9 @@ async def _execute_resource_composition_prepare(rt: AgentRuntime, project: str,
                 _chg(changes, seen, "composition", composition_id)
 
     approved = approval_summary.get("status") == "approved"
+    # ---- Phase C1 Work A：审查结果记账（用确定 composition_id 对齐重试 key）----
+    _review_retry_record(project, message_id, composition_id, retry_basis,
+                         review_overall if review.get("status") == "completed" else None)
     return _base_receipt(
         "resource.composition.prepare", ok=bool(changes), target=composition_id,
         before=None, after=None, revision=None, verified=bool(changes),
