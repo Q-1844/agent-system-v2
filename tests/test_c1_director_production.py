@@ -617,4 +617,7 @@ def test_C52_C53_producer_routing_awareness():
     assert "prerequisite[resource_prerequisite]" in ps
     assert "Resource Agent" in ps.split("Production prerequisite")[1][:400]
     assert "scene_production_prerequisite" in ps
-    assert "绝不让 Resource Agent 越权写场景" in ps
+    # 28.md §25 演进（原 C1 断言「绝不让 Resource Agent 越权写场景」已由
+    # Scene Agent 的存在取代）：scene_production_prerequisite 现在路由给 Scene Agent，
+    # 且 Resource Agent 的写入域不包含场景（越权语义仍由工具面缺失保证）。
+    assert "Scene Agent" in ps.split("Production prerequisite")[1][:600]

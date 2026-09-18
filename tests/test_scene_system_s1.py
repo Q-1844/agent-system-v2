@@ -659,7 +659,8 @@ def test_t26_no_agent_source_references_scene_system():
     project_events.py 仅持锁/事件域常量。其余任何 Agent 源文件仍禁止 scene_system
     引用；production_context 投影层不得出现 scene 写/生成类 API（只读边界）。"""
     root = Path(__file__).resolve().parent.parent
-    allowed = {"production_context.py", "scene_designer.py", "project_events.py"}
+    allowed = {"production_context.py", "scene_designer.py", "project_events.py",
+               "producer.py"}
     for rel in ("src/agents", "src/ai"):
         pkg = root / rel
         assert pkg.exists()

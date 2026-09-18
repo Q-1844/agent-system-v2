@@ -1913,7 +1913,17 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
 
             executor = TOOL_EXECUTORS.get(name)
             exc_msg = None
-            if (executor is not None and name == "web.search"
+            if (is_write_tool and executor is not None
+                    and not (str(fn.get("arguments") or "").strip().strip('"'))):
+                # 空参数写调用：给可行动的错误（模型偶发把 arguments 发空——
+                # 单独指出参数载体，避免模型在 validation_error 上空转）。
+                obs = {"ok": False, "operation": name, "code": "empty_arguments",
+                       "error": ("工具调用的 arguments 为空。请把参数以 JSON 对象写在 "
+                                 f"arguments 字段里再调用 {name}，例如："
+                                 "{{\"story_scene_id\": \"s02\", \"location_id\": \"loc_xxx\", "
+                                 "\"expected_document_revision\": \"<当前 revision>\"}}"
+                                 "（以该工具 schema 的必填字段为准）。")}
+            elif (executor is not None and name == "web.search"
                     and search_count >= MAX_WEB_SEARCH):
                 obs = {"ok": False, "operation": "web.search",
                        "code": "search_budget_exhausted",
@@ -2153,6 +2163,8 @@ async def scene_designer_turn(rt: AgentRuntime, project: str, session_id: str,
             "verified": bool(r.get("verified")), "stale": bool(r.get("stale")),
             "unchanged": bool(r.get("unchanged")),
             "error": r.get("error"),
+            "detail": (str(r.get("detail"))[:200] if r.get("detail") else None),
+            "code": r.get("code"),
             "op_summary": r.get("op_summary"),
             "revision": r.get("revision"),
             "expected_revision": r.get("expected_revision"),

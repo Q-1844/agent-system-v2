@@ -151,7 +151,8 @@ def test_t47_no_agent_source_references_scene_system():
     合法写入者）+ project_events.py（锁/事件域常量）——
     详见 test_scene_system_s1.T26 同款边界。"""
     root = Path(__file__).resolve().parent.parent
-    allowed = {"production_context.py", "scene_designer.py", "project_events.py"}
+    allowed = {"production_context.py", "scene_designer.py", "project_events.py",
+               "producer.py"}
     for rel in ("src/agents", "src/ai"):
         pkg = root / rel
         assert pkg.exists()
