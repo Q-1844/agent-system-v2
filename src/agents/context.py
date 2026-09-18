@@ -35,7 +35,7 @@ def build_context(agent_id: str, project: str, scope_type: str, scope_id: str,
 
     if agent_id == "producer":
         lines.append(f"场景数 {len(p.scenes)} / 镜头数 {len(p.all_shots())} / 角色数 {len(p.characters)}")
-        lines.append("可委派 Specialist: script_writer/character_designer/director/production_planner/shot_producer/continuity_reviewer/editor")
+        lines.append("可委派 Specialist: script_writer/character_designer/scene_designer/director/production_planner/shot_producer/continuity_reviewer/editor")
     elif agent_id == "script_writer":
         lines.append(f"故事文本({len(p.story_text)}字): {p.story_text[:500]}")
         for s in p.scenes:

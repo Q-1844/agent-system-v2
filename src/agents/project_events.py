@@ -30,6 +30,10 @@ RESOURCE_CHARACTER = "character"   # 角色域：project.json 的 characters（C
 RESOURCE_STORYBOARD = "storyboard"   # 分镜域：scenes[].shots[]（Director 写入域）
 RESOURCE_RESOURCES = "resources"   # 生产资源域：resources.json（Look/Clothing/Prop/Composition/
                                    # ReferenceAsset——Agent System V2 Phase B，Resource Agent 写入域）
+RESOURCE_SCENE_SYSTEM = "scene_system"   # 场景系统域：scene_system.json（Location/SpatialAnchor/
+                                         # SetLayout/LocationView/SceneInstance/SceneState/
+                                         # SceneInstanceView——Agent System V2 Phase C2，
+                                         # Scene Agent 写入域）
 
 _MAX_QUEUE = 256
 
@@ -122,11 +126,13 @@ def emit_changed(bus, project: str, resource: str, *, by: str = "",
                  session_id: str = "", operation: str = "") -> None:
     """按资源名分发内容变更事件（Agent 流式端点用；资源 → 事件类型映射的唯一入口）。
     story → story.changed；character → character.changed；storyboard → storyboard.changed；
-    resources → resources.changed；未知资源发通用 resource.changed。"""
+    resources → resources.changed；scene_system → scene_system.changed；
+    未知资源发通用 resource.changed。"""
     type_by_resource = {RESOURCE_STORY: "story.changed",
                         RESOURCE_CHARACTER: "character.changed",
                         RESOURCE_STORYBOARD: "storyboard.changed",
-                        RESOURCE_RESOURCES: "resources.changed"}
+                        RESOURCE_RESOURCES: "resources.changed",
+                        RESOURCE_SCENE_SYSTEM: "scene_system.changed"}
     bus.publish(project, {"type": type_by_resource.get(resource, "resource.changed"),
                           "resource": resource, "by": by,
                           "session_id": session_id, "operation": operation})

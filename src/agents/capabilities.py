@@ -90,6 +90,16 @@ def build_default_capabilities() -> List[CapabilityDefinition]:
         _cap("character.propose_change", "角色语义提案(AI-7B)",
              "从角色角度产出语义修改意图（不生成资产/不建 Workspace/不应用）",
              CC.CHARACTER.value, "character_designer", ["character_designer"], [P], ME, False),
+        # ---- scene（Agent System V2 Phase C2：Scene Agent 原生 tool-loop；能力只登记
+        #      语义 id 供 registry 完整性校验与查询展示，不走 _ADAPTERS dispatch）----
+        _cap("scene.inspect", "场景系统查看",
+             "读取 Scene System 生产事实（Location/SpatialAnchor/SetLayout/LocationView/"
+             "SceneInstance/SceneState/SceneInstanceView）",
+             CC.SCENE.value, "scene_designer", ["scene_designer"], [I], LO, False),
+        _cap("scene.prepare", "场景生产准备",
+             "Location/Anchor/Layout/View/Instance/State/Sciv 生产准备与审批"
+             "（包装 SceneSystemService/SceneVisualService 正式链路）",
+             CC.SCENE.value, "scene_designer", ["scene_designer"], [E], ME, False),
         # ---- storyboard ----
         _cap("storyboard.inspect", "分镜查看", "读取场景分镜结构（DEMO）",
              CC.STORYBOARD.value, "director",

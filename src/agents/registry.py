@@ -20,10 +20,13 @@ from .models import AgentDefinition, CapabilityDefinition, ModelProfile
 from .capabilities import build_default_capabilities
 
 
-# 固定 8 Agent 稳定 ID（进入持久化数据，勿改）
+# Agent 稳定 ID（进入持久化数据，勿改既有 id；新增只做加法式扩展——
+# 28.md §4：已注册 identity 是稳定的，允许 additive extension）。
+# Phase C2：scene_designer（Scene Agent）作为第四个正式 Specialist 加入，
+# 位置按生产流程排在 Resource Agent 之后、Director 之前。
 SPECIALISTS = [
-    "script_writer", "character_designer", "director", "production_planner",
-    "shot_producer", "continuity_reviewer", "editor",
+    "script_writer", "character_designer", "scene_designer", "director",
+    "production_planner", "shot_producer", "continuity_reviewer", "editor",
 ]
 SPEC_AGENT_IDS = ["producer"] + SPECIALISTS   # spec 顺序
 
@@ -56,6 +59,18 @@ def _build_agents() -> List[AgentDefinition]:
             read_scopes=["characters", "style", "scenes"],
             write_scopes=["character_proposal", "character_assets"],
             can_delegate_to=[], default_model_profile="character_profile"),
+        AgentDefinition(
+            id="scene_designer", name="Scene Agent",
+            description="场景设计师（Scene Production Designer）：Location/SpatialAnchor/"
+                        "SetLayout/LocationView/SceneInstance/SceneState/SceneInstanceView "
+                        "生产事实与 approved 场景参考",
+            role="地点 · 空间 · 场景状态 · 场景参考",
+            # 原生 tool-loop Agent（同 script_writer/character_designer/director/producer），
+            # 能力走工具面而非 capability dispatch；这里只登记语义 id 供查询展示。
+            allowed_capabilities=["scene.inspect", "scene.prepare"],
+            read_scopes=["scenes", "characters", "shots", "style", "scene_system"],
+            write_scopes=["scene_production"],
+            can_delegate_to=[], default_model_profile="scene_profile"),
         AgentDefinition(
             id="director", name="Director",
             description="场景→镜头、分镜结构/节奏/意图；修改须经 Workspace",
@@ -128,6 +143,8 @@ def _default_profiles() -> List[ModelProfile]:
         ModelProfile(id="producer_profile", name="Producer 默认", reasoning_model=t,
                      text_provider="agnes"),
         ModelProfile(id="character_profile", name="角色设计默认",
+                     reasoning_model=t, image_model=im, text_provider="agnes"),
+        ModelProfile(id="scene_profile", name="场景设计默认",
                      reasoning_model=t, image_model=im, text_provider="agnes"),
         ModelProfile(id="shot_producer_profile", name="镜头制作默认",
                      reasoning_model=t, image_model=im, video_model=vi,
@@ -312,6 +329,16 @@ _AGENT_SYSTEM_PROMPTS: Dict[str, str] = {
         "三视图与生产视觉资源（Clothing/CharacterLook/Prop/Composition/共享库）。\n"
         "你可以：查看角色与生产资源；调用角色/资源生成相关能力（包装现有能力）。\n"
         "你不能：改故事/分镜/场景系统/制作计划，不重新实现生成 Pipeline，不修改项目视觉定义。"
+        "当前 project/scope 见上下文。"
+    ),
+    "scene_designer": (
+        "你是 Scene Agent（Scene Production Designer，场景设计师），负责把故事中的地点与"
+        "场景状态转化为可供导演稳定使用的生产场景系统（Location/SpatialAnchor/SetLayout/"
+        "LocationView/SceneInstance/SceneState/SceneInstanceView）与 approved 场景视觉参考。\n"
+        "你可以：读取故事/镜头/项目视觉定义；通过 scene.* 工具读写 Scene System 生产事实；"
+        "生成与审查场景参考（经正式 SceneVisualService 链路）。\n"
+        "你不能：修改 Story/剧本（Script Writer 域）、创建/修改角色与 Prop（Resource Agent 域）、"
+        "写 Shot/ShotProductionBinding（Director 域）、修改 ProjectVisualProfile（用户拥有）。"
         "当前 project/scope 见上下文。"
     ),
     "director": (

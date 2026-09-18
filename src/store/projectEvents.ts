@@ -14,6 +14,8 @@ export const RESOURCE_CHARACTER = 'character';
 export const RESOURCE_STORYBOARD = 'storyboard';
 /** Agent System V2 Phase B：生产资源域（resources.json——Look/Clothing/Prop/Composition） */
 export const RESOURCE_RESOURCES = 'resources';
+/** Agent System V2 Phase C2：场景系统域（scene_system.json——Location/View/Instance/State） */
+export const RESOURCE_SCENE_SYSTEM = 'scene_system';
 
 export interface ProjectEvent {
   type: string;
@@ -40,11 +42,14 @@ export const useProjectEventsStore = defineStore('projectEvents', () => {
   const storyboardVersion = ref(0);
   /** resources.changed 自增版本号（生产资源域内容变化信号，Resource Agent 写入后 +1） */
   const resourcesVersion = ref(0);
+  /** scene_system.changed 自增版本号（场景系统域内容变化信号，Scene Agent 写入后 +1） */
+  const sceneSystemVersion = ref(0);
 
   const storyLocked = computed(() => !!lockedResources.value[RESOURCE_STORY]);
   const charactersLocked = computed(() => !!lockedResources.value[RESOURCE_CHARACTER]);
   const storyboardLocked = computed(() => !!lockedResources.value[RESOURCE_STORYBOARD]);
   const resourcesLocked = computed(() => !!lockedResources.value[RESOURCE_RESOURCES]);
+  const sceneSystemLocked = computed(() => !!lockedResources.value[RESOURCE_SCENE_SYSTEM]);
 
   function setProject(p: string) {
     if (currentProject.value !== p) {
@@ -56,6 +61,7 @@ export const useProjectEventsStore = defineStore('projectEvents', () => {
       storyVersion.value = 0;
       storyboardVersion.value = 0;
       resourcesVersion.value = 0;
+      sceneSystemVersion.value = 0;
     }
   }
   function setConnected(c: boolean) { connected.value = c; }
@@ -85,13 +91,15 @@ export const useProjectEventsStore = defineStore('projectEvents', () => {
       storyboardVersion.value += 1;
     } else if (ev.type === 'resources.changed') {
       resourcesVersion.value += 1;
+    } else if (ev.type === 'scene_system.changed') {
+      sceneSystemVersion.value += 1;
     }
   }
 
   return {
     currentProject, connected, lockedResources, storyVersion, lastStoryChange,
-    charactersVersion, storyboardVersion, resourcesVersion,
-    storyLocked, charactersLocked, storyboardLocked, resourcesLocked,
+    charactersVersion, storyboardVersion, resourcesVersion, sceneSystemVersion,
+    storyLocked, charactersLocked, storyboardLocked, resourcesLocked, sceneSystemLocked,
     setProject, setConnected, applySnapshot, applyEvent,
   };
 });

@@ -59,12 +59,17 @@ def _raise503():
     raise HTTPException(503, "not ready")
 
 
-# ============ 1. 8 个 Agent 全注册 ============
+# ============ 1. Agent 全注册（28.md §4：identity 稳定 + 允许加法式扩展；
+#               Phase C2 scene_designer 加入后为 9 个）============
 def test_8_agents_registered():
     r = Registries()
     agents = r.agents.list()
-    assert len(agents) == 8
+    assert len(agents) == len(SPEC_AGENT_IDS) == 9
     assert [a.id for a in agents] == SPEC_AGENT_IDS
+    # 加法式扩展基线：旧 8 identity 一个不少（旧值不迁移不改名）
+    assert {"producer", "script_writer", "character_designer", "director",
+            "production_planner", "shot_producer", "continuity_reviewer",
+            "editor"} <= {a.id for a in agents}
 
 
 # ============ 2. registry 完整性 ============
@@ -72,8 +77,8 @@ def test_registry_integrity():
     r = Registries()
     agent_ids = {a.id for a in r.agents.list()}
     cap_ids = {c.id for c in r.capabilities.list()}
-    # 8 ID 唯一 + 精确匹配 spec
-    assert len(agent_ids) == 8
+    # ID 唯一 + 精确匹配 spec（Phase C2：9 个，允许加法式扩展）
+    assert len(agent_ids) == 9
     assert agent_ids == set(SPEC_AGENT_IDS)
     # 每个 allowed_capabilities id 存在
     for a in r.agents.list():

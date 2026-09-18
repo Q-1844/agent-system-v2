@@ -320,6 +320,14 @@ async def agent_turn_stream(project_name: str, sid: str, req: StreamTurnReq):
         _turn_fn, _writes, _resource, _emit = (
             character_designer_turn, frozenset(WRITE_TOOL_DOMAIN), None, emit_changed)
         _write_domain_map = WRITE_TOOL_DOMAIN
+    elif session.agent_id == "scene_designer":
+        # Agent System V2 Phase C2（28.md §5）：Scene Agent 单写域 scene_system——
+        # 锁按工具查 WRITE_TOOL_DOMAIN 挂（当前工具面随 Commit D-G 逐个入表）。
+        from src.agents.scene_designer import scene_designer_turn, WRITE_TOOL_DOMAIN
+        from src.agents.project_events import emit_changed
+        _turn_fn, _writes, _resource, _emit = (
+            scene_designer_turn, frozenset(WRITE_TOOL_DOMAIN), None, emit_changed)
+        _write_domain_map = WRITE_TOOL_DOMAIN
     elif session.agent_id == "director":
         from src.agents.director import director_turn, DIRECTOR_WRITE_OPERATIONS
         from src.agents.project_events import RESOURCE_STORYBOARD, emit_changed
@@ -338,7 +346,8 @@ async def agent_turn_stream(project_name: str, sid: str, req: StreamTurnReq):
         _write_domain_map = None
     else:
         _raise(AgentError("permission_denied",
-                          "流式 turn 仅支持 Script Writer / Character Designer / Director / Producer 会话"))
+                          "流式 turn 仅支持 Script Writer / Character Designer / Scene Agent / "
+                          "Director / Producer 会话"))
     from src.agents.models import ScopeType
     from src.agents.project_events import get_project_bus
     if session.scope_type != ScopeType.PROJECT.value:

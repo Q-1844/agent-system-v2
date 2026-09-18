@@ -48,8 +48,9 @@ class AgentError(Exception):
 
 
 # 全部 specialist（§12：specialist→specialist 禁止，因为它们的 can_delegate_to 都为空）
-SPECIALISTS = ["script_writer", "character_designer", "director", "production_planner",
-               "shot_producer", "continuity_reviewer", "editor"]
+# Phase C2：scene_designer 加法式加入（勿改既有 id）。
+SPECIALISTS = ["script_writer", "character_designer", "scene_designer", "director",
+               "production_planner", "shot_producer", "continuity_reviewer", "editor"]
 
 
 class AgentRuntime:
@@ -378,6 +379,13 @@ class AgentRuntime:
         if agent_id == "character_designer" and scope_type == ScopeType.PROJECT.value:
             from .character_designer import character_designer_turn
             return await character_designer_turn(self, project, sid, content)
+
+        # Agent System V2 Phase C2（28.md §3/§4）：Scene Agent 项目级 Direct Chat 走原生
+        # tool-loop（只写 Scene System canonical；story/shot/profile 只读参考）。
+        # 与 SW/CD 同语义：在持久化 user 之前委派，避免重复落盘。
+        if agent_id == "scene_designer" and scope_type == ScopeType.PROJECT.value:
+            from .scene_designer import scene_designer_turn
+            return await scene_designer_turn(self, project, sid, content)
 
         # Producer V1 Phase 1：Producer 项目级 Direct Chat 走原生 tool-loop（自己持久化
         # 消息、自己循环，经 *.delegate 真实调用 SW/CD/Director *_turn；不经过 inquiry

@@ -42,6 +42,7 @@ class CapabilityCategory(str, Enum):
     PROJECT         = "project"
     STORY           = "story"
     CHARACTER      = "character"
+    SCENE           = "scene"     # Agent System V2 Phase C2：Scene Agent（场景生产系统）
     STORYBOARD      = "storyboard"
     PRODUCTION_PLAN = "production_plan"
     SHOT            = "shot"
