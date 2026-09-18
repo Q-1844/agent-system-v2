@@ -77,6 +77,7 @@ SCENE_READ_TOOLS = {
     "shot.list", "shot.read",
     "web.search",
     "scene.inventory", "scene.production.inspect",   # Commit C（28.md §8/§9）
+    "resource.inventory", "resource.read",           # §0.6：Prop id 定位（只读）
 }
 
 # 写工具 → 资源锁域（唯一权威映射；流式端点与 Producer Bridge 的锁接线都从这张表取）。
@@ -197,8 +198,12 @@ def _tool_surface() -> list:
     except Exception:   # noqa: BLE001 - 防御：partial-import 降级
         pass
     try:
-        from .character_designer import VISUAL_PROFILE_READ_TOOL, WEB_SEARCH_TOOL
-        tools += [VISUAL_PROFILE_READ_TOOL, WEB_SEARCH_TOOL]
+        from .character_designer import (RESOURCE_INVENTORY_TOOL, RESOURCE_READ_TOOL,
+                                         VISUAL_PROFILE_READ_TOOL, WEB_SEARCH_TOOL)
+        # §0.6：Scene Agent 可读生产资源（定位 Prop id 供 prop_placements 引用）——
+        # 只读复用 Resource Agent 的 inventory/read schema，无任何写工具。
+        tools += [RESOURCE_INVENTORY_TOOL, RESOURCE_READ_TOOL,
+                  VISUAL_PROFILE_READ_TOOL, WEB_SEARCH_TOOL]
     except Exception:   # noqa: BLE001
         pass
     try:
@@ -231,6 +236,20 @@ def _execute_visual_profile_read_via_cd(rt: AgentRuntime, project: str, argument
     return _execute_visual_profile_read(rt, project, arguments, instruction, message_id)
 
 
+def _execute_resource_inventory_via_cd(rt: AgentRuntime, project: str, arguments: str,
+                                       instruction, message_id) -> dict:
+    """resource.inventory 只读执行器（§0.6：定位 Prop id；复用 Resource Agent 实现）。"""
+    from .character_designer import _execute_resource_inventory
+    return _execute_resource_inventory(rt, project, arguments, instruction, message_id)
+
+
+def _execute_resource_read_via_cd(rt: AgentRuntime, project: str, arguments: str,
+                                  instruction, message_id) -> dict:
+    """resource.read 只读执行器（§0.6：读 Prop 详情确认可用性；只读无写权）。"""
+    from .character_designer import _execute_resource_read
+    return _execute_resource_read(rt, project, arguments, instruction, message_id)
+
+
 def _execute_web_search_via_sw(rt: AgentRuntime, project: str, arguments: str,
                                instruction, message_id) -> dict:
     """web.search 只读执行器（复用 Script Writer 实现；预算由本 loop 维护）。"""
@@ -261,6 +280,8 @@ TOOL_EXECUTORS: Dict[str, Any] = {
     "shot.list": _execute_shot_list_via_director,
     "shot.read": _execute_shot_read_via_director,
     "project.visual_profile.read": _execute_visual_profile_read_via_cd,
+    "resource.inventory": _execute_resource_inventory_via_cd,
+    "resource.read": _execute_resource_read_via_cd,
     "web.search": _execute_web_search_via_sw,
 }
 
@@ -268,6 +289,8 @@ TOOL_LABELS = {
     "story.list": "列出故事段", "story.read": "读取故事段", "script.read": "读取剧本正文",
     "shot.list": "列出镜头", "shot.read": "读取镜头",
     "project.visual_profile.read": "读取项目视觉定义",
+    "resource.inventory": "列出生产资源（定位 Prop id）",
+    "resource.read": "读取生产资源详情",
     "web.search": "搜索资料",
 }
 
@@ -1815,9 +1838,13 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
         if not tool_calls:
             text = (content or "").strip()
             # ---- 真相闸门（场景域）----
+            # 场景域加固（C2 真机 §32 实证）：指令常含「不要修改故事和分镜」类否定式
+            # 约束——_CHAT_TURN_RE 的「不要修改」会把它误判为聊天轮而解除闸门武装。
+            # 显式动作词存在时一律视为执行轮（宁可误武装，不可漏放幻觉）。
             real_changes = [r for r in receipts
                             if r.get("ok") and r.get("verified") and not r.get("unchanged")]
-            chat_turn = (write_attempts == 0 and _is_chat_turn(instruction))
+            chat_turn = (write_attempts == 0 and _is_chat_turn(instruction)
+                         and not _SCENE_EXPLICIT_ACTION_RE.search(instruction or ""))
             false_claim = _claims_success(text) and not real_changes and not chat_turn
             real_searches = [t for t in trace if t["tool"] == "web.search" and t.get("ok")]
             search_false_claim = (_claims_search_success(text) and not real_searches
@@ -2060,6 +2087,11 @@ _ZERO_WRITE_RECOVERY_NUDGE = (
 # 回复中像在「总结场景系统现状/成果」的正则（needs_final_read 收尾判定用）。
 _SCENE_SUMMARY_RE = re.compile(
     r"\d+\s*个[地点场景视 角]|场景系统|Location|LocationView|SceneInstance|场景参考|已就绪|READY")
+
+# 显式场景动作词（真相闸门武装：指令含任一 → 非聊天轮，即使带「不要修改…」否定约束）。
+_SCENE_EXPLICIT_ACTION_RE = re.compile(
+    r"准备|更新|创建|生成|绑定|摆放|放进|登记|批准|重建|补充|完善|清理|修改场景|"
+    r"scene\.(location|anchor|layout|view|instance|state|state_view)\.(upsert|set|prepare|update)")
 
 
 # ============ 主 turn ============

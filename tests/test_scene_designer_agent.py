@@ -959,9 +959,12 @@ def test_S47_missing_prop_resource_prerequisite(tmp_path, monkeypatch):
 
 
 def test_S48_cannot_create_prop(tmp_path):
-    """S48：Scene Agent 工具面无任何 Prop 写工具（物理边界）。"""
+    """S48：Scene Agent 工具面无任何 Prop/资源写工具（物理边界）。
+    §0.6：resource.inventory/resource.read 只读定位 Prop id 允许。"""
     names = {t["function"]["name"] for t in sd._tool_surface()}
-    assert not any(n.startswith("resource.") for n in names), names
+    allowed_resource_reads = {"resource.inventory", "resource.read"}
+    resource_tools = {n for n in names if n.startswith("resource.")}
+    assert resource_tools <= allowed_resource_reads, resource_tools
     assert not any("prop" in n and "scene" in n for n in names)
     # 工具面总数在 14~18 区间（28.md §6）
     assert 14 <= len(names) <= 18, names
