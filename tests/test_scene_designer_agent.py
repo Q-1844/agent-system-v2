@@ -571,6 +571,7 @@ def _view_reply(anchor_id: str, overrides: dict | None = None) -> str:
         "layout_consistency": "pass", "layout_notes": "",
         "camera_observed_zone": "overhead", "camera_evidence": "flat map view",
         "view_consistency": "pass", "view_notes": "",
+        "lighting_weather": "pass", "lighting_notes": "",
         "visual_defects": "pass", "defect_notes": "",
         "project_style_consistency": "pass", "style_notes": "ok",
         "overall": "pass", "summary": "ok",
@@ -964,3 +965,197 @@ def test_S48_cannot_create_prop(tmp_path):
     assert not any("prop" in n and "scene" in n for n in names)
     # 工具面总数在 14~18 区间（28.md §6）
     assert 14 <= len(names) <= 18, names
+
+
+# ============ Commit G：scene.state_view.prepare（S49-S55）============
+def _approve_base_view(pdir, view_id: str, asset_id: str = "ref_base0000001"):
+    """快捷批准 base view（canonical + 参考资产文件 + 同口径 approval record）。"""
+    from src.resources.store import ResourceStore
+    from src.resources.models import ReferenceAsset
+    from src.scene_system.store import SceneSystemStore
+    from src.scene_system import generation_records as gr
+    from src.scene_system.generation_records import approval_records_path
+    from src.scene_system.view_review import (build_review_expectations,
+                                              expectations_fingerprint)
+    from src.visual_profile import load_profile_or_none
+    from src.visual_profile.models import visual_profile_fingerprint
+    local_rel = f"output/scene_system/views/{view_id}/c_01.png"
+    f = pdir / local_rel
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_bytes(b"\x89PNG fake")
+    rdoc = ResourceStore(pdir, pdir.name).load()
+    rdoc.reference_assets[asset_id] = ReferenceAsset(
+        asset_id=asset_id, local=local_rel, checksum="c" * 8, source="scene_system")
+    ResourceStore(pdir, pdir.name).save(rdoc)
+    st = SceneSystemStore(pdir, pdir.name)
+    doc = st.load()
+    doc.views[view_id].approval_status = "approved"
+    doc.views[view_id].reference_asset_id = asset_id
+    st.save(doc)
+    doc = st.load()
+    vp = load_profile_or_none(pdir)
+    fp = expectations_fingerprint(
+        build_review_expectations(doc, doc.views[view_id]), [asset_id],
+        visual_profile_fingerprint=(visual_profile_fingerprint(vp)
+                                    if vp is not None else None))
+    gr.append_record(pdir, {"approval_id": "apv_t", "operation":
+                            "scene.approve_location_view",
+                            "status": "approved", "view_id": view_id,
+                            "asset_id": asset_id,
+                            "reviewed_basis_fingerprint": fp,
+                            "completed_at": 0.0},
+                     path=approval_records_path(pdir))
+
+
+def _gen_env_ready(_gen_env, monkeypatch):
+    """instance + approved base view + fake client 就绪。"""
+    rt, svc, tmp_path, fake = _gen_env
+    loc, a1 = _seed_loc_anchor(svc)
+    drev = _drev(svc)
+    view = (asyncio.run(svc.create_view(
+        location_id=loc, label="hero", camera_zone="overhead",
+        look_direction="site center", visible_anchor_ids=[a1],
+        expected_document_revision=_drev(svc))))["target"]
+    _approve_base_view(tmp_path, view)
+    r_inst = _run_exec(sd._execute_scene_instance_prepare(
+        rt, "s2demo", json.dumps({
+            "story_scene_id": "s01", "location_id": loc,
+            "expected_document_revision": _drev(svc)}), None, "m1"))
+    fake.vision_content = _view_reply(a1)
+    return rt, svc, tmp_path, fake, loc, a1, view, r_inst
+
+
+def test_S49_sciv_base_unapproved_rejected(_gen_env, monkeypatch):
+    """S49：base LocationView 未批准 → 生成被系统 fail closed 拒绝。"""
+    rt, svc, tmp_path, fake, loc, a1, view, r_inst = _gen_env_ready(_gen_env, None)
+    # 撤销批准（恢复 unreviewed）
+    from src.scene_system.store import SceneSystemStore
+    st = SceneSystemStore(tmp_path, tmp_path.name)
+    d = st.load()
+    d.views[view].approval_status = "unreviewed"
+    d.views[view].reference_asset_id = None
+    st.save(d)
+    r = _run_exec(sd._execute_scene_state_view_prepare(
+        rt, "s2demo", json.dumps({
+            "scene_instance_id": r_inst["scene_instance_id"],
+            "base_location_view_id": view, "approval_mode": "review_only",
+            "expected_document_revision": _drev(svc)}), None, "m1"))
+    assert not r["ok"], "base 未批准必须被拒"
+    assert r["stage"] == "generate"
+
+
+def test_S50_sciv_create_generate(_gen_env, monkeypatch):
+    rt, svc, tmp_path, fake, loc, a1, view, r_inst = _gen_env_ready(_gen_env, None)
+    r = _run_exec(sd._execute_scene_state_view_prepare(
+        rt, "s2demo", json.dumps({
+            "scene_instance_id": r_inst["scene_instance_id"],
+            "base_location_view_id": view, "approval_mode": "review_only",
+            "expected_document_revision": _drev(svc)}), None, "m1"))
+    assert r["ok"], (r.get("error"), r.get("detail"))
+    assert r["scene_instance_view_id"].startswith("sciv_")
+    assert fake.gen_calls == 1
+    assert r["changed_resources"] == [{"kind": "scene_instance_view",
+                                       "id": r["scene_instance_view_id"]}]
+
+
+def test_S51_sciv_pass_and_approve(_gen_env, monkeypatch):
+    rt, svc, tmp_path, fake, loc, a1, view, r_inst = _gen_env_ready(_gen_env, None)
+    fake.vision_content = _view_reply(a1)
+    r = _run_exec(sd._execute_scene_state_view_prepare(
+        rt, "s2demo", json.dumps({
+            "scene_instance_id": r_inst["scene_instance_id"],
+            "base_location_view_id": view, "approval_mode": "approve_if_pass",
+            "expected_document_revision": _drev(svc)}), None, "m1"))
+    assert r["ok"] and r["approved"] is True, (r.get("approve_error"),
+                                               r.get("review_overall"))
+    doc = sd._scene_system_read(tmp_path)
+    sciv = doc.scene_instance_views[r["scene_instance_view_id"]]
+    assert sciv.approval_status == "approved" and sciv.reference_asset_id
+
+
+def test_S52_sciv_needs_fix_not_approve(_gen_env, monkeypatch):
+    rt, svc, tmp_path, fake, loc, a1, view, r_inst = _gen_env_ready(_gen_env, None)
+    # 先给状态期望（有期望时 scene_state/lighting_weather 才是 hard 维度）
+    r_state = _run_exec(sd._execute_scene_state_update(
+        rt, "s2demo", json.dumps({
+            "instance_id": r_inst["scene_instance_id"],
+            "time_of_day": "night", "weather": "storm",
+            "expected_revision": r_inst["revision"]}), None, "m0"))
+    assert r_state["ok"]
+    fake.vision_content = _view_reply(a1, {"scene_state": {
+        "time_of_day": "fail", "weather": "fail",
+        "environment_conditions": "concern", "anchor_states": [], "notes": ""},
+        "lighting_weather": "fail",
+        "overall": "needs_fix"})
+    r = _run_exec(sd._execute_scene_state_view_prepare(
+        rt, "s2demo", json.dumps({
+            "scene_instance_id": r_inst["scene_instance_id"],
+            "base_location_view_id": view, "approval_mode": "approve_if_pass",
+            "expected_document_revision": _drev(svc)}), None, "m1"))
+    assert r["ok"] and r["review_overall"] == "needs_fix", \
+        (r.get("review_overall"), r.get("candidate_reviews"))
+    assert r["approved"] is False
+
+
+def test_S53_S54_state_change_new_basis(_gen_env, monkeypatch):
+    """S53/S54：SceneState 改变 → basis 指纹改变（guard 允许重新生成）。"""
+    from src.agents.review_retry_guard import review_basis_sig
+    rt, svc, tmp_path, fake, loc, a1, view, r_inst = _gen_env_ready(_gen_env, None)
+    sig1 = review_basis_sig(scene_instance_id=r_inst["scene_instance_id"],
+                            base_location_view_id=view, label="",
+                            instance_revision=r_inst["revision"],
+                            intent="scene_instance_view")
+    r_state = _run_exec(sd._execute_scene_state_update(
+        rt, "s2demo", json.dumps({
+            "instance_id": r_inst["scene_instance_id"],
+            "time_of_day": "night", "weather": "storm",
+            "expected_revision": r_inst["revision"]}), None, "m2"))
+    assert r_state["ok"]
+    sig2 = review_basis_sig(scene_instance_id=r_inst["scene_instance_id"],
+                            base_location_view_id=view, label="",
+                            instance_revision=r_state["revision"],
+                            intent="scene_instance_view")
+    assert sig1 != sig2, "状态真改变 → basis 必须改变（§18）"
+    # 重新生成（带 sciv id + 新 revision）→ 放行并成功
+    fake.vision_content = _view_reply(a1)
+    drev = _drev(svc)
+    r1 = _run_exec(sd._execute_scene_state_view_prepare(
+        rt, "s2demo", json.dumps({
+            "scene_instance_id": r_inst["scene_instance_id"],
+            "base_location_view_id": view, "approval_mode": "review_only",
+            "expected_document_revision": drev}), None, "m1"))
+    sciv_id, sciv_rev = r1["scene_instance_view_id"], r1["revision"]
+    # S53：状态改变后 inspect 报 stale（sciv 状态 mock 层面已在 S22 验证）；
+    # S54：直接重生成（新状态 → 新 basis）成功
+    _run_exec(sd._execute_scene_state_update(
+        rt, "s2demo", json.dumps({
+            "instance_id": r_inst["scene_instance_id"],
+            "weather": "clear",
+            "expected_revision": r_state["revision"]}), None, "m3"))
+    r2 = _run_exec(sd._execute_scene_state_view_prepare(
+        rt, "s2demo", json.dumps({
+            "scene_instance_id": r_inst["scene_instance_id"],
+            "base_location_view_id": view,
+            "scene_instance_view_id": sciv_id,
+            "expected_revision": sciv_rev,
+            "approval_mode": "review_only"}), None, "m4"))
+    assert r2["ok"], (r2.get("error"), r2.get("detail"))
+    assert fake.gen_calls == 2
+
+
+def test_S55_sciv_review_prompt_inherits_base_camera(tmp_path):
+    """S55：Sciv 审查 prompt 继承 base view 机位语义（含 CAMERA CORRECTNESS 块）。"""
+    from src.scene_system.instance_view_review import \
+        build_scene_instance_review_prompt
+    from src.scene_system.models import LocationView
+    base_view = LocationView(view_id="view_x", location_id="loc_x",
+                             camera_zone="overhead", look_direction="site center",
+                             visible_anchor_ids=["a1"])
+    expectations = {"location": {}, "view": {
+        "view_id": "view_x", "label": "", "camera_zone": "overhead",
+        "look_direction": "site center", "visible_anchor_ids": ["a1"]},
+        "scene_state": {}, "anchor_snapshots": [], "prop_expectations": []}
+    prompt = build_scene_instance_review_prompt(expectations, ["candidate"])
+    assert "CAMERA CORRECTNESS" in prompt
+    assert "overhead" in prompt
+    assert "camera_observed_zone" in prompt

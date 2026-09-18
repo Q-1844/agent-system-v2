@@ -1400,12 +1400,267 @@ async def _execute_scene_state_update(rt: AgentRuntime, project: str, arguments:
     return out
 
 
+# ============ G 域写工具（28.md §16，Commit G）：scene.state_view.prepare ============
+SCENE_STATE_VIEW_PREPARE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "scene.state_view.prepare",
+        "description": ("高层 SceneInstanceView 生产准备（一次调用 = 一次正式生成尝试）："
+                        "LocationView（base 视觉母版）+ 当前 SceneState + 项目视觉定义 + "
+                        "相关 Prop 参考 → 生成该故事段此刻的场景状态图 → 正式 vision 审查 "
+                        "→ approval_mode=approve_if_pass 且真实 pass 时自动批准。"
+                        "不传 scene_instance_view_id = 新建（expected_document_revision "
+                        "必传；同一 (instance, base view) 对只能有一个 Sciv，已存在会被拒"
+                        "并返回现有 id——复用它重新生成）；传 id = 重新生成（"
+                        "expected_revision 传该 Sciv 的 revision）。前置：base "
+                        "LocationView 必须 approved（系统 fail closed 校验）。"
+                        "SceneState 改变后原 Sciv 会 stale——改状态后记得重新生成。"
+                        "同一语义输入连续 needs_fix 会被 review_retry_exhausted 拦住。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "scene_instance_id": {"type": "string", "description": "SceneInstance id（必传）。"},
+                "base_location_view_id": {"type": "string",
+                                          "description": "base LocationView id（必须已 approved）。"},
+                "scene_instance_view_id": {"type": "string",
+                                           "description": "已有 Sciv id（重新生成时传；新建省略）。"},
+                "label": {"type": "string", "description": "视角备注名。"},
+                "expected_document_revision": {"type": "string",
+                                               "description": "新建时必传：document_revision。"},
+                "expected_revision": {"type": "string",
+                                      "description": "重新生成时必传：该 Sciv 当前 revision。"},
+                "candidate_count": {"type": "integer", "description": "候选图数量 1~2（默认 1）。"},
+                "approval_mode": {"type": "string",
+                                  "enum": ["review_only", "approve_if_pass"],
+                                  "description": "review_only=只生成审查；approve_if_pass=真实 pass 自动批准。"},
+            },
+            "required": ["scene_instance_id", "base_location_view_id", "approval_mode"],
+        },
+    },
+}
+
+
+async def _execute_scene_state_view_prepare(rt: AgentRuntime, project: str, arguments: str,
+                                            instruction, message_id, *,
+                                            event_cb=None, cancel_event=None) -> dict:
+    """scene.state_view.prepare（28.md §16）：SceneInstanceView 高层准备。
+    内部链路（全走正式 service，Agent 不拼 provider request）：
+    create Sciv（或复用已有）→ generate（base approved fail-closed + SceneState + props
+    + profile 由 service 编译）→ vision review → optional approve。"""
+    args = _parse_args(arguments)
+    scene_instance_id = str(args.get("scene_instance_id") or "").strip()
+    base_view_id = str(args.get("base_location_view_id") or "").strip()
+    sciv_id = str(args.get("scene_instance_view_id") or "").strip()
+    approval_mode = str(args.get("approval_mode") or "review_only").strip()
+    label = str(args.get("label") or "").strip()
+    if not scene_instance_id or not base_view_id:
+        return {"ok": False, "operation": "scene.state_view.prepare",
+                "error": "validation_error",
+                "detail": "scene_instance_id 与 base_location_view_id 必填"}
+    if approval_mode not in ("review_only", "approve_if_pass"):
+        return {"ok": False, "operation": "scene.state_view.prepare",
+                "error": "validation_error",
+                "detail": "approval_mode 只支持 review_only|approve_if_pass"}
+    pdir = rt._resolve_project_dir(project)
+    vs = _visual_svc(pdir, project)
+    started = time.time()
+
+    def _prog(phase: str, summary: str) -> None:
+        if event_cb:
+            event_cb({"type": "tool.progress", "phase": phase, "summary": summary[:160]})
+
+    from .review_retry_guard import (review_basis_sig, review_retry_check,
+                                     review_retry_record)
+    # basis：base view + instance（SceneState 嵌入 instance → instance revision 即状态
+    # 指纹——状态真改变 → 新 basis 放行；同状态重试 → 计数）。
+    try:
+        _inst = _scene_system_read(pdir).scene_instances.get(scene_instance_id)
+        from src.scene_system.models import scene_instance_revision
+        inst_revision = (scene_instance_revision(_inst)
+                         if _inst is not None else "")
+    except Exception:   # noqa: BLE001
+        inst_revision = ""
+    basis_sig = review_basis_sig(scene_instance_id=scene_instance_id,
+                                 base_location_view_id=base_view_id,
+                                 label=label, instance_revision=inst_revision,
+                                 intent="scene_instance_view")
+    try:
+        if sciv_id:
+            expected = str(args.get("expected_revision") or "").strip()
+            if not expected:
+                return {"ok": False, "operation": "scene.state_view.prepare",
+                        "error": "expected_revision_required",
+                        "detail": "重新生成必须带 expected_revision（先 "
+                                  "scene.production.inspect 拿该 Sciv 的 revision）",
+                        "scene_instance_view_id": sciv_id,
+                        "scene_instance_id": scene_instance_id}
+            blocked = review_retry_check(
+                project, message_id, sciv_id, basis_sig,
+                "scene.state_view.prepare",
+                change_hints=(
+                    "①先 scene.state.update 真正改变 SceneState（天气/时间/anchor 状态/"
+                    "prop）；②更换 base LocationView；③修改 anchor/prop 描述后再改状态；"
+                    "④或停止并如实向用户报告模型边界（MODEL_LIMITATION）。"))
+            if blocked is not None:
+                blocked["scene_instance_view_id"] = sciv_id
+                blocked["scene_instance_id"] = scene_instance_id
+                blocked["note"] = ("Sciv 未变；拦截的是重复生成。"
+                                   + (blocked.get("note") or ""))
+                return blocked
+        else:
+            expected_doc = str(args.get("expected_document_revision") or "").strip()
+            if not expected_doc:
+                return {"ok": False, "operation": "scene.state_view.prepare",
+                        "error": "expected_document_revision_required",
+                        "detail": "新建 Sciv 必须带 expected_document_revision",
+                        "scene_instance_id": scene_instance_id}
+            _prog("sciv.create", "创建 SceneInstanceView")
+            r_def = await vs.create_scene_instance_view(
+                scene_instance_id=scene_instance_id,
+                location_view_id=base_view_id, label=label,
+                expected_document_revision=expected_doc)
+            if not r_def.get("ok"):
+                out = _scene_write_receipt(r_def, "scene.state_view.prepare",
+                                           kind="scene_instance_view",
+                                           entity_id=str(r_def.get("target")
+                                                         or r_def.get(
+                                                             "scene_instance_view_id")
+                                                         or ""))
+                out["scene_instance_id"] = scene_instance_id
+                if out.get("error") == "scene_instance_view_already_exists":
+                    out["scene_instance_view_id"] = out.get("scene_instance_view_id") \
+                        or r_def.get("scene_instance_view_id")
+                    out["note"] = ("该 (instance, base view) 对已有 Sciv（稳定身份）。"
+                                   "复用返回的 scene_instance_view_id 重新生成（带其 "
+                                   "revision），不要新建。")
+                return out
+            sciv_id = r_def.get("target")
+            # 新建路径：guard 在生成前（key=sciv_id 稳定）
+            blocked = review_retry_check(
+                project, message_id, sciv_id, basis_sig,
+                "scene.state_view.prepare",
+                change_hints=(
+                    "①先 scene.state.update 真正改变 SceneState；②更换 base "
+                    "LocationView；③或停止并如实向用户报告模型边界。"))
+            if blocked is not None:
+                blocked["scene_instance_view_id"] = sciv_id
+                blocked["scene_instance_id"] = scene_instance_id
+                return blocked
+
+        # ---- 生成（一次正式生成尝试；base approved/props/profile 由 service fail-closed）----
+        candidate_count = args.get("candidate_count") or 1
+        try:
+            candidate_count = int(candidate_count)
+        except (TypeError, ValueError):
+            candidate_count = 1
+        # generate 前取该 sciv 当前 revision（新建后为初始 revision）
+        doc_now = _scene_system_read(pdir)
+        sciv_now = doc_now.scene_instance_views.get(sciv_id)
+        if sciv_now is None:
+            return {"ok": False, "operation": "scene.state_view.prepare",
+                    "error": "sciv_not_found", "detail": f"Sciv 不存在: {sciv_id}",
+                    "scene_instance_view_id": sciv_id}
+        from src.scene_system.models import scene_instance_view_revision
+        _prog("sciv.generate", f"生成场景状态候选图 ×{max(1, min(candidate_count, 2))}"
+                               "（约 1 分钟）")
+        r_gen = await vs.generate_scene_instance_view(
+            sciv_id, expected_revision=scene_instance_view_revision(sciv_now),
+            candidate_count=max(1, min(candidate_count, 2)))
+        if not r_gen.get("ok"):
+            out = _scene_write_receipt(r_gen, "scene.state_view.prepare",
+                                       kind="scene_instance_view", entity_id=sciv_id)
+            out.update({"scene_instance_view_id": sciv_id,
+                        "scene_instance_id": scene_instance_id,
+                        "stage": "generate"})
+            if out.get("error") == "prop_missing":
+                out.setdefault("prerequisite_warnings", [{
+                    "code": "resource_prerequisite",
+                    "story_scene_id": _inst.story_scene_id if _inst else "",
+                    "detail": "可见 anchor 需要 Prop 参考但缺失——委派 Resource Agent。",
+                    "required_capability": "resource_agent"}])
+            return out
+        # ---- 审查 ----
+        _prog("sciv.review", "vision 审查场景状态候选图")
+        from src.scene_system.instance_view_review import \
+            review_scene_instance_view_candidates as _sciv_review
+        r_review = await _sciv_review(pdir, sciv_id)
+        candidates = [c for c in (r_review.get("candidate_reviews") or [])
+                      if c.get("status") == "reviewed"]
+        best = next((c for c in candidates if c.get("overall") == "pass"), None)
+        if best is None and candidates:
+            best = candidates[0]
+        review_overall = (best or {}).get("overall")
+        review_retry_record(project, message_id, sciv_id, basis_sig, review_overall)
+
+        # ---- optional approve ----
+        approved = False
+        approve_error = None
+        doc_gen = _scene_system_read(pdir)
+        sciv_gen = doc_gen.scene_instance_views.get(sciv_id)
+        if approval_mode == "approve_if_pass" and review_overall == "pass" and best \
+                and sciv_gen is not None:
+            from src.resources.service import ResourceService
+            res_rev = ResourceService(pdir, project).document_revision()
+            _prog("sciv.approve", "审查 pass → 批准")
+            r_ap = await vs.approve_scene_instance_view(
+                sciv_id, candidate_index=best["candidate_index"],
+                expected_revision=scene_instance_view_revision(sciv_gen),
+                expected_resources_document_revision=res_rev)
+            if r_ap.get("ok"):
+                approved = True
+            else:
+                approve_error = {"error": r_ap.get("error"),
+                                 "detail": (r_ap.get("detail") or "")[:200]}
+
+        verified_any = bool((r_gen.get("ok") and r_gen.get("verified")) or approved)
+        doc_final = _scene_system_read(pdir)
+        sciv_final = doc_final.scene_instance_views.get(sciv_id)
+        from src.scene_system.models import scene_instance_view_revision
+        return {"ok": True, "operation": "scene.state_view.prepare",
+                "scene_instance_view_id": sciv_id,
+                "scene_instance_id": scene_instance_id,
+                "base_location_view_id": base_view_id,
+                "revision": (scene_instance_view_revision(sciv_final)
+                             if sciv_final is not None else None),
+                "generation_id": r_gen.get("generation_id"),
+                "review_overall": review_overall,
+                "candidate_reviews": [
+                    {"candidate_index": c.get("candidate_index"),
+                     "overall": c.get("overall"),
+                     "view_consistency": (c.get("dimensions") or {}).get("view_consistency"),
+                     "camera_observed_zone": c.get("camera_observed_zone"),
+                     "scene_state_items": c.get("scene_state_items"),
+                     "per_prop": c.get("per_prop"),
+                     "summary": (c.get("summary") or "")[:200]}
+                    for c in candidates],
+                "approval_mode": approval_mode,
+                "approved": approved,
+                "approve_error": approve_error,
+                "verified": verified_any,
+                "changed_resources": ([{"kind": "scene_instance_view", "id": sciv_id}]
+                                      if verified_any else []),
+                "elapsed_s": round(time.time() - started, 1),
+                "op_summary": (f"SceneInstanceView {sciv_id} 生成完成"
+                               f"（审查={review_overall}"
+                               f"{'，已批准' if approved else ''}）"),
+                "note": (
+                    "审查未 pass：候选未批准。按 candidate_reviews 的真实原因（逐状态项/"
+                    "逐 prop）先修正 SceneState 或输入再试；不要原样重试。"
+                    if (not approved and review_overall not in ("pass", None)) else
+                    "review_only 模式：候选未经批准，Director 不可消费；用户显式批准（UI）"
+                    "或以 approve_if_pass 重新生成。"
+                    if not approved else
+                    "Sciv 已生成并批准（approved 场景参考可被 Director 消费/绑定）。")}
+    finally:
+        pass
+
+
 # ============ D-G 域写工具 schema 与执行器（后续 Commit 逐个落地）============
-# scene.state_view.prepare（Commit G）
 SCENE_DESIGNER_TOOLS: list = [SCENE_INVENTORY_TOOL, SCENE_PRODUCTION_INSPECT_TOOL,
                               SCENE_LOCATION_UPSERT_TOOL, SCENE_ANCHOR_UPSERT_TOOL,
                               SCENE_LAYOUT_SET_TOOL, SCENE_VIEW_PREPARE_TOOL,
-                              SCENE_INSTANCE_PREPARE_TOOL, SCENE_STATE_UPDATE_TOOL]
+                              SCENE_INSTANCE_PREPARE_TOOL, SCENE_STATE_UPDATE_TOOL,
+                              SCENE_STATE_VIEW_PREPARE_TOOL]
 
 TOOL_EXECUTORS["scene.inventory"] = _execute_scene_inventory
 TOOL_EXECUTORS["scene.production.inspect"] = _execute_scene_production_inspect
@@ -1415,6 +1670,7 @@ TOOL_EXECUTORS["scene.layout.set"] = _execute_scene_layout_set
 TOOL_EXECUTORS["scene.view.prepare"] = _execute_scene_view_prepare
 TOOL_EXECUTORS["scene.instance.prepare"] = _execute_scene_instance_prepare
 TOOL_EXECUTORS["scene.state.update"] = _execute_scene_state_update
+TOOL_EXECUTORS["scene.state_view.prepare"] = _execute_scene_state_view_prepare
 TOOL_LABELS["scene.inventory"] = "列出场景系统地图"
 TOOL_LABELS["scene.production.inspect"] = "检查场景生产准备"
 TOOL_LABELS["scene.location.upsert"] = "创建/更新地点"
@@ -1423,8 +1679,10 @@ TOOL_LABELS["scene.layout.set"] = "设置平面布局"
 TOOL_LABELS["scene.view.prepare"] = "准备 LocationView（生成+审查+按档批准）"
 TOOL_LABELS["scene.instance.prepare"] = "绑定故事段与地点"
 TOOL_LABELS["scene.state.update"] = "更新场景状态"
+TOOL_LABELS["scene.state_view.prepare"] = "准备 SceneInstanceView（生成+审查+按档批准）"
 # 长任务 executor 标注（tool-loop 据此传 event_cb/cancel_event）
 _execute_scene_view_prepare._long_task = True
+_execute_scene_state_view_prepare._long_task = True
 
 # 写工具 → 锁域（28.md §5：单写域 scene_system）
 WRITE_TOOL_DOMAIN.update({
@@ -1434,6 +1692,7 @@ WRITE_TOOL_DOMAIN.update({
     "scene.view.prepare": RESOURCE_SCENE_SYSTEM,
     "scene.instance.prepare": RESOURCE_SCENE_SYSTEM,
     "scene.state.update": RESOURCE_SCENE_SYSTEM,
+    "scene.state_view.prepare": RESOURCE_SCENE_SYSTEM,
 })
 
 
