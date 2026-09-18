@@ -159,11 +159,13 @@ def test_D6b_write_tool_domain_mapping_shape():
     assert set(WRITE_TOOL_DOMAIN) == {"character.create", "character.update",
                                       "character.delete", "character.generate_views",
                                       "resource.clothing.upsert", "resource.look.prepare",
+                                      "resource.look.approve",
                                       "resource.prop.register",
                                       "resource.composition.prepare",
                                       "resource.library.publish",
                                       "resource.library.import"}
     for k in ("resource.clothing.upsert", "resource.look.prepare",
+              "resource.look.approve",
               "resource.prop.register", "resource.composition.prepare",
               "resource.library.publish", "resource.library.import"):
         assert WRITE_TOOL_DOMAIN[k] == RESOURCE_RESOURCES

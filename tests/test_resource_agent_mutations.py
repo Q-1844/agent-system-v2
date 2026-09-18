@@ -18,6 +18,7 @@ from src.agents import character_designer as cd
 from src.agents.runtime import AgentRuntime, AgentError
 from src.agents.character_designer import (
     _execute_resource_clothing_upsert, _execute_resource_look_prepare,
+    _execute_resource_look_approve,
     _execute_resource_prop_register, _execute_resource_composition_prepare,
     _execute_resource_inventory, _look_reference_conflicts, _tool_surface,
 )
@@ -212,6 +213,60 @@ def test_R17_R18_look_create_generate_review_pass(tmp_path, monkeypatch):
     assert "Visual production style" in fake.gen_calls[0]["prompt"]
     # identity ref 来自 legacy views（fail-closed 缺失会报错——见 R22）
     assert fake.gen_calls[0]["refs"], "identity reference 已注入"
+
+
+# ---- Phase D §35：resource.look.approve（批准已有 pass 候选，不重新生成）----
+def test_PD35_look_approve_existing_pass_candidate(tmp_path, monkeypatch):
+    pdir = _env(tmp_path)
+    fake = FakeProvider(LOOK_PASS_JSON)
+    monkeypatch.setattr("deps.agnes_client", fake, raising=False)
+    rt = _runtime(pdir)
+    prep = asyncio.run(_execute_resource_look_prepare(
+        rt, pdir.name, json.dumps({
+            "character_name": "Alice", "label": "rain look",
+            "appearance_description": "wearing a yellow raincoat, soaked",
+            "expected_resources_revision": _doc_rev(pdir),
+            "approval_mode": "review_only"}), None, None))
+    assert prep["ok"] and prep["review"]["overall"] == "pass"
+    look_id = prep["look_id"]
+    from src.resources.models import look_revision
+    lk = ResourceService(pdir, pdir.name).store.load().looks[look_id]
+    asset_id = lk.reference_asset_ids[0]
+    out = asyncio.run(_execute_resource_look_approve(
+        rt, pdir.name, json.dumps({
+            "look_id": look_id, "asset_id": asset_id,
+            "expected_resources_revision": look_revision(lk)}), None, None))
+    assert out["ok"] and out["verified"], out
+    assert {"kind": "look", "id": look_id} in out["changed_resources"]
+    lk2 = ResourceService(pdir, pdir.name).store.load().looks[look_id]
+    assert lk2.approval_status == "approved"
+    assert asset_id in lk2.approved_reference_asset_ids
+    assert len(fake.gen_calls) == 1, "批准路径零额外生成"
+
+
+def test_PD35_look_approve_without_pass_evidence_rejected(tmp_path, monkeypatch):
+    pdir = _env(tmp_path)
+    fake = FakeProvider(LOOK_NEEDSFIX_JSON)
+    monkeypatch.setattr("deps.agnes_client", fake, raising=False)
+    rt = _runtime(pdir)
+    prep = asyncio.run(_execute_resource_look_prepare(
+        rt, pdir.name, json.dumps({
+            "character_name": "Alice", "label": "x",
+            "appearance_description": "wearing black armor",
+            "expected_resources_revision": _doc_rev(pdir),
+            "approval_mode": "review_only"}), None, None))
+    assert prep["ok"] and prep["review"]["overall"] == "needs_fix"
+    look_id = prep["look_id"]
+    from src.resources.models import look_revision
+    lk = ResourceService(pdir, pdir.name).store.load().looks[look_id]
+    asset_id = lk.reference_asset_ids[0]
+    out = asyncio.run(_execute_resource_look_approve(
+        rt, pdir.name, json.dumps({
+            "look_id": look_id, "asset_id": asset_id,
+            "expected_resources_revision": look_revision(lk)}), None, None))
+    assert out["ok"] is False and out["error"] == "review_not_passed", out
+    lk2 = ResourceService(pdir, pdir.name).store.load().looks[look_id]
+    assert lk2.approval_status == "unreviewed", "无 pass 证据绝不批准"
 
 
 def test_R19_look_needs_fix_no_approve(tmp_path, monkeypatch):

@@ -101,6 +101,7 @@ WRITE_TOOL_DOMAIN = {
     # Phase B：resources.json 域（§8/§9 mutation 工具）
     "resource.clothing.upsert": RESOURCE_RESOURCES,
     "resource.look.prepare": RESOURCE_RESOURCES,
+    "resource.look.approve": RESOURCE_RESOURCES,
     "resource.prop.register": RESOURCE_RESOURCES,
     "resource.composition.prepare": RESOURCE_RESOURCES,
     "resource.library.publish": RESOURCE_RESOURCES,
@@ -599,6 +600,34 @@ PROP_REGISTER_TOOL = {
     },
 }
 
+LOOK_APPROVE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "resource.look.approve",
+        "description": ("显式批准 Look 的某张【已有】候选参考图（Phase D §35：Agent 无法访问"
+                        "既有正式审批 capability 的系统缺口修复）。门槛：该候选必须已有 "
+                        "overall=pass 的视觉审查证据——pass 不自动批准，但没有 pass 证据也不能"
+                        "批准（review_not_passed 会被拒绝）。用途：候选审查已通过但未批准时"
+                        "（如 approve_if_pass 未传、批准后 OCC 冲突），直接批准复用，避免为"
+                        "批准而无谓重新生成烧图。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "look_id": {"type": "string", "description": "Look id（look_xxx）。"},
+                "asset_id": {"type": "string",
+                             "description": "要批准的候选 ReferenceAsset id（必须是该 Look 下"
+                                            "已有 overall=pass 审查证据的候选）。"},
+                "expected_resources_revision": {
+                    "type": "string",
+                    "description": "OCC 期望 revision：该 look 的 revision（resource.read 返回）。"},
+                "set_cover": {"type": "boolean",
+                              "description": "是否设为封面（省略=首个 approved 自动成为封面）。"},
+            },
+            "required": ["look_id", "asset_id", "expected_resources_revision"],
+        },
+    },
+}
+
 COMPOSITION_PREPARE_TOOL = {
     "type": "function",
     "function": {
@@ -727,7 +756,7 @@ CHARACTER_DESIGNER_TOOLS = [
     CHARACTER_CREATE_TOOL, CHARACTER_UPDATE_TOOL, CHARACTER_DELETE_TOOL,
     CHARACTER_GENERATE_VIEWS_TOOL,
     RESOURCE_INVENTORY_TOOL, RESOURCE_READ_TOOL,
-    CLOTHING_UPSERT_TOOL, LOOK_PREPARE_TOOL, PROP_REGISTER_TOOL,
+    CLOTHING_UPSERT_TOOL, LOOK_PREPARE_TOOL, LOOK_APPROVE_TOOL, PROP_REGISTER_TOOL,
     COMPOSITION_PREPARE_TOOL,
     LIBRARY_PUBLISH_TOOL, LIBRARY_IMPORT_TOOL,
     VISUAL_PROFILE_READ_TOOL,
@@ -1732,6 +1761,48 @@ async def _execute_resource_look_prepare(rt: AgentRuntime, project: str, argumen
                  "；review_only 模式不自动批准，等待用户验收。")))
 
 
+# ---- Phase D §35：resource.look.approve（显式批准已有 pass 候选）----
+async def _execute_resource_look_approve(rt: AgentRuntime, project: str, arguments: str,
+                                         instruction, message_id) -> dict:
+    """显式批准 Look 的某张已有候选参考图（复用正式 service approve_look_reference，
+    与 HTTP /looks/{id}/approve 同一语义：必须有 overall=pass 审查证据，OCC 保护）。
+    不生成图片、不改描述——纯审批 mutation；失败如实返回（not_found/不属该 look/
+    review_not_passed/stale_revision）。"""
+    args = _parse_args(arguments)
+    look_id = (args.get("look_id") or "").strip()
+    asset_id = (args.get("asset_id") or "").strip()
+    expected = args.get("expected_resources_revision")
+    set_cover = args.get("set_cover")
+    if not look_id or not asset_id:
+        raise AgentError("bad_arguments", "缺少 look_id 或 asset_id")
+    if not expected or not isinstance(expected, str):
+        raise AgentError("bad_arguments",
+                         "缺少 expected_resources_revision（该 look 的 revision，"
+                         "来自 resource.read）")
+    from src.resources.write_service import ResourceWriteService
+    pdir = _resolve_pdir(rt, project)
+    ws = ResourceWriteService(pdir, project)
+    r = await ws.approve_look_reference(
+        look_id, asset_id, expected_revision=expected,
+        set_cover=set_cover if isinstance(set_cover, bool) else None)
+    if not r.get("ok"):
+        return _base_receipt(
+            "resource.look.approve", ok=False, target=look_id, before=None,
+            after=None, revision=None, verified=False, look_id=look_id,
+            resource_kind="look", resource_id=look_id, changed_resources=[],
+            error=r.get("error"), stale=r.get("error") == "stale_revision",
+            op_summary=f"Look {look_id} 批准被拒（{r.get('error')}）",
+            note=(r.get("detail") or ""))
+    approved = ((r.get("after") or {}).get("approved_reference_asset_ids")) or []
+    return _base_receipt(
+        "resource.look.approve", ok=True, target=look_id, before=None,
+        after=None, revision=r.get("revision"), verified=bool(r.get("verified")),
+        look_id=look_id, resource_kind="look", resource_id=look_id,
+        changed_resources=[{"kind": "look", "id": look_id}],
+        op_summary=f"Look {look_id} 已批准候选 {asset_id}",
+        note=f"approved_reference_asset_ids={approved}；该 Look 现在可进入生产绑定。")
+
+
 # ---- §8.3 resource.prop.register ----
 async def _execute_resource_prop_register(rt: AgentRuntime, project: str, arguments: str,
                                           instruction, message_id) -> dict:
@@ -2329,6 +2400,7 @@ TOOL_EXECUTORS = {
     "resource.clothing.upsert": _execute_resource_clothing_upsert,
     "resource.look.prepare": _execute_resource_look_prepare,
     "resource.prop.register": _execute_resource_prop_register,
+    "resource.look.approve": _execute_resource_look_approve,
     "resource.composition.prepare": _execute_resource_composition_prepare,
     "resource.library.publish": _execute_resource_library_publish,
     "resource.library.import": _execute_resource_library_import,
@@ -2351,6 +2423,7 @@ _TOOL_LABELS = {
     "resource.clothing.upsert": "创建/更新服装",
     "resource.look.prepare": "准备角色造型（生成+审查）",
     "resource.prop.register": "登记道具参考",
+    "resource.look.approve": "批准造型候选",
     "resource.composition.prepare": "准备组合参考（生成+审查）",
     "resource.library.publish": "发布到共享库", "resource.library.import": "从共享库导入",
     "shot.list": "列出镜头", "shot.read": "读取镜头",
