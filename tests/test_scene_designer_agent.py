@@ -132,8 +132,8 @@ def test_S3_direct_turn_scripted(tmp_path):
 
 
 def test_S3b_write_tool_serial_gate(tmp_path):
-    """写工具单写串行：同一步发多个 scene.* 写工具 → 第 2 个被拒（闸门在 Commit D
-    加入真实写工具前用未知 scene.* 工具验证账本分类路径）。"""
+    """写工具单写串行：同一步发多个 scene.* 写工具 → 第 2 个被串行闸门拒绝；
+    第 1 个真实执行（缺 expected_document_revision → OCC stale 拒绝，ok=False）。"""
     rt = _runtime(tmp_path)
     _save_proj(tmp_path)
     s = rt.get_or_create_session("s2demo", "scene_designer", "project", "s2demo")
@@ -152,7 +152,8 @@ def test_S3b_write_tool_serial_gate(tmp_path):
     # 第 1 个进账本（写尝试），第 2 个被串行闸门拒绝
     assert len(result["receipts"]) == 1
     assert result["receipts"][0]["operation"] == "scene.location.upsert"
-    assert result["receipts"][0]["ok"] is False   # 工具尚未实现（Commit D 落地）
+    assert result["receipts"][0]["ok"] is False   # OCC stale 拒绝（缺 document_revision）
+    assert result["receipts"][0]["error"] == "stale_revision"
 
 
 # ============ S6：旧 Agent identity 不变（28.md §28 S6）============
@@ -388,3 +389,146 @@ def test_S23_inspect_missing_prop(tmp_path, monkeypatch):
     assert any(m["prop_id"] == "prop_ghost" and m["reason"] == "prop_not_found"
                for m in missing), missing
     assert r["production_status"] != "READY"
+
+
+# ============ Commit D：Location / Anchor / Layout 工具（S24-S30）============
+def _run_exec(coro):
+    return asyncio.run(coro)
+
+
+def test_S24_location_create(tmp_path):
+    rt = _runtime(tmp_path)
+    _save_proj(tmp_path)
+    svc, pdir = _mk_svc(tmp_path)
+    drev = _drev(svc)
+    r = _run_exec(sd._execute_scene_location_upsert(
+        rt, "s2demo", json.dumps({
+            "name": "山雨驿站", "identity_description": "mountain inn by the pass",
+            "expected_document_revision": drev}), None, "m1"))
+    assert r["ok"] and r["verified"] and r["location_id"].startswith("loc_")
+    assert r["changed_resources"] == [{"kind": "location", "id": r["location_id"]}]
+    assert WRITE_TOOL_DOMAIN["scene.location.upsert"] == "scene_system"
+    # canonical 真实落盘
+    assert svc.read_location(r["location_id"])["name"] == "山雨驿站"
+
+
+def test_S25_location_update_occ(tmp_path):
+    rt = _runtime(tmp_path)
+    _save_proj(tmp_path)
+    svc, pdir = _mk_svc(tmp_path)
+    loc = (asyncio.run(svc.create_location(
+        name="山雨驿站", expected_document_revision=_drev(svc))))["target"]
+    rev = svc.read_location(loc)["revision"]
+    r = _run_exec(sd._execute_scene_location_upsert(
+        rt, "s2demo", json.dumps({
+            "location_id": loc, "name": "山雨驿站（正门）",
+            "expected_revision": rev}), None, "m1"))
+    assert r["ok"] and r["verified"]
+    assert svc.read_location(loc)["name"] == "山雨驿站（正门）"
+    assert svc.read_location(loc)["location_id"] == loc   # rename 不变 id
+
+
+def test_S26_location_update_stale_rejected(tmp_path):
+    rt = _runtime(tmp_path)
+    _save_proj(tmp_path)
+    svc, pdir = _mk_svc(tmp_path)
+    loc = (asyncio.run(svc.create_location(
+        name="山雨驿站", expected_document_revision=_drev(svc))))["target"]
+    r = _run_exec(sd._execute_scene_location_upsert(
+        rt, "s2demo", json.dumps({
+            "location_id": loc, "name": "改名",
+            "expected_revision": "bogus_rev"}), None, "m1"))
+    assert not r["ok"] and r["stale"] is True
+    assert r["current_revision"]
+    assert svc.read_location(loc)["name"] == "山雨驿站"   # 未写入
+
+
+def test_S27_anchor_create_and_update(tmp_path):
+    rt = _runtime(tmp_path)
+    _save_proj(tmp_path)
+    svc, pdir = _mk_svc(tmp_path)
+    loc = (asyncio.run(svc.create_location(
+        name="山雨驿站", expected_document_revision=_drev(svc))))["target"]
+    a1 = _run_exec(sd._execute_scene_anchor_upsert(
+        rt, "s2demo", json.dumps({
+            "location_id": loc, "name": "east gate", "kind": "entry",
+            "description": "east-facing double door",
+            "expected_document_revision": _drev(svc)}), None, "m1"))
+    assert a1["ok"] and a1["anchor_id"].startswith("anc_")
+    assert a1["changed_resources"] == [{"kind": "anchor", "id": a1["anchor_id"]}]
+    # 更新（带合法 relation 指向 a1）
+    a2 = _run_exec(sd._execute_scene_anchor_upsert(
+        rt, "s2demo", json.dumps({
+            "location_id": loc, "name": "west chimney", "kind": "landmark",
+            "relations": [{"object_anchor_id": a1["anchor_id"],
+                           "relation": "opposite"}],
+            "expected_document_revision": _drev(svc)}), None, "m1"))
+    assert a2["ok"]
+    rev = svc.read_anchor(a2["anchor_id"])["revision"]
+    up = _run_exec(sd._execute_scene_anchor_upsert(
+        rt, "s2demo", json.dumps({
+            "anchor_id": a2["anchor_id"], "description": "stone chimney",
+            "expected_revision": rev}), None, "m1"))
+    assert up["ok"] and up["verified"]
+    assert svc.read_anchor(a2["anchor_id"])["description"] == "stone chimney"
+
+
+def test_S28_anchor_invalid_relation_fails(tmp_path):
+    rt = _runtime(tmp_path)
+    _save_proj(tmp_path)
+    svc, pdir = _mk_svc(tmp_path)
+    loc = (asyncio.run(svc.create_location(
+        name="山雨驿站", expected_document_revision=_drev(svc))))["target"]
+    r = _run_exec(sd._execute_scene_anchor_upsert(
+        rt, "s2demo", json.dumps({
+            "location_id": loc, "name": "west chimney",
+            "relations": [{"object_anchor_id": "anc_missing", "relation": "opposite"}],
+            "expected_document_revision": _drev(svc)}), None, "m1"))
+    assert not r["ok"], "非法 relation 必须被 service 拒绝（不弱化校验）"
+    assert r.get("error") in ("relation_anchor_not_found", "validation_error",
+                              "anchor_not_found")
+
+
+def test_S29_layout_set_create_and_update(tmp_path):
+    rt = _runtime(tmp_path)
+    _save_proj(tmp_path)
+    svc, pdir = _mk_svc(tmp_path)
+    loc = (asyncio.run(svc.create_location(
+        name="山雨驿站", expected_document_revision=_drev(svc))))["target"]
+    a1 = (asyncio.run(svc.create_anchor(
+        location_id=loc, name="east gate", kind="entry",
+        expected_document_revision=_drev(svc))))["target"]
+    r = _run_exec(sd._execute_scene_layout_set(
+        rt, "s2demo", json.dumps({
+            "location_id": loc, "orientation_convention": "north_up",
+            "placements": [{"anchor_id": a1, "zone": "east area"}],
+            "expected_document_revision": _drev(svc)}), None, "m1"))
+    assert r["ok"] and r["layout_id"].startswith("layout_")
+    # 已有 layout：不带 revision → 拒绝；带 revision → 更新
+    r2 = _run_exec(sd._execute_scene_layout_set(
+        rt, "s2demo", json.dumps({
+            "location_id": loc, "orientation_convention": "north_up",
+            "placements": [{"anchor_id": a1, "zone": "south area"}]}), None, "m1"))
+    assert not r2["ok"] and r2["error"] == "expected_revision_required"
+    lay = svc.read_layout_by_location(loc)
+    r3 = _run_exec(sd._execute_scene_layout_set(
+        rt, "s2demo", json.dumps({
+            "location_id": loc, "orientation_convention": "north_up",
+            "placements": [{"anchor_id": a1, "zone": "south area"}],
+            "expected_revision": lay["revision"]}), None, "m1"))
+    assert r3["ok"] and r3["layout_id"] == lay["layout_id"]   # 稳定身份复用
+    assert svc.read_layout_by_location(loc)["placements"][0]["zone"] == "south area"
+
+
+def test_S30_location_rename_keeps_stable_id(tmp_path):
+    rt = _runtime(tmp_path)
+    _save_proj(tmp_path)
+    svc, pdir = _mk_svc(tmp_path)
+    loc = (asyncio.run(svc.create_location(
+        name="山雨驿站", expected_document_revision=_drev(svc))))["target"]
+    rev = svc.read_location(loc)["revision"]
+    _run_exec(sd._execute_scene_location_upsert(
+        rt, "s2demo", json.dumps({
+            "location_id": loc, "name": "山雨驿站旧馆",
+            "expected_revision": rev}), None, "m1"))
+    assert svc.read_location(loc)["location_id"] == loc

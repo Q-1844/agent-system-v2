@@ -242,6 +242,12 @@ def _resolve_pdir(rt: AgentRuntime, project: str):
     return rt._resolve_project_dir(project)
 
 
+def _svc(pdir, project: str):
+    """SceneSystemService（每次调用新建——service 无状态，store 自带文件锁）。"""
+    from src.scene_system.service import SceneSystemService
+    return SceneSystemService(pdir, project)
+
+
 TOOL_EXECUTORS: Dict[str, Any] = {
     "story.list": _execute_story_list,
     "story.read": _execute_story_read,
@@ -686,17 +692,309 @@ def _execute_scene_production_inspect(rt: AgentRuntime, project: str, arguments:
                      "缺 Prop 时报告 resource_prerequisite，不自己创建。")}
 
 
+# ============ D 域写工具（28.md §10，Commit D）：Location / Anchor / Layout ============
+SCENE_LOCATION_UPSERT_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "scene.location.upsert",
+        "description": ("创建或更新 Location（地点长期身份）。不传 location_id = 创建"
+                        "（expected_document_revision 传 scene.inventory 看到的 "
+                        "document_revision）；传 location_id = 更新（expected_revision "
+                        "传该 location 的 revision）。"
+                        "🔴 Location 是【可跨多个故事段复用的地点身份】（「山雨驿站」），"
+                        "不是某一幕的样子（「s03 暴雨中的山雨驿站」——暴雨属于 "
+                        "SceneState）。创建前必须 scene.inventory 确认可复用的地点，"
+                        "同一地点绝不重复创建；rename 不改变 location_id。"
+                        "一次调用只做一个写操作。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "location_id": {"type": "string",
+                                "description": "要更新的 Location id（更新时必传；创建时省略）。"},
+                "name": {"type": "string",
+                         "description": "地点显示名（如 山雨驿站 / 灯塔监听室）。"},
+                "identity_description": {"type": "string",
+                                         "description": "稳定空间身份描述（英文优先，进视觉生成"
+                                                        "prompt 的语义基底：建筑/规模/氛围/材质）。"},
+                "description": {"type": "string", "description": "地点补充描述。"},
+                "style_notes": {"type": "string", "description": "地点风格备注（时代/地域/材质感）。"},
+                "expected_document_revision": {"type": "string",
+                                               "description": "创建时必传：scene.inventory 的 document_revision。"},
+                "expected_revision": {"type": "string",
+                                      "description": "更新时必传：该 Location 当前 revision。"},
+            },
+            "required": [],
+        },
+    },
+}
+
+SCENE_ANCHOR_UPSERT_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "scene.anchor.upsert",
+        "description": ("创建或更新 SpatialAnchor（稳定空间锚点）。创建：location_id + name"
+                        "（+ expected_document_revision）；更新：anchor_id + expected_revision。"
+                        "🔴 优先建【真正有助于多视角识别/连续性/机位规划】的结构性锚点"
+                        "（east gate / west chimney / north stair / bridge arch / well），"
+                        "不要建几十个装饰性小锚点。relation 的 object_anchor_id 必须是同 "
+                        "Location 已存在的 anchor。kind 只能是 door/window/stairs/furniture/"
+                        "landmark/zone/entry/exit/other。一次调用只做一个写操作。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "location_id": {"type": "string", "description": "所属 Location id（创建时必传）。"},
+                "anchor_id": {"type": "string",
+                              "description": "要更新的 anchor id（更新时必传；创建时省略）。"},
+                "name": {"type": "string", "description": "锚点名（如 east gate / 主楼梯）。"},
+                "kind": {"type": "string",
+                         "enum": ["door", "window", "stairs", "furniture", "landmark",
+                                  "zone", "entry", "exit", "other"],
+                         "description": "锚点类型。"},
+                "description": {"type": "string",
+                                "description": "视觉结构描述（数量/形状/位置特征会进审查期望）。"},
+                "semantic_zone": {"type": "string",
+                                  "description": "语义方位（如 north_wall / center / south_entrance）。"},
+                "relations": {"type": "array",
+                              "items": {"type": "object", "properties": {
+                                  "object_anchor_id": {"type": "string"},
+                                  "relation": {"type": "string",
+                                               "description": "如 opposite / beside / above / behind"}},
+                                  "required": ["object_anchor_id", "relation"]},
+                              "description": "与同 Location 其它 anchor 的空间关系（创建时可选）。"},
+                "expected_document_revision": {"type": "string",
+                                               "description": "创建时必传：document_revision。"},
+                "expected_revision": {"type": "string",
+                                      "description": "更新时必传：该 anchor 当前 revision。"},
+            },
+            "required": [],
+        },
+    },
+}
+
+SCENE_LAYOUT_SET_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "scene.layout.set",
+        "description": ("设置一个 Location 的 SetLayout（normalized 2D 平面布局提示）。"
+                        "一个 Location 至多一个 layout：已有则更新（需该 layout 的 "
+                        "expected_revision），没有则创建（需 expected_document_revision）。"
+                        "🔴 layout 是空间关系提示/连续性辅助（语义方位），不是物理精确 CAD——"
+                        "x/y 取 0~1 归一化近似值即可，不要制造毫米级假精度。"
+                        "orientation_convention 用 north_up 时 y 轴=南北（0=北）。"
+                        "一次调用只做一个写操作。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "location_id": {"type": "string", "description": "Location id（必传）。"},
+                "orientation_convention": {"type": "string",
+                                           "description": "如 north_up（默认建议）。"},
+                "notes": {"type": "string", "description": "布局备注。"},
+                "placements": {"type": "array",
+                               "items": {"type": "object", "properties": {
+                                   "anchor_id": {"type": "string"},
+                                   "zone": {"type": "string",
+                                            "description": "语义方位（north-west area 等）"},
+                                   "x": {"type": "number", "description": "0~1 归一化"},
+                                   "y": {"type": "number", "description": "0~1 归一化"}},
+                                   "required": ["anchor_id"]},
+                               "description": "各 anchor 的平面位置（anchor 必须属于该 Location）。"},
+                "expected_document_revision": {"type": "string",
+                                               "description": "创建时必传：document_revision。"},
+                "expected_revision": {"type": "string",
+                                      "description": "更新已有 layout 时必传：该 layout 的 revision。"},
+            },
+            "required": ["location_id"],
+        },
+    },
+}
+
+
+def _scene_write_receipt(r: dict, op: str, *, kind: str, entity_id: str) -> dict:
+    """service receipt → Agent 写回执（补 changed_resources 等 Producer 派生字段；
+    真实回执透传，绝不美化失败）。scene service 的 stale 以 error=stale_revision
+    表达——规范化为 stale 布尔（与 Resource Agent 回执契约一致）。"""
+    out = dict(r)
+    out["operation"] = op
+    if out.get("error") == "stale_revision":
+        out["stale"] = True
+    if r.get("ok") and r.get("verified") and not r.get("unchanged"):
+        out["changed_resources"] = [{"kind": kind, "id": entity_id}]
+    else:
+        out["changed_resources"] = []
+    return out
+
+
+async def _execute_scene_location_upsert(rt: AgentRuntime, project: str, arguments: str,
+                                         instruction, message_id) -> dict:
+    """scene.location.upsert（28.md §10.1）：Location identity 创建/更新（OCC）。
+    更新路径 name 可选（只改要改的字段）。"""
+    args = _parse_args(arguments)
+    pdir = rt._resolve_project_dir(project)
+    svc = _svc(pdir, project)
+    location_id = str(args.get("location_id") or "").strip()
+    if location_id:
+        expected = str(args.get("expected_revision") or "").strip()
+        if not expected:
+            return {"ok": False, "operation": "scene.location.upsert",
+                    "error": "expected_revision_required",
+                    "detail": "更新 Location 必须带 expected_revision（先 scene.inventory/"
+                              "scene.production.inspect 拿该 location 的 revision）",
+                    "location_id": location_id}
+        patch = {k: args[k] for k in ("name", "description", "identity_description",
+                                      "style_notes") if args.get(k) is not None}
+        r = await svc.update_location(location_id, patch, expected_revision=expected)
+        r = _scene_write_receipt(r, "scene.location.upsert", kind="location",
+                                 entity_id=location_id)
+        r.setdefault("location_id", location_id)
+        return r
+    name = str(args.get("name") or "").strip()
+    if not name:
+        return {"ok": False, "operation": "scene.location.upsert",
+                "error": "validation_error", "detail": "创建 Location 需要 name"}
+    r = await svc.create_location(
+        name=name,
+        description=str(args.get("description") or ""),
+        identity_description=str(args.get("identity_description") or ""),
+        style_notes=str(args.get("style_notes") or ""),
+        expected_document_revision=str(args.get("expected_document_revision") or ""))
+    r = _scene_write_receipt(r, "scene.location.upsert", kind="location",
+                             entity_id=str(r.get("target") or ""))
+    if r.get("ok"):
+        r["location_id"] = r.get("target")
+    return r
+
+
+async def _execute_scene_anchor_upsert(rt: AgentRuntime, project: str, arguments: str,
+                                       instruction, message_id) -> dict:
+    """scene.anchor.upsert（28.md §10.2）：SpatialAnchor 创建/更新（OCC + 关系校验）。
+    更新路径 name 可选（只改要改的字段）。"""
+    args = _parse_args(arguments)
+    pdir = rt._resolve_project_dir(project)
+    svc = _svc(pdir, project)
+    anchor_id = str(args.get("anchor_id") or "").strip()
+    relations = args.get("relations")
+    if relations is not None and not isinstance(relations, list):
+        return {"ok": False, "operation": "scene.anchor.upsert",
+                "error": "validation_error", "detail": "relations 必须是数组"}
+    if anchor_id:
+        expected = str(args.get("expected_revision") or "").strip()
+        if not expected:
+            return {"ok": False, "operation": "scene.anchor.upsert",
+                    "error": "expected_revision_required",
+                    "detail": "更新 anchor 必须带 expected_revision",
+                    "anchor_id": anchor_id}
+        patch: Dict[str, Any] = {}
+        for k in ("name", "kind", "description", "semantic_zone"):
+            if args.get(k) is not None:
+                patch[k] = args[k]
+        if relations is not None:
+            patch["relations"] = relations
+        r = await svc.update_anchor(anchor_id, patch, expected_revision=expected)
+        r = _scene_write_receipt(r, "scene.anchor.upsert", kind="anchor",
+                                 entity_id=anchor_id)
+        r.setdefault("anchor_id", anchor_id)
+        if r.get("ok"):
+            r["location_id"] = (r.get("after") or {}).get("location_id") \
+                if isinstance(r.get("after"), dict) else None
+        return r
+    name = str(args.get("name") or "").strip()
+    if not name:
+        return {"ok": False, "operation": "scene.anchor.upsert",
+                "error": "validation_error", "detail": "创建 anchor 需要 name"}
+    location_id = str(args.get("location_id") or "").strip()
+    if not location_id:
+        return {"ok": False, "operation": "scene.anchor.upsert",
+                "error": "validation_error", "detail": "创建 anchor 需要 location_id"}
+    r = await svc.create_anchor(
+        location_id=location_id, name=name,
+        kind=str(args.get("kind") or "other"),
+        description=str(args.get("description") or ""),
+        semantic_zone=str(args.get("semantic_zone") or ""),
+        relations=relations,
+        expected_document_revision=str(args.get("expected_document_revision") or ""))
+    r = _scene_write_receipt(r, "scene.anchor.upsert", kind="anchor",
+                             entity_id=str(r.get("target") or ""))
+    if r.get("ok"):
+        r["anchor_id"] = r.get("target")
+        r["location_id"] = location_id
+    return r
+
+
+async def _execute_scene_layout_set(rt: AgentRuntime, project: str, arguments: str,
+                                    instruction, message_id) -> dict:
+    """scene.layout.set（28.md §10.3）：SetLayout upsert（一 location 至多一个 layout）。"""
+    args = _parse_args(arguments)
+    location_id = str(args.get("location_id") or "").strip()
+    if not location_id:
+        return {"ok": False, "operation": "scene.layout.set",
+                "error": "validation_error", "detail": "location_id 必填"}
+    pdir = rt._resolve_project_dir(project)
+    svc = _svc(pdir, project)
+    placements = args.get("placements")
+    if placements is not None and not isinstance(placements, list):
+        return {"ok": False, "operation": "scene.layout.set",
+                "error": "validation_error", "detail": "placements 必须是数组"}
+    existing = svc.read_layout_by_location(location_id)
+    if existing is not None:
+        expected = str(args.get("expected_revision") or "").strip()
+        if not expected:
+            return {"ok": False, "operation": "scene.layout.set",
+                    "error": "expected_revision_required",
+                    "detail": (f"该 Location 已有 layout（{existing['layout_id']}）；"
+                               "更新必须带 expected_revision"),
+                    "layout_id": existing["layout_id"],
+                    "location_id": location_id,
+                    "current_layout": existing}
+        patch = {"orientation_convention": str(args.get("orientation_convention") or ""),
+                 "notes": str(args.get("notes") or "")}
+        if placements is not None:
+            patch["placements"] = placements
+        r = await svc.update_layout(existing["layout_id"], patch,
+                                    expected_revision=expected)
+        r = _scene_write_receipt(r, "scene.layout.set", kind="layout",
+                                 entity_id=existing["layout_id"])
+        r.setdefault("layout_id", existing["layout_id"])
+        r["location_id"] = location_id
+        return r
+    r = await svc.create_layout(
+        location_id=location_id,
+        orientation_convention=str(args.get("orientation_convention") or ""),
+        notes=str(args.get("notes") or ""),
+        placements=placements,
+        expected_document_revision=str(args.get("expected_document_revision") or ""))
+    r = _scene_write_receipt(r, "scene.layout.set", kind="layout",
+                             entity_id=str(r.get("target") or ""))
+    if r.get("ok"):
+        r["layout_id"] = r.get("target")
+        r["location_id"] = location_id
+    return r
+
+
 # ============ D-G 域写工具 schema 与执行器（后续 Commit 逐个落地）============
-# scene.location.upsert / scene.anchor.upsert / scene.layout.set（Commit D）
 # scene.view.prepare（Commit E，含共享 review retry guard）
 # scene.instance.prepare / scene.state.update（Commit F）
 # scene.state_view.prepare（Commit G）
-SCENE_DESIGNER_TOOLS: list = [SCENE_INVENTORY_TOOL, SCENE_PRODUCTION_INSPECT_TOOL]
+SCENE_DESIGNER_TOOLS: list = [SCENE_INVENTORY_TOOL, SCENE_PRODUCTION_INSPECT_TOOL,
+                              SCENE_LOCATION_UPSERT_TOOL, SCENE_ANCHOR_UPSERT_TOOL,
+                              SCENE_LAYOUT_SET_TOOL]
 
 TOOL_EXECUTORS["scene.inventory"] = _execute_scene_inventory
 TOOL_EXECUTORS["scene.production.inspect"] = _execute_scene_production_inspect
+TOOL_EXECUTORS["scene.location.upsert"] = _execute_scene_location_upsert
+TOOL_EXECUTORS["scene.anchor.upsert"] = _execute_scene_anchor_upsert
+TOOL_EXECUTORS["scene.layout.set"] = _execute_scene_layout_set
 TOOL_LABELS["scene.inventory"] = "列出场景系统地图"
 TOOL_LABELS["scene.production.inspect"] = "检查场景生产准备"
+TOOL_LABELS["scene.location.upsert"] = "创建/更新地点"
+TOOL_LABELS["scene.anchor.upsert"] = "创建/更新空间锚点"
+TOOL_LABELS["scene.layout.set"] = "设置平面布局"
+
+# 写工具 → 锁域（28.md §5：单写域 scene_system）
+WRITE_TOOL_DOMAIN.update({
+    "scene.location.upsert": RESOURCE_SCENE_SYSTEM,
+    "scene.anchor.upsert": RESOURCE_SCENE_SYSTEM,
+    "scene.layout.set": RESOURCE_SCENE_SYSTEM,
+})
 
 
 # ============ tool-loop（镜像 character_designer 结构，场景域语义）============
