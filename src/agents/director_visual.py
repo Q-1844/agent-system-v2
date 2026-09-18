@@ -197,10 +197,17 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
     variants = 1
     force = False
     video_model = None
+    reference_policy = "legacy_allowed"
     if is_image:
         targets = _parse_image_targets(args)
         variants = max(1, min(2, int(args.get("variants") or 1)))
         force = bool(args.get("force", False))
+        reference_policy = (str(args.get("reference_policy") or "legacy_allowed").strip()
+                            or "legacy_allowed")
+        if reference_policy not in ("legacy_allowed", "bound_required"):
+            raise AgentError("bad_arguments",
+                             f"reference_policy 必须是 legacy_allowed | bound_required，"
+                             f"得到: {reference_policy}")
         total_timeout = IMAGES_TOTAL_TIMEOUT_S
         asset_noun = "分镜图"
     else:
@@ -238,6 +245,48 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
                                              kind="image" if is_image else "video",
                                              force=force)
 
+    # ---- Phase C1（27.md §11.3）：bound_required 参考策略——提交前绑定门槛 ----
+    # UNBOUND → binding_required（绝不静默 legacy）；NOT_READY → 结构化 issues（§13：
+    # 回执必须携带 production_state/issue codes/hints，Agent 能据此行动）；READY → 放行。
+    if is_image and reference_policy == "bound_required" and submittable:
+        from src.shot_binding.service import ShotBindingService
+        svc = ShotBindingService(pdir, project)
+        policy_blocked: list = []
+        allowed: list = []
+        for t in submittable:
+            v = svc.read_validity(t["shot_id"])
+            readiness = v.get("readiness")
+            if readiness == "READY":
+                allowed.append(t)
+                continue
+            issues = v.get("issues") or []
+            if readiness == "UNBOUND":
+                err = "binding_required"
+                hint = ("该镜头没有生产绑定（ ShotProductionBinding）——bound_required "
+                        "策略禁止静默回落 legacy 参考链。先 shot.production.inspect 看"
+                        "缺什么（approved Look/场景视图），再 shot.production.bind。")
+                state = "unbound"
+            else:
+                err = "binding_not_ready"
+                hint = ("生产绑定存在但未就绪（见 issues）。逐项解决依赖问题后 "
+                        "shot.production.refresh 或报告相应 prerequisite；不要原样重试生成。")
+                state = "not_ready"
+            policy_blocked.append({
+                **t, "status": err, "ok": False, "verified": False,
+                "error": err,
+                "production_state": state,
+                "binding_revision": v.get("binding_revision"),
+                "issues": [{"reason": i.get("reason"),
+                            "detail": str(i.get("detail") or "")[:160]}
+                           for i in issues][:6],
+                "missing_stale_dependencies": [
+                    (i.get("ref") or i.get("kind") or "") for i in issues
+                    if i.get("reason") not in (None, "ok")][:6],
+                "fix_hint": hint,
+            })
+        submittable = allowed
+        blocked = blocked + policy_blocked
+
     # 提交：origin_run_id = 每目标唯一 marker（ImageBatch/VideoVersion 记录同值，
     # 写后验证按它精确匹配；JobQueue.find_by_origin 也可据此查询）。
     jobs: list = []   # (target, job, marker)
@@ -254,14 +303,19 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
 
     total = len(targets)
     if not jobs:
+        policy_hint = ("；bound_required 策略下 binding_required/not_ready 项请先检查生产"
+                       "前置（inspect→bind），不要降级 legacy"
+                       if is_image and reference_policy == "bound_required" else "")
         return _base_receipt(
             op, ok=False, target=",".join(t["shot_id"] for t in targets),
             revision=None, verified=False,
             results=blocked, count=total, done=0, failed=total,
             cancelled=False, timed_out=False,
+            reference_policy=reference_policy if is_image else None,
             **({"variants": variants} if is_image else {}),
             note=f"没有可提交的生成目标（{total} 项全部被预检拦截），未消耗生成额度。"
-                 "请根据各项 error 先补齐前置条件（如先生成首帧）。")
+                 "请根据各项 error/fix_hint 先补齐前置条件（如先生成首帧、补生产绑定）"
+                 + policy_hint + "。")
 
     _progress(event_cb, f"已提交 {len(jobs)} 个{asset_noun}生成任务，开始等待完成…",
               done=0, total=total, pct=0)
@@ -391,6 +445,7 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
         results=results, count=total, done=len(done_items),
         failed=total - len(done_items),
         cancelled=cancelled, timed_out=timed_out,
+        reference_policy=reference_policy if is_image else None,
         **({"variants": variants} if is_image else {}),
         elapsed_s=elapsed, note=note)
 
@@ -452,6 +507,11 @@ SHOT_GENERATE_IMAGES_TOOL = {
                              "description": "每个首帧生成几个候选（默认 1；2 会多花一次生成额度，用户想挑图时才用）。"},
                 "force": {"type": "boolean",
                           "description": "镜头被锁定时是否仍生成（默认 false）。"},
+                "reference_policy": {"type": "string", "enum": ["legacy_allowed", "bound_required"],
+                                     "description": "参考策略（Phase C1）：bound_required=正式生产——"
+                                                    "必须已有 READY 生产绑定，UNBOUND/NOT_READY 会被拒绝"
+                                                    "（绝不静默回落 legacy）；legacy_allowed=旧行为"
+                                                    "（未绑定的镜头走 legacy 参考链）。省略=legacy_allowed。"},
             },
             "required": ["targets"],
         },

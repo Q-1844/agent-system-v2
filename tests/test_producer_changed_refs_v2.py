@@ -126,7 +126,7 @@ def test_A6_zero_mutation_all_keys_empty():
     refs = _derive_changed_refs("character_designer", [])
     assert refs == {"scenes": [], "shots": [], "characters": [],
                     "clothings": [], "looks": [], "props": [],
-                    "reference_assets": [], "compositions": []}
+                    "reference_assets": [], "compositions": [], "bindings": []}
 
 
 def test_A7_stale_failed_unchanged_excluded():
@@ -168,4 +168,4 @@ def test_A8_wrap_task_result_resource_keys():
 def test_A8b_empty_changed_refs_skeleton_shape():
     assert _empty_changed_refs() == {"scenes": [], "shots": [], "characters": [],
                                      "clothings": [], "looks": [], "props": [],
-                                     "reference_assets": [], "compositions": []}
+                                     "reference_assets": [], "compositions": [], "bindings": []}

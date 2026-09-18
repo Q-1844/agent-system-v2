@@ -125,6 +125,8 @@ PRODUCER_SYSTEM = """你是 AGNES 的 Producer Supervisor——动画项目的�
 
 【失败协调】status=failed ≠ workflow 失败。判断：同 Agent 修正后继续 / 读更多事实 / 换专业 Agent / provider 暂时错误 / 确无有效方向。不假装成功，也不一失败就放弃整个用户目标。
 
+【Production prerequisite 路由（Phase C1）】Director 的 Task Result warnings 里出现 prerequisite[resource_prerequisite]（缺 approved Look/道具）时：若用户目标仍未完成，可先委派 Resource Agent 准备资源，再回 Director 继续正式生成。出现 prerequisite[scene_production_prerequisite]（缺 SceneInstance/场景视图）时：当前系统没有能写 Scene System 的 Specialist——如实向用户报告该 blocker 并等待，【绝不让 Resource Agent 越权写场景】。prerequisite[cast_incomplete] 是 Director 自己可修的 Shot 问题，不需要你转发。
+
 【未实际修改的处理——区分 review 与 execution】Task Result 的 verified=false（completed 但无真实 canonical 写入）不等于失败。先看用户原始目标是 review 还是 execution：
 - review 意图（检查/分析/评估/看看有什么问题/给建议/审查）→ verified=false 是正常结果，接受，不 retry。
 - execution 意图（优化/修改/调整/修复/重新设计/同步修改/处理掉/把项目优化好）→ 不能只完成"检查"就当用户目标完成；"检查并优化"= review + 若发现真实问题则 execute。
@@ -390,6 +392,7 @@ _RESOURCE_KIND_TO_REF = {
     "composition": "compositions",
     "reference_asset": "reference_assets",
     "character": "characters",   # 共享库角色母版导入（copy-on-import 进 project.json）
+    "binding": "bindings",       # Phase C1：ShotProductionBinding（id = shot_id，canonical 键）
 }
 # 兼容扫描的单数 id 字段（generation / write-service 原始 receipt 形态）。
 _RESOURCE_ID_FIELDS = (("clothing_id", "clothings"), ("look_id", "looks"),
@@ -397,7 +400,8 @@ _RESOURCE_ID_FIELDS = (("clothing_id", "clothings"), ("look_id", "looks"),
                        ("asset_id", "reference_assets"))
 # changed_refs 键 → AgentTask.artifact_refs 的 type 名。
 _REF_KEY_TO_TYPE = {"clothings": "clothing", "looks": "look", "props": "prop",
-                    "compositions": "composition", "reference_assets": "reference_asset"}
+                    "compositions": "composition", "reference_assets": "reference_asset",
+                    "bindings": "binding"}
 
 
 def _derive_changed_refs(agent_id: str, receipts: list) -> dict:
@@ -449,15 +453,18 @@ def _derive_changed_refs(agent_id: str, receipts: list) -> dict:
         for aid in (r.get("candidate_asset_ids") or []):
             if isinstance(aid, str) and aid.strip():
                 resources["reference_assets"].add(aid.strip())
-    return {"scenes": sorted(scenes), "shots": sorted(shots), "characters": sorted(characters),
-            "clothings": sorted(resources["clothings"]), "looks": sorted(resources["looks"]),
-            "props": sorted(resources["props"]),
-            "reference_assets": sorted(resources["reference_assets"]),
-            "compositions": sorted(resources["compositions"])}
+    # legacy character 扫描与 "character" kind（共享库母版导入）统一合并进 characters 键
+    # （Map 里 "character"→"characters" 与 legacy set 同键——合并而非覆盖）。
+    resources["characters"].update(characters)
+    return {"scenes": sorted(scenes), "shots": sorted(shots),
+            **{k: sorted(resources[k]) for k in _RESOURCE_KIND_TO_REF.values()}}
 
 
 def _derive_warnings(receipts: list) -> list:
-    """receipts 的 ok=false 错误 + status，截前 10 条。"""
+    """receipts 的 ok=false 错误 + status，截前 10 条。Phase C1（27.md §15）：真实 tool
+    result 携带的结构化 prerequisite_warnings（shot.production.inspect / bind 派生）
+    一并进入 warnings——Director 报告的 Resource/Scene prerequisite 对 Producer 可见，
+    绝不信模型自然语言自述。"""
     out = []
     for r in receipts or []:
         if r.get("ok") is False:
@@ -465,6 +472,18 @@ def _derive_warnings(receipts: list) -> list:
             out.append(f"{r.get('operation', '?')}: {str(why)[:200]}")
             if len(out) >= 10:
                 break
+    for r in receipts or []:
+        for pw in (r.get("prerequisite_warnings") or []):
+            if not isinstance(pw, dict):
+                continue
+            code = pw.get("code") or "prerequisite"
+            sid = pw.get("shot_id") or ""
+            detail = str(pw.get("detail") or "")[:160]
+            out.append(f"prerequisite[{code}] {sid}: {detail}".strip())
+            if len(out) >= 10:
+                break
+        if len(out) >= 10:
+            break
     return out
 
 

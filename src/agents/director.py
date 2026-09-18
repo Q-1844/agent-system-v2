@@ -83,6 +83,12 @@ from .director_visual import (
     _execute_shot_generate_videos,
 )
 # —— 视觉审查工具（Visual Review Tool V1：只读、fresh-context，本文件只注册接线）——
+from .director_production import (
+    _execute_shot_production_bind,
+    _execute_shot_production_inspect,
+    _execute_shot_production_refresh,
+    _execute_visual_profile_read,
+)
 from .director_vision_review import (
     VISION_REVIEW_TOOL,
     _execute_visual_review,
@@ -134,13 +140,16 @@ _BATCH_DOWNGRADE = {10: 5, 5: 2, 2: 1, 1: 1}
 # 同样占单写槽 + 锁 storyboard + 发 storyboard.changed（verified 语义 = canonical+文件存在）。
 DIRECTOR_WRITE_OPERATIONS = {"shot.create", "shot.create_many", "shot.update",
                              "shot.update_many", "shot.delete", "shot.move",
-                             "shot.generate_images", "shot.generate_videos"}
+                             "shot.generate_images", "shot.generate_videos",
+                             # Phase C1（27.md §1.1）：ShotProductionBinding 生产意图归 Director
+                             "shot.production.bind", "shot.production.refresh"}
 # 长任务视觉工具（loop 侧额外传 event_cb/cancel_event；对生成类工具豁免「写后重读」
 # 收尾判定——executor 内部已做「重读 canonical + 文件存在」验证，强于 shot.list）。
 DIRECTOR_LONG_TASK_TOOLS = {"shot.generate_images", "shot.generate_videos"}
 # 只读工具（不占写槽、可一次多个；用于「写后重读最终状态」的收尾判定）。
 DIRECTOR_READ_TOOLS = {"shot.list", "shot.read", "story.list", "story.read",
-                       "script.read", "character.list", "character.read"}
+                       "script.read", "character.list", "character.read",
+                       "project.visual_profile.read", "shot.production.inspect"}
 
 
 # ============ 乐观并发指纹（分镜域，字段级作用域）============
@@ -208,16 +217,22 @@ def _shots_content_token(scenes) -> str:
 _SUBAGENT_SYSTEM_SUFFIX = None
 
 
-def _build_system(proj) -> str:
+def _build_system(proj, pdir=None) -> str:
     """精简 system：只放职责、权限、工具说明、项目元信息（名称/段数/镜头数）。
-    不注入完整 story_text / scenes / shots 列表——Agent 需要时用读工具按需取。"""
+    不注入完整 story_text / scenes / shots 列表——Agent 需要时用读工具按需取。
+    Phase C1（27.md §5）：注入 ProjectVisualProfile 一行摘要（生产风格真相）。"""
     n_shots = sum(len(sc.shots or []) for sc in (proj.scenes or []))
+    vp_summary = "（未知）"
+    if pdir is not None:
+        from .production_context import profile_summary_line
+        vp_summary = profile_summary_line(pdir)
     base = DIRECTOR_SYSTEM.format(
         project_name=proj.name or "（未命名）",
         scenes_count=len(proj.scenes or []),
         shots_count=n_shots,
         max_create_batch=MAX_CREATE_BATCH,
         max_update_batch=MAX_UPDATE_BATCH,
+        visual_profile_summary=vp_summary,
     )
     if _SUBAGENT_SYSTEM_SUFFIX:
         base += "\n\n" + _SUBAGENT_SYSTEM_SUFFIX
@@ -228,6 +243,7 @@ DIRECTOR_SYSTEM = """你是 AGNES 的 Director（导演/分镜设计者），负
 镜头数量、景别变化、机位与运镜、节奏与信息释放由你按剧情需要做专业判断：像真正的导演那样设计，而不是机械地把故事文本切成等长的句子。项目里已有的镜头结构、拍摄方案、风格基调是你的创作基础，用户没有要求改变的部分尽量保留。
 
 项目：{project_name}（{scenes_count} 个故事段，共 {shots_count} 个镜头）。
+项目视觉定义（ProjectVisualProfile——全项目生成风格真相，你只能读不能改）：{visual_profile_summary}
 
 权限边界（硬约束）：
 - 你【只】写镜头 canonical：创建/修改/删除/移动镜头及其拍摄字段，以及用生成工具为镜头产出分镜图/视频资产。
@@ -265,7 +281,14 @@ DIRECTOR_SYSTEM = """你是 AGNES 的 Director（导演/分镜设计者），负
 - 🔴 你没有任何直接看图能力：对生成画面内容下判断只有一条正路——调用本工具拿真实视觉反馈。用户问「这张图有没有问题/符不符合要求/检查一下画面」时必须调用本工具；绝不允许凭 shot 描述、prompt、文件名或想象去描述/评价画面（那是编造，违反 truth gate）。
 - 审查结果是视觉模型的判断（可能 uncertain 或出错），供决策参考，不是 canonical 事实；不要把 pass/needs_fix 当成已确认的项目真相向用户断言，也不要因反馈不佳就自动重新生成（生成永远等用户要求）。
 
-🔴 最重要的铁律（违反即失败）：
+【生产检查与绑定（正式分镜图生成前；Phase C1）】
+- project.visual_profile.read()：读项目视觉定义（render_family/风格方向/负面约束）。正式生产推理前先读；它才是决定生成风格的真相，与用户要求冲突时指出冲突（你没有修改它的工具）。
+- shot.production.inspect(shot_id)：【正式生成前必查】一镜的生产准备摘要：该镜 cast 的 approved Look 选项 / 场景生产上下文（SceneInstance 与 approved 场景视图）/ 当前 binding 与 readiness / cast 一致性 / 结构化 prerequisite。不要「生成失败后才猜问题」——正式生成前先 inspect。
+- shot.production.bind(shot_id, character_bindings[], prop_bindings?, scene_binding?, expected_binding_revision?)：为镜头声明生产绑定（本镜消费哪些 approved 造型/道具/场景视图）。UNBOUND 直接创建；已有 binding 是 replace（必须传 inspect 返回的 binding_revision）。绑定后回执带 readiness。
+- shot.production.refresh(shot_id, expected_binding_revision)：依赖都有效但快照过期时，显式刷新 binding 快照。依赖本身失效（Look/场景视图变更、审批撤销）时 refresh 会 fail closed 返回真实原因——refresh 不能魔法修复。
+- 【概念纪律】Character 是身份（是谁），CharacterLook 是当前生产造型（穿什么/什么状态）——绑定时选 Look，不是改 Character。Story Scene ≠ Location ≠ SceneInstance ≠ SceneInstanceView：SceneInstanceView 才是 BOUND 镜头真正消费的场景参考。ShotProductionBinding 不是故事事实，是「本镜消费哪些 approved 生产真相」的正式生产意图。
+- 【readiness 工作流】正式生成：inspect → 修 Shot 层问题（cast 不全就 shot.update 补全——这是你自己能修的）→ bind → inspect/回执 READY → generate。缺 approved Look / 缺场景视图时【绝不自己创建】（你没有那些工具），如实列出 missing 资源、受影响镜头、所需能力，作为 production prerequisite 报告——Producer 会协调。
+- 【生成 reference policy】shot.generate_images 新增可选 reference_policy：用户要求 production-ready / 使用批准资源 / 保持人物场景一致 / 正式生成 → 必须传 `bound_required`（未绑定会被系统拒绝，绝不静默回落 legacy）；用户明确要快速草稿、或项目没有生产资源 → 才允许 `legacy_allowed`（省略参数=旧行为）。不要为了「任务成功率」偷偷降级到 legacy。
 - 你只有通过【真正发起工具调用】（function/tool_calls）才能读/写数据。在回复里说「我已创建/已修改」但没有真正调用对应工具，等于什么都没做——这是严重错误。
 - 工具调用成功后，你只能依据工具【真实返回】的结果汇报；没看到 ok=true 与真实分配的 shot_id/顺序，就不能声称成功。
 - 不要编造 shot_id、scene_id、镜头数、指纹；这些值必须来自工具返回。
@@ -664,12 +687,120 @@ WEB_SEARCH_TOOL = {
     },
 }
 
+DIRECTOR_PROFILE_READ_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "project.visual_profile.read",
+        "description": ("读取项目视觉定义（ProjectVisualProfile）：render_family / "
+                        "art_direction / style_tags / 负面风格约束 + 指纹与 revision。"
+                        "这是真正决定生成风格的项目视觉宪法——正式生产推理（绑定/生成前）"
+                        "先读它；与用户要求冲突时指出冲突。只读工具，你没有修改它的工具。"),
+        "parameters": {"type": "object", "properties": {}},
+    },
+}
+
+SHOT_PRODUCTION_INSPECT_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "shot.production.inspect",
+        "description": ("【正式生成前必查】读取一个镜头的完整生产准备摘要：镜头信息与内容"
+                        "指纹 / 项目视觉定义 / 每个 cast 角色的 approved Look 选项与身份参考"
+                        "状态 / 道具线索 / 场景生产上下文（SceneInstance 与 approved 场景视图）"
+                        "/ 当前 binding 状态与 readiness / cast 一致性检查（文本提到但 cast "
+                        "未列的已建立角色）/ 结构化 prerequisite 清单。只读工具。用它判断"
+                        "「这镜现在能不能正式生成、缺什么」，不要生成失败后才猜问题。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "shot_id": {"type": "string", "description": "镜头 id。"},
+            },
+            "required": ["shot_id"],
+        },
+    },
+}
+
+SHOT_PRODUCTION_BIND_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "shot.production.bind",
+        "description": ("为镜头创建/替换生产绑定（ShotProductionBinding）：声明本镜消费哪些"
+                        "approved 生产真相（角色→look_id、可选道具、可选场景"
+                        "scene_instance_id+location_view_id）。UNBOUND 时直接创建；已有 "
+                        "binding 时是 replace（必须传 expected_binding_revision，来自 "
+                        "shot.production.inspect）。绑定后立即返回 readiness；NOT_READY 时"
+                        "按 issues 处理。写工具（一个一个来）。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "shot_id": {"type": "string", "description": "镜头 id。"},
+                "character_bindings": {
+                    "type": "array",
+                    "items": {"type": "object",
+                              "properties": {
+                                  "character_name": {"type": "string"},
+                                  "look_id": {"type": "string"},
+                              },
+                              "required": ["character_name", "look_id"]},
+                    "description": "角色绑定：cast 中每个角色 → 其 approved look_id"
+                                   "（来自 shot.production.inspect 的 character_options）。"},
+                "prop_bindings": {
+                    "type": "array",
+                    "items": {"type": "object",
+                              "properties": {
+                                  "prop_id": {"type": "string"},
+                                  "relation": {"type": "string"},
+                                  "anchor": {"type": "string"},
+                                  "visual_state_note": {"type": "string"},
+                              },
+                              "required": ["prop_id"]},
+                    "description": "可选道具绑定。"},
+                "scene_binding": {
+                    "type": "object",
+                    "properties": {
+                        "scene_instance_id": {"type": "string"},
+                        "location_view_id": {"type": "string"},
+                        "pinned_scene_instance_view_id": {"type": "string"},
+                    },
+                    "required": ["scene_instance_id", "location_view_id"],
+                    "description": "可选场景绑定（用 inspect 的 scene 上下文里真实存在的 id）。"},
+                "expected_binding_revision": {"type": "string",
+                                              "description": "替换已有绑定时必传（inspect 返回的"
+                                                             " binding_revision）。"},
+                "production_notes": {"type": "string", "description": "生产备注。"},
+            },
+            "required": ["shot_id", "character_bindings"],
+        },
+    },
+}
+
+SHOT_PRODUCTION_REFRESH_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "shot.production.refresh",
+        "description": ("显式刷新 binding 的依赖指纹快照（把当前仍有效的依赖确认为新 "
+                        "freshness basis）。依赖本身已失效（Look/场景视图变更、审批被撤销、"
+                        "profile 不符）时 refresh 会 fail closed 返回真实原因——refresh 不能"
+                        "魔法修复依赖，那种情况要修依赖或报告 prerequisite。写工具。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "shot_id": {"type": "string", "description": "镜头 id。"},
+                "expected_binding_revision": {"type": "string",
+                                              "description": "当前 binding revision（inspect 返回）。"},
+            },
+            "required": ["shot_id", "expected_binding_revision"],
+        },
+    },
+}
+
 DIRECTOR_TOOLS = [
     SHOT_LIST_TOOL, SHOT_READ_TOOL, SHOT_CREATE_TOOL, SHOT_CREATE_MANY_TOOL,
     SHOT_UPDATE_TOOL, SHOT_UPDATE_MANY_TOOL, SHOT_DELETE_TOOL, SHOT_MOVE_TOOL,
     SHOT_GENERATE_IMAGES_TOOL, SHOT_GENERATE_VIDEOS_TOOL,
     STORY_LIST_TOOL, STORY_READ_TOOL, SCRIPT_READ_TOOL,
     CHARACTER_LIST_TOOL, CHARACTER_READ_TOOL,
+    DIRECTOR_PROFILE_READ_TOOL, SHOT_PRODUCTION_INSPECT_TOOL,
+    SHOT_PRODUCTION_BIND_TOOL, SHOT_PRODUCTION_REFRESH_TOOL,
     WEB_SEARCH_TOOL,
     VISION_REVIEW_TOOL,
 ]
@@ -1355,6 +1486,10 @@ TOOL_EXECUTORS = {
     "shot.generate_images": _execute_shot_generate_images,
     "shot.generate_videos": _execute_shot_generate_videos,
     "visual.review_image": _execute_visual_review,
+    "project.visual_profile.read": _execute_visual_profile_read,
+    "shot.production.inspect": _execute_shot_production_inspect,
+    "shot.production.bind": _execute_shot_production_bind,
+    "shot.production.refresh": _execute_shot_production_refresh,
     "story.list": _execute_story_list,
     "story.read": _execute_story_read,
     "script.read": _execute_script_read,
@@ -1372,6 +1507,10 @@ _TOOL_LABELS = {
     "shot.delete": "删除镜头", "shot.move": "移动镜头",
     "shot.generate_images": "生成分镜图", "shot.generate_videos": "生成镜头视频",
     "visual.review_image": "视觉审查",
+    "project.visual_profile.read": "读取项目视觉定义",
+    "shot.production.inspect": "检查镜头生产准备",
+    "shot.production.bind": "创建/替换生产绑定",
+    "shot.production.refresh": "刷新绑定快照",
     "story.list": "读取故事段", "story.read": "读取故事段",
     "script.read": "读取剧本", "character.list": "读取角色列表",
     "character.read": "读取角色", "web.search": "搜索资料",
@@ -1666,7 +1805,7 @@ def _refresh_system(messages: list, rt: AgentRuntime, project: str) -> None:
     try:
         pdir = rt._resolve_project_dir(project)
         proj = ProjectStore(pdir).load()
-        messages[0] = {"role": "system", "content": _build_system(proj)}
+        messages[0] = {"role": "system", "content": _build_system(proj, pdir)}
     except Exception:
         pass
 
@@ -2106,9 +2245,10 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                     break
 
             # 写域调用记入账本（含拼错的 shot.* 未知工具：也算写尝试失败）。
+            # Phase C1：shot.production.inspect 是只读聚合工具，不计写域。
             is_write_domain = (name in DIRECTOR_WRITE_OPERATIONS
                                or name.startswith("shot."))
-            if is_write_domain and name not in ("shot.list", "shot.read"):
+            if is_write_domain and name not in DIRECTOR_READ_TOOLS:
                 write_attempts += 1
                 obs.setdefault("operation", name)
                 receipts.append(obs)
@@ -2254,7 +2394,7 @@ async def run_clean_review(rt: AgentRuntime, client, project: str, *,
         trigger, user_request,
         session_governance.get_brief(pdir, project),
         session_governance.build_state_header(pdir, project))
-    messages: list[dict] = [{"role": "system", "content": _build_system(proj)},
+    messages: list[dict] = [{"role": "system", "content": _build_system(proj, pdir)},
                             {"role": "user", "content": instruction}]
     final = await _run_tool_loop(rt, client, project, messages, instruction, None,
                                  event_cb=event_cb, cancel_event=cancel_event,
@@ -2441,7 +2581,7 @@ async def director_turn(rt: AgentRuntime, project: str, session_id: str,
         except Exception:
             log.exception("subagent 工具挂载检查失败（按未启用处理）")
         proj = ProjectStore(pdir).load()
-        system = _build_system(proj)
+        system = _build_system(proj, pdir)
         mem = rt._memory_supplement(project, "director")
         if mem:
             system += "\n\n" + mem
@@ -2603,6 +2743,15 @@ async def director_turn(rt: AgentRuntime, project: str, session_id: str,
             # Sub-Agent：DiffEngine 内嵌子操作回执（治理扁平化 / 审计）
             "executed_ops": r.get("executed_ops"),
             "proposal_id": r.get("proposal_id"),
+            # Phase C1：生产绑定 / 生产生成回执字段（Producer changed_refs.bindings 与
+            # prerequisite warnings 的确定性来源）
+            "binding_id": r.get("binding_id"),
+            "mode": r.get("mode"),
+            "changed_resources": r.get("changed_resources"),
+            "prerequisite_warnings": r.get("prerequisite_warnings"),
+            "readiness": r.get("readiness"),
+            "production_state": r.get("production_state"),
+            "reference_policy": r.get("reference_policy"),
         })
         if r.get("operation") in SHOT_GENERATE_TOOL_NAMES and r.get("ok"):
             for item in (r.get("results") or []):

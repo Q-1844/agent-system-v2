@@ -1258,32 +1258,12 @@ async def _execute_character_generate_views(rt: AgentRuntime, project: str, argu
 def _execute_visual_profile_read(rt: AgentRuntime, project: str, arguments: str,
                                  instruction, message_id) -> dict:
     """读取 ProjectVisualProfile（Phase B §3.1：高信号紧凑返回——内容+指纹+revision+
-    specified 状态；不返回无关项目大块 JSON）。只读；profile 由用户拥有，Agent 无 mutation。"""
+    specified 状态；不返回无关项目大块 JSON）。只读；profile 由用户拥有，Agent 无 mutation。
+    Phase C1 Work B：实现委托共享层 production_context（与 Director 同一投影/schema，
+    消除双实现）；本工具的 schema 与对外行为不变。"""
     pdir = rt._resolve_project_dir(project)
-    from src.visual_profile import load_profile_or_none
-    from src.visual_profile.models import (VisualProfileSchemaError,
-                                           visual_profile_fingerprint,
-                                           profile_revision)
-    try:
-        vp = load_profile_or_none(pdir)
-    except VisualProfileSchemaError as e:
-        return {"ok": False, "operation": "project.visual_profile.read",
-                "error": "visual_profile_unreadable",
-                "note": f"project_profile.json 损坏（fail closed）：{e}"}
-    if vp is None:
-        return {"ok": True, "operation": "project.visual_profile.read",
-                "specified": False, "visual_profile": None,
-                "fingerprint": "", "revision": "",
-                "note": "项目未设置视觉定义。资源类视觉生成（Look/Composition）会被系统 "
-                        "fail closed 拒绝；角色三视图当前不追加项目风格指令。可建议用户在"
-                        "项目设置里配置。"}
-    return {"ok": True, "operation": "project.visual_profile.read",
-            "specified": True,
-            "visual_profile": vp.to_dict(),
-            "fingerprint": visual_profile_fingerprint(vp),
-            "revision": profile_revision(vp),
-            "note": "项目视觉定义即全项目风格真相：你的视觉生成遵守它；如用户要求与它冲突，"
-                    "指出冲突而不是默默照做或试图修改它。"}
+    from .production_context import read_visual_profile_projection
+    return read_visual_profile_projection(pdir)
 
 
 # ============ Production Resources 只读（Phase B §7：inventory / read）============

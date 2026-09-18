@@ -181,7 +181,7 @@ def test_B5_verified_false_not_success(tmp_path):
     # Phase B：changed_refs 八键骨架（新资源键并存，空值语义不变）
     assert result["changed_refs"] == {"scenes": [], "shots": [], "characters": [],
                                       "clothings": [], "looks": [], "props": [],
-                                      "reference_assets": [], "compositions": []}
+                                      "reference_assets": [], "compositions": [], "bindings": []}
     assert result["warnings"], "失败写应出现在 warnings"
     # roster 同样诚实
     sw = next(p for p in snap["participants"] if p["agent_id"] == "script_writer")
