@@ -62,8 +62,18 @@ def build_prop_review_prompt(*, prop_name: str, prop_description: str = "",
     ]
     if style_expectation:
         parts.append(
-            "4. project_style_consistency — the image must belong to the project's declared "
-            "visual production style/medium (hard dimension: a style mismatch must fail).\n"
+            "4. project_style_consistency — judge whether the PROP OBJECT ITSELF matches the "
+            "project's declared visual production style/medium: its materials, shape language, "
+            "textures, line work, era feel and rendering medium must visibly belong to the "
+            "declared style (hard dimension: a real style mismatch must fail).\n"
+            "WHAT DOES NOT COUNT AS A STYLE FAILURE: a prop production reference is EXPECTED to "
+            "be presented as an isolated object on a neutral / plain / white / transparent / "
+            "simple background with even lighting. That presentation format must NOT by itself "
+            "cause project_style_consistency to fail — do not demand scene atmosphere, "
+            "environment, dramatic lighting or full composition from a prop reference.\n"
+            "Only fail when the prop object itself reads as a different medium or style family "
+            "than declared (for example a photorealistic product photograph when the project "
+            "expects 2D cel animation).\n"
             f"{style_expectation}\n")
     schema = ('{"prop_fidelity": "pass|concern|fail", "fidelity_notes": "...",\n'
               ' "visual_clarity": "pass|concern|fail", "clarity_notes": "...",\n'
