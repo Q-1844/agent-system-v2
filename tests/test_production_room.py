@@ -178,7 +178,10 @@ def test_B5_verified_false_not_success(tmp_path):
     result = next(m for m in snap["messages"] if m["kind"] == "specialist_result")
     assert result["verified"] is False
     assert result["status"] == "completed"
-    assert result["changed_refs"] == {"scenes": [], "shots": [], "characters": []}
+    # Phase B：changed_refs 八键骨架（新资源键并存，空值语义不变）
+    assert result["changed_refs"] == {"scenes": [], "shots": [], "characters": [],
+                                      "clothings": [], "looks": [], "props": [],
+                                      "reference_assets": [], "compositions": []}
     assert result["warnings"], "失败写应出现在 warnings"
     # roster 同样诚实
     sw = next(p for p in snap["participants"] if p["agent_id"] == "script_writer")

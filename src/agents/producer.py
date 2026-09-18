@@ -372,13 +372,38 @@ def render_envelope(envelope: dict) -> str:
 
 
 # ============ Task Result 包装（§6）============
+# Agent System V2 Phase B（Resource Agent）：resources.json 域 changed_refs 键。
+# kind（changed_resources[].kind / receipt.resource_kind）→ changed_refs 键。
+# 原三键（scenes/shots/characters）完全不动，只追加——旧 workflow/Room 投影对新键容错
+# （production_room.py isinstance 检查），旧 Specialist 不会产出新键（恒空列表）。
+_RESOURCE_KIND_TO_REF = {
+    "clothing": "clothings",
+    "look": "looks",
+    "prop": "props",
+    "composition": "compositions",
+    "reference_asset": "reference_assets",
+}
+# 兼容扫描的单数 id 字段（generation / write-service 原始 receipt 形态）。
+_RESOURCE_ID_FIELDS = (("clothing_id", "clothings"), ("look_id", "looks"),
+                       ("prop_id", "props"), ("composition_id", "compositions"),
+                       ("asset_id", "reference_assets"))
+# changed_refs 键 → AgentTask.artifact_refs 的 type 名。
+_REF_KEY_TO_TYPE = {"clothings": "clothing", "looks": "look", "props": "prop",
+                    "compositions": "composition", "reference_assets": "reference_asset"}
+
+
 def _derive_changed_refs(agent_id: str, receipts: list) -> dict:
     """只从真实 receipts 派生 changed_refs（绝不采信 LLM 自述）。
     扫描该 turn 的 receipts：scene_id/shot_id 字段 + created[].shot_id/scene_id +
-    deleted.{shots,scenes} + results[].shot_id；CD 侧按 character_name。"""
+    deleted.{shots,scenes} + results[].shot_id；CD 侧按 character_name。
+    Phase B（Resource Agent）：resources.json 域从回执的 changed_resources=[{kind,id}]
+    （Agent mutation 工具从真实 write-service receipts 聚合的确定性清单）派生，
+    并兼容单数字段 clothing_id/look_id/prop_id/composition_id/asset_id 与
+    candidate_asset_ids（look/composition 生成回执的候选资产）。"""
     scenes: set = set()
     shots: set = set()
     characters: set = set()
+    resources: Dict[str, set] = {k: set() for k in _RESOURCE_KIND_TO_REF.values()}
     for r in receipts or []:
         if not (r.get("ok") and r.get("verified") and not r.get("unchanged")):
             continue
@@ -401,7 +426,26 @@ def _derive_changed_refs(agent_id: str, receipts: list) -> dict:
         for res in (r.get("results") or []):
             if res.get("shot_id"):
                 shots.add(res["shot_id"])
-    return {"scenes": sorted(scenes), "shots": sorted(shots), "characters": sorted(characters)}
+        # Phase B：Resource Agent mutation 工具回执的确定性聚合清单。
+        for cr in (r.get("changed_resources") or []):
+            if isinstance(cr, dict):
+                key = _RESOURCE_KIND_TO_REF.get(cr.get("kind"))
+                rid = str(cr.get("id") or "").strip()
+                if key and rid:
+                    resources[key].add(rid)
+        # 兼容：携带单数 id 字段的原始 service/generation 回执。
+        for field, key in _RESOURCE_ID_FIELDS:
+            rid = r.get(field)
+            if isinstance(rid, str) and rid.strip():
+                resources[key].add(rid.strip())
+        for aid in (r.get("candidate_asset_ids") or []):
+            if isinstance(aid, str) and aid.strip():
+                resources["reference_assets"].add(aid.strip())
+    return {"scenes": sorted(scenes), "shots": sorted(shots), "characters": sorted(characters),
+            "clothings": sorted(resources["clothings"]), "looks": sorted(resources["looks"]),
+            "props": sorted(resources["props"]),
+            "reference_assets": sorted(resources["reference_assets"]),
+            "compositions": sorted(resources["compositions"])}
 
 
 def _derive_warnings(receipts: list) -> list:
@@ -525,6 +569,13 @@ def _append_bridge_messages(pdir: Path, project: str, rows: list) -> None:
 
 
 # ============ delegate 执行器（§5.3，三个共用一个泛化实现）============
+def _empty_changed_refs() -> dict:
+    """changed_refs 全键空骨架（三老键 + Phase B 资源键）。早期失败回执保持全键形状。"""
+    out = {"scenes": [], "shots": [], "characters": []}
+    out.update({k: [] for k in _RESOURCE_KIND_TO_REF.values()})
+    return out
+
+
 async def _delegate_specialist(rt, project: str, agent_id: str,
                                envelope: dict, *, event_cb, cancel_event,
                                prev_task_id: Optional[str],
@@ -538,7 +589,8 @@ async def _delegate_specialist(rt, project: str, agent_id: str,
                 "code": "missing_objective", "agent": agent_id,
                 "error": "objective 必填（任务目标）",
                 "fix_hint": "给出明确的任务目标 objective",
-                "status": "failed", "task_id": None, "changed_refs": {"scenes": [], "shots": [], "characters": []}}
+                "status": "failed", "task_id": None,
+                "changed_refs": _empty_changed_refs()}
 
     # lazy import Specialist turn + write ops（避免本模块 import 时拖入）
     if agent_id == "script_writer":
@@ -555,7 +607,7 @@ async def _delegate_specialist(rt, project: str, agent_id: str,
         return {"ok": False, "operation": "delegate", "code": "unknown_agent",
                 "error": f"未知 Specialist: {agent_id}", "agent": agent_id,
                 "status": "failed", "task_id": None,
-                "changed_refs": {"scenes": [], "shots": [], "characters": []}}
+                "changed_refs": _empty_changed_refs()}
     resource = _SPECIALIST_RESOURCE[agent_id]
 
     store = rt._session_store(project)
@@ -570,7 +622,7 @@ async def _delegate_specialist(rt, project: str, agent_id: str,
                 "error": f"{agent_id} 会话已有进行中任务",
                 "fix_hint": "稍后再试，或先停止该 Agent 的当前任务",
                 "status": "failed", "task_id": None,
-                "changed_refs": {"scenes": [], "shots": [], "characters": []}}
+                "changed_refs": _empty_changed_refs()}
 
     # ④ AgentTask 创建（parent_task_id 链上前一 task 或留空为首 task）
     pdir = rt._resolve_project_dir(project)
@@ -651,6 +703,10 @@ async def _delegate_specialist(rt, project: str, agent_id: str,
             refs.append({"type": "shot", "id": sid_})
         for nm in task_result["changed_refs"].get("characters", []):
             refs.append({"type": "character", "id": nm})
+        # Phase B：resources.json 域资源引用（Look/Prop/Clothing/Composition/ReferenceAsset）。
+        for key, ref_type in _REF_KEY_TO_TYPE.items():
+            for rid in task_result["changed_refs"].get(key, []):
+                refs.append({"type": ref_type, "id": rid})
         t.artifact_refs = refs
         t.error = (err or (None if tr_status == "completed" else tr_status))
         t.updated_at = time.time()

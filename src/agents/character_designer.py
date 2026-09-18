@@ -1600,6 +1600,17 @@ async def character_designer_turn(rt: AgentRuntime, project: str, session_id: st
             "generated": r.get("generated"),
             "character_names": r.get("character_names"),
             "elapsed_s": r.get("elapsed_s"),
+            # Phase B（Resource Agent）：resources.json 域回执字段透传——
+            # Producer._derive_changed_refs 只从这些真实回执字段派生资源 changed_refs。
+            "resource_kind": r.get("resource_kind"),
+            "resource_id": r.get("resource_id"),
+            "changed_resources": r.get("changed_resources"),
+            "clothing_id": r.get("clothing_id"),
+            "look_id": r.get("look_id"),
+            "prop_id": r.get("prop_id"),
+            "composition_id": r.get("composition_id"),
+            "asset_id": r.get("asset_id"),
+            "candidate_asset_ids": r.get("candidate_asset_ids"),
         })
         if (r.get("operation") == "character.generate_views" and r.get("ok")):
             for g in (r.get("generated") or []):
