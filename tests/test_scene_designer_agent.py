@@ -766,3 +766,201 @@ def test_S38_same_basis_failure_guard(_gen_env, monkeypatch):
     assert r5["ok"] and r5.get("error") != "review_retry_exhausted", \
         (r5.get("error"), r5.get("detail"))
     assert fake.gen_calls == gen_before + 1
+
+
+# ============ Commit F：scene.instance.prepare / scene.state.update（S39-S48）============
+def _seed_loc_anchor(svc, name="山雨驿站"):
+    loc = (asyncio.run(svc.create_location(
+        name=name, identity_description="mountain inn",
+        expected_document_revision=_drev(svc))))["target"]
+    a1 = (asyncio.run(svc.create_anchor(
+        location_id=loc, name="east gate", kind="entry",
+        expected_document_revision=_drev(svc))))["target"]
+    return loc, a1
+
+
+def test_S39_instance_create(tmp_path):
+    rt = _runtime(tmp_path)
+    _save_proj(tmp_path)
+    svc, pdir = _mk_svc(tmp_path)
+    loc, a1 = _seed_loc_anchor(svc)
+    r = _run_exec(sd._execute_scene_instance_prepare(
+        rt, "s2demo", json.dumps({
+            "story_scene_id": "s01", "location_id": loc,
+            "expected_document_revision": _drev(svc)}), None, "m1"))
+    assert r["ok"] and r["verified"]
+    assert r["scene_instance_id"].startswith("scin_")
+    assert r["changed_resources"] == [{"kind": "scene_instance",
+                                       "id": r["scene_instance_id"]}]
+
+
+def test_S40_instance_story_scene_missing_rejected(tmp_path):
+    rt = _runtime(tmp_path)
+    _save_proj(tmp_path)
+    svc, pdir = _mk_svc(tmp_path)
+    loc, a1 = _seed_loc_anchor(svc)
+    r = _run_exec(sd._execute_scene_instance_prepare(
+        rt, "s2demo", json.dumps({
+            "story_scene_id": "sXX", "location_id": loc,
+            "expected_document_revision": _drev(svc)}), None, "m1"))
+    assert not r["ok"] and r["error"] == "story_scene_not_found"
+
+
+def test_S41_instance_location_missing_rejected(tmp_path):
+    rt = _runtime(tmp_path)
+    _save_proj(tmp_path)
+    svc, pdir = _mk_svc(tmp_path)
+    r = _run_exec(sd._execute_scene_instance_prepare(
+        rt, "s2demo", json.dumps({
+            "story_scene_id": "s01", "location_id": "loc_missing",
+            "expected_document_revision": _drev(svc)}), None, "m1"))
+    assert not r["ok"] and r["error"] == "location_not_found"
+
+
+def test_S42_duplicate_active_instance_rejected(tmp_path):
+    """S42：同故事段第二个 active instance → 系统拒绝 + 返回现有 id（不静默创建）。"""
+    rt = _runtime(tmp_path)
+    _save_proj(tmp_path)
+    svc, pdir = _mk_svc(tmp_path)
+    loc, a1 = _seed_loc_anchor(svc)
+    r1 = _run_exec(sd._execute_scene_instance_prepare(
+        rt, "s2demo", json.dumps({
+            "story_scene_id": "s01", "location_id": loc,
+            "expected_document_revision": _drev(svc)}), None, "m1"))
+    assert r1["ok"]
+    r2 = _run_exec(sd._execute_scene_instance_prepare(
+        rt, "s2demo", json.dumps({
+            "story_scene_id": "s01", "location_id": loc,
+            "expected_document_revision": _drev(svc)}), None, "m1"))
+    assert not r2["ok"] and r2["error"] == "instance_already_active"
+    assert r2["existing_scene_instance_ids"] == [r1["scene_instance_id"]]
+    assert "复用" in r2.get("op_summary", "")
+
+
+def test_S43_instance_stable_mapping(tmp_path):
+    """S43：instance ↔ story_scene 映射稳定（inspect 可见）。"""
+    rt = _runtime(tmp_path)
+    _save_proj(tmp_path)
+    svc, pdir = _mk_svc(tmp_path)
+    loc, a1 = _seed_loc_anchor(svc)
+    r = _run_exec(sd._execute_scene_instance_prepare(
+        rt, "s2demo", json.dumps({
+            "story_scene_id": "s02", "location_id": loc,
+            "expected_document_revision": _drev(svc)}), None, "m1"))
+    ins = sd._execute_scene_production_inspect(
+        rt, "s2demo", json.dumps({"story_scene_id": "s02"}), None, "m1")
+    assert ins["scene_system"]["scene_instance"]["scene_instance_id"] \
+        == r["scene_instance_id"]
+
+
+def test_S44_state_update(tmp_path):
+    rt = _runtime(tmp_path)
+    _save_proj(tmp_path)
+    svc, pdir = _mk_svc(tmp_path)
+    loc, a1 = _seed_loc_anchor(svc)
+    r_inst = _run_exec(sd._execute_scene_instance_prepare(
+        rt, "s2demo", json.dumps({
+            "story_scene_id": "s01", "location_id": loc,
+            "expected_document_revision": _drev(svc)}), None, "m1"))
+    r = _run_exec(sd._execute_scene_state_update(
+        rt, "s2demo", json.dumps({
+            "instance_id": r_inst["scene_instance_id"],
+            "time_of_day": "night", "weather": "heavy_rain",
+            "lighting": "warm lanterns",
+            "expected_revision": r_inst["revision"]}), None, "m1"))
+    assert r["ok"] and r["verified"]
+    st = sd._scene_system_read(tmp_path).scene_instances[
+        r_inst["scene_instance_id"]].state
+    assert st.time_of_day == "night" and st.weather == "heavy_rain"
+
+
+def test_S45_state_anchor_validation(tmp_path):
+    """S45：anchor_states 引用不属于该 location 的 anchor → 拒绝。"""
+    rt = _runtime(tmp_path)
+    _save_proj(tmp_path)
+    svc, pdir = _mk_svc(tmp_path)
+    loc, a1 = _seed_loc_anchor(svc)
+    loc2, _ = _seed_loc_anchor(svc, name="另一地点")
+    r_inst = _run_exec(sd._execute_scene_instance_prepare(
+        rt, "s2demo", json.dumps({
+            "story_scene_id": "s01", "location_id": loc,
+            "expected_document_revision": _drev(svc)}), None, "m1"))
+    # loc2 的 anchor 不属于 loc——直接造一个跨点 anchor id
+    a_other = (asyncio.run(svc.create_anchor(
+        location_id=loc2, name="other gate", kind="entry",
+        expected_document_revision=_drev(svc))))["target"]
+    r = _run_exec(sd._execute_scene_state_update(
+        rt, "s2demo", json.dumps({
+            "instance_id": r_inst["scene_instance_id"],
+            "anchor_states": {a_other: {"condition": "broken"}},
+            "expected_revision": r_inst["revision"]}), None, "m1"))
+    assert not r["ok"]
+    assert r["error"] in ("cross_location_anchor", "anchor_not_found")
+
+
+def test_S46_state_real_prop_placement(tmp_path, monkeypatch):
+    """S46：真实 Prop 引用成功写入（mock resources doc 提供 prop）。"""
+    rt = _runtime(tmp_path)
+    _save_proj(tmp_path)
+    svc, pdir = _mk_svc(tmp_path)
+    loc, a1 = _seed_loc_anchor(svc)
+    r_inst = _run_exec(sd._execute_scene_instance_prepare(
+        rt, "s2demo", json.dumps({
+            "story_scene_id": "s01", "location_id": loc,
+            "expected_document_revision": _drev(svc)}), None, "m1"))
+    # 构造真实 resources doc（含 prop）
+    from src.resources.store import ResourceStore
+    from src.resources.models import ResourceDocument, Prop, ApprovalState
+    rdoc = ResourceDocument()
+    rdoc.props["prop_compass"] = Prop(prop_id="prop_compass", name="铜罗盘",
+                                      description="brass compass",
+                                      approval_status=ApprovalState.APPROVED.value,
+                                      approved_reference_asset_ids=["ref_a"])
+    ResourceStore(tmp_path, tmp_path.name).save(rdoc)
+    r = _run_exec(sd._execute_scene_state_update(
+        rt, "s2demo", json.dumps({
+            "instance_id": r_inst["scene_instance_id"],
+            "prop_placements": {"prop_compass": {"anchor_id": a1,
+                                                 "state": "on table"}},
+            "expected_revision": r_inst["revision"]}), None, "m1"))
+    assert r["ok"] and r["verified"], (r.get("error"), r.get("detail"))
+    st = sd._scene_system_read(tmp_path).scene_instances[
+        r_inst["scene_instance_id"]].state
+    assert "prop_compass" in st.prop_placements
+
+
+def test_S47_missing_prop_resource_prerequisite(tmp_path, monkeypatch):
+    """S47：缺 Prop → resource_prerequisite 结构化上报（零写入）。"""
+    rt = _runtime(tmp_path)
+    _save_proj(tmp_path)
+    svc, pdir = _mk_svc(tmp_path)
+    loc, a1 = _seed_loc_anchor(svc)
+    r_inst = _run_exec(sd._execute_scene_instance_prepare(
+        rt, "s2demo", json.dumps({
+            "story_scene_id": "s01", "location_id": loc,
+            "expected_document_revision": _drev(svc)}), None, "m1"))
+    r = _run_exec(sd._execute_scene_state_update(
+        rt, "s2demo", json.dumps({
+            "instance_id": r_inst["scene_instance_id"],
+            "prop_placements": {"prop_ghost": {"anchor_id": a1,
+                                               "state": "on table"}},
+            "expected_revision": r_inst["revision"]}), None, "m1"))
+    assert not r["ok"] and r["error"] == "prop_not_found"
+    pw = r.get("prerequisite_warnings") or []
+    assert pw and pw[0]["code"] == "resource_prerequisite"
+    assert pw[0]["required_capability"] == "resource_agent"
+    assert pw[0]["missing_props"][0]["prop_id"] == "prop_ghost"
+    assert "prop_placements" in pw[0]["missing_props"][0]["target_field"]
+    # canonical 零写入
+    st = sd._scene_system_read(tmp_path).scene_instances[
+        r_inst["scene_instance_id"]].state
+    assert st.prop_placements == {}
+
+
+def test_S48_cannot_create_prop(tmp_path):
+    """S48：Scene Agent 工具面无任何 Prop 写工具（物理边界）。"""
+    names = {t["function"]["name"] for t in sd._tool_surface()}
+    assert not any(n.startswith("resource.") for n in names), names
+    assert not any("prop" in n and "scene" in n for n in names)
+    # 工具面总数在 14~18 区间（28.md §6）
+    assert 14 <= len(names) <= 18, names

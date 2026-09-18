@@ -1222,12 +1222,190 @@ async def _execute_scene_view_prepare(rt: AgentRuntime, project: str, arguments:
     return out
 
 
+# ============ F 域写工具（28.md §13/§14/§15，Commit F）：Instance / State ============
+SCENE_INSTANCE_PREPARE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "scene.instance.prepare",
+        "description": ("建立 Story Scene → SceneInstance → Location 绑定（V1 规则："
+                        "一个故事段至多一个 active instance）。成功返回 instance_id 与"
+                        "revision。若该故事段已有 active instance：系统拒绝并返回现有 "
+                        "instance id——你应先 scene.production.inspect 读取现状再决定"
+                        "【复用】（换 State 而不是重建）或向用户/Producer 说明，绝不静默"
+                        "创建第二个。location_id 必须真实存在。一次调用只做一个写操作。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "story_scene_id": {"type": "string",
+                                   "description": "故事段 id（来自 story.list，如 s01）。"},
+                "location_id": {"type": "string", "description": "Location id。"},
+                "expected_document_revision": {"type": "string",
+                                               "description": "必传：document_revision。"},
+            },
+            "required": ["story_scene_id", "location_id", "expected_document_revision"],
+        },
+    },
+}
+
+SCENE_STATE_UPDATE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "scene.state.update",
+        "description": ("更新一个 SceneInstance 的 SceneState（该地点在这场戏的此刻状态）"
+                        "：time_of_day / weather / lighting / environment_conditions / "
+                        "notes / anchor_states（{anchor_id: {condition, note}}，anchor "
+                        "必须属于该 location）/ prop_placements（{prop_id: {anchor_id, "
+                        "state, note}}，prop_id 必须是真实存在的 Resources Prop）。"
+                        "🔴 剧情只写「夜晚」时你可以设计合理 lighting，但【不要】无理由"
+                        "改成「暴雨」——不创造影响剧情的事实；只按 Story 推导。"
+                        "🔴 prop 引用不存在的 Prop 会被拒（prop_not_found）并返回结构化 "
+                        "resource_prerequisite——如实上报 Producer 委派 Resource Agent，"
+                        "绝不伪造 prop id。整 dict 替换语义（先 inspect 读现状再 patch）。"
+                        "一次调用只做一个写操作。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "instance_id": {"type": "string", "description": "SceneInstance id。"},
+                "time_of_day": {"type": "string", "description": "如 day / night / dusk。"},
+                "weather": {"type": "string", "description": "如 clear / heavy_rain / snow。"},
+                "lighting": {"type": "string", "description": "灯光描述（如 warm lanterns）。"},
+                "environment_conditions": {"type": "string",
+                                           "description": "weather 之外的环境条件（风/雪/烟…）。"},
+                "notes": {"type": "string", "description": "状态备注。"},
+                "anchor_states": {"type": "object",
+                                  "description": "{anchor_id: {condition, note}}",
+                                  "additionalProperties": {"type": "object"}},
+                "prop_placements": {"type": "object",
+                                    "description": "{prop_id: {anchor_id, state, note}}",
+                                    "additionalProperties": {"type": "object"}},
+                "expected_revision": {"type": "string",
+                                      "description": "必传：该 instance 当前 revision。"},
+            },
+            "required": ["instance_id", "expected_revision"],
+        },
+    },
+}
+
+
+async def _execute_scene_instance_prepare(rt: AgentRuntime, project: str, arguments: str,
+                                          instruction, message_id) -> dict:
+    """scene.instance.prepare（28.md §13）：Story Scene → SceneInstance → Location。
+    不静默创建第二个 instance（service one-active 校验，零弱化）；已存在时返回现有
+    instance 供 Agent 决定复用。"""
+    args = _parse_args(arguments)
+    story_scene_id = str(args.get("story_scene_id") or "").strip()
+    location_id = str(args.get("location_id") or "").strip()
+    expected_doc = str(args.get("expected_document_revision") or "").strip()
+    if not story_scene_id or not location_id:
+        return {"ok": False, "operation": "scene.instance.prepare",
+                "error": "validation_error",
+                "detail": "story_scene_id 与 location_id 必填"}
+    if not expected_doc:
+        return {"ok": False, "operation": "scene.instance.prepare",
+                "error": "expected_document_revision_required",
+                "detail": "必传 expected_document_revision（scene.inventory 的 "
+                          "document_revision）"}
+    pdir = rt._resolve_project_dir(project)
+    svc = _svc(pdir, project)
+    r = await svc.create_scene_instance(story_scene_id=story_scene_id,
+                                        location_id=location_id,
+                                        expected_document_revision=expected_doc)
+    out = _scene_write_receipt(r, "scene.instance.prepare", kind="scene_instance",
+                               entity_id=str(r.get("target") or ""))
+    out["story_scene_id"] = story_scene_id
+    if out.get("ok"):
+        out["scene_instance_id"] = out.get("target")
+        out["op_summary"] = (f"故事段 {story_scene_id} 已绑定 Location {location_id}"
+                             f"（instance={out['scene_instance_id']}）")
+    elif out.get("error") == "instance_already_active":
+        # §13：不静默创建第二个——把现有 instance 交给 Agent 决定复用
+        existing = out.get("existing_scene_instance_ids") or []
+        out["op_summary"] = (f"故事段 {story_scene_id} 已有 active instance "
+                             f"（{', '.join(existing)}）——请 inspect 后决定复用，"
+                             "不要重复创建")
+        out["note"] = ("该故事段已绑定场景。复用现有 instance（scene.state.update 改状态/"
+                       "scene.instance.prepare 不需要重跑）；确需换绑 Location 时向用户"
+                       "说明理由，绝不静默重建。")
+    return out
+
+
+async def _execute_scene_state_update(rt: AgentRuntime, project: str, arguments: str,
+                                      instruction, message_id) -> dict:
+    """scene.state.update（28.md §14/§15）：SceneState patch（整 dict 替换语义）。
+    缺 Prop → 结构化 resource_prerequisite（story_scene_id + 缺什么 + 为什么 + 目标字段），
+    零 Prop 越权创建、零伪造引用。"""
+    args = _parse_args(arguments)
+    instance_id = str(args.get("instance_id") or "").strip()
+    expected = str(args.get("expected_revision") or "").strip()
+    if not instance_id:
+        return {"ok": False, "operation": "scene.state.update",
+                "error": "validation_error", "detail": "instance_id 必填"}
+    if not expected:
+        return {"ok": False, "operation": "scene.state.update",
+                "error": "expected_revision_required",
+                "detail": "必传 expected_revision（先 scene.production.inspect 拿该 "
+                          "instance 的 revision）"}
+    patch: Dict[str, Any] = {}
+    for k in ("time_of_day", "weather", "lighting", "environment_conditions", "notes"):
+        if args.get(k) is not None:
+            patch[k] = str(args[k])
+    for k in ("anchor_states", "prop_placements"):
+        if args.get(k) is not None:
+            if not isinstance(args[k], dict):
+                return {"ok": False, "operation": "scene.state.update",
+                        "error": "validation_error", "detail": f"{k} 必须是对象"}
+            patch[k] = args[k]
+    pdir = rt._resolve_project_dir(project)
+    svc = _svc(pdir, project)
+    r = await svc.patch_scene_state(instance_id, patch, expected_revision=expected)
+    out = _scene_write_receipt(r, "scene.state.update", kind="scene_instance",
+                               entity_id=instance_id)
+    out["scene_instance_id"] = instance_id
+    if out.get("error") == "prop_not_found" and not out.get("ok"):
+        # §15：结构化 resource_prerequisite（Producer 据 §25 路由 Resource Agent）
+        missing = []
+        props = patch.get("prop_placements") or {}
+        story_scene_id = ""
+        try:
+            _inst = _scene_system_read(pdir).scene_instances.get(instance_id)
+            if _inst is not None:
+                story_scene_id = _inst.story_scene_id
+        except Exception:   # noqa: BLE001 - 域信息尽力补全，不影响主回执
+            pass
+        for pid, placement in props.items():
+            detail = str(out.get("detail") or "")
+            if pid in detail or len(props) == 1:
+                missing.append({
+                    "prop_id": pid,
+                    "requirement": {
+                        "anchor_id": (placement or {}).get("anchor_id", ""),
+                        "state": (placement or {}).get("state", ""),
+                        "note": (placement or {}).get("note", ""),
+                    },
+                    "why": "SceneState.prop_placements 引用的 Prop 在 Resources 中不存在",
+                    "target_field": f"SceneState.prop_placements[{pid}]",
+                })
+        out["prerequisite_warnings"] = [{
+            "code": "resource_prerequisite",
+            "story_scene_id": story_scene_id,
+            "detail": f"prop_placements 引用不存在的 Prop: {sorted(props)}；"
+                      f"由 Producer 委派 Resource Agent 登记 Prop 后重试。",
+            "required_capability": "resource_agent",
+            "missing_props": missing,
+        }]
+        out["missing_props"] = missing
+        out["note"] = ("Prop 不存在，本次 state 更新未写入。按 resource_prerequisite 如实"
+                       "上报（不要伪造 prop id、不要自己创建 Prop）；Producer 会委派 "
+                       "Resource Agent。")
+    return out
+
+
 # ============ D-G 域写工具 schema 与执行器（后续 Commit 逐个落地）============
-# scene.instance.prepare / scene.state.update（Commit F）
 # scene.state_view.prepare（Commit G）
 SCENE_DESIGNER_TOOLS: list = [SCENE_INVENTORY_TOOL, SCENE_PRODUCTION_INSPECT_TOOL,
                               SCENE_LOCATION_UPSERT_TOOL, SCENE_ANCHOR_UPSERT_TOOL,
-                              SCENE_LAYOUT_SET_TOOL, SCENE_VIEW_PREPARE_TOOL]
+                              SCENE_LAYOUT_SET_TOOL, SCENE_VIEW_PREPARE_TOOL,
+                              SCENE_INSTANCE_PREPARE_TOOL, SCENE_STATE_UPDATE_TOOL]
 
 TOOL_EXECUTORS["scene.inventory"] = _execute_scene_inventory
 TOOL_EXECUTORS["scene.production.inspect"] = _execute_scene_production_inspect
@@ -1235,27 +1413,27 @@ TOOL_EXECUTORS["scene.location.upsert"] = _execute_scene_location_upsert
 TOOL_EXECUTORS["scene.anchor.upsert"] = _execute_scene_anchor_upsert
 TOOL_EXECUTORS["scene.layout.set"] = _execute_scene_layout_set
 TOOL_EXECUTORS["scene.view.prepare"] = _execute_scene_view_prepare
+TOOL_EXECUTORS["scene.instance.prepare"] = _execute_scene_instance_prepare
+TOOL_EXECUTORS["scene.state.update"] = _execute_scene_state_update
 TOOL_LABELS["scene.inventory"] = "列出场景系统地图"
 TOOL_LABELS["scene.production.inspect"] = "检查场景生产准备"
 TOOL_LABELS["scene.location.upsert"] = "创建/更新地点"
 TOOL_LABELS["scene.anchor.upsert"] = "创建/更新空间锚点"
 TOOL_LABELS["scene.layout.set"] = "设置平面布局"
 TOOL_LABELS["scene.view.prepare"] = "准备 LocationView（生成+审查+按档批准）"
+TOOL_LABELS["scene.instance.prepare"] = "绑定故事段与地点"
+TOOL_LABELS["scene.state.update"] = "更新场景状态"
 # 长任务 executor 标注（tool-loop 据此传 event_cb/cancel_event）
 _execute_scene_view_prepare._long_task = True
-
-WRITE_TOOL_DOMAIN.update({
-    "scene.location.upsert": RESOURCE_SCENE_SYSTEM,
-    "scene.anchor.upsert": RESOURCE_SCENE_SYSTEM,
-    "scene.layout.set": RESOURCE_SCENE_SYSTEM,
-    "scene.view.prepare": RESOURCE_SCENE_SYSTEM,
-})
 
 # 写工具 → 锁域（28.md §5：单写域 scene_system）
 WRITE_TOOL_DOMAIN.update({
     "scene.location.upsert": RESOURCE_SCENE_SYSTEM,
     "scene.anchor.upsert": RESOURCE_SCENE_SYSTEM,
     "scene.layout.set": RESOURCE_SCENE_SYSTEM,
+    "scene.view.prepare": RESOURCE_SCENE_SYSTEM,
+    "scene.instance.prepare": RESOURCE_SCENE_SYSTEM,
+    "scene.state.update": RESOURCE_SCENE_SYSTEM,
 })
 
 
