@@ -181,7 +181,9 @@ def test_B5_verified_false_not_success(tmp_path):
     # Phase B：changed_refs 八键骨架（新资源键并存，空值语义不变）
     assert result["changed_refs"] == {"scenes": [], "shots": [], "characters": [],
                                       "clothings": [], "looks": [], "props": [],
-                                      "reference_assets": [], "compositions": [], "bindings": []}
+                                      "reference_assets": [], "compositions": [], "bindings": [],
+                                   "locations": [], "location_views": [],
+                                   "scene_instances": [], "scene_instance_views": []}
     assert result["warnings"], "失败写应出现在 warnings"
     # roster 同样诚实
     sw = next(p for p in snap["participants"] if p["agent_id"] == "script_writer")
@@ -347,8 +349,10 @@ def test_B9_legacy_empty_project(tmp_path):
     assert snap["workflow"] is None
     assert snap["turn_active"] is False
     statuses = {p["agent_id"]: p["status"] for p in snap["participants"]}
+    # 28.md §26：scene_designer 加入顶层 roster
     assert statuses == {"producer": "idle", "script_writer": "idle",
-                        "character_designer": "idle", "director": "idle"}
+                        "character_designer": "idle", "scene_designer": "idle",
+                        "director": "idle"}
 
 
 def test_B9b_legacy_producer_session_without_bridge(tmp_path):

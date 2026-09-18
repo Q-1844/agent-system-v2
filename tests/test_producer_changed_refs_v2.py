@@ -126,7 +126,9 @@ def test_A6_zero_mutation_all_keys_empty():
     refs = _derive_changed_refs("character_designer", [])
     assert refs == {"scenes": [], "shots": [], "characters": [],
                     "clothings": [], "looks": [], "props": [],
-                    "reference_assets": [], "compositions": [], "bindings": []}
+                    "reference_assets": [], "compositions": [], "bindings": [],
+                    "locations": [], "location_views": [],
+                    "scene_instances": [], "scene_instance_views": []}
 
 
 def test_A7_stale_failed_unchanged_excluded():
@@ -166,6 +168,10 @@ def test_A8_wrap_task_result_resource_keys():
 
 
 def test_A8b_empty_changed_refs_skeleton_shape():
+    # 28.md §22：Phase C2 场景域四键
     assert _empty_changed_refs() == {"scenes": [], "shots": [], "characters": [],
                                      "clothings": [], "looks": [], "props": [],
-                                     "reference_assets": [], "compositions": [], "bindings": []}
+                                     "reference_assets": [], "compositions": [],
+                                     "bindings": [], "locations": [],
+                                     "location_views": [], "scene_instances": [],
+                                     "scene_instance_views": []}

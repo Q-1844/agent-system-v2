@@ -43,7 +43,8 @@ from .models import (AgentMessage, AgentTask, AgentOp, ResultStatus,
                      ScopeType, TaskStatus)
 from .tasks import AgentTaskStore
 from .project_events import (get_project_bus, emit_changed,
-                             RESOURCE_STORY, RESOURCE_CHARACTER, RESOURCE_STORYBOARD)
+                             RESOURCE_STORY, RESOURCE_CHARACTER, RESOURCE_STORYBOARD,
+                             RESOURCE_SCENE_SYSTEM)
 from . import turn_registry
 
 log = logging.getLogger("producer")
@@ -72,13 +73,15 @@ _WINDOW_SELF_CHECK_NUDGE = (
 PRODUCER_WRITE_OPERATIONS: set = set()
 
 # delegate 工具名集合（长任务通道：走 event_cb + cancel_event）。
+# Phase C2（28.md §23）：scene_designer.delegate 成为第四个正式 delegate。
 DELEGATE_TOOLS = {"script_writer.delegate", "character_designer.delegate",
-                  "director.delegate"}
+                  "director.delegate", "scene_designer.delegate"}
 
 # agent_id → (resource, capability_id 前缀)
 _SPECIALIST_RESOURCE = {
     "script_writer": RESOURCE_STORY,
     "character_designer": RESOURCE_CHARACTER,
+    "scene_designer": RESOURCE_SCENE_SYSTEM,
     "director": RESOURCE_STORYBOARD,
 }
 
@@ -88,9 +91,10 @@ PRODUCER_SYSTEM = """你是 AGNES 的 Producer Supervisor——动画项目的�
 
 【身份与权限】你不是第四个创作 Agent。你不写剧本、不设计角色、不改分镜、不生成图/视频。你的工作是：读懂用户的项目级目标 → 观察真实项目状态 → 决定下一步该找谁 → 委派 → 读真实结果 → 评估影响 → 重新规划 → 判断完成 → 继续或结束或问用户。事实自己读，专业判断问 Specialist，专业修改交给 owner。你永远不直接修改任何 canonical。
 
-【硬边界（物理保证，不是提示词约束）】你的工具面里【根本没有】story/character/shot 的写工具与生成工具——只有只读工具与三个 *.delegate 委派工具。修改必须经对应 *.delegate 委派给 owner。
+【硬边界（物理保证，不是提示词约束）】你的工具面里【根本没有】story/character/scene/shot 的写工具与生成工具——只有只读工具与四个 *.delegate 委派工具。修改必须经对应 *.delegate 委派给 owner。
 - Script Writer（script_writer.delegate）→ Story / 剧本正文 / 故事段结构 / 情节逻辑 / 人物动机在故事层的成立 / 对白 / Scene 的叙事内容
 - Resource Agent（character_designer.delegate——兼容工具名，内部历史 id）→ Character identity（是谁/外貌/发型）+ 三视图 + 生产视觉资源全套：Clothing 服装 / CharacterLook 造型 / Prop 道具参考 / Composition 组合参考 / 共享库。production-ready 的资源准备（角色→身份参考→服装→造型→道具→组合）是它的招牌任务。
+- Scene Agent（scene_designer.delegate）→ 地点、场景状态和场景视觉参考：Location 地点身份 / SpatialAnchor 空间锚点 / SetLayout 布局 / LocationView 地点视角图 / SceneInstance 场景实例 / SceneState 场景状态 / SceneInstanceView 可绑定场景参考。production-ready 的场景准备（建/复用地点→锚点→hero 视角→绑定故事段→状态→场景状态图）是它的招牌任务。不负责：Story 改写、角色/Prop 创建、Shot 设计、Binding。
 - Director（director.delegate）→ Shot / Storyboard / 镜头结构 / 构图 / 景别 / 运镜 / 分镜连续性 / 分镜图 / 视频
 
 【决策循环】每个 Specialist 返回后，不要机械执行原计划——回到原始目标、对照当前项目真实状态、重新判断下一步最佳动作。这个循环贯穿整个 turn：理解目标 → 观察现状 → 决定下一步 → 委派 → 读真实 Task Result → 评估影响 → 重新规划 → 完成检查 → 继续/结束/问用户。
@@ -125,7 +129,11 @@ PRODUCER_SYSTEM = """你是 AGNES 的 Producer Supervisor——动画项目的�
 
 【失败协调】status=failed ≠ workflow 失败。判断：同 Agent 修正后继续 / 读更多事实 / 换专业 Agent / provider 暂时错误 / 确无有效方向。不假装成功，也不一失败就放弃整个用户目标。
 
-【Production prerequisite 路由（Phase C1）】Director 的 Task Result warnings 里出现 prerequisite[resource_prerequisite]（缺 approved Look/道具）时：若用户目标仍未完成，可先委派 Resource Agent 准备资源，再回 Director 继续正式生成。出现 prerequisite[scene_production_prerequisite]（缺 SceneInstance/场景视图）时：当前系统没有能写 Scene System 的 Specialist——如实向用户报告该 blocker 并等待，【绝不让 Resource Agent 越权写场景】。prerequisite[cast_incomplete] 是 Director 自己可修的 Shot 问题，不需要你转发。
+【Production prerequisite 路由（Phase C1/C2）】Specialist 的 Task Result warnings 里出现结构化 prerequisite 时，按缺什么补什么推进（不硬编码固定 pipeline——每次委派后重新判断目标与 canonical）：
+- prerequisite[resource_prerequisite]：若来自 Director（缺 approved Look/道具）→ 委派 Resource Agent 准备资源后回 Director 继续正式生成；若来自 Scene Agent（场景状态引用的 Prop 不存在）→ 同样委派 Resource Agent 登记 Prop，再回 Scene Agent 重试 SceneState/Sciv。
+- prerequisite[scene_production_prerequisite]（Director 报缺 SceneInstance/场景视图）→ 委派 Scene Agent 做场景生产准备（Location/View/Instance/State/Sciv 到 approved），完成后回 Director 继续建 binding 与 BOUND 生成。
+- prerequisite[visual_profile_unspecified]：项目没设视觉定义，只有用户能在设置里配置——如实向用户说明。
+- prerequisite[cast_incomplete] 是 Director 自己可修的 Shot 问题，不需要你转发。
 
 【未实际修改的处理——区分 review 与 execution】Task Result 的 verified=false（completed 但无真实 canonical 写入）不等于失败。先看用户原始目标是 review 还是 execution：
 - review 意图（检查/分析/评估/看看有什么问题/给建议/审查）→ verified=false 是正常结果，接受，不 retry。
@@ -248,6 +256,22 @@ def _build_producer_tools() -> tuple:
                          "不要把资源清单全文复制进去。用户要求 production-ready 时在 envelope 里明说，"
                          "让它用 approve_if_pass；只要看效果时明说 review_only。\n"
                          "若任务是检查并修改：发现真实问题就直接执行，不要只返回分析报告；无值得修改的问题则明确说明无需修改。"),
+        _delegate_schema("scene_designer", "Scene Agent",
+                         "委派任务给 Scene Agent（场景设计师 / Scene Production Designer）。\n"
+                         "【owns】地点、场景状态和场景视觉参考：Location 地点身份 / "
+                         "SpatialAnchor 空间锚点 / SetLayout 布局 / LocationView 地点视角 / "
+                         "SceneInstance 场景实例 / SceneState 场景状态 / SceneInstanceView "
+                         "可绑定场景参考。\n"
+                         "【适用】为故事段准备场景系统与 production-ready 场景参考（建/复用"
+                         "地点→锚点→hero 视角→绑定故事段→状态→场景状态图，审查+按档批准）；"
+                         "状态变化后重新生成 stale 的场景视图。\n"
+                         "【不适用】剧情/对白改写（→ Script Writer）；角色/Prop 创建（→ "
+                         "Resource Agent）；镜头/构图/分镜/Binding（→ Director）。\n"
+                         "【要点】Scene Agent 会自己读最新 canonical——situation 写发生了什么+"
+                         "为什么找它，不要把场景系统/剧本全文复制进去。"
+                         "用户要求 production-ready 时在 envelope 里明说让它用 "
+                         "approve_if_pass；只要看效果时明说 review_only。"
+                         "若任务是检查并准备：缺什么补什么，已可复用的一律复用，绝不重复创建地点。"),
         _delegate_schema("director", "Director",
                          "委派任务给 Director。\n"
                          "【owns】Shot / Storyboard / 镜头结构 / 构图 / 景别 / 运镜 / 分镜连续性 / 分镜图 / 视频。\n"
@@ -267,6 +291,7 @@ _TOOL_LABELS = {
     "shot.list": "列出镜头", "shot.read": "读取镜头",
     "script_writer.delegate": "委派 Script Writer",
     "character_designer.delegate": "委派 Resource Agent（资源设计师）",
+    "scene_designer.delegate": "委派 Scene Agent（场景设计师）",
     "director.delegate": "委派 Director",
 }
 
@@ -382,7 +407,9 @@ def render_envelope(envelope: dict) -> str:
 
 # ============ Task Result 包装（§6）============
 # Agent System V2 Phase B（Resource Agent）：resources.json 域 changed_refs 键。
-# kind（changed_resources[].kind / receipt.resource_kind）→ changed_refs 键。
+# Agent System V2 Phase C2（28.md §22）：Scene 域四键（locations/location_views/
+# scene_instances/scene_instance_views）——anchor/layout 变更归入 locations、
+# SceneState 变更归入 scene_instances，不为每个 child entity 加键。
 # 原三键（scenes/shots/characters）完全不动，只追加——旧 workflow/Room 投影对新键容错
 # （production_room.py isinstance 检查），旧 Specialist 不会产出新键（恒空列表）。
 _RESOURCE_KIND_TO_REF = {
@@ -393,6 +420,13 @@ _RESOURCE_KIND_TO_REF = {
     "reference_asset": "reference_assets",
     "character": "characters",   # 共享库角色母版导入（copy-on-import 进 project.json）
     "binding": "bindings",       # Phase C1：ShotProductionBinding（id = shot_id，canonical 键）
+    # Phase C2：Scene System 域（Scene Agent 写回执 changed_resources kinds）
+    "location": "locations",
+    "anchor": "locations",            # §22：SpatialAnchor 变更归入 locations
+    "layout": "locations",            # §22：SetLayout 变更归入 locations
+    "location_view": "location_views",
+    "scene_instance": "scene_instances",
+    "scene_instance_view": "scene_instance_views",
 }
 # 兼容扫描的单数 id 字段（generation / write-service 原始 receipt 形态）。
 _RESOURCE_ID_FIELDS = (("clothing_id", "clothings"), ("look_id", "looks"),
@@ -401,7 +435,10 @@ _RESOURCE_ID_FIELDS = (("clothing_id", "clothings"), ("look_id", "looks"),
 # changed_refs 键 → AgentTask.artifact_refs 的 type 名。
 _REF_KEY_TO_TYPE = {"clothings": "clothing", "looks": "look", "props": "prop",
                     "compositions": "composition", "reference_assets": "reference_asset",
-                    "bindings": "binding"}
+                    "bindings": "binding",
+                    "locations": "location", "location_views": "location_view",
+                    "scene_instances": "scene_instance",
+                    "scene_instance_views": "scene_instance_view"}
 
 
 def _derive_changed_refs(agent_id: str, receipts: list) -> dict:
@@ -609,7 +646,8 @@ def _append_bridge_messages(pdir: Path, project: str, rows: list) -> None:
 
 # ============ delegate 执行器（§5.3，三个共用一个泛化实现）============
 def _empty_changed_refs() -> dict:
-    """changed_refs 全键空骨架（三老键 + Phase B 资源键）。早期失败回执保持全键形状。"""
+    """changed_refs 全键空骨架（三老键 + Phase B 资源键 + Phase C2 场景键）。
+    早期失败回执保持全键形状。"""
     out = {"scenes": [], "shots": [], "characters": []}
     out.update({k: [] for k in _RESOURCE_KIND_TO_REF.values()})
     return out
@@ -641,6 +679,11 @@ async def _delegate_specialist(rt, project: str, agent_id: str,
                                                    WRITE_TOOL_DOMAIN)
         # Phase B：Resource Agent 双写域——锁按工具查 WRITE_TOOL_DOMAIN 逐域挂。
         turn_fn, writes = character_designer_turn, frozenset(WRITE_TOOL_DOMAIN)
+        write_domain_map = WRITE_TOOL_DOMAIN
+    elif agent_id == "scene_designer":
+        from src.agents.scene_designer import scene_designer_turn, WRITE_TOOL_DOMAIN
+        # Phase C2（28.md §23）：Scene Agent 单写域 scene_system——锁按工具查域挂。
+        turn_fn, writes = scene_designer_turn, frozenset(WRITE_TOOL_DOMAIN)
         write_domain_map = WRITE_TOOL_DOMAIN
     elif agent_id == "director":
         from src.agents.director import director_turn, DIRECTOR_WRITE_OPERATIONS
@@ -1089,7 +1132,7 @@ async def producer_turn(rt, project: str, session_id: str, content: str, *,
 
         tool_executors = dict(read_executors)
         tool_executors["project.inspect"] = _execute_project_inspect
-        for aid in ("script_writer", "character_designer", "director"):
+        for aid in ("script_writer", "character_designer", "scene_designer", "director"):
             tool_executors[f"{aid}.delegate"] = _make_delegate_executor(aid)
 
         loop_state: dict = {}

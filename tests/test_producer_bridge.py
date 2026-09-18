@@ -690,7 +690,9 @@ def test_R3_fact_hierarchy_verified_from_receipts(tmp_path):
     assert rec["verified"] is False
     assert rec["changed_refs"] == {"scenes": [], "shots": [], "characters": [],
                                    "clothings": [], "looks": [], "props": [],
-                                   "reference_assets": [], "compositions": [], "bindings": []}
+                                   "reference_assets": [], "compositions": [], "bindings": [],
+                                   "locations": [], "location_views": [],
+                                   "scene_instances": [], "scene_instance_views": []}
     # 失败写进 warnings
     assert rec["warnings"], "应有失败写 warning"
     assert any("stale" in w or "script.update" in w for w in rec["warnings"])
@@ -737,6 +739,11 @@ def test_P1_prompt_content_weak_assertions():
     # 反模式提示：对方自己读 canonical，situation 不复制全文
     for d in descs.values():
         assert "canonical" in d and "全文" in d
+    # 28.md §23/§24：第四 delegate——Scene Agent ownership 关键词
+    sd_d = descs["scene_designer.delegate"]
+    assert "owns" in sd_d and "Location" in sd_d and "SceneState" in sd_d
+    assert "SceneInstanceView" in sd_d
+    assert "Script Writer" in sd_d or "Resource Agent" in sd_d or "Director" in sd_d
 
 
 # ============================================================================
@@ -780,7 +787,9 @@ def test_RE1_review_verified_false_accepted(tmp_path):
     assert rec["verified"] is False          # 无真实写入
     assert rec["changed_refs"] == {"scenes": [], "shots": [], "characters": [],
                                    "clothings": [], "looks": [], "props": [],
-                                   "reference_assets": [], "compositions": [], "bindings": []}
+                                   "reference_assets": [], "compositions": [], "bindings": [],
+                                   "locations": [], "location_views": [],
+                                   "scene_instances": [], "scene_instance_views": []}
     assert rec["warnings"] == []
     # canonical 未变（review 不写）
     assert _shots_rev(tmp_path) == _shots_rev(tmp_path)  # 结构指纹不变（无写）
@@ -876,7 +885,9 @@ def test_RE3_second_false_no_third_mechanical_repeat(tmp_path):
     assert all(r["verified"] is False for r in res["receipts"])
     _empty_refs = {"scenes": [], "shots": [], "characters": [],
                    "clothings": [], "looks": [], "props": [],
-                   "reference_assets": [], "compositions": [], "bindings": []}
+                   "reference_assets": [], "compositions": [], "bindings": [],
+                                   "locations": [], "location_views": [],
+                                   "scene_instances": [], "scene_instance_views": []}
     assert all(r["changed_refs"] == _empty_refs for r in res["receipts"])
     # canonical 未变（两次都失败写）
     assert ProjectStore(tmp_path).load().scenes[0].shots[0].shot_size == "medium shot"
@@ -909,7 +920,9 @@ def test_RE4_no_change_accept_not_force_write(tmp_path):
     assert rec["verified"] is False
     assert rec["changed_refs"] == {"scenes": [], "shots": [], "characters": [],
                                    "clothings": [], "looks": [], "props": [],
-                                   "reference_assets": [], "compositions": [], "bindings": []}
+                                   "reference_assets": [], "compositions": [], "bindings": [],
+                                   "locations": [], "location_views": [],
+                                   "scene_instances": [], "scene_instance_views": []}
     # canonical 未变（未强行修改）
     assert ProjectStore(tmp_path).load().scenes[0].shots[0].shot_size == "medium shot"
 
@@ -963,7 +976,9 @@ def test_RE5_upstream_replan_director_to_script_writer(tmp_path):
     assert res["receipts"][2]["verified"] is True    # SW wrote story
     assert res["receipts"][2]["changed_refs"] == {"scenes": [], "shots": [], "characters": [],
                                                   "clothings": [], "looks": [], "props": [],
-                                                  "reference_assets": [], "compositions": [], "bindings": []}
+                                                  "reference_assets": [], "compositions": [], "bindings": [],
+                                   "locations": [], "location_views": [],
+                                   "scene_instances": [], "scene_instance_views": []}
     # SW 真改了 story_text（SW changed_refs 为空是因 story_text 不映射 scene/shot/char，
     # 但 verified=true 来自 ok+verified+not-unchanged 回执—— receipts 派生正确）
     assert ProjectStore(tmp_path).load().story_text == new_text

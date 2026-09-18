@@ -16,6 +16,8 @@ export const ROOM_IDENTITY: Record<string, RoomIdentity> = {
   script_writer:      { name: 'Script Writer',      emoji: '✍️', color: '#22a06b', role: '编剧 · 故事层' },
   // Agent System V2 Phase B：显示名升级为 Resource Agent（内部 id character_designer 兼容不变）
   character_designer: { name: 'Resource Agent', emoji: '🧩', color: '#c2559d', role: '角色 · 造型 · 道具 · 生产资源' },
+  // Agent System V2 Phase C2：Scene Agent（第四正式 Specialist，28.md §26）
+  scene_designer:     { name: 'Scene Agent',        emoji: '🏞️', color: '#2b8a78', role: '地点 · 空间 · 场景状态 · 场景参考' },
   director:           { name: 'Director',           emoji: '🎥', color: '#c78a1d', role: '导演 · 分镜' },
 };
 
@@ -42,11 +44,20 @@ export function statusLabel(status: string | null | undefined, notCalled?: boole
 }
 
 /** 结果卡事实徽标（§二十四：轻量 footer，不展示 receipt JSON） */
-export function changedRefsText(refs?: { scenes?: string[]; shots?: string[]; characters?: string[] }): string {
+export function changedRefsText(refs?: {
+  scenes?: string[]; shots?: string[]; characters?: string[];
+  locations?: string[]; location_views?: string[];
+  scene_instances?: string[]; scene_instance_views?: string[];
+}): string {
   if (!refs) return '';
   const parts: string[] = [];
   if (refs.scenes?.length) parts.push(`Scenes: ${refs.scenes.join(', ')}`);
   if (refs.shots?.length) parts.push(`Shots: ${refs.shots.join(', ')}`);
   if (refs.characters?.length) parts.push(`角色: ${refs.characters.join(', ')}`);
+  // Agent System V2 Phase C2：Scene 域 changed_refs 键
+  if (refs.locations?.length) parts.push(`地点: ${refs.locations.join(', ')}`);
+  if (refs.location_views?.length) parts.push(`地点视角: ${refs.location_views.join(', ')}`);
+  if (refs.scene_instances?.length) parts.push(`场景实例: ${refs.scene_instances.join(', ')}`);
+  if (refs.scene_instance_views?.length) parts.push(`场景参考: ${refs.scene_instance_views.join(', ')}`);
   return parts.join(' · ');
 }

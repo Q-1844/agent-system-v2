@@ -34,7 +34,9 @@ from . import turn_registry
 
 log = logging.getLogger("production_room")
 
-_SPECIALISTS = ("script_writer", "character_designer", "director")
+# Phase C2（28.md §26）：Scene Agent 加入顶层 Room Specialist roster。
+# Director 内部 Scene Sub-Agent 不在此重复显示（它折叠在 Director 域）。
+_SPECIALISTS = ("script_writer", "character_designer", "scene_designer", "director")
 
 # 消息种类在同时刻 tie-break 时的确定次序：user → 委派 → 结果 → producer 汇报
 _KIND_ORDER = {"user": 0, "delegation": 1, "specialist_result": 2, "producer": 3}

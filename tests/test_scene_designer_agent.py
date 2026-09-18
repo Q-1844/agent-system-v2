@@ -1159,3 +1159,135 @@ def test_S55_sciv_review_prompt_inherits_base_camera(tmp_path):
     assert "CAMERA CORRECTNESS" in prompt
     assert "overhead" in prompt
     assert "camera_observed_zone" in prompt
+
+
+# ============ Commit H：changed_refs / Producer / Production Room（S4/S5/S56-S65）============
+def test_S4_producer_delegate_tool_registered():
+    """S4：scene_designer.delegate 第四 delegate（schema+executor 通道）。"""
+    offered, _ = producer._build_producer_tools()
+    schema = next(t for t in offered
+                  if t["function"]["name"] == "scene_designer.delegate")
+    desc = schema["function"]["description"]
+    assert "Location" in desc and "SceneState" in desc and "SceneInstanceView" in desc
+    assert "resource_designer" not in desc
+    assert "scene_designer.delegate" in producer.DELEGATE_TOOLS
+    assert producer._SPECIALIST_RESOURCE["scene_designer"] == "scene_system"
+    # 旧三个 delegate 原样
+    for n in ("script_writer.delegate", "character_designer.delegate",
+              "director.delegate"):
+        assert n in producer.DELEGATE_TOOLS
+
+
+def test_S5_production_room_participant(tmp_path):
+    """S5：Production Room roster 含 Scene Agent；历史参与者不变。"""
+    from src.agents.production_room import build_room_projection
+    rt = _runtime(tmp_path)
+    _save_proj(tmp_path)
+    snap = build_room_projection(rt, "s2demo")
+    ids = [p["agent_id"] for p in snap["participants"]]
+    assert "scene_designer" in ids
+    for aid in ("producer", "script_writer", "character_designer", "director"):
+        assert aid in ids
+
+
+def _derive_with(receipts):
+    from src.agents.producer import _derive_changed_refs
+    return _derive_changed_refs("scene_designer", receipts)
+
+
+def test_S56_changed_refs_locations(tmp_path):
+    """S56：location/anchor/layout 变更 → locations 键（§22 归并）。"""
+    refs = _derive_with([
+        {"ok": True, "verified": True, "operation": "scene.location.upsert",
+         "changed_resources": [{"kind": "location", "id": "loc_1"}]},
+        {"ok": True, "verified": True, "operation": "scene.anchor.upsert",
+         "changed_resources": [{"kind": "anchor", "id": "anc_1"}]},
+        {"ok": True, "verified": True, "operation": "scene.layout.set",
+         "changed_resources": [{"kind": "layout", "id": "layout_1"}]},
+    ])
+    assert refs["locations"] == ["anc_1", "layout_1", "loc_1"]
+    assert refs["location_views"] == []
+    assert refs["scene_instances"] == []
+
+
+def test_S57_changed_refs_location_views():
+    refs = _derive_with([
+        {"ok": True, "verified": True, "operation": "scene.view.prepare",
+         "changed_resources": [{"kind": "location_view", "id": "view_1"}]},
+    ])
+    assert refs["location_views"] == ["view_1"]
+    assert refs["locations"] == []
+
+
+def test_S58_changed_refs_scene_instances():
+    """S58：instance/state 变更 → scene_instances 键。"""
+    refs = _derive_with([
+        {"ok": True, "verified": True, "operation": "scene.instance.prepare",
+         "changed_resources": [{"kind": "scene_instance", "id": "scin_1"}]},
+        {"ok": True, "verified": True, "operation": "scene.state.update",
+         "changed_resources": [{"kind": "scene_instance", "id": "scin_1"}]},
+    ])
+    assert refs["scene_instances"] == ["scin_1"]
+
+
+def test_S59_changed_refs_scene_instance_views():
+    refs = _derive_with([
+        {"ok": True, "verified": True, "operation": "scene.state_view.prepare",
+         "changed_resources": [{"kind": "scene_instance_view", "id": "sciv_1"}]},
+    ])
+    assert refs["scene_instance_views"] == ["sciv_1"]
+
+
+def test_S60_zero_mutation_empty():
+    """S60：零 mutation（失败/stale 回执）→ 全键空。"""
+    refs = _derive_with([
+        {"ok": False, "verified": False, "operation": "scene.location.upsert",
+         "changed_resources": [{"kind": "location", "id": "loc_x"}]},
+        {"ok": True, "verified": True, "stale": True, "operation": "scene.state.update",
+         "changed_resources": []},
+    ])
+    assert all(v == [] for v in refs.values())
+
+
+def test_S61_old_task_result_compatibility():
+    """S61：旧 TaskResult（无场景键）派生照常 + 投影容错。"""
+    from src.agents.producer import _derive_changed_refs
+    # 旧 CD 回执（只有 character_name）
+    refs = _derive_changed_refs("character_designer", [
+        {"ok": True, "verified": True, "character_name": "Alice"}])
+    assert refs["characters"] == ["Alice"]
+    assert refs["locations"] == []   # 新键恒在（加法式），旧字段照常派生
+    # 旧 structured_result 无场景键 → room 投影不炸
+    from src.agents.production_room import _result_message
+    msg = _result_message({"task_id": "t1", "target_agent": "director",
+                           "status": "completed",
+                           "structured_result": {"status": "completed",
+                                                 "changed_refs": {
+                                                     "scenes": [], "shots": [],
+                                                     "characters": []}}},
+                          None)
+    assert msg["changed_refs"] == {"scenes": [], "shots": [], "characters": []}
+
+
+def test_S62_S63_S64_prerequisite_routing_prompt():
+    """S62-S64：Producer system prompt 的前置路由（scene_production_prerequisite →
+    Scene Agent；Scene Agent 的 resource_prerequisite → Resource Agent；完成 → Director）。"""
+    ps = producer.PRODUCER_SYSTEM
+    assert "scene_production_prerequisite" in ps and "Scene Agent" in ps
+    assert "resource_prerequisite" in ps and "Resource Agent" in ps
+    # §24：四专业分工 + Producer zero write
+    assert "Script Writer" in ps and "Resource Agent" in ps
+    assert "Scene Agent" in ps and "Director" in ps
+    assert "四个 *.delegate" in ps
+    # Producer 无任何 scene.* 写工具（zero direct writes 工具面层）
+    offered, _ = producer._build_producer_tools()
+    names = {t["function"]["name"] for t in offered}
+    assert not any(n.startswith("scene.") for n in names)
+
+
+def test_S65_producer_zero_direct_writes():
+    """S65：Producer 写工具集合恒空 + registry 委派链完整。"""
+    assert producer.PRODUCER_WRITE_OPERATIONS == set()
+    reg = Registries().agents
+    assert reg.can_delegate("producer", "scene_designer")
+    assert not reg.can_delegate("scene_designer", "director")   # specialist 不互委派
