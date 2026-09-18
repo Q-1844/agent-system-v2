@@ -248,6 +248,12 @@ def _svc(pdir, project: str):
     return SceneSystemService(pdir, project)
 
 
+def _visual_svc(pdir, project: str):
+    """SceneVisualService（生成/审查/审批正式链路包装）。"""
+    from src.scene_system.visual_service import SceneVisualService
+    return SceneVisualService(pdir, project)
+
+
 TOOL_EXECUTORS: Dict[str, Any] = {
     "story.list": _execute_story_list,
     "story.read": _execute_story_read,
@@ -970,24 +976,280 @@ async def _execute_scene_layout_set(rt: AgentRuntime, project: str, arguments: s
     return r
 
 
+# ============ E 域写工具（28.md §11/§12/§17/§18，Commit E）：scene.view.prepare ============
+SCENE_VIEW_PREPARE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "scene.view.prepare",
+        "description": ("高层 LocationView 生产准备（一次调用 = 一次正式生成尝试，约 1 分钟）："
+                        "建/改 view 定义 → 生成候选图 → 正式 vision 审查 → "
+                        "approval_mode=approve_if_pass 且审查 pass 时自动批准。"
+                        "不传 view_id = 新建视角（expected_document_revision 必传）；"
+                        "传 view_id = 更新定义后重新生成（expected_revision 传该 view 的 "
+                        "revision）。机位纪律：先建 hero/identity view，再按【真实生产需要】"
+                        "补视角（镜头需求/Story 地理/连续性），绝不为凑数生成 8 视角。"
+                        "同一机位+同一语义输入连续 needs_fix 会被 review_retry_exhausted "
+                        "拦住——先真正改变输入（换 camera_zone/改 visible anchors/改描述）。"
+                        "审查严格检查机位正确性：声明 side/rear/overhead 但实际是正面 hero "
+                        "构图会被 needs_fix；模型确实做不到时如实报告模型边界，不要原样重试。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "location_id": {"type": "string", "description": "Location id（必传）。"},
+                "view_id": {"type": "string",
+                            "description": "要更新/重生成的 LocationView id（更新时传；新建省略）。"},
+                "label": {"type": "string", "description": "视角名（如 hero / east side / plan）。"},
+                "camera_zone": {"type": "string",
+                                "description": "相机位置（front/side/rear/overhead 或 "
+                                               "south_west 等）；overhead=top-down 正俯视。"},
+                "look_direction": {"type": "string", "description": "看向（north_east / site center 等）。"},
+                "visible_anchor_ids": {"type": "array", "items": {"type": "string"},
+                                       "description": "该视角必须可见的 anchor id 列表（审查逐个核验）。"},
+                "expected_document_revision": {"type": "string",
+                                               "description": "新建 view 时必传：document_revision。"},
+                "expected_revision": {"type": "string",
+                                      "description": "更新已有 view 时必传：该 view 当前 revision。"},
+                "candidate_count": {"type": "integer",
+                                    "description": "候选图数量 1~2（默认 1；省图）。"},
+                "approval_mode": {"type": "string",
+                                  "enum": ["review_only", "approve_if_pass"],
+                                  "description": "review_only=只生成审查不批准（探索）；"
+                                                 "approve_if_pass=审查真实 pass 时自动批准（production-ready）。"},
+            },
+            "required": ["location_id", "approval_mode"],
+        },
+    },
+}
+
+
+def _view_prepare_progress(event_cb, phase: str, summary: str) -> None:
+    if event_cb:
+        event_cb({"type": "tool.progress", "phase": phase, "summary": summary[:160]})
+
+
+async def _execute_scene_view_prepare(rt: AgentRuntime, project: str, arguments: str,
+                                      instruction, message_id, *,
+                                      event_cb=None, cancel_event=None) -> dict:
+    """scene.view.prepare（28.md §11）：LocationView 高层准备。内部链路：
+    create/update view（正式 service，OCC）→ generate（一次正式生成尝试）→
+    vision review → optional approve（approve_if_pass 且真实 pass）。
+    复用共享 review retry guard（同 view + 同语义 basis 连续 needs_fix ≥3 → 拦截）。"""
+    args = _parse_args(arguments)
+    location_id = str(args.get("location_id") or "").strip()
+    approval_mode = str(args.get("approval_mode") or "review_only").strip()
+    if not location_id:
+        return {"ok": False, "operation": "scene.view.prepare",
+                "error": "validation_error", "detail": "location_id 必填"}
+    if approval_mode not in ("review_only", "approve_if_pass"):
+        return {"ok": False, "operation": "scene.view.prepare",
+                "error": "validation_error", "detail": "approval_mode 只支持 "
+                                                       "review_only|approve_if_pass"}
+    pdir = rt._resolve_project_dir(project)
+    vs = _visual_svc(pdir, project)
+    svc = _svc(pdir, project)
+
+    view_id = str(args.get("view_id") or "").strip()
+    cam_zone = str(args.get("camera_zone") or "").strip()
+    look_dir = str(args.get("look_direction") or "").strip()
+    label = str(args.get("label") or "").strip()
+    visible = args.get("visible_anchor_ids")
+    if visible is not None and not isinstance(visible, list):
+        return {"ok": False, "operation": "scene.view.prepare",
+                "error": "validation_error", "detail": "visible_anchor_ids 必须是数组"}
+    started = time.time()
+
+    # ---- 共享 retry guard（28.md §18）：key = 稳定 view_id（定义落地后判定，
+    # 建定义本身零烧图）；basis = view 意图字段，真实改任一项 → 新 basis 放行。
+    from .review_retry_guard import (review_basis_sig, review_retry_check,
+                                     review_retry_record)
+    basis_sig = review_basis_sig(location_id=location_id, camera_zone=cam_zone,
+                                 look_direction=look_dir, label=label,
+                                 visible_anchor_ids=sorted(visible or []),
+                                 intent="location_view")
+    # ---- ① 建/改 view 定义（OCC）----
+    if view_id:
+        expected = str(args.get("expected_revision") or "").strip()
+        if not expected:
+            return {"ok": False, "operation": "scene.view.prepare",
+                    "error": "expected_revision_required",
+                    "detail": "更新已有 view 必须带 expected_revision（先 "
+                              "scene.production.inspect 拿该 view 的 revision）",
+                    "view_id": view_id, "location_id": location_id}
+        patch: Dict[str, Any] = {}
+        for k, v in (("label", label), ("camera_zone", cam_zone),
+                     ("look_direction", look_dir)):
+            if v:
+                patch[k] = v
+        if visible is not None:
+            patch["visible_anchor_ids"] = visible
+        _view_prepare_progress(event_cb, "view.update", f"更新 view 定义 {view_id}")
+        # 更新路径：guard 在 update 之前——被拦截时不消耗 OCC revision。
+        blocked = review_retry_check(project, message_id, view_id, basis_sig,
+                                     "scene.view.prepare",
+                                     change_hints=(
+                                         "①修改 camera_zone / look_direction / visible "
+                                         "anchors / 描述（任一真实语义变化）；②更换 reference "
+                                         "策略；③解决 prompt-reference 冲突（必要时向用户说明"
+                                         "并请其选择）；④或停止并如实向用户报告模型边界"
+                                         "（MODEL_LIMITATION）/blocker。"))
+        if blocked is not None:
+            blocked["view_id"] = view_id
+            blocked["location_id"] = location_id
+            blocked["note"] = ("view 定义未变；拦截的是重复生成。"
+                               + (blocked.get("note") or ""))
+            return blocked
+        r_def = await svc.update_view(view_id, patch, expected_revision=expected)
+        if not r_def.get("ok"):
+            out = _scene_write_receipt(r_def, "scene.view.prepare",
+                                       kind="location_view", entity_id=view_id)
+            out["view_id"] = view_id
+            out["location_id"] = location_id
+            return out
+        view_revision = r_def.get("revision")
+    else:
+        expected_doc = str(args.get("expected_document_revision") or "").strip()
+        if not expected_doc:
+            return {"ok": False, "operation": "scene.view.prepare",
+                    "error": "expected_document_revision_required",
+                    "detail": "新建 view 必须带 expected_document_revision（"
+                              "scene.inventory 的 document_revision）",
+                    "location_id": location_id}
+        _view_prepare_progress(event_cb, "view.create",
+                               f"创建 view 定义（{cam_zone or 'default'}）")
+        r_def = await svc.create_view(
+            location_id=location_id, label=label, camera_zone=cam_zone,
+            look_direction=look_dir, visible_anchor_ids=visible,
+            expected_document_revision=expected_doc)
+        if not r_def.get("ok"):
+            out = _scene_write_receipt(r_def, "scene.view.prepare",
+                                       kind="location_view",
+                                       entity_id=str(r_def.get("target") or ""))
+            out["location_id"] = location_id
+            return out
+        view_id = r_def.get("target")
+        view_revision = r_def.get("revision")
+
+    # ---- ② 生成（一次正式生成尝试）----
+    candidate_count = args.get("candidate_count") or 1
+    try:
+        candidate_count = int(candidate_count)
+    except (TypeError, ValueError):
+        candidate_count = 1
+    _view_prepare_progress(event_cb, "view.generate",
+                           f"生成候选图 ×{candidate_count}（{view_id}，约 1 分钟）")
+    r_gen = await vs.generate_location_view(
+        view_id, expected_revision=view_revision,
+        candidate_count=max(1, min(candidate_count, 2)))
+    if not r_gen.get("ok"):
+        out = _scene_write_receipt(r_gen, "scene.view.prepare",
+                                   kind="location_view", entity_id=view_id)
+        out.update({"view_id": view_id, "location_id": location_id,
+                    "stage": "generate"})
+        return out
+    view_revision = r_gen.get("revision_after") or view_revision
+
+    # ---- ③ 正式 vision review ----
+    _view_prepare_progress(event_cb, "view.review", "vision 审查候选图")
+    r_review = await vs.review_location_view_candidates(view_id)
+    candidates = [c for c in (r_review.get("candidate_reviews") or [])
+                  if c.get("status") == "reviewed"]
+    best = None
+    for c in candidates:
+        if c.get("overall") == "pass":
+            best = c
+            break
+    if best is None and candidates:
+        best = candidates[0]
+    review_overall = (best or {}).get("overall")
+
+    # ---- ④ 共享 guard 记账（needs_fix 计数 / pass 清零）----
+    review_retry_record(project, message_id, view_id, basis_sig, review_overall)
+
+    # ---- ⑤ optional approve（显式 mutation；审查 pass ≠ 自动批准）----
+    approved = False
+    approve_error = None
+    if approval_mode == "approve_if_pass" and review_overall == "pass" and best:
+        from src.resources.service import ResourceService
+        res_rev = ResourceService(pdir, project).document_revision()
+        _view_prepare_progress(event_cb, "view.approve", "审查 pass → 批准")
+        r_ap = await vs.approve_location_view(
+            view_id, candidate_index=best["candidate_index"],
+            expected_revision=view_revision,
+            expected_resources_document_revision=res_rev)
+        if r_ap.get("ok"):
+            approved = True
+            view_revision = r_ap.get("revision") or view_revision
+        else:
+            approve_error = {"error": r_ap.get("error"),
+                             "detail": (r_ap.get("detail") or "")[:200]}
+
+    verified_any = bool((r_def.get("ok") and r_def.get("verified"))
+                        or (r_gen.get("ok") and r_gen.get("verified")) or approved)
+    out = {"ok": True, "operation": "scene.view.prepare",
+           "view_id": view_id, "location_id": location_id,
+           "generation_id": r_gen.get("generation_id"),
+           "review_overall": review_overall,
+           "candidate_reviews": [
+               {"candidate_index": c.get("candidate_index"),
+                "overall": c.get("overall"),
+                "view_consistency": (c.get("dimensions") or {}).get("view_consistency"),
+                "camera_observed_zone": c.get("camera_observed_zone"),
+                "camera_derivation_note": c.get("camera_derivation_note"),
+                "summary": (c.get("summary") or "")[:200]}
+               for c in candidates],
+           "approval_mode": approval_mode,
+           "approved": approved,
+           "approve_error": approve_error,
+           "stale": bool(r_gen.get("stale")),
+           "unchanged": False,
+           "verified": verified_any,
+           "revision": view_revision,
+           "document_revision_after": r_gen.get("document_revision_after")
+                                      or r_def.get("document_revision_after"),
+           "changed_resources": ([{"kind": "location_view", "id": view_id}]
+                                 if verified_any else []),
+           "elapsed_s": round(time.time() - started, 1),
+           "op_summary": (f"LocationView {view_id} 生成完成（审查={review_overall}"
+                          f"{'，已批准' if approved else ''}）"),
+           "note": (
+               "审查未 pass：候选未批准。按 candidate_reviews 的真实原因调整输入"
+               "（换机位/改 anchors/改描述）后再试；不要原样重试。"
+               if (not approved and review_overall not in ("pass", None)) else
+               "review_only 模式：候选未经批准，Director 不可消费；用户看过后显式"
+               "批准（UI）或以 approve_if_pass 重新生成。"
+               if not approved else
+               "view 已生成并批准（approved reference 可被 Director 消费）。")}
+    return out
+
+
 # ============ D-G 域写工具 schema 与执行器（后续 Commit 逐个落地）============
-# scene.view.prepare（Commit E，含共享 review retry guard）
 # scene.instance.prepare / scene.state.update（Commit F）
 # scene.state_view.prepare（Commit G）
 SCENE_DESIGNER_TOOLS: list = [SCENE_INVENTORY_TOOL, SCENE_PRODUCTION_INSPECT_TOOL,
                               SCENE_LOCATION_UPSERT_TOOL, SCENE_ANCHOR_UPSERT_TOOL,
-                              SCENE_LAYOUT_SET_TOOL]
+                              SCENE_LAYOUT_SET_TOOL, SCENE_VIEW_PREPARE_TOOL]
 
 TOOL_EXECUTORS["scene.inventory"] = _execute_scene_inventory
 TOOL_EXECUTORS["scene.production.inspect"] = _execute_scene_production_inspect
 TOOL_EXECUTORS["scene.location.upsert"] = _execute_scene_location_upsert
 TOOL_EXECUTORS["scene.anchor.upsert"] = _execute_scene_anchor_upsert
 TOOL_EXECUTORS["scene.layout.set"] = _execute_scene_layout_set
+TOOL_EXECUTORS["scene.view.prepare"] = _execute_scene_view_prepare
 TOOL_LABELS["scene.inventory"] = "列出场景系统地图"
 TOOL_LABELS["scene.production.inspect"] = "检查场景生产准备"
 TOOL_LABELS["scene.location.upsert"] = "创建/更新地点"
 TOOL_LABELS["scene.anchor.upsert"] = "创建/更新空间锚点"
 TOOL_LABELS["scene.layout.set"] = "设置平面布局"
+TOOL_LABELS["scene.view.prepare"] = "准备 LocationView（生成+审查+按档批准）"
+# 长任务 executor 标注（tool-loop 据此传 event_cb/cancel_event）
+_execute_scene_view_prepare._long_task = True
+
+WRITE_TOOL_DOMAIN.update({
+    "scene.location.upsert": RESOURCE_SCENE_SYSTEM,
+    "scene.anchor.upsert": RESOURCE_SCENE_SYSTEM,
+    "scene.layout.set": RESOURCE_SCENE_SYSTEM,
+    "scene.view.prepare": RESOURCE_SCENE_SYSTEM,
+})
 
 # 写工具 → 锁域（28.md §5：单写域 scene_system）
 WRITE_TOOL_DOMAIN.update({

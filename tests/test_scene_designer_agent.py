@@ -6,6 +6,8 @@
 import asyncio
 import json
 
+import pytest
+
 from src.core.models import Project, Scene
 from src.core.store import ProjectStore
 from src.agents.registry import Registries
@@ -532,3 +534,235 @@ def test_S30_location_rename_keeps_stable_id(tmp_path):
             "location_id": loc, "name": "山雨驿站旧馆",
             "expected_revision": rev}), None, "m1"))
     assert svc.read_location(loc)["location_id"] == loc
+
+
+# ============ Commit E：scene.view.prepare（S31-S38）============
+import base64 as _b64
+
+_PNG_B64 = _b64.b64encode(b"\x89PNG fake-image").decode()
+
+
+class _FakeSceneClient:
+    """生成 + vision 审查双能力 fake（deps.agnes_client 单例——生成与审查共用）。"""
+
+    def __init__(self, vision_content: str = ""):
+        self.gen_calls = 0
+        self.vision_calls = 0
+        self.vision_content = vision_content
+        self.models = {"image": "fake-image-model"}
+
+    async def generate_image(self, prompt, *, image_refs=None, size_tier="1K",
+                             ratio="16:9", seed=None, want_b64=False):
+        self.gen_calls += 1
+        return {"url": None, "b64": _PNG_B64}
+
+    async def chat_completion_vision(self, msgs, *, model):
+        self.vision_calls += 1
+        return {"content": self.vision_content,
+                "usage": {"prompt_tokens": 10, "completion_tokens": 5}}
+
+
+def _view_reply(anchor_id: str, overrides: dict | None = None) -> str:
+    d = {
+        "location_identity": "pass", "location_notes": "",
+        "anchors": [{"anchor_id": anchor_id, "visibility": "clearly_visible",
+                     "notes": ""}],
+        "anchor_consistency": "pass", "anchor_notes": "",
+        "layout_consistency": "pass", "layout_notes": "",
+        "camera_observed_zone": "overhead", "camera_evidence": "flat map view",
+        "view_consistency": "pass", "view_notes": "",
+        "visual_defects": "pass", "defect_notes": "",
+        "project_style_consistency": "pass", "style_notes": "ok",
+        "overall": "pass", "summary": "ok",
+    }
+    d.update(overrides or {})
+    return json.dumps(d, ensure_ascii=False)
+
+
+@pytest.fixture()
+def _gen_env(tmp_path, monkeypatch):
+    """profile + fake 生成/审查客户端注入 deps（服务惰性取用）。"""
+    import deps
+    rt = _runtime(tmp_path)
+    _save_proj(tmp_path)
+    svc, pdir = _mk_svc(tmp_path)
+    from src.visual_profile import VisualProfileService
+    VisualProfileService(tmp_path, tmp_path.name).update(
+        render_family="photorealistic", expected_revision="")
+    fake = _FakeSceneClient()
+    monkeypatch.setattr(deps, "agnes_client", fake, raising=False)
+    yield rt, svc, tmp_path, fake
+    from src.agents import review_retry_guard
+    review_retry_guard.reset_review_retry_state()
+
+
+def _seed_location_and_view(rt, svc, tmp_path, *, camera_zone="overhead",
+                            anchor_name="west chimney"):
+    loc = (asyncio.run(svc.create_location(
+        name="watchtower yard", identity_description="stone yard",
+        expected_document_revision=_drev(svc))))["target"]
+    a1 = (asyncio.run(svc.create_anchor(
+        location_id=loc, name=anchor_name, kind="landmark",
+        expected_document_revision=_drev(svc))))["target"]
+    return loc, a1
+
+
+def _prepare_args(**kw):
+    base = {"approval_mode": "review_only"}
+    base.update(kw)
+    return json.dumps(base)
+
+
+def test_S31_S32_view_prepare_create_generate_pass(_gen_env, monkeypatch):
+    """S31 create+generate；S32 review PASS（review_only：不批准）。"""
+    import deps
+    rt, svc, tmp_path, fake = _gen_env
+    loc, a1 = _seed_location_and_view(rt, svc, tmp_path)
+    fake.vision_content = _view_reply(a1)
+    r = _run_exec(sd._execute_scene_view_prepare(
+        rt, tmp_path.name, _prepare_args(
+            location_id=loc, label="plan", camera_zone="overhead",
+            look_direction="site center", visible_anchor_ids=[a1],
+            expected_document_revision=_drev(svc)), None, "m1"))
+    assert r["ok"], r.get("error") or r.get("detail")
+    assert r["view_id"].startswith("view_")
+    assert r["review_overall"] == "pass"
+    assert r["approved"] is False   # review_only 不批准
+    assert fake.gen_calls == 1
+    assert r["changed_resources"] == [{"kind": "location_view", "id": r["view_id"]}]
+    # canonical 真实落盘：view 已生成候选但未批准
+    doc = sd._scene_system_read(tmp_path)
+    view = doc.views[r["view_id"]]
+    assert view.generation_status == "ready"
+    assert view.approval_status != "approved"
+
+
+def test_S33_S34_needs_fix_and_review_only_no_approve(_gen_env, monkeypatch):
+    """S33 审查 needs_fix 不批准；S34 review_only 恒不批准。"""
+    import deps
+    rt, svc, tmp_path, fake = _gen_env
+    loc, a1 = _seed_location_and_view(rt, svc, tmp_path)
+    fake.vision_content = _view_reply(a1, {"view_consistency": "fail",
+                                           "overall": "needs_fix",
+                                           "summary": "facade frontal"})
+    r = _run_exec(sd._execute_scene_view_prepare(
+        rt, tmp_path.name, _prepare_args(
+            location_id=loc, label="plan", camera_zone="overhead",
+            visible_anchor_ids=[a1],
+            expected_document_revision=_drev(svc)), None, "m1"))
+    assert r["ok"] and r["review_overall"] == "needs_fix"
+    assert r["approved"] is False
+    assert "未批准" in r["note"] or "没有" in r["note"] or "调整" in r["note"]
+    # S34：review_only + pass 回复也绝不批准
+    fake.vision_content = _view_reply(a1)
+    r2 = _run_exec(sd._execute_scene_view_prepare(
+        rt, tmp_path.name, _prepare_args(
+            location_id=loc, view_id=r["view_id"], label="plan",
+            camera_zone="overhead", visible_anchor_ids=[a1],
+            approval_mode="review_only", expected_revision=r["revision"]),
+        None, "m2"))
+    assert r2["ok"] and r2["review_overall"] == "pass"
+    assert r2["approved"] is False   # review_only 恒不批准
+    doc = sd._scene_system_read(tmp_path)
+    assert doc.views[r2["view_id"]].approval_status != "approved"
+
+
+def test_S35_approve_if_pass_auto_approves(_gen_env, monkeypatch):
+    """S35 approve_if_pass + 审查真实 pass → 自动批准（approved reference 落盘）。"""
+    import deps
+    rt, svc, tmp_path, fake = _gen_env
+    loc, a1 = _seed_location_and_view(rt, svc, tmp_path)
+    fake.vision_content = _view_reply(a1)
+    r = _run_exec(sd._execute_scene_view_prepare(
+        rt, tmp_path.name, _prepare_args(
+            location_id=loc, label="plan", camera_zone="overhead",
+            visible_anchor_ids=[a1], approval_mode="approve_if_pass",
+            expected_document_revision=_drev(svc)), None, "m1"))
+    assert r["ok"] and r["approved"] is True, (r.get("approve_error"), r.get("review_overall"))
+    doc = sd._scene_system_read(tmp_path)
+    view = doc.views[r["view_id"]]
+    assert view.approval_status == "approved"
+    assert view.reference_asset_id
+
+
+def test_S36_camera_wrong_needs_fix(_gen_env, monkeypatch):
+    """S36：requested=overhead 而模型 observed=front → view_consistency fail →
+    needs_fix 不批准（28.md §2/§30 诚实机位）。"""
+    import deps
+    rt, svc, tmp_path, fake = _gen_env
+    loc, a1 = _seed_location_and_view(rt, svc, tmp_path)
+    fake.vision_content = _view_reply(a1, {"camera_observed_zone": "front",
+                                           "camera_evidence": "frontal hero"})
+    r = _run_exec(sd._execute_scene_view_prepare(
+        rt, tmp_path.name, _prepare_args(
+            location_id=loc, label="plan", camera_zone="overhead",
+            visible_anchor_ids=[a1], approval_mode="approve_if_pass",
+            expected_document_revision=_drev(svc)), None, "m1"))
+    assert r["review_overall"] == "needs_fix"
+    assert r["approved"] is False
+    cr = r["candidate_reviews"][0]
+    assert cr["view_consistency"] == "fail"
+    assert "矛盾" in (cr["camera_derivation_note"] or "")
+
+
+def test_S37_anchor_visibility_missing_needs_fix(_gen_env, monkeypatch):
+    """S37：required anchor 缺回报（fail closed missing）→ needs_fix。"""
+    import deps
+    rt, svc, tmp_path, fake = _gen_env
+    loc, a1 = _seed_location_and_view(rt, svc, tmp_path)
+    # 回复完全不包含 anchors（→ derive fail closed missing）
+    d = json.loads(_view_reply(a1))
+    d["anchors"] = []
+    fake.vision_content = json.dumps(d)
+    r = _run_exec(sd._execute_scene_view_prepare(
+        rt, tmp_path.name, _prepare_args(
+            location_id=loc, label="plan", camera_zone="overhead",
+            visible_anchor_ids=[a1], expected_document_revision=_drev(svc)),
+        None, "m1"))
+    assert r["review_overall"] == "needs_fix"
+    assert r["approved"] is False
+
+
+def test_S38_same_basis_failure_guard(_gen_env, monkeypatch):
+    """S38：同 view + 同语义 basis 连续 3 次 needs_fix → 第 4 次 review_retry_exhausted
+    （零生成零审查）。改变 basis（换 camera_zone）→ 放行。
+    重试路径与真实 Agent 一致：带 view_id + 最新 expected_revision。"""
+    import deps
+    from src.agents import review_retry_guard
+    rt, svc, tmp_path, fake = _gen_env
+    loc, a1 = _seed_location_and_view(rt, svc, tmp_path)
+    fake.vision_content = _view_reply(a1, {"view_consistency": "fail",
+                                           "overall": "needs_fix"})
+    drev = _drev(svc)
+    r1 = _run_exec(sd._execute_scene_view_prepare(
+        rt, tmp_path.name, _prepare_args(
+            location_id=loc, label="plan", camera_zone="overhead",
+            visible_anchor_ids=[a1], expected_document_revision=drev), None, "m1"))
+    assert r1["ok"] and r1["review_overall"] == "needs_fix"
+    view_id, rev = r1["view_id"], r1["revision"]
+    for i in range(2):
+        r = _run_exec(sd._execute_scene_view_prepare(
+            rt, tmp_path.name, _prepare_args(
+                location_id=loc, view_id=view_id, label="plan",
+                camera_zone="overhead", visible_anchor_ids=[a1],
+                expected_revision=rev), None, "m1"))
+        assert r["ok"] and r["review_overall"] == "needs_fix", (i, r.get("error"))
+        rev = r["revision"]
+    gen_before, vis_before = fake.gen_calls, fake.vision_calls
+    r4 = _run_exec(sd._execute_scene_view_prepare(
+        rt, tmp_path.name, _prepare_args(
+            location_id=loc, view_id=view_id, label="plan",
+            camera_zone="overhead", visible_anchor_ids=[a1],
+            expected_revision=rev), None, "m1"))
+    assert r4["ok"] is False and r4["error"] == "review_retry_exhausted"
+    assert fake.gen_calls == gen_before and fake.vision_calls == vis_before, \
+        "guard 后零生成零审查"
+    # 改 basis（换 camera_zone）→ 新 basis 放行
+    r5 = _run_exec(sd._execute_scene_view_prepare(
+        rt, tmp_path.name, _prepare_args(
+            location_id=loc, view_id=view_id, label="plan",
+            camera_zone="south_west", visible_anchor_ids=[a1],
+            expected_revision=rev), None, "m1"))
+    assert r5["ok"] and r5.get("error") != "review_retry_exhausted", \
+        (r5.get("error"), r5.get("detail"))
+    assert fake.gen_calls == gen_before + 1
