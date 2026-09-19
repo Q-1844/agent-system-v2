@@ -48,6 +48,8 @@ SHOT_REVIEW_DIMENSIONS = (
     "identity_look",           # 10 角色 identity/look 一致
     "prop_fidelity",           # 11 道具保真
     "anatomy_artifact",        # 12 解剖/生成伪影（fail=严重，hard）
+    "scene_identity",          # 13 环境与 Location 身份一致（软维度，D2 §5 A/B 评测）
+    "overall_quality",         # 14 整体图像质量/电影可读性（软维度，永不 hard-fail）
 )
 SHOT_REVIEW_HARD_DIMS = (
     "duplicate_identity", "unexpected_people", "missing_character",
@@ -100,6 +102,13 @@ _DIM_RUBRICS = {
     "anatomy_artifact":
         "生成伪影：多余肢体/手融合/武器复制/不可能解剖/面部崩坏。严重 → fail（hard）；"
         "轻微（个别手指含糊、远景面部简化）→ pass+note 或 uncertain。",
+    "scene_identity":
+        "画面环境是否与「场景上下文（Binding）」给出的地点身份一致：建筑样式/材质/"
+        "空间感/时代感。近景只看到局部时，判断局部元素是否与地点相符（这评的是身份，"
+        "不是入镜范围——范围由 scene_scope_correctness 管）。无法判断 → uncertain。",
+    "overall_quality":
+        "整体图像质量与电影可读性：光影、层次、风格一致、作为分镜是否可用。"
+        "本维度是软维度，只反映质量印象，绝不参与 hard gate。",
 }
 
 _SHOT_SIZE_VOCAB = "EWS(extreme wide)/WS(wide)/MS(medium)/MCU(medium close-up)/CU(close-up)/ECU(extreme close-up)"
@@ -112,7 +121,8 @@ SHOT_REVIEW_JSON_CONTRACT = (
     '"camera_semantics_observed": "实际成立的机位语义（OTS/POV/低机位/高机位/侧面/背面/insert/none）",'
     '"scene_visibility": "full_location|partial_environment|minimal_background"},'
     ' "dimensions": {'
-    + "".join(f'"{k}": {{"status": "pass|fail|uncertain", "note": "≤60字依据"}}{"," if i < 11 else ""}'
+    + "".join(f'"{k}": {{"status": "pass|fail|uncertain", "note": "≤60字依据"}}'
+              f"{"," if i < len(SHOT_REVIEW_DIMENSIONS) - 1 else ""}"
               for i, k in enumerate(SHOT_REVIEW_DIMENSIONS)) + '},'
     ' "director_feedback": ["可执行导演反馈，每条一句（如 expected CU observed MS; '
     'character occupies too little frame）"],'
