@@ -83,3 +83,62 @@ def test_D2_clean_truncates():
     assert len(c["director_feedback"]) <= 6
     assert len(c["summary"]) <= 300
     assert all(len(v["note"]) <= 120 for v in c["dimensions"].values())
+
+
+# ============ 工具执行器接线（真 bug 防回归：D2 真机曾因缺 ProjectStore 导入失败）============
+def test_D2_execute_review_shot_wiring(tmp_path, monkeypatch):
+    """stub rt + stub vision client：_execute_review_shot 必须走通
+    （导入完整、候选解析、契约解析、receipt 形状）。"""
+    import asyncio
+    import json as _json
+    from pathlib import Path
+    from src.core.models import Candidate, ImageBatch, Project as P, Scene, Shot as S
+    from src.core.store import ProjectStore
+    from src.agents import shot_review as sr
+
+    # 最小项目：1 镜 + 1 批次 1 候选（本地 png）
+    proj = P(name="t")
+    proj.scenes = [Scene(scene_id="s01", summary="x", characters=["沈夜"],
+                         shots=[S(shot_id="s01_c01", scene_id="s01", index=1,
+                                  description="玉佩特写", shot_size="extreme close-up",
+                                  characters=["沈夜"])])]
+    pdir = tmp_path / "proj"
+    pdir.mkdir()
+    (pdir / "output").mkdir()
+    ProjectStore(pdir).save(proj)
+    img = pdir / "f.png"
+    img.write_bytes(b"\x89PNG fake")
+    proj = ProjectStore(pdir).load()
+    shot = proj.get_shot("s01_c01")
+    batch = ImageBatch(batch_id="ff_x", kind="first_frame", created_at=1.0,
+                       candidates=[Candidate(candidate_id="ff_x_1", local=str(img),
+                                             status="done")])
+    shot.first_frame_batches = [batch]
+    shot.selected_first_frame = "ff_x_1"
+    ProjectStore(pdir).save(proj)
+
+    good = {
+        "observed": {"people_count": 1, "people_notes": "one", "shot_size_observed": "ECU",
+                     "camera_semantics_observed": "none", "scene_visibility": "minimal_background"},
+        "dimensions": {k: {"status": "pass", "note": "ok"} for k in sr.SHOT_REVIEW_DIMENSIONS},
+        "director_feedback": ["ok"],
+        "summary": "s",
+    }
+
+    class _Client:
+        async def chat_completion_vision(self, messages, **kw):
+            return {"content": _json.dumps(good), "model": sr.VISION_MODEL, "usage": {}}
+
+    class _StubRT:
+        def _resolve_project_dir(self, project):
+            return pdir
+        def record_work(self, *a, **k):
+            pass
+        def _resolve_client_or_none(self, **k):
+            return _Client()
+
+    receipt = asyncio.run(sr._execute_review_shot(
+        _StubRT(), "t", _json.dumps({"shot_id": "s01_c01"}), None, None))
+    assert receipt["ok"] is True
+    assert receipt["derived"]["overall"] == "pass"
+    assert receipt["reviewed_refs"]["image_source"] == "ff_x_1"

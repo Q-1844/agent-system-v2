@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Optional
 
 from ..api.agnes_client import AgnesError
 from ..core.models import Project, Shot
+from ..core.store import ProjectStore
 from .script_writer import _base_receipt, _parse_args
 from .runtime import AgentError, AgentRuntime
 
