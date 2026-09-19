@@ -357,6 +357,7 @@ def test_t15_character_designer_tools_intact():
                      "project.visual_profile.read",
                      "resource.inventory", "resource.read",
                      "resource.clothing.upsert", "resource.look.prepare",
+                     "resource.look.approve",
                      "resource.prop.register", "resource.composition.prepare",
                      "resource.library.publish", "resource.library.import"}
     assert {"character.create", "character.update", "character.delete"} <= CHARACTER_WRITE_OPERATIONS
