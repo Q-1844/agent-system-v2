@@ -352,6 +352,7 @@ _SHOT_WRITABLE_FIELDS = (
     "preserve_elements", "preserve_custom", "transition_description",
     "video_preserve_elements", "video_preserve_custom",
     "note",
+    "link_mode",   # Phase D §25.C：尾帧生产需 keyframes 模式（值校验见 update_shot_fields）
 )
 
 # 哪些结构化字段影响哪个生成 prompt（与 prompt_builder 消费的字段对齐）。
@@ -490,6 +491,13 @@ def update_shot_fields(project: Project, shot_id: str, fields: Optional[dict] = 
             from src.core.models import PerformanceIntent
             setattr(shot, key,
                     PerformanceIntent.from_dict(val) if isinstance(val, dict) else None)
+        elif key == "link_mode":
+            # Phase D §25.C：只接受 i2v | keyframes（尾帧生成前置）；非法值忽略。
+            # 自管 changed（合法才追加），不落到链尾的统一 append。
+            if str(val) in ("i2v", "keyframes"):
+                setattr(shot, key, str(val))
+                changed.append(key)
+            continue
         elif key in ("characters", "required_elements", "preserve_elements",
                      "video_preserve_elements"):
             setattr(shot, key, list(val) if isinstance(val, (list, tuple)) else [val])

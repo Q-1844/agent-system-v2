@@ -179,6 +179,7 @@ SHOT_UPDATABLE_FIELDS = (
     "preserve_elements", "preserve_custom", "transition_description",
     "video_preserve_elements", "video_preserve_custom",
     "note",
+    "link_mode",   # Phase D §25.C：i2v | keyframes（尾帧生产前置）
     "source_shot_id",
 )
 _LIST_FIELDS = ("characters", "required_elements", "preserve_elements",
@@ -850,6 +851,12 @@ def _clean_shot_fields(fields: dict, valid_chars: set) -> tuple[dict, list]:
             out[k] = str(v).strip() if v else None
             continue
         if v is None or k not in SHOT_UPDATABLE_FIELDS:
+            continue
+        if k == "link_mode":
+            # Phase D §25.C：非法值丢弃（结构服务层也二次校验）
+            vv = str(v).strip()
+            if vv in ("i2v", "keyframes"):
+                out[k] = vv
             continue
         if k == "characters":
             names = [str(x).strip() for x in (v if isinstance(v, list) else [v])

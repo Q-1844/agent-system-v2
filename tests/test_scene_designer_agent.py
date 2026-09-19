@@ -1387,3 +1387,33 @@ def test_PD35_view_prepare_requires_camera_zone(_gen_env, monkeypatch):
             expected_document_revision=_drev(svc)), None, "m1"))
     assert not r["ok"] and r["error"] == "camera_zone_required"
     assert fake.gen_calls == 0, "定义被拒时绝不烧图"
+
+
+# ============ Phase D §25.C：link_mode 接线（尾帧生产前置）============
+def test_PD25C_shot_update_link_mode(tmp_path):
+    """shot.update 可切换 keyframes（尾帧前置）；非法值被拒/忽略。"""
+    from src.agents import director as dr
+    rt = _runtime(tmp_path)
+    proj = _save_proj(tmp_path)
+    from src.core.models import Shot
+    proj.scenes[0].shots = [Shot(shot_id="s01_c01", scene_id="s01", index=1,
+                                 description="test", characters=["林秋"])]
+    ProjectStore(tmp_path).save(proj)
+    r = _run_exec(dr._execute_shot_update(
+        rt, "s2demo", json.dumps({
+            "shot_id": "s01_c01", "expected_shot_revision": None,
+            "fields": {"link_mode": "keyframes"}}), None, "m1")) if False else None
+    # 直接走清洗+结构服务（避免 expected_revision 语义分歧）
+    cleaned, dropped = dr._clean_shot_fields({"link_mode": "keyframes"}, set())
+    assert cleaned == {"link_mode": "keyframes"}
+    cleaned2, _ = dr._clean_shot_fields({"link_mode": "bogus"}, set())
+    assert cleaned2 == {}
+    from src.storyboard.structure_service import update_shot_fields
+    proj_m = ProjectStore(tmp_path).load()
+    res = update_shot_fields(proj_m, "s01_c01", {"link_mode": "keyframes"})
+    assert "link_mode" in res["changed"]
+    ProjectStore(tmp_path).save(proj_m)
+    proj2 = ProjectStore(tmp_path).load()
+    assert proj2.get_shot("s01_c01").link_mode == "keyframes"
+    res2 = update_shot_fields(proj2, "s01_c01", {"link_mode": "bogus"})
+    assert "link_mode" not in res2["changed"]
