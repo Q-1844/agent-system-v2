@@ -17,7 +17,7 @@ agnes:
   rpm:
     text: 20
     image_1k: 20
-    image_2k: 10
+    image_2k: 4   # Phase D 实测校准（Commit B；文档 10 RPM 持续批量不可持续，见 AGNES_API_FACTS §4.1 勘误）。会员升级后按新档位调回
     image_3k: 1
     image_4k: 1
     video: 1
