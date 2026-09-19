@@ -1,0 +1,5090 @@
+{
+  "baseline": "phase_d2_before",
+  "created_at": "2026-09-19T15:48:34",
+  "project": "Golden_Full_Production_V1",
+  "spec": "详细流程文件/修复阶段/30.md §2",
+  "project_counts": {
+    "shots": 52,
+    "bindings": 47,
+    "looks": 9,
+    "props": 4,
+    "compositions": 2,
+    "reference_assets": 49,
+    "scene_instance_views_total": 34,
+    "scene_instance_views_approved": 9
+  },
+  "shots": [
+    {
+      "shot_id": "s09_c01",
+      "scene_id": "s09",
+      "index": 1,
+      "shot_size": "extreme wide shot",
+      "camera_angle": "high angle",
+      "camera": "",
+      "composition": "三分构图：雨幕占上2/3，山路占下1/3，驿站作为视觉焦点在远处右侧",
+      "characters": [
+        "沈夜"
+      ],
+      "dialogue": "",
+      "description": "大雨滂沱，山道泥泞。沈夜一人骑老马穿行雨幕，蓑衣斗笠，怀中紧揣泛黄匿名信。镜头推进展现他孤独疲惫的身影。",
+      "opening_state": "沈夜低头护信，老马缓步前行",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_b05e7958_1",
+        "batch_id": "ff_b05e7958",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_SF1w5MAhINutCpgLIRcBszut7CpFontS/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s09_c01_first_v1.png",
+        "sha256": "3a7d6362971f428703a9719f28992726ba090eebeda7cafcfe637863f83efd0b",
+        "bytes": 4596521
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_7408ae74",
+          "created_at": 1789764353.5744603,
+          "status": "pending",
+          "generation_basis": {
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_7408ae74_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s09_c01_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_myod8GEkoJwk32DRidCp8qzW8Oe38wsb/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "ff_61ea89d3",
+          "created_at": 1789782590.3294055,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "574c14ec",
+            "binding_document_revision": "0944b763",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "56ad2169",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_856595357058",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_61ea89d3_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s09_c01_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_5z5lIuYKDcCUEHgw9R62RMMkgoofhqZE/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "ff_aeec94a8",
+          "created_at": 1789786316.9180121,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "574c14ec",
+            "binding_document_revision": "be6937fb",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "56ad2169",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_856595357058",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_aeec94a8_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s09_c01_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_1vtEC7K6TbWQCmAhxS8ImjVKbOTryOuQ/output.png"
+            },
+            {
+              "candidate_id": "ff_aeec94a8_2",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s09_c01_first_v2.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_JPTACozjcRuTtiSz8DLg06KKoAAit3pI/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "ff_4e54c44a",
+          "created_at": 1789790115.4597263,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "574c14ec",
+            "binding_document_revision": "16a6dbd7",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "56ad2169",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_856595357058",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_4e54c44a_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s09_c01_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_S0PV8rIXXJnPVayNB8UG4m5p7LiElnM4/output.png"
+            },
+            {
+              "candidate_id": "ff_4e54c44a_2",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s09_c01_first_v2.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_RINuZsK682LGxHXrlA1vp1E0It0255zB/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "ff_c4d9bcbe",
+          "created_at": 1789796570.5994544,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "574c14ec",
+            "binding_document_revision": "9f4bc5dc",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "56ad2169",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_856595357058",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_c4d9bcbe_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s09_c01_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_d7UOPNPdnKshWtF806iXjpo9ciacGhUB/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "ff_b05e7958",
+          "created_at": 1789796888.8391192,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "574c14ec",
+            "binding_document_revision": "9f4bc5dc",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "56ad2169",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_856595357058",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_b05e7958_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s09_c01_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_SF1w5MAhINutCpgLIRcBszut7CpFontS/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789782386.7207108
+    },
+    {
+      "shot_id": "s09_c02",
+      "scene_id": "s09",
+      "index": 2,
+      "shot_size": "medium shot",
+      "camera_angle": "eye level",
+      "camera": "",
+      "composition": "沈夜位于画面左侧1/3处，驿站大门在右侧，形成对角线构图",
+      "characters": [
+        "沈夜"
+      ],
+      "dialogue": "",
+      "description": "中景：沈夜翻身下马，雨水顺着蓑衣滴落。他牵马入院，院中杂草没膝。驿站木门半开，门轴发出吱呀声。沈夜抬头望向屋内微弱的烛光，眼神警惕而疲惫。",
+      "opening_state": "沈夜下马后站直，望向驿站",
+      "link_mode": "keyframes",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_4b726baa_1",
+        "batch_id": "ff_4b726baa",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_X10P2zXuxfH1xXk9JYlzr6HxWZen5X1s/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s09_c02_first_v1.png",
+        "sha256": "d85cf622f87c67360b8e7b6fd8e8bf22361027bea3b88330f49ba8190806d27f",
+        "bytes": 4431757
+      },
+      "selected_last_frame": {
+        "candidate_id": "lf_d11aa643_1",
+        "batch_id": "lf_d11aa643",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_s0C4rkDzhhvhbUkI5dZVZRDkc7C2nfHv/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s09_c02_last.png",
+        "sha256": "0b2e79b5d8f223a261cfa286a3070797aadf8d365a8b326d1c2d3ba163d36c99",
+        "bytes": 4513114
+      },
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_b7e46493",
+          "created_at": 1789783155.8135493,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "83fdefff",
+            "binding_document_revision": "0944b763",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "56ad2169",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_856595357058",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_b7e46493_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s09_c02_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_ISNcb1QazRIkPu1k6RF9WuYJN8xasY2F/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "ff_72646ef4",
+          "created_at": 1789786665.236176,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "83fdefff",
+            "binding_document_revision": "be6937fb",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "56ad2169",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_856595357058",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_72646ef4_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s09_c02_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_3XGdbMF1XF5jDUTYw3C7cNGLho2tJ2b0/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "ff_4b726baa",
+          "created_at": 1789790376.4431872,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "83fdefff",
+            "binding_document_revision": "16a6dbd7",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "56ad2169",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_856595357058",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_4b726baa_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s09_c02_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_X10P2zXuxfH1xXk9JYlzr6HxWZen5X1s/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [
+        {
+          "batch_id": "lf_d11aa643",
+          "created_at": 1789790509.048214,
+          "status": "done",
+          "generation_basis": {
+            "binding_revision": "83fdefff",
+            "binding_document_revision": "16a6dbd7",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "56ad2169",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_856595357058",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "lf_d11aa643_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s09_c02_last.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_s0C4rkDzhhvhbUkI5dZVZRDkc7C2nfHv/output.png"
+            }
+          ]
+        }
+      ],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789782395.584328
+    },
+    {
+      "shot_id": "s09_c03",
+      "scene_id": "s09",
+      "index": 3,
+      "shot_size": "close-up",
+      "camera_angle": "eye level",
+      "camera": "",
+      "composition": "信件占据画面中心，沈夜的手在前景，柳衣剪影在背景虚化",
+      "characters": [
+        "沈夜",
+        "柳衣"
+      ],
+      "dialogue": "沈夜：（低声自语）三个月了……",
+      "description": "近景：沈夜的手从怀中取出那张泛黄匿名信，信上可见二十年前的镖局暗号标记。他的手指因雨水和紧张而微微颤抖。背景是驿站昏暗的室内，柳衣的身影在烛光中若隐若现。",
+      "opening_state": "沈夜展开信件，手指颤抖",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_844de676_1",
+        "batch_id": "ff_844de676",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_UfbFh9GR8tOB2d2ZLboq47jPDoTRfmbb/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s09_c03_first_v1.png",
+        "sha256": "79089b8e8318580494adcc59e5ae68efa0f794ac2ea9f08e72f7def019f26eee",
+        "bytes": 4385153
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_844de676",
+          "created_at": 1789764354.3979783,
+          "status": "pending",
+          "generation_basis": {
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_844de676_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s09_c03_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_UfbFh9GR8tOB2d2ZLboq47jPDoTRfmbb/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789782407.880966
+    },
+    {
+      "shot_id": "s09_c05",
+      "scene_id": "s09",
+      "index": 4,
+      "shot_size": "medium shot",
+      "camera_angle": "",
+      "camera": "",
+      "composition": "",
+      "characters": [
+        "周伯"
+      ],
+      "dialogue": "周伯：老爷，您终于来了。",
+      "description": "周伯出场：驿站门内，老仆周伯从阴影中走出，手持油灯。面容愁苦，眼神复杂。",
+      "opening_state": "周伯站在门内阴影中",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_a15173cc_1",
+        "batch_id": "ff_a15173cc",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_2gvqVvjtTVqEntnplbuP3714J8mptgHx/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s09_c05_first_v1.png",
+        "sha256": "6c9e6d0e9588494dcc9067d0ed3c2410495af90eb0d58badfb4cd8537fc6395f",
+        "bytes": 4512694
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_4ec5200b",
+          "created_at": 1789782644.6125784,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "87758d09",
+            "binding_document_revision": "0944b763",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "周伯": "bca14dd1"
+              },
+              "looks": {
+                "look_7fff641147a6": "2fbcdeb3"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "56ad2169",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_856595357058",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_4ec5200b_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s09_c05_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_1zDOWFWWU6b7zZLRBJJdpbCg9AIvFm1O/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "ff_a15173cc",
+          "created_at": 1789785389.2160604,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "87758d09",
+            "binding_document_revision": "be6937fb",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "周伯": "bca14dd1"
+              },
+              "looks": {
+                "look_7fff641147a6": "2fbcdeb3"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "56ad2169",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_856595357058",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_a15173cc_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s09_c05_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_2gvqVvjtTVqEntnplbuP3714J8mptgHx/output.png"
+            },
+            {
+              "candidate_id": "ff_a15173cc_2",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s09_c05_first_v2.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_ODaTjgKqC2onYdZHACpt9pLzuXF8bO17/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789782417.3233843
+    },
+    {
+      "shot_id": "s09_c08",
+      "scene_id": "s09",
+      "index": 5,
+      "shot_size": "close-up",
+      "camera_angle": "eye level",
+      "camera": "",
+      "composition": "双人构图，目光交汇中心",
+      "characters": [
+        "沈夜",
+        "周伯"
+      ],
+      "dialogue": "",
+      "description": "近景：沈夜与周伯的目光在昏黄烛光中短暂交汇。周伯的眼神中闪过一丝复杂——认出、警惕、隐忍。沈夜同样警觉，手不自觉地按向腰间。两人谁也没有说话，空气中弥漫着微妙的张力。",
+      "opening_state": "沈夜警觉，周伯隐忍",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_0f219267_1",
+        "batch_id": "ff_0f219267",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_rJ7Pf3V9QvQ3zvEHiBWmlHhJ2qL61FEk/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s09_c08_first_v1.png",
+        "sha256": "0f7c90d32e1400f420203c70644dc4a4ae92eccd8d2081f6f21ae437d1a6ac62",
+        "bytes": 4480500
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_3a8ecb9d",
+          "created_at": 1789784123.2766118,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "acb60640",
+            "binding_document_revision": "0944b763",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c",
+                "周伯": "bca14dd1"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309",
+                "look_7fff641147a6": "2fbcdeb3"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "56ad2169",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_856595357058",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_3a8ecb9d_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s09_c08_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_wz3DrFV904AQyMpnDXS6uMvsLyQxYdkX/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "ff_0f219267",
+          "created_at": 1789785640.272462,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "acb60640",
+            "binding_document_revision": "be6937fb",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c",
+                "周伯": "bca14dd1"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309",
+                "look_7fff641147a6": "2fbcdeb3"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "56ad2169",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_856595357058",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_0f219267_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s09_c08_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_rJ7Pf3V9QvQ3zvEHiBWmlHhJ2qL61FEk/output.png"
+            },
+            {
+              "candidate_id": "ff_0f219267_2",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s09_c08_first_v2.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_kX18HVFQYBXkUCoQYloLg4ofFp1dvAsm/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789782427.3996494
+    },
+    {
+      "shot_id": "s09_c06",
+      "scene_id": "s09",
+      "index": 6,
+      "shot_size": "wide shot",
+      "camera_angle": "",
+      "camera": "",
+      "composition": "",
+      "characters": [
+        "沈夜",
+        "周伯"
+      ],
+      "dialogue": "",
+      "description": "驿站院内全景：杂草没膝，井台生苔，破败院落尽显荒凉。沈夜牵马入院，周伯持灯照路。",
+      "opening_state": "沈夜站在院门口",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_26cae827_1",
+        "batch_id": "ff_26cae827",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_CEWVUjf0rRiJ6Dn0dk9mcIwA1oDzm2mD/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s09_c06_first_v1.png",
+        "sha256": "937005c96e04b3f0b42862e92acc96dab94e48c4592a48ca03b173f30f39e12f",
+        "bytes": 4581411
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_26cae827",
+          "created_at": 1789784866.9581358,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "53f1c0f1",
+            "binding_document_revision": "0944b763",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c",
+                "周伯": "bca14dd1"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309",
+                "look_7fff641147a6": "2fbcdeb3"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "56ad2169",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_856595357058",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_26cae827_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s09_c06_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_CEWVUjf0rRiJ6Dn0dk9mcIwA1oDzm2mD/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789782436.431755
+    },
+    {
+      "shot_id": "s09_c07",
+      "scene_id": "s09",
+      "index": 7,
+      "shot_size": "medium close-up",
+      "camera_angle": "",
+      "camera": "",
+      "composition": "",
+      "characters": [
+        "沈夜",
+        "柳衣"
+      ],
+      "dialogue": "",
+      "description": "柳衣初现：后院厢房，柳衣立于窗边，望着院中的沈夜。面容清冷，眼神复杂。",
+      "opening_state": "柳衣站在窗后",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_34b875e0_1",
+        "batch_id": "ff_34b875e0",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_O39GQuvzWleWa561AuWcAYcQQ3RW0uC1/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s09_c07_first_v1.png",
+        "sha256": "7a2d5dcc65e4417a52bd8aee866c2d46261fed257e8e432cec6521613d606439",
+        "bytes": 4446630
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_34b875e0",
+          "created_at": 1789786151.6496918,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "0c97fbee",
+            "binding_document_revision": "be6937fb",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c",
+                "柳衣": "d1a13bf7"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309",
+                "look_04a3933e739b": "8b84dcae"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "56ad2169",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_856595357058",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_34b875e0_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s09_c07_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_O39GQuvzWleWa561AuWcAYcQQ3RW0uC1/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789782444.2469616
+    },
+    {
+      "shot_id": "s10_c01",
+      "scene_id": "s10",
+      "index": 1,
+      "shot_size": "medium shot",
+      "camera_angle": "eye level",
+      "camera": "",
+      "composition": "三角构图：三人形成稳定的三角形，铁盒在画面中心下方",
+      "characters": [
+        "沈夜",
+        "柳衣",
+        "周伯"
+      ],
+      "dialogue": "柳衣：这封信，是当年主谋写的。",
+      "description": "中景：灶台前，三人围坐。柳衣从床底取出一个锈蚀铁盒，盒中是一封泛黄密信，信封写着'致柳氏全族'。火光映照着三人沉默的脸。周伯在左侧，柳衣在右侧，沈夜在正对镜头。",
+      "opening_state": "柳衣打开铁盒，展示密信",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_5c531804_1",
+        "batch_id": "ff_5c531804",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_QhoN5c7xb4FzUizeN1fsTCcJZ4E1I4be/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s10_c01_first_v1.png",
+        "sha256": "eee6eafe400b895999897a853572fd39d4a7e086cf70d8b625bca6b3fc3031ad",
+        "bytes": 4672618
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_5c531804",
+          "created_at": 1789786152.8351023,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "8d0dce8b",
+            "binding_document_revision": "be6937fb",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c",
+                "柳衣": "d1a13bf7",
+                "周伯": "bca14dd1"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309",
+                "look_04a3933e739b": "8b84dcae",
+                "look_7fff641147a6": "2fbcdeb3"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "cb3bce62",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_32134bfae0e9",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_5c531804_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s10_c01_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_QhoN5c7xb4FzUizeN1fsTCcJZ4E1I4be/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789782451.1560626
+    },
+    {
+      "shot_id": "s10_c02",
+      "scene_id": "s10",
+      "index": 2,
+      "shot_size": "close-up",
+      "camera_angle": "over the shoulder",
+      "camera": "",
+      "composition": "信件占据画面2/3，柳衣的肩膀和头发在前景虚化",
+      "characters": [
+        "沈夜",
+        "柳衣"
+      ],
+      "dialogue": "柳衣：信里详细记录了交易、地点、时间。沈夜，证据一直在我们手里。",
+      "description": "特写：密信推轨镜头。泛黄信纸上的墨迹清晰可见，'致柳氏全族'字样在烛光下显得格外刺眼。镜头缓缓推进，展现信中记录的交易、地点、时间细节。",
+      "opening_state": "信件平放在桌上，烛光映照",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_d857c085_1",
+        "batch_id": "ff_d857c085",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_6ZgPFZKTMYW81FHXapmjZTJPVVzmIfwu/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s10_c02_first_v1.png",
+        "sha256": "a6c2f8b094f09a4d0a45a9c8ccda3f34a12f6455d7df251c42327dd51071188f",
+        "bytes": 4601980
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_ed25b127",
+          "created_at": 1789764453.1520822,
+          "status": "pending",
+          "generation_basis": {
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_ed25b127_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s10_c02_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_odqbgkJCKaIAat60s79CJBfy1KQq1m6y/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "ff_6e84ccc9",
+          "created_at": 1789785665.2982707,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "fd92e6d1",
+            "binding_document_revision": "be6937fb",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c",
+                "柳衣": "d1a13bf7"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309",
+                "look_04a3933e739b": "8b84dcae"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "cb3bce62",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_32134bfae0e9",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_6e84ccc9_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s10_c02_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_4OzlYYYfAvI8BkPkiHx64GXPfjiBZv2K/output.png"
+            },
+            {
+              "candidate_id": "ff_6e84ccc9_2",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s10_c02_first_v2.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_UvIzWpMKG2pzTItNPDr40hK9XtxxRT87/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "ff_c5364f51",
+          "created_at": 1789785969.6330745,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "fd92e6d1",
+            "binding_document_revision": "be6937fb",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c",
+                "柳衣": "d1a13bf7"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309",
+                "look_04a3933e739b": "8b84dcae"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "cb3bce62",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_32134bfae0e9",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_c5364f51_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s10_c02_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_BJPvFgVkRF6PBofYce5YCPSGhqCPiTxP/output.png"
+            },
+            {
+              "candidate_id": "ff_c5364f51_2",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s10_c02_first_v2.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_Acu2QNqdZ9HPb8gWVm7ScgmOTK35BgAG/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "ff_bea4e2d5",
+          "created_at": 1789786317.981785,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "fd92e6d1",
+            "binding_document_revision": "be6937fb",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c",
+                "柳衣": "d1a13bf7"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309",
+                "look_04a3933e739b": "8b84dcae"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "cb3bce62",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_32134bfae0e9",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_bea4e2d5_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s10_c02_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_0qjcsk9bOmU3j3hjzePyi2WMR3aJ0WZ8/output.png"
+            },
+            {
+              "candidate_id": "ff_bea4e2d5_2",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s10_c02_first_v2.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_lxT93qg1aa91KEjDuxPlYBHK8wFLr0DC/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "ff_31dacc60",
+          "created_at": 1789790246.992678,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "fd92e6d1",
+            "binding_document_revision": "16a6dbd7",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c",
+                "柳衣": "d1a13bf7"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309",
+                "look_04a3933e739b": "8b84dcae"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "cb3bce62",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_32134bfae0e9",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_31dacc60_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s10_c02_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_54ppOYtbT9IuJ0QM2d5XcB4EZGTYupUX/output.png"
+            },
+            {
+              "candidate_id": "ff_31dacc60_2",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s10_c02_first_v2.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_5IOMWwYWRtpQZvCQP78rkgov7rgCh1iL/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "ff_d857c085",
+          "created_at": 1789796449.4950984,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "fd92e6d1",
+            "binding_document_revision": "9f4bc5dc",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c",
+                "柳衣": "d1a13bf7"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309",
+                "look_04a3933e739b": "8b84dcae"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "cb3bce62",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_32134bfae0e9",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_d857c085_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s10_c02_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_6ZgPFZKTMYW81FHXapmjZTJPVVzmIfwu/output.png"
+            },
+            {
+              "candidate_id": "ff_d857c085_2",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s10_c02_first_v2.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_F5EgY46SeGJRoixYIPKNVcrhgmrACk8s/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789782464.017589
+    },
+    {
+      "shot_id": "s10_c03",
+      "scene_id": "s10",
+      "index": 3,
+      "shot_size": "close-up",
+      "camera_angle": "eye level",
+      "camera": "",
+      "composition": "沈夜面部占据画面3/4，背景完全虚化为暖色光斑",
+      "characters": [
+        "沈夜"
+      ],
+      "dialogue": "沈夜：（声音颤抖）二十年……我以为一切都忘了……",
+      "description": "近景：沈夜的特写。他的瞳孔骤然收缩，呼吸变得急促。手指紧紧攥住信纸边缘，指节发白。泪水在眼眶中打转，二十年的压抑即将崩溃。",
+      "opening_state": "沈夜震惊，瞳孔收缩，手指颤抖",
+      "link_mode": "keyframes",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_44aeaa6c_1",
+        "batch_id": "ff_44aeaa6c",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_TTv7dEa1iyMAu2LDnwyJaG46BNw7Kodd/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s10_c03_first_v1.png",
+        "sha256": "37e550da1bbdeec508f565faaf0933af91257022e30b282ed30e995ca1da705c",
+        "bytes": 4612799
+      },
+      "selected_last_frame": {
+        "candidate_id": "lf_14ae143e_1",
+        "batch_id": "lf_14ae143e",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_B178yGD68S0I2Rn5u5sGqTs8eBZ0idqK/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s10_c03_last.png",
+        "sha256": "3e55c8378b32db5e14c1b1c6161e014748ea11fc657486024a274adf97ae6d1f",
+        "bytes": 4720324
+      },
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_5cc3c425",
+          "created_at": 1789764521.879751,
+          "status": "pending",
+          "generation_basis": {
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_5cc3c425_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s10_c03_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_3Eq3LNscNdoZbzaNN0b7mTJqPTurF6Cc/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "ff_44aeaa6c",
+          "created_at": 1789783035.1716905,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "989700f1",
+            "binding_document_revision": "0944b763",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "cb3bce62",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_32134bfae0e9",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_44aeaa6c_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s10_c03_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_TTv7dEa1iyMAu2LDnwyJaG46BNw7Kodd/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [
+        {
+          "batch_id": "lf_a7d8db7c",
+          "created_at": 1789792314.237841,
+          "status": "done",
+          "generation_basis": {
+            "binding_revision": "989700f1",
+            "binding_document_revision": "961f566f",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "cb3bce62",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_32134bfae0e9",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "lf_a7d8db7c_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s10_c03_last.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_K2bBAQ4IYmXZcGOWoCiHi5WLXaM6GaA4/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "lf_14ae143e",
+          "created_at": 1789793813.1593463,
+          "status": "done",
+          "generation_basis": {
+            "binding_revision": "989700f1",
+            "binding_document_revision": "961f566f",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "cb3bce62",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_32134bfae0e9",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "lf_14ae143e_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s10_c03_last.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_B178yGD68S0I2Rn5u5sGqTs8eBZ0idqK/output.png"
+            }
+          ]
+        }
+      ],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789782476.5081346
+    },
+    {
+      "shot_id": "s10_c06",
+      "scene_id": "s10",
+      "index": 4,
+      "shot_size": "close-up",
+      "camera_angle": "",
+      "camera": "",
+      "composition": "",
+      "characters": [
+        "周伯"
+      ],
+      "dialogue": "周伯（低声）：老爷，对不住您了。",
+      "description": "周伯反应：周伯低头沉默，手指颤抖。他想起二十年前的灭门惨案。",
+      "opening_state": "周伯站立一旁",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_46ccea32_1",
+        "batch_id": "ff_46ccea32",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_BBZS98pgovVmXKvGFrlxXxhyhUmwers8/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s10_c06_first_v1.png",
+        "sha256": "819575cb7d4574c404aaa221bbf589c0256b2b194fa6b75d734fbf6d81e57a93",
+        "bytes": 4611928
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_46ccea32",
+          "created_at": 1789783493.9833689,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "8f0e2c7e",
+            "binding_document_revision": "0944b763",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "周伯": "bca14dd1"
+              },
+              "looks": {
+                "look_7fff641147a6": "2fbcdeb3"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "cb3bce62",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_32134bfae0e9",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_46ccea32_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s10_c06_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_BBZS98pgovVmXKvGFrlxXxhyhUmwers8/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789782488.6149614
+    },
+    {
+      "shot_id": "s11_c01",
+      "scene_id": "s11",
+      "index": 1,
+      "shot_size": "medium shot",
+      "camera_angle": "eye level",
+      "camera": "",
+      "composition": "沈夜和柳衣面对面，信件在两人之间，周伯在背景右侧",
+      "characters": [
+        "沈夜",
+        "柳衣",
+        "周伯"
+      ],
+      "dialogue": "柳衣：你怎么会有这封信？\n沈夜：三个月前收到，署名不详，但暗号是当年镖局的内部标记。",
+      "description": "中景：沈夜展开怀中另一份物品——那张匿名信。信中不仅提到证据，更有一个关键信息：'赵字玉佩，藏于柴房旧箱。'柳衣追问沈夜如何得到这封信。周伯在角落默默倾听。",
+      "opening_state": "沈夜展示信件内容",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_c6b37137_1",
+        "batch_id": "ff_c6b37137",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_wLW8mdAACHPezbqVwZ0m4N0W6tro8SJs/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s11_c01_first_v1.png",
+        "sha256": "cb2012e350482e09e519b1812df9fa09ae0c99e480da548914880773392fe993",
+        "bytes": 4253932
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_c6b37137",
+          "created_at": 1789764570.3244362,
+          "status": "pending",
+          "generation_basis": {
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_c6b37137_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s11_c01_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_wLW8mdAACHPezbqVwZ0m4N0W6tro8SJs/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789782503.6049106
+    },
+    {
+      "shot_id": "s11_c02",
+      "scene_id": "s11",
+      "index": 2,
+      "shot_size": "close-up",
+      "camera_angle": "eye level",
+      "camera": "",
+      "composition": "沈夜和周伯同框，形成信任的连接",
+      "characters": [
+        "沈夜",
+        "周伯"
+      ],
+      "dialogue": "沈夜：周伯，这驿站这些年，可有异常？\n周伯：老爷行事谨慎，只是偶尔深夜有客人来访。",
+      "description": "近景：沈夜看着周伯，眼神中的怀疑逐渐消散。他点了点头，表示信任。周伯也点了点头，眼中闪过欣慰。",
+      "opening_state": "沈夜提问，周伯回答",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_1cf2fba5_1",
+        "batch_id": "ff_1cf2fba5",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_PjVdHl5yn352gNO3GewedSf4rBOfDw6H/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s11_c02_first_v1.png",
+        "sha256": "3a7579e3fe605c4487ec8c683132fd60cae98328a65ee74b30f6d3661ebeda6e",
+        "bytes": 4454419
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_1cf2fba5",
+          "created_at": 1789784947.072213,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "c082c743",
+            "binding_document_revision": "0944b763",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c",
+                "周伯": "bca14dd1"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309",
+                "look_7fff641147a6": "2fbcdeb3"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "8f667eb0",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_b90243f9e522",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_1cf2fba5_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s11_c02_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_PjVdHl5yn352gNO3GewedSf4rBOfDw6H/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789782512.1711116
+    },
+    {
+      "shot_id": "s11_c03",
+      "scene_id": "s11",
+      "index": 3,
+      "shot_size": "close-up",
+      "camera_angle": "",
+      "camera": "",
+      "composition": "",
+      "characters": [
+        "沈夜"
+      ],
+      "dialogue": "沈夜（独白）：这封信……是谁寄来的？",
+      "description": "沈夜内心挣扎：沈夜独自坐在灶前，手中紧攥匿名信。眉头紧锁，眼神挣扎。",
+      "opening_state": "沈夜低头看着信",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_c02ffa1c_1",
+        "batch_id": "ff_c02ffa1c",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_DYzj9jad42rFys2vHEDiPwxzpuPFVBHo/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s11_c03_first_v1.png",
+        "sha256": "3c00b611d670798cf20406da5488ca9c79b4bf5be88e5cd32c34631761958f5a",
+        "bytes": 4458742
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_c02ffa1c",
+          "created_at": 1789785130.1341286,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "a858fc0e",
+            "binding_document_revision": "be6937fb",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "8f667eb0",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_b90243f9e522",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_c02ffa1c_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s11_c03_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_DYzj9jad42rFys2vHEDiPwxzpuPFVBHo/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789785122.2372322
+    },
+    {
+      "shot_id": "s11_c04",
+      "scene_id": "s11",
+      "index": 4,
+      "shot_size": "medium shot",
+      "camera_angle": "",
+      "camera": "",
+      "composition": "",
+      "characters": [
+        "柳衣",
+        "周伯"
+      ],
+      "dialogue": "周伯：老夫只知道，老爷当年是被冤枉的。",
+      "description": "柳衣与周伯对视：柳衣看着周伯，眼神中带着询问。周伯点头确认。",
+      "opening_state": "柳衣转身看向周伯",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_852b1be2_1",
+        "batch_id": "ff_852b1be2",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_ve16zGrKtsucrrlRyGsVrbQdusL5rEwX/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s11_c04_first_v1.png",
+        "sha256": "fd4934c6142d4ddb0dea215162e9286d262ea722ff10c3f2c2af0f11c2d06e06",
+        "bytes": 4460059
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_852b1be2",
+          "created_at": 1789785005.3400466,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "fe99bffa",
+            "binding_document_revision": "0944b763",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "柳衣": "d1a13bf7",
+                "周伯": "bca14dd1"
+              },
+              "looks": {
+                "look_04a3933e739b": "8b84dcae",
+                "look_7fff641147a6": "2fbcdeb3"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "8f667eb0",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_b90243f9e522",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_852b1be2_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s11_c04_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_ve16zGrKtsucrrlRyGsVrbQdusL5rEwX/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789782524.4891279
+    },
+    {
+      "shot_id": "s11_c05",
+      "scene_id": "s11",
+      "index": 5,
+      "shot_size": "extreme close-up",
+      "camera_angle": "",
+      "camera": "",
+      "composition": "",
+      "characters": [
+        "沈夜"
+      ],
+      "dialogue": "",
+      "description": "信纸特写：镜头推进到匿名信上，\"赵字玉佩\"四个字被朱砂圈出。沈夜的手指在文字上游走。",
+      "opening_state": "",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_e7a64230_1",
+        "batch_id": "ff_e7a64230",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_hGYgm64puio7Yl3mwqPaoEZcNa0oS2sB/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s11_c05_first_v1.png",
+        "sha256": "1107eee8ea7b5f01fadf66c7c1a66a25671026993b8e286bb7fe8c6b81dcb8d7",
+        "bytes": 4704737
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_e7a64230",
+          "created_at": 1789785188.8544092,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "3a669418",
+            "binding_document_revision": "be6937fb",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "8f667eb0",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_b90243f9e522",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_e7a64230_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s11_c05_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_hGYgm64puio7Yl3mwqPaoEZcNa0oS2sB/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789782579.891875
+    },
+    {
+      "shot_id": "s11_c06",
+      "scene_id": "s11",
+      "index": 6,
+      "shot_size": "medium shot",
+      "camera_angle": "eye level",
+      "camera": "",
+      "composition": "",
+      "characters": [
+        "沈夜",
+        "周伯"
+      ],
+      "dialogue": "周伯：「这印章，是当年镖局的印记。我守了二十年，等的人终于来了。」",
+      "description": "周伯坦白：周伯缓缓起身，从怀中取出一枚旧印章。他苦笑：「这印章，是当年镖局的印记。我守了二十年，等的人终于来了。」",
+      "opening_state": "",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_d83911a3_1",
+        "batch_id": "ff_d83911a3",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_VzZuCWhZtkvZi2cEhTu0kkAuWjMzWMoq/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s11_c06_first_v1.png",
+        "sha256": "6386a0242fa9ff1aaa3c0c75db0ab548499725964a02b7a99b112150740139d5",
+        "bytes": 4449551
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_d83911a3",
+          "created_at": 1789785247.3280296,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "4c7b51ec",
+            "binding_document_revision": "be6937fb",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c",
+                "周伯": "bca14dd1"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309",
+                "look_7fff641147a6": "2fbcdeb3"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "8f667eb0",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_b90243f9e522",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_d83911a3_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s11_c06_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_VzZuCWhZtkvZi2cEhTu0kkAuWjMzWMoq/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789782569.229884
+    },
+    {
+      "shot_id": "s13_c01",
+      "scene_id": "s13",
+      "index": 1,
+      "shot_size": "extreme wide shot",
+      "camera_angle": "high angle",
+      "camera": "",
+      "composition": "三人剪影在画面下方1/3，远山和晨雾占上2/3",
+      "characters": [
+        "沈夜",
+        "柳衣",
+        "周伯"
+      ],
+      "dialogue": "",
+      "description": "大远景：雨停了。晨曦穿透云层，照在湿漉漉的山路上。远处的山峦在晨雾中若隐若现，呈现出水墨画般的层次感。沈夜和柳衣走出驿站，身影在晨光中形成剪影。",
+      "opening_state": "三人走出驿站，面向晨雾",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_0e439631_1",
+        "batch_id": "ff_0e439631",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_Igkvcnsx79LAgoxmYijriexAPFYgeg7o/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s13_c01_first_v1.png",
+        "sha256": "b765a12b5b8c07e47a9784b41fe05133ff572a199708ecc58e1f404199c57103",
+        "bytes": 4447681
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_0e439631",
+          "created_at": 1789791107.5290122,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "a843ec5b",
+            "binding_document_revision": "9b81c727",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c",
+                "柳衣": "d1a13bf7",
+                "周伯": "bca14dd1"
+              },
+              "looks": {
+                "look_f9be91236a97": "cc09fee7",
+                "look_53bab2e2d837": "4d7b1019",
+                "look_7fff641147a6": "2fbcdeb3"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "91a435a4",
+              "scene_instance_view": "14d2efce"
+            },
+            "resolved_scene_instance_view_id": "sciv_f8ae7e8d90d5",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_0e439631_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s13_c01_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_Igkvcnsx79LAgoxmYijriexAPFYgeg7o/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789791052.3201613
+    },
+    {
+      "shot_id": "s13_c02",
+      "scene_id": "s13",
+      "index": 2,
+      "shot_size": "medium shot",
+      "camera_angle": "eye level",
+      "camera": "",
+      "composition": "沈夜在马背上居高临下，柳衣和周伯在下方",
+      "characters": [
+        "沈夜",
+        "柳衣",
+        "周伯"
+      ],
+      "dialogue": "沈夜：真相已经找到了。接下来，是该清算的时候了。\n周伯：（欣慰）老爷，一路小心。",
+      "description": "中景：沈夜翻身上马，蓑衣已被鲜血染红，多处伤痕清晰可见。柳衣跟在他身后，剑已折断，手臂缠着布条。周伯早已牵马等候，眼中闪过欣慰。'走吧。'沈夜说，'真相已经找到了。接下来，是该清算的时候了。'",
+      "opening_state": "三人准备出发",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_7bc82d0e_1",
+        "batch_id": "ff_7bc82d0e",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_6BxmJZ4Z4O2OK2j9tM5m9vUjYLZBSeeo/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s13_c02_first_v1.png",
+        "sha256": "2d27b545765eea31f730b0e96915edb43b439ea28df4e10fa4242c1c7a0d3714",
+        "bytes": 4456268
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_798644ea",
+          "created_at": 1789765118.0306025,
+          "status": "pending",
+          "generation_basis": {
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_798644ea_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s13_c02_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_WEhh0kRY4OnO2zYlpokQnSjBygOtBaUq/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "ff_7bc82d0e",
+          "created_at": 1789791108.8351102,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "eb127303",
+            "binding_document_revision": "9b81c727",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c",
+                "柳衣": "d1a13bf7",
+                "周伯": "bca14dd1"
+              },
+              "looks": {
+                "look_f9be91236a97": "cc09fee7",
+                "look_53bab2e2d837": "4d7b1019",
+                "look_7fff641147a6": "2fbcdeb3"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "91a435a4",
+              "scene_instance_view": "14d2efce"
+            },
+            "resolved_scene_instance_view_id": "sciv_f8ae7e8d90d5",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_7bc82d0e_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s13_c02_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_6BxmJZ4Z4O2OK2j9tM5m9vUjYLZBSeeo/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789791057.7519913
+    },
+    {
+      "shot_id": "s13_c03",
+      "scene_id": "s13",
+      "index": 3,
+      "shot_size": "medium shot",
+      "camera_angle": "",
+      "camera": "",
+      "composition": "",
+      "characters": [
+        "沈夜"
+      ],
+      "dialogue": "",
+      "description": "沈夜整装：沈夜整理伤口，包扎手臂。眼神从迷茫转为坚定。",
+      "opening_state": "沈夜坐在驿站门口",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_6ed677e9_1",
+        "batch_id": "ff_6ed677e9",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_hplH5M0HQutia9n8FeMlwfW6Vr1Ny6yo/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s13_c03_first_v1.png",
+        "sha256": "a141be9cf12c9776326d05de7579c2784299a048ed41da55f6bfdc25c10c8c9d",
+        "bytes": 4334414
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_6ed677e9",
+          "created_at": 1789791109.8528085,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "f44d1042",
+            "binding_document_revision": "9b81c727",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_f9be91236a97": "cc09fee7"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "91a435a4",
+              "scene_instance_view": "14d2efce"
+            },
+            "resolved_scene_instance_view_id": "sciv_f8ae7e8d90d5",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_6ed677e9_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s13_c03_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_hplH5M0HQutia9n8FeMlwfW6Vr1Ny6yo/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789791063.3338032
+    },
+    {
+      "shot_id": "s13_c04",
+      "scene_id": "s13",
+      "index": 4,
+      "shot_size": "medium shot",
+      "camera_angle": "",
+      "camera": "",
+      "composition": "",
+      "characters": [
+        "柳衣",
+        "沈夜"
+      ],
+      "dialogue": "柳衣：保重。",
+      "description": "柳衣目送：柳衣站在驿站门口，望着沈夜上马。眼神复杂——担忧、不舍、支持。",
+      "opening_state": "柳衣站在门口",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_e1b40996_1",
+        "batch_id": "ff_e1b40996",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_UBjnJgrZoeqMRIb8RJTMA8G8KcJQaCjr/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s13_c04_first_v1.png",
+        "sha256": "cafcafc1cce75f6bb964d6481ea8cd4a8a337d6e77d70993ca15044d8a00254b",
+        "bytes": 4370864
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_e1b40996",
+          "created_at": 1789791332.5145433,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "4c1206c8",
+            "binding_document_revision": "9b81c727",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "柳衣": "d1a13bf7",
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_53bab2e2d837": "4d7b1019",
+                "look_f9be91236a97": "cc09fee7"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "91a435a4",
+              "scene_instance_view": "14d2efce"
+            },
+            "resolved_scene_instance_view_id": "sciv_f8ae7e8d90d5",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_e1b40996_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s13_c04_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_UBjnJgrZoeqMRIb8RJTMA8G8KcJQaCjr/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789791068.989502
+    },
+    {
+      "shot_id": "s13_c06",
+      "scene_id": "s13",
+      "index": 5,
+      "shot_size": "close-up",
+      "camera_angle": "eye level",
+      "camera": "",
+      "composition": "手部特写，断剑为视觉焦点",
+      "characters": [
+        "柳衣",
+        "沈夜"
+      ],
+      "dialogue": "",
+      "description": "特写：柳衣的手。她缓缓抬起，向沈夜离去的方向挥别。手中紧握断剑，剑刃在晨光中泛着冷光。她的手指因用力而发白，微微颤抖。背景虚化，晨光柔和。",
+      "opening_state": "手握断剑垂下",
+      "link_mode": "keyframes",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_622c7726_1",
+        "batch_id": "ff_622c7726",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_gOegxKc65DOq0qeuRcTaqi25M6f7A33D/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s13_c06_first_v1.png",
+        "sha256": "2af4a4cebacd593efa12d604b9f9d826a948aa0c44e9b8dbab283ac94744c490",
+        "bytes": 4500289
+      },
+      "selected_last_frame": {
+        "candidate_id": "lf_a04fc229_1",
+        "batch_id": "lf_a04fc229",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_n3wBZB1wwQekfvAZiIv7R8TaQIcRHwRn/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s13_c06_last.png",
+        "sha256": "add9c24dd5597ec586a96b1207889830df27bdd25b84add5134949bb4989f786",
+        "bytes": 4510049
+      },
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_fc6099d2",
+          "created_at": 1789791333.6380277,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "90d279a5",
+            "binding_document_revision": "9b81c727",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "柳衣": "d1a13bf7"
+              },
+              "looks": {
+                "look_53bab2e2d837": "4d7b1019"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "91a435a4",
+              "scene_instance_view": "14d2efce"
+            },
+            "resolved_scene_instance_view_id": "sciv_f8ae7e8d90d5",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_fc6099d2_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s13_c06_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_fzrltwfxseyj3YoIxsrotmNcyC3CzdlZ/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "ff_622c7726",
+          "created_at": 1789793862.3626509,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "ae83955d",
+            "binding_document_revision": "9f4bc5dc",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "柳衣": "d1a13bf7",
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_53bab2e2d837": "4d7b1019",
+                "look_f9be91236a97": "cc09fee7"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "91a435a4",
+              "scene_instance_view": "14d2efce"
+            },
+            "resolved_scene_instance_view_id": "sciv_f8ae7e8d90d5",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_622c7726_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s13_c06_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_gOegxKc65DOq0qeuRcTaqi25M6f7A33D/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [
+        {
+          "batch_id": "lf_8fc91715",
+          "created_at": 1789792727.5062134,
+          "status": "done",
+          "generation_basis": {
+            "binding_revision": "90d279a5",
+            "binding_document_revision": "961f566f",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "柳衣": "d1a13bf7"
+              },
+              "looks": {
+                "look_53bab2e2d837": "4d7b1019"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "91a435a4",
+              "scene_instance_view": "14d2efce"
+            },
+            "resolved_scene_instance_view_id": "sciv_f8ae7e8d90d5",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "lf_8fc91715_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s13_c06_last.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_9hjkdWTeNyDzyHAQWHhhp9CW4XJ27p0e/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "lf_a04fc229",
+          "created_at": 1789794237.2121868,
+          "status": "done",
+          "generation_basis": {
+            "binding_revision": "ae83955d",
+            "binding_document_revision": "9f4bc5dc",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "柳衣": "d1a13bf7",
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_53bab2e2d837": "4d7b1019",
+                "look_f9be91236a97": "cc09fee7"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "91a435a4",
+              "scene_instance_view": "14d2efce"
+            },
+            "resolved_scene_instance_view_id": "sciv_f8ae7e8d90d5",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "lf_a04fc229_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s13_c06_last.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_n3wBZB1wwQekfvAZiIv7R8TaQIcRHwRn/output.png"
+            }
+          ]
+        }
+      ],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789793829.750202
+    },
+    {
+      "shot_id": "s13_c05",
+      "scene_id": "s13",
+      "index": 6,
+      "shot_size": "medium shot",
+      "camera_angle": "",
+      "camera": "",
+      "composition": "",
+      "characters": [
+        "周伯"
+      ],
+      "dialogue": "周伯：老爷，小的等您很久了。",
+      "description": "周伯牵马：周伯牵着两匹马站在路旁。脸上皱纹 deepened，但眼神欣慰。",
+      "opening_state": "周伯站在马旁",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_16357a8f_1",
+        "batch_id": "ff_16357a8f",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_5UNzhHCyApMv8gluGRyN2cbrfKVka6W9/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s13_c05_first_v1.png",
+        "sha256": "e81d1421e3eeb6d17b29eaae34e95b9e4866730dad758f578e7e7410d6797b08",
+        "bytes": 4486387
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_16357a8f",
+          "created_at": 1789791334.5718648,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "22e75f85",
+            "binding_document_revision": "9b81c727",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "周伯": "bca14dd1"
+              },
+              "looks": {
+                "look_7fff641147a6": "2fbcdeb3"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "91a435a4",
+              "scene_instance_view": "14d2efce"
+            },
+            "resolved_scene_instance_view_id": "sciv_f8ae7e8d90d5",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_16357a8f_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s13_c05_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_5UNzhHCyApMv8gluGRyN2cbrfKVka6W9/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789791100.8424463
+    },
+    {
+      "shot_id": "s14_c01",
+      "scene_id": "s14",
+      "index": 1,
+      "shot_size": "wide shot",
+      "camera_angle": "eye level",
+      "camera": "",
+      "composition": "驿站空镜，檐角滴水，远处马蹄声方向",
+      "characters": [
+        "柳衣",
+        "周伯"
+      ],
+      "dialogue": "",
+      "description": "全景：驿站重归寂静，只有檐角的滴水声，还在滴滴答答地响着。远处，隐约可见新的马蹄声由远及近——或许是有新的旅人到来，或许是更多的秘密即将揭开。",
+      "opening_state": "驿站空无一人",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_eab137d3_1",
+        "batch_id": "ff_eab137d3",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_XPkfbAtoC88DOYRfDuotMJ8SKVw61ZhD/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s14_c01_first_v1.png",
+        "sha256": "5341cc3885ca97ba7b41a4ddf51b441ac0fdb4cd2700cc73079615677853db7b",
+        "bytes": 4093039
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_eab137d3",
+          "created_at": 1789765181.1317718,
+          "status": "pending",
+          "generation_basis": {
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_eab137d3_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s14_c01_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_XPkfbAtoC88DOYRfDuotMJ8SKVw61ZhD/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789791532.7474341
+    },
+    {
+      "shot_id": "s14_c03",
+      "scene_id": "s14",
+      "index": 2,
+      "shot_size": "medium shot",
+      "camera_angle": "",
+      "camera": "",
+      "composition": "",
+      "characters": [
+        "周伯"
+      ],
+      "dialogue": "周伯（低声）：老爷，一定要回来。",
+      "description": "周伯守门：周伯站在驿站门口，望向山路方向。眼神中带着期待和忧虑。",
+      "opening_state": "周伯站在门口",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_f244a899_1",
+        "batch_id": "ff_f244a899",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_zI3VdnLYUiAlMiBnpkcGViiR7wtNXpfq/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s14_c03_first_v1.png",
+        "sha256": "97bbade683df5a33d712259de270386c1824f97cce16e07e221ec7ba641bfaf0",
+        "bytes": 4121194
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_ee48c166",
+          "created_at": 1789792033.1176162,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "5cde37d5",
+            "binding_document_revision": "961f566f",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "周伯": "bca14dd1"
+              },
+              "looks": {
+                "look_7fff641147a6": "2fbcdeb3"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "1b3e870e",
+              "scene_instance_view": "7d6edc56"
+            },
+            "resolved_scene_instance_view_id": "sciv_25082643bf34",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_ee48c166_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s14_c03_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_fYdPtKuGPhGDPBHHKlCcJH1ajl55vkp2/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "ff_f244a899",
+          "created_at": 1789794315.981645,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "5cde37d5",
+            "binding_document_revision": "9f4bc5dc",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "周伯": "bca14dd1"
+              },
+              "looks": {
+                "look_7fff641147a6": "2fbcdeb3"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "1b3e870e",
+              "scene_instance_view": "7d6edc56"
+            },
+            "resolved_scene_instance_view_id": "sciv_25082643bf34",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_f244a899_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s14_c03_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_zI3VdnLYUiAlMiBnpkcGViiR7wtNXpfq/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789791546.5332716
+    },
+    {
+      "shot_id": "s14_c04",
+      "scene_id": "s14",
+      "index": 3,
+      "shot_size": "extreme close-up",
+      "camera_angle": "",
+      "camera": "",
+      "composition": "",
+      "characters": [],
+      "dialogue": "",
+      "description": "黎明空镜：驿站屋檐滴水特写，晨曦穿透云层，远处山峦轮廓初现。",
+      "opening_state": "",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_20dafc47_1",
+        "batch_id": "ff_20dafc47",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_BtC8MqJsXOPeO7WIsJB0O5XHtT3r1lYA/output_09b09d4e1ba843ada3db24697c2ee17f.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s14_c04_first_v1.png",
+        "sha256": "1fe6932131dd934830ddc8817b252209a93a2ee19e3858c88d3d24490b8a87dc",
+        "bytes": 3158993
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_20dafc47",
+          "created_at": 1789792033.7106707,
+          "status": "pending",
+          "generation_basis": {
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_20dafc47_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s14_c04_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_BtC8MqJsXOPeO7WIsJB0O5XHtT3r1lYA/output_09b09d4e1ba843ada3db24697c2ee17f.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": false,
+      "binding_updated_at": null
+    },
+    {
+      "shot_id": "s14_c05",
+      "scene_id": "s14",
+      "index": 4,
+      "shot_size": "medium close-up",
+      "camera_angle": "low angle",
+      "camera": "",
+      "composition": "",
+      "characters": [
+        "柳衣",
+        "沈夜"
+      ],
+      "dialogue": "柳衣：「你会回来吗？」",
+      "description": "柳衣独白：柳衣站在驿站门口，望着沈夜离去的方向。晨曦照在她的脸上，眼中带着不舍与担忧。",
+      "opening_state": "",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_fe03066f_1",
+        "batch_id": "ff_fe03066f",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_2MtUkmv7MnAzOq7BMYXtPKIvplmN0Wr6/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s14_c05_first_v1.png",
+        "sha256": "6200f8e0884ff5fa5432de68d8048f9f1a6d6cebbb81d159dce678563c1e2d52",
+        "bytes": 4218129
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_fe03066f",
+          "created_at": 1789792034.8030057,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "3b65939f",
+            "binding_document_revision": "961f566f",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "柳衣": "d1a13bf7",
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_53bab2e2d837": "4d7b1019",
+                "look_f9be91236a97": "cc09fee7"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "1b3e870e",
+              "scene_instance_view": "7d6edc56"
+            },
+            "resolved_scene_instance_view_id": "sciv_25082643bf34",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_fe03066f_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s14_c05_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_2MtUkmv7MnAzOq7BMYXtPKIvplmN0Wr6/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789791551.6554883
+    },
+    {
+      "shot_id": "s15_c01",
+      "scene_id": "s15",
+      "index": 1,
+      "shot_size": "medium shot",
+      "camera_angle": "eye level",
+      "camera": "",
+      "composition": "萧寒在前景右侧逼近，柳衣居中保护沈夜，周伯在背景左侧",
+      "characters": [
+        "沈夜",
+        "柳衣",
+        "萧寒",
+        "周伯"
+      ],
+      "dialogue": "沈夜：萧寒，你是来杀她的，还是来杀我的？\n萧寒：沈镖头果然消息灵通。不过提醒你一句——那玉佩，早就该属于我了。",
+      "description": "中景，气氛骤紧。萧寒步步逼近，黑袍在烛火中飘动。柳衣挡在沈夜身前，长剑出鞘。周伯退到门边，手摸柴刀。三人形成对峙三角，门外雨中无人影。",
+      "opening_state": "萧寒踏入屋内，三人对峙",
+      "link_mode": "keyframes",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_5b9acfcb_1",
+        "batch_id": "ff_5b9acfcb",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_9Rn5jJrxT724y6KUh35YFksjQTgPlY4t/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s15_c01_first_v1.png",
+        "sha256": "c053bf13d03f860506cb8952ec4201bf229febcf43d59758f05294c1fc754e88",
+        "bytes": 4770272
+      },
+      "selected_last_frame": {
+        "candidate_id": "lf_f5317a2e_1",
+        "batch_id": "lf_f5317a2e",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_wXjoTnFCAF3B0080U51gXIJCpeSIONZB/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s15_c01_last.png",
+        "sha256": "f5b16766efc5e457e0aa0ddc5dccfa371cc50a70999b3fdc15f2fe5d7bc1a6c8",
+        "bytes": 4783857
+      },
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_59f78e6d",
+          "created_at": 1789764571.1928258,
+          "status": "pending",
+          "generation_basis": {
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_59f78e6d_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s15_c01_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_vSVspDzycMc7pOsoVY3vnh0DoM37WAvl/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "ff_be6a4d91",
+          "created_at": 1789787873.5523243,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "b19c0966",
+            "binding_document_revision": "e828beb3",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c",
+                "柳衣": "d1a13bf7",
+                "萧寒": "80af17f5",
+                "周伯": "bca14dd1"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309",
+                "look_04a3933e739b": "8b84dcae",
+                "look_ae63175c7f72": "a353e107",
+                "look_7fff641147a6": "2fbcdeb3"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "ae2a9e8f",
+              "scene_instance_view": "5c3748ca"
+            },
+            "resolved_scene_instance_view_id": "sciv_eff60c4f5b2a",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_be6a4d91_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s15_c01_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_OZOgvdfkYV8cpKg1nMkJkAJFCNBWSoX2/output.png"
+            },
+            {
+              "candidate_id": "ff_be6a4d91_2",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s15_c01_first_v2.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_QxcvfT9gpL6ZGdvGKK0N7oCobmfRTD5R/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "ff_fa68455e",
+          "created_at": 1789796569.3129475,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "b19c0966",
+            "binding_document_revision": "9f4bc5dc",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c",
+                "柳衣": "d1a13bf7",
+                "萧寒": "80af17f5",
+                "周伯": "bca14dd1"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309",
+                "look_04a3933e739b": "8b84dcae",
+                "look_ae63175c7f72": "a353e107",
+                "look_7fff641147a6": "2fbcdeb3"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "ae2a9e8f",
+              "scene_instance_view": "5c3748ca"
+            },
+            "resolved_scene_instance_view_id": "sciv_eff60c4f5b2a",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_fa68455e_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s15_c01_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_wJpPyvDSWRqxqMUzrM3O6gdBuG7Uwvkk/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "ff_5b9acfcb",
+          "created_at": 1789796959.6650453,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "b19c0966",
+            "binding_document_revision": "9f4bc5dc",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c",
+                "柳衣": "d1a13bf7",
+                "萧寒": "80af17f5",
+                "周伯": "bca14dd1"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309",
+                "look_04a3933e739b": "8b84dcae",
+                "look_ae63175c7f72": "a353e107",
+                "look_7fff641147a6": "2fbcdeb3"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "ae2a9e8f",
+              "scene_instance_view": "5c3748ca"
+            },
+            "resolved_scene_instance_view_id": "sciv_eff60c4f5b2a",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_5b9acfcb_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s15_c01_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_9Rn5jJrxT724y6KUh35YFksjQTgPlY4t/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [
+        {
+          "batch_id": "lf_1166aedc",
+          "created_at": 1789792457.3808236,
+          "status": "done",
+          "generation_basis": {
+            "binding_revision": "b19c0966",
+            "binding_document_revision": "961f566f",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c",
+                "柳衣": "d1a13bf7",
+                "萧寒": "80af17f5",
+                "周伯": "bca14dd1"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309",
+                "look_04a3933e739b": "8b84dcae",
+                "look_ae63175c7f72": "a353e107",
+                "look_7fff641147a6": "2fbcdeb3"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "ae2a9e8f",
+              "scene_instance_view": "5c3748ca"
+            },
+            "resolved_scene_instance_view_id": "sciv_eff60c4f5b2a",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "lf_1166aedc_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s15_c01_last.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_hQJfTfq9zOTSJc9xcnN7dj5knzGR23Xp/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "lf_f5317a2e",
+          "created_at": 1789793586.1716871,
+          "status": "done",
+          "generation_basis": {
+            "binding_revision": "b19c0966",
+            "binding_document_revision": "961f566f",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c",
+                "柳衣": "d1a13bf7",
+                "萧寒": "80af17f5",
+                "周伯": "bca14dd1"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309",
+                "look_04a3933e739b": "8b84dcae",
+                "look_ae63175c7f72": "a353e107",
+                "look_7fff641147a6": "2fbcdeb3"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "ae2a9e8f",
+              "scene_instance_view": "5c3748ca"
+            },
+            "resolved_scene_instance_view_id": "sciv_eff60c4f5b2a",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "lf_f5317a2e_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s15_c01_last.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_wXjoTnFCAF3B0080U51gXIJCpeSIONZB/output.png"
+            }
+          ]
+        }
+      ],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789787832.3743672
+    },
+    {
+      "shot_id": "s15_c02",
+      "scene_id": "s15",
+      "index": 2,
+      "shot_size": "wide shot",
+      "camera_angle": "from inside looking out",
+      "camera": "",
+      "composition": "窗户框住外面的竹林和雨幕，三人的剪影在前景",
+      "characters": [
+        "沈夜",
+        "柳衣",
+        "周伯",
+        "萧寒"
+      ],
+      "dialogue": "周伯：（低声）外面至少二十个人。",
+      "description": "全景：山道上，马蹄声由远及近。萧寒的身影出现在山路尽头，身后隐约有数名黑衣人跟随。沈夜、柳衣、周伯在驿站内透过窗户观察。",
+      "opening_state": "三人望向窗外",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_acb69faa_1",
+        "batch_id": "ff_acb69faa",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_53TggqqPJvAqeqZHJRZAxuwCesVC8m0U/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s15_c02_first_v1.png",
+        "sha256": "965c64735d06a9603475e1853c661f25b7352d860bf1f2e2fc19b777739903ef",
+        "bytes": 4305756
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_acb69faa",
+          "created_at": 1789764643.95764,
+          "status": "pending",
+          "generation_basis": {
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_acb69faa_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s15_c02_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_53TggqqPJvAqeqZHJRZAxuwCesVC8m0U/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": false,
+      "binding_updated_at": null
+    },
+    {
+      "shot_id": "s15_c03",
+      "scene_id": "s15",
+      "index": 3,
+      "shot_size": "medium shot",
+      "camera_angle": "",
+      "camera": "",
+      "composition": "",
+      "characters": [
+        "萧寒"
+      ],
+      "dialogue": "萧寒：沈镖头，别来无恙。",
+      "description": "萧寒入场：萧寒踏入驿站，黑色披风滴水。面容冷峻，眼神锐利如刀。身后跟着两名手下。",
+      "opening_state": "萧寒站在门口",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_c8dd44c7_1",
+        "batch_id": "ff_c8dd44c7",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_2JyMEz5xmxV9K1aibuL2tCIHprahvKOu/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s15_c03_first_v1.png",
+        "sha256": "9c494eb6533d729bcf4b08de41dc6592f0d5ad1172c186e415d9b7fbf9581f57",
+        "bytes": 4420941
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_c8dd44c7",
+          "created_at": 1789787523.8604443,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "cd21e5bc",
+            "binding_document_revision": "3021a144",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "萧寒": "80af17f5"
+              },
+              "looks": {
+                "look_ae63175c7f72": "a353e107"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "ae2a9e8f",
+              "scene_instance_view": "5c3748ca"
+            },
+            "resolved_scene_instance_view_id": "sciv_eff60c4f5b2a",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_c8dd44c7_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s15_c03_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_2JyMEz5xmxV9K1aibuL2tCIHprahvKOu/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789787494.596377
+    },
+    {
+      "shot_id": "s15_c04",
+      "scene_id": "s15",
+      "index": 4,
+      "shot_size": "close-up",
+      "camera_angle": "",
+      "camera": "",
+      "composition": "",
+      "characters": [
+        "周伯"
+      ],
+      "dialogue": "",
+      "description": "周伯暗中准备：周伯退到门边，手摸向腰间的柴刀。眼神警惕。",
+      "opening_state": "周伯站在门边阴影中",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_587565cc_1",
+        "batch_id": "ff_587565cc",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_t9HiwluOjQOdZjfYxcQgLKXZTzVa3OjR/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s15_c04_first_v1.png",
+        "sha256": "a07251213130824f28aa101437270629712c0d38b0a7d579fad4a5a7f9ebe7b6",
+        "bytes": 4509580
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_587565cc",
+          "created_at": 1789788549.4550753,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "3c752b4c",
+            "binding_document_revision": "eb43d5dc",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "周伯": "bca14dd1"
+              },
+              "looks": {
+                "look_7fff641147a6": "2fbcdeb3"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "ae2a9e8f",
+              "scene_instance_view": "5c3748ca"
+            },
+            "resolved_scene_instance_view_id": "sciv_eff60c4f5b2a",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_587565cc_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s15_c04_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_t9HiwluOjQOdZjfYxcQgLKXZTzVa3OjR/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789788540.4565492
+    },
+    {
+      "shot_id": "s15_c05",
+      "scene_id": "s15",
+      "index": 5,
+      "shot_size": "medium shot",
+      "camera_angle": "",
+      "camera": "",
+      "composition": "",
+      "characters": [
+        "柳衣",
+        "沈夜"
+      ],
+      "dialogue": "",
+      "description": "柳衣握剑：柳衣手按剑柄，剑未出鞘但已进入战斗状态。眼神坚定。",
+      "opening_state": "柳衣坐在桌旁",
+      "link_mode": "keyframes",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_bb7ddbdd_1",
+        "batch_id": "ff_bb7ddbdd",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_JkSNYqGFkO8HUoFfSMQdyh5IjYreHIM4/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s15_c05_first_v1.png",
+        "sha256": "cf45b8afdff2763d6b63f52fa1ea8a0b56b61854569e39daaefc2f11959d7c2c",
+        "bytes": 4667554
+      },
+      "selected_last_frame": {
+        "candidate_id": "lf_e306c179_1",
+        "batch_id": "lf_e306c179",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_wQI6AYkm1d3sSsNZwjdZC4NWFex5rxc2/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s15_c05_last.png",
+        "sha256": "8043e9d61c49b99451727560dd8c4099c4cfe8c4f04e51357065dabd59a9883b",
+        "bytes": 4621962
+      },
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_bb7ddbdd",
+          "created_at": 1789788605.8216143,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "712e174a",
+            "binding_document_revision": "eb43d5dc",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "柳衣": "d1a13bf7",
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_04a3933e739b": "8b84dcae",
+                "look_f8254b31dfc9": "01e21309"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "ae2a9e8f",
+              "scene_instance_view": "5c3748ca"
+            },
+            "resolved_scene_instance_view_id": "sciv_eff60c4f5b2a",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_bb7ddbdd_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s15_c05_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_JkSNYqGFkO8HUoFfSMQdyh5IjYreHIM4/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [
+        {
+          "batch_id": "lf_a1897f11",
+          "created_at": 1789788838.7490492,
+          "status": "done",
+          "generation_basis": {
+            "binding_revision": "712e174a",
+            "binding_document_revision": "eb43d5dc",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "柳衣": "d1a13bf7",
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_04a3933e739b": "8b84dcae",
+                "look_f8254b31dfc9": "01e21309"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "ae2a9e8f",
+              "scene_instance_view": "5c3748ca"
+            },
+            "resolved_scene_instance_view_id": "sciv_eff60c4f5b2a",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "lf_a1897f11_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s15_c05_last.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_1daGw06mwtQjYp4p8NapLhaEBl4KsnLr/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "lf_e306c179",
+          "created_at": 1789791644.1685174,
+          "status": "done",
+          "generation_basis": {
+            "binding_revision": "712e174a",
+            "binding_document_revision": "961f566f",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "柳衣": "d1a13bf7",
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_04a3933e739b": "8b84dcae",
+                "look_f8254b31dfc9": "01e21309"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "ae2a9e8f",
+              "scene_instance_view": "5c3748ca"
+            },
+            "resolved_scene_instance_view_id": "sciv_eff60c4f5b2a",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "lf_e306c179_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s15_c05_last.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_wQI6AYkm1d3sSsNZwjdZC4NWFex5rxc2/output.png"
+            }
+          ]
+        }
+      ],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789788361.9609408
+    },
+    {
+      "shot_id": "s15_c06",
+      "scene_id": "s15",
+      "index": 6,
+      "shot_size": "medium shot",
+      "camera_angle": "",
+      "camera": "",
+      "composition": "",
+      "characters": [
+        "萧寒",
+        "沈夜",
+        "柳衣"
+      ],
+      "dialogue": "萧寒：我来取回属于我的东西。",
+      "description": "萧寒逼近：萧寒步步逼近，沈夜挡在柳衣身前。气氛剑拔弩张。",
+      "opening_state": "萧寒站在原地",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_957c2792_1",
+        "batch_id": "ff_957c2792",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_x1PY0dAlFDDmvksHqNw7GgM17aBXGQn1/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s15_c06_first_v1.png",
+        "sha256": "b18a6bb1ef4d985c9b3c547404eea15c5bcbc6ad7d817eedeca3e9f08b44b73e",
+        "bytes": 4393225
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_957c2792",
+          "created_at": 1789787527.5046306,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "550f8501",
+            "binding_document_revision": "3021a144",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "萧寒": "80af17f5",
+                "沈夜": "00bb751c",
+                "柳衣": "d1a13bf7"
+              },
+              "looks": {
+                "look_ae63175c7f72": "a353e107",
+                "look_f8254b31dfc9": "01e21309",
+                "look_04a3933e739b": "8b84dcae"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "ae2a9e8f",
+              "scene_instance_view": "5c3748ca"
+            },
+            "resolved_scene_instance_view_id": "sciv_eff60c4f5b2a",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_957c2792_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s15_c06_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_x1PY0dAlFDDmvksHqNw7GgM17aBXGQn1/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789787505.386715
+    },
+    {
+      "shot_id": "s16_c01",
+      "scene_id": "s16",
+      "index": 1,
+      "shot_size": "medium shot",
+      "camera_angle": "low angle",
+      "camera": "",
+      "composition": "三人混战占据画面中心，动态构图，剑光形成视觉引导线",
+      "characters": [
+        "沈夜",
+        "柳衣",
+        "萧寒"
+      ],
+      "dialogue": "萧寒：沈夜，你还是这么没用——二十年了，还是只会逃！\n沈夜：逃？我逃了二十年，今晚，我绝不退！",
+      "description": "中景：萧寒身形一闪，已至近前。柳衣拔剑相迎，剑光如虹。沈夜也抽出短刃，三人混战在狭小的屋内。烛火摇曳，光影交错。",
+      "opening_state": "萧寒突然袭击，柳衣格挡",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_26b0d145_1",
+        "batch_id": "ff_26b0d145",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_7oKQFhyTEIYgAWCbdG4GGsvWmj2NVvUw/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s16_c01_first_v1.png",
+        "sha256": "ed9456334080ba255a58d524ecce06adb2a2d00b6dfcf1da043d21c27aa5fe83",
+        "bytes": 4656167
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_26b0d145",
+          "created_at": 1789787576.0172725,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "3f0567c5",
+            "binding_document_revision": "3021a144",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c",
+                "柳衣": "d1a13bf7",
+                "萧寒": "80af17f5"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309",
+                "look_04a3933e739b": "8b84dcae",
+                "look_ae63175c7f72": "a353e107"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "b5c69afd",
+              "scene_instance_view": "1f1e1d1f"
+            },
+            "resolved_scene_instance_view_id": "sciv_7c3527ffed91",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_26b0d145_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s16_c01_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_7oKQFhyTEIYgAWCbdG4GGsvWmj2NVvUw/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789787509.4772828
+    },
+    {
+      "shot_id": "s16_c02",
+      "scene_id": "s16",
+      "index": 2,
+      "shot_size": "close-up",
+      "camera_angle": "eye level",
+      "camera": "",
+      "composition": "双剑交叉占据画面中心，两人面部在两侧虚化",
+      "characters": [
+        "柳衣",
+        "萧寒"
+      ],
+      "dialogue": "",
+      "description": "特写：双剑对决。柳衣的长剑与萧寒的长刀碰撞，火花四溅。两人的手臂肌肉紧绷，表情狰狞。",
+      "opening_state": "柳衣与萧寒剑刃相交",
+      "link_mode": "keyframes",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_8ae61d08_1",
+        "batch_id": "ff_8ae61d08",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_n9cWnhKTxalgZxrSuNhD4ew8p84QWXQR/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s16_c02_first_v1.png",
+        "sha256": "2f3a84930cf8a7e537a3a3828141a7257492c42de8efa1b6f7faf168bd23809c",
+        "bytes": 4641405
+      },
+      "selected_last_frame": {
+        "candidate_id": "lf_214df8c9_1",
+        "batch_id": "lf_214df8c9",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_OnfavjT5yCIJ2QLphZ5UNnY9TcZAP8cl/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s16_c02_last.png",
+        "sha256": "a8706a3a33d03d9ee7f7b37d09b8372cb24c5b267a5ee8bd97544941aa3b5211",
+        "bytes": 4553818
+      },
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_4ce5e188",
+          "created_at": 1789764748.4177713,
+          "status": "pending",
+          "generation_basis": {
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_4ce5e188_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s16_c02_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_XI2pwvtwAJalHVcutXgu24VEMdki5oSv/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "ff_8ae61d08",
+          "created_at": 1789788067.5502102,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "bb852605",
+            "binding_document_revision": "e828beb3",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "柳衣": "d1a13bf7",
+                "萧寒": "80af17f5"
+              },
+              "looks": {
+                "look_04a3933e739b": "8b84dcae",
+                "look_ae63175c7f72": "a353e107"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "b5c69afd",
+              "scene_instance_view": "1f1e1d1f"
+            },
+            "resolved_scene_instance_view_id": "sciv_7c3527ffed91",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_8ae61d08_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s16_c02_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_n9cWnhKTxalgZxrSuNhD4ew8p84QWXQR/output.png"
+            },
+            {
+              "candidate_id": "ff_8ae61d08_2",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s16_c02_first_v2.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_XiotDanbX3ahababElwvagc0n5oJE8tH/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [
+        {
+          "batch_id": "lf_1c364048",
+          "created_at": 1789792379.5974429,
+          "status": "done",
+          "generation_basis": {
+            "binding_revision": "bb852605",
+            "binding_document_revision": "961f566f",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "柳衣": "d1a13bf7",
+                "萧寒": "80af17f5"
+              },
+              "looks": {
+                "look_04a3933e739b": "8b84dcae",
+                "look_ae63175c7f72": "a353e107"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "b5c69afd",
+              "scene_instance_view": "1f1e1d1f"
+            },
+            "resolved_scene_instance_view_id": "sciv_7c3527ffed91",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "lf_1c364048_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s16_c02_last.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_JwLcZBTgwekuLR7sXRZY19cwS4m4UahW/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "lf_214df8c9",
+          "created_at": 1789793669.6037714,
+          "status": "done",
+          "generation_basis": {
+            "binding_revision": "bb852605",
+            "binding_document_revision": "961f566f",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "柳衣": "d1a13bf7",
+                "萧寒": "80af17f5"
+              },
+              "looks": {
+                "look_04a3933e739b": "8b84dcae",
+                "look_ae63175c7f72": "a353e107"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "b5c69afd",
+              "scene_instance_view": "1f1e1d1f"
+            },
+            "resolved_scene_instance_view_id": "sciv_7c3527ffed91",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "lf_214df8c9_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s16_c02_last.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_OnfavjT5yCIJ2QLphZ5UNnY9TcZAP8cl/output.png"
+            }
+          ]
+        }
+      ],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789787836.1418338
+    },
+    {
+      "shot_id": "s16_c03",
+      "scene_id": "s16",
+      "index": 3,
+      "shot_size": "close-up",
+      "camera_angle": "eye level",
+      "camera": "",
+      "composition": "周伯挡在沈夜身前，萧寒在背景中愤怒",
+      "characters": [
+        "沈夜",
+        "柳衣",
+        "萧寒",
+        "周伯"
+      ],
+      "dialogue": "周伯：老爷，快走！\n沈夜：周伯！",
+      "description": "近景：周伯突然冲出，用身体挡住萧寒射向沈夜的暗器。他的肩膀被划出一道血口，但成功为沈夜争取了时间。",
+      "opening_state": "萧寒发射暗器，周伯挺身阻挡",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_e31e5d65_1",
+        "batch_id": "ff_e31e5d65",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_IkC6ZuBheA29CuSm1aPHfNtHLQbdGBfH/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s16_c03_first_v1.png",
+        "sha256": "c47bc03a46eed828ddbe8e4a3bc640bcc9ebe87f0e3061dc2b9c349a9dbb7c58",
+        "bytes": 4253021
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_e31e5d65",
+          "created_at": 1789764879.1021426,
+          "status": "pending",
+          "generation_basis": {
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_e31e5d65_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s16_c03_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_IkC6ZuBheA29CuSm1aPHfNtHLQbdGBfH/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": false,
+      "binding_updated_at": null
+    },
+    {
+      "shot_id": "s16_c05",
+      "scene_id": "s16",
+      "index": 4,
+      "shot_size": "close-up",
+      "camera_angle": "",
+      "camera": "",
+      "composition": "",
+      "characters": [
+        "柳衣",
+        "萧寒"
+      ],
+      "dialogue": "",
+      "description": "剑断瞬间：柳衣长剑被萧寒重击，断成两截。剑锋飞溅，柳衣后退跌坐。",
+      "opening_state": "柳衣挥剑格挡",
+      "link_mode": "keyframes",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_cfcfb250_1",
+        "batch_id": "ff_cfcfb250",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_EMvQpv8ywiXvkbmgApykJbCoKtDsZ0iD/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s16_c05_first_v1.png",
+        "sha256": "051b307c5a84ec861460a1d47d1c4ad229a032a9351658c48701981bdcd34247",
+        "bytes": 4516189
+      },
+      "selected_last_frame": {
+        "candidate_id": "lf_996509fd_1",
+        "batch_id": "lf_996509fd",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_tY1G53GQ42qbaRCHmLgv0mryMnRUmj7d/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s16_c05_last.png",
+        "sha256": "a00306e77bad0bac30e8312bf1c37dd9e69962f8bdcf4228eccaddda683ee539",
+        "bytes": 4647321
+      },
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_ee80c1da",
+          "created_at": 1789788606.9762752,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "297f6e94",
+            "binding_document_revision": "eb43d5dc",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "柳衣": "d1a13bf7",
+                "萧寒": "80af17f5"
+              },
+              "looks": {
+                "look_04a3933e739b": "8b84dcae",
+                "look_ae63175c7f72": "a353e107"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "b5c69afd",
+              "scene_instance_view": "1f1e1d1f"
+            },
+            "resolved_scene_instance_view_id": "sciv_7c3527ffed91",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_ee80c1da_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s16_c05_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_LQxjo3XwfjDwyJultXEwcczx1F5wKHmS/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "ff_cfcfb250",
+          "created_at": 1789789206.221027,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "297f6e94",
+            "binding_document_revision": "63a77210",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "柳衣": "d1a13bf7",
+                "萧寒": "80af17f5"
+              },
+              "looks": {
+                "look_04a3933e739b": "8b84dcae",
+                "look_ae63175c7f72": "a353e107"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "b5c69afd",
+              "scene_instance_view": "1f1e1d1f"
+            },
+            "resolved_scene_instance_view_id": "sciv_7c3527ffed91",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_cfcfb250_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s16_c05_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_EMvQpv8ywiXvkbmgApykJbCoKtDsZ0iD/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [
+        {
+          "batch_id": "lf_8bcec516",
+          "created_at": 1789788917.6105175,
+          "status": "done",
+          "generation_basis": {
+            "binding_revision": "297f6e94",
+            "binding_document_revision": "eb43d5dc",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "柳衣": "d1a13bf7",
+                "萧寒": "80af17f5"
+              },
+              "looks": {
+                "look_04a3933e739b": "8b84dcae",
+                "look_ae63175c7f72": "a353e107"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "b5c69afd",
+              "scene_instance_view": "1f1e1d1f"
+            },
+            "resolved_scene_instance_view_id": "sciv_7c3527ffed91",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "lf_8bcec516_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s16_c05_last.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_glPVXcvPZ96Ro0wmPWkPImkCnQMn64x4/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "lf_996509fd",
+          "created_at": 1789789479.5694363,
+          "status": "done",
+          "generation_basis": {
+            "binding_revision": "297f6e94",
+            "binding_document_revision": "63a77210",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "柳衣": "d1a13bf7",
+                "萧寒": "80af17f5"
+              },
+              "looks": {
+                "look_04a3933e739b": "8b84dcae",
+                "look_ae63175c7f72": "a353e107"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "b5c69afd",
+              "scene_instance_view": "1f1e1d1f"
+            },
+            "resolved_scene_instance_view_id": "sciv_7c3527ffed91",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "lf_996509fd_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s16_c05_last.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_tY1G53GQ42qbaRCHmLgv0mryMnRUmj7d/output.png"
+            }
+          ]
+        }
+      ],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789788369.2569993
+    },
+    {
+      "shot_id": "s16_c08",
+      "scene_id": "s16",
+      "index": 5,
+      "shot_size": "close-up",
+      "camera_angle": "high angle",
+      "camera": "",
+      "composition": "烛台居中，火焰熄灭过程",
+      "characters": [],
+      "dialogue": "",
+      "description": "特写：桌上的烛火被凌厉掌风扫灭，瞬间陷入黑暗。只有窗外雨夜微光勾勒轮廓。黑暗持续两秒，打破战斗节奏，营造紧张氛围。",
+      "opening_state": "烛火摇曳",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_57064c48_1",
+        "batch_id": "ff_57064c48",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_mCXsdWOeh8BCWWfXvcJP1bpGQ8u659dH/output_3ed1832ad338491591fc8535e0cff2ba.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s16_c08_first_v1.png",
+        "sha256": "6f2fef6a98f884b23bab7dcd6c8f075e43aeac5b23313e446838c18a680b45bb",
+        "bytes": 1988086
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_57064c48",
+          "created_at": 1789787854.3611252,
+          "status": "pending",
+          "generation_basis": {
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_57064c48_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s16_c08_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_mCXsdWOeh8BCWWfXvcJP1bpGQ8u659dH/output_3ed1832ad338491591fc8535e0cff2ba.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": false,
+      "binding_updated_at": null
+    },
+    {
+      "shot_id": "s16_c06",
+      "scene_id": "s16",
+      "index": 6,
+      "shot_size": "medium shot",
+      "camera_angle": "",
+      "camera": "",
+      "composition": "",
+      "characters": [
+        "周伯",
+        "萧寒",
+        "沈夜"
+      ],
+      "dialogue": "周伯：老爷，快走！",
+      "description": "周伯受伤：周伯挡在沈夜身前，萧寒的刀锋划过他的肩膀。鲜血染红蓑衣。",
+      "opening_state": "周伯持刀站立",
+      "link_mode": "keyframes",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_5859e371_1",
+        "batch_id": "ff_5859e371",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_rUuRWEu4k3JPVRCzwBMPCRg3IZFQHruX/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s16_c06_first_v1.png",
+        "sha256": "7a9876d287f3d018dc36b91e4c6f7d98ff862bba48ec762419b38edeb17d44ea",
+        "bytes": 4538127
+      },
+      "selected_last_frame": {
+        "candidate_id": "lf_4c6af568_1",
+        "batch_id": "lf_4c6af568",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_Xed7jCHP4KrnheAkPuVHbFnKFKsUUr7X/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s16_c06_last.png",
+        "sha256": "2a3ff6e931817fa999b6ddd34cca17bc75da5eecf5e624a6dae85a016c61b1db",
+        "bytes": 4690940
+      },
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_5859e371",
+          "created_at": 1789788382.730176,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "a6c32297",
+            "binding_document_revision": "491fe44c",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "周伯": "bca14dd1",
+                "萧寒": "80af17f5",
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_7fff641147a6": "2fbcdeb3",
+                "look_ae63175c7f72": "a353e107",
+                "look_f8254b31dfc9": "01e21309"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "b5c69afd",
+              "scene_instance_view": "1f1e1d1f"
+            },
+            "resolved_scene_instance_view_id": "sciv_7c3527ffed91",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_5859e371_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s16_c06_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_rUuRWEu4k3JPVRCzwBMPCRg3IZFQHruX/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [
+        {
+          "batch_id": "lf_4a0e8a22",
+          "created_at": 1789792806.8141892,
+          "status": "done",
+          "generation_basis": {
+            "binding_revision": "a6c32297",
+            "binding_document_revision": "961f566f",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "周伯": "bca14dd1",
+                "萧寒": "80af17f5",
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_7fff641147a6": "2fbcdeb3",
+                "look_ae63175c7f72": "a353e107",
+                "look_f8254b31dfc9": "01e21309"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "b5c69afd",
+              "scene_instance_view": "1f1e1d1f"
+            },
+            "resolved_scene_instance_view_id": "sciv_7c3527ffed91",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "lf_4a0e8a22_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s16_c06_last.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_Bij8zs6qKbBjBaIPurf8Ft3OmUvzrYcH/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "lf_4c6af568",
+          "created_at": 1789793756.8792555,
+          "status": "done",
+          "generation_basis": {
+            "binding_revision": "a6c32297",
+            "binding_document_revision": "961f566f",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "周伯": "bca14dd1",
+                "萧寒": "80af17f5",
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_7fff641147a6": "2fbcdeb3",
+                "look_ae63175c7f72": "a353e107",
+                "look_f8254b31dfc9": "01e21309"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "b5c69afd",
+              "scene_instance_view": "1f1e1d1f"
+            },
+            "resolved_scene_instance_view_id": "sciv_7c3527ffed91",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "lf_4c6af568_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s16_c06_last.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_Xed7jCHP4KrnheAkPuVHbFnKFKsUUr7X/output.png"
+            }
+          ]
+        }
+      ],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789787816.1442804
+    },
+    {
+      "shot_id": "s16_c07",
+      "scene_id": "s16",
+      "index": 7,
+      "shot_size": "close-up",
+      "camera_angle": "",
+      "camera": "",
+      "composition": "",
+      "characters": [
+        "沈夜",
+        "萧寒"
+      ],
+      "dialogue": "沈夜：我逃了二十年，今晚绝不退！",
+      "description": "沈夜暴起：沈夜怒不可遏，短刃直刺萧寒。眼神中二十年压抑瞬间爆发。",
+      "opening_state": "沈夜持刃对峙",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_d2170099_1",
+        "batch_id": "ff_d2170099",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_atCjm8n67h5VCbOehWTAsX44A6kIMRTS/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s16_c07_first_v1.png",
+        "sha256": "b2ab059671698e4229b458149247b43ebe06f7b63d95269a8fcfb009a1ec5c2b",
+        "bytes": 4511976
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_d2170099",
+          "created_at": 1789788383.879046,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "f35ba5da",
+            "binding_document_revision": "491fe44c",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c",
+                "萧寒": "80af17f5"
+              },
+              "looks": {
+                "look_f8254b31dfc9": "01e21309",
+                "look_ae63175c7f72": "a353e107"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "b5c69afd",
+              "scene_instance_view": "1f1e1d1f"
+            },
+            "resolved_scene_instance_view_id": "sciv_7c3527ffed91",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_d2170099_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s16_c07_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_atCjm8n67h5VCbOehWTAsX44A6kIMRTS/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789787826.256049
+    },
+    {
+      "shot_id": "s17_c01",
+      "scene_id": "s17",
+      "index": 1,
+      "shot_size": "medium shot",
+      "camera_angle": "low angle",
+      "camera": "",
+      "composition": "沈夜在柴房门口，木箱在画面中心，萧寒在门外阴影中",
+      "characters": [
+        "沈夜",
+        "萧寒"
+      ],
+      "dialogue": "沈夜：（喘息）这就是……证据……",
+      "description": "中景：混乱中，沈夜被萧寒击退，撞开了柴房的门。他跌入黑暗中，手中却抓住了一样东西——一个落满灰尘的木箱。箱子已经腐烂，但锁扣完好。沈夜用力撬开，里面是一枚玉佩，雕工精美，刻着一个'赵'字。玉佩下方，还压着一张纸——是当年的账本。",
+      "opening_state": "沈夜跌入柴房，发现木箱",
+      "link_mode": "keyframes",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_d4e4a226_1",
+        "batch_id": "ff_d4e4a226",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_J04XvQ51kPnhszNJLGL8Ft9mbZGJwRGf/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s17_c01_first_v1.png",
+        "sha256": "32c44aa0793e89dbc3b45a3aab7004118955ed5f6f20706081ee457f342e073c",
+        "bytes": 4284327
+      },
+      "selected_last_frame": {
+        "candidate_id": "lf_19305dd8_1",
+        "batch_id": "lf_19305dd8",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_NbmbNKwn9XbF1OEBNpcgzVJ5O2NvSDqI/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s17_c01_last.png",
+        "sha256": "27e32d799d8e93d98aec9a4cc5e7527fd444bd29c3f2c60782d56995552a783c",
+        "bytes": 4281495
+      },
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_e04d8598",
+          "created_at": 1789764879.4743834,
+          "status": "pending",
+          "generation_basis": {
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_e04d8598_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s17_c01_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_tGHnCmKqYj3xmaDHlHghAQpGUg8GaXMH/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "ff_d4e4a226",
+          "created_at": 1789793860.3211246,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "eab2f5bd",
+            "binding_document_revision": "9f4bc5dc",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c",
+                "萧寒": "80af17f5"
+              },
+              "looks": {
+                "look_f9be91236a97": "cc09fee7",
+                "look_ae63175c7f72": "a353e107"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "eacf6dd9",
+              "scene_instance_view": "2d1de60a"
+            },
+            "resolved_scene_instance_view_id": "sciv_1c6bdc2d5de5",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_d4e4a226_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s17_c01_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_J04XvQ51kPnhszNJLGL8Ft9mbZGJwRGf/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [
+        {
+          "batch_id": "lf_0ead8ef0",
+          "created_at": 1789792500.8381712,
+          "status": "done",
+          "generation_basis": {
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "lf_0ead8ef0_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s17_c01_last.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_HOYAsENWgiFgqvJA4d8x5HhpoOz8JtEn/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "lf_d2a1efb9",
+          "created_at": 1789793481.3454027,
+          "status": "done",
+          "generation_basis": {
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "lf_d2a1efb9_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s17_c01_last.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_A6l1GYcyEruFRzAh9pbofWRNxKEig9eK/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "lf_19305dd8",
+          "created_at": 1789794160.127787,
+          "status": "done",
+          "generation_basis": {
+            "binding_revision": "eab2f5bd",
+            "binding_document_revision": "9f4bc5dc",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c",
+                "萧寒": "80af17f5"
+              },
+              "looks": {
+                "look_f9be91236a97": "cc09fee7",
+                "look_ae63175c7f72": "a353e107"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "eacf6dd9",
+              "scene_instance_view": "2d1de60a"
+            },
+            "resolved_scene_instance_view_id": "sciv_1c6bdc2d5de5",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "lf_19305dd8_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s17_c01_last.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_NbmbNKwn9XbF1OEBNpcgzVJ5O2NvSDqI/output.png"
+            }
+          ]
+        }
+      ],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789793839.4437954
+    },
+    {
+      "shot_id": "s17_c02",
+      "scene_id": "s17",
+      "index": 2,
+      "shot_size": "extreme close-up",
+      "camera_angle": "overhead",
+      "camera": "",
+      "composition": "玉佩占据画面中心，账本边缘可见于下方",
+      "characters": [
+        "沈夜"
+      ],
+      "dialogue": "沈夜：（低声）赵……大理寺卿赵……",
+      "description": "极特写：玉佩特写。一枚精美的玉佩，雕刻着'赵'字，在微弱光线下泛着温润的光泽。玉佩下方压着一张泛黄的账本。",
+      "opening_state": "玉佩静置于箱中",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_fbb790cc_1",
+        "batch_id": "ff_fbb790cc",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_U2cqQju3ujMCdR3QDGDkOqnE6cg8ISCv/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s17_c02_first_v1.png",
+        "sha256": "0fbe79b8a3a763629d924e5b30636a942e7717074c218dad99041c60c371ebf7",
+        "bytes": 4287252
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_6c0b10cb",
+          "created_at": 1789789205.1782305,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "b64ed01f",
+            "binding_document_revision": "63a77210",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_f9be91236a97": "cc09fee7"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "eacf6dd9",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_1c6bdc2d5de5",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_6c0b10cb_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s17_c02_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_GezkQVhX1d1N2TwB6IVoNFCeOscxj7Qb/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "ff_fbb790cc",
+          "created_at": 1789796228.9754128,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "b64ed01f",
+            "binding_document_revision": "9f4bc5dc",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_f9be91236a97": "cc09fee7"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "eacf6dd9",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_1c6bdc2d5de5",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_fbb790cc_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s17_c02_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_U2cqQju3ujMCdR3QDGDkOqnE6cg8ISCv/output.png"
+            },
+            {
+              "candidate_id": "ff_fbb790cc_2",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s17_c02_first_v2.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_bK5l7YJ7t41I3C58EDemthIwxK73zNYj/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789789189.6984313
+    },
+    {
+      "shot_id": "s17_c03",
+      "scene_id": "s17",
+      "index": 3,
+      "shot_size": "close-up",
+      "camera_angle": "eye level",
+      "camera": "",
+      "composition": "沈夜面部占据画面3/4，眼神坚定直视镜头",
+      "characters": [
+        "沈夜"
+      ],
+      "dialogue": "沈夜：（低声，坚定）这一次，我不会再逃了。",
+      "description": "近景：沈夜的特写。他的眼神从迷茫逐渐变得坚定。二十年的逃避，在这一刻找到了意义。他握紧玉佩，站起身。",
+      "opening_state": "沈夜蹲在地上，手握玉佩",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_9633e5e9_1",
+        "batch_id": "ff_9633e5e9",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_uWJ6hQvwFUwixxrf1fle3xhm6DhhIjCu/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s17_c03_first_v1.png",
+        "sha256": "40bab85930770fcb3df1c21dcabce41ade8f4e05c4afb9b96abb5325c4660e70",
+        "bytes": 4301212
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_a68ee955",
+          "created_at": 1789790563.785842,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "dbc9a404",
+            "binding_document_revision": "10c9f441",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_f9be91236a97": "cc09fee7"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "eacf6dd9",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_1c6bdc2d5de5",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_a68ee955_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s17_c03_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_XMnNdStqgGFzclEGAhOCSVeaCAZwLdr4/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "ff_9633e5e9",
+          "created_at": 1789790870.516846,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "dbc9a404",
+            "binding_document_revision": "10c9f441",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_f9be91236a97": "cc09fee7"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "eacf6dd9",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_1c6bdc2d5de5",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_9633e5e9_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s17_c03_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_uWJ6hQvwFUwixxrf1fle3xhm6DhhIjCu/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789790557.2054973
+    },
+    {
+      "shot_id": "s17_c06",
+      "scene_id": "s17",
+      "index": 4,
+      "shot_size": "close-up",
+      "camera_angle": "",
+      "camera": "",
+      "composition": "",
+      "characters": [
+        "沈夜"
+      ],
+      "dialogue": "",
+      "description": "账本内容：账本页面上记录着二十年前的交易明细。沈夜手指划过一行行字迹。",
+      "opening_state": "沈夜低头看账本",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_e16fd301_1",
+        "batch_id": "ff_e16fd301",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_8yzJftiJSOgzmrLeUMgXZxBLoSrAzSOw/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s17_c06_first_v1.png",
+        "sha256": "455592c0e3de2ae23b892156975a115f51054e4621afe305994f4f424f620cbf",
+        "bytes": 4449783
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_e16fd301",
+          "created_at": 1789789732.125702,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "58a240c2",
+            "binding_document_revision": "16a6dbd7",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_f9be91236a97": "cc09fee7"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "eacf6dd9",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_1c6bdc2d5de5",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_e16fd301_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s17_c06_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_8yzJftiJSOgzmrLeUMgXZxBLoSrAzSOw/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789789661.4134092
+    },
+    {
+      "shot_id": "s17_c07",
+      "scene_id": "s17",
+      "index": 5,
+      "shot_size": "extreme wide shot",
+      "camera_angle": "high angle",
+      "camera": "",
+      "composition": "",
+      "characters": [
+        "沈夜",
+        "萧寒"
+      ],
+      "dialogue": "",
+      "description": "极远景：柴房外景，雨夜中的破旧木屋孤立于山野。沈夜跌入门内的身影在昏黄光线中一闪而过。远处山峦轮廓在闪电中若隐若现，雨幕如帘。",
+      "opening_state": "",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_5b0fe808_1",
+        "batch_id": "ff_5b0fe808",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_512muLMPxJXtnNUlrlATFyxIMcPUocqW/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s17_c07_first_v1.png",
+        "sha256": "5f806e5d0be826c186ea58eeb654a26bfa5d3055805a7cc9ae32330971efd42c",
+        "bytes": 4443557
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_5b0fe808",
+          "created_at": 1789790871.5771272,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "a57a8248",
+            "binding_document_revision": "10c9f441",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c",
+                "萧寒": "80af17f5"
+              },
+              "looks": {
+                "look_f9be91236a97": "cc09fee7",
+                "look_ae63175c7f72": "a353e107"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "eacf6dd9",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_1c6bdc2d5de5",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_5b0fe808_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s17_c07_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_512muLMPxJXtnNUlrlATFyxIMcPUocqW/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789789668.2495782
+    },
+    {
+      "shot_id": "s18_c01",
+      "scene_id": "s18",
+      "index": 1,
+      "shot_size": "medium shot",
+      "camera_angle": "eye level",
+      "camera": "",
+      "composition": "沈夜和柳衣面对面，玉佩在两人之间，萧寒在背景门外的阴影中",
+      "characters": [
+        "沈夜",
+        "柳衣",
+        "萧寒"
+      ],
+      "dialogue": "柳衣：你为什么不早点说？\n沈夜：因为我不敢相信。我怕这是另一个陷阱，怕再次被骗。",
+      "description": "中景：沈夜走出柴房，柳衣也追入。她看到沈夜手中的玉佩和账本，眼中闪过复杂的情绪。'你为什么不早点说？'她问。沈夜回答：'因为我不敢相信。我怕这是另一个陷阱，怕再次被骗。'萧寒在门外冷笑。",
+      "opening_state": "柳衣追入，看到证据",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_00407b98_1",
+        "batch_id": "ff_00407b98",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_3MUY4EP2Jk7UZQ89vs6D6vcA13dRtt9i/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s18_c01_first_v1.png",
+        "sha256": "294fc34a57c3f3ba9392630608e730fb891abcec6faa3c8d76e1d0d66a0d9f1a",
+        "bytes": 4370497
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_00407b98",
+          "created_at": 1789764967.6324415,
+          "status": "pending",
+          "generation_basis": {
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_00407b98_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s18_c01_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_3MUY4EP2Jk7UZQ89vs6D6vcA13dRtt9i/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": false,
+      "binding_updated_at": null
+    },
+    {
+      "shot_id": "s18_c02",
+      "scene_id": "s18",
+      "index": 2,
+      "shot_size": "close-up",
+      "camera_angle": "eye level",
+      "camera": "",
+      "composition": "沈夜和柳衣并肩，面向萧寒的方向",
+      "characters": [
+        "沈夜",
+        "柳衣",
+        "萧寒"
+      ],
+      "dialogue": "沈夜：我逃了二十年，今天，我要亲手结束这一切。\n柳衣：（坚定）我会陪你。",
+      "description": "近景：沈夜的特写。他抬起头，直视萧寒的方向，眼神决绝。'饶命？'他冷笑，'我逃了二十年，今天，我要亲手结束这一切。'柳衣站在他身边，尽管手臂受伤，仍紧握断剑。",
+      "opening_state": "沈夜从迷茫转为坚定",
+      "link_mode": "keyframes",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_7f2b87bf_1",
+        "batch_id": "ff_7f2b87bf",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_objs6Dt1UuVOv3ZHitHkd2IzTpFvZZoC/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s18_c02_first_v1.png",
+        "sha256": "184ecbd6273aca835c645e8aa86aff969258cf97da5e888f5da207a365f2f62a",
+        "bytes": 4512326
+      },
+      "selected_last_frame": {
+        "candidate_id": "lf_fd1b2fe2_1",
+        "batch_id": "lf_fd1b2fe2",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_wurf2xLeJ8sN5GBjIFGT5UU0wd0h3vtT/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s18_c02_last.png",
+        "sha256": "95f52fce743a0b932c99a7d173ed78916c550425639743014e7c3edfd0e0a49f",
+        "bytes": 4554046
+      },
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_e0fff9f6",
+          "created_at": 1789765044.2868898,
+          "status": "pending",
+          "generation_basis": {
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_e0fff9f6_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s18_c02_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_yXK9e10WULO13O9EGnXVIh1C6qLPxJOE/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "ff_7f2b87bf",
+          "created_at": 1789793861.4004748,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "92532953",
+            "binding_document_revision": "9f4bc5dc",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c",
+                "柳衣": "d1a13bf7",
+                "萧寒": "80af17f5"
+              },
+              "looks": {
+                "look_f9be91236a97": "cc09fee7",
+                "look_53bab2e2d837": "4d7b1019",
+                "look_ae63175c7f72": "a353e107"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "38266176",
+              "scene_instance_view": "87e25d5e"
+            },
+            "resolved_scene_instance_view_id": "sciv_ba494b71ae06",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_7f2b87bf_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s18_c02_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_objs6Dt1UuVOv3ZHitHkd2IzTpFvZZoC/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [
+        {
+          "batch_id": "lf_4ae30ec9",
+          "created_at": 1789792592.6201396,
+          "status": "done",
+          "generation_basis": {
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "lf_4ae30ec9_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s18_c02_last.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_d2biiUedCbKOOXHmPOeDI7QsVz1ZCNwb/output.png"
+            }
+          ]
+        },
+        {
+          "batch_id": "lf_fd1b2fe2",
+          "created_at": 1789794309.6522598,
+          "status": "done",
+          "generation_basis": {
+            "binding_revision": "92532953",
+            "binding_document_revision": "9f4bc5dc",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c",
+                "柳衣": "d1a13bf7",
+                "萧寒": "80af17f5"
+              },
+              "looks": {
+                "look_f9be91236a97": "cc09fee7",
+                "look_53bab2e2d837": "4d7b1019",
+                "look_ae63175c7f72": "a353e107"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "38266176",
+              "scene_instance_view": "87e25d5e"
+            },
+            "resolved_scene_instance_view_id": "sciv_ba494b71ae06",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "lf_fd1b2fe2_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s18_c02_last.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_wurf2xLeJ8sN5GBjIFGT5UU0wd0h3vtT/output.png"
+            }
+          ]
+        }
+      ],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789793835.4137294
+    },
+    {
+      "shot_id": "s18_c03",
+      "scene_id": "s18",
+      "index": 3,
+      "shot_size": "medium shot",
+      "camera_angle": "eye level",
+      "camera": "",
+      "composition": "两人并肩站立，形成对抗的门",
+      "characters": [
+        "沈夜",
+        "柳衣",
+        "萧寒"
+      ],
+      "dialogue": "柳衣：你的仇，就是我的仇。\n沈夜：（感激）谢谢你，柳衣。",
+      "description": "中景：柳衣承诺帮助沈夜面对萧寒。她尽管手臂受伤，仍坚定地说：'你的仇，就是我的仇。'沈夜看着她，眼中闪过感激。两人准备迎战。",
+      "opening_state": "沈夜和柳衣对视",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_40db067f_1",
+        "batch_id": "ff_40db067f",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_XIRqUbY20UOb6rnHmCtlTPzJI0AMfeeq/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s18_c03_first_v1.png",
+        "sha256": "a09f668daa6ba2abef6a3a2f69063dabe701d2a56c4ac8788f3d8e9f519dec2f",
+        "bytes": 4499863
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_40db067f",
+          "created_at": 1789789734.4369032,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "a3ae867d",
+            "binding_document_revision": "16a6dbd7",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c",
+                "柳衣": "d1a13bf7",
+                "萧寒": "80af17f5"
+              },
+              "looks": {
+                "look_f9be91236a97": "cc09fee7",
+                "look_53bab2e2d837": "4d7b1019",
+                "look_ae63175c7f72": "a353e107"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "38266176",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_ba494b71ae06",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_40db067f_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s18_c03_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_XIRqUbY20UOb6rnHmCtlTPzJI0AMfeeq/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789789676.2061846
+    },
+    {
+      "shot_id": "s18_c05",
+      "scene_id": "s18",
+      "index": 4,
+      "shot_size": "medium shot",
+      "camera_angle": "",
+      "camera": "",
+      "composition": "",
+      "characters": [
+        "萧寒"
+      ],
+      "dialogue": "萧寒：把东西交出来，我可以饶你们一命。",
+      "description": "萧寒逼近：萧寒推开门，冷笑着走进柴房。手中长剑滴血。",
+      "opening_state": "萧寒站在门口",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_7ff9bebd_1",
+        "batch_id": "ff_7ff9bebd",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_j3CGtYjzYEYe0ooDT5r38ThVMGOgPib2/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s18_c05_first_v1.png",
+        "sha256": "d4cca9ec9fd7d0a7d123dbc1d9d9ad051f562667977d09a1997995b7bc2c0d90",
+        "bytes": 4360447
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_7ff9bebd",
+          "created_at": 1789789783.5834923,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "336e153e",
+            "binding_document_revision": "16a6dbd7",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "萧寒": "80af17f5"
+              },
+              "looks": {
+                "look_ae63175c7f72": "a353e107"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "38266176",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_ba494b71ae06",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_7ff9bebd_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s18_c05_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_j3CGtYjzYEYe0ooDT5r38ThVMGOgPib2/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789789679.1769192
+    },
+    {
+      "shot_id": "s18_c06",
+      "scene_id": "s18",
+      "index": 5,
+      "shot_size": "extreme close-up",
+      "camera_angle": "",
+      "camera": "",
+      "composition": "",
+      "characters": [
+        "沈夜"
+      ],
+      "dialogue": "",
+      "description": "玉佩特写：沈夜手中的赵字玉佩在烛光下泛着温润光泽。特写展示玉佩上的雕工与刻字。",
+      "opening_state": "",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_cb8501a9_1",
+        "batch_id": "ff_cb8501a9",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_6i10nFznm0jC4piH6J0kZmdU1jLTXhrE/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s18_c06_first_v1.png",
+        "sha256": "67240b4fcabf7f74ca45a35cc390d137daa6e5c541edcec9a5ccecdd58cd681d",
+        "bytes": 4378492
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_cb8501a9",
+          "created_at": 1789790566.166909,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "6178360b",
+            "binding_document_revision": "10c9f441",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_f9be91236a97": "cc09fee7"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "38266176",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_ba494b71ae06",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_cb8501a9_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s18_c06_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_6i10nFznm0jC4piH6J0kZmdU1jLTXhrE/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789789686.2490761
+    },
+    {
+      "shot_id": "s18_c07",
+      "scene_id": "s18",
+      "index": 6,
+      "shot_size": "close-up",
+      "camera_angle": "high angle",
+      "camera": "",
+      "composition": "",
+      "characters": [
+        "柳衣",
+        "沈夜"
+      ],
+      "dialogue": "",
+      "description": "柳衣的反应：柳衣看到沈夜手中的玉佩，瞳孔微缩。她认出了这枚玉佩——那是她家族的信物。",
+      "opening_state": "",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_103ed878_1",
+        "batch_id": "ff_103ed878",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_5KTBRwwvRwKSHCLPomfS34m4IgiFKVPU/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s18_c07_first_v1.png",
+        "sha256": "5bafacd4e5139ffe55169e140413aacd70d9c60b61be00276c7b9e6bda959305",
+        "bytes": 4440195
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_103ed878",
+          "created_at": 1789790618.9804173,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "4e92a0b7",
+            "binding_document_revision": "10c9f441",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "柳衣": "d1a13bf7",
+                "沈夜": "00bb751c"
+              },
+              "looks": {
+                "look_53bab2e2d837": "4d7b1019",
+                "look_f9be91236a97": "cc09fee7"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "38266176",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_ba494b71ae06",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_103ed878_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s18_c07_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_5KTBRwwvRwKSHCLPomfS34m4IgiFKVPU/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789789689.810343
+    },
+    {
+      "shot_id": "s18_c08",
+      "scene_id": "s18",
+      "index": 7,
+      "shot_size": "wide shot",
+      "camera_angle": "eye level",
+      "camera": "",
+      "composition": "",
+      "characters": [
+        "沈夜",
+        "柳衣",
+        "萧寒"
+      ],
+      "dialogue": "",
+      "description": "三人对峙：沈夜、柳衣背靠背站立，面对萧寒。柴房门半开，雨声从门外传来。",
+      "opening_state": "",
+      "link_mode": "i2v",
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "selected_first_frame": {
+        "candidate_id": "ff_ea40013b_1",
+        "batch_id": "ff_ea40013b",
+        "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_GcKWt6b4OOGuUgZVKFOpMQFElsP5MaPx/output.png",
+        "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s18_c08_first_v1.png",
+        "sha256": "8b6e277ddb247cfe4964560c53a6dd5087b077fb241e93f33ebb9af97ad5e78b",
+        "bytes": 4610960
+      },
+      "selected_last_frame": {},
+      "first_frame_batches": [
+        {
+          "batch_id": "ff_ea40013b",
+          "created_at": 1789789202.6688535,
+          "status": "pending",
+          "generation_basis": {
+            "binding_revision": "a01a5218",
+            "binding_document_revision": "63a77210",
+            "binding_readiness": "READY",
+            "dependency_fingerprints": {
+              "visual_profile": "05b75e02",
+              "characters": {
+                "沈夜": "00bb751c",
+                "柳衣": "d1a13bf7",
+                "萧寒": "80af17f5"
+              },
+              "looks": {
+                "look_f9be91236a97": "cc09fee7",
+                "look_53bab2e2d837": "4d7b1019",
+                "look_ae63175c7f72": "a353e107"
+              },
+              "props": {},
+              "compositions": {},
+              "scene_instance": "38266176",
+              "scene_instance_view": null
+            },
+            "resolved_scene_instance_view_id": "sciv_ba494b71ae06",
+            "visual_profile_fingerprint": "05b75e02",
+            "image_provider": "agnes"
+          },
+          "candidates": [
+            {
+              "candidate_id": "ff_ea40013b_1",
+              "local": "projects\\Golden_Full_Production_V1\\output\\frames\\s18_c08_first_v1.png",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_GcKWt6b4OOGuUgZVKFOpMQFElsP5MaPx/output.png"
+            }
+          ]
+        }
+      ],
+      "last_frame_batches": [],
+      "video_versions_count": 0,
+      "final_video": null,
+      "video_end_frame": {},
+      "binding_present": true,
+      "binding_updated_at": 1789789185.5397549
+    }
+  ],
+  "missing_selected_files": []
+}

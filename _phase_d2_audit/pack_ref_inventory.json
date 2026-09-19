@@ -1,0 +1,3242 @@
+[
+  {
+    "shot_id": "s09_c01",
+    "scene_id": "s09",
+    "shot_size": "extreme wide shot",
+    "camera_angle": "high angle",
+    "characters": [
+      "沈夜"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 3,
+      "character_look": 1
+    },
+    "total_refs": 5,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "沈夜": 4
+    },
+    "human_refs_total": 4,
+    "human_detail": {
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 5,
+    "first_excluded": 0,
+    "cap_fired": false,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "first_sent_human": 4
+  },
+  {
+    "shot_id": "s09_c02",
+    "scene_id": "s09",
+    "shot_size": "medium shot",
+    "camera_angle": "eye level",
+    "characters": [
+      "沈夜"
+    ],
+    "link_mode": "keyframes",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 3,
+      "character_look": 1
+    },
+    "total_refs": 5,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "沈夜": 4
+    },
+    "human_refs_total": 4,
+    "human_detail": {
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 5,
+    "first_excluded": 0,
+    "cap_fired": false,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "first_sent_human": 4
+  },
+  {
+    "shot_id": "s09_c03",
+    "scene_id": "s09",
+    "shot_size": "close-up",
+    "camera_angle": "eye level",
+    "characters": [
+      "沈夜",
+      "柳衣"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 6,
+      "character_look": 2
+    },
+    "total_refs": 9,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "沈夜": 4,
+      "柳衣": 4
+    },
+    "human_refs_total": 8,
+    "human_detail": {
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "柳衣": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 9,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:沈夜:front",
+      "legacy:沈夜:side",
+      "legacy:沈夜:back",
+      "legacy:柳衣:front",
+      "legacy:柳衣:side",
+      "legacy:柳衣:back"
+    ],
+    "first_sent_human": 2
+  },
+  {
+    "shot_id": "s09_c05",
+    "scene_id": "s09",
+    "shot_size": "medium shot",
+    "camera_angle": "",
+    "characters": [
+      "周伯"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 3,
+      "character_look": 1
+    },
+    "total_refs": 5,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "周伯": 4
+    },
+    "human_refs_total": 4,
+    "human_detail": {
+      "周伯": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 5,
+    "first_excluded": 0,
+    "cap_fired": false,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "first_sent_human": 4
+  },
+  {
+    "shot_id": "s09_c08",
+    "scene_id": "s09",
+    "shot_size": "close-up",
+    "camera_angle": "eye level",
+    "characters": [
+      "沈夜",
+      "周伯"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 6,
+      "character_look": 2
+    },
+    "total_refs": 9,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "沈夜": 4,
+      "周伯": 4
+    },
+    "human_refs_total": 8,
+    "human_detail": {
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "周伯": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 9,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:沈夜:front",
+      "legacy:沈夜:side",
+      "legacy:沈夜:back",
+      "legacy:周伯:front",
+      "legacy:周伯:side",
+      "legacy:周伯:back"
+    ],
+    "first_sent_human": 2
+  },
+  {
+    "shot_id": "s09_c06",
+    "scene_id": "s09",
+    "shot_size": "wide shot",
+    "camera_angle": "",
+    "characters": [
+      "沈夜",
+      "周伯"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 6,
+      "character_look": 2
+    },
+    "total_refs": 9,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "沈夜": 4,
+      "周伯": 4
+    },
+    "human_refs_total": 8,
+    "human_detail": {
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "周伯": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 9,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:沈夜:front",
+      "legacy:沈夜:side",
+      "legacy:沈夜:back",
+      "legacy:周伯:front",
+      "legacy:周伯:side",
+      "legacy:周伯:back"
+    ],
+    "first_sent_human": 2
+  },
+  {
+    "shot_id": "s09_c07",
+    "scene_id": "s09",
+    "shot_size": "medium close-up",
+    "camera_angle": "",
+    "characters": [
+      "沈夜",
+      "柳衣"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 6,
+      "character_look": 2
+    },
+    "total_refs": 9,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "沈夜": 4,
+      "柳衣": 4
+    },
+    "human_refs_total": 8,
+    "human_detail": {
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "柳衣": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 9,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:沈夜:front",
+      "legacy:沈夜:side",
+      "legacy:沈夜:back",
+      "legacy:柳衣:front",
+      "legacy:柳衣:side",
+      "legacy:柳衣:back"
+    ],
+    "first_sent_human": 2
+  },
+  {
+    "shot_id": "s10_c01",
+    "scene_id": "s10",
+    "shot_size": "medium shot",
+    "camera_angle": "eye level",
+    "characters": [
+      "沈夜",
+      "柳衣",
+      "周伯"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 9,
+      "character_look": 3
+    },
+    "total_refs": 13,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "沈夜": 4,
+      "柳衣": 4,
+      "周伯": 4
+    },
+    "human_refs_total": 12,
+    "human_detail": {
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "柳衣": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "周伯": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 13,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:沈夜:front",
+      "legacy:沈夜:side",
+      "legacy:沈夜:back",
+      "legacy:柳衣:front",
+      "legacy:柳衣:side",
+      "legacy:柳衣:back",
+      "legacy:周伯:front",
+      "legacy:周伯:side",
+      "legacy:周伯:back"
+    ],
+    "first_sent_human": 3
+  },
+  {
+    "shot_id": "s10_c02",
+    "scene_id": "s10",
+    "shot_size": "close-up",
+    "camera_angle": "over the shoulder",
+    "characters": [
+      "沈夜",
+      "柳衣"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 6,
+      "character_look": 2
+    },
+    "total_refs": 9,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "沈夜": 4,
+      "柳衣": 4
+    },
+    "human_refs_total": 8,
+    "human_detail": {
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "柳衣": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 9,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:沈夜:front",
+      "legacy:沈夜:side",
+      "legacy:沈夜:back",
+      "legacy:柳衣:front",
+      "legacy:柳衣:side",
+      "legacy:柳衣:back"
+    ],
+    "first_sent_human": 2
+  },
+  {
+    "shot_id": "s10_c03",
+    "scene_id": "s10",
+    "shot_size": "close-up",
+    "camera_angle": "eye level",
+    "characters": [
+      "沈夜"
+    ],
+    "link_mode": "keyframes",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 3,
+      "character_look": 1
+    },
+    "total_refs": 5,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "沈夜": 4
+    },
+    "human_refs_total": 4,
+    "human_detail": {
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 5,
+    "first_excluded": 0,
+    "cap_fired": false,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "first_sent_human": 4
+  },
+  {
+    "shot_id": "s10_c06",
+    "scene_id": "s10",
+    "shot_size": "close-up",
+    "camera_angle": "",
+    "characters": [
+      "周伯"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 3,
+      "character_look": 1
+    },
+    "total_refs": 5,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "周伯": 4
+    },
+    "human_refs_total": 4,
+    "human_detail": {
+      "周伯": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 5,
+    "first_excluded": 0,
+    "cap_fired": false,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "first_sent_human": 4
+  },
+  {
+    "shot_id": "s11_c01",
+    "scene_id": "s11",
+    "shot_size": "medium shot",
+    "camera_angle": "eye level",
+    "characters": [
+      "沈夜",
+      "柳衣",
+      "周伯"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 9,
+      "character_look": 3
+    },
+    "total_refs": 13,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "沈夜": 4,
+      "柳衣": 4,
+      "周伯": 4
+    },
+    "human_refs_total": 12,
+    "human_detail": {
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "柳衣": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "周伯": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 13,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:沈夜:front",
+      "legacy:沈夜:side",
+      "legacy:沈夜:back",
+      "legacy:柳衣:front",
+      "legacy:柳衣:side",
+      "legacy:柳衣:back",
+      "legacy:周伯:front",
+      "legacy:周伯:side",
+      "legacy:周伯:back"
+    ],
+    "first_sent_human": 3
+  },
+  {
+    "shot_id": "s11_c02",
+    "scene_id": "s11",
+    "shot_size": "close-up",
+    "camera_angle": "eye level",
+    "characters": [
+      "沈夜",
+      "周伯"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 6,
+      "character_look": 2
+    },
+    "total_refs": 9,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "沈夜": 4,
+      "周伯": 4
+    },
+    "human_refs_total": 8,
+    "human_detail": {
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "周伯": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 9,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:沈夜:front",
+      "legacy:沈夜:side",
+      "legacy:沈夜:back",
+      "legacy:周伯:front",
+      "legacy:周伯:side",
+      "legacy:周伯:back"
+    ],
+    "first_sent_human": 2
+  },
+  {
+    "shot_id": "s11_c03",
+    "scene_id": "s11",
+    "shot_size": "close-up",
+    "camera_angle": "",
+    "characters": [
+      "沈夜"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 3,
+      "character_look": 1
+    },
+    "total_refs": 5,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "沈夜": 4
+    },
+    "human_refs_total": 4,
+    "human_detail": {
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 5,
+    "first_excluded": 0,
+    "cap_fired": false,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "first_sent_human": 4
+  },
+  {
+    "shot_id": "s11_c04",
+    "scene_id": "s11",
+    "shot_size": "medium shot",
+    "camera_angle": "",
+    "characters": [
+      "柳衣",
+      "周伯"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 6,
+      "character_look": 2
+    },
+    "total_refs": 9,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "柳衣": 4,
+      "周伯": 4
+    },
+    "human_refs_total": 8,
+    "human_detail": {
+      "柳衣": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "周伯": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 9,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:柳衣:front",
+      "legacy:柳衣:side",
+      "legacy:柳衣:back",
+      "legacy:周伯:front",
+      "legacy:周伯:side",
+      "legacy:周伯:back"
+    ],
+    "first_sent_human": 2
+  },
+  {
+    "shot_id": "s11_c05",
+    "scene_id": "s11",
+    "shot_size": "extreme close-up",
+    "camera_angle": "",
+    "characters": [
+      "沈夜"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 3,
+      "character_look": 1
+    },
+    "total_refs": 5,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "沈夜": 4
+    },
+    "human_refs_total": 4,
+    "human_detail": {
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 5,
+    "first_excluded": 0,
+    "cap_fired": false,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "first_sent_human": 4
+  },
+  {
+    "shot_id": "s11_c06",
+    "scene_id": "s11",
+    "shot_size": "medium shot",
+    "camera_angle": "eye level",
+    "characters": [
+      "沈夜",
+      "周伯"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 6,
+      "character_look": 2
+    },
+    "total_refs": 9,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "沈夜": 4,
+      "周伯": 4
+    },
+    "human_refs_total": 8,
+    "human_detail": {
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "周伯": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 9,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:沈夜:front",
+      "legacy:沈夜:side",
+      "legacy:沈夜:back",
+      "legacy:周伯:front",
+      "legacy:周伯:side",
+      "legacy:周伯:back"
+    ],
+    "first_sent_human": 2
+  },
+  {
+    "shot_id": "s13_c01",
+    "scene_id": "s13",
+    "shot_size": "extreme wide shot",
+    "camera_angle": "high angle",
+    "characters": [
+      "沈夜",
+      "柳衣",
+      "周伯"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 9,
+      "character_look": 3
+    },
+    "total_refs": 13,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "沈夜": 4,
+      "柳衣": 4,
+      "周伯": 4
+    },
+    "human_refs_total": 12,
+    "human_detail": {
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "柳衣": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "周伯": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 13,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:沈夜:front",
+      "legacy:沈夜:side",
+      "legacy:沈夜:back",
+      "legacy:柳衣:front",
+      "legacy:柳衣:side",
+      "legacy:柳衣:back",
+      "legacy:周伯:front",
+      "legacy:周伯:side",
+      "legacy:周伯:back"
+    ],
+    "first_sent_human": 3
+  },
+  {
+    "shot_id": "s13_c02",
+    "scene_id": "s13",
+    "shot_size": "medium shot",
+    "camera_angle": "eye level",
+    "characters": [
+      "沈夜",
+      "柳衣",
+      "周伯"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 9,
+      "character_look": 3
+    },
+    "total_refs": 13,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "沈夜": 4,
+      "柳衣": 4,
+      "周伯": 4
+    },
+    "human_refs_total": 12,
+    "human_detail": {
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "柳衣": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "周伯": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 13,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:沈夜:front",
+      "legacy:沈夜:side",
+      "legacy:沈夜:back",
+      "legacy:柳衣:front",
+      "legacy:柳衣:side",
+      "legacy:柳衣:back",
+      "legacy:周伯:front",
+      "legacy:周伯:side",
+      "legacy:周伯:back"
+    ],
+    "first_sent_human": 3
+  },
+  {
+    "shot_id": "s13_c03",
+    "scene_id": "s13",
+    "shot_size": "medium shot",
+    "camera_angle": "",
+    "characters": [
+      "沈夜"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 3,
+      "character_look": 1
+    },
+    "total_refs": 5,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "沈夜": 4
+    },
+    "human_refs_total": 4,
+    "human_detail": {
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 5,
+    "first_excluded": 0,
+    "cap_fired": false,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "first_sent_human": 4
+  },
+  {
+    "shot_id": "s13_c04",
+    "scene_id": "s13",
+    "shot_size": "medium shot",
+    "camera_angle": "",
+    "characters": [
+      "柳衣",
+      "沈夜"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 6,
+      "character_look": 2
+    },
+    "total_refs": 9,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "柳衣": 4,
+      "沈夜": 4
+    },
+    "human_refs_total": 8,
+    "human_detail": {
+      "柳衣": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 9,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:柳衣:front",
+      "legacy:柳衣:side",
+      "legacy:柳衣:back",
+      "legacy:沈夜:front",
+      "legacy:沈夜:side",
+      "legacy:沈夜:back"
+    ],
+    "first_sent_human": 2
+  },
+  {
+    "shot_id": "s13_c06",
+    "scene_id": "s13",
+    "shot_size": "close-up",
+    "camera_angle": "eye level",
+    "characters": [
+      "柳衣",
+      "沈夜"
+    ],
+    "link_mode": "keyframes",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 6,
+      "character_look": 2
+    },
+    "total_refs": 9,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "柳衣": 4,
+      "沈夜": 4
+    },
+    "human_refs_total": 8,
+    "human_detail": {
+      "柳衣": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 9,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:柳衣:front",
+      "legacy:柳衣:side",
+      "legacy:柳衣:back",
+      "legacy:沈夜:front",
+      "legacy:沈夜:side",
+      "legacy:沈夜:back"
+    ],
+    "first_sent_human": 2
+  },
+  {
+    "shot_id": "s13_c05",
+    "scene_id": "s13",
+    "shot_size": "medium shot",
+    "camera_angle": "",
+    "characters": [
+      "周伯"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 3,
+      "character_look": 1
+    },
+    "total_refs": 5,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "周伯": 4
+    },
+    "human_refs_total": 4,
+    "human_detail": {
+      "周伯": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 5,
+    "first_excluded": 0,
+    "cap_fired": false,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "first_sent_human": 4
+  },
+  {
+    "shot_id": "s14_c01",
+    "scene_id": "s14",
+    "shot_size": "wide shot",
+    "camera_angle": "eye level",
+    "characters": [
+      "柳衣",
+      "周伯"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 6,
+      "character_look": 2
+    },
+    "total_refs": 9,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "柳衣": 4,
+      "周伯": 4
+    },
+    "human_refs_total": 8,
+    "human_detail": {
+      "柳衣": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "周伯": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 9,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:柳衣:front",
+      "legacy:柳衣:side",
+      "legacy:柳衣:back",
+      "legacy:周伯:front",
+      "legacy:周伯:side",
+      "legacy:周伯:back"
+    ],
+    "first_sent_human": 2
+  },
+  {
+    "shot_id": "s14_c03",
+    "scene_id": "s14",
+    "shot_size": "medium shot",
+    "camera_angle": "",
+    "characters": [
+      "周伯"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 3,
+      "character_look": 1
+    },
+    "total_refs": 5,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "周伯": 4
+    },
+    "human_refs_total": 4,
+    "human_detail": {
+      "周伯": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 5,
+    "first_excluded": 0,
+    "cap_fired": false,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "first_sent_human": 4
+  },
+  {
+    "shot_id": "s14_c04",
+    "scene_id": "s14",
+    "shot_size": "extreme close-up",
+    "camera_angle": "",
+    "characters": [],
+    "link_mode": "i2v",
+    "readiness": "UNBOUND",
+    "skip_reason": "UNBOUND"
+  },
+  {
+    "shot_id": "s14_c05",
+    "scene_id": "s14",
+    "shot_size": "medium close-up",
+    "camera_angle": "low angle",
+    "characters": [
+      "柳衣",
+      "沈夜"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 6,
+      "character_look": 2
+    },
+    "total_refs": 9,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "柳衣": 4,
+      "沈夜": 4
+    },
+    "human_refs_total": 8,
+    "human_detail": {
+      "柳衣": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 9,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:柳衣:front",
+      "legacy:柳衣:side",
+      "legacy:柳衣:back",
+      "legacy:沈夜:front",
+      "legacy:沈夜:side",
+      "legacy:沈夜:back"
+    ],
+    "first_sent_human": 2
+  },
+  {
+    "shot_id": "s15_c01",
+    "scene_id": "s15",
+    "shot_size": "medium shot",
+    "camera_angle": "eye level",
+    "characters": [
+      "沈夜",
+      "柳衣",
+      "萧寒",
+      "周伯"
+    ],
+    "link_mode": "keyframes",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 12,
+      "character_look": 4
+    },
+    "total_refs": 17,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "沈夜": 4,
+      "柳衣": 4,
+      "萧寒": 4,
+      "周伯": 4
+    },
+    "human_refs_total": 16,
+    "human_detail": {
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "柳衣": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "萧寒": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "周伯": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 17,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:沈夜:front",
+      "legacy:沈夜:side",
+      "legacy:沈夜:back",
+      "legacy:柳衣:front",
+      "legacy:柳衣:side",
+      "legacy:柳衣:back",
+      "legacy:萧寒:front",
+      "legacy:萧寒:side",
+      "legacy:萧寒:back",
+      "legacy:周伯:front",
+      "legacy:周伯:side",
+      "legacy:周伯:back"
+    ],
+    "first_sent_human": 4
+  },
+  {
+    "shot_id": "s15_c02",
+    "scene_id": "s15",
+    "shot_size": "wide shot",
+    "camera_angle": "from inside looking out",
+    "characters": [
+      "沈夜",
+      "柳衣",
+      "周伯",
+      "萧寒"
+    ],
+    "link_mode": "i2v",
+    "readiness": "UNBOUND",
+    "skip_reason": "UNBOUND"
+  },
+  {
+    "shot_id": "s15_c03",
+    "scene_id": "s15",
+    "shot_size": "medium shot",
+    "camera_angle": "",
+    "characters": [
+      "萧寒"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 3,
+      "character_look": 1
+    },
+    "total_refs": 5,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "萧寒": 4
+    },
+    "human_refs_total": 4,
+    "human_detail": {
+      "萧寒": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 5,
+    "first_excluded": 0,
+    "cap_fired": false,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "first_sent_human": 4
+  },
+  {
+    "shot_id": "s15_c04",
+    "scene_id": "s15",
+    "shot_size": "close-up",
+    "camera_angle": "",
+    "characters": [
+      "周伯"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 3,
+      "character_look": 1
+    },
+    "total_refs": 5,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "周伯": 4
+    },
+    "human_refs_total": 4,
+    "human_detail": {
+      "周伯": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 5,
+    "first_excluded": 0,
+    "cap_fired": false,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "first_sent_human": 4
+  },
+  {
+    "shot_id": "s15_c05",
+    "scene_id": "s15",
+    "shot_size": "medium shot",
+    "camera_angle": "",
+    "characters": [
+      "柳衣",
+      "沈夜"
+    ],
+    "link_mode": "keyframes",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 6,
+      "character_look": 2
+    },
+    "total_refs": 9,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "柳衣": 4,
+      "沈夜": 4
+    },
+    "human_refs_total": 8,
+    "human_detail": {
+      "柳衣": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 9,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:柳衣:front",
+      "legacy:柳衣:side",
+      "legacy:柳衣:back",
+      "legacy:沈夜:front",
+      "legacy:沈夜:side",
+      "legacy:沈夜:back"
+    ],
+    "first_sent_human": 2
+  },
+  {
+    "shot_id": "s15_c06",
+    "scene_id": "s15",
+    "shot_size": "medium shot",
+    "camera_angle": "",
+    "characters": [
+      "萧寒",
+      "沈夜",
+      "柳衣"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 9,
+      "character_look": 3
+    },
+    "total_refs": 13,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "萧寒": 4,
+      "沈夜": 4,
+      "柳衣": 4
+    },
+    "human_refs_total": 12,
+    "human_detail": {
+      "萧寒": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "柳衣": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 13,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:萧寒:front",
+      "legacy:萧寒:side",
+      "legacy:萧寒:back",
+      "legacy:沈夜:front",
+      "legacy:沈夜:side",
+      "legacy:沈夜:back",
+      "legacy:柳衣:front",
+      "legacy:柳衣:side",
+      "legacy:柳衣:back"
+    ],
+    "first_sent_human": 3
+  },
+  {
+    "shot_id": "s16_c01",
+    "scene_id": "s16",
+    "shot_size": "medium shot",
+    "camera_angle": "low angle",
+    "characters": [
+      "沈夜",
+      "柳衣",
+      "萧寒"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 9,
+      "character_look": 3
+    },
+    "total_refs": 13,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "沈夜": 4,
+      "柳衣": 4,
+      "萧寒": 4
+    },
+    "human_refs_total": 12,
+    "human_detail": {
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "柳衣": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "萧寒": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 13,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:沈夜:front",
+      "legacy:沈夜:side",
+      "legacy:沈夜:back",
+      "legacy:柳衣:front",
+      "legacy:柳衣:side",
+      "legacy:柳衣:back",
+      "legacy:萧寒:front",
+      "legacy:萧寒:side",
+      "legacy:萧寒:back"
+    ],
+    "first_sent_human": 3
+  },
+  {
+    "shot_id": "s16_c02",
+    "scene_id": "s16",
+    "shot_size": "close-up",
+    "camera_angle": "eye level",
+    "characters": [
+      "柳衣",
+      "萧寒"
+    ],
+    "link_mode": "keyframes",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 6,
+      "character_look": 2
+    },
+    "total_refs": 9,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "柳衣": 4,
+      "萧寒": 4
+    },
+    "human_refs_total": 8,
+    "human_detail": {
+      "柳衣": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "萧寒": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 9,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:柳衣:front",
+      "legacy:柳衣:side",
+      "legacy:柳衣:back",
+      "legacy:萧寒:front",
+      "legacy:萧寒:side",
+      "legacy:萧寒:back"
+    ],
+    "first_sent_human": 2
+  },
+  {
+    "shot_id": "s16_c03",
+    "scene_id": "s16",
+    "shot_size": "close-up",
+    "camera_angle": "eye level",
+    "characters": [
+      "沈夜",
+      "柳衣",
+      "萧寒",
+      "周伯"
+    ],
+    "link_mode": "i2v",
+    "readiness": "UNBOUND",
+    "skip_reason": "UNBOUND"
+  },
+  {
+    "shot_id": "s16_c05",
+    "scene_id": "s16",
+    "shot_size": "close-up",
+    "camera_angle": "",
+    "characters": [
+      "柳衣",
+      "萧寒"
+    ],
+    "link_mode": "keyframes",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 6,
+      "character_look": 2
+    },
+    "total_refs": 9,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "柳衣": 4,
+      "萧寒": 4
+    },
+    "human_refs_total": 8,
+    "human_detail": {
+      "柳衣": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "萧寒": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 9,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:柳衣:front",
+      "legacy:柳衣:side",
+      "legacy:柳衣:back",
+      "legacy:萧寒:front",
+      "legacy:萧寒:side",
+      "legacy:萧寒:back"
+    ],
+    "first_sent_human": 2
+  },
+  {
+    "shot_id": "s16_c08",
+    "scene_id": "s16",
+    "shot_size": "close-up",
+    "camera_angle": "high angle",
+    "characters": [],
+    "link_mode": "i2v",
+    "readiness": "UNBOUND",
+    "skip_reason": "UNBOUND"
+  },
+  {
+    "shot_id": "s16_c06",
+    "scene_id": "s16",
+    "shot_size": "medium shot",
+    "camera_angle": "",
+    "characters": [
+      "周伯",
+      "萧寒",
+      "沈夜"
+    ],
+    "link_mode": "keyframes",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 9,
+      "character_look": 3
+    },
+    "total_refs": 13,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "周伯": 4,
+      "萧寒": 4,
+      "沈夜": 4
+    },
+    "human_refs_total": 12,
+    "human_detail": {
+      "周伯": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "萧寒": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 13,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:周伯:front",
+      "legacy:周伯:side",
+      "legacy:周伯:back",
+      "legacy:萧寒:front",
+      "legacy:萧寒:side",
+      "legacy:萧寒:back",
+      "legacy:沈夜:front",
+      "legacy:沈夜:side",
+      "legacy:沈夜:back"
+    ],
+    "first_sent_human": 3
+  },
+  {
+    "shot_id": "s16_c07",
+    "scene_id": "s16",
+    "shot_size": "close-up",
+    "camera_angle": "",
+    "characters": [
+      "沈夜",
+      "萧寒"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 6,
+      "character_look": 2
+    },
+    "total_refs": 9,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "沈夜": 4,
+      "萧寒": 4
+    },
+    "human_refs_total": 8,
+    "human_detail": {
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "萧寒": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 9,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:沈夜:front",
+      "legacy:沈夜:side",
+      "legacy:沈夜:back",
+      "legacy:萧寒:front",
+      "legacy:萧寒:side",
+      "legacy:萧寒:back"
+    ],
+    "first_sent_human": 2
+  },
+  {
+    "shot_id": "s17_c01",
+    "scene_id": "s17",
+    "shot_size": "medium shot",
+    "camera_angle": "low angle",
+    "characters": [
+      "沈夜",
+      "萧寒"
+    ],
+    "link_mode": "keyframes",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 6,
+      "character_look": 2
+    },
+    "total_refs": 9,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "沈夜": 4,
+      "萧寒": 4
+    },
+    "human_refs_total": 8,
+    "human_detail": {
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "萧寒": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 9,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:沈夜:front",
+      "legacy:沈夜:side",
+      "legacy:沈夜:back",
+      "legacy:萧寒:front",
+      "legacy:萧寒:side",
+      "legacy:萧寒:back"
+    ],
+    "first_sent_human": 2
+  },
+  {
+    "shot_id": "s17_c02",
+    "scene_id": "s17",
+    "shot_size": "extreme close-up",
+    "camera_angle": "overhead",
+    "characters": [
+      "沈夜"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 3,
+      "character_look": 1
+    },
+    "total_refs": 5,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "沈夜": 4
+    },
+    "human_refs_total": 4,
+    "human_detail": {
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 5,
+    "first_excluded": 0,
+    "cap_fired": false,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "first_sent_human": 4
+  },
+  {
+    "shot_id": "s17_c03",
+    "scene_id": "s17",
+    "shot_size": "close-up",
+    "camera_angle": "eye level",
+    "characters": [
+      "沈夜"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 3,
+      "character_look": 1
+    },
+    "total_refs": 5,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "沈夜": 4
+    },
+    "human_refs_total": 4,
+    "human_detail": {
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 5,
+    "first_excluded": 0,
+    "cap_fired": false,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "first_sent_human": 4
+  },
+  {
+    "shot_id": "s17_c06",
+    "scene_id": "s17",
+    "shot_size": "close-up",
+    "camera_angle": "",
+    "characters": [
+      "沈夜"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 3,
+      "character_look": 1
+    },
+    "total_refs": 5,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "沈夜": 4
+    },
+    "human_refs_total": 4,
+    "human_detail": {
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 5,
+    "first_excluded": 0,
+    "cap_fired": false,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "first_sent_human": 4
+  },
+  {
+    "shot_id": "s17_c07",
+    "scene_id": "s17",
+    "shot_size": "extreme wide shot",
+    "camera_angle": "high angle",
+    "characters": [
+      "沈夜",
+      "萧寒"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 6,
+      "character_look": 2
+    },
+    "total_refs": 9,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "沈夜": 4,
+      "萧寒": 4
+    },
+    "human_refs_total": 8,
+    "human_detail": {
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "萧寒": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 9,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:沈夜:front",
+      "legacy:沈夜:side",
+      "legacy:沈夜:back",
+      "legacy:萧寒:front",
+      "legacy:萧寒:side",
+      "legacy:萧寒:back"
+    ],
+    "first_sent_human": 2
+  },
+  {
+    "shot_id": "s18_c01",
+    "scene_id": "s18",
+    "shot_size": "medium shot",
+    "camera_angle": "eye level",
+    "characters": [
+      "沈夜",
+      "柳衣",
+      "萧寒"
+    ],
+    "link_mode": "i2v",
+    "readiness": "UNBOUND",
+    "skip_reason": "UNBOUND"
+  },
+  {
+    "shot_id": "s18_c02",
+    "scene_id": "s18",
+    "shot_size": "close-up",
+    "camera_angle": "eye level",
+    "characters": [
+      "沈夜",
+      "柳衣",
+      "萧寒"
+    ],
+    "link_mode": "keyframes",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 9,
+      "character_look": 3
+    },
+    "total_refs": 13,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "沈夜": 4,
+      "柳衣": 4,
+      "萧寒": 4
+    },
+    "human_refs_total": 12,
+    "human_detail": {
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "柳衣": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "萧寒": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 13,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:沈夜:front",
+      "legacy:沈夜:side",
+      "legacy:沈夜:back",
+      "legacy:柳衣:front",
+      "legacy:柳衣:side",
+      "legacy:柳衣:back",
+      "legacy:萧寒:front",
+      "legacy:萧寒:side",
+      "legacy:萧寒:back"
+    ],
+    "first_sent_human": 3
+  },
+  {
+    "shot_id": "s18_c03",
+    "scene_id": "s18",
+    "shot_size": "medium shot",
+    "camera_angle": "eye level",
+    "characters": [
+      "沈夜",
+      "柳衣",
+      "萧寒"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 9,
+      "character_look": 3
+    },
+    "total_refs": 13,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "沈夜": 4,
+      "柳衣": 4,
+      "萧寒": 4
+    },
+    "human_refs_total": 12,
+    "human_detail": {
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "柳衣": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "萧寒": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 13,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:沈夜:front",
+      "legacy:沈夜:side",
+      "legacy:沈夜:back",
+      "legacy:柳衣:front",
+      "legacy:柳衣:side",
+      "legacy:柳衣:back",
+      "legacy:萧寒:front",
+      "legacy:萧寒:side",
+      "legacy:萧寒:back"
+    ],
+    "first_sent_human": 3
+  },
+  {
+    "shot_id": "s18_c05",
+    "scene_id": "s18",
+    "shot_size": "medium shot",
+    "camera_angle": "",
+    "characters": [
+      "萧寒"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 3,
+      "character_look": 1
+    },
+    "total_refs": 5,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "萧寒": 4
+    },
+    "human_refs_total": 4,
+    "human_detail": {
+      "萧寒": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 5,
+    "first_excluded": 0,
+    "cap_fired": false,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "first_sent_human": 4
+  },
+  {
+    "shot_id": "s18_c06",
+    "scene_id": "s18",
+    "shot_size": "extreme close-up",
+    "camera_angle": "",
+    "characters": [
+      "沈夜"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 3,
+      "character_look": 1
+    },
+    "total_refs": 5,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "沈夜": 4
+    },
+    "human_refs_total": 4,
+    "human_detail": {
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 5,
+    "first_excluded": 0,
+    "cap_fired": false,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "first_sent_human": 4
+  },
+  {
+    "shot_id": "s18_c07",
+    "scene_id": "s18",
+    "shot_size": "close-up",
+    "camera_angle": "high angle",
+    "characters": [
+      "柳衣",
+      "沈夜"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 6,
+      "character_look": 2
+    },
+    "total_refs": 9,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "柳衣": 4,
+      "沈夜": 4
+    },
+    "human_refs_total": 8,
+    "human_detail": {
+      "柳衣": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 9,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:柳衣:front",
+      "legacy:柳衣:side",
+      "legacy:柳衣:back",
+      "legacy:沈夜:front",
+      "legacy:沈夜:side",
+      "legacy:沈夜:back"
+    ],
+    "first_sent_human": 2
+  },
+  {
+    "shot_id": "s18_c08",
+    "scene_id": "s18",
+    "shot_size": "wide shot",
+    "camera_angle": "eye level",
+    "characters": [
+      "沈夜",
+      "柳衣",
+      "萧寒"
+    ],
+    "link_mode": "i2v",
+    "readiness": "READY",
+    "ref_sequence": [
+      "scene_instance_view",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look",
+      "character_identity",
+      "character_identity",
+      "character_identity",
+      "character_look"
+    ],
+    "ref_counts": {
+      "scene_instance_view": 1,
+      "character_identity": 9,
+      "character_look": 3
+    },
+    "total_refs": 13,
+    "scene_ref": {
+      "present": true,
+      "position": 0,
+      "priority": "primary"
+    },
+    "human_refs_per_character": {
+      "沈夜": 4,
+      "柳衣": 4,
+      "萧寒": 4
+    },
+    "human_refs_total": 12,
+    "human_detail": {
+      "沈夜": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "柳衣": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ],
+      "萧寒": [
+        "character_identity:legacy view: front",
+        "character_identity:legacy view: side",
+        "character_identity:legacy view: back",
+        "character_look:approved hero"
+      ]
+    },
+    "first_eligible": 13,
+    "first_excluded": 0,
+    "cap_fired": true,
+    "first_sent_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "character_look",
+      "character_look"
+    ],
+    "cap_dropped": [
+      "legacy:沈夜:front",
+      "legacy:沈夜:side",
+      "legacy:沈夜:back",
+      "legacy:柳衣:front",
+      "legacy:柳衣:side",
+      "legacy:柳衣:back",
+      "legacy:萧寒:front",
+      "legacy:萧寒:side",
+      "legacy:萧寒:back"
+    ],
+    "first_sent_human": 3
+  }
+]
