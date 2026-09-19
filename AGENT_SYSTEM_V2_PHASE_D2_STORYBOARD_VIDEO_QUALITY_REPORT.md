@@ -113,7 +113,7 @@ identity 多视角/extras 填充剩余槽位（C2 §33 时代假设「单人无�
 
 ---
 
-## 4. Shot-level Scene Reference Policy 实现（30.md §6-§8）— 已实现，默认策略待 A/B 后翻转
+## 4. Shot-level Scene Reference Policy 实现（30.md §6-§8）— 已实现，默认已按 A/B 证据翻转为 auto
 
 Commit 89b1233 / c6f9685：
 
@@ -131,7 +131,7 @@ Commit 89b1233 / c6f9685：
   `_handler_first_frame` / `_handler_last_frame` → adapter（request.scene_reference_mode
   落 generation 观测）。
 
-## 5. Scene Reference A/B（30.md §4-§5）— 进行中
+## 5. Scene Reference A/B（30.md §4-§5）— 完成，判定见 5.1
 
 - 设计：16 代表镜（EWS×2/WS×2/MS×4/MCU×2/CU×4 含全片唯一显式 OTS s10_c02/ECU×2）×
   {Mode A=full, Mode B=context_only} × 2 候选，全部经真实 `build_bound_first_frame_input`
@@ -143,6 +143,62 @@ Commit 89b1233 / c6f9685：
 - Mode C（SELECTIVE SCENE REFERENCE）：**跳过**——Agnes image API 无 crop/role/weight/
   mask/background-only 能力（§3.1 Q3/Q4），按 30.md §4「不支持不要伪造」如实记录。
 - 状态：真机生成中（会员档限速波动，429 自愈重试；结果出来后补 §5.1 判定）。
+
+### 5.1 A/B 结果与判定（真机 64 候选 + 16 Before，全部 Agnes 2K + Agnes Vision 14 维审查）
+
+数据：`_phase_d2_ab/AB_EVAL.json`（80 条审查全落盘）、`AB_GALLERY.html`（并排对比页）、
+`_phase_d2_ab/ab_runs.json`（每候选真实 prompt/refs/sequence/ basis）。
+
+**三组 overall（deterministic derive_overall）**：
+
+| 组 | n | pass | needs_fix | uncertain |
+|---|---|---|---|---|
+| Before（Phase D 旧参考行为） | 16 | 0 | 16 | 0 |
+| A = full（新预算+场景图） | 32 | 4 | 27 | 1 |
+| B = context_only（新预算+无场景图） | 32 | 1 | 31 | 0 |
+
+**关键发现（推翻/修正起草假设）**：
+
+1. **「场景图锚定构图」的假设被二值数据否证、但被逐镜目检部分证实**：
+   - 分层统计：CU 族 shot_size fail A 16/16 vs B 16/16——有无场景图都偏宽；
+   - **但逐镜目检（s17_c02 内景 ECU vs 外景庭院 plate）**：A 组 = 完整庭院 WS
+     （plate 构图直接获胜）；B 组 = 玉佩+账本近景插入构图（大幅改善）。
+     场景图主导构图**真实存在、但只在「镜头意图空间≠plate 空间」时爆发**（内景镜
+     绑外景 plate 是 Golden Project 的系统性现状，见 §3.2 R1）。
+   - pass/fail 二值统计掩盖了「差多远」：B 的失败多为「MS 而非 CU」（近了一步），
+     A 的失败多为「完整庭院 WS」（完全跑偏）。景别阶梯距离（EWS↔WS↔MS↔MCU↔CU↔ECU）
+     实测：MS 组 A 0.67 vs B 1.60（A 更好）；CU 族两者均 >3（都没解决）。
+2. **人形参考预算立竿见影（§8/§9 证据）**：duplicate_identity fail Before 5/16 →
+   A 组 2/32；unexpected_people 8/16 → 3/32。克隆/路人在新预算下大幅收敛。
+3. **场景图对宽/中景有益**：scene_identity fail B 14/32 vs A 3/32；prop_fidelity
+   B 15/32 vs A 8/32。去掉场景图伤害地点一致性与道具保真。
+4. **残余主根因 = prompt 结构**：景别指令（"extreme close-up, overhead"）被埋在
+   角色描述墙之后（`build_first_frame_prompt` 把 `_char_identity` 放最前）——i2i
+   对头部权重高，景别指令被参考图构图淹没。CU→WS 在 A/B 两组都系统性存在。
+
+**判定（§5 两问）**：
+
+- *Scene reference 是否提高地点一致性但损害构图自由？* —— 场景图确实提高地点一致性
+  （scene_identity 3 vs 14 fail）与道具保真；对构图自由的损害是**条件性的**：仅当
+  「镜头意图空间≠plate 空间」时发生构图主导（s17_c02 实证），同空间宽/中景无损害。
+- *哪些 Shot 类型应发送 scene image？* —— EWS/WS/**MS→full**；MCU/CU/ECU/OTS/
+  insert→**context_only**（避免 plate 冲突），场景语义仍走 prompt。MS 从起草的
+  context_only 修正为 full（A/B 数据：景别距离与身份一致性都支持 full）。
+
+**据此落地的两项修复**（commit 本次）：
+
+1. `DEFAULT_SCENE_REFERENCE_MODE: full → auto`（30.md §6 要求翻转须以证据为前提——
+   已满足），auto 映射定稿：EWS/WS/MS→full；MCU/CU/ECU/OTS/insert→context_only；
+   未识别景别→full。
+2. `_size_directive`（prompt_builder）：首帧 prompt 结构性重排——景别/机位/构图指令
+   前置为 `[SHOT SIZE: ...]` 头部（近景族附「画面紧裁、只留局部环境、不要完整地点」
+   排除语义），角色描述墙退居其后。这是 CU→WS 残余问题的对症修复（第 3 杠杆）。
+
+Mode C 按规格跳过（provider 无 crop/role/weight 能力，§3.1 Q3/Q4）。
+
+---
+
+---
 
 ## 6. Shot-aware Vision Review（30.md §10-§13）— 已建成
 

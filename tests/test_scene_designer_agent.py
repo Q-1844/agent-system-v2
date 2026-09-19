@@ -1482,7 +1482,8 @@ class _FakeShot:
 
 def test_D2_resolve_scene_reference_mode_explicit():
     from src.generation.image_adapter import resolve_scene_reference_mode
-    assert resolve_scene_reference_mode(None, _FakeShot()) == "full"       # 零回归默认
+    # A/B 证据后默认翻转为 auto（30.md §6：翻转须以证据为前提——见 §5.1）
+    assert resolve_scene_reference_mode(None, _FakeShot("close-up")) == "context_only"
     assert resolve_scene_reference_mode("full", _FakeShot()) == "full"
     assert resolve_scene_reference_mode("context_only", _FakeShot()) == "context_only"
     import pytest
@@ -1500,7 +1501,7 @@ def test_D2_resolve_scene_reference_mode_auto_mapping():
     assert r("auto", _FakeShot("close-up")) == "context_only"
     assert r("auto", _FakeShot("extreme close-up")) == "context_only"
     assert r("auto", _FakeShot("medium close-up")) == "context_only"
-    assert r("auto", _FakeShot("medium shot")) == "context_only"
+    assert r("auto", _FakeShot("medium shot")) == "full"   # A/B 证据：MS→full
     assert r("auto", _FakeShot("medium shot", camera_angle="OTS 过肩")) == "context_only"
     assert r("auto", _FakeShot("close-up", composition="insert of jade pendant")) == "context_only"
 

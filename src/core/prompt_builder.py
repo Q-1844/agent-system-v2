@@ -29,12 +29,33 @@ def _char_identity(project: Project, shot: Shot) -> str:
                  if c.name in shot.characters and c.description_en)
 
 
+def _size_directive(shot: Shot) -> str:
+    """D2（30.md §5 A/B 证据）：景别/构图指令前置——i2i 模型对 prompt 头部权重高，
+    景别指令埋在角色描述墙后会被参考图构图淹没（A/B 实测 CU 族 16/16 渲染为 WS，
+    无论是否携带场景图）。显式把景别+机位+构图提到最前，并对近景族补一句
+    「画面只有局部环境」的排除语义。"""
+    bits = [str(shot.shot_size or "").strip()]
+    angle = str(shot.camera_angle or "").strip()
+    if angle:
+        bits.append(f"{angle} angle")
+    directive = ", ".join(b for b in bits if b)
+    comp = str(shot.composition or "").strip()
+    if comp:
+        directive += f". {comp}"
+    size_l = directive.lower()
+    if any(k in size_l for k in ("close-up", "closeup", "close up")):
+        directive += (". The frame is tightly cropped on the subject; show only a "
+                      "minimal sliver of the environment, NOT the full location")
+    return f"[SHOT SIZE: {directive}]" if directive else ""
+
+
 def build_first_frame_prompt(project: Project, shot: Shot,
                              *, style_suffix: Optional[str] = None) -> str:
     """首帧英文 prompt（提示词.md §9）。
     优先级：first_frame_prompt_override > prompt_en（兼容）> 结构字段拼接。
-    顺序：角色身份 -> 起始画面 -> 主体起始状态 -> 景别 -> 机位角度 -> 光线
-          -> 构图 -> 重要细节 -> 必须出现的元素 -> [风格后缀]。
+    顺序（D2 调整）：景别/构图前置指令 -> 角色身份 -> 起始画面 -> 主体起始状态
+          -> 光线 -> 重要细节 -> 必须出现的元素 -> [风格后缀]。
+    （景别/机位/构图不再重复出现在后段——已前置为 SHOT SIZE 指令。）
     camera_angle 是新字段（与运镜分离），不回退旧 camera（旧 camera 拆分到 video 运镜）。
     style_suffix（S3C.1）：None=legacy 行为（拼 project.style.suffix()）；
     传 str 则用之（""=不拼后缀）——Binding-aware 生成路径用 Pack 的 VisualProfile
@@ -45,13 +66,11 @@ def build_first_frame_prompt(project: Project, shot: Shot,
     if shot.prompt_en:
         return _with_suffix(shot.prompt_en.strip(), suffix)
     parts = [
+        _size_directive(shot),
         _char_identity(project, shot),
         shot.description,
         shot.opening_state,
-        shot.shot_size,
-        shot.camera_angle,
         shot.lighting,
-        shot.composition,
         shot.important_details,
         ", ".join(shot.required_elements) if shot.required_elements else "",
     ]

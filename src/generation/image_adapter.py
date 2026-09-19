@@ -44,14 +44,18 @@ from typing import Any, Dict, List, Optional, Tuple
 _FIRST_FRAME_ELIGIBLE_TEMPORAL = ("start", "throughout", "static")
 
 # ============ Shot-level Scene Reference Policy (Phase D2, 30.md §6/§7) ============
-# 三态：full=场景图作为 conditioning（Phase D 既有行为）；context_only=场景语义仍走
-# prompt 生产上下文（_production_context_text 的 Scene 行），但场景图不进 image_refs；
-# auto=按景别/机位的确定性导演策略映射（30.md §7：EWS/WS→full；MCU/CU/ECU/OTS/
-# insert→context_only；MS→context_only 起步，待 §4 A/B 证据校准）。
-# 🔴 改变默认策略前必须有 A/B 证据（30.md §4-§6）：DEFAULT_SCENE_REFERENCE_MODE
-# 当前 = "full"（零回归），A/B 证实后由策略 commit 翻转为 "auto"。
+# 三态：full=场景图作为 conditioning；context_only=场景语义仍走 prompt 生产上下文
+# （_production_context_text 的 Scene 行），但场景图不进 image_refs；auto=按景别/
+# 机位的确定性导演策略映射。
+# 🔴 默认值翻转（full→auto）依据 30.md §4 A/B 真机证据（64 候选 × 16 镜 × Agnes 2K）：
+#   1. 场景图主导构图只在「意图空间≠plate 空间」时爆发（s17_c02 内景 ECU + 外景庭院
+#      plate → A 组渲染成 WS 全景；B 组显著改善）；
+#   2. 紧景别（MCU/CU/ECU/OTS/insert）两组都偏宽，但 B 组不劣于 A 且解除 plate 冲突
+#      → 紧景别默认 context_only；
+#   3. MS 组 A 的景别距离 0.67 优于 B 1.60，场景身份 fail B 14/32 vs A 3/32、道具
+#      保真 B 15/32 vs A 8/32 → MS/WS/EWS 默认 full（场景图在宽/中景有益无害）。
 SCENE_REFERENCE_MODES = ("full", "context_only", "auto")
-DEFAULT_SCENE_REFERENCE_MODE = "full"
+DEFAULT_SCENE_REFERENCE_MODE = "auto"
 
 
 class BoundGenerationError(Exception):
@@ -394,7 +398,9 @@ MAX_PROVIDER_INPUT_IMAGES = 6
 # ============ Shot-level Scene Reference Policy (Phase D2, 30.md §6/§7) ============
 # （常量定义见文件头部；此处为解析与预算逻辑。）
 
-# auto 映射（30.md §7 起草版；A/B 后校准）——纯确定性，输入只有 shot 字段
+# auto 映射（A/B 后定稿）：EWS/WS/MS→full（场景图在宽/中景有益：景别距离 0.67 vs
+# 1.60、场景身份 fail 3/32 vs 14/32）；MCU/CU/ECU/OTS/insert→context_only（解除
+# plate 构图冲突）。纯确定性，输入只有 shot 字段。
 _AUTO_CONTEXT_ONLY_SIZE_KEYS = ("close-up", "closeup", "extreme close", "medium close")
 _AUTO_FULL_SIZE_KEYS = ("extreme wide", "wide shot", "establishing")
 _AUTO_CONTEXT_ONLY_ANGLE_KEYS = ("ots", "over-the-shoulder", "over the shoulder",
@@ -402,8 +408,8 @@ _AUTO_CONTEXT_ONLY_ANGLE_KEYS = ("ots", "over-the-shoulder", "over the shoulder"
 
 
 def resolve_scene_reference_mode(mode: Optional[str], shot: Any) -> str:
-    """None→默认（当前 full）；显式 full/context_only 直通；auto→确定性导演映射。
-    未知值 fail closed（BoundGenerationError 语义归调用方；此处抛 ValueError）。"""
+    """None→默认（A/B 证据后=auto）；显式 full/context_only 直通；auto→确定性导演映射。
+    未知值 fail closed（ValueError）。"""
     m = (str(mode or "").strip().lower() or DEFAULT_SCENE_REFERENCE_MODE)
     if m in ("full", "context_only"):
         return m
@@ -418,7 +424,7 @@ def resolve_scene_reference_mode(mode: Optional[str], shot: Any) -> str:
         return "context_only"
     if any(k in size for k in _AUTO_FULL_SIZE_KEYS):
         return "full"
-    return "context_only"     # MS 及未识别景别：30.md §7 起草默认（A/B 后校准）
+    return "full"              # MS 及未识别景别：A/B 证据=full（场景图对 MS 有益）
 
 
 # ============ Human Reference Budget (Phase D2, 30.md §8/§9) ============

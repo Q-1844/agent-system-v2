@@ -77,19 +77,17 @@ async def main() -> int:
     client = ctrl.agnes_client
     project = ProjectStore(PROJ).load()
 
-    # 组装评审队列：每镜 Before selected + A/B 候选
+    # 组装评审队列：每镜 Before selected + A/B 候选（runs["shots"] 是 dict 列表）
+    shot_ids = [d["shot_id"] for d in runs["shots"]]
     queue = []  # (shot_id, slot_label, file_path, scene_mode_label)
 
-    def selected_file(sid: str):
-        idx = json.loads((ROOT / "_phase_d2_baseline" / "baseline_index.json")
-                         .read_text(encoding="utf-8"))
-        for s in idx["shots"]:
-            if s["shot_id"] == sid:
-                return ROOT / s["selected_first_frame"]["local"]
-        return None
+    baseline = json.loads((ROOT / "_phase_d2_baseline" / "baseline_index.json")
+                          .read_text(encoding="utf-8"))
+    sel_of = {s["shot_id"]: ROOT / s["selected_first_frame"]["local"]
+              for s in baseline["shots"]}
 
-    for sid, _why in runs["shots"]:
-        bf = selected_file(sid)
+    for sid in shot_ids:
+        bf = sel_of.get(sid)
         if bf and bf.exists():
             queue.append((sid, "Before", bf, "before(legacy refs)"))
     for c in runs["candidates"]:
@@ -97,10 +95,16 @@ async def main() -> int:
                       ROOT / c["file"], c["scene_reference_mode"]))
 
     print(f"review queue: {len(queue)} images")
+    # 增量持久化：已有结果跳过（断点续跑）；每条完成即落盘
+    eval_path = AB / "AB_EVAL.json"
+    serial = json.loads(eval_path.read_text(encoding="utf-8")) if eval_path.exists() else {}
     sem = asyncio.Semaphore(CONCURRENCY)
-    results = {}
+    results = {tuple(k.split("||")): v for k, v in serial.items()}
 
     async def do_one(sid, slot, path, mode_label):
+        if (sid, slot) in results and "error" not in results[(sid, slot)]:
+            print(f"  {sid} {slot}: cached", flush=True)
+            return
         shot = project.get_shot(sid)
         async with sem:
             try:
@@ -112,13 +116,13 @@ async def main() -> int:
                 rv = {"error": repr(e), "shot_id": sid, "frame": "first",
                       "scene_reference_mode": mode_label}
         results[(sid, slot)] = rv
+        eval_path.write_text(json.dumps(
+            {f"{k[0]}||{k[1]}": v for k, v in results.items()},
+            ensure_ascii=False, indent=2), encoding="utf-8")
         status = rv.get("derived", {}).get("overall") or f"ERR {rv.get('error','')[:60]}"
-        print(f"  {sid} {slot}: {status}")
+        print(f"  {sid} {slot}: {status}", flush=True)
 
     await asyncio.gather(*[do_one(*q) for q in queue])
-    serial = {f"{sid}||{slot}": rv for (sid, slot), rv in results.items()}
-    (AB / "AB_EVAL.json").write_text(json.dumps(serial, ensure_ascii=False, indent=2),
-                                     encoding="utf-8")
 
     # ---- 汇总统计（§5 判定用）----
     agg = defaultdict(lambda: {"n": 0, "overall": defaultdict(int),
@@ -157,7 +161,8 @@ async def main() -> int:
     """
     parts = [f"<!doctype html><html><head><meta charset='utf-8'><style>{css}</style></head><body>",
              "<h2 style='color:#fff'>Phase D2 — Scene Reference A/B（Before / Mode A full / Mode B context_only）</h2>"]
-    for sid, why in runs["shots"]:
+    for d in runs["shots"]:
+        sid, why = d["shot_id"], d["rationale"]
         shot = project.get_shot(sid)
         parts.append(f"<div class='shot'><div class='hd'>{esc(sid)} "
                      f"<small>[{esc(shot.shot_size)} / {esc(shot.camera_angle) or '-'} / "
@@ -167,7 +172,7 @@ async def main() -> int:
                                         for i in (1, 2)):
             rv = results.get((sid, slot))
             if slot == "Before":
-                img = selected_file(sid)
+                img = sel_of.get(sid)
                 if not (img and img.exists()):
                     continue
                 rel = img.relative_to(ROOT).as_posix()
