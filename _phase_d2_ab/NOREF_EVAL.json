@@ -1,0 +1,832 @@
+{
+  "s09_c03||noref_c1": {
+    "shot_id": "s09_c03",
+    "frame": "first",
+    "image_source": "explicit",
+    "scene_reference_mode": null,
+    "expected_cast": [
+      "沈夜",
+      "柳衣"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 2,
+        "people_notes": "1. 沈夜：位于画面中央偏左，正面半身像（胸上），黑发低发髻，左脸颊有刀疤，青灰色立领盘扣长袍，右手伸出压信纸。2. 柳衣：位于画面右侧，虚化侧脸轮廓，黑色长发编辫，墨黑衣衫，手持油纸伞柄。无路人，无背景闲人。",
+        "shot_size_observed": "MCU(medium close-up)",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "partial_environment"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "镜头要求沈夜、柳衣两人；画面实际两人，匹配。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "未发现同一角色被复制成两个独立人物的情况。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "画面中只有沈夜和柳衣两人，无多余人物。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "沈夜和柳衣均出现在画面中，无缺失。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "镜头要求ECU（极近特写，信纸占画面90%以上）；实际为MCU（人物胸上，占画面主体，信纸仅在下半部一小部分），景别严重错误。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "镜头意图是信纸为绝对主体（90%画面），人物仅指尖局部；实际人物为画面主体，信纸只是前景小元素，主次颠倒。"
+        },
+        "framing_and_composition": {
+          "status": "fail",
+          "note": "镜头要求信纸占据画面下半部中心，人物只呈现上半身局部；实际构图是两人正面半身对坐，信纸在下方但不占主导，构图完全偏离导演意图。"
+        },
+        "camera_semantics": {
+          "status": "fail",
+          "note": "镜头要求high angle俯拍，背景纯黑无环境；实际为平视或微低机位，背景有雨、烛光等环境元素。"
+        },
+        "scene_scope_correctness": {
+          "status": "fail",
+          "note": "镜头明确要求『绝不出现任何人物、建筑、环境』，背景纯黑；实际画面有雨丝、远处烛光等环境元素，违反镜头约束。"
+        },
+        "identity_look": {
+          "status": "pass",
+          "note": "沈夜：黑发低发髻、左脸刀疤、青灰立领盘扣长袍，与Look参考一致。柳衣：黑发编辫、墨黑衣衫、持油纸伞，与Look参考一致。"
+        },
+        "prop_fidelity": {
+          "status": "pass",
+          "note": "泛黄信纸、油纸伞、短剑（腰间）均出现且形态正确。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "手部结构正常，无多余肢体或融合伪影。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "雨夜、烛光、暗调氛围与落雁驿夜暴雨场景设定相符。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "画面质量高，东方水墨电影质感强，可作为分镜使用，但景别与构图需修正以匹配导演意图。"
+        }
+      },
+      "director_feedback": [
+        "Expected ECU but observed MCU:人物胸上出现，信纸未占画面90%以上；重新生成时需大幅推近镜头，仅保留信纸与指尖。",
+        "镜头要求背景纯黑无环境，实际有雨丝与烛光；需将背景完全去黑处理或确保不出现任何环境元素。",
+        "镜头要求人物只呈现上半身局部（沈夜指尖、柳衣侧脸虚化轮廓），实际为完整半身像；需裁切构图，仅保留局部。",
+        "镜头要求high angle俯拍，实际为平视；调整机位为上俯视角度。",
+        "构图信纸应为主角占画面主体，实际人物成主角；重生成时以信纸纹理和暗号墨迹为核心视觉焦点。",
+        "画面中沈夜表情偏愤怒而非警惕，需调整眼神和面部情绪为冷峻警惕。"
+      ],
+      "summary": "景别严重错误：导演要求ECU信纸为主体+纯黑背景+局部人物，实际为MCU双人半身对坐+有环境背景；identity_look和prop_fidelity通过，但shot_size、framing、scene_scope等核心维度全fail，需重大重生成。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "shot_size_correctness",
+        "framing_and_composition"
+      ],
+      "soft_fails": [
+        "subject_scale",
+        "camera_semantics",
+        "scene_scope_correctness"
+      ],
+      "uncertains": []
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4527,
+      "image_tokens": 966,
+      "latency_s": 97.25,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s09_c03||noref_c2": {
+    "shot_id": "s09_c03",
+    "frame": "first",
+    "image_source": "explicit",
+    "scene_reference_mode": null,
+    "expected_cast": [
+      "沈夜",
+      "柳衣"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 2,
+        "people_notes": "沈夜（手持信纸，中近景）、柳衣（持伞站立，同画面右侧）",
+        "shot_size_observed": "MS",
+        "camera_semantics_observed": "high angle",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "expected cast为2人，实际观察为2人，数量正确。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "未发现同一角色被复制成多人的情况。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "画面中仅有镜头要求的沈夜和柳衣，无路人或无关人物形。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "沈夜和柳衣均完整出现在画面中。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "要求ECU（极近特写，信纸占90%以上），但实际画面为MS（中景），两人全身及环境清晰可见。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "信纸在画面中占比远小于90%，无法体现ECU的局部细节强调。"
+        },
+        "framing_and_composition": {
+          "status": "fail",
+          "note": "构图要求信纸占据下半部并聚焦局部，但实际画面展示了完整的人物与环境，主体关系错位。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "实际为高机位，符合镜头未指定但可能成立的机位逻辑（尽管与ECU矛盾）。"
+        },
+        "scene_scope_correctness": {
+          "status": "fail",
+          "note": "要求背景纯黑无任何形状，但实际画面展现了暴雨、烛光、驿站建筑等完整环境。"
+        },
+        "identity_look": {
+          "status": "pass",
+          "note": "沈夜的低发髻、刀疤、长袍，柳衣的长发辫、油纸伞、玉佩均与参考图一致。"
+        },
+        "prop_fidelity": {
+          "status": "pass",
+          "note": "信纸、油纸伞、短剑等道具均出现且形态正确。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "手指、面部等解剖结构正常，无生成伪影。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "落雁驿夜景、暴雨、烛光等元素与场景上下文一致。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "图像质量高，光影层次丰富，水墨电影质感强，但景别错误导致分镜意图失效。"
+        }
+      },
+      "director_feedback": [
+        "将镜头改为极近特写（ECU），使信纸占据画面90%以上。",
+        "背景处理为纯黑，去除所有环境元素（烛光、建筑等）。",
+        "仅展示沈夜指尖压住信纸边缘的局部，柳衣侧脸虚化置于右侧边缘。",
+        "人物身体仅呈现上半身局部，不可展示完整躯干或腿部。",
+        "保持东方水墨电影质感，但需通过景别变化服务于叙事重点。"
+      ],
+      "summary": "分镜在角色造型和道具方面合格，但严重偏离了极近特写（ECU）的景别要求，导致叙事焦点和环境设定错误。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "shot_size_correctness",
+        "framing_and_composition"
+      ],
+      "soft_fails": [
+        "subject_scale",
+        "scene_scope_correctness"
+      ],
+      "uncertains": []
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4255,
+      "image_tokens": 966,
+      "latency_s": 26.43,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s17_c03||noref_c1": {
+    "shot_id": "s17_c03",
+    "frame": "first",
+    "image_source": "explicit",
+    "scene_reference_mode": null,
+    "expected_cast": [
+      "沈夜"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 1,
+        "people_notes": "沈夜一人蹲姿持玉佩。",
+        "shot_size_observed": "WS",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "partial_environment"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "只出现沈夜1人，符合镜头要求的单一cast。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "无重复角色现象。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "画面无路人或额外任何人形。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "沈夜在画面中，完整可见。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "要求CU特写（脸/头肩为主体），实际为WS，展示全身及大量环境背景。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "人物在画面中占比过小，面部并非主体，无法作为情绪转折点承载特写功能。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "构图采用中心构图，人物虽全身但视觉重心明确，并未违背构图逻辑，只是景别错误。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "无特殊机位要求，画面为常规平视全景镜头。"
+        },
+        "scene_scope_correctness": {
+          "status": "uncertain",
+          "note": "背景为模糊的雨夜黑暗与雾气，仅能判定为夜间环境，无法确认是否为落雁驿大堂内部。"
+        },
+        "identity_look": {
+          "status": "pass",
+          "note": "发型、服饰、蓑衣背篓与参考图描述一致。"
+        },
+        "prop_fidelity": {
+          "status": "pass",
+          "note": "手中持有玉佩（带红绳），腰间短剑在鞘，道具形态正确。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人体结构正常，无多余肢体或融合。"
+        },
+        "scene_identity": {
+          "status": "uncertain",
+          "note": "仅见雨水与暗调背景，未出现落雁驿内景的具体建筑特征（如主屋、烛光、柴房缝隙）以供确认。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "画风细腻，光影氛围感强，作为插画质量上乘，但作为分镜因景别错误不可用。"
+        }
+      },
+      "director_feedback": [
+        "必须重新生成：将景别从全身景（WS）改为面部特写（CU）。",
+        "构图需调整：沈夜面部应占据画面3/4，重点表现眼神变化。",
+        "请保留眼神坚定直视镜头的状态，这是本镜的情绪核心。",
+        "保持背景虚化以突出人物，但需确保人物足够大以便观察表情。"
+      ],
+      "summary": "镜头严重误判为WS而非要求的CU，人物占比过小无法传达特写情绪，必须重生成面部特写。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "subject_scale"
+      ],
+      "uncertains": [
+        "scene_scope_correctness",
+        "scene_identity"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4057,
+      "image_tokens": 966,
+      "latency_s": 91.38,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s17_c03||noref_c2": {
+    "shot_id": "s17_c03",
+    "frame": "first",
+    "image_source": "explicit",
+    "scene_reference_mode": null,
+    "expected_cast": [
+      "沈夜"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 1,
+        "people_notes": "画面中仅沈夜一人，无路人或背景人形。",
+        "shot_size_observed": "MS",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "partial_environment"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "镜头只要求沈夜一人，画面实际也仅沈夜一人，数量符合。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "未发现角色被复制成多人的情况，单一主体。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "画面背景仅有火光和烟雾，无额外人物。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "沈夜在画面中完整呈现。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "镜头要求CU（面部占据3/4），画面实际为MS（全身及大环境可见）。"
+        },
+        "subject_scale": {
+          "status": "pass",
+          "note": "主体清晰，虽为MS但沈夜在画面中视觉重量足够。"
+        },
+        "framing_and_composition": {
+          "status": "fail",
+          "note": "意图要求面部居中且占大头，现改为全身构图，沈夜虽居中但无法体现'眼神坚定直视镜头'的特写效果。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "平视角度符合预期，无明显机位冲突。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "虽然场景较宽，但背景可见木墙、柴房缝隙透入的微弱火光，符合'落雁驿 - 柴房'的昏暗环境设定。"
+        },
+        "identity_look": {
+          "status": "fail",
+          "note": "参考图要求'蓑衣披在肩上被血染红'且面部有'刀疤'，画面中沈夜背负大竹篓而非蓑衣，且面部无伤痕。"
+        },
+        "prop_fidelity": {
+          "status": "fail",
+          "note": "意图要求'手握玉佩'，画面中沈夜右手垂在身侧握拳，玉佩悬挂于另一只手或腰带旁（未明确握在手中），与'握紧玉佩'的动作不符。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人物肢体比例正常，无明显生成伪影。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "背景深色木板和雨丝符合'落雁驿内景大堂/柴房'且'heavy_rain'的描述。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "动画分镜风格统一，光影氛围营造到位，具有电影感。"
+        }
+      },
+      "director_feedback": [
+        "景别不符：镜头要求CU（面部特写），画面产出了MS（全身），需重新生成近景或推镜头。",
+        "Look不符：缺少参考图要求的蓑衣（现为背篓）及面部刀疤，请检查参考图绑定或提示词。",
+        "动作不符：沈夜并未'握紧玉佩'，而是垂手站立，建议调整手部pose。",
+        "缺少细节：画面未表现出眼神从迷茫到坚定的变化（首帧需捕捉迷茫感），需细化面部表情。"
+      ],
+      "summary": "主要问题在于景别过大（MS vs 预期CU）、关键造型缺失（蓑衣/刀疤）及动作细节错误（未握玉佩）。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "shot_size_correctness",
+        "framing_and_composition"
+      ],
+      "soft_fails": [
+        "identity_look",
+        "prop_fidelity"
+      ],
+      "uncertains": []
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4162,
+      "image_tokens": 966,
+      "latency_s": 88.41,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s18_c06||noref_c1": {
+    "shot_id": "s18_c06",
+    "frame": "first",
+    "image_source": "explicit",
+    "scene_reference_mode": null,
+    "expected_cast": [
+      "沈夜"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 1,
+        "people_notes": "Single character (Shen Ye) torso/waist with sword and rain cape; no duplication or extras visible.",
+        "shot_size_observed": "MCU",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "partial_environment"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "Expected one person; image shows one figure."
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "No duplicated identity observed; only a single character present."
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "No additional people, silhouettes, or extras are visible."
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "Shen Ye is present; though only the torso is shown, he is clearly represented."
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "Requested ECU jade pendant close-up; observed a mid close-up of the character's torso and sword, not the pendant."
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "Subject scale does not serve the intended evidence focus; frame emphasizes clothing/sword rather than the small pendant "
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "Torso is centered with leading elements (sword, sash) but not tailored for the requested insert composition."
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "No special camera semantics required; observed framing is straightforward medium-torso view."
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "Partial environment shown; candle and rain ambiance are consistent with the interior night/rain setting."
+        },
+        "identity_look": {
+          "status": "uncertain",
+          "note": "Clothing, sash, and sword align with Shen Ye; facial scar and hair topknot are not visible due to cropping."
+        },
+        "prop_fidelity": {
+          "status": "fail",
+          "note": "The Zhao-character jade pendant is missing; the visible prop is the sheathed sword, not the required evidence object."
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "Anatomy and limbs appear consistent; no obvious artifacts or impossible anatomy observed."
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "Visual cues support an interior night setting with rain and candlelight."
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "Cinematic animation quality with strong cel shading and moody lighting; usable as a body shot but not for the intended i"
+        }
+      },
+      "director_feedback": [
+        "Regenerate as an ECU insert of the Zhao pendant in Shen Ye's hand, not the torso.",
+        "Center the pendant under warm candlelight with visible carved characters and fine jade texture.",
+        "Drop the wider raincape/torso framing and remove the sword from the composition.",
+        "Keep shallow depth of field so background melts into dark interior while pendant stays sharp.",
+        "Limit frame to pendant and fingertips; exclude full body or clothing details.",
+        "Add subtle light falloff from candle to reinforce night interior without widening the shot."
+      ],
+      "summary": "Frame shows one Shen Ye torso in MCU instead of the requested ECU jade pendant insert."
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "subject_scale",
+        "prop_fidelity"
+      ],
+      "uncertains": [
+        "identity_look"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4071,
+      "image_tokens": 966,
+      "latency_s": 61.77,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s18_c06||noref_c2": {
+    "shot_id": "s18_c06",
+    "frame": "first",
+    "image_source": "explicit",
+    "scene_reference_mode": null,
+    "expected_cast": [
+      "沈夜"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 1,
+        "people_notes": "沈夜一人，符合镜头意图，无多余人物。",
+        "shot_size_observed": "MCU (medium close-up)",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "partial_environment"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "画面中只有沈夜一人，符合expected cast数量。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "未发现同一角色被复制成两个人。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "画面中无镜头未要求的路人或闲杂人等。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "沈夜已完整出现在画面中。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "导演意图为ECU(玉佩特写)，实际为MCU(肩以上)。人物和手部占主体，景别不符。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "意图聚焦于手中玉佩的雕工细节，但画面以人物脸部为主体，玉佩占比不足。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "人物构图合理，人物与道具位置清晰，无明显构图违背。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "无特殊机位要求，画面呈现标准视角，无明显冲突。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "虽然人物占比大，但背景可见室内环境与雨夜氛围，符合'落雁驿内景'设定。"
+        },
+        "identity_look": {
+          "status": "uncertain",
+          "note": "由于是近景面部特写，无法全面评估服装破损、蓑衣、血渍等细节是否符合'战斗伤损造型'参考图。"
+        },
+        "prop_fidelity": {
+          "status": "pass",
+          "note": "玉佩出现，可见雕刻细节和刻字，符合'证据实物'的要求。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "手部结构正常，五官无崩坏，无明显生成伪影。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "背景可见深色室内结构与雨夜光线，与'落雁驿大堂/微光'的暗调氛围相符。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "画面光影层次丰富，电影质感强，人物表情刻画细腻，整体分镜质量高。"
+        }
+      },
+      "director_feedback": [
+        "调整景别：目标为ECU(极端特写)，需裁切画面仅保留手部、玉佩及部分背景，消除人物脸部。",
+        "强化道具焦点：玉佩应占据画面主体，利用景深虚化背景，引导视线至玉佩雕工与'赵'字刻痕。",
+        "确认look细节：需核对画面是否体现'战斗伤损'（左颊刀疤、破损衣物、血渍），目前主要呈现正常状态。",
+        "统一光影氛围：烛光摇曳感可更明显，增加室内环境的冷暖对比，强化'剑拔弩张'的戏剧张力。",
+        "考虑机位变化：可尝试俯拍强调玉佩，或主观视角增加代入感，需与导演确认。",
+        "明确场景语境：背景中雨夜的冷蓝光效与室内烛光的暖色调对比应更鲜明，增强视觉叙事。"
+      ],
+      "summary": "该分镜在角色数量、人物表现及画面质量上均表现良好，但在核心景别（意图ECU，实际MCU）和视觉焦点（意图玉佩，实际人物）上存在关键偏差，需要根据导演意图重新裁剪或生成。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "subject_scale"
+      ],
+      "uncertains": [
+        "identity_look"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4193,
+      "image_tokens": 966,
+      "latency_s": 57.93,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s11_c03||noref_c1": {
+    "shot_id": "s11_c03",
+    "frame": "first",
+    "image_source": "explicit",
+    "scene_reference_mode": null,
+    "expected_cast": [
+      "沈夜"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 1,
+        "people_notes": "沈夜一人，正视图前景手持信纸，左脸有刀疤痕迹，黑底纯色背景",
+        "shot_size_observed": "MCU",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "minimal_background"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "镜头只要求沈夜一人，画面人物数为1人，符合预期，无多余角色。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "未发现同一角色被复制成多人的情况，画面只有唯一的沈夜形象。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "背景纯黑，无任何其他人物、路人、士兵或幻觉 silhouette，符合强制约束。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "沈夜出现完整，在画面中低头看信，动作和道具均符合描述。"
+        },
+        "shot_size_correctness": {
+          "status": "pass",
+          "note": "实际为MCU（胸上），包含完整肩部与面部表情细节，符合'脸部特写'的导演意图，虽略宽于CU但可接受。"
+        },
+        "subject_scale": {
+          "status": "pass",
+          "note": "人物占据画面主体，胸部以上清晰呈现，符合 CU/脸部特写镜头的情绪聚焦目的。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "构图居中偏下，脸部作为视觉焦点，手与信纸自然置于画面下方，符合特写镜头的审美要求。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "正常正视图，未要求特殊机位，画面无冲突，整体为正面视角的常规拍摄。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "背景纯黑，场景极简，符合'背景纯黑无任何场景'的要求，局部画面与情绪镜头意图一致。"
+        },
+        "identity_look": {
+          "status": "pass",
+          "note": "与Look参考一致：黑发低发髻、左脸刀疤、青灰长袍、短剑在腰左侧，符合沈夜造型设定。"
+        },
+        "prop_fidelity": {
+          "status": "pass",
+          "note": "信纸清晰可见，手握信纸姿势正确，手指位置暗示摩挲动作，符合'信纸暗号'细节。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "无明显生成伪影，手指、面部细节均正常，无多余肢体或崩坏现象。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "黑色背景符合'背景纯黑无任何场景'的强制要求，虽无具体环境元素，但与情绪镜头定位一致。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "整体电影质感优秀，光影层次分明（暖光照明+冷蓝背景），构图与情绪表达契合，分镜可用。"
+        }
+      },
+      "director_feedback": [
+        "画面达到MCU而非严格CU，可适当裁剪保留面部细节增强特写冲击力",
+        "人物姿势稍正面，若微侧30°可突出左脸刀疤细节并强化眼神挣扎感",
+        "手部动作可微调更突出手指摩挲信纸的动态细节",
+        "信纸清晰度良好但可略加强调纸张纹理与暗号部分以呼应对白",
+        "建议维持当前黑色背景策略，避免引入环境元素分散注意力",
+        "人物比例在画面中适中，无需调整景别即可用于分镜"
+      ],
+      "summary": "该镜头基本符合导演意图，人物、道具、背景控制得当，仅景别略宽于严格CU要求，整体质量优秀可作为分镜使用。"
+    },
+    "derived": {
+      "overall": "pass",
+      "hard_fails": [],
+      "soft_fails": [],
+      "uncertains": []
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4187,
+      "image_tokens": 966,
+      "latency_s": 63.26,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s11_c03||noref_c2": {
+    "shot_id": "s11_c03",
+    "frame": "first",
+    "image_source": "explicit",
+    "scene_reference_mode": null,
+    "expected_cast": [
+      "沈夜"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 1,
+        "people_notes": "1人（沈夜），无路人，无其他角色",
+        "shot_size_observed": "MCU",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "partial_environment"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "expected 1人，observed 1人，符合"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "画面仅1人，无复制嫌疑"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "无额外人物"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "沈夜完整出镜，未缺失"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "镜头要求CU（脸部特写），实际为MCU（胸上，桌面可见），景别过大"
+        },
+        "subject_scale": {
+          "status": "pass",
+          "note": "人物占比适中，虽非CU但主体性仍清晰"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "居中构图，烛光/雨夜形成合理纵深与层次"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "镜头角度正常，无特殊机位冲突"
+        },
+        "scene_scope_correctness": {
+          "status": "fail",
+          "note": "意图明确【背景纯黑无任何场景】，实际画面含柴房木门、蜡烛、窗外雨夜建筑与灯笼"
+        },
+        "identity_look": {
+          "status": "pass",
+          "note": "黑发低发髻、青灰立领盘扣长袍、冷峻眼神均与参考一致"
+        },
+        "prop_fidelity": {
+          "status": "pass",
+          "note": "信纸在手，腰侧悬剑，烛火出现，均符合意图与上下文"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "手部形态正常，面部结构清晰，无伪影"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "木箱/门框、雨夜、暖烛光与冷蓝门外符合落雁驿内景"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "光影层次丰富，水墨电影质感良好，作为分镜可用"
+        }
+      },
+      "director_feedback": [
+        "景别需从MCU重剪为CU，只保留脸部与手持信件，裁掉桌面/蜡烛/门窗",
+        "背景须改为纯黑或移除，意图明确无环境入镜",
+        "若保留雨夜氛围，需重新分镜实现CU+黑底，而非此MCU版",
+        "确认手指摩挲信纸动作清晰可辨"
+      ],
+      "summary": "角色造型与场景气氛准确，但严重违反硬约束：景别过大（MCU非CU）且背景环境违规入镜（要求纯黑无场景），两维均需重生成。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "scene_scope_correctness"
+      ],
+      "uncertains": []
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 3862,
+      "image_tokens": 966,
+      "latency_s": 127.68,
+      "repairs": 0,
+      "image_count": 1
+    }
+  }
+}

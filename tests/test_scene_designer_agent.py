@@ -1544,7 +1544,8 @@ def test_D2_budget_context_only_drops_scene_keeps_semantics_path():
     dropped = []
     kept, mode = _apply_reference_budget(_d2_budget_items(), shot=_FakeShot(),
                                          scene_reference_mode="context_only",
-                                         dropped=dropped)
+                                         dropped=dropped,
+                                         human_reference_mode="keep")
     assert mode == "context_only"
     assert [x["source_id"] for x in kept] == ["look_沈夜", "prop_玉佩"]
     scene_drops = [d for d in dropped if d["reason"] == "scene_reference_context_only"]
@@ -1557,3 +1558,36 @@ def test_D2_budget_full_keeps_scene():
                                          scene_reference_mode="full", dropped=[])
     assert mode == "full" and kept[0]["source_type"] == "scene_instance_view"
 
+
+
+def test_D2_human_reference_mode_auto_drop_on_tight():
+    """D2 §5.2：auto 下 context_only（紧景别）→ drop 全部人形参考；
+    WS/MS（full）→ keep。显式 keep/drop 直通。"""
+    from src.generation.image_adapter import (
+        _apply_reference_budget, resolve_human_reference_mode)
+    # CU + auto scene → context_only → look 也 drop
+    dropped = []
+    kept, mode = _apply_reference_budget(_d2_budget_items(), shot=_FakeShot("close-up"),
+                                         scene_reference_mode="auto", dropped=dropped)
+    assert mode == "context_only"
+    assert [x["source_id"] for x in kept] == ["prop_玉佩"], kept
+    reasons = {d["reason"] for d in dropped}
+    assert "human_reference_drop" in reasons
+    # MS + auto → full → look 保留
+    kept2, mode2 = _apply_reference_budget(_d2_budget_items(), shot=_FakeShot("medium shot"),
+                                           scene_reference_mode="auto", dropped=[])
+    assert mode2 == "full"
+    assert "look_沈夜" in [x["source_id"] for x in kept2]
+    # 显式 keep 覆盖
+    kept3, _m = _apply_reference_budget(_d2_budget_items(), shot=_FakeShot("close-up"),
+                                        scene_reference_mode="context_only",
+                                        human_reference_mode="keep", dropped=[])
+    assert "look_沈夜" in [x["source_id"] for x in kept3]
+    # resolver 直通
+    from src.generation.image_adapter import resolve_human_reference_mode as r
+    assert r(None, _FakeShot("medium shot"), "full") == "keep"
+    assert r(None, _FakeShot("close-up"), "context_only") == "drop"
+    assert r("keep", _FakeShot("close-up"), "context_only") == "keep"
+    import pytest
+    with pytest.raises(ValueError):
+        r("bogus", _FakeShot(), "full")

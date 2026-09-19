@@ -216,6 +216,14 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
             raise AgentError("bad_arguments",
                              f"scene_reference_mode 必须是 full | context_only | auto，"
                              f"得到: {scene_reference_mode}")
+        # D2 §5.2：人形参考策略（auto=紧景别自动不发 look 参考，identity 走 prompt 文本）
+        human_reference_mode = (str(args.get("human_reference_mode") or "").strip().lower()
+                                or None)
+        if human_reference_mode is not None and human_reference_mode not in (
+                "keep", "drop", "auto"):
+            raise AgentError("bad_arguments",
+                             f"human_reference_mode 必须是 keep | drop | auto，"
+                             f"得到: {human_reference_mode}")
         total_timeout = IMAGES_TOTAL_TIMEOUT_S
         asset_noun = "分镜图"
     else:
@@ -306,6 +314,8 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
             extra.update(variants=variants, force=force)
             if scene_reference_mode:
                 extra["scene_reference_mode"] = scene_reference_mode
+            if human_reference_mode:
+                extra["human_reference_mode"] = human_reference_mode
         elif video_model:
             extra["video_model"] = video_model
         job = q.submit(project, kind, t["shot_id"], **extra)
@@ -522,6 +532,12 @@ SHOT_GENERATE_IMAGES_TOOL = {
                                                     "必须已有 READY 生产绑定，UNBOUND/NOT_READY 会被拒绝"
                                                     "（绝不静默回落 legacy）；legacy_allowed=旧行为"
                                                     "（未绑定的镜头走 legacy 参考链）。省略=legacy_allowed。"},
+                "human_reference_mode": {"type": "string", "enum": ["keep", "drop", "auto"],
+                                         "description": "人形参考策略（D2）：keep=每角色 1 张 look "
+                                                        "参考；drop=不发人形参考（identity 走提示词"
+                                                        "文本——紧景别推荐，实验证据：构图遵从显著改善）；"
+                                                        "auto=紧景别(context_only)自动 drop，其余 keep。"
+                                                        "省略=auto。"},
                 "scene_reference_mode": {"type": "string", "enum": ["full", "context_only", "auto"],
                                          "description": "场景参考策略（Phase D2）：full=场景图作为生图参考"
                                                         "（空间身份最强，适合大远景/全景确立空间）；"
