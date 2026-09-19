@@ -37,7 +37,7 @@ def _size_directive(shot: Shot) -> str:
     bits = [str(shot.shot_size or "").strip()]
     angle = str(shot.camera_angle or "").strip()
     if angle:
-        bits.append(f"{angle} angle")
+        bits.append(angle if angle.lower().endswith("angle") else f"{angle} angle")
     directive = ", ".join(b for b in bits if b)
     comp = str(shot.composition or "").strip()
     if comp:

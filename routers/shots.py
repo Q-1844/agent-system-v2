@@ -614,7 +614,12 @@ async def _handler_first_frame(job, emit):
                            char_ref_snapshot=char_snap, candidates=cand_list,
                            origin_run_id=job.params.get("origin_run_id"),
                            generation_basis={**(dict(bound.basis) if bound else {}),
-                                             "image_provider": provider})
+                                             "image_provider": provider,
+                                             # D2 观测：本批实际使用的场景参考策略与发送序列
+                                             **({"scene_reference_mode": bound.scene_reference_mode,
+                                                 "sent_ref_sequence": [r.get("source_type")
+                                                                       for r in bound.semantic_roles]}
+                                                if bound else {})})
 
     def mut(s):
         s.first_frame_batches.append(new_batch)
