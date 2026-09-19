@@ -370,6 +370,39 @@ def _gate_ready_pack(svc: Any, sid: str) -> dict:
     return compiled["pack"]
 
 
+# ============ Provider input image cap (Phase D #35 real-machine fix) ============
+# Agnes i2i cap: at most 6 input images (400 invalid_request, Golden Run Batch 1
+# evidence -- multi-character shot Pack can reach 9~13 refs). Deterministic
+# selection: keep all primary (truncate in original order if over cap), fill
+# remaining slots in original order; dropped items recorded with
+# reason=provider_input_image_cap, never silent.
+MAX_PROVIDER_INPUT_IMAGES = 6
+
+
+def _cap_provider_input_images(eligible, *, reserved_slots=0, dropped=None):
+    dropped = dropped if dropped is not None else []
+    cap = max(0, MAX_PROVIDER_INPUT_IMAGES - int(reserved_slots))
+    if len(eligible) <= cap:
+        return eligible
+    keep_idx = set()
+    primaries = [i for i, it in enumerate(eligible)
+                 if str(it.get("priority") or "") == "primary"]
+    for i in primaries[:cap]:
+        keep_idx.add(i)
+    for i, _it in enumerate(eligible):
+        if len(keep_idx) >= cap:
+            break
+        if i not in keep_idx:
+            keep_idx.add(i)
+    for i, it in enumerate(eligible):
+        if i not in keep_idx:
+            dropped.append({"source_id": str(it.get("source_id")),
+                            "reference_asset_id": str(it.get("reference_asset_id") or ""),
+                            "reason": "provider_input_image_cap",
+                            "detail": {"cap": cap, "eligible": len(eligible)}})
+    return [it for i, it in enumerate(eligible) if i in keep_idx]
+
+
 def _resolve_media_loop(eligible: List[dict], rdoc: Any, project_dir: Path
                         ) -> Tuple[List[str], List[str], List[Dict[str, Any]],
                                    List[Dict[str, Any]], List[Dict[str, Any]]]:
@@ -421,12 +454,16 @@ def build_bound_first_frame_input(project_dir, project: Any, shot: Any) -> Bound
 
     # ---- Step 1 temporal eligibility（先于 priority，§8/§13）----
     eligible, excluded_end = filter_first_frame_references(pack.get("references") or [])
+    _cap_dropped: list = []
+    eligible = _cap_provider_input_images(eligible, reserved_slots=0,
+                                          dropped=_cap_dropped)
 
     # ---- Step 2 媒体解析（§23）----
     from src.resources.store import ResourceStore
     rdoc = ResourceStore(project_dir, project_dir.name).load()
     image_refs, used_ids, dropped, diagnostics, roles = \
         _resolve_media_loop(eligible, rdoc, project_dir)
+    dropped.extend(_cap_dropped)   # Phase D: provider input cap drops
     if excluded_end:
         diagnostics.append({
             "reason": "end_state_reference_excluded_from_first_frame",
@@ -520,8 +557,12 @@ def build_bound_last_frame_input(project_dir, project: Any, shot: Any, *,
     # ---- 媒体解析 ----
     from src.resources.store import ResourceStore
     rdoc = ResourceStore(project_dir, project_dir.name).load()
+    _cap_dropped2: list = []
+    eligible = _cap_provider_input_images(
+        eligible, reserved_slots=1, dropped=_cap_dropped2)   # Phase D: +1 = 首帧构图基础
     refs, used_ids, dropped, diag2, roles = _resolve_media_loop(eligible, rdoc, project_dir)
     diagnostics.extend(diag2)
+    dropped.extend(_cap_dropped2)
     if excluded_start:
         diagnostics.append({
             "reason": "start_state_reference_excluded_from_last_frame",

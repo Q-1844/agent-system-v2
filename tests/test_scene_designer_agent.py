@@ -1417,3 +1417,28 @@ def test_PD25C_shot_update_link_mode(tmp_path):
     assert proj2.get_shot("s01_c01").link_mode == "keyframes"
     res2 = update_shot_fields(proj2, "s01_c01", {"link_mode": "bogus"})
     assert "link_mode" not in res2["changed"]
+
+
+# ============ Phase D §35：provider 输入图上限（Agnes i2i ≤6）============
+def test_PD35_cap_provider_input_images():
+    """13 张候选 → 截到 6：primary 全保（scene/hero look/composition），其余按原序补，
+    被裁剪项逐条记录 provider_input_image_cap。"""
+    from src.generation.image_adapter import _cap_provider_input_images
+    items = [{"source_id": "scene", "priority": "primary"}]
+    for i in range(4):
+        items.append({"source_id": f"look_hero_{i}", "priority": "primary"})
+    for i in range(4):
+        items.append({"source_id": f"identity_{i}", "priority": "supporting"})
+    for i in range(4):
+        items.append({"source_id": f"look_extra_{i}", "priority": "supporting"})
+    dropped = []
+    out = _cap_provider_input_images(items, reserved_slots=0, dropped=dropped)
+    assert len(out) == 6
+    ids = [x["source_id"] for x in out]
+    assert "scene" in ids and all(f"look_hero_{i}" in ids for i in range(4))
+    assert len(dropped) == 7
+    assert all(d["reason"] == "provider_input_image_cap" for d in dropped)
+    # 未超限时原样返回、零 dropped
+    dropped2 = []
+    out2 = _cap_provider_input_images(items[:5], reserved_slots=0, dropped=dropped2)
+    assert len(out2) == 5 and dropped2 == []
