@@ -90,7 +90,8 @@ def test_C3_production_context_contains_profile(tmp_path):
 def test_C4_legacy_director_tests_not_regressed():
     """C4：legacy Director creative 行为回归由 tests/test_director_agent.py 全量承载
     （本阶段 CI 同批运行）；此处锚定工具面规模不膨胀。"""
-    assert len(DIRECTOR_TOOLS) == 21, "Director 工具面 = 17 既有 + 4 新增（§18）"
+    # D2（30.md §21/§22）：+shot.select_frame（候选选定闭环）→ 22
+    assert len(DIRECTOR_TOOLS) == 22, "Director 工具面 = 17 既有 + 4 新增（§18）+ select_frame（D2）"
 
 
 # ============ Production inspect（C5-C14）============
