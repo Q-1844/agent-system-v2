@@ -257,3 +257,43 @@ reference_previous / 2.5-flash(单帧)；与 30.md §29-§39 要求的覆盖面�
 ---
 
 （以下章节随执行推进追加：A/B 判定、52 镜重收口、视频生产、Gallery/Reel、回归、结论）
+
+### 5.2 补充实验：紧景别无参考（Mode C'，D2 新证据）
+
+A/B 后仍有一堵墙：CU 族在 A/B 两组都渲染为 WS。第四个假设——**全身白底 look 立绘把
+构图锚定在「全身+环境」**。对照实验（4 紧景别镜 × 2 候选，context_only + **0 人形
+参考**，identity 由 prompt 文本承载，Agnes 2K）：
+
+| 指标 | A/B（有 look 参考） | 无参考实验 |
+|---|---|---|
+| observed 景别 | WS/EWS 为主 | **MCU/MS**（距离收窄一档） |
+| observed 人数 | 5~11（s10_c02 曾 11 人） | **1~2** |
+| vision pass | 0/16（CU 族） | 1/8（其余仅剩 1 档差距） |
+
+证据文件：`_phase_d2_ab/noref_runs.json` / `NOREF_EVAL.json`；目检样张
+`_phase_d2_ab/s17_c03/noref_c1.png`（真近景：头肩占框、雨夜、单人、identity 保持）。
+
+**落地**：`human_reference_mode ∈ {keep, drop, auto}`（默认 auto）——scene 解析为
+context_only（紧景别家族）时自动 drop 全部人形参考，identity 走 prompt 文本；
+显式 keep/drop 可覆盖（commit dbce0ec）。
+
+## 9. 52 镜重收口进展（30.md §18-§24）— 进行中
+
+- Before 全量矩阵（§18）：PASS 1 / NEEDS_REFRAME 24 / NEEDS_CAST_FIX 23 /
+  NEEDS_REVIEW 3 / ERROR 1（`_phase_d2_audit/REVIEW52_MATRIX.md`）。
+- 代表集闭环由 Director 真实执行（Round 1-3，会话治理：2 次归档重校准）：
+  Director 用 shot.update 改意图、shot.generate_images（bound_required + auto 策略）、
+  visual.review_shot 逐候选审查、shot.select_frame 选定。
+- **真机 bug 修复**：visual.review_shot 执行器缺 ProjectStore 导入（harness 路径
+  不经过执行器所以单测未暴露）→ 修复 + 执行器接线测试（commit 前后两条）。
+- ImageBatch.generation_basis 补记 scene_reference_mode + 发送序列（观测缺口）。
+- **结果与剩墙**：s16_c02 达成 pass+选定；其余代表镜在 3 次策略升级尝试
+  （意图重写/context_only/无参考）后仍不能全过 hard gate——残余失败集中在
+  shot_size_correctness（CU 意图渲染为 MS/MCU，距离收窄但未达）与偶发
+  unexpected_people。按 §24 规则记 MODEL_LIMITATION，证据链完整：
+  这是 Agnes 对本题材的景别遵从能力边界（Phase D §44.5 的延续与量化）。
+- 待用户决策点：§48 的「CU/ECU actually close」标准在本 provider 下的可达性——
+  (a) 接受 MODEL_LIMITATION 按现状进入视频生产（需放宽 §25 门槛）；
+  (b) 人工复核定稿口径（人眼可能接受 MCU 级渲染）；(c) 更换/增加 provider 重试
+  紧景别（超出本阶段 Agnes-only 约束，需用户批准）。
+
