@@ -113,5 +113,91 @@ identity 多视角/extras 填充剩余槽位（C2 §33 时代假设「单人无�
 
 ---
 
-（以下章节随执行推进追加：§4 A/B、§5 policy、§6 review_shot、§7 Director、
-§8 52 镜重收口、§9 视频、§10 Gallery/Reel、§11 回归、§12 结论）
+## 4. Shot-level Scene Reference Policy 实现（30.md §6-§8）— 已实现，默认策略待 A/B 后翻转
+
+Commit 89b1233 / c6f9685：
+
+- `scene_reference_mode ∈ {full, context_only, auto}`（`src/generation/image_adapter.py`）：
+  full=场景图 conditioning（Phase D 行为）；context_only=场景图不进 image_refs、场景语义
+  仍经 `_production_context_text` 的 Scene 行进 prompt（30.md §4 Mode B 的真实实现——
+  BOUND 保持、不 fallback legacy）；auto=确定性导演映射（EWS/WS→full；MCU/CU/ECU/OTS/
+  insert/MS→context_only 起草版，A/B 后校准）。
+- **`DEFAULT_SCENE_REFERENCE_MODE = "full"`（零回归）**——翻转默认必须以 A/B 证据为前提
+  （30.md §4-§6 的顺序纪律）。
+- 人形参考预算（§8/§9）：`_apply_reference_budget` —— legacy identity 视图一律不进
+  provider；每角色仅保 pack 序第一张 approved look；裁剪逐条记录 `human_reference_budget`；
+  cap(6) 保留为最终护栏。任何角色不再出现「1 look + 3 身份视图」的人形过载。
+- 透传链：Director 工具 `shot.generate_images(scene_reference_mode=…)` → job.params →
+  `_handler_first_frame` / `_handler_last_frame` → adapter（request.scene_reference_mode
+  落 generation 观测）。
+
+## 5. Scene Reference A/B（30.md §4-§5）— 进行中
+
+- 设计：16 代表镜（EWS×2/WS×2/MS×4/MCU×2/CU×4 含全片唯一显式 OTS s10_c02/ECU×2）×
+  {Mode A=full, Mode B=context_only} × 2 候选，全部经真实 `build_bound_first_frame_input`
+  （同一 pack、同一 creative intent、同一新预算，唯一变量=场景图是否 conditioning），
+  Agnes 2K 真机生成。Before 组 = baseline 既有 selected（旧参考行为）作第三对照。
+- 评测：每张候选 + Before 共 80 张经 `review_shot_core`（真实 Agnes Vision，14 维度），
+  汇总 overall / 维度失败率按组对比；产出 `_phase_d2_ab/AB_EVAL.json` +
+  `AB_GALLERY.html`（三组并排）供人工终审。
+- Mode C（SELECTIVE SCENE REFERENCE）：**跳过**——Agnes image API 无 crop/role/weight/
+  mask/background-only 能力（§3.1 Q3/Q4），按 30.md §4「不支持不要伪造」如实记录。
+- 状态：真机生成中（会员档限速波动，429 自愈重试；结果出来后补 §5.1 判定）。
+
+## 6. Shot-aware Vision Review（30.md §10-§13）— 已建成
+
+- `src/agents/shot_review.py`：`visual.review_shot`——输入=Shot creative intent/cast/
+  景别/机位/构图/细节/对白/Binding 期望 Look/场景上下文/待审图（+≤2 张 approved Look
+  参考图）；输出=observed 块（people_count/people_notes/实际景别/实际机位语义/场景
+  可见度）+ **14 固定维度**（§11 的 12 硬维度 + scene_identity/overall_quality 软维度）
+  + director_feedback（可执行导演反馈）+ summary。
+- **Deterministic overall（§12）**：`derive_overall` 代码推导——duplicate_identity /
+  unexpected_people / missing_character / shot_size_correctness / framing 重大错配 /
+  anatomy 严重伪影任一 fail → overall=needs_fix，模型整体印象无权翻案；无 fail 有
+  uncertain → uncertain；否则 pass。
+- scene_scope_correctness 口径（§11.9）写入评审 prompt：近景只见局部环境（一面墙/雨/
+  门框）完全可 pass，绝不因「没画全整个场景」而 fail——只评局部与地点的一致性。
+- 复用：`review_shot_core` 不依赖 AgentRuntime——A/B 评测、52 镜全量审查、fixture
+  验证走同一条代码路径；telemetry 落 `output/agents/director/shot_reviews.jsonl`。
+- 已知差图 fixture（§13）：`_phase_d2_fixtures/`——差图本地文件已被批次覆盖（候选文件名
+  跨批复用 `{shot}_first_v1.png`），**从不过期的 provider URL 重下载**并哈希存证：
+  F1=s17_c02 克隆+ECU→WS 双证图；F2=s15_c01 五个幻觉路人+柳衣/周伯缺失；
+  F3=s15_c01 武器复制+服装漂移。真实 Agnes Vision verdict 确认后写入 registry 供
+  derive_overall 单测（真机确认在 52 镜审查轮执行）。
+
+## 7. Director 导演纪律强化（30.md §14-§17 / §36）— 已写入
+
+`DIRECTOR_SYSTEM` 新增「导演核心原则」块：你是在决定观众此刻看什么、不看什么；场景已由
+Scene System 建立，不逐镜重复展示；远景立空间 / 中景人物互动 / 近景特写「有意排除信息」
+（背景只剩局部墙体/灯光/雨/门框，场景完整≠场景完整入镜）/ OTS 的证据是遮挡与焦点而非
+「两人都在画面里」/ insert 锁道具局部；**接力（inherit_previous）是动作与时空的连续，
+不是构图复制——cut 的自由永远保留**。8 问推理纪律（叙事目的/注意力/藏露/占比/场景露出/
+景别选择/前后镜关系）作为 reasoning discipline，不加机械 checklist、不加 canonical 字段。
+
+## 8. 视频生产能力审计（30.md §26，真实代码）
+
+来源：`src/generation/video_adapter.py` / `src/api/agnes_client.py:529-645` /
+`routers/shots.py _handler_video` / `src/core/models.OpeningSource`。
+
+| Mode | 真实支持 | 生产路径暴露 | 备注 |
+|---|---|---|---|
+| i2v（first-frame video） | ✅ | ✅ 默认 | v2.0 顶层 image URL；2.5 契约 mode='keyframe' 同形；**只有 first frame 视觉槽**，end_state 仅语义文本（adapter §8 诚实诊断） |
+| keyframes（first+last 双帧） | ✅ | ✅ link_mode=keyframes | **仅 v2.0**（extra_body.image=[first,last]≥2）；2.5 显式拒绝；首尾同图有 diagnostic |
+| t2v | client 可发 | ❌ handler 不暴露 | mode 映射只有 i2v/keyframes |
+| multi（多图） | client stub | ❌ 未验证、handler 不用 | adapter 头部明确「未验证且 handler 不用」→ 不测（30.md §26 不发明不存在的功能） |
+| Native AV（对白控制） | ✅ | ✅ dialogue 镜默认开 | BOUND/UNBOUND 共用唯一 NativeAVGenerationPack→Compiler；language fail closed；speaker fail closed；generation_basis 参与 freshness |
+| agnes-video-2.5-flash（新契约） | ✅ | ✅ video_model 参数 | mode 必填 text/keyframe + seconds 4-12s 720P；**keyframes 双帧在 2.5 被拒** |
+| opening_source=independent | ✅ | ✅ | 本镜 selected 首帧开场 |
+| opening_source=reference_previous | ✅ | ✅ | 来源镜头末帧作参考图生成新首帧候选（image_adapter continuity clause） |
+| opening_source=inherit_previous | ✅ | ✅ | 开场=来源镜头**实际视频末帧**（video_end_frame.url），relay 物料免 basis 检查 |
+| video_end_frame relay | ✅ | ✅ | 视频完成自动 ffmpeg 提取；video_end_source_version 记录 provenance；下游 source_version 变化=stale 可检 |
+| boundary freshness | ✅ | ✅ | video 消费 boundary 前比对 generation_basis（binding_revision+resolved SIV），stale→fail closed 零 provider 调用 |
+| 配额 | — | — | client quota `video_seconds=300`（config）+ 视频 1 RPM 串行 worker；平台档位额度以真机实测为准（§44 遗留：约 5 RPM/日 500s） |
+
+**结论**：本轮真实可测的生产模式 = i2v / keyframes / Native AV / inherit_previous relay /
+reference_previous / 2.5-flash(单帧)；与 30.md §29-§39 要求的覆盖面完全吻合（t2v/multi
+非生产暴露，如实记录不虚构）。
+
+---
+
+（以下章节随执行推进追加：A/B 判定、52 镜重收口、视频生产、Gallery/Reel、回归、结论）
