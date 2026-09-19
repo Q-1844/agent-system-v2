@@ -17,7 +17,7 @@ agnes:
   rpm:
     text: 20
     image_1k: 20
-    image_2k: 6   # Token Plan 入门版（2026-09-19 生效，1500 req/5h）；免费档实测值见 AGNES_API_FACTS §4.1 勘误
+    image_2k: 16   # Token Plan 入门版 2K 可达约 80 RPM；按用户指引不过度并发，取 16（约 2.5 倍提速）。免费档实测值见 §4.1 勘误
     image_3k: 1
     image_4k: 1
     video: 1
