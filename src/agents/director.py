@@ -62,7 +62,7 @@ from typing import Any, Optional
 
 import httpx
 
-from src.core.models import Project, Shot
+from src.core.models import Asset, Project, Shot, ShotStatus
 from src.core.store import ProjectStore
 from src.core.atomic import atomic_write_json
 from src.storyboard.structure_service import (
@@ -146,7 +146,10 @@ DIRECTOR_WRITE_OPERATIONS = {"shot.create", "shot.create_many", "shot.update",
                              "shot.update_many", "shot.delete", "shot.move",
                              "shot.generate_images", "shot.generate_videos",
                              # Phase C1（27.md §1.1）：ShotProductionBinding 生产意图归 Director
-                             "shot.production.bind", "shot.production.refresh"}
+                             "shot.production.bind", "shot.production.refresh",
+                             # Phase D2（30.md §21/§22）：候选选定 = generate→review→
+                             # compare→choose 闭环的最后一环，由 Director 完成
+                             "shot.select_frame"}
 # 长任务视觉工具（loop 侧额外传 event_cb/cancel_event；对生成类工具豁免「写后重读」
 # 收尾判定——executor 内部已做「重读 canonical + 文件存在」验证，强于 shot.list）。
 DIRECTOR_LONG_TASK_TOOLS = {"shot.generate_images", "shot.generate_videos"}
@@ -283,6 +286,7 @@ DIRECTOR_SYSTEM = """你是 AGNES 的 Director（导演/分镜设计者），负
 - shot.update_many(updates[], expected_revision)：一次修改 ≥{max_update_batch_prev} 个互相独立的镜头（「这组镜头整体重新设计得更有张力」）。每项 shot_id + 要改的字段；同镜多字段合并到一项。整批一次校验+一次原子写入。
 - shot.delete(shot_id)：删除一个镜头（系统会级联删除接力依赖它的下游镜头，并保留已生成文件）。用户明确要求删除时直接调用。
 - shot.move(shot_id, before_shot_id?/after_shot_id?, expected_shots_revision)：把一个镜头在同段内移到某镜之前/之后（都省略则移到段尾）。镜头顺序是状态依赖操作：多个移动必须一步一步来，每步用最新指纹，不要试图一次重排整组。
+- shot.select_frame(shot_id, candidate_id, frame?)：选定该镜头的首帧/尾帧候选（默认首帧）。闭环：shot.generate_images 生成 → visual.review_shot 审查（hard gate 失败的候选绝不能选定）→ 比较候选 → 本工具选定。
 
 【视觉生产（分镜图/视频生成，长任务）】
 - shot.generate_images(targets[], variants?, force?, scene_reference_mode?)：批量为镜头生成分镜图（frame=first 首帧 / frame=last 尾帧）。复用系统既有生成管线：自动带角色参考图与接力参考图保持角色一致性；生成后写入镜头数据并在分镜页展示（你看不到图片内容，成功与否以工具返回为准，【不要】向用户描述图片画面细节）。单个镜头也传一项；单批最多 {max_create_batch} 项。scene_reference_mode（Phase D2）：full=场景图作为参考（空间确立）；context_only=只保留场景语义（近景/特写防构图拉宽）；auto=按景别自动。省略=full。
@@ -584,11 +588,34 @@ SHOT_MOVE_TOOL = {
     },
 }
 
+SHOT_SELECT_FRAME_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "shot.select_frame",
+        "description": (
+            "选定一个镜头的首帧/尾帧候选（Phase D2：generate→review→compare→choose "
+            "闭环的最后一环）。生成会产生多个批次候选；用 visual.review_shot 对照审查后，"
+            "把通过质量闸门的那一候选设为 selected（任何 hard gate 失败的候选不得被选为"
+            "最终 selected frame）。选定是 canonical 写操作：会更新 selected 指针与旧版"
+            "兼容字段。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "shot_id": {"type": "string", "description": "镜头 id。"},
+                "frame": {"type": "string", "enum": ["first", "last"],
+                          "description": "选首帧（默认）还是尾帧。"},
+                "candidate_id": {"type": "string",
+                                 "description": "要选定的候选 id（如 ff_ab12cd34_2）。"},
+            },
+            "required": ["shot_id", "candidate_id"],
+        },
+    },
+}
+
 SHOT_LIST_TOOL = {
     "type": "function",
     "function": {
-        "name": "shot.list",
-        "description": (
+        "name": "shot.list",        "description": (
             "镜头地图（轻量，不返回完整拍摄方案）。不带参数：列所有故事段（position/scene_id/"
             "摘要/角色/镜头数/各段镜头 id 列表）+ 镜头结构指纹 revision 与内容指纹 "
             "shots_content_revision。带 scene_id：列该段镜头的顺序/一句话描述/角色/时长/景别/"
@@ -1497,6 +1524,78 @@ def _execute_shot_move(rt: AgentRuntime, project: str, arguments: str,
              "请用 shot.list 核对后向用户总结。")
 
 
+async def _execute_shot_select_frame(rt: AgentRuntime, project: str, arguments: str,
+                                     instruction, message_id) -> dict:
+    """shot.select_frame（Phase D2，30.md §21/§22）：选定首帧/尾帧候选。
+    语义与 REST choose 端点一致（selected 指针 + 旧字段同步 + status=done）；
+    写后重读 canonical 验证指针。候选不存在/无资产 → 结构化失败，不猜。"""
+    args = _parse_args(arguments)
+    shot_id = (args.get("shot_id") or "").strip()
+    candidate_id = (args.get("candidate_id") or "").strip()
+    frame = (args.get("frame") or "first").strip()
+    if not shot_id or not candidate_id:
+        raise AgentError("bad_arguments", "缺少 shot_id 或 candidate_id")
+    if frame not in ("first", "last"):
+        raise AgentError("bad_arguments", "frame 只允许 first/last")
+
+    pdir, store, proj = _load_proj(rt, project)
+    shot = proj.get_shot(shot_id)
+    if shot is None:
+        raise AgentError("not_found", f"镜头不存在: {shot_id}")
+    batches = shot.last_frame_batches if frame == "last" else shot.first_frame_batches
+    found = None
+    for b in batches or []:
+        for i, c in enumerate(b.candidates or []):
+            if c.candidate_id == candidate_id:
+                found = (b, i, c)
+                break
+        if found:
+            break
+    if found is None:
+        raise AgentError("candidate_not_found",
+                         f"镜头 {shot_id} 的{'尾帧' if frame == 'last' else '首帧'}批次中"
+                         f"找不到候选 {candidate_id}")
+    batch, idx, cand = found
+    if not (cand.local or cand.url):
+        raise AgentError("candidate_no_asset", f"候选 {candidate_id} 无本地文件也无 URL")
+
+    def mut(s):
+        if frame == "last":
+            s.selected_last_frame = candidate_id
+            s.last_frame.candidates = [
+                Asset(local=c.local, url=c.url, status=c.status)
+                for c in batch.candidates]
+            s.last_frame.selected_index = idx
+            s.last_frame.status = ShotStatus.DONE.value
+        else:
+            s.selected_first_frame = candidate_id
+            s.first_frame.candidates = [
+                Asset(local=c.local, url=c.url, status=c.status)
+                for c in batch.candidates]
+            s.first_frame.selected_index = idx
+            s.first_frame.status = ShotStatus.DONE.value
+
+    store.update_shot(shot_id, mut)
+    disk = _reload(rt, project)
+    disk_shot = disk.get_shot(shot_id)
+    pointer = disk_shot.selected_last_frame if frame == "last" else disk_shot.selected_first_frame
+    if pointer != candidate_id:
+        return _base_receipt(
+            "shot.select_frame", ok=False, target=shot_id, shot_id=shot_id,
+            error="verify_failed",
+            note=f"写后重读 selected 指针不匹配（{pointer!r} != {candidate_id!r}）——如实失败")
+    rt.record_work(project, "change",
+                   f"Director 选定镜头 {shot_id} 的{'尾帧' if frame == 'last' else '首帧'}候选 {candidate_id}",
+                   participants=["director"], affected_domains=["storyboard"],
+                   references={"shot_id": shot_id}, status="completed")
+    return _base_receipt(
+        "shot.select_frame", ok=True, target=shot_id, shot_id=shot_id,
+        frame=frame, candidate_id=candidate_id, batch_id=batch.batch_id,
+        verified=True, unchanged=False,
+        note=f"镜头 {shot_id} 的{'尾帧' if frame == 'last' else '首帧'}已选定 {candidate_id}"
+             f"（批次 {batch.batch_id}）。")
+
+
 TOOL_EXECUTORS = {
     "shot.list": _execute_shot_list,
     "shot.read": _execute_shot_read,
@@ -1506,6 +1605,7 @@ TOOL_EXECUTORS = {
     "shot.update_many": _execute_shot_update_many,
     "shot.delete": _execute_shot_delete,
     "shot.move": _execute_shot_move,
+    "shot.select_frame": _execute_shot_select_frame,
     "shot.generate_images": _execute_shot_generate_images,
     "shot.generate_videos": _execute_shot_generate_videos,
     "visual.review_image": _execute_visual_review,
@@ -1557,6 +1657,9 @@ def _op_human(r: dict) -> str:
     if op == "shot.delete":
         n = len((r.get("deleted") or {}).get("shots") or [])
         return f"删除镜头 {sid}" + (f"及 {n - 1} 个下游镜头" if n > 1 else "")
+    if op == "shot.select_frame":
+        fr = "尾帧" if r.get("frame") == "last" else "首帧"
+        return f"选定 {sid} {fr}候选 {r.get('candidate_id') or ''}"
     if op == "shot.move":
         return f"移动镜头 {sid} 到第 {r.get('order')} 位"
     if op == "shot.create_many":

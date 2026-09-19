@@ -599,3 +599,45 @@ def test_D2_build_bound_request_context_only(cenv):
     assert "Scene:" in req.prompt, "场景语义仍经 prompt 生产上下文进入"
     assert any(d.get("reason") == "scene_reference_context_only"
                for d in req.dropped_optional)
+
+
+# ============ Phase D2：shot.select_frame（Director 候选选定闭环）============
+def test_D2_select_frame_executor(cenv, monkeypatch):
+    """候选选定：跨批次定位候选 → 写 selected 指针 + 旧字段同步 → 写后验证。"""
+    import asyncio
+    import json
+    import src.agents.director as dr
+    pdir, ids, svc, fake = cenv
+    _bind_default(svc, ids)
+    _run_handler(pdir, variants=2)          # 产生 2 候选批次并自动选第一候选
+    proj = ProjectStore(pdir).load()
+    shot = proj.get_shot("s01_c01")
+    batches = shot.first_frame_batches
+    assert len(batches[0].candidates) == 2
+    target_cid = batches[0].candidates[1].candidate_id
+    assert shot.selected_first_frame != target_cid
+
+    class _StubRT:
+        def _resolve_project_dir(self, project):
+            return pdir
+        def record_work(self, *a, **k):
+            pass
+    monkeypatch.setattr(dr, "_reload", lambda rt, project: ProjectStore(pdir).load())
+
+    async def emit(*a, **k):
+        pass
+    receipt = asyncio.run(dr._execute_shot_select_frame(
+        _StubRT(), pdir.name,
+        json.dumps({"shot_id": "s01_c01", "candidate_id": target_cid,
+                    "frame": "first"}), None, None))
+    assert receipt["ok"] is True and receipt["verified"] is True
+    assert receipt["candidate_id"] == target_cid
+    disk = ProjectStore(pdir).load().get_shot("s01_c01")
+    assert disk.selected_first_frame == target_cid
+    # 错误候选 → 结构化失败
+    with pytest.raises(dr.AgentError) as ei:
+        asyncio.run(dr._execute_shot_select_frame(
+            _StubRT(), pdir.name,
+            json.dumps({"shot_id": "s01_c01", "candidate_id": "ff_nope_9"}),
+            None, None))
+    assert ei.value.code == "candidate_not_found"
