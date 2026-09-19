@@ -1442,3 +1442,31 @@ def test_PD35_cap_provider_input_images():
     dropped2 = []
     out2 = _cap_provider_input_images(items[:5], reserved_slots=0, dropped=dropped2)
     assert len(out2) == 5 and dropped2 == []
+
+def test_PD35_cap_multi_character_no_identity_fill():
+    """>=2 角色：每角色 1 张 look 主参考 + 场景/composition；identity 多视角全裁剪
+    （反克隆策略）；单角色仍允许多视角填充。"""
+    from src.generation.image_adapter import _cap_provider_input_images
+    items = [{"source_id": "scene", "source_type": "scene_instance_view", "priority": "primary"}]
+    # 3 角色 x (look hero + look extra + identity front/side)
+    for c in ("沈夜", "柳衣", "萧寒"):
+        items.append({"source_id": f"look_{c}", "source_type": "character_look",
+                      "subject_character": c, "priority": "primary"})
+        items.append({"source_id": f"lookx_{c}", "source_type": "character_look",
+                      "subject_character": c, "priority": "supporting"})
+        items.append({"source_id": f"id_f_{c}", "source_type": "character_identity",
+                      "subject_character": c, "priority": "supporting"})
+        items.append({"source_id": f"id_s_{c}", "source_type": "character_identity",
+                      "subject_character": c, "priority": "supporting"})
+    dropped = []
+    out = _cap_provider_input_images(items, reserved_slots=0, dropped=dropped)
+    ids = [x["source_id"] for x in out]
+    assert ids == ["scene", "look_沈夜", "look_柳衣", "look_萧寒"], ids
+    assert len(dropped) == 9   # 13 items - 4 kept
+    assert all(d["reason"] == "provider_input_image_cap" for d in dropped)
+    # 单角色：identity 多视角允许填充
+    single = [items[0]] + [it for it in items if it.get("subject_character") == "沈夜"]
+    out2 = _cap_provider_input_images(single, reserved_slots=0, dropped=[])
+    assert len(out2) == min(5, 6)   # scene + look + lookx + id_f + id_s
+    assert {x["source_id"] for x in out2} == {"scene", "look_沈夜", "lookx_沈夜",
+                                              "id_f_沈夜", "id_s_沈夜"}

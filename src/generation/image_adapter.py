@@ -380,26 +380,59 @@ MAX_PROVIDER_INPUT_IMAGES = 6
 
 
 def _cap_provider_input_images(eligible, *, reserved_slots=0, dropped=None):
+    """确定性选择 + 反克隆策略（Phase D §35 真机修订）。
+
+    Golden Run 抽检实证：多人物镜头把同角色多视角（identity front/side/back +
+    look extras）全部送入 provider 时，Agnes 把每张人形参考渲染成画面里的一个
+    人物——克隆人 / 幻觉路人。修订选择策略：
+    - 场景参考（scene_instance_view）与 composition plate 恒保；
+    - 每个出场角色只保 1 张 character_look 主参考（第一个）；
+    - 单角色镜头：允许 identity 多视角 / look extras 按原序填充剩余槽位
+      （增强身份一致性；单角色无克隆歧义，C2 §33 实证）；
+    - ≥2 角色：不填充任何 identity 多视角 / 同角色 extras——宁缺勿滥。
+    被裁剪项逐条记 dropped（reason=provider_input_image_cap），绝不静默。"""
     dropped = dropped if dropped is not None else []
     cap = max(0, MAX_PROVIDER_INPUT_IMAGES - int(reserved_slots))
     if len(eligible) <= cap:
         return eligible
+
+    def _char_of(it):
+        return it.get("subject_character") or None
+
+    chars = []
+    for it in eligible:
+        c = _char_of(it)
+        if c and c not in chars:
+            chars.append(c)
+
     keep_idx = set()
-    primaries = [i for i, it in enumerate(eligible)
-                 if str(it.get("priority") or "") == "primary"]
-    for i in primaries[:cap]:
-        keep_idx.add(i)
-    for i, _it in enumerate(eligible):
-        if len(keep_idx) >= cap:
-            break
-        if i not in keep_idx:
+    # 1) 场景与 composition 参考（非角色 subject）
+    for i, it in enumerate(eligible):
+        if _char_of(it) is None and str(it.get("source_type") or "") in (
+                "scene_instance_view", "composition"):
             keep_idx.add(i)
+    # 2) 每角色第一张 character_look
+    for c in chars:
+        for i, it in enumerate(eligible):
+            if _char_of(it) == c and str(it.get("source_type") or "") == "character_look":
+                keep_idx.add(i)
+                break
+    # 3) 填充：仅单角色镜头允许（identity 多视角 / extras 按原序）
+    if len(chars) <= 1:
+        for i, _it in enumerate(eligible):
+            if len(keep_idx) >= cap:
+                break
+            if i not in keep_idx:
+                keep_idx.add(i)
+    # 截断到 cap（保持原序优先级）
+    keep_idx = set(sorted(keep_idx)[:cap])
     for i, it in enumerate(eligible):
         if i not in keep_idx:
             dropped.append({"source_id": str(it.get("source_id")),
                             "reference_asset_id": str(it.get("reference_asset_id") or ""),
                             "reason": "provider_input_image_cap",
-                            "detail": {"cap": cap, "eligible": len(eligible)}})
+                            "detail": {"cap": cap, "eligible": len(eligible),
+                                       "distinct_characters": len(chars)}})
     return [it for i, it in enumerate(eligible) if i in keep_idx]
 
 
