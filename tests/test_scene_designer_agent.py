@@ -1373,3 +1373,17 @@ def test_PD35_instance_delete_and_stale_guard(tmp_path):
     assert {"kind": "scene_instance", "id": inst_id} in r_ok["changed_resources"]
     doc2 = sd._scene_system_read(tmp_path)
     assert inst_id not in doc2.scene_instances
+
+
+# ============ Phase D §35：view.prepare 机位必填（空机位 → Sciv 审查期望退化）============
+def test_PD35_view_prepare_requires_camera_zone(_gen_env, monkeypatch):
+    """新建 LocationView 缺 camera_zone → camera_zone_required 拒绝（不建定义不烧图）。"""
+    rt, svc, tmp_path, fake = _gen_env
+    loc, a1 = _seed_location_and_view(rt, svc, tmp_path)
+    r = _run_exec(sd._execute_scene_view_prepare(
+        rt, tmp_path.name, _prepare_args(
+            location_id=loc, label="no zone",
+            visible_anchor_ids=[a1],
+            expected_document_revision=_drev(svc)), None, "m1"))
+    assert not r["ok"] and r["error"] == "camera_zone_required"
+    assert fake.gen_calls == 0, "定义被拒时绝不烧图"

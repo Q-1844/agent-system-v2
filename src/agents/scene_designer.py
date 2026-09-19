@@ -1039,7 +1039,7 @@ SCENE_VIEW_PREPARE_TOOL = {
                                   "description": "review_only=只生成审查不批准（探索）；"
                                                  "approve_if_pass=审查真实 pass 时自动批准（production-ready）。"},
             },
-            "required": ["location_id", "approval_mode"],
+            "required": ["location_id", "camera_zone", "approval_mode"],
         },
     },
 }
@@ -1060,6 +1060,14 @@ async def _execute_scene_view_prepare(rt: AgentRuntime, project: str, arguments:
     args = _parse_args(arguments)
     location_id = str(args.get("location_id") or "").strip()
     approval_mode = str(args.get("approval_mode") or "review_only").strip()
+    # Phase D §35：camera_zone 必填（空机位 view 会让 Sciv 审查期望退化为 "(base)"
+    # 乱码 → 审查 churn；机位是 view 的核心生产承诺，fail closed）
+    if not str(args.get("camera_zone") or "").strip() and not str(args.get("view_id") or "").strip():
+        return {"ok": False, "operation": "scene.view.prepare",
+                "error": "camera_zone_required",
+                "detail": "新建 LocationView 必须传 camera_zone（如 front/side/rear/"
+                          "overhead/interior_hall……该 view 的相机物理位置）。"
+                          "机位是审查与绑定链的核心承诺，不接受空值。"}
     if not location_id:
         return {"ok": False, "operation": "scene.view.prepare",
                 "error": "validation_error", "detail": "location_id 必填"}

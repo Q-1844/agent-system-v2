@@ -663,6 +663,7 @@ class SceneSystemService:
         op = "scene.create_view"
         try:
             location_id = self._require_str(location_id, "location_id")
+            camera_zone = self._require_str(camera_zone, "camera_zone")
             if visible_anchor_ids is not None and not isinstance(visible_anchor_ids, list):
                 raise ValueError("visible_anchor_ids 必须是 list")
             if reference_asset_id is not None and not isinstance(reference_asset_id, str):
