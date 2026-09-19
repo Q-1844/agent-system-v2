@@ -1,0 +1,161 @@
+{
+  "description": "Phase D2 (30.md §13) Review regression set——已知差图 fixture。差图本地文件已被批次覆盖，从不过期的 provider URL 重下载（下载于 2026-09-19，哈希记录在案）。",
+  "policy": "review_shot 对以下 fixture 的 deterministic overall 不得为 pass；期望维度由人工目检确认（2026-09-19）。真实 Agnes Vision verdict 确认后写入 confirmed_verdicts，供 derive_overall 单测使用。",
+  "fixtures": [
+    {
+      "id": "F1_clone_s17_c02",
+      "file": "s17_c02_ff_6c0b10cb_1.png",
+      "origin": {
+        "shot_id": "s17_c02",
+        "candidate_id": "ff_6c0b10cb_1",
+        "batch_id": "ff_6c0b10cb",
+        "shot_size": "extreme close-up",
+        "expected_cast": [
+          "沈夜"
+        ],
+        "note": "Phase D §23 克隆案发镜（Commit J 前）；本地文件已被批次覆盖，URL 重下载"
+      },
+      "human_observation": "ECU 镜被渲染为 WS 全景庭院；两个沈夜（同蓝袍/佩剑/发髻）并排站立",
+      "expected_fail_dims": [
+        "duplicate_identity",
+        "cast_cardinality",
+        "shot_size_correctness"
+      ],
+      "confirmed_verdict": {
+        "overall": "needs_fix",
+        "hard_fails": [
+          "duplicate_identity",
+          "unexpected_people",
+          "missing_character",
+          "shot_size_correctness",
+          "framing_and_composition"
+        ],
+        "soft_fails": [
+          "cast_cardinality",
+          "subject_scale",
+          "camera_semantics",
+          "prop_fidelity"
+        ],
+        "observed": {
+          "people_count": 2,
+          "people_notes": "画面出现两名男性人物，均着青灰长袍、腰佩短剑，发型与面容高度相似，疑似同一角色（沈夜）被复制成两人，一左一右对称站立于院落中",
+          "shot_size_observed": "EWS(extreme wide)",
+          "camera_semantics_observed": "none",
+          "scene_visibility": "full_location"
+        },
+        "feedback": [
+          "镜头要求极特写（玉佩+账本），当前为EWS外景，需重生成至ECU/CU级别并聚焦道具",
+          "删除重复人物，镜头仅允许沈夜一人出现，当前为复制角色导致hard gate失败",
+          "补充玉佩（刻'赵'字）与泛黄账本，二者为镜头核心道具，当前完全缺失",
+          "调整机位至overhead俯拍视角，当前为平视远景，与导演意图不符",
+          "近距特写镜头无需展示完整场景，应裁切至仅保留玉佩及账本边缘",
+          "若需保留沈夜出场，应将其置于玉佩前景或侧景，而非占据画面主体"
+        ]
+      }
+    },
+    {
+      "id": "F2_passersby_s15_c01",
+      "file": "s15_c01_ff_be6a4d91_1.png",
+      "origin": {
+        "shot_id": "s15_c01",
+        "candidate_id": "ff_be6a4d91_1",
+        "batch_id": "ff_be6a4d91",
+        "shot_size": "medium shot",
+        "expected_cast": [
+          "沈夜",
+          "柳衣",
+          "萧寒",
+          "周伯"
+        ],
+        "note": "Phase D §23 幻觉路人群像案发批次"
+      },
+      "human_observation": "5 个额外路人（左坐者/红衣坐者/绿衣立者/右二坐者）；柳衣/周伯缺席",
+      "expected_fail_dims": [
+        "unexpected_people",
+        "missing_character"
+      ],
+      "confirmed_verdict": {
+        "overall": "needs_fix",
+        "hard_fails": [
+          "unexpected_people",
+          "missing_character",
+          "shot_size_correctness",
+          "framing_and_composition"
+        ],
+        "soft_fails": [
+          "cast_cardinality",
+          "scene_scope_correctness",
+          "prop_fidelity",
+          "scene_identity"
+        ],
+        "observed": {
+          "people_count": 7,
+          "people_notes": "左前坐者疑似周伯（老年）；中央黑衣人疑似萧寒；右前站者疑似沈夜（低发髻）；右后坐者疑似另一男子；中间背景立者+桌旁坐者身份存疑，画面呈现的是5男对峙而非3人三角。",
+          "shot_size_observed": "WS (Wide Shot) - 包含了整个院落、建筑外观和远处的山峦",
+          "camera_semantics_observed": "none",
+          "scene_visibility": "full_location"
+        },
+        "feedback": [
+          "Rebuild shot as Interior Main Hall; current image is an Exterior Courtyard.",
+          "Reduce character count from 7 to 4 (Shen Ye, Liu Yi, Xiao Han, Zhou Bo); remove extras.",
+          "Include Liu Yi: she must be central, holding an umbrella and a longsword, shielding Shen Ye.",
+          "Zoom in to Medium Shot (knee-up to waist-up); current framing is too Wide.",
+          "Fix Xiao Han's placement to foreground right, approaching dynamically.",
+          "Restore Zhou Bo's prop: a firewood cleaver (柴刀), and place him near the door left background."
+        ]
+      }
+    },
+    {
+      "id": "F3_weapon_dup_s15_c01",
+      "file": "s15_c01_ff_59f78e6d_1.png",
+      "origin": {
+        "shot_id": "s15_c01",
+        "candidate_id": "ff_59f78e6d_1",
+        "batch_id": "ff_59f78e6d",
+        "shot_size": "medium shot",
+        "expected_cast": [
+          "沈夜",
+          "柳衣",
+          "萧寒",
+          "周伯"
+        ],
+        "note": "道具复制+服装漂移样本（soft fixture）"
+      },
+      "human_observation": "左侧人物双手各持一把剑（一拔一鞘）；柳衣服装漂移为旗袍样式",
+      "expected_fail_dims": [
+        "prop_fidelity",
+        "identity_look"
+      ],
+      "confirmed_verdict": {
+        "overall": "needs_fix",
+        "hard_fails": [
+          "missing_character",
+          "shot_size_correctness",
+          "framing_and_composition"
+        ],
+        "soft_fails": [
+          "cast_cardinality",
+          "subject_scale",
+          "scene_scope_correctness",
+          "prop_fidelity",
+          "scene_identity"
+        ],
+        "observed": {
+          "people_count": 3,
+          "people_notes": "左侧灰袍男子（疑似周伯但造型不符）/ 中间黑裙女子（疑似柳衣）/ 右侧黑衣男子（疑似萧寒）。未出现沈夜。",
+          "shot_size_observed": "WS",
+          "camera_semantics_observed": "none",
+          "scene_visibility": "full_location"
+        },
+        "feedback": [
+          "Fix scene scope: generate as interior 'Main Hall' (落雁驿 - 内景大堂), not exterior.",
+          "Adjust shot size: switch from Wide Shot to Medium Shot (MS) to focus on confrontation.",
+          "Add missing character: include Shen Ye (Sword Guard). He must be present.",
+          "Re-stage blocking: create depth triangle. Xiao Han in foreground, Liu Yi/Shen Ye in center/mid-ground, Zhou Bo in background left.",
+          "Fix lighting: change from daylight to dark moody atmosphere with dramatic candle shadows and cold moonlight.",
+          "Check prop: Zhou Bo must hold a wood knife (柴刀), not a long sword."
+        ]
+      }
+    }
+  ]
+}

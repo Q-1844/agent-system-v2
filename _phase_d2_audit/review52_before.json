@@ -1,0 +1,5441 @@
+{
+  "s09_c01": {
+    "shot_id": "s09_c01",
+    "frame": "first",
+    "image_source": "ff_b05e7958_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 1,
+        "people_notes": "沈夜骑于画面正中偏左；左侧店铺内有模糊人影，疑似背景闲人。",
+        "shot_size_observed": "MS",
+        "camera_semantics_observed": "高机位",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "fail",
+          "note": "画面主体仅1人但构图为MS而非EWS。若将店铺内模糊人影计入则变为2人，人数不符；主体占比过大亦偏离extreme wide预期。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "未发现与沈夜同款发型、面孔或服饰的重复人物。"
+        },
+        "unexpected_people": {
+          "status": "fail",
+          "note": "镜头仅要求沈夜一人，画面左侧店铺内出现疑似路人/店员剪影，属于无意图人形。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "沈夜完整出现；未见其他预期角色缺失。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "要求EWS，实际为MS：马头到尾、人物与驿站同框且占据画面主体，环境被压缩，不符远境。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "主体比例过大，孤独疲惫与暴雨压迫感被削弱，不符合EWS应让环境主导情绪的目的。"
+        },
+        "framing_and_composition": {
+          "status": "fail",
+          "note": "驿站本应在远处右侧作焦点，现居中偏左并占画面主体；三分占比与指定焦点均未成立。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "明显为高机位俯拍驿站街道，与指令一致。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "落雁驿外观、灯笼、山与雨景均符合night heavy_rain的地点身份。"
+        },
+        "identity_look": {
+          "status": "uncertain",
+          "note": "发型、刀疤、蓝袍特征可见，但斗笠蓑衣与Look参考未对齐；面部在雨光下细节不清，无法核验短剑与眼神。"
+        },
+        "prop_fidelity": {
+          "status": "uncertain",
+          "note": "斗笠与蓑衣出现在画面但意图未指定；信件未明确可见，无法判断数量与朝向是否正确。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人无多余肢体或面部崩坏；马蹄、缰绳与鞍具解剖合理。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "废弃古驿建筑、湿路、山景与暗夜暴雨氛围相符。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "水墨电影质感良好，光影与雨势层次清晰，作为分镜可读。"
+        }
+      },
+      "director_feedback": [
+        "改景别为EWS：把沈夜+老马压到画面下1/3以内，让驿站与雨幕成为视觉主体。",
+        "重写构图：按三分，雨幕占上2/3、山路下1/3，驿站移至远处右侧作焦点。",
+        "移除店铺内的人影，保持只有一位沈夜。",
+        "核对Look：去掉斗笠蓑衣或让参考图补充；确保低发髻、刀疤、立领盘扣与腰间左侧短剑清晰可辨。",
+        "恢复镜头动机：沈夜低头护信，怀中信件可见；镜头推进需体现孤独疲惫。",
+        "统一场景氛围：强化狂风暴雨与极低能见度，驿站烛光应微弱而非明亮照亮主体。"
+      ],
+      "summary": "画面质量不错，但景别被误生成成MS且驿站焦点错位，并出现无意图人物；需改EWS、重构图、删多余角色并补核对Look。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "unexpected_people",
+        "shot_size_correctness",
+        "framing_and_composition"
+      ],
+      "soft_fails": [
+        "cast_cardinality",
+        "subject_scale"
+      ],
+      "uncertains": [
+        "identity_look",
+        "prop_fidelity"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4205,
+      "image_tokens": 966,
+      "latency_s": 154.77,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s09_c03": {
+    "shot_id": "s09_c03",
+    "frame": "first",
+    "image_source": "ff_844de676_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜",
+      "柳衣"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 2,
+        "people_notes": "左侧：沈夜，手持信纸站立（约MS）；右侧：柳衣，身着深色长衫持伞，站立姿态，位置在沈夜右后方。无其他多余人物。",
+        "shot_size_observed": "MS",
+        "camera_semantics_observed": "侧面",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "expected 2人，画面观察到2人。"
+        },
+        "duplicate_identity": {
+          "status": "fail",
+          "note": "左侧沈夜与右侧柳衣均为男性形象，且服装、面容相似度高，疑似将女性角色柳衣错误生成了与沈夜相似的男性形象。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "未观察到镜头要求外的路人或无关人形。"
+        },
+        "missing_character": {
+          "status": "uncertain",
+          "note": "沈夜出现，但柳衣形象严重偏离参考（生成为了男性），无法确认身份是否缺失还是错误替代。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "意图为CU（特写信件/手/脸），实际画面为MS（全身+环境+雨景），景别远大于意图。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "意图主体是手/信，画面主体是全人与环境，信件占比过小，无法达成特写强调目的。"
+        },
+        "framing_and_composition": {
+          "status": "fail",
+          "note": "构图要求前景手/中景信/背景虚化剪影，实际为两人并排全景，完全违背指定构图。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "无明显冲突的特殊机位语义，为常规侧面平视。"
+        },
+        "scene_scope_correctness": {
+          "status": "fail",
+          "note": "意图为昏暗室内近景，画面展示了大量室外暴雨、房屋、山景、灯笼，严重偏离'室内'场景设定。"
+        },
+        "identity_look": {
+          "status": "fail",
+          "note": "柳衣应为女性且穿旗袍式长衫，实际生成男性形象，且面部特征与沈夜几乎一致，严重不符。"
+        },
+        "prop_fidelity": {
+          "status": "uncertain",
+          "note": "信中文字与暗号标记因距离过远/分辨率不足难以辨识是否为二十年前镖局暗号。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人物四肢完整，无明显解剖学伪影或多余肢体。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "落雁驿的牌匾与建筑样式与上下文相符，尽管场景位置从室内转到了室外。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "画风统一，光影尚可，但严重偏离导演意图，作为分镜可用性极差。"
+        }
+      },
+      "director_feedback": [
+        "镜头需重新生成为CU特写，聚焦手部、信件及沈夜脸部表情，背景需虚化并移至室内。",
+        "修复柳衣形象：必须是女性，穿墨黑修身长衫，气质冷峻神秘，而非现在的男性外观。",
+        "场景必须切回落雁驿室内，去除室外暴雨、山景、灯笼等环境元素，营造昏暗烛光感。",
+        "构图需调整：前景为手和信，背景虚化处为柳衣剪影，不要两人并排站立。",
+        "确认信件上的印记为'镖局暗号'，且手指颤抖细节需体现。",
+        "注意保持东方水墨电影质感，并确保沈夜的左脸颊刀疤可见。"
+      ],
+      "summary": "分镜严重偏离导演意图：景别错误（MS代替CU）、柳衣形象错误（生成男性）、场景位置错误（室内变室外）、构图逻辑错误（并排全景代替前景手/信）。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "duplicate_identity",
+        "shot_size_correctness",
+        "framing_and_composition"
+      ],
+      "soft_fails": [
+        "subject_scale",
+        "scene_scope_correctness",
+        "identity_look"
+      ],
+      "uncertains": [
+        "missing_character",
+        "prop_fidelity"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4333,
+      "image_tokens": 966,
+      "latency_s": 165.44,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s09_c05": {
+    "shot_id": "s09_c05",
+    "frame": "first",
+    "image_source": "ff_a15173cc_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "周伯"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 1,
+        "people_notes": "1名老仆（周伯）站在庭院中央，无其他可见人形或背景闲杂人等。",
+        "shot_size_observed": "WS",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "画面中只有周伯1人，符合预期的单人出场要求。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "画面中无复制/克隆人物，仅有一位老者形象。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "未发现额外的路人、士兵或背景闲人，环境干净。"
+        },
+        "missing_character": {
+          "status": "fail",
+          "note": "周伯虽出现，但处于户外庭院中央，未处于镜头要求的'门内阴影中'。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "导演要求MS（Medium Shot），但画面是WS（Wide Shot），人物在画面中占比过小，主体是建筑与环境。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "周伯仅占画面一小部分，未构成主体，无法体现'眼中欣慰与担忧'的情绪细节。"
+        },
+        "framing_and_composition": {
+          "status": "uncertain",
+          "note": "人物居中构图成立，但镜头意图为'从阴影中走出'，实际位置过于开阔，未能传达出发出状态。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "无明显相机语义冲突，但景别不符导致人物细节不可见。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "场景为荒废驿站外景，符合'落雁驿-外景'的地点设定。"
+        },
+        "identity_look": {
+          "status": "pass",
+          "note": "周伯形象符合Look：须发花白、粗布麻衣、补丁、柴刀挂腰、身形微佝偻。"
+        },
+        "prop_fidelity": {
+          "status": "fail",
+          "note": "镜头要求周伯'手持油灯'，但画面中人物双手下垂未持有任何物品。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人体解剖结构正常，无多余肢体或融合伪影。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "建筑样式、材质（木结构、瓦片）、氛围（暴雨、暗黑、微弱烛光）符合'落雁驿'设定。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "图像质量高，光影层次丰富，东方水墨质感与电影级2D动画风格一致。"
+        }
+      },
+      "director_feedback": [
+        "景别需改为MS（中景），让人物占据画面更大比例，便于展现面部表情和眼神细节。",
+        "周伯位置应从户外庭院移至驿站门内阴影处，体现'从阴影中走出'的镜头意图。",
+        "道具'油灯'必须添加，角色手中需持有发光油灯。",
+        "建议增加人物面部光影对比，突出'面容愁苦、眼神复杂'的情绪表达。"
+      ],
+      "summary": "场景氛围和角色造型准确，但景别（WS vs MS）、人物位置（户外vs门内阴影）、关键道具（油灯缺失）三项严重偏离导演意图。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "missing_character",
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "subject_scale",
+        "prop_fidelity"
+      ],
+      "uncertains": [
+        "framing_and_composition"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4096,
+      "image_tokens": 966,
+      "latency_s": 229.24,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s09_c08": {
+    "shot_id": "s09_c08",
+    "frame": "first",
+    "image_source": "ff_0f219267_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜",
+      "周伯"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 2,
+        "people_notes": "画面中两人形，左右各一。左侧人物为年轻男性（疑似沈夜），右侧人物为年长男性（疑似周伯）。二人面部特征、身形轮廓与发型均不同，无复制身份迹象。",
+        "shot_size_observed": "WS",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "Expected cast 2人（沈夜、周伯），画面2人，数量符合。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "左侧年轻男性与右侧年长男性外貌、装束、体型差异显著，无同一角色复制迹象。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "画面内仅有预期二人，无路人、背景闲人或幻觉人形。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "沈夜与周伯均清晰入镜，无缺失。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "镜头要求 close-up（特写/近景），画面实为 wide shot（全身+完整场景）；主体占比过小，环境信息过载，违背特写意图。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "特写镜头需人物占画面主体以传达情绪张力，此处二人仅占画面中下部小面积，无法聚焦眼神交汇与微表情。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "双人对称构图、目光朝向镜头方向、居中布局基本符合‘目光交汇’的构图意图；景别错误非构图问题。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "eye level 平视成立，无特殊机位要求，画面无冲突。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "画面完整呈现落雁驿外景，暴雨、烛光、建筑均与场景上下文一致；虽非近景，但 scope 正确无误。"
+        },
+        "identity_look": {
+          "status": "pass",
+          "note": "沈夜：黑发低髻、青灰长袍、腰间短剑、面颊刀疤可见；周伯：须发花白、灰褐麻衣、拄柴刀、身形微佝偻——均符合参考描述。"
+        },
+        "prop_fidelity": {
+          "status": "pass",
+          "note": "短剑（沈夜）、柴刀（周伯）、烛灯（背景）、门匾（落雁驿）均存在且形态合理；无矛盾道具。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人物肢体、手部、面部结构正常，无多余肢体、融合或崩坏伪影。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "中式驿站建筑、牌匾‘落雁驿’、瓦顶、雨夜、远山、井台等元素均与‘落雁驿 - 外景’一致。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "水墨电影质感、光影层次、雨丝动态、氛围营造优秀，分镜可用，仅景别需调整。"
+        }
+      },
+      "director_feedback": [
+        "将景别从 WS 改为 CU：裁剪至二人上半身或面部特写，确保眼神交汇成为视觉中心。",
+        "放大人物占比至画面 60% 以上，压缩背景环境比例，保留‘昏黄烛光’光源即可。",
+        "移除对称全景构图，改用轻微错位双人近景，强化张力而非空间关系。",
+        "确保沈夜手部按腰、周伯隐忍微表情在近景中可辨识。",
+        "保留暴雨氛围但降低其视觉权重，避免环境淹没人物情绪。",
+        "若需保留场景信息，可拆为两镜：先 WS 建立环境，再切 CU 专注眼神交锋。"
+      ],
+      "summary": "画面景别严重偏离特写意图（实际为全景），导致人物情绪张力无法传达；其余维度（人物、造型、道具、场景）均正确，整体质量高但需重生成特写版本。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "subject_scale"
+      ],
+      "uncertains": []
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4397,
+      "image_tokens": 966,
+      "latency_s": 317.72,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s09_c06": {
+    "shot_id": "s09_c06",
+    "frame": "first",
+    "image_source": "ff_26cae827_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜",
+      "周伯"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 2,
+        "people_notes": "左侧站立男子（沈夜），右侧老者牵马（周伯）。两人造型和位置均清晰，无重复或疑似复制。",
+        "shot_size_observed": "WS(wide)",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "镜头要求沈夜、周伯2人，画面中2人符合。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "未发现同一角色被复制成两人的情况。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "画面中仅有沈夜、周伯两人物，无多余路人或背景闲人。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "两位预期角色（沈夜、周伯）均在画面中出现。"
+        },
+        "shot_size_correctness": {
+          "status": "pass",
+          "note": "画面展示了完整的院落、建筑、人物全身及环境，属于Wide Shot (WS)，符合镜头要求。"
+        },
+        "subject_scale": {
+          "status": "pass",
+          "note": "人物在画面中比例适中，既非微小远点也非过大占据主体，符合广角展示环境的意图。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "构图采用纵深布局，前景有井，中景为人物，后景为房屋牌匾，具有空间感。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "镜头语义（普通广角/全景）与画面实际相符，无特殊机位矛盾。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "落雁驿场景完整入镜（正门、牌匾、院落），符合全貌展示要求。"
+        },
+        "identity_look": {
+          "status": "pass",
+          "note": "沈夜：黑发低发髻、青灰长袍、腰间佩剑；周伯：白发胡须、灰褐粗布衣、身形微佝偻。均符合Look参考。"
+        },
+        "prop_fidelity": {
+          "status": "pass",
+          "note": "马匹、马缰绳、周伯手持（或身旁）、沈夜腰间的短剑、院中的井、远处的灯笼均出现且形态正确。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人物肢体结构正常，马匹解剖结构无明显错误。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "建筑风格（中式古建）、牌匾文字（落雁驿）、雨天氛围、荒凉感均符合Binding给定的地点身份。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "画面光影层次丰富（雷雨夜色+暖光灯笼），水墨电影质感还原度好，作为分镜可读性强。"
+        }
+      },
+      "director_feedback": [],
+      "summary": "分镜完全符合沈夜与周伯夜入落雁驿的导演意图，景别、人物造型及场景细节均准确无误。"
+    },
+    "derived": {
+      "overall": "pass",
+      "hard_fails": [],
+      "soft_fails": [],
+      "uncertains": []
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4110,
+      "image_tokens": 966,
+      "latency_s": 274.26,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s09_c07": {
+    "shot_id": "s09_c07",
+    "frame": "first",
+    "image_source": "ff_34b875e0_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜",
+      "柳衣"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 2,
+        "people_notes": "1. 沈夜（左前）：身穿蓝色长袍，腰侧挂短剑，符合Look参考。2. 柳衣（右侧）：身穿墨黑长衫，手持油纸伞（暖棕色），符合部分Look参考。无其他背景人形。",
+        "shot_size_observed": "WS (Wide Shot)",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "画面中有且仅有沈夜和柳衣两人，符合expected cast=2的要求。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "沈夜与柳衣面貌、身形、服装完全不同，未发现复制现象。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "全图只有两名主角，无路人、侍卫或多余的背景人形。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "沈夜和柳衣均在画面中，身份辨识清晰。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "意图要求MCU（中近景），实际画面为WS（全景）。人物仅占画面很小比例，无法体现'面容清冷'的面部特写意图。"
+        },
+        "subject_scale": {
+          "status": "pass",
+          "note": "作为全镜头（Establishment shot），人物在画面中的占比与WS景别相符，构图上人物清晰可见。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "采用左右对称构图，沈夜左前、柳衣右后，视觉焦点在两人之间，构图平衡。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "平视机位，无特殊机位要求，画面实际呈现符合常规叙事视角。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "意图是'后院厢房'，画面展示了落雁驿全貌及庭院，属于合理的场景交代（Wider context）。"
+        },
+        "identity_look": {
+          "status": "uncertain",
+          "note": "沈夜形象基本符合（发髻、刀疤、青灰色袍）。柳衣虽身穿墨黑长衫，但意图要求'手持碎布'，画面中她手持的是'油纸伞'，形态不符。"
+        },
+        "prop_fidelity": {
+          "status": "fail",
+          "note": "意图明确描述'手中紧握着那块碎布'，画面中柳衣手中握着的是油纸伞，道具错误。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人物肢体、手部结构正常，无多余肢体或多指等伪影。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "场景展示了一个暴雨夜的古代驿站（有牌匾'落雁'），山峦背景与'落雁驿'设定一致。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "水墨质感良好，雨势、闪电与氛围渲染到位，虽然是WS但可作为高质量分镜使用。"
+        }
+      },
+      "director_feedback": [
+        "重生成：必须将景别从WS推近至MCU（Medium Close-Up），重点展示柳衣在窗边的上半身及面部神态。",
+        "改道具：柳衣手中必须改为紧握着'碎布'，而非油纸伞。",
+        "改位置：若保留WS，需明确柳衣站在'窗边/厢房内'的特定位置关系，而不是站在院子中央。",
+        "情绪：MCU下需更清晰地呈现'眼神复杂'，目前WS距离过远难以传达微表情。",
+        "构图：MCU建议采用侧窗框做前景，增加画面的层次感和窥视感。"
+      ],
+      "summary": "本镜严重偏离MCU意图，生成为WS全景观；且柳衣手持道具错误（应为碎布实为油纸伞）；人物与场景身份正确，无多余人员。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "prop_fidelity"
+      ],
+      "uncertains": [
+        "identity_look"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4317,
+      "image_tokens": 966,
+      "latency_s": 303.62,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s10_c01": {
+    "shot_id": "s10_c01",
+    "frame": "first",
+    "image_source": "ff_5c531804_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜",
+      "柳衣",
+      "周伯"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 3,
+        "people_notes": "1. 左侧站立男性（沈夜）；2. 中间坐着的老年男性（周伯）；3. 右侧持伞站立女性（柳衣）。未发现重复身份或额外路人。",
+        "shot_size_observed": "EWS (extreme wide)",
+        "camera_semantics_observed": "frontal",
+        "scene_visibility": "partial_environment"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "预期3人，画面3人，无多余或缺失角色。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "三名角色形象各异，未发现复制现象。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "画面中仅有指定的三名主要角色，无背景闲杂人等。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "沈夜、柳衣、周伯三人均出现，位置关系符合描述。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "预期为中景(MS)，画面实为EWS。人物在画面中占比过小，且展示了完整建筑外观和远景山峦，不符合灶台边围坐的内景要求。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "人物作为画面主体占比不足，处于远景小点状态，无法承载密信细节和情绪特写。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "虽然构图基本呈三角分布，但人物位置安排（左右站立、中间坐）与描述中的'灶台前围坐'略有偏差，整体构图尚可。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "使用了正面平视机位，画面实际成立。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "地点环境正确，展示了落雁驿内景柴房外观及雨夜山景，符合场景上下文。"
+        },
+        "identity_look": {
+          "status": "pass",
+          "note": "沈夜束发带刀，柳衣持伞着深衣，周伯须发花白，与参考图描述基本一致。"
+        },
+        "prop_fidelity": {
+          "status": "uncertain",
+          "note": "周伯面前有箱子/木盒状物体，但无法清晰辨识是否为'铁盒'及'泛黄密信'细节。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "无明显解剖结构错误或伪影。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "场景为中式木质庭院建筑，符合落雁驿/柴房的环境设定。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "画面光影层次分明，雨夜氛围渲染到位，东方水墨质感较好。"
+        }
+      },
+      "director_feedback": [
+        "景别错误：实际为EWS而非中景，需放大至中景(MS)以聚焦人物。",
+        "场景应改为内景：导演意图是'灶台前围坐'，目前画面为室外庭院全景。",
+        "调整机位：应推进至内景，聚焦三人面部及桌上铁盒。",
+        "人物站位：保持三角构图，但需从室外搬至室内柴房灶台旁。",
+        "道具细节：需确保前景出现锈蚀铁盒及泛黄密信的清晰特写。"
+      ],
+      "summary": "分镜质量存在严重问题：场景从内景灶房错误生成为室外庭院全景(EWS)，人物占比过小。虽然角色形象和构图基础正确，但不符合'中景'及'灶台围坐'的导演核心意图。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "subject_scale"
+      ],
+      "uncertains": [
+        "prop_fidelity"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4407,
+      "image_tokens": 966,
+      "latency_s": 351.38,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s09_c02": {
+    "shot_id": "s09_c02",
+    "frame": "first",
+    "image_source": "ff_4b726baa_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 2,
+        "people_notes": "左侧正面人物：沈夜；右侧背影人物：疑似沈夜复制，造型与沈夜完全一致（发型/服饰/身形/短剑），为同一角色出现两份。",
+        "shot_size_observed": "WS(wide)",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "fail",
+          "note": "Expected cast 为沈夜 1 人，画面中 2 个同造型人物（正背相对），cast cardinality 超出预期。"
+        },
+        "duplicate_identity": {
+          "status": "fail",
+          "note": "Hard gate fail。右侧背影与左侧沈夜在发型、服装、短剑位置完全一致，构成同一角色的复制。"
+        },
+        "unexpected_people": {
+          "status": "fail",
+          "note": "除沈夜外，画面中出现另一名外形完全相同的角色（右侧背影），镜头意图未要求此人形存在。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "沈夜已在画面中，且特征清晰可见（正脸+刀疤+剑）。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "指令要求 medium shot，实际画面为 WS（两人全身 + 大面积庭院环境 + 远景山峦）。"
+        },
+        "subject_scale": {
+          "status": "pass",
+          "note": "虽有两人，但沈夜（左侧）在画面中比例占主体，符合电影主体性要求，仅不符合景别。"
+        },
+        "framing_and_composition": {
+          "status": "fail",
+          "note": "构图严重偏离意图：指令要求沈夜居左 1/3 + 对角线构图；实际为两人并排居中对称，视觉重心分散在画面中央井口。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "镜头未指定特殊机位，画面为平视。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "场景为落雁驿外景，雨夜、闪电、远山、建筑细节符合 '荒废驿站' 语境，完整入镜可接受。"
+        },
+        "identity_look": {
+          "status": "pass",
+          "note": "左侧沈夜造型符合 v2 设定（低发髻、青色立领长袍、短剑、刀疤）。"
+        },
+        "prop_fidelity": {
+          "status": "uncertain",
+          "note": "指令要求蓑衣，画面人物无蓑衣；但图中马匹缺失，无法判断 '翻身下马' 及蓑衣状态；剑已就位。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人物解剖结构正常，无多余肢体或崩坏。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "中式瓦房、牌匾、水井、风雨意境符合 '落雁驿' 的历史时代感。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "画风电影质感良好，光影层次丰富，画面清晰可读。"
+        }
+      },
+      "director_feedback": [
+        "Hard fail：画面将主角复制成 2 人（正背相对），须修复模型生成，确保只有 1 个沈夜。",
+        "景别不符：要求中景，实际生成全景（WS）。需放大画面裁剪或重生成，聚焦沈夜半身与驿站。",
+        "构图错配：要求对角线构图（人在左，门在右），实际为左右对称并排。需调整人物站位至画面左侧 1/3。",
+        "道具缺失：指令要求 '蓑衣' 和 '下马' 动作，画面中沈夜无蓑衣且未牵马。需补全关键道具与动作。",
+        "叙事细节：指令描述 '杂草没膝'，地面铺设石板，杂草不明显，建议根据剧本强调环境荒废细节。"
+      ],
+      "summary": "分镜质量不合格（Hard Fail）。虽然单个人物的 Look 参考与美术风格准确，但画面存在严重的生成幻觉（沈夜复制出两人），且景别（WS vs MS）与构图（对称 vs 对角线）完全违背导演意图。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "duplicate_identity",
+        "unexpected_people",
+        "shot_size_correctness",
+        "framing_and_composition"
+      ],
+      "soft_fails": [
+        "cast_cardinality"
+      ],
+      "uncertains": [
+        "prop_fidelity"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4143,
+      "image_tokens": 966,
+      "latency_s": 1056.73,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s10_c06": {
+    "shot_id": "s10_c06",
+    "frame": "first",
+    "image_source": "ff_46ccea32_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "周伯"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 1,
+        "people_notes": "图中站立在画面右侧的周伯，符合look参考。",
+        "shot_size_observed": "WS",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "fail",
+          "note": "Cast人数正确（1人），但镜头要求是close-up（CU），实际画面为WS远景。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "人物无重复或复制现象。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "画面中仅周伯一人，无多余背景人形。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "expected cast周伯完整出现在画面中。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "镜头要求CU，实际为全身远景WS，景别严重不匹配。"
+        },
+        "subject_scale": {
+          "status": "pass",
+          "note": "WS下周伯作为主体清晰可见，比例合适。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "人物位于画面右侧符合三分法，整体构图平衡。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "平视机位，无明显冲突。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "画面展示了落雁驿内景整体环境，符合场景设定。"
+        },
+        "identity_look": {
+          "status": "pass",
+          "note": "周伯白发白须、麻衣补丁、柴刀等特征与look参考一致。"
+        },
+        "prop_fidelity": {
+          "status": "pass",
+          "note": "柴刀、木箱、篝火等道具呈现正确。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人物肢体正常，无明显生成伪影。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "建筑样式、雨天、烛光氛围与场景上下文吻合。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "画面光影层次丰富，风格统一，电影质感强。"
+        }
+      },
+      "director_feedback": [
+        "景别从WS改为CU，聚焦周伯面部表情和含泪双眼",
+        "需要重新生成画面，当前为远景不足以传达内心情绪",
+        "可考虑近景表现周伯颤抖的手指和沧桑面容",
+        "保持暖烛光与冷蓝雨夜的对比氛围不变",
+        "构图可调整为人物居中或偏右近景",
+        "机位建议降低至仰视增强人物的压迫感和沉重感"
+      ],
+      "summary": "画面执行了场景氛围和角色造型，但景别（WS）与导演意图（CU）严重不符，导致情绪表达受阻。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "cast_cardinality"
+      ],
+      "uncertains": []
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 3819,
+      "image_tokens": 966,
+      "latency_s": 544.47,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s10_c02": {
+    "shot_id": "s10_c02",
+    "frame": "first",
+    "image_source": "ff_d857c085_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜",
+      "柳衣"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 2,
+        "people_notes": "人物1（左侧）为男性，符合沈夜造型；人物2（右侧）为女性持伞，符合柳衣造型。未发现背景路人或重复复制人物。",
+        "shot_size_observed": "EWS(extreme wide)",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "镜头要求沈夜、柳衣两人，画面实际显示一男一女共2人，符合预期数量。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "画面中男女二人形象、服饰均不相同，未发现同一角色的重复拷贝。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "画面除沈夜和柳衣外无其他路人或无关人形。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "沈夜与柳衣均已完整出现在画面中。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "镜头要求特写（CU），画面实际为极远景（EWS），展现了完整院落与远近山脉，环境占比过大。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "预期主体信件在画面中完全不可见，主要人物也仅占画面很小比例，无法形成特写焦点。"
+        },
+        "framing_and_composition": {
+          "status": "fail",
+          "note": "镜头要求信件占据2/3前景，画面实际为双人中景全景构图，完全违背了分镜意图。"
+        },
+        "camera_semantics": {
+          "status": "fail",
+          "note": "镜头要求推轨近景/过肩特写，画面实际为固定的极远距离平视镜头，视角严重不符。"
+        },
+        "scene_scope_correctness": {
+          "status": "uncertain",
+          "note": "虽然场景看起来像落雁驿，但这是极远景全貌，非镜头要求的室内/近处特写场景。"
+        },
+        "identity_look": {
+          "status": "pass",
+          "note": "沈夜的刀疤、低发髻及武器、柳衣的墨黑长衫及油纸伞均符合Look参考设定。"
+        },
+        "prop_fidelity": {
+          "status": "fail",
+          "note": "镜头要求的关键道具（泛黄密信）完全未出现。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人物解剖结构正常，无多余肢体或面部崩坏，细节清晰。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "中式古建筑、雨天氛围与‘落雁驿’及暴雨环境描述相符。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "画面具有东方水墨电影质感，光影层次优美，虽作为分镜错误，但图片本身质量较高。"
+        }
+      },
+      "director_feedback": [
+        "景别错误：必须生成近景或特写，目前画面过远（EWS），需推近至主体。",
+        "构图重构：需将镜头改为以信件为主体（占画面2/3），并在前景虚化呈现柳衣的肩膀与头发。",
+        "移除外景：当前为室外全景，需切换至‘内景柴房’或极近的近处视角以容纳桌上的信件。",
+        "道具缺失：画面中未出现‘致柳氏全族’的泛黄密信，需明确添加并聚焦。"
+      ],
+      "summary": "分镜严重失实：预期为信件特写推轨镜头，实际输出为全剧全景图，景别、构图、道具均完全错误。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "shot_size_correctness",
+        "framing_and_composition"
+      ],
+      "soft_fails": [
+        "subject_scale",
+        "camera_semantics",
+        "prop_fidelity"
+      ],
+      "uncertains": [
+        "scene_scope_correctness"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4277,
+      "image_tokens": 966,
+      "latency_s": 819.08,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s11_c01": {
+    "shot_id": "s11_c01",
+    "frame": "first",
+    "image_source": "ff_c6b37137_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜",
+      "柳衣",
+      "周伯"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 4,
+        "people_notes": "1. 左侧蓝袍男（沈夜疑似）；2. 中间黑衣女（柳衣疑似）；3. 右侧背景老翁（周伯）；4. 最右侧撑伞黑衣女（柳衣疑似复制品/多余人形）",
+        "shot_size_observed": "WS",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "fail",
+          "note": "期望cast为3人，画面实际为4人（多出一位撑伞女性），不符合人数要求。"
+        },
+        "duplicate_identity": {
+          "status": "fail",
+          "note": "画面出现两位相似特征的女性角色（中间黑衣与右侧撑伞），疑似同一角色被复制成两人，违反hard gate。"
+        },
+        "unexpected_people": {
+          "status": "fail",
+          "note": "多出了一位撑油纸伞的女性，镜头意图未要求此人。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "沈夜、柳衣、周伯三人均有出现，人物完整。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "镜头要求Medium Shot（中景），实际画面呈现4人全身及完整建筑，属于Wide Shot（全景）。"
+        },
+        "subject_scale": {
+          "status": "pass",
+          "note": "虽然景别偏大，但人物在画面中占比较大且清晰，符合构图主体地位。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "人物排列呈横向，虽未呈现'面对面'的亲密构图，但人物关系清晰。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "镜头为平视角度，无明显机位语义冲突。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "展示了完整的落雁驿外景与雨夜氛围，符合场景设定。"
+        },
+        "identity_look": {
+          "status": "pass",
+          "note": "沈夜（持剑）、柳衣（黑衣）、周伯（粗布麻衣+柴刀）的特征均符合Look参考描述。"
+        },
+        "prop_fidelity": {
+          "status": "fail",
+          "note": "画面未展示关键的'信件'道具，无法体现'展开信件'的戏剧动作；周伯腰间虽挂柴刀符合描述。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人物解剖结构正常，无多余肢体或崩坏。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "古建风格、灯笼、雨夜背景与'落雁驿-内景柴房'的时代感和环境描述一致。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "画面质感优秀，光影冷暖对比（烛光与冷雨）有电影感，适合作为动画分镜。"
+        }
+      },
+      "director_feedback": [
+        "纠正景别：从广角（WS）改为中景（MS），让人物主体占据画面主要空间。",
+        "修正构图：将沈夜和柳衣安排为面对面站位，突出信件交换的对话感，而不是排队站立。",
+        "移除多余人物：删去画面右侧撑伞的女性，保持三人配置。",
+        "补充关键道具：让沈夜手中明显持有那封'匿名信'，作为画面视觉焦点。",
+        "调整场景深度：确认这是'内景柴房'，当前更像室外街道，请加强室内/半室内的封闭感与烛光氛围。",
+        "检查人物位置：按导演意图，周伯应在背景右侧'默默倾听'，现在位于人物列队中间，需调整。"
+      ],
+      "summary": "分镜图景别过大（WS非MS）且人数错误（4人非3人），核心戏剧道具'信件'缺失，需大幅重构构图。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "duplicate_identity",
+        "unexpected_people",
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "cast_cardinality",
+        "prop_fidelity"
+      ],
+      "uncertains": []
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4316,
+      "image_tokens": 966,
+      "latency_s": 313.05,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s11_c03": {
+    "shot_id": "s11_c03",
+    "frame": "first",
+    "image_source": "ff_c02ffa1c_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 2,
+        "people_notes": "1. 左侧坐着的沈夜：黑发低发髻，左脸颊有红色伤痕/印记，身穿青灰色长袍，手持书本/信件。2. 右侧站立的男子：黑发发髻，面部无明显疤痕，身穿同色长袍，腰间悬短剑，手持长棍/武器，外貌特征与左侧角色高度相似（疑似同一角色或双胞胎/分身）。",
+        "shot_size_observed": "WS(wide)",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "fail",
+          "note": "镜头要求沈夜独自一人（cast=1），画面出现两个角色，违反人数预期。"
+        },
+        "duplicate_identity": {
+          "status": "fail",
+          "note": "疑似复制身份：画面中沈夜(坐)与站立者外貌高度相似（相似的发髻、服装、面容），在单人镜头中呈现双生/复制人现象，属于硬伤。"
+        },
+        "unexpected_people": {
+          "status": "fail",
+          "note": "画面右侧多出一名站立男子，镜头意图仅为沈夜独处，该人物为意外的无关人员。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "沈夜角色已在画面左侧出现（坐者），符合角色要求。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "镜头要求 close-up (特写)，画面实际为全景 (Wide Shot)，完整呈现了落雁驿建筑全貌和两名角色全身，严重不符。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "期望沈夜占据画面主体并传达内心挣扎的特写情绪，实际人物占比过小，环境占比过大。"
+        },
+        "framing_and_composition": {
+          "status": "fail",
+          "note": "双人全景构图违背了独白镜头的封闭感和心理聚焦意图；且两人身材、脸谱过度相似，构图产生冲突。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "画面为客观旁观的全景镜头，无特定机位要求，实际与镜头描述无明显语义冲突。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "画面完整展示了落雁驿内景柴房正面，包括腐朽木箱、背景山峦及雨势，与场景上下文一致。"
+        },
+        "identity_look": {
+          "status": "uncertain",
+          "note": "左侧角色符合沈夜外观，但画面中多出的一名相似角色无法确定是否为设计意图，且存在身份重复嫌疑。"
+        },
+        "prop_fidelity": {
+          "status": "pass",
+          "note": "沈夜手持纸质书信/信件，符合'紧攥匿名信'的描述；短剑佩于腰间，符合设定。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "可见的人体结构（手指、五官）无明显畸变或融合。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "画面呈现了中式古代建筑（落雁驿）、雨夜氛围与烛光照明，符合背景设定。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "图像渲染质量良好，光影层次丰富，但在叙事和分镜执行上存在严重偏离。"
+        }
+      },
+      "director_feedback": [
+        "必须修正景别：重生成 close-up，聚焦沈夜的面部表情和手中的信件，去掉背景中的其他人物。",
+        "解决人物重复问题：删除画面右侧站立的第二名男子，确保镜头中只有沈夜一个人。",
+        "强化特写情绪：画面需突出沈夜眉头紧锁、眼神挣扎的神态，以及手指摩挲暗号的细节。",
+        "调整构图比例：沈夜的身体应占据画面的大部分（胸上或头肩为主），而非当前的全身远景。",
+        "确认光影氛围：保留暖烛光打在沈夜脸上的戏剧阴影，但作为近景处理。"
+      ],
+      "summary": "分镜失败：画面错误地呈现了双人全景（WS），而非要求的单人特写（CU），且存在同一角色的视觉复制现象，与独白镜头的意图严重偏离。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "duplicate_identity",
+        "unexpected_people",
+        "shot_size_correctness",
+        "framing_and_composition"
+      ],
+      "soft_fails": [
+        "cast_cardinality",
+        "subject_scale"
+      ],
+      "uncertains": [
+        "identity_look"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4255,
+      "image_tokens": 966,
+      "latency_s": 125.53,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s11_c04": {
+    "shot_id": "s11_c04",
+    "frame": "first",
+    "image_source": "ff_852b1be2_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "柳衣",
+      "周伯"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 3,
+        "people_notes": "1. 左侧持伞女性（疑似柳衣）2. 中间持伞女性（疑似柳衣的复制）3. 右侧老者（周伯）。中间与左侧人物面部、发型、黑衣、持伞姿态高度雷同，判定为同一角色被复制生成。",
+        "shot_size_observed": "EWS(extreme wide)",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "fail",
+          "note": "预期Cast为2人（柳衣、周伯），画面实际出现3人，其中一人疑似柳衣的复制品，人数不符。"
+        },
+        "duplicate_identity": {
+          "status": "fail",
+          "note": "画面左侧女性与中间女性为同一角色复制（同脸/同装/同发型），位于庭院中景两侧并排站立。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "除角色外未见额外路人或无关人形，场景符合落雁驿设定。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "柳衣与周伯均已出现在画面中，无角色缺失。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "镜头要求Medium Shot（膝上），实际为Extreme Wide Shot，呈现全景环境，人物在画面中占比过小。"
+        },
+        "subject_scale": {
+          "status": "pass",
+          "note": "虽然是远景但三人构图平衡，作为双人对手戏的分镜框架是成立的。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "人物站位居中，虽有冗余人物但整体构图尚可接受。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "未指定特殊机位，实际画面为标准平视全景，符合常规逻辑。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "展示了完整的落雁驿外观、雨夜氛围及光影细节，符合镜头语境。"
+        },
+        "identity_look": {
+          "status": "uncertain",
+          "note": "周伯形象符合参考（白须麻衣、柴刀）；柳衣形象符合参考，但因存在两个柳衣，无法确认哪一个是标准版本。"
+        },
+        "prop_fidelity": {
+          "status": "pass",
+          "note": "油纸伞、柴刀、建筑细节均符合设定。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "未见明显肢体错误或解剖崩坏。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "雨夜古驿站、暖黄灯光与冷蓝雨水的对比氛围，符合场景身份。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "画风统一，电影质感强，光影氛围渲染出色。"
+        }
+      },
+      "director_feedback": [
+        "Remove duplicate character: The figure on the left is an exact copy of the central figure.",
+        "Adjust shot size from Extreme Wide to Medium Shot to frame Waist-Up for better intimacy.",
+        "Focus the shot on two characters only: Liu Yi and Zhou Bo standing closer to each other.",
+        "Ensure the composition emphasizes the emotional exchange (eye contact) rather than the environment."
+      ],
+      "summary": "画面构图美观，但存在严重分镜错误：出现了同一个角色的双重复制，且景别严重过远（Wide/EWS而非Medium），无法体现要求的对视信任感。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "duplicate_identity",
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "cast_cardinality"
+      ],
+      "uncertains": [
+        "identity_look"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4067,
+      "image_tokens": 966,
+      "latency_s": 332.89,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s11_c02": {
+    "shot_id": "s11_c02",
+    "frame": "first",
+    "image_source": "ff_1cf2fba5_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜",
+      "周伯"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 3,
+        "people_notes": "沈夜（左侧蓝袍）、周伯（右侧灰麻衣）、背景坐姿路人（左后方）疑似幻觉或多余角色",
+        "shot_size_observed": "WS",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "fail",
+          "note": "expected cast 为2人，画面出现3人形（含背景坐姿路人），数量不符。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "画面中沈夜与周伯形象独立，未发现同脸同衣复制现象。"
+        },
+        "unexpected_people": {
+          "status": "fail",
+          "note": "镜头未要求且与对话无互动的背景人物（左后方坐姿）出现，属非预期人物。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "沈夜、周伯均已入镜，无角色缺失。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "导演意图为CU近景，实际画面展现完整院落、屋顶与远山，属WS全景，严重不符。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "两人虽处前景但在画面中占比较小，缺乏近景应有的情感沉浸感与压迫感。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "两人形成对角线站位，视线与肢体有连接感，构图逻辑基本成立。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "实际为平视客观镜头，与未指定机位的要求不冲突。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "场景为落雁驿外庭院，虽意图为内景/近景，但环境元素与地点设定一致。"
+        },
+        "identity_look": {
+          "status": "pass",
+          "note": "沈夜低发髻刀疤、周伯花白胡须补丁衣符合Look reference。"
+        },
+        "prop_fidelity": {
+          "status": "pass",
+          "note": "沈夜腰侧短剑、周伯腰间柴刀均出现且形态正确。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "主要角色手部及肢体结构正常，无严重变形。"
+        },
+        "scene_identity": {
+          "status": "uncertain",
+          "note": "背景环境像庭院而非柴房内部，光影氛围尚可但空间归属存疑。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "水墨画风质感良好，雨夜光影层次丰富，具备电影可读性。"
+        }
+      },
+      "director_feedback": [
+        "核心问题：镜头是CU近景，但生成了WS全景，需重生成并裁剪至两人面部特写。",
+        "去除画面左后方背景中的坐姿路人，只保留沈夜和周伯。",
+        "推进机位，消除屋檐、远山和环境背景，使人物占据画面主体。",
+        "强化烛光在沈夜和周伯面部的戏剧阴影，以符合'信任连接'的微表情。",
+        "注意周伯的柴刀和沈夜的短剑在CU视角下的比例，避免武器抢夺视觉焦点。"
+      ],
+      "summary": "Fail：景别严重错误（WS误当CU）且包含多余背景人物；需重生成大幅拉近景别并删减路人。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "unexpected_people",
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "cast_cardinality",
+        "subject_scale"
+      ],
+      "uncertains": [
+        "scene_identity"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4075,
+      "image_tokens": 966,
+      "latency_s": 853.92,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s11_c05": {
+    "shot_id": "s11_c05",
+    "frame": "first",
+    "image_source": "ff_e7a64230_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 9,
+        "people_notes": "画面正前方两名主要角色为同一人物（沈夜）的重复形象（同一刀疤位置、发髻造型、青灰长袍、短剑悬挂方式均一致），疑似双生/复制生成；背景街道右侧有4-5名站立交谈或持卷者，左侧门口1人，近景右下角1坐者，均为额外路人。",
+        "shot_size_observed": "WS",
+        "camera_semantics_observed": "正面平视",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "fail",
+          "note": "镜头仅要求沈夜一人，画面却出现两名主角色+多名路人，总人数远超预期。"
+        },
+        "duplicate_identity": {
+          "status": "fail",
+          "note": "左前与右前两名男性角色面部特征、刀疤、发型、服饰完全一致，位置分别位于画面左侧与右侧，疑似同一角色被复制。"
+        },
+        "unexpected_people": {
+          "status": "fail",
+          "note": "除两名疑似沈夜的主体外，背景中至少5名路人（站立交谈者、持卷者、坐姿者）均非镜头要求。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "沈夜形象已出现（尽管重复），未完全缺席。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "镜头要求ECU（信纸特写+手指），实际画面为全景街道，人物全身入镜，环境完整呈现，严重偏离景别要求。"
+        },
+        "subject_scale": {
+          "status": "pass",
+          "note": "人物虽非画面绝对中心，但在WS语境下仍具主体性，符合该景别的情绪表达——但此维度不补救其他硬错。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "构图居中对称，人物与信纸形成视觉引导，符合武侠氛围，无明显违背意图。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "机位为常规正面平视，未要求特殊角度，实际成立，无冲突。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "场景为落雁驿外街，雨夜、暖光、建筑样式与上下文一致，虽画全但未矛盾。"
+        },
+        "identity_look": {
+          "status": "pass",
+          "note": "沈夜造型（低发髻、刀疤、青灰长袍、短剑）与参考描述基本吻合。"
+        },
+        "prop_fidelity": {
+          "status": "pass",
+          "note": "信纸与朱砂圈出文字清晰可见，虽未严格聚焦于'赵字玉佩'四字，但道具形态存在且可辨识。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "手指、面部、服饰细节无崩坏或多余肢体，艺术风格统一。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "雨夜古镇、灯笼、木屋、远山符合'落雁驿'的空间质感与时代设定。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "画面光影层次丰富，水墨电影感强，作为分镜具有可读性与情绪张力。"
+        }
+      },
+      "director_feedback": [
+        "必须切换至ECU景别，仅保留信纸局部与沈夜手指，删除所有背景人物与街道元素。",
+        "移除画面中第二个沈夜形象，确保单角色唯一性；当前双生结构破坏叙事逻辑。",
+        "镜头推进应聚焦于'赵字玉佩'四字及朱砂圈，而非全景街道；请重新设计构图焦点。",
+        "背景路人虽营造氛围，但违反'仅沈夜出场'指令，需全部裁切或重生成无其他人形版本。",
+        "维持雨夜烛光照明，但光源应来自信纸附近（如手持烛台），强化特写戏剧阴影而非环境光。",
+        "景别校正优先级最高：当前WS完全无法承载'线索视觉强调'意图，须立即重生成ECU。"
+      ],
+      "summary": "画面严重偏离ECU特写意图，出现角色复制与多余人物，虽造型与场景质感合格，但核心镜头语言错误，需彻底重构。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "duplicate_identity",
+        "unexpected_people",
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "cast_cardinality"
+      ],
+      "uncertains": []
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4269,
+      "image_tokens": 966,
+      "latency_s": 203.41,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s11_c06": {
+    "shot_id": "s11_c06",
+    "frame": "first",
+    "image_source": "ff_d83911a3_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜",
+      "周伯"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 2,
+        "people_notes": "人物1：左侧青年男性（疑似沈夜），站姿笔直；人物2：右侧老年男性（疑似周伯），白发白须。共2人，无路人或背景人群。",
+        "shot_size_observed": "WS",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "镜头要求沈夜、周伯两人，画面出现2人。符合。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "画面中为两名不同年龄、外貌的角色，未发现复制现象。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "画面中仅有沈夜和周伯，未出现路人或多余人物。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "沈夜和周伯均在画面中，身份可见。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "镜头要求Medium Shot（膝上），实际画面为Wide Shot（全身加大量环境/建筑）。人物占比过小。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "作为坦白戏份，人物被置于广阔场景中，情绪焦点和面部神态被压缩，不符合Medium Shot的叙事要求。"
+        },
+        "framing_and_composition": {
+          "status": "uncertain",
+          "note": "构图均衡且有意境，虽景别不匹配导演意图，但作为静态画面本身构图没有明显错误。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "镜头为常规平视，无明显特殊机位需求冲突。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "场景为落雁驿内景庭院，画面展示了完整院落、雨夜背景，符合场景设定。"
+        },
+        "identity_look": {
+          "status": "pass",
+          "note": "沈夜：黑发束髻、青灰袍、持剑；周伯：白发白须、粗布麻衣、身形微佝偻。与参考图描述一致。"
+        },
+        "prop_fidelity": {
+          "status": "fail",
+          "note": "导演意图明确要求周伯‘手中取出旧印章’，画面中两人双手自然下垂，未见印章道具。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "肢体结构正常，无多余肢体或崩坏。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "中式古建筑、雨夜氛围、冷暖光影对比，符合落雁驿设定。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "画面质感优秀，光影层次丰富，电影感强，仅景别选择有偏差。"
+        }
+      },
+      "director_feedback": [
+        "景别过大（WS），请重生成Medium Shot，需切至膝盖以上，放大人物主体。",
+        "必须展示关键道具：画面需包含周伯手中的旧印章，不要空手。",
+        "调整光影：当前雨夜过亮，建议加强室内烛光漫射与门外的冷蓝对比，强化悬疑氛围。",
+        "人物站位过对称：沈夜与周伯分列两侧稍显生硬，可尝试打破对称构图以聚焦对话感。",
+        "周伯表情过于平静，需刻画‘苦笑’的神态以配合台词。"
+      ],
+      "summary": "画面美术质量很高且人物造型准确，但存在两个核心剧情错误：景别拍成了全景（WS）导致人物过远，以及关键道具‘印章’完全缺失。建议重生成中景并补上道具细节。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "subject_scale",
+        "prop_fidelity"
+      ],
+      "uncertains": [
+        "framing_and_composition"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4122,
+      "image_tokens": 966,
+      "latency_s": 214.45,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s13_c02": {
+    "shot_id": "s13_c02",
+    "frame": "first",
+    "image_source": "ff_7bc82d0e_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜",
+      "柳衣",
+      "周伯"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 2,
+        "people_notes": "左侧站立男子疑似沈夜，右侧骑马女子手持油纸伞且服饰干净，疑似柳衣。画面中未见周伯。无路人或重复身份现象。",
+        "shot_size_observed": "WS(wide)",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "fail",
+          "note": "Expected cast is 3, observed count is 2. Missing character Zhou Bo."
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "No duplicate characters or identities found."
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "No unexpected people or background silhouettes detected."
+        },
+        "missing_character": {
+          "status": "fail",
+          "note": "Zhou Bo is completely absent from the frame."
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "The image is a full wide shot showing the entire building and environment. Expected is medium shot (knee-up to waist) of"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "Characters are small subjects within a large environment. They do not occupy the visual dominance required for a Medium "
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "Composition is balanced with the building as a central anchor, though the shot is wider than requested."
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "Camera angle is eye level. No specific complex semantics required, so no failure."
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "The environment matches the 'Luoyi Post' description, including the rain and dawn lighting."
+        },
+        "identity_look": {
+          "status": "fail",
+          "note": "Female character holds an oil-paper umbrella and wears clean dark robes, inconsistent with Li Yi's 'severed sword, blood"
+        },
+        "prop_fidelity": {
+          "status": "fail",
+          "note": "Li Yi is holding an umbrella instead of a broken sword hilt. Li Yi's injury bandage is missing. Zhou Bo's tools (machete"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "Anatomy of the two characters appears generally correct."
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "Scene identity matches Luoyi Post exterior with traditional Chinese architecture and rain."
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "High aesthetic quality in terms of art style and rendering, but fails the narrative/fidelity gate."
+        }
+      },
+      "director_feedback": [
+        "Correct shot size to Medium Shot; characters must be larger in frame.",
+        "Include Zhou Bo in the shot (standing near the horse or horse).",
+        "Update Li Yi's look: remove umbrella, add broken sword hilt, bloody bandage, and disheveled hair.",
+        "Apply battle damage to Shen Ye's costume and face (blood, cuts).",
+        "Ensure the composition places characters in the foreground or mid-ground, dominating the visual hierarchy."
+      ],
+      "summary": "Scene is a Wide Shot instead of Medium; Zhou Bo is missing; Li Yi's look and props (umbrella vs broken sword) are incorrect."
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "missing_character",
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "cast_cardinality",
+        "subject_scale",
+        "identity_look",
+        "prop_fidelity"
+      ],
+      "uncertains": []
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4457,
+      "image_tokens": 966,
+      "latency_s": 167.46,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s13_c01": {
+    "shot_id": "s13_c01",
+    "frame": "first",
+    "image_source": "ff_0e439631_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜",
+      "柳衣",
+      "周伯"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 3,
+        "people_notes": "左侧为沈夜，中间为周伯，右侧为柳衣；均为主要人物，画面内无其他无关人形。",
+        "shot_size_observed": "WS",
+        "camera_semantics_observed": "高机位",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "画面出现沈夜、柳衣、周伯三人，与导演意图的expected cast（3人）人数一致。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "画面三人服饰、体态、发型各不相同，未见同脸/同服装的复制现象。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "画面除沈夜、柳衣、周伯外，无路人或任何背景闲人。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "三位expected cast角色均在画面中清晰呈现，无缺席。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "意图要求EWS（剪影与远山主体），实际为MS（人物清晰可见近景站姿），人物尺度过大。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "人物占据画面下方主体且细节清晰，破坏了预期的剪影渺小感与EWS环境氛围。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "人物位于画面下方，远山占据上方，构图视觉重心符合画面实际布局。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "俯视角明显，符合意图中的高机位设定。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "场景包含落雁驿建筑、远山与晨雾，完整展现了地点环境。"
+        },
+        "identity_look": {
+          "status": "fail",
+          "note": "严重不符：柳衣持有油纸伞（意图为折断的剑柄）；三人身材与破损妆容均过于整洁，无血污与伤损感。"
+        },
+        "prop_fidelity": {
+          "status": "fail",
+          "note": "柳衣手持错误的油纸伞而非断剑；周伯腰间未挂柴刀；沈夜衣物无明显血迹。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人物肢体比例正常，无多余肢体或结构崩坏。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "驿站牌匾及古风建筑样式与落雁驿场景设定相符。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "画面光影渲染出色，具有东方水墨电影质感，但风格过于唯美，缺乏战争后的灰暗氛围。"
+        }
+      },
+      "director_feedback": [
+        "必须重生成Extreme Wide Shot，人物应缩小至剪影，确保远山和晨雾成为画面上2/3的绝对主体。",
+        "修复沈夜造型：青灰长袍破损需加剧，增加下摆和肩部的明显血渍，并修复左脸颊刀疤。",
+        "修复柳衣造型：移除油纸伞，改为右手紧握折断的剑柄；增加右臂染血白布条。",
+        "为全场景增加雨停后的湿润感和晨曦微光，降低饱和度以匹配'战后创伤'的冷暗悬疑基调。",
+        "沈夜发髻应更加凌乱，眼神需呈现疲惫警惕；周伯身形需佝偻化，添加胡须花白细节。"
+      ],
+      "summary": "分镜被拒：严重违反景别要求（WS非EWS）且所有角色Look均出现重大偏差（道具错误、无伤损妆）。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "subject_scale",
+        "identity_look",
+        "prop_fidelity"
+      ],
+      "uncertains": []
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4513,
+      "image_tokens": 966,
+      "latency_s": 272.69,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s13_c04": {
+    "shot_id": "s13_c04",
+    "frame": "first",
+    "image_source": "ff_e1b40996_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "柳衣",
+      "沈夜"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 2,
+        "people_notes": "1. 女性角色（柳衣）：完整站立，手持油纸伞，黑色长发散乱，黑色长袍上可见深色污渍。2. 男性角色（沈夜）：完整站立，黑发散乱束髻，左脸可见横向伤痕（疑似刀疤），身穿青色长袍，腰间佩剑，左手似乎握着某物。",
+        "shot_size_observed": "WS",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "画面中两人，符合柳衣和沈夜的出场要求。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "未发现同角色重复出现的情况。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "画面中无额外路人或无关人形。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "柳衣、沈夜均在画面中且清晰可辨。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "镜头要求Medium Shot（膝上），实际为Wide Shot（全身+大量环境）。"
+        },
+        "subject_scale": {
+          "status": "pass",
+          "note": "在全景中人物依然清晰，主体感尚可，服务于场景叙事。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "双人构图平衡，背景建筑突出“驿站”地点特征。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "无特殊机位要求，画面为常规平视角度。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "完整展示了落雁驿外观、石阶和周围环境。"
+        },
+        "identity_look": {
+          "status": "uncertain",
+          "note": "服装颜色与参考（蓝/黑）基本相符，但面部特写不足，无法确认伤口细节。"
+        },
+        "prop_fidelity": {
+          "status": "fail",
+          "note": "柳衣手中拿着油纸伞，而非镜头要求的“断剑”；沈夜握持物也不清晰。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "未发现多余肢体或解剖结构错误。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "场景包含传统中式建筑、雨滴和湿润地面，符合“落雁驿”设定。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "画面光影优美，具有电影质感，氛围到位。"
+        }
+      },
+      "director_feedback": [
+        "调整景别：将镜头推近至Medium Shot（膝上/半身），聚焦人物情绪。",
+        "修正道具：柳衣手中需改为紧握断剑，移除油纸伞；或根据导演意图确认是否保留雨伞。",
+        "保留环境：在推近景的同时，确保落雁驿背景仍在画面边缘或虚化背景中可见，以交代地点。"
+      ],
+      "summary": "画面质量高，但景别过大（WS非MS）且关键道具（断剑）缺失，未传达目送时的亲密情绪。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "prop_fidelity"
+      ],
+      "uncertains": [
+        "identity_look"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4245,
+      "image_tokens": 966,
+      "latency_s": 79.21,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s10_c03": {
+    "error": "AgentError('shot review provider 失败：重试 5 次仍失败: ')",
+    "shot_id": "s10_c03"
+  },
+  "s13_c03": {
+    "shot_id": "s13_c03",
+    "frame": "first",
+    "image_source": "ff_6ed677e9_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 1,
+        "people_notes": "沈夜（单人）",
+        "shot_size_observed": "WS(wide)",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "画面1人，镜头意图亦为1人。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "仅一人，无复制嫌疑。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "画面中无其他人物。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "沈夜主体完整出现。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "Expected MS, but observed WS (全身含大量建筑环境)。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "人物被背景弱化，不是画面主体，不符合动作戏（整理伤口）的叙事重点。"
+        },
+        "framing_and_composition": {
+          "status": "fail",
+          "note": "人物被放置在右下角，主体性过弱，且未体现'坐'的状态。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "无特殊机位要求，正常全景视角成立。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "落雁驿环境入镜范围完全覆盖，符合上下文地点。"
+        },
+        "identity_look": {
+          "status": "uncertain",
+          "note": "发型大致符合，但参考图要求的血迹破损未体现；无法仅凭此图确认面部伤疤细节。"
+        },
+        "prop_fidelity": {
+          "status": "fail",
+          "note": "未见道具（包扎物/血渍），沈夜呈现'整装前'的整洁状态而非'整装中'的狼狈状态。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "无生成伪影。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "建筑风格、招牌（落雁驿）、雨后晨光氛围与上下文一致。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "整体光影与氛围渲染质量良好，具有电影感。"
+        }
+      },
+      "director_feedback": [
+        "景别错误：当前为全景，必须改为中景（MS），聚焦躯干与面部。",
+        "动作未体现：沈夜应呈现'包扎手臂'的动作或手部特写，当前站姿静止。",
+        "造型错误：角色过于整洁，缺乏参考图中的血迹破损和脏乱感。",
+        "姿态调整：导演意图要求'坐'在门口，需将站立改为坐姿。",
+        "构图调整：人物不应仅占据右下角，需适当放大并突出主体位置。"
+      ],
+      "summary": "景别与造型严重不符：实际为WS全景，沈夜呈坐姿缺失且过于整洁，需改回MS并增加血迹与包扎动作。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "shot_size_correctness",
+        "framing_and_composition"
+      ],
+      "soft_fails": [
+        "subject_scale",
+        "prop_fidelity"
+      ],
+      "uncertains": [
+        "identity_look"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4013,
+      "image_tokens": 966,
+      "latency_s": 125.76,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s13_c05": {
+    "shot_id": "s13_c05",
+    "frame": "first",
+    "image_source": "ff_16357a8f_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "周伯"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 1,
+        "people_notes": "1名男性角色，画面中无其他人物或背景人形",
+        "shot_size_observed": "MS",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "expected cast 为周伯1人，observed 1人，数量正确。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "画面中仅出现一个周伯形象，未发现复制或同貌人物。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "画面中仅有周伯一人，无路人、士兵或其他幻觉人形。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "周伯完整出现在画面中，无缺失。"
+        },
+        "shot_size_correctness": {
+          "status": "pass",
+          "note": "画面中周伯膝盖以上呈现，符合medium shot定义。"
+        },
+        "subject_scale": {
+          "status": "pass",
+          "note": "周伯作为主体占画面显著位置，符合镜头目的。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "人物位于画面中心偏左，构图平衡，无明显违反规则之处。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "导演未指定特殊机位，画面为常规正面视角，无冲突。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "场景展示落雁驿全貌及远山，与地点一致。"
+        },
+        "identity_look": {
+          "status": "pass",
+          "note": "周伯形象符合描述：须发花白、粗布麻衣、补丁、腰间柴刀，东方水墨质感。"
+        },
+        "prop_fidelity": {
+          "status": "fail",
+          "note": "意图要求周伯肩膀缠着绷带，但画面中肩膀未显示绷带。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人物解剖结构正常，无多余肢体或面部崩坏。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "建筑风格、石径、远山等元素与落雁驿 - 外景描述一致。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "光影层次丰富，晨雾与雨后湿润效果突出，电影可读性强。"
+        }
+      },
+      "director_feedback": [
+        "检查周伯肩膀处是否需要添加绷带细节以符合镜头意图。",
+        "确认马匹数量：意图描述'两匹马'但画面仅显示一匹，需核实。"
+      ],
+      "summary": "画面整体质量高，基本符合导演意图，但存在道具（绷带）缺失的失败项。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [],
+      "soft_fails": [
+        "prop_fidelity"
+      ],
+      "uncertains": []
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 3958,
+      "image_tokens": 966,
+      "latency_s": 50.15,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s13_c06": {
+    "shot_id": "s13_c06",
+    "frame": "first",
+    "image_source": "ff_622c7726_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "柳衣",
+      "沈夜"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 2,
+        "people_notes": "柳衣在右侧持伞站立；沈夜在左侧持剑站立，两人形象清晰独立。",
+        "shot_size_observed": "WS(wide)",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "画面含2人（柳衣、沈夜），与expected cast一致。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "未发现同角色复制成双的情况。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "无多余路人或背景人形。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "柳衣与沈夜均已出现。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "镜头要求CU手部特写，但画面是WS展示完整人物与环境。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "断剑为远处道具而非画面主体，未形成特写视觉焦点。"
+        },
+        "framing_and_composition": {
+          "status": "fail",
+          "note": "两人并排全景站位，未按要求构图为手部特写。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "无特殊机位要求，画面为常规正面平视。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "落雁驿外景晨景符合描述，但雨仍未停。"
+        },
+        "identity_look": {
+          "status": "uncertain",
+          "note": "人物造型与参考图差异较大：柳衣未展示染血绷带和断剑，沈夜发髻形态不一致。"
+        },
+        "prop_fidelity": {
+          "status": "fail",
+          "note": "柳衣未手持断剑，且手中持有未要求的油纸伞；沈夜腰间无短剑。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人物肢体结构正常，无明显生成伪影。"
+        },
+        "scene_identity": {
+          "status": "uncertain",
+          "note": "虽有雨雾场景，但与dawn/golden hour的柔和光影及clearing状态不符。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "画面具有较好的电影感水墨风格与层次感，但并非目标分镜。"
+        }
+      },
+      "director_feedback": [
+        "画面是广角双人镜头，必须重生成为手部特写以聚焦断剑与手势。",
+        "柳衣造型与参考不符：需修复右臂染血绷带破损长衫及凌发散乱。",
+        "柳衣应手持断裂剑身，且不应持有油纸伞；断剑需有冷光。",
+        "晨光背景应转为dawn golden hour，避免当前明显的下雨线条。",
+        "镜头应排除沈夜全身形象，重点在挥手告别的情感凝聚点。",
+        "构图中心需移至柳衣面部或手部与断剑交互处，背景虚化。"
+      ],
+      "summary": "画面严重偏离导演意图，景别为广角全景而非手部特写，断剑缺失，角色造型与光影状态均有重大偏差。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "shot_size_correctness",
+        "framing_and_composition"
+      ],
+      "soft_fails": [
+        "subject_scale",
+        "prop_fidelity"
+      ],
+      "uncertains": [
+        "identity_look",
+        "scene_identity"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4107,
+      "image_tokens": 966,
+      "latency_s": 96.53,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s14_c01": {
+    "shot_id": "s14_c01",
+    "frame": "first",
+    "image_source": "ff_eab137d3_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "柳衣",
+      "周伯"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 3,
+        "people_notes": "1. 柳衣（前景左侧）；2. 周伯（前景右侧）；3. 无名路人（背景中景，坐于屋檐下，画面未要求此人物）。",
+        "shot_size_observed": "WS",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "fail",
+          "note": "画面出现3人（含背景路人），镜头意图起始状态为“驿站空无一人”，预期主要登场为柳衣、周伯，路人属于多余元素。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "未发现同一角色被复制成两个人的情况，画面中人物特征独立。"
+        },
+        "unexpected_people": {
+          "status": "fail",
+          "note": "背景深处有一人坐在屋檐下/案旁，镜头意图为“起先空无一人”的孤寂氛围铺垫，此路人破坏了“寂静”的空镜基调。"
+        },
+        "missing_character": {
+          "status": "fail",
+          "note": "镜头意图明确为「驿站空镜」及「新旅人/秘密将至」的远景马蹄声暗示，画面直接给出柳衣与周伯的大特写式全景，完全违背了“未见其人先闻其声/未见其形先见其境”的叙事逻辑。"
+        },
+        "shot_size_correctness": {
+          "status": "pass",
+          "note": "画面展现街道全貌、远山背景及建筑纵深，属于标准的 Wide Shot (WS)，符合镜头景别要求。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "导演意图为“空镜”与“马蹄声方向”的环境渲染，而非人物对视/对话场景。人物占据画面主体，喧宾夺主，不符合“重归寂静”的情绪。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "构图符合常规双人全景站位，视觉重心清晰，虽不符合导演意图但技术上是正确的全景构图。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "镜头为平视全景，符合“eye level”要求，无特殊机位语义冲突。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "入镜范围为落雁驿街道全景，符合“wide shot”对场景范围的入镜需求。"
+        },
+        "identity_look": {
+          "status": "pass",
+          "note": "柳衣（墨黑修身长衫、油纸伞）、周伯（灰褐粗布麻衣、柴刀）造型与参考图及描述一致。"
+        },
+        "prop_fidelity": {
+          "status": "pass",
+          "note": "油纸伞、柴刀、马匹均存在且形态正确。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人物肢体结构正常，无明显生成伪影。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "环境呈现中式驿站、远山、清晨微光与冷色调，符合“落雁驿 - 内景大堂正面”及“early_morning”语境。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "图像质感良好，水墨风格统一，光影层次丰富，具备电影级分镜可用性。"
+        }
+      },
+      "director_feedback": [
+        "核心叙事错误：本镜应为空镜（环境音+马蹄声），不应直接展示柳衣和周伯的人像。",
+        "删减人物：移除前景的柳衣和周伯，恢复“空无一人”的初始状态。",
+        "调整构图：保留或增加远景中的单人剪影（暗示新旅人或周伯在远处）以呼应马蹄声，而非全景展示二人。",
+        "强化环境：突出檐角滴水细节和寂静氛围，人物比例应极小或完全不在画面中。",
+        "重新理解意图：导演要求的是“起承转合”中的铺垫（空镜），而非高潮相遇场面。"
+      ],
+      "summary": "分镜严重偏离导演意图：本镜旨在通过空镜与听觉意象（马蹄声）铺垫氛围，画面却错误地展示了全副武装的柳衣与周伯正面全景，且背景多出路人，彻底破坏了“重归寂静”的叙事张力。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "unexpected_people",
+        "missing_character"
+      ],
+      "soft_fails": [
+        "cast_cardinality",
+        "subject_scale"
+      ],
+      "uncertains": []
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4406,
+      "image_tokens": 966,
+      "latency_s": 134.37,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s14_c03": {
+    "shot_id": "s14_c03",
+    "frame": "first",
+    "image_source": "ff_f244a899_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "周伯"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 1,
+        "people_notes": "Figure 1: Zhou Bo (elderly male with white beard/stubble, worn hemp robes, walking stick in hand). No duplicates detected. No unexpected persons.",
+        "shot_size_observed": "EWS (Extreme Wide Shot)",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "fail",
+          "note": "镜头意图出场1人，画面实际出现1人（周伯）。然而镜头要求Medium Shot，画面呈现Extreme Wide Shot（人物很小）；虽然人数正确，但景别与镜头意图严重不符。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "画面中仅出现1人，不存在同一角色被复制成两个人的情况。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "画面中只有周伯1人，没有发现任何路人、额外士兵或背景闲人。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "周伯在画面中，位于大门正中央，完整可见。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "镜头要求Medium Shot（膝上/半身），画面实际是Extreme Wide Shot（全身+建筑全景，人物仅占画面很小一部分），严重偏离。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "镜头意图聚焦周伯神情与期待/忧虑，画面中人物占比极小（远景中的点），情绪无法传达，主体地位缺失。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "构图采用对称式构图，人物居中，前景门柱形成框架式构图，层次分明。虽非导演要求的MS构图，但作为单帧画面本身构图合理。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "镜头未指定特殊机位，画面为常规正面视角，无明显冲突。"
+        },
+        "scene_scope_correctness": {
+          "status": "fail",
+          "note": "镜头描述为'驿站门口'且场景上下文为'内景大堂正面'，但画面呈现了完整的院落全景+远处山脉，且为外景白天场景。上下文要求'落雁驿 - 内景大堂正面'，实际画面是外景大门广场，与场景身份不符。"
+        },
+        "identity_look": {
+          "status": "pass",
+          "note": "人物造型符合参考：灰褐色粗布麻衣、补丁、腰间柴刀、须发花白、身形微佝偻。虽手持的是拐杖而非紧握柴刀，但柴刀出现在腰间。整体气质相符。"
+        },
+        "prop_fidelity": {
+          "status": "uncertain",
+          "note": "镜头要求'紧握着柴刀'，画面中柴刀挂在腰间，手里拿的是木棍/拐杖。腰间有柴刀存在，但手持物不一致。需进一步确认。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人物解剖结构正常，无明显伪影、多余肢体或面部崩坏。"
+        },
+        "scene_identity": {
+          "status": "fail",
+          "note": "场景上下文要求'落雁驿 - 内景大堂正面 (主屋内部)'，画面却是外景大门和庭院。且光线为清晨阳光，而上下文要求'冷色调'、'寂静无声'的氛围。场景身份不符。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "作为分镜图质量良好，光影层次丰富，东方水墨质感，但情绪氛围偏暖而非悬疑冷调。"
+        }
+      },
+      "director_feedback": [
+        "景别问题：镜头要求Medium Shot，实际是Extreme Wide Shot，需重新生成或裁剪至人物半身。",
+        "场景不符：上下文要求'内景大堂正面'，画面却是外景大门庭院，需调整场景设定。",
+        "道具问题：镜头要求'紧握着柴刀'，画面柴刀在腰间，手中是拐杖，需修正道具位置。",
+        "氛围不符：上下文要求冷色调/清晨微光，画面是暖调日间光线，需调整色彩倾向。",
+        "人物比例：周伯在画面中占比过小（约5%），无法传达'期待和忧虑'的眼神，需拉近景别。"
+      ],
+      "summary": "该分镜在景别（EWS vs MS）、场景身份（外景 vs 内景）、氛围（暖调 vs 冷调）三个关键维度与导演意图严重不符，建议重新生成。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "cast_cardinality",
+        "subject_scale",
+        "scene_scope_correctness",
+        "scene_identity"
+      ],
+      "uncertains": [
+        "prop_fidelity"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4251,
+      "image_tokens": 966,
+      "latency_s": 89.05,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s14_c04": {
+    "shot_id": "s14_c04",
+    "frame": "first",
+    "image_source": "ff_20dafc47_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [],
+    "review": {
+      "observed": {
+        "people_count": 0,
+        "people_notes": "画面无人物，仅有屋檐、灯笼与远山背景",
+        "shot_size_observed": "MS(medium)",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "partial_environment"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "镜头未要求任何人物，画面中确无任何人形，符合要求。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "画面中无人物，不存在重复身份问题。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "画面中未发现路人、背景闲人或幻觉 silhouette，完全干净。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "镜头无出场人物要求，无需检查缺失。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "要求 ECU（特写），实际画面为 MS：画面呈现了屋檐结构、灯笼及完整远景山峦，包含大量环境，主体占比不符特写定义。"
+        },
+        "subject_scale": {
+          "status": "pass",
+          "note": "屋檐与灯笼作为主体占据主要画幅，雨滴清晰可见，氛围传达有效。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "构图平衡，屋檐引导视线，光线层次分明，符合黎明清新氛围意图。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "镜头未指定特殊机位，当前视角自然成立，无明显冲突。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "画面显示局部屋檐与远景山峦，与「驿站」设定一致，未出现矛盾元素。"
+        },
+        "identity_look": {
+          "status": "uncertain",
+          "note": "无附带的 Look 参考图可供比对，无法评估造型一致性。"
+        },
+        "prop_fidelity": {
+          "status": "pass",
+          "note": "画面中有灯笼，形态正确；未发现与导演意图矛盾的道具。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "无人物，无解剖伪影或肢体生成错误。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "东方瓦片建筑样式、灯笼与山峦雾气符合「驿站」场景预期。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "光影层次丰富，电影感强，色彩传达希望与清新情绪，分镜可用。"
+        }
+      },
+      "director_feedback": [
+        "当前画面为 MS，需裁剪或重新生成以突出屋檐滴水细节，达到 ECU 的视觉强度。",
+        "保持当前氛围与构图，但主体应改为仅屋檐与雨滴，减少背景山峦的占比。"
+      ],
+      "summary": "画面氛围与美术质量优秀，但景别判断为 MS 而非预期的 ECU，主体占比过大导致未达特写标准，建议调整或裁剪。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "shot_size_correctness"
+      ],
+      "soft_fails": [],
+      "uncertains": [
+        "identity_look"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 3692,
+      "image_tokens": 966,
+      "latency_s": 126.42,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s15_c01": {
+    "shot_id": "s15_c01",
+    "frame": "first",
+    "image_source": "ff_5b9acfcb_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜",
+      "柳衣",
+      "萧寒",
+      "周伯"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 5,
+        "people_notes": "萧寒(黑衣劲装站立左中)、柳衣(黑衣持伞站立右中)、沈夜(蓝袍站左二)、周伯(灰褐粗布站右一)、额外蓝袍人坐右侧石凳(镜头未要求的路人/幻觉)",
+        "shot_size_observed": "EWS(extreme wide)",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "fail",
+          "note": "镜头要求4人，画面实际5人。多出一位坐在右侧石凳上的蓝袍人形，不在expected cast内。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "未发现同一角色被复制成两人的情况。各角色外形差异明显。"
+        },
+        "unexpected_people": {
+          "status": "fail",
+          "note": "画面右侧石凳上坐着一位蓝袍人，镜头意图明确说「门外雨中无人影」，此人属于意外出现的路人/幻觉人物。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "沈夜、柳衣、萧寒、周伯四人全部出现，无缺失角色。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "镜头要求medium shot，画面实际为EWS。人物在画面中占比过小，可看到完整建筑群、远山和月亮，环境是主体而非人物对峙。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "人物在画面中占比过小，无法体现「步步逼近」「剑出鞘」等紧张情绪。中景目的为人物关系和情绪，此图为全景风景。"
+        },
+        "framing_and_composition": {
+          "status": "fail",
+          "note": "镜头要求：萧寒前景右逼近、柳衣居中护沈夜、周伯背景左。实际：萧寒偏左中、柳衣偏右中、两人并排而非保护姿态、无前景/背景层次区分，构图为松散并排站姿而非三角对峙。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "镜头未指定特殊机位，画面为平视，无矛盾。"
+        },
+        "scene_scope_correctness": {
+          "status": "fail",
+          "note": "场景入镜范围过大。镜头意图是「屋内对峙」，画面展示的是完整外景街道、建筑、远山、月亮，与室内烛光摇曳的场景设定矛盾。"
+        },
+        "identity_look": {
+          "status": "pass",
+          "note": "角色造型基本符合参考：萧寒黑色劲装、柳衣黑衣持伞、沈夜蓝袍、周伯灰褐麻衣。但萧寒服装过于紧身肌肉感，偏离「粗布棉麻」纹理描述。"
+        },
+        "prop_fidelity": {
+          "status": "uncertain",
+          "note": "柳衣手持油纸伞符合描述；萧寒佩剑可见；沈夜腰间有短剑/刀；周伯腰间有柴刀。但柳衣的玉佩在画面中难以辨识。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人物解剖结构正常，无明显肢体融合或崩坏。周伯身形微佝偻符合描述。"
+        },
+        "scene_identity": {
+          "status": "fail",
+          "note": "镜头意图「内景大堂正面」，画面展示的是外景街道。虽有建筑招牌（落雁驿），但这是外部庭院场景，非室内大堂。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "图像质量较高，光影层次丰富，东方水墨电影质感，适合作为场景氛围图使用。"
+        }
+      },
+      "director_feedback": [
+        "重生成medium shot，人物占比需放大至画面主体，当前EWS无法体现对峙张力。",
+        "场景需改为内景大堂正面，消除街道、远山、月亮等外景元素。",
+        "构图需调整：萧寒应在前景右侧逼近，柳衣居中保护沈夜，周伯在背景左侧，形成三角对峙层次。",
+        "移除右侧石凳上坐着的蓝袍人，镜头明确要求门外雨中无人影。",
+        "柳衣需体现「挡在沈夜身前」的保护姿态，而非并排站立。",
+        "萧寒服装材质需从紧身肌肉感调整为粗布棉麻纹理，符合刺客劲装描述。"
+      ],
+      "summary": "Hard gate fail：镜头要求medium shot室内对峙，实际生成EWS外景街道，且出现意外路人，构图和场景均严重偏离导演意图。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "unexpected_people",
+        "shot_size_correctness",
+        "framing_and_composition"
+      ],
+      "soft_fails": [
+        "cast_cardinality",
+        "subject_scale",
+        "scene_scope_correctness",
+        "scene_identity"
+      ],
+      "uncertains": [
+        "prop_fidelity"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4785,
+      "image_tokens": 966,
+      "latency_s": 126.48,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s14_c05": {
+    "shot_id": "s14_c05",
+    "frame": "first",
+    "image_source": "ff_fe03066f_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "柳衣",
+      "沈夜"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 2,
+        "people_notes": "左侧男子沈夜；右侧女子柳衣。两人位置相对独立，非复制。",
+        "shot_size_observed": "WS (Wide Shot)",
+        "camera_semantics_observed": "侧面",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "镜头要求柳衣与沈夜两人，画面实际出现2人，人数相符。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "画面中两人形态、服饰不同，未见同一角色重复出现的现象。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "画面中仅有主要角色二人，未发现多余的路人或背景闲杂人员。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "柳衣（持伞女子）和沈夜（持刀男子）均已出现在画面中。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "镜头要求Medium Close-Up（中近景），但画面呈现为展现完整建筑环境与人物全身位置的远景/全景。"
+        },
+        "subject_scale": {
+          "status": "pass",
+          "note": "作为Wide Shot，人物在画面中比例适中，能看清其姿态与场景关系。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "对称式构图，中心为驿站门楼，人物分列左右前景，视觉平衡。"
+        },
+        "camera_semantics": {
+          "status": "uncertain",
+          "note": "画面为平视偏俯视的侧面，未体现明显仰拍效果，且镜头未强制规定机位语义。"
+        },
+        "scene_scope_correctness": {
+          "status": "fail",
+          "note": "镜头描述为「站在门口」的近景视角，但画面展示了整个落雁驿的庭院全貌和远山，严重超出了预期的场景范围。"
+        },
+        "identity_look": {
+          "status": "fail",
+          "note": "柳衣缺少『右臂染血绷带』和『折断的剑柄』，衣服无明显破损血迹，仅持伞；沈夜服装颜色偏蓝而非要求的青灰，战损程度不足。"
+        },
+        "prop_fidelity": {
+          "status": "fail",
+          "note": "柳衣手持油纸伞（意图未要求），却缺失关键道具折断的剑柄；沈夜剑鞘样式略有出入。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人物肢体结构正常，无明显生成伪影或多余肢体。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "画面有『落雁驿』牌匾及中式建筑风格，与地点身份一致。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "画面具有东方水墨电影质感，光影层次丰富，整体美术风格优良。"
+        }
+      },
+      "director_feedback": [
+        "修正景别：从全景切换为中近景（MCU/CU），聚焦于柳衣的面部表情与眼神。",
+        "调整构图：需体现『站在驿站门口』的纵深感，背景保留门楣即可，切掉过远的山水。",
+        "修改柳衣造型：恢复右臂缠满血迹的绷带，手持折断的剑柄而非油纸伞，头发改为凌乱散开。",
+        "调整沈夜造型：修正长袍颜色为青灰色，增加左脸颊的刀疤细节，确保蓑衣上有明显血渍。",
+        "情绪引导：着重刻画晨曦光线下柳衣脸上的不舍与担忧，弱化环境大场景。"
+      ],
+      "summary": "构图虽美，但景别严重不符（应为中近景却出全景），且关键角色造型（柳衣的绷带/断剑、沈夜的服饰）严重偏离了『战后伤损』的设定要求。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "scene_scope_correctness",
+        "identity_look",
+        "prop_fidelity"
+      ],
+      "uncertains": [
+        "camera_semantics"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4302,
+      "image_tokens": 966,
+      "latency_s": 149.61,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s15_c02": {
+    "shot_id": "s15_c02",
+    "frame": "first",
+    "image_source": "ff_acb69faa_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜",
+      "柳衣",
+      "周伯",
+      "萧寒"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 4,
+        "people_notes": "左边男性持剑（疑似沈夜）；中间两名穿黑衣女性，面部与服装高度一致（疑似柳衣被复制成两人）；右边坐着的老年男性（周伯）。萧寒未出现在画面中。",
+        "shot_size_observed": "MS",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "partial_environment"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "画面共4人，符合expected cast 人数要求。"
+        },
+        "duplicate_identity": {
+          "status": "fail",
+          "note": "中间两名女性角色面部和服装高度一致，疑似同一角色柳衣被复制成两人（位于画面中央并列站立）。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "画面未出现镜头意图之外的额外人物。"
+        },
+        "missing_character": {
+          "status": "fail",
+          "note": "出场人物要求包含萧寒，但画面中未出现，仅4人存在。"
+        },
+        "shot_size_correctness": {
+          "status": "pass",
+          "note": "实际画面为MS（膝上/中景），展示人物主体与部分环境，整体视觉成立。"
+        },
+        "subject_scale": {
+          "status": "pass",
+          "note": "人物占据画面主要位置，符合镜头的情绪表达需求。"
+        },
+        "framing_and_composition": {
+          "status": "fail",
+          "note": "镜头要求从窗户向内看，前景三人为剪影，实际画面为室外正面平视，构图意图严重错配。"
+        },
+        "camera_semantics": {
+          "status": "fail",
+          "note": "镜头意图是 from inside looking out（室内视角），实际画面为室外平视，未体现内部观窗语义。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "展现雨后庭院、石板路与建筑，场景元素与地点身份相符。"
+        },
+        "identity_look": {
+          "status": "uncertain",
+          "note": "没有提供可靠Look参考图，无法比对身份一致性。"
+        },
+        "prop_fidelity": {
+          "status": "pass",
+          "note": "画面出现剑和纸伞，均与古风设定相符，无矛盾道具。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "无明显生成伪影或解剖异常，手指与比例正常。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "古建筑、灯笼、雨幕、石板路等均符合古代驿站的场景身份。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "画面光影层次清晰、风格统一，电影感强，分镜可执行。"
+        }
+      },
+      "director_feedback": [
+        "萧寒未在画面中出现，需补入出场。",
+        "中间两名女性疑似同一角色复制，需删除其一。",
+        "机位应从窗户由内向外观测，而非室外正面视角。",
+        "构图应让窗户成为前景框架，三人以剪影形式呈现。",
+        "镜头类型为wide shot，需拉远至全景以容纳窗外竹林与雨幕。",
+        "建议重新生成以匹配分镜意图与相机语义。"
+      ],
+      "summary": "画面质量良好，但关键分镜意图（机位、构图）与expected cast（萧寒缺失）未实现，存在硬错误，需重生成。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "duplicate_identity",
+        "missing_character",
+        "framing_and_composition"
+      ],
+      "soft_fails": [
+        "camera_semantics"
+      ],
+      "uncertains": [
+        "identity_look"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 3771,
+      "image_tokens": 966,
+      "latency_s": 138.6,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s15_c05": {
+    "shot_id": "s15_c05",
+    "frame": "first",
+    "image_source": "ff_bb7ddbdd_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "柳衣",
+      "沈夜"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 6,
+        "people_notes": "1. 柳衣（女主持伞站立）；2. 左侧前景男子（蓝袍）疑似沈夜；3. 中间男子（黑袍）疑似沈夜复制；4. 右侧坐着的男子（蓝灰袍）；5. 远景门边站立路人；6. 远处走廊站立背影人形。",
+        "shot_size_observed": "WS (Wide Shot)",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "fail",
+          "note": "预期2人，实际出现6名人形，多出一名黑衣男子、一名坐客及两名背景路人。"
+        },
+        "duplicate_identity": {
+          "status": "fail",
+          "note": "画面左侧蓝袍男子与中间黑衣男子面部特征高度相似，疑似同一角色（沈夜）被复制成两人。"
+        },
+        "unexpected_people": {
+          "status": "fail",
+          "note": "画面中出现非剧本要求的人物：右侧坐客、门边远客、背景路人，均非预期Cast。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "柳衣和沈夜（两人均出现）均已入镜。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "导演要求MS，实际为WS。展示了完整的落雁驿招牌与远景山脉，人物全身且较小。"
+        },
+        "subject_scale": {
+          "status": "pass",
+          "note": "作为WS镜头，构图以环境烘托氛围，人物比例符合全场景展示的目的。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "三分法构图合理，主角色（柳衣）在右侧三分之一处。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "未指定机位，画面为客观第三人称视角，无特殊机位语义错误。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "场景显示完整的落雁驿内景大堂外观，与地点上下文一致，有雨夜氛围。"
+        },
+        "identity_look": {
+          "status": "uncertain",
+          "note": "左侧男子面部特征与参考图差异较大，无法确切辨识刀疤与发型细节。"
+        },
+        "prop_fidelity": {
+          "status": "pass",
+          "note": "道具（油纸伞、剑）均出现，形态基本正确。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "画面无明显肢体或解剖伪影。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "中式建筑、招牌'落雁驿'及雨夜意境符合场景上下文描述。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "画面水墨电影质感，光影与氛围渲染良好，具备分镜可读性。"
+        }
+      },
+      "director_feedback": [
+        "Shot size mismatch: Director asked for MS but generated a WS showing the entire environment.",
+        "Cast cardinality error: Expected 2 characters (Liu Yi, Shen Ye), but 4 extra figures appeared.",
+        "Duplicate identity check: The man in blue (foreground) and the man in black (center) share identical facial features.",
+        "Action alignment: Character appears standing with an umbrella, not 'sitting at a table' as described."
+      ],
+      "summary": "Shot failed due to incorrect WS scale (requiring MS) and extra cast/duplicates; Liu Yi and Shen Ye appear visually confused."
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "duplicate_identity",
+        "unexpected_people",
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "cast_cardinality"
+      ],
+      "uncertains": [
+        "identity_look"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4053,
+      "image_tokens": 966,
+      "latency_s": 42.21,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s15_c04": {
+    "shot_id": "s15_c04",
+    "frame": "first",
+    "image_source": "ff_587565cc_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "周伯"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 2,
+        "people_notes": "画面中有两位老年男性，均具备白发胡须、粗布麻衣、柴刀特征，疑似同一角色的重复生成。",
+        "shot_size_observed": "WS",
+        "camera_semantics_observed": "侧面",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "fail",
+          "note": "镜头要求周伯单人（expected=1），画面出现两人（observed=2），与意图不符。"
+        },
+        "duplicate_identity": {
+          "status": "fail",
+          "note": "Hard gate：画面左右各有一位外貌、着装高度一致的白发老者，系角色复制。"
+        },
+        "unexpected_people": {
+          "status": "fail",
+          "note": "画面右侧人物为镜头未要求的额外人形。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "周伯形象出现，但数量超标。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "要求特写（CU），实际画面为全景（WS），人物极小且环境为主体。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "特写应凸显面部神情与动作细节，实际人物占比过小。"
+        },
+        "framing_and_composition": {
+          "status": "fail",
+          "note": "画面呈现两个相同主体并排，构图意图冲突。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "实际侧面视角，与未指定的机位无硬性冲突。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "落雁驿外观展示完整，符合地点上下文。"
+        },
+        "identity_look": {
+          "status": "pass",
+          "note": "白发、补丁麻衣、柴刀、身形佝偻均符合周伯参考图。"
+        },
+        "prop_fidelity": {
+          "status": "pass",
+          "note": "柴刀出现，形态正确。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "无明显肢体崩坏或解剖伪影。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "夜雨氛围、建筑风格与'落雁驿'描述一致。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "画面光影质感优秀，风格统一，但关键叙事逻辑失败。"
+        }
+      },
+      "director_feedback": [
+        "重生成：必须删除画面右侧或左侧的一位老者，只保留单一人物。",
+        "调整景别：将机位推至特写（CU），使人物占据画面主体，以便清晰表现眼神和'摸向柴刀'的细节。",
+        "构图策略：确保画面中只有一个周伯。",
+        "光影氛围：强化阴影以突出'暗中准备'的紧张感，而非强调建筑外观。",
+        "细节修正：聚焦于手部动作和面部表情，而非环境全景。"
+      ],
+      "summary": "该分镜存在严重的硬错误：景别严重失当（WS替代了CU），且出现重复的角色复制（出现两个周伯），导致镜头意图无法达成。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "duplicate_identity",
+        "unexpected_people",
+        "shot_size_correctness",
+        "framing_and_composition"
+      ],
+      "soft_fails": [
+        "cast_cardinality",
+        "subject_scale"
+      ],
+      "uncertains": []
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4018,
+      "image_tokens": 966,
+      "latency_s": 111.49,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s16_c01": {
+    "shot_id": "s16_c01",
+    "frame": "first",
+    "image_source": "ff_26b0d145_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜",
+      "柳衣",
+      "萧寒"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 5,
+        "people_notes": "画面共5人：1萧寒（黑色劲装站立，持剑）/1柳衣（黑裙持伞）/2沈夜重复（左前景坐/右侧背景站）/1疑似路人（远处门廊蓝袍站立）。",
+        "shot_size_observed": "EWS(extreme wide)",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "fail",
+          "note": "镜头要求3人，画面实际5人（含2沈夜/1背景路人），超出。"
+        },
+        "duplicate_identity": {
+          "status": "fail",
+          "note": "沈夜被复制成两人：前景左侧坐像与画面右侧背景站像同脸同发型同服装同色调，且均无对应角色意图。"
+        },
+        "unexpected_people": {
+          "status": "fail",
+          "note": "除3名cast外，画面右后侧门廊处有1名蓝袍路人，意图未要求任何第三人形。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "萧寒/柳衣/沈夜均在画面出现，虽沈夜重复但未见缺漏。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "镜头要求MS，实际为EWS；三人及完整院落全景入镜，人物仅约画面1/5高，与中景定义不符。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "三人在广阔雨夜院落中仅为视觉中心点缀而非主体，人物体量过小，不服务‘混战紧凑’情绪。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "三人站位形成三角构图，居中并略有纵深，满足‘混战居中心’的构图意图。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "未规定特殊机位语义，现画面为正常平视EWS，无冲突。"
+        },
+        "scene_scope_correctness": {
+          "status": "fail",
+          "note": "镜头要求内景大堂，画面却画到室外庭院全景：月亮/群山/院门/露天火塘均出现；场景地点与状态严重矛盾。"
+        },
+        "identity_look": {
+          "status": "pass",
+          "note": "萧寒：魁梧+黑劲装+低发髻+腰带佩剑，符合参考；柳衣：黑长裙+长直发+持伞+玉佩，符合；沈夜（任一像）：青灰长袍+低发髻+冷峻，基本符合。"
+        },
+        "prop_fidelity": {
+          "status": "fail",
+          "note": "场景要求大量室内元素（烛台/翻倒家具/碎瓷/血渍蜡烛混合等），画面几乎全为室外空旷地；仅保留少数散置器物，与意图严重不符。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "五个人物姿态自然，肢体比例无崩坏，无明显克隆粘连问题。"
+        },
+        "scene_identity": {
+          "status": "fail",
+          "note": "主场景写落雁驿内景大堂，画面却呈现雨后露天院落，远处群山+月光+室外天井火塘，身份不一致。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "水墨电影感强，光影层次丰富，氛围到位，整体可作为高质量概念图使用。"
+        }
+      },
+      "director_feedback": [
+        "重生成MS/室内近景：三人应占据画面2/3以上高度，去除远景建筑/远山/天空。",
+        "删除两个沈夜重叠像与远处门廊路人：只保留1沈夜+1柳衣+1萧寒的混战造型。",
+        "场景改为落雁驿内景大堂正面：加入烛台/翻倒家具/碎瓷/血迹蜡烛混合/灯笼悬挂等细节。",
+        "引入动态：手持剑的光轨或动作暗示格斗，不要静止站姿。",
+        "低机位语义：将相机放低至略仰角，强调萧寒逼近与沈夜拔刃对峙。",
+        "光影以烛火为主光源：室内强方向阴影与雨丝反光，避免外景月光主导。"
+      ],
+      "summary": "该分镜错把内景三人混战画成室外EWS全景，并出现沈夜复制与额外路人，场景元素与意图严重偏离；构图与品质佳但须重生成。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "duplicate_identity",
+        "unexpected_people",
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "cast_cardinality",
+        "subject_scale",
+        "scene_scope_correctness",
+        "prop_fidelity",
+        "scene_identity"
+      ],
+      "uncertains": []
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4499,
+      "image_tokens": 966,
+      "latency_s": 13.86,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s16_c02": {
+    "shot_id": "s16_c02",
+    "frame": "first",
+    "image_source": "ff_8ae61d08_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "柳衣",
+      "萧寒"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 3,
+        "people_notes": "1. 左侧持刀男性（疑似萧寒）; 2. 画面后方站立女性; 3. 右侧持油纸伞女性（疑似柳衣）",
+        "shot_size_observed": "WS",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "fail",
+          "note": "镜头要求两人，画面出现三人。多出一名背景女性。"
+        },
+        "duplicate_identity": {
+          "status": "uncertain",
+          "note": "两名女性角色特征相似，疑似同一模型生成，需进一步确认。"
+        },
+        "unexpected_people": {
+          "status": "fail",
+          "note": "画面中央后方出现一名无戏份的背景女性，不在预期 cast 中。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "柳衣与萧寒均已出现在画面中。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "镜头要求 CU 特写，实际生成全景 WS，包含完整建筑与夜空环境。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "人物占画面比例过小，未突出‘双剑对决’的核心视觉重心。"
+        },
+        "framing_and_composition": {
+          "status": "fail",
+          "note": "画面无剑刃交叉中心构图，且背景杂乱（篝火、杂物），视觉焦点不聚焦。"
+        },
+        "camera_semantics": {
+          "status": "fail",
+          "note": "镜头要求 OTS 机位（前景肩头遮挡），实际为正面全景平视，无遮挡。"
+        },
+        "scene_scope_correctness": {
+          "status": "fail",
+          "note": "镜头要求内景大堂，画面展示为露天庭院，且篝火场景与室内打斗不符。"
+        },
+        "identity_look": {
+          "status": "pass",
+          "note": "持伞黑衣女子与柳衣参考图一致；持刀男子与萧寒参考图基本一致。"
+        },
+        "prop_fidelity": {
+          "status": "pass",
+          "note": "油纸伞、长剑等道具形态正确，符合角色设定。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人物肢体结构完整，无明显变形或多余肢体。"
+        },
+        "scene_identity": {
+          "status": "fail",
+          "note": "场景为露天庭院，与指令要求的‘内景大堂正面’严重不符。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "光影氛围与电影质感良好，作为单幅插图质量较高。"
+        }
+      },
+      "director_feedback": [
+        "景别严重错误：需从全景强制裁剪或重生成至特写 (CU) 范围。",
+        "机位缺失：必须采用 OTS 过肩视角，前景需包含肩部或手臂遮挡。",
+        "场景修正：背景必须替换为内景大堂（烛光/暴雨），禁止露天元素。",
+        "删减角色：移除背景站立的第三名女性，保持双人构图。",
+        "构图调整：焦点应集中在双剑碰撞火花上，而非人物全身。"
+      ],
+      "summary": "该分镜存在严重的意图偏离。核心问题在于将 CU 生成了 WS，且场景从室内错误地生成为了露天庭院，导致画面不仅信息量过载，更完全失去了‘双剑对决’的紧张感。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "unexpected_people",
+        "shot_size_correctness",
+        "framing_and_composition"
+      ],
+      "soft_fails": [
+        "cast_cardinality",
+        "subject_scale",
+        "camera_semantics",
+        "scene_scope_correctness",
+        "scene_identity"
+      ],
+      "uncertains": [
+        "duplicate_identity"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4225,
+      "image_tokens": 966,
+      "latency_s": 10.49,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s16_c03": {
+    "shot_id": "s16_c03",
+    "frame": "first",
+    "image_source": "ff_e31e5d65_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜",
+      "柳衣",
+      "萧寒",
+      "周伯"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 4,
+        "people_notes": "左侧蓝衣男子(萧寒?)/中间持伞黑衣女子(柳衣?) /右侧白发老者(周伯?)/背景左侧远处模糊人影",
+        "shot_size_observed": "WS(wide)",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "fail",
+          "note": "expected cast 4人(沈夜/柳衣/萧寒/周伯),observed 3人+背景1模糊人影;沈夜缺失;背景人影若计入则4人但身份不明"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "画面3个主要角色各自外形特征不同,未发现同脸同服装同发型复制成两人的情况"
+        },
+        "unexpected_people": {
+          "status": "uncertain",
+          "note": "背景左侧楼梯处有一个模糊人影,镜头要求4人但场景只应有3明确人物;无法确认是路人还是幻觉silhouette"
+        },
+        "missing_character": {
+          "status": "fail",
+          "note": "沈夜完全不在画面中;柳衣持伞女性可能是但无法确认;萧寒与周伯可能对应但无look参考图验证"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "镜头要求CU(近景),实际画面为WS(全景);人物全身完整可见+大量环境(山脉/建筑/天空)占主体;人物占画面比例过小,不成立CU"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "本镜核心是周伯挡暗器的紧张时刻,人物应是画面主体;但实际画面人物占比小,环境山水建筑占主导,尺度与镜头情绪目的矛盾"
+        },
+        "framing_and_composition": {
+          "status": "fail",
+          "note": "镜头要求周伯挡在沈夜身前、萧寒背景愤怒,实际三人横向并排站姿,无遮挡关系无前后层次;构图违背镜头空间意图"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "镜头未指定特殊机位,仅要求eye level;画面为平视角度,无冲突"
+        },
+        "scene_scope_correctness": {
+          "status": "uncertain",
+          "note": "镜头未指定地点;画面呈现古风山地村落场景,无法判断是否与「场景上下文(Binding)」的地点身份一致"
+        },
+        "identity_look": {
+          "status": "uncertain",
+          "note": "未提供可靠reference look图,无法验证角色发型/发色/服装/身形/标志性特征是否匹配"
+        },
+        "prop_fidelity": {
+          "status": "uncertain",
+          "note": "镜头要求暗器/血伤口,画面无暗器/无出血;持伞女性有伞道具但非镜头要求;老者可辨识为周伯但有刀非暗器;无法判断是否符合"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人物肢体/手部/面部无明显伪影;各手指清晰,无融合或缺失,解剖结构正常"
+        },
+        "scene_identity": {
+          "status": "uncertain",
+          "note": "画面呈现古风山地环境(传统建筑/山峦/石板路),但镜头未指定地点,Binding无额外信息,无法判断场景身份一致性"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "整体图像质量高,光影层次丰富,风格统一,作为分镜图视觉可读性良好"
+        }
+      },
+      "director_feedback": [
+        "镜头要求CU近景但画面实际WS全景;需重生成近景构图聚焦周伯挡暗器动作",
+        "沈夜缺失;镜头要求4人出场,需将沈夜加入画面且在周伯身后位置",
+        "构图要求周伯挡在沈夜身前形成遮挡关系,实际三人并排横向站立;需调整空间布局体现前后层次",
+        "镜头描述周伯肩膀流血口;当前画面无血伤口细节,需补画或重生成",
+        "镜头描述萧寒在背景愤怒;当前萧寒在前景且指向远处;需调整萧寒位置到背景并表现愤怒状态",
+        "持伞女性身份存疑(可能是柳衣);需参考look确认是否为正确角色"
+      ],
+      "summary": "分镜多处重大失败:景别不符(CU变WS)、缺少关键角色沈夜、构图违背遮挡关系、道具细节缺失;画面整体质量高但内容偏离导演意图。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "missing_character",
+        "shot_size_correctness",
+        "framing_and_composition"
+      ],
+      "soft_fails": [
+        "cast_cardinality",
+        "subject_scale"
+      ],
+      "uncertains": [
+        "unexpected_people",
+        "scene_scope_correctness",
+        "identity_look",
+        "prop_fidelity",
+        "scene_identity"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4190,
+      "image_tokens": 966,
+      "latency_s": 14.58,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s15_c03": {
+    "shot_id": "s15_c03",
+    "frame": "first",
+    "image_source": "ff_c8dd44c7_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "萧寒"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 2,
+        "people_notes": "1. 画面左侧站立一名黑紧身衣女性，非预期人物。2. 画面右侧站立一名黑紧身衣男性，即萧寒。",
+        "shot_size_observed": "EWS(extreme wide)",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "fail",
+          "note": "预期1人，实际2人。画面中多出一名女性角色（画面左侧），不符合镜头要求。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "画面中的两名人物（一男一女）外貌特征、服装、体态均明显不同，不存在同一角色复制成多人的情况。"
+        },
+        "unexpected_people": {
+          "status": "fail",
+          "note": "画面左侧出现一名黑色紧身衣女性，不属于镜头指定的“萧寒”或“两名手下”群体。"
+        },
+        "missing_character": {
+          "status": "uncertain",
+          "note": "萧寒已在画面中（右侧男性）。另外两名“手下”在图中未出现，但在EWS中可能因视角极远而处于画面外或被完全遮挡，无法确证缺失，故判定为uncertain。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "期望MS（中景，膝上），实际画面为EWS（远景，人物极小且展现完整建筑）。人物仅占画面很小部分，环境完全为主体，严重不符。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "要求人物作为主体，实际人物在巨大屋檐下显得渺小。人物没有形成视觉焦点，与“萧寒入场”的气势需求相悖。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "虽然景别不对，但从构图角度看，采用对称构图，人物位于中轴线附近，画面具有形式美感，无明显违和。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "画面为正面平视的全景展示，未涉及OTS/POV等特殊机位要求，当前机位无明显语义错误。"
+        },
+        "scene_scope_correctness": {
+          "status": "uncertain",
+          "note": "虽然镜头要求是室内（内景），但图画的是室外大门全景。这是题材的错配，但从场景元素（落雁驿站、雨夜）来看，地点身份是一致的，但范围判定模糊。"
+        },
+        "identity_look": {
+          "status": "pass",
+          "note": "萧寒形象（黑发、低发髻、冷峻）与参考图基本一致。服装虽为黑色紧身衣，符合“黑色劲装”的大方向，尽管质感略显光滑而非粗布纹理。"
+        },
+        "prop_fidelity": {
+          "status": "fail",
+          "note": "镜头明确要求“手中把玩着一枚玉佩”，画面中萧寒双手下垂或持剑，完全没有任何把玩玉佩的动作细节。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人物肢体结构正常，关节比例无明显崩坏或多余肢体，虽有肌肉夸张但不属于伪影。"
+        },
+        "scene_identity": {
+          "status": "uncertain",
+          "note": "参考图要求是“内景大堂正面”。画面却画成了“外景大门全景”。虽然门牌写了字，但从内部空间转换成了外部空间，地点内部属性的展示是错误的。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "画面光影氛围渲染到位，雨夜效果、烛光与暗影的处理具有较强的电影质感，风格统一。"
+        }
+      },
+      "director_feedback": [
+        "严重错景：必须改为MS（中景），目前EWS导致人物太小，无法看清面部表情和情绪。",
+        "严重错场景：从外景切换至内景，必须展示大堂内部和烛光环境，不要只画大门。",
+        "修改动作：删除“把玩玉佩”情节，改为手持长剑或自然垂放，符合刺客冷峻气质。",
+        "修正Cast：增加萧寒的两名手下，目前仅有一人，需补充为三人一组入场。",
+        "调整构图：使用过肩镜头或聚焦人物，不要让萧寒淹没在巨大的屋檐背景中。"
+      ],
+      "summary": "该分镜存在严重错误：将内景误画为外景，景别远不符合要求（EWS代替MS），且人物数量与预期不符，导致核心情感传达失败。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "unexpected_people",
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "cast_cardinality",
+        "subject_scale",
+        "prop_fidelity"
+      ],
+      "uncertains": [
+        "missing_character",
+        "scene_scope_correctness",
+        "scene_identity"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4385,
+      "image_tokens": 966,
+      "latency_s": 136.44,
+      "repairs": 1,
+      "image_count": 1
+    }
+  },
+  "s15_c06": {
+    "shot_id": "s15_c06",
+    "frame": "first",
+    "image_source": "ff_957c2792_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "萧寒",
+      "沈夜",
+      "柳衣"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 4,
+        "people_notes": "1. 左侧黑衣男：疑似萧寒（黑劲装、侧佩剑）；2. 中间撑伞女：疑似柳衣（墨黑长衫、油纸伞）；3. 右侧蓝袍男：沈夜（低发髻、青灰/蓝袍、左腰佩剑，有刀疤，位置在柳衣身侧非身前）；4. 背景门内绿衣人：意外出现的无关路人。",
+        "shot_size_observed": "WS",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "fail",
+          "note": "画面出现4人（含背景路人），镜头要求3人。多出一名背景路人是明显违反。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "未发现明显的同角色复制现象。"
+        },
+        "unexpected_people": {
+          "status": "fail",
+          "note": "画面正后方门口处站立一名绿衣路人，镜头意图中无此人物，属于意外多余人形。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "萧寒、沈夜、柳衣三人均出现在画面中。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "镜头要求medium shot，实际为wide shot。三人全身入画且周围布满建筑，未能体现MS应有的膝上或胸上距离。"
+        },
+        "subject_scale": {
+          "status": "pass",
+          "note": "符合WS构图规律，人物虽远但在场景中占比合理，焦点清晰。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "三人呈三角构图，虽站位略显水平，但主体清晰，无严重构图失误。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "无明显特殊机位要求或冲突。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "环境为外景院落，与落雁驿内部大堂场景不符，但入镜范围符合WS表现逻辑，此处仅做范围判定不判场景错误（见scene_identity）。"
+        },
+        "identity_look": {
+          "status": "pass",
+          "note": "萧寒黑劲装、柳衣黑长衫持伞、沈夜蓝袍腰佩短剑，外形特征基本符合参考描述。"
+        },
+        "prop_fidelity": {
+          "status": "pass",
+          "note": "油纸伞、长剑、短剑形态正确，无异常道具出现。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "肢体比例正常，无明显生成伪影。"
+        },
+        "scene_identity": {
+          "status": "fail",
+          "note": "画面显示的是大雨中的室外庭院（full exterior with sky/moon），而非镜头要求的'内景大堂正面'（主屋内部）。光线和材质均为室外特征，与内部场景严重不符。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "画风统一，光影氛围感强，作为WS外景质量合格。"
+        }
+      },
+      "director_feedback": [
+        "场景错误：画面处于室外院落，必须改为落雁驿内景大堂（背景应为墙壁、门窗、蜡烛而非天空和雨）。",
+        "景别错误：需改为Medium Shot（MS），裁剪掉头顶上方的天空及远处山脉，让人物占据画面主体。",
+        "站位纠正：沈夜应挡在柳衣身前（遮挡柳衣或靠近她），目前沈夜站在柳衣侧面，未形成'挡在前面'的保护姿态。",
+        "清理多余人物：移除正后方门口站立的那个绿衣路人。"
+      ],
+      "summary": "分镜图错把内景大堂画成了外景庭院，且景别从MS变成了WS，还多画了一个背景路人。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "unexpected_people",
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "cast_cardinality",
+        "scene_identity"
+      ],
+      "uncertains": []
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4446,
+      "image_tokens": 966,
+      "latency_s": 97.62,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s16_c08": {
+    "shot_id": "s16_c08",
+    "frame": "first",
+    "image_source": "ff_57064c48_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [],
+    "review": {
+      "observed": {
+        "people_count": 0,
+        "people_notes": "画面中无人物，只有烛台、木桌与窗外雨夜环境。",
+        "shot_size_observed": "CU",
+        "camera_semantics_observed": "高机位/俯视",
+        "scene_visibility": "partial_environment"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "预期无出场人物，实际人数为0，符合镜头意图。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "无角色出现，不存在身份复制问题。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "画面中无背景路人或多余人物，符合无 cast 要求。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "镜头不要求人物出场，无缺失角色。"
+        },
+        "shot_size_correctness": {
+          "status": "pass",
+          "note": "画面以桌面与烛台为视觉主体，符合特写（CU）定义。"
+        },
+        "subject_scale": {
+          "status": "pass",
+          "note": "烛台在画面中占据足够比例，符合特写情绪聚焦目的。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "烛台居中构图，与导演要求一致；光影氛围契合紧张节奏。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "实际呈现高机位俯视视角，符合导演意图的高角度要求。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "特写只展示桌面与窗外局部，未展示全场景，属于正常近景处理。"
+        },
+        "identity_look": {
+          "status": "uncertain",
+          "note": "无可用参考图，无法判断道具/场景设计是否与 Bind 一致。"
+        },
+        "prop_fidelity": {
+          "status": "pass",
+          "note": "烛台形态完整，位于桌面上，符合镜头描述。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "无人物出现，无解剖伪影问题。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "木质墙面、窗户与烛光环境符合室内夜间氛围设定。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "光影层次分明，情绪张力强，作为分镜可用。"
+        }
+      },
+      "director_feedback": [
+        "当前画面为静态烛火，如需表现掌风扫灭瞬间，建议补充火焰熄灭动态帧。"
+      ],
+      "summary": "该镜头严格符合特写调度与无角色出场的要求，烛火作为节奏转折点视觉清晰，氛围把控准确。"
+    },
+    "derived": {
+      "overall": "uncertain",
+      "hard_fails": [],
+      "soft_fails": [],
+      "uncertains": [
+        "identity_look"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 3794,
+      "image_tokens": 966,
+      "latency_s": 25.32,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s16_c07": {
+    "shot_id": "s16_c07",
+    "frame": "first",
+    "image_source": "ff_d2170099_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜",
+      "萧寒"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 2,
+        "people_notes": "左：沈夜（灰蓝色长袍，持短刃）；右：萧寒（黑色劲装，肌肉明显，持剑）；无背景路人或额外人物",
+        "shot_size_observed": "WS",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "expected 2 (沈夜+萧寒)，observed 2，人数匹配"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "无复制现象，两人分别为不同角色"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "无镜头外人物，仅沈夜、萧寒二人"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "沈夜、萧寒均出现，无遗漏角色"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "要求close-up（脸/头肩为画面主体），实际为全身+完整建筑（落雁驿大门+大堂正面+两侧山峦），人物占比极小，景别严重不匹配"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "人物在画面中占比过小（约15%），无法传达'眼神中二十年压抑爆发'的情绪意图，主体被环境淹没"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "对称构图、rule of thirds成立、人物站位平衡，但过度平衡导致情绪张力不足，非硬错配"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "镜头未指定特殊机位，实际为常规正面机位，无矛盾"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "场景入镜完整（落雁驿大门+大堂+雨夜山景），符合'落雁驿-内景大堂正面'的地点身份；近景未画全大堂内部属正常范围"
+        },
+        "identity_look": {
+          "status": "uncertain",
+          "note": "沈夜：低发髻、青灰长袍基本吻合；萧寒：黑色劲装+肌肉明显，但参考图要求'粗布棉麻'有纹理感，画面偏光滑紧身材质，存疑需对照Look图确认"
+        },
+        "prop_fidelity": {
+          "status": "pass",
+          "note": "短刃（沈夜）、长剑（萧寒）均出现；烛火+雨夜符合场景要求"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "手部/面部结构清晰，无多余肢体或融合伪影；远景面部简化属WS常规处理"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "中式瓦顶建筑、落雁驿牌匾、雨夜山景、泥地+血迹，与'落雁驿-内景大堂正面'地点身份高度一致"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "电影感分镜质量高，光影层次丰富，但景别错误导致无法服务于'短刃直刺'的情绪爆发点"
+        }
+      },
+      "director_feedback": [
+        "景别严重错误：expected CU/MS用于传达面部情绪爆发，observed WS全身远景无法建立情感连接，必须重生成为MS或CU",
+        "构图需调整：两人对称并排站位弱化冲突张力，建议改为OTS（过肩从萧寒侧看沈夜）或倾斜构图增强对峙感",
+        "萧寒服装材质存疑：参考要求'粗布棉麻劲装'，画面偏光滑紧身材质，请对照Look v2确认是否需要改设定",
+        "场景范围过大：大堂内部细节（烛火摇曳、翻倒家具、血迹）未入镜，可考虑WS+切MS组合方案，或选MS机位同时保留部分环境",
+        "情绪传达不足：沈夜'眼神怒不可遏'在WS中不可见，近景特写才能传递瞳孔收缩、呼吸急促等细节"
+      ],
+      "summary": "景别硬性失败：镜头要求CU传达面部情绪爆发，实际生成为WS全身远景，人物占比过小，情绪意图完全落空；其余维度基本通过，建议重生成MS/CU版本。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "subject_scale"
+      ],
+      "uncertains": [
+        "identity_look"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4472,
+      "image_tokens": 966,
+      "latency_s": 49.57,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s16_c06": {
+    "shot_id": "s16_c06",
+    "frame": "first",
+    "image_source": "ff_5859e371_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "周伯",
+      "萧寒",
+      "沈夜"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 3,
+        "people_notes": "左侧为两名老年男性（疑似周伯/沈夜），右侧为一名黑衣刺客（萧寒）。三人形态各异，未发现复制克隆。",
+        "shot_size_observed": "WS",
+        "camera_semantics_observed": "正面平视全景",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "画面中人物总数为3人，与镜头意图的expected cast人数完全一致。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "画面内三人（两位老者、一位刺客）面部特征、体型及服装均不相同，未发现重复克隆现象。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "画面内仅出现镜头指定的三名角色，未见路人、背景闲人或幻觉人形。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "周伯、萧寒、沈夜三人均在画面中清晰可见，未出现角色遗漏。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "镜头要求Medium Shot（近景/中景），但实际画面为WS（远景/全景），包含了整个建筑外观及环境，人物占比过小。"
+        },
+        "subject_scale": {
+          "status": "pass",
+          "note": "作为全景建立镜头，人物大小与环境关系正确；但与剧本指示的「近景」目的不符，已在上项指出。"
+        },
+        "framing_and_composition": {
+          "status": "fail",
+          "note": "镜头要求聚焦于「受伤时刻」的近景，但画面构图展示的是人物站在庭院大门外，未能体现门内搏斗或挡刀的特写张力。"
+        },
+        "camera_semantics": {
+          "status": "fail",
+          "note": "镜头要求捕捉「受伤挡刀」动作，应为近景或中景；实际机位为展示整个驿站环境的远景（Wide Shot），语义错位。"
+        },
+        "scene_scope_correctness": {
+          "status": "fail",
+          "note": "场景描述为室内大堂正面（内景），但画面展示的是驿站建筑的室外外观（外墙、山景、庭院），地点属性错误。"
+        },
+        "identity_look": {
+          "status": "uncertain",
+          "note": "右侧黑衣男子符合萧寒设定；左侧两名老者发型胡须略有相似，难以在3人全貌图中确凿区分沈夜的刀疤或蓑衣细节。"
+        },
+        "prop_fidelity": {
+          "status": "fail",
+          "note": "周伯未出现镜头要求的「蓑衣」（Rain cape），也无受伤状态及明显血迹；萧寒手持长棍，而非剑锋划过的姿态。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "三名角色的肢体结构正常，手部、头部比例及姿态无明显伪影或崩坏现象。"
+        },
+        "scene_identity": {
+          "status": "fail",
+          "note": "要求为「内景大堂正面」，但画面为「外景夜间庭院」，虽然建筑形制正确，但室内/室外属性不符。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "虽然是错误构图，但作为静态概念图，光影渲染、水墨风格及整体氛围感质量较高。"
+        }
+      },
+      "director_feedback": [
+        "景别严重错误：目前为建场用远景（WS），需改为Medium Shot聚焦人物近景以传达受伤情节。",
+        "场景位置错误：镜头要求室内（内景大堂），画面却画在室外庭院；请移至室内或重绘。",
+        "关键道具缺失：周伯身上缺少「蓑衣」及血染细节，请修改造型及污渍设计。",
+        "动作状态不符：周伯应呈现「挡刀/受伤忍痛」状态，目前三人均站立且看似无恙。",
+        "氛围偏差：要求dramatic candlelight与chaos，但画面光线均匀如白昼或普通雨夜，请增加烛光与动态光影。"
+      ],
+      "summary": "分镜严重偏离导演意图：将指定的室内近距离特写误作室外全景建立镜头处理，且未体现受伤与蓑衣等关键剧情细节。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "shot_size_correctness",
+        "framing_and_composition"
+      ],
+      "soft_fails": [
+        "camera_semantics",
+        "scene_scope_correctness",
+        "prop_fidelity",
+        "scene_identity"
+      ],
+      "uncertains": [
+        "identity_look"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4554,
+      "image_tokens": 966,
+      "latency_s": 98.05,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s16_c05": {
+    "shot_id": "s16_c05",
+    "frame": "first",
+    "image_source": "ff_cfcfb250_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "柳衣",
+      "萧寒"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 2,
+        "people_notes": "左侧女性：柳衣造型（黑长发、黑衫、颈间玉佩），手持断剑/棍状物；右侧女性：手持油纸伞，黑色长裙，相似发饰。两人均为完整全身像站立姿态，无男性身影。",
+        "shot_size_observed": "EWS",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "fail",
+          "note": "镜头要求柳衣+萧寒两人；画面出现两位女性，无萧寒（预期男性刺客）。实际人物性别与镜头意图不符，人数虽为2但身份错误。"
+        },
+        "duplicate_identity": {
+          "status": "uncertain",
+          "note": "两位女性着装风格相似（深色长袍、黑发），但发型、面部特征、配饰略有差异，无法确认是否为同一角色复制。"
+        },
+        "unexpected_people": {
+          "status": "fail",
+          "note": "镜头未要求任何路人的画面出现两位女性；若右侧人物非萧寒替换，则为多余人物。萧寒完全缺席。"
+        },
+        "missing_character": {
+          "status": "fail",
+          "note": "萧寒（男性刺客）完全不在画面中；画面出现第二位女性，非镜头要求角色。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "镜头要求close-up；实际为EWS（极远景），完整建筑、庭院、山脉尽收画面，人物仅占画面极小部分，景别严重错误。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "近景特写要求剑断瞬间与人物情绪；画面人物占比过小，断剑动作不清晰，场景环境反成主体，镜头目的完全违背。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "构图对称，建筑居中，人物分列左右，雨夜氛围感强。但此优点无法掩盖景别与人物身份的硬伤。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "镜头未指定特殊机位；当前平视全景构图无明显冲突。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "落雁驿内景大堂正面场景可见：匾额、烛火、门窗、雨夜，环境与地点一致，入镜范围符合EWS类型。"
+        },
+        "identity_look": {
+          "status": "fail",
+          "note": "左侧女性似柳衣（黑色长衫、玉佩）但发型/配饰与参考不完全一致；右侧持伞女性非萧寒（参考要求男性刺客、黑色劲装），完全错配。"
+        },
+        "prop_fidelity": {
+          "status": "fail",
+          "note": "镜头要求断剑飞溅、柳衣手臂擦伤、跌坐姿态；画面无人物受伤痕迹，断剑不清晰，无血迹/擦伤细节。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人物解剖结构正常，无多余肢体或面部崩坏；手持物形态可辨识。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "落雁驿建筑样式、烛光、雨夜、泥泞地面与场景上下文一致，氛围感强。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "画面艺术质量高，光影层次丰富，电影感强，色彩脚本完整。"
+        }
+      },
+      "director_feedback": [
+        "景别错误：要求CU近景，实际EWS极远景；需重新生成以特写聚焦断剑瞬间与人物表情。",
+        "角色身份错误：萧寒缺席，画面出现第二位女性；需确保萧寒（男性刺客）出场。",
+        "动作细节缺失：镜头要求剑断飞溅、手臂擦伤、跌坐姿态；当前画面无受伤痕迹。",
+        "道具不完整：断剑与擦伤未呈现；需强化断剑飞溅的动态瞬间。",
+        "人物比例失衡：近景特写要求人物占画面主体；当前人物占比过小无法传达紧张情绪。",
+        "场景氛围偏离：要求室内打斗混乱场景；当前为室外宁静庭院，无打斗痕迹。"
+      ],
+      "summary": "本次分镜存在根本性错误：景别（EWS vs CU）、角色身份（缺萧寒）、动作细节（无断剑/受伤）均不符合镜头意图，需重新生成。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "unexpected_people",
+        "missing_character",
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "cast_cardinality",
+        "subject_scale",
+        "identity_look",
+        "prop_fidelity"
+      ],
+      "uncertains": [
+        "duplicate_identity"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4512,
+      "image_tokens": 966,
+      "latency_s": 165.32,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s17_c01": {
+    "shot_id": "s17_c01",
+    "frame": "first",
+    "image_source": "ff_d4e4a226_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜",
+      "萧寒"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 2,
+        "people_notes": "左侧：沈夜式人物（蓝色长袍，低发髻，腰佩短剑）；右侧：萧寒式人物（黑色紧身劲装，肌肉发达，黑发束后，腰间长剑）。无其他角色或背景人形。",
+        "shot_size_observed": "WS",
+        "camera_semantics_observed": "低机位",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "expected 2, observed 2。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "未发现同一角色的复制体。两人造型、位置均独立。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "未出现镜头外的路人或多余背景人形。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "沈夜、萧寒均已入画。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "场景要求 medium shot 且聚焦柴房内部动作（撞门、发现木箱），但画面呈现极远的 WS，展示落雁驿主屋正面全貌，未满足镜头叙事尺度。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "人物在极宽的全景中显得渺小，无法承载镜头意图中对沈夜状态及‘证据’发现的视觉强调。"
+        },
+        "framing_and_composition": {
+          "status": "fail",
+          "note": "导演要求木箱居中、沈夜在门口。画面构图以主屋大门和对角线围墙为中心，木箱与柴房均未入画，严重偏离构图意图。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "画面存在仰视感，低机位语义成立。"
+        },
+        "scene_scope_correctness": {
+          "status": "fail",
+          "note": "导演意图场景为昏暗的柴房（dusty/shack interior），画面展示的是灯火通明的大堂/正门（Main building），光影、结构与地点身份均不符。"
+        },
+        "identity_look": {
+          "status": "uncertain",
+          "note": "左侧人物服饰与沈夜参考图差异较大（参考为青灰破损血袍，图为整洁蓝袍）；右侧人物服装接近萧寒参考。因缺乏面部细节无法确认身份。"
+        },
+        "prop_fidelity": {
+          "status": "fail",
+          "note": "沈夜手中未持有任何物品，木箱与玉佩均未出现。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人物解剖结构无明显异常。"
+        },
+        "scene_identity": {
+          "status": "fail",
+          "note": "场景被描绘为落雁驿主屋正面大堂（建筑宏伟），而非导演指定的阴暗、陈旧的柴房。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "分镜整体画面质量高，具有电影感的氛围渲染，虽不符合本镜具体意图。"
+        }
+      },
+      "director_feedback": [
+        "必须重新生成；当前是极远全景，而非中景（Medium Shot）。",
+        "镜头焦点错误；需移除主屋前景，将柴房（wooden shack）作为背景。",
+        "人物状态重绘；沈夜需呈现跌入/撞击后的姿态，且衣物应有破损和血迹。",
+        "必须包含关键道具；沈夜手中或身前需出现腐烂的木箱。",
+        "光源调整；场景应昏暗且从缝隙透入微光，而非当前明亮的室内照明。"
+      ],
+      "summary": "画面质量高但根本性偏离导演意图：景别错误（WS vs MS）、地点错误（大堂 vs 柴房）、道具缺失。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "shot_size_correctness",
+        "framing_and_composition"
+      ],
+      "soft_fails": [
+        "subject_scale",
+        "scene_scope_correctness",
+        "prop_fidelity",
+        "scene_identity"
+      ],
+      "uncertains": [
+        "identity_look"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4246,
+      "image_tokens": 966,
+      "latency_s": 113.82,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s17_c03": {
+    "shot_id": "s17_c03",
+    "frame": "first",
+    "image_source": "ff_9633e5e9_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 2,
+        "people_notes": "两个角色外观完全一致（发型/伤疤/蓝袍/短剑），判定为同一角色沈夜的复制。左侧蹲坐，右侧站立。",
+        "shot_size_observed": "WS(wide)",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "fail",
+          "note": "镜头仅要求沈夜1人，画面出现2人。"
+        },
+        "duplicate_identity": {
+          "status": "fail",
+          "note": "画面左侧蹲着的人与右侧站着的人特征完全一致，确认为同一角色的重复生成。"
+        },
+        "unexpected_people": {
+          "status": "fail",
+          "note": "出现非剧本要求的第二个人物。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "沈夜的角色形象出现了。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "导演要求CU（面部特写），实际为包含整座建筑和两人的WS。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "人物在画面中占比过小，环境是主体，违背特写镜头情绪诉求。"
+        },
+        "framing_and_composition": {
+          "status": "fail",
+          "note": "要求面部占据3/4，实际为全景双人构图。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "机位虽非直视特写，但在广角语境下无明显逻辑冲突，主要为景别错误。"
+        },
+        "scene_scope_correctness": {
+          "status": "uncertain",
+          "note": "画面展示的是夜间雨景的 exterior 院落，而非镜头要求内的 落雁驿大堂 (Interior)。"
+        },
+        "identity_look": {
+          "status": "pass",
+          "note": "单个人物造型符合沈夜参考图（低发髻/蓝袍/刀疤）。"
+        },
+        "prop_fidelity": {
+          "status": "pass",
+          "note": "有短剑道具，虽然未清晰展示玉佩，但符合整体造型。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "单看单人形态无明显解剖错误。"
+        },
+        "scene_identity": {
+          "status": "fail",
+          "note": "画面为室外庭院，场景上下文要求为室内大堂。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "画面光影渲染和动画风格质量尚可。"
+        }
+      },
+      "director_feedback": [
+        "镜头完全跑偏，请重置为面部特写构图。",
+        "修正重复生成错误，画面中只保留1个沈夜。",
+        "场景应切换至室内大堂，不要画室外雨景。",
+        "调整景别：沈夜面部需占据画面4/5以上。",
+        "沈夜表情应从迷茫转为坚定，眼神直视镜头。",
+        "手持玉佩并站起身，这是动作重点。"
+      ],
+      "summary": "画面景别（WS vs CU）、构图（双人全景 vs 单人特写）、场景（室外 vs 室内）及人物数量（2 vs 1）均严重不符，判定为重大失败。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "duplicate_identity",
+        "unexpected_people",
+        "shot_size_correctness",
+        "framing_and_composition"
+      ],
+      "soft_fails": [
+        "cast_cardinality",
+        "subject_scale",
+        "scene_identity"
+      ],
+      "uncertains": [
+        "scene_scope_correctness"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4078,
+      "image_tokens": 966,
+      "latency_s": 167.96,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s17_c02": {
+    "shot_id": "s17_c02",
+    "frame": "first",
+    "image_source": "ff_fbb790cc_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 2,
+        "people_notes": "左侧：沈夜正面，右侧：背影人物（疑似同一角色复制），场景为外景庭院雨夜。",
+        "shot_size_observed": "EWS",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "fail",
+          "note": "意图Cast=1，实际2人，且包含疑似复制的同一角色，不符合单人数要求。"
+        },
+        "duplicate_identity": {
+          "status": "fail",
+          "note": "硬故障：画面出现两个造型一致的角色（正面与背影），疑似同一角色的错误复制。"
+        },
+        "unexpected_people": {
+          "status": "fail",
+          "note": "出现镜头未要求的两人，且非单人特写，完全属于意外人物。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "沈夜形象存在于画面中，但场景和比例完全错误。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "意图为Extreme Close-Up（极特写），实际为Extreme Wide Shot（全景），人物仅占极小比例。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "镜头目的是展示玉佩细节，但画面主体是建筑和人物全景，视觉重心完全偏离。"
+        },
+        "framing_and_composition": {
+          "status": "fail",
+          "note": "构图意图为玉佩居中，实际为人物对视角+建筑大场景，完全违背构图要求。"
+        },
+        "camera_semantics": {
+          "status": "fail",
+          "note": "意图无特定机位（或隐含俯拍/特写），实际为平视广角，机位语义不成立。"
+        },
+        "scene_scope_correctness": {
+          "status": "uncertain",
+          "note": "意图为内景大堂，实际画面为外景庭院，存在空间属性矛盾。"
+        },
+        "identity_look": {
+          "status": "pass",
+          "note": "人物造型符合沈夜·战斗伤损造型（伤疤、发髻、血渍长袍）。"
+        },
+        "prop_fidelity": {
+          "status": "fail",
+          "note": "意图道具为'玉佩'与'账本'，画面中只有打开的巨大账本，缺少关键道具玉佩。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人物解剖结构无明显严重伪影，手指轮廓清晰。"
+        },
+        "scene_identity": {
+          "status": "fail",
+          "note": "意图为落雁驿内景，画面显示为外景，虽然都有雨和建筑，但空间归属错误。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "渲染质量尚可，具有电影感，光影层次丰富。"
+        }
+      },
+      "director_feedback": [
+        "景别严重错误：由ECU/CU错生成为EWS，需重新生成极特写镜头。",
+        "道具缺失：画面中未见'玉佩'，请确保玉佩雕刻'赵'字并占据画面中心。",
+        "场景属性错误：意图为内景大堂，实际生成外景庭院，请修正Binding上下文。",
+        "多人物错误：出现了两个沈夜（正面与背面），请修正重复角色问题，保持Cast=1。",
+        "账本比例错误：账本在ECU镜头中不应占据地面巨大区域，需符合微距透视。"
+      ],
+      "summary": "本次分镜在景别、构图、道具、角色数量及场景属性上均严重偏离导演意图，判定为Fail。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "duplicate_identity",
+        "unexpected_people",
+        "shot_size_correctness",
+        "framing_and_composition"
+      ],
+      "soft_fails": [
+        "cast_cardinality",
+        "subject_scale",
+        "camera_semantics",
+        "prop_fidelity",
+        "scene_identity"
+      ],
+      "uncertains": [
+        "scene_scope_correctness"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4233,
+      "image_tokens": 966,
+      "latency_s": 117.91,
+      "repairs": 1,
+      "image_count": 1
+    }
+  },
+  "s17_c07": {
+    "shot_id": "s17_c07",
+    "frame": "first",
+    "image_source": "ff_5b0fe808_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜",
+      "萧寒"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 2,
+        "people_notes": "1. 左侧站立男性，疑似沈夜，身着蓝灰色长袍，手持棍状物，面部可见刀疤；2. 右侧站立男性，疑似萧寒，身着黑色紧身衣，身材健硕。无其他背景人物。",
+        "shot_size_observed": "WS(wide)",
+        "camera_semantics_observed": "正面平视角度",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "画面中沈夜与萧寒两人均出现，expected=2 observed=2，符合镜头要求。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "两名角色外貌、服装、造型显著不同，未发现同一角色的重复克隆现象。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "画面中除主角二人外，无路人、额外士兵或其他无关人形。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "沈夜、萧寒两位预期人物均在画面前景清晰显现，无遗漏。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "导演要求extreme wide shot（极远景，强调孤独感与环境）。实际图为广角镜头（Wide Shot），人物在画面中占据显著比例，且环境展示为完整院落而非孤立于山野的远景，严重偏离景别要求。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "画面意图是表现人物在雨夜环境中的渺小与孤独。当前构图人物过大，缺乏远景应有的空间感和渺小感。"
+        },
+        "framing_and_composition": {
+          "status": "fail",
+          "note": "人物采用双人并排站立的正面构图，像角色定妆照或海报，不符合'跌入'的动态或'极远景'的叙事氛围要求。"
+        },
+        "camera_semantics": {
+          "status": "fail",
+          "note": "导演要求high angle（高机位）俯瞰场景。实际画面为平视（eye-level），人物与建筑处于同一透视平面，缺乏高空鸟瞰的压迫感。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "虽然景别不符，但画面确实展示了落雁驿的完整外景范围（含月亮、雨夜、远山），范围上是充分的。"
+        },
+        "identity_look": {
+          "status": "uncertain",
+          "note": "沈夜形象大致符合（黑发、长袍、有疤），但未见'鲜血'、'破损'、'蓑衣'等战斗伤损细节，且手持木棍与'短剑在鞘'描述不符。萧寒形象基本符合。"
+        },
+        "prop_fidelity": {
+          "status": "uncertain",
+          "note": "左侧沈夜手中持有一根长棍/短棒，与设定中'腰间短剑在鞘中'不符。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人物肢体结构正常，无明显伪影或多出肢体。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "场景包含中式瓦房、牌匾、石井，符合落雁驿的古代背景设定。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "画面光影效果、雨夜氛围渲染良好，色彩协调，具备较高的电影分镜质量。"
+        }
+      },
+      "director_feedback": [
+        "严重偏离景别要求：需要重新生成为极远景(Extreme Wide Shot)，让人物成为环境中的微小剪影。",
+        "修改机位：需要High Angle（高机位/俯视），俯瞰落雁驿全貌，体现雨夜的压抑和神秘。",
+        "调整构图：取消双人正面站立，表现'跌入门内'的动态瞬间或沈夜在昏暗光线中一闪而过的背影。",
+        "还原细节：沈夜需增加'战斗伤损'特征（血迹、破损衣物、蓑衣），去除多余的木棍道具。",
+        "减少干扰：前景不要放置过多的石井、柱子等元素阻挡视线，确保视觉焦点集中在人物与建筑的关系上。"
+      ],
+      "summary": "分镜图完全未能满足导演意图：核心问题在于景别（WS误用为EWS）、机位（平视误用为高机位）及构图（静态人像误用为动态叙事），导致原本应展现的孤寂、紧张的氛围全部丢失。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "shot_size_correctness",
+        "framing_and_composition"
+      ],
+      "soft_fails": [
+        "subject_scale",
+        "camera_semantics"
+      ],
+      "uncertains": [
+        "identity_look",
+        "prop_fidelity"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4518,
+      "image_tokens": 966,
+      "latency_s": 96.14,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s17_c06": {
+    "shot_id": "s17_c06",
+    "frame": "first",
+    "image_source": "ff_e16fd301_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 2,
+        "people_notes": "1. 沈夜（坐于案前，左侧）：符合 Look（发髻、刀疤、长袍）。2. 另一位古装男子（右侧站立）：画面存在镜头未要求的额外人物。",
+        "shot_size_observed": "WS (Wide Shot)",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "fail",
+          "note": "镜头意图为单人 close-up（沈夜），画面实际呈现 2 人，人物数量不符。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "画面中两人着装、面部特征及神态差异明显，未见同一角色复制情况。"
+        },
+        "unexpected_people": {
+          "status": "fail",
+          "note": "镜头未安排其他角色，画面右侧出现一位站立的古装男子，属于多余的意外人物。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "期望角色沈夜已在画面左侧清晰出现，且妆容符合 Look 设定。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "镜头要求 Close-up（特写），实际为 Wide Shot（全景/远景），包含整个建筑与背景群山。"
+        },
+        "subject_scale": {
+          "status": "pass",
+          "note": "作为全景构图，人物在环境中的比例与空间关系自然，并非比例失调的微小点。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "双人对峙/并置构图均衡，视觉重心清晰，符合画面实际呈现的布局意图。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "无特殊机位要求（OTS/POV等），实际为标准正面平视机位，与场景不冲突。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "展示了落雁驿内外景全貌，环境符合场景上下文（雨夜、驿站、古建筑）。"
+        },
+        "identity_look": {
+          "status": "pass",
+          "note": "沈夜的造型（刀疤、发髻、服饰）与提供的参考 Look 高度一致。"
+        },
+        "prop_fidelity": {
+          "status": "pass",
+          "note": "沈夜手持/观看账本的动作正确，账本上的红色痕迹（血渍/文字）符合镜头细节描述。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人物肢体结构正常，手部握笔/放置动作自然，无明显伪影或崩坏。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "建筑样式、牌匾（落雁）、雨天氛围与「落雁驿 - 内景大堂/外景」的上下文高度一致。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "画面具有电影感与戏剧张力，光影层次丰富，虽然景别不符但作为分镜图质量良好。"
+        }
+      },
+      "director_feedback": [
+        "严重失配：镜头要求 Close-up（特写），画面实为 WS（全景），必须重选景。",
+        "移除画面上右侧站立的第二位男子，剧本此处应为单人沈夜。",
+        "推近镜头至沈夜手部与账本，聚焦于血迹与字迹细节，强调情绪而非环境。",
+        "若保留双人互动意图，导演需求应改为两人对话中景，而非单人看账本的近景。",
+        "确认沈夜的坐姿低矮程度，以确保特写时背景不至于过于杂乱或突兀。"
+      ],
+      "summary": "本次审查主要失败在于景别严重错误（WS vs 要求 CU）及多出画面外无关人物，沈夜角色本身造型准确。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "unexpected_people",
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "cast_cardinality"
+      ],
+      "uncertains": []
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4110,
+      "image_tokens": 966,
+      "latency_s": 252.77,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s18_c02": {
+    "shot_id": "s18_c02",
+    "frame": "first",
+    "image_source": "ff_7f2b87bf_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜",
+      "柳衣",
+      "萧寒"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 3,
+        "people_notes": "沈夜：左侧穿青灰长袍、手持长剑的男性。柳衣：右侧撑油纸伞的女性。萧寒：画面中央穿黑色紧身劲装、肌肉发达的男性。三人形态差异明显，非复制身份。",
+        "shot_size_observed": "WS(wide)",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "沈夜、柳衣、萧寒三人均出现在画面中，符合镜头要求的cast数量。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "三人形象差异显著（服饰、体型、道具），未见疑似同一角色复制的情况。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "画面中仅有三名主要角色，未出现镜头未要求的路人、士兵或背景闲人。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "三位指定角色（沈夜、柳衣、萧寒）均已入镜，无缺失。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "镜头要求CU（近景/特写），实际画面为WS（全景）。画面包含完整建筑、庭院和天空，远非沈夜的特写，严重偏离镜头意图。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "虽然三个人物是画面焦点，但人物在宏大场景中占比过小，无法体现沈夜眼神决绝的特写情绪，主体占比严重不足。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "构图遵循三分法，三人呈三角站位分布在画面前景至中景，视觉焦点层级清晰，符合电影感。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "镜头为平视广角，未要求特殊机位，画面实际内容无明显机位冲突。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "虽然景别错误导致场景范围过大，但入镜的落雁驿、大堂、雨夜等局部元素与镜头要求的地点和状态完全一致，没有环境矛盾。"
+        },
+        "identity_look": {
+          "status": "uncertain",
+          "note": "沈夜发型大致符合，但面部未呈现明显刀疤；柳衣手持油纸伞与描述中'紧握断剑'矛盾，且未见明显手臂伤口；萧寒造型差异较大。因景别过远（WS），难以精确比对细节特征。"
+        },
+        "prop_fidelity": {
+          "status": "fail",
+          "note": "柳衣手持油纸伞，而意图要求她'紧握断剑'；沈夜持长剑而非短剑；萧寒服装与'黑色粗布棉麻'描述有出入，呈现为现代风格紧身衣。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "三人解剖结构正常，无明显多余肢体、融合或崩坏。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "场景呈现传统中式建筑、雨夜、月亮，符合落雁驿内景大堂正面的时代感和氛围。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "图像光影层次丰富，雨夜氛围营造到位，色彩脚本（冷蓝月光对比暖黄烛光）具有电影质感，整体艺术质量高。"
+        }
+      },
+      "director_feedback": [
+        "必须将景别从WS调整为CU，聚焦沈夜面部以体现眼神决绝。",
+        "柳衣道具改为紧握断剑，移除油纸伞，并明确显示手臂血伤。",
+        "修正萧寒造型，还原东方历史风格的粗布棉麻劲装。",
+        "调整沈夜和萧寒的武器，沈夜使用短剑，萧寒配长剑。",
+        "确保柳衣服装符合战后破损、血迹斑斑的描述。"
+      ],
+      "summary": "图像在艺术质量上表现出色，但存在严重的景别错误（WS vs CU）和关键道具/造型不符（柳衣持伞非断剑、萧寒服装现代），导致分镜完全偏离导演意图。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "subject_scale",
+        "prop_fidelity"
+      ],
+      "uncertains": [
+        "identity_look"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4677,
+      "image_tokens": 966,
+      "latency_s": 123.67,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s18_c05": {
+    "shot_id": "s18_c05",
+    "frame": "first",
+    "image_source": "ff_7ff9bebd_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "萧寒"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 1,
+        "people_notes": "萧寒，画面主体人物，无其他任何人形。",
+        "shot_size_observed": "WS",
+        "camera_semantics_observed": "正面",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "画面中仅萧寒一人，符合expected cast人数。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "未发现同一角色被复制成多人的情况。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "无路人、额外士兵或其他镜头未要求的人物形存在。"
+        },
+        "missing_character": {
+          "status": "fail",
+          "note": "意图要求站在柴房门口，画面萧寒位于庭院中央而非门口位置。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "意图要求medium shot（膝上），实际为wide shot（全身+大量环境）。"
+        },
+        "subject_scale": {
+          "status": "pass",
+          "note": "人物作为画面视觉主体成立，虽处远景但占比清晰。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "构图居中对称，人物与环境关系明确，符合电影分镜要求。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "正面视角无特殊机位要求，符合画面实际。"
+        },
+        "scene_scope_correctness": {
+          "status": "fail",
+          "note": "场景要求内景（落雁驿-大堂），画面却是外景/庭院雨夜，地点错误。"
+        },
+        "identity_look": {
+          "status": "pass",
+          "note": "黑发低发髻、黑色劲装、面部冷峻轮廓与参考图基本一致。"
+        },
+        "prop_fidelity": {
+          "status": "fail",
+          "note": "意图要求长剑滴血，画面长剑归鞘且无明显血迹细节。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人体结构完整，无明显伪影。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "雨夜、古建筑、落雁驿站牌匾与场景上下文相符。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "图像质量高，光影层次丰富，具有电影感，但场景与意图不符。"
+        }
+      },
+      "director_feedback": [
+        "修改镜头为内景柴房门口站位，而非庭院中央",
+        "调整景别至medium shot，聚焦人物膝上区域",
+        "在长剑上添加滴血细节以符合意图",
+        "保留夜雨氛围但切换至室内或门口空间"
+      ],
+      "summary": "画面艺术质量高但场景内外景错配、景别偏大、道具细节缺失，需重生成匹配导演意图。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "missing_character",
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "scene_scope_correctness",
+        "prop_fidelity"
+      ],
+      "uncertains": []
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 3843,
+      "image_tokens": 966,
+      "latency_s": 22.12,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s18_c03": {
+    "shot_id": "s18_c03",
+    "frame": "first",
+    "image_source": "ff_40db067f_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜",
+      "柳衣",
+      "萧寒"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 3,
+        "people_notes": "左侧蓝袍男子(沈夜?)、中间持伞黑衣女子(柳衣?)、右侧黑色劲装男子(萧寒?)。三人清晰可见，无背景路人或疑似复制。",
+        "shot_size_observed": "WS",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "Expected 3 characters (沈夜/柳衣/萧寒), observed 3 people. Cardinality matches intent."
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "Three distinct characters with different outfits and appearances. No duplication detected."
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "Only the three expected characters visible. No extra silhouettes or background figures."
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "All three expected characters (沈夜/柳衣/萧寒) are present in the frame."
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "Intent requires MS (medium shot), but observed is WS. Full bodies + extensive environment dominate. Character scale is t"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "At WS, characters appear as small figures in large environment. Subject does not dominate frame. This contradicts scene'"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "Characters stand roughly in horizontal formation across frame. Slight compositional balance achieved despite scale misma"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "No specific camera semantics required (eye level default). Actual framing neutral, no conflict."
+        },
+        "scene_scope_correctness": {
+          "status": "fail",
+          "note": "Intent: 内景大堂正面 (interior hall). Observed: full exterior courtyard with building facade visible. Scene type mismatch - in"
+        },
+        "identity_look": {
+          "status": "fail",
+          "note": "1) 柳衣: intended right arm bandaged with blood seepage, holding broken sword. Observed: left arm visible, no bandage, hol"
+        },
+        "prop_fidelity": {
+          "status": "fail",
+          "note": "Multiple prop mismatches: 柳衣 holds umbrella instead of broken sword; 沈夜 has no sword at waist; 柳衣 arm not bandaged/blood"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "Anatomy appears coherent. No impossible limbs or fusion artifacts detected. 萧寒 muscular rendering may be exaggerated but"
+        },
+        "scene_identity": {
+          "status": "uncertain",
+          "note": "Building shows Chinese-style architecture with signboard (落雁驿?) and traditional roof. Could match location, but interior"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "High cinematic quality, atmospheric rain lighting, rich color grading, proper anime feature aesthetic. Image is visually"
+        }
+      },
+      "director_feedback": [
+        "Shot size mismatch: generate as MS (medium shot) to fill frame with characters, reduce environmental dominance.",
+        "Scene scope error: this is interior hall shot, not exterior courtyard - regenerate showing interior space with candlelight.",
+        "Character injuries missing: 沈夜 needs facial scar, bloody damaged robe, sword at waist; 柳衣 needs bloody arm bandage, broken sword, disheveled hair.",
+        "萧寒 costume error: use textured rough cloth 劲装 (loose fit), not formfitting muscular suit.",
+        "Prop fidelity: ensure 柳衣 holds broken sword, not umbrella; both characters show battle damage per look references.",
+        "Subject scale: MS should have characters as visual priority, not miniature figures in wide environment."
+      ],
+      "summary": "Hard gate fails on shot_size (WS vs MS), scene_scope (exterior vs interior), identity_look (multiple character appearance errors), and prop_fidelity (wrong props, missing injuries). Image has strong visual quality but fundamentally misaligns with director intent."
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "subject_scale",
+        "scene_scope_correctness",
+        "identity_look",
+        "prop_fidelity"
+      ],
+      "uncertains": [
+        "scene_identity"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4761,
+      "image_tokens": 966,
+      "latency_s": 135.41,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s18_c01": {
+    "shot_id": "s18_c01",
+    "frame": "first",
+    "image_source": "ff_00407b98_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜",
+      "柳衣",
+      "萧寒"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 6,
+        "people_notes": "前景三位：蓝袍沈夜、黑衣柳衣、黑衣萧寒。背景远处有3名无剧本的路人形。",
+        "shot_size_observed": "WS",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "fail",
+          "note": "镜头要求3人，实际出现6人人形（含3名背景路人），超出镜头要求的观众。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "三人造型各异，未见相同脸部或服装的复制体。"
+        },
+        "unexpected_people": {
+          "status": "fail",
+          "note": "镜头只要求沈夜、柳衣、萧寒三人，但画面背景出现了至少3名无剧本依据的路人。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "沈夜、柳衣、萧寒三人均在画面前景出现，无明显缺位。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "镜头要求中景(MS)，但画面中人物仅为全身加完整街道环境，判定为全景(WS)。"
+        },
+        "subject_scale": {
+          "status": "pass",
+          "note": "人物虽在远景较小，但三人作为主体占据前景C位，符合WS叙事目的。"
+        },
+        "framing_and_composition": {
+          "status": "fail",
+          "note": "构图意图是沈夜与柳衣面对面、玉佩在两人之间，但画面呈现三人在街道上并排站立，完全违背构图指令。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "镜头未指定特殊机位，画面呈现平视视角，与实际一致。"
+        },
+        "scene_scope_correctness": {
+          "status": "fail",
+          "note": "导演意图明确描述'走出柴房'，画面却呈现宽阔的古代街道，与柴房场景设定矛盾。"
+        },
+        "identity_look": {
+          "status": "uncertain",
+          "note": "无可用的参考Look图进行比对，无法确认角色外观一致性。"
+        },
+        "prop_fidelity": {
+          "status": "fail",
+          "note": "镜头要求沈夜手持玉佩和账本，但画面中未见任何玉佩或账本。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人物比例和解剖结构正常，无明显多余肢体或崩坏伪影。"
+        },
+        "scene_identity": {
+          "status": "fail",
+          "note": "意图为'柴房'场景，画面却是开阔的古镇街道，场景身份严重不符。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "画面整体渲染质量高，光影清晰，风格统一。"
+        }
+      },
+      "director_feedback": [
+        "Expected MS, Observed WS: 需重新生成以符合中景要求，确保人物膝上可见。",
+        "Scene Mismatch: 导演要求'柴房'，画面却是街道，请更换场景上下文。",
+        "Composition Fail: 构图为三人并排，偏离了'面对面'的意图，请调整站位。",
+        "Missing Props: 玉佩和账本作为核心道具缺失，必须添加。",
+        "Unexpected Extras: 背景中有3名无关路人，需移除以符合只有3名角色的要求。"
+      ],
+      "summary": "硬门槛多重失败：景别错误、场景不符、构图错配、道具缺失、路人多余。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "unexpected_people",
+        "shot_size_correctness",
+        "framing_and_composition"
+      ],
+      "soft_fails": [
+        "cast_cardinality",
+        "scene_scope_correctness",
+        "prop_fidelity",
+        "scene_identity"
+      ],
+      "uncertains": [
+        "identity_look"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4234,
+      "image_tokens": 966,
+      "latency_s": 158.51,
+      "repairs": 1,
+      "image_count": 1
+    }
+  },
+  "s18_c06": {
+    "shot_id": "s18_c06",
+    "frame": "first",
+    "image_source": "ff_cb8501a9_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 2,
+        "people_notes": "正面人物：男性，束发髻，青灰长袍，腰间短剑在鞘，面部有伤痕，站立姿态；背面人物：男性，束发髻，同样青灰长袍，侧背对镜头，体型相似。两人外形高度相近，疑似同一角色被复制成两个独立人形出现在画面中。",
+        "shot_size_observed": "WS",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "fail",
+          "note": "镜头expected cast=1（仅沈夜），画面出现2个类似角色人形，不符合单人物特写意图。"
+        },
+        "duplicate_identity": {
+          "status": "fail",
+          "note": "hard gate。画面左侧正面人物与右侧背对人物发型（低发髻+散乱发丝）、身形、服装、腰间短剑位置高度相似，疑似同一角色被复制成两个人出现在画面中。"
+        },
+        "unexpected_people": {
+          "status": "fail",
+          "note": "镜头仅要求沈夜一人，画面出现第二个相似人形（右侧背对者），非导演意图中的人物。"
+        },
+        "missing_character": {
+          "status": "uncertain",
+          "note": "沈夜角色特征（刀疤、发髻、破损长袍、鲜血）无法精确比对，因实际为WS而非特写，面部细节不可辨。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "镜头要求ECU（extreme close-up）玉佩特写，画面实际为WS全景，展示落雁驿整座建筑及两人全身+完整环境，严重偏离特写意图。"
+        },
+        "subject_scale": {
+          "status": "fail",
+          "note": "ECU目的应是展示玉佩雕工与刻字作为画面主体，画面主体为两人与整栋建筑，无任何玉佩或手部细节呈现。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "双人对称构图，中间水井形成引导线，两侧建筑平衡，构图技术上可接受，但与ECU镜头意图无关。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "镜头未指定特殊机位，实际为平视全景，无冲突。"
+        },
+        "scene_scope_correctness": {
+          "status": "pass",
+          "note": "全场景入镜（落雁驿内景大堂正面、雨夜、远山、庭院水井）与场景上下文Binding完全一致，雨夜氛围浓厚。"
+        },
+        "identity_look": {
+          "status": "uncertain",
+          "note": "WS距离无法清晰辨识沈夜Look关键特征（刀疤、发型细节、破损程度），需CU/ECU才能准确比对参考图。"
+        },
+        "prop_fidelity": {
+          "status": "pass",
+          "note": "画面中出现短剑在鞘、庭院水井、堂内烛台等道具，无与意图矛盾的道具。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人物四肢、手指、面部基本完整，无明显生成伪影。"
+        },
+        "scene_identity": {
+          "status": "pass",
+          "note": "建筑样式（中式瓦顶、木柱、牌匾）、雨夜氛围、烛光冷暖对比与「落雁驿-内景大堂正面」完全吻合。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "画面风格统一，光影层次丰富，雨夜氛围强烈，作为电影分镜整体质量良好。"
+        }
+      },
+      "director_feedback": [
+        "镜头id s18_c06 要求ECU玉佩特写，当前为WS全景，需重新生成聚焦沈夜手中玉佩的特写画面。",
+        "画面出现两个相似角色（左右对称），疑似角色复制，需删除右侧背对人物，仅保留沈夜单人。",
+        "ECU特写应突出玉佩雕工与刻字细节，建议镜头改为沈夜手持玉佩的近景或特写，烛光照亮玉佩表面。",
+        "当前双人构图不符合单人物证据展示的镜头意图，应改为沈夜独自在烛光下查看玉佩。",
+        "若需保留环境，可考虑MS景别展示沈夜在落雁驿大堂内的姿态，但必须聚焦单人。",
+        "Look参考特征（刀疤、破损服饰）因距离过远无法验证，建议后续特写镜头加强细节呈现。"
+      ],
+      "summary": "hard gate失败：镜头要求ECU玉佩特写，实际为WS全景且疑似同一角色被复制成两个人物同时出现在画面中，严重偏离导演意图。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "duplicate_identity",
+        "unexpected_people",
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "cast_cardinality",
+        "subject_scale"
+      ],
+      "uncertains": [
+        "missing_character",
+        "identity_look"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4379,
+      "image_tokens": 966,
+      "latency_s": 31.21,
+      "repairs": 0,
+      "image_count": 1
+    }
+  },
+  "s18_c07": {
+    "shot_id": "s18_c07",
+    "frame": "first",
+    "image_source": "ff_103ed878_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "柳衣",
+      "沈夜"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 2,
+        "people_notes": "1. 女性角色（疑似柳衣）：位于画面左侧，黑长直发整洁，无血迹或伤损，手持不明物体。2. 男性角色（疑似沈夜）：位于画面右侧，手持油纸伞和剑，无面部刀疤，衣着整洁无明显血渍。",
+        "shot_size_observed": "WS(wide)",
+        "camera_semantics_observed": "none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "预期2人（柳衣、沈夜），画面2人，符合。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "未发现同一角色复制成两个人的情况。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "画面仅出现两位主要人物，无其他路人或背景闲人。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "柳衣与沈夜均在画面中可见。"
+        },
+        "shot_size_correctness": {
+          "status": "fail",
+          "note": "导演意图要求close-up（特写），实际画面为WS全身远景，人物占画面极小，严重不符。"
+        },
+        "subject_scale": {
+          "status": "pass",
+          "note": "作为WS展示环境关系，人物大小符合全景逻辑。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "对称式构图展示建筑与环境，符合广角叙事意图。"
+        },
+        "camera_semantics": {
+          "status": "fail",
+          "note": "导演意图要求high angle（高机位），实际画面接近平视角度，未体现高机位优势。"
+        },
+        "scene_scope_correctness": {
+          "status": "uncertain",
+          "note": "场景为室外庭院，Binding指定'内景大堂'，场景位置不一致，无法确认是否符合'落雁驿'身份。"
+        },
+        "identity_look": {
+          "status": "fail",
+          "note": "柳衣无战损/血迹/断发；沈夜无刀疤/蓑衣破损/血渍，均严重偏离Look参考图。"
+        },
+        "prop_fidelity": {
+          "status": "fail",
+          "note": "沈夜手中为油纸伞而非玉佩；柳衣未见家族信物玉佩或被关注的动作。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "肢体结构正常，无明显生成伪影。"
+        },
+        "scene_identity": {
+          "status": "uncertain",
+          "note": "画面风格符合东方水墨质感，但场景为室外雨夜，与'内景大堂'描述冲突。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "画面渲染质量良好，光影氛围到位，具备电影感。"
+        }
+      },
+      "director_feedback": [
+        "需要修改为近景特写，聚焦柳衣面部表情变化。",
+        "需要使用高机位俯拍视角。",
+        "需要修正柳衣造型：增加重伤战损、血渍、断发细节。",
+        "需要修正沈夜造型：增加面部刀疤、蓑衣破损及血渍。",
+        "镜头必须包含沈夜手中玉佩的特写以展现认信物的情节。",
+        "场景应移至内景大堂而非室外庭院。"
+      ],
+      "summary": "Hard Gate Fail: 关键错误包括景别不符(CU→WS)、机位不符(High Angle→Eye Level)、造型不符(Look参考偏离)、道具缺失(玉佩未现)及场景位置错误(外景vs内景)。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [
+        "shot_size_correctness"
+      ],
+      "soft_fails": [
+        "camera_semantics",
+        "identity_look",
+        "prop_fidelity"
+      ],
+      "uncertains": [
+        "scene_scope_correctness",
+        "scene_identity"
+      ]
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4244,
+      "image_tokens": 966,
+      "latency_s": 20.02,
+      "repairs": 1,
+      "image_count": 1
+    }
+  },
+  "s18_c08": {
+    "shot_id": "s18_c08",
+    "frame": "first",
+    "image_source": "ff_ea40013b_1",
+    "scene_reference_mode": "before",
+    "expected_cast": [
+      "沈夜",
+      "柳衣",
+      "萧寒"
+    ],
+    "review": {
+      "observed": {
+        "people_count": 3,
+        "people_notes": "左侧蓝灰长袍男子（疑似沈夜）、中间黑色紧身劲装男子（疑似萧寒）、右侧持伞黑衣女子（疑似柳衣）。无背景路人。未发现同脸/同发复制品。",
+        "shot_size_observed": "WS(wide)",
+        "camera_semantics_observed": "eye level/none",
+        "scene_visibility": "full_location"
+      },
+      "dimensions": {
+        "cast_cardinality": {
+          "status": "pass",
+          "note": "画面人物总数3人，与镜头expected cast（沈夜、柳衣、萧寒）人数一致。"
+        },
+        "duplicate_identity": {
+          "status": "pass",
+          "note": "画面三人造型各异，未见同脸/同发/同服装的重复人员。"
+        },
+        "unexpected_people": {
+          "status": "pass",
+          "note": "画面仅出现三名主要角色，未发现有镜头未要求的背景路人或闲杂人形。"
+        },
+        "missing_character": {
+          "status": "pass",
+          "note": "沈夜、柳衣、萧寒三人均在画面中出现，无缺失。"
+        },
+        "shot_size_correctness": {
+          "status": "pass",
+          "note": "画面为全景大远景，可见完整建筑外观和远处山脉，符合director要求的wide shot。"
+        },
+        "subject_scale": {
+          "status": "pass",
+          "note": "画面中人物虽占比较小，但在Wide Shot语境下，人物作为清晰剪影主体存在，符合镜头目的。"
+        },
+        "framing_and_composition": {
+          "status": "pass",
+          "note": "三人横向排开形成对峙三角构图，视线方向明确指向对方，具有戏剧张力。但三人呈并排站立，未呈现要求中的'背靠背'姿态。"
+        },
+        "camera_semantics": {
+          "status": "pass",
+          "note": "摄像机处于人眼平视角度，画面无特殊机位遮挡或透视变形，构图正常。"
+        },
+        "scene_scope_correctness": {
+          "status": "fail",
+          "note": "场景为室外庭院夜景，有河流和远山；而镜头要求场景为'内景大堂正面 (主屋内部)'，场景地点严重不符。"
+        },
+        "identity_look": {
+          "status": "fail",
+          "note": "1. 沈夜应为'战损造型'且需显'刀疤'，但图中人物身穿整齐蓝袍，无明显伤损与血迹；2. 萧寒要求'体型魁梧'、'黑劲装'、'低发髻'，图中人物过于精瘦（肌肉感像健美型），发型为披肩短发；3. 柳衣应'黑发打结'且手持'断剑'，图中人物长发"
+        },
+        "prop_fidelity": {
+          "status": "fail",
+          "note": "柳衣手持油纸伞（意图未要求且不符合战后重伤形象）；柳衣应持有折断的剑柄；背景柴房门（半开）缺失，且场景为完整的建筑物而非门洞。"
+        },
+        "anatomy_artifact": {
+          "status": "pass",
+          "note": "人物四肢完整，无明显多余肢体、融合或崩坏等生成伪影。"
+        },
+        "scene_identity": {
+          "status": "fail",
+          "note": "意图要求场景身份为'落雁驿 - 内景大堂'（主屋内部，烛光摇曳），但画面展示的是'落雁驿'外部的河流与庭院（夜间户外），空间属性（Indoor vs Outdoor）彻底矛盾。"
+        },
+        "overall_quality": {
+          "status": "pass",
+          "note": "渲染质量尚可，光影氛围尚可，但未能服务于当前的战斗对峙剧情。"
+        }
+      },
+      "director_feedback": [
+        "重绘场景：必须将背景改为室内大堂，增加摇曳烛光与雨夜氛围，移除外部河流与远山。",
+        "修正角色位置：沈夜与柳衣必须改为'背靠背'站立姿态，萧寒面对他们。",
+        "重塑沈夜造型：需换上破损染血的青灰长袍，增加左脸刀疤及战损状态。",
+        "重塑萧寒造型：需增加身材魁梧度，改为紧致劲装与低发髻，去除紧身健身肌肉感。",
+        "修正柳衣道具与造型：去除雨伞，改为手持折断剑柄；发型改为凌乱散开，增加面部污迹与血迹。"
+      ],
+      "summary": "镜头景别（WS）正确，但场景完全画错（画成了外景而非内景），角色造型、战损状态及武器道具（尤其是雨伞错误替换了断剑）均严重偏离要求，且三人站位未体现关键的'背靠背'对峙姿态。"
+    },
+    "derived": {
+      "overall": "needs_fix",
+      "hard_fails": [],
+      "soft_fails": [
+        "scene_scope_correctness",
+        "identity_look",
+        "prop_fidelity",
+        "scene_identity"
+      ],
+      "uncertains": []
+    },
+    "telemetry": {
+      "model": "agnes-2.5-flash",
+      "total_tokens": 4727,
+      "image_tokens": 966,
+      "latency_s": 97.71,
+      "repairs": 0,
+      "image_count": 1
+    }
+  }
+}
