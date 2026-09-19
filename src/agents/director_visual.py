@@ -208,6 +208,14 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
             raise AgentError("bad_arguments",
                              f"reference_policy 必须是 legacy_allowed | bound_required，"
                              f"得到: {reference_policy}")
+        # Phase D2（30.md §6）：场景参考策略透传到生成 handler（省略=None→adapter 默认 full）
+        scene_reference_mode = (str(args.get("scene_reference_mode") or "").strip().lower()
+                                or None)
+        if scene_reference_mode is not None and scene_reference_mode not in (
+                "full", "context_only", "auto"):
+            raise AgentError("bad_arguments",
+                             f"scene_reference_mode 必须是 full | context_only | auto，"
+                             f"得到: {scene_reference_mode}")
         total_timeout = IMAGES_TOTAL_TIMEOUT_S
         asset_noun = "分镜图"
     else:
@@ -296,6 +304,8 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
         extra = {"origin_run_id": marker}
         if is_image:
             extra.update(variants=variants, force=force)
+            if scene_reference_mode:
+                extra["scene_reference_mode"] = scene_reference_mode
         elif video_model:
             extra["video_model"] = video_model
         job = q.submit(project, kind, t["shot_id"], **extra)
@@ -512,6 +522,14 @@ SHOT_GENERATE_IMAGES_TOOL = {
                                                     "必须已有 READY 生产绑定，UNBOUND/NOT_READY 会被拒绝"
                                                     "（绝不静默回落 legacy）；legacy_allowed=旧行为"
                                                     "（未绑定的镜头走 legacy 参考链）。省略=legacy_allowed。"},
+                "scene_reference_mode": {"type": "string", "enum": ["full", "context_only", "auto"],
+                                         "description": "场景参考策略（Phase D2）：full=场景图作为生图参考"
+                                                        "（空间身份最强，适合大远景/全景确立空间）；"
+                                                        "context_only=不发场景图，场景语义仍进提示词"
+                                                        "（近景/特写/OTS/insert 推荐——防止场景图把构图"
+                                                        "拉宽）；auto=按景别确定性映射（EWS/WS→full，"
+                                                        "MCU/CU/ECU/OTS/insert/MS→context_only）。"
+                                                        "省略=full（Phase D 行为）。"},
             },
             "required": ["targets"],
         },

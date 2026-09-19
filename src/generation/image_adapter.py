@@ -43,6 +43,16 @@ from typing import Any, Dict, List, Optional, Tuple
 # first-frame 允许的 temporal scopes（§8；end 排除且先于 priority）
 _FIRST_FRAME_ELIGIBLE_TEMPORAL = ("start", "throughout", "static")
 
+# ============ Shot-level Scene Reference Policy (Phase D2, 30.md §6/§7) ============
+# 三态：full=场景图作为 conditioning（Phase D 既有行为）；context_only=场景语义仍走
+# prompt 生产上下文（_production_context_text 的 Scene 行），但场景图不进 image_refs；
+# auto=按景别/机位的确定性导演策略映射（30.md §7：EWS/WS→full；MCU/CU/ECU/OTS/
+# insert→context_only；MS→context_only 起步，待 §4 A/B 证据校准）。
+# 🔴 改变默认策略前必须有 A/B 证据（30.md §4-§6）：DEFAULT_SCENE_REFERENCE_MODE
+# 当前 = "full"（零回归），A/B 证实后由策略 commit 翻转为 "auto"。
+SCENE_REFERENCE_MODES = ("full", "context_only", "auto")
+DEFAULT_SCENE_REFERENCE_MODE = "full"
+
 
 class BoundGenerationError(Exception):
     """Binding-aware 生成路径的结构化失败（§33）。
@@ -76,6 +86,7 @@ class BoundImageRequest:
     diagnostics: List[Dict[str, Any]] = field(default_factory=list)
     semantic_roles: List[Dict[str, Any]] = field(default_factory=list)  # §29 观测
     basis: Dict[str, Any] = field(default_factory=dict)
+    scene_reference_mode: str = DEFAULT_SCENE_REFERENCE_MODE  # D2：resolved 结果
 
     def to_dict(self) -> dict:
         return {
@@ -87,6 +98,7 @@ class BoundImageRequest:
             "diagnostics": list(self.diagnostics),
             "semantic_roles": list(self.semantic_roles),
             "basis": dict(self.basis),
+            "scene_reference_mode": self.scene_reference_mode,
         }
 
 
@@ -379,6 +391,83 @@ def _gate_ready_pack(svc: Any, sid: str) -> dict:
 MAX_PROVIDER_INPUT_IMAGES = 6
 
 
+# ============ Shot-level Scene Reference Policy (Phase D2, 30.md §6/§7) ============
+# （常量定义见文件头部；此处为解析与预算逻辑。）
+
+# auto 映射（30.md §7 起草版；A/B 后校准）——纯确定性，输入只有 shot 字段
+_AUTO_CONTEXT_ONLY_SIZE_KEYS = ("close-up", "closeup", "extreme close", "medium close")
+_AUTO_FULL_SIZE_KEYS = ("extreme wide", "wide shot", "establishing")
+_AUTO_CONTEXT_ONLY_ANGLE_KEYS = ("ots", "over-the-shoulder", "over the shoulder",
+                                 "insert", "detail")
+
+
+def resolve_scene_reference_mode(mode: Optional[str], shot: Any) -> str:
+    """None→默认（当前 full）；显式 full/context_only 直通；auto→确定性导演映射。
+    未知值 fail closed（BoundGenerationError 语义归调用方；此处抛 ValueError）。"""
+    m = (str(mode or "").strip().lower() or DEFAULT_SCENE_REFERENCE_MODE)
+    if m in ("full", "context_only"):
+        return m
+    if m != "auto":
+        raise ValueError(f"scene_reference_mode 非法: {mode!r}（允许 {'/'.join(SCENE_REFERENCE_MODES)}）")
+    size = (getattr(shot, "shot_size", "") or "").lower()
+    angle_comp = " ".join([(getattr(shot, "camera_angle", "") or ""),
+                           (getattr(shot, "composition", "") or "")]).lower()
+    if any(k in angle_comp for k in _AUTO_CONTEXT_ONLY_ANGLE_KEYS):
+        return "context_only"
+    if any(k in size for k in _AUTO_CONTEXT_ONLY_SIZE_KEYS):
+        return "context_only"
+    if any(k in size for k in _AUTO_FULL_SIZE_KEYS):
+        return "full"
+    return "context_only"     # MS 及未识别景别：30.md §7 起草默认（A/B 后校准）
+
+
+# ============ Human Reference Budget (Phase D2, 30.md §8/§9) ============
+# Golden Run 审计实证（D2 §3）：每角色 pack 内 1 look + 3 legacy identity 视图；
+# 单角色 5 refs ≤ cap 6 → 4 张人形全发 → 克隆人/幻觉路人根因。Commit J 只是超限缓解。
+# D2 预算原则（30.md §8）：同一个真实角色，不要无意义同时发送多张人形 reference——
+#   - legacy identity（front/side/back）一律不进 provider（reason=human_reference_budget）；
+#   - 每个出场角色只保 pack 序第一张 character_look（extras 同 reason 裁剪）；
+#   - 场景图按 resolve_scene_reference_mode 决定 0/1 张；
+#   - cap(6) 仍作最终护栏（多人 + 多道具极端情形）。
+
+def _apply_reference_budget(eligible, *, shot, scene_reference_mode,
+                            dropped=None):
+    """确定性预算层：temporal 过滤后、cap/媒体解析前执行。
+    返回 (kept, resolved_scene_mode)。所有裁剪逐条记 dropped，绝不静默。"""
+    dropped = dropped if dropped is not None else []
+    resolved = resolve_scene_reference_mode(scene_reference_mode, shot)
+    kept: list = []
+    seen_look_char: set = set()
+    for it in eligible:
+        st = str(it.get("source_type") or "")
+        char = it.get("subject_character") or None
+        if st == "scene_instance_view" and resolved == "context_only":
+            dropped.append({"source_id": str(it.get("source_id")),
+                            "reference_asset_id": str(it.get("reference_asset_id") or ""),
+                            "reason": "scene_reference_context_only",
+                            "detail": {"scene_reference_mode": resolved}})
+            continue
+        if st == "character_identity":
+            dropped.append({"source_id": str(it.get("source_id")),
+                            "reference_asset_id": str(it.get("reference_asset_id") or ""),
+                            "reason": "human_reference_budget",
+                            "detail": {"subject_character": char,
+                                       "hint": "legacy 身份视图不进 provider（每角色 1 张 "
+                                               "approved look 主参考）"}})
+            continue
+        if st == "character_look":
+            if char in seen_look_char:
+                dropped.append({"source_id": str(it.get("source_id")),
+                                "reference_asset_id": str(it.get("reference_asset_id") or ""),
+                                "reason": "human_reference_budget",
+                                "detail": {"subject_character": char,
+                                           "hint": "每角色仅 1 张人形参考（look 主参考已选）"}})
+                continue
+            seen_look_char.add(char)
+        kept.append(it)
+    return kept, resolved
+
+
 def _cap_provider_input_images(eligible, *, reserved_slots=0, dropped=None):
     """确定性选择 + 反克隆策略（Phase D §35 真机修订）。
 
@@ -474,10 +563,13 @@ def _resolve_media_loop(eligible: List[dict], rdoc: Any, project_dir: Path
 
 # ============ 主入口 ============
 
-def build_bound_first_frame_input(project_dir, project: Any, shot: Any) -> BoundImageRequest:
+def build_bound_first_frame_input(project_dir, project: Any, shot: Any, *,
+                                  scene_reference_mode: Optional[str] = None
+                                  ) -> BoundImageRequest:
     """BOUND shot 的首帧生成输入（§4.A/C；§27：BOUND 永不回落 legacy）。
     顺序：validity gate → compile pack（自带 pre/post 守卫）→ temporal 过滤（先于
-    priority）→ 媒体解析 → prompt 组装 → pre-dispatch guard。"""
+    priority）→ reference budget（D2：scene mode + 人形预算）→ cap 护栏 → 媒体解析 →
+    prompt 组装 → pre-dispatch guard。"""
     from src.shot_binding import ShotBindingService
 
     project_dir = Path(project_dir)
@@ -488,6 +580,10 @@ def build_bound_first_frame_input(project_dir, project: Any, shot: Any) -> Bound
     # ---- Step 1 temporal eligibility（先于 priority，§8/§13）----
     eligible, excluded_end = filter_first_frame_references(pack.get("references") or [])
     _cap_dropped: list = []
+    # ---- Step 1b reference budget（Phase D2：scene mode + 每角色 1 张人形）----
+    eligible, resolved_scene_mode = _apply_reference_budget(
+        eligible, shot=shot, scene_reference_mode=scene_reference_mode,
+        dropped=_cap_dropped)
     eligible = _cap_provider_input_images(eligible, reserved_slots=0,
                                           dropped=_cap_dropped)
 
@@ -540,11 +636,14 @@ def build_bound_first_frame_input(project_dir, project: Any, shot: Any) -> Bound
     return BoundImageRequest(
         shot_id=sid, prompt=prompt, image_refs=image_refs,
         used_reference_ids=used_ids, dropped_optional=dropped,
-        diagnostics=diagnostics, semantic_roles=roles, basis=basis)
+        diagnostics=diagnostics, semantic_roles=roles, basis=basis,
+        scene_reference_mode=resolved_scene_mode)
 
 
 def build_bound_last_frame_input(project_dir, project: Any, shot: Any, *,
-                                 first_frame_url: str) -> BoundImageRequest:
+                                 first_frame_url: str,
+                                 scene_reference_mode: Optional[str] = None
+                                 ) -> BoundImageRequest:
     """BOUND shot 的尾帧生成输入（S3C.2 §3.A）。last-frame temporal rule（§6）：
     end/throughout/static 进、**start 排除且先于 priority**。
     refs = [已选首帧 URL（构图基础，creative 机制，保持第一位——提示词.md §11）]
@@ -591,6 +690,10 @@ def build_bound_last_frame_input(project_dir, project: Any, shot: Any, *,
     from src.resources.store import ResourceStore
     rdoc = ResourceStore(project_dir, project_dir.name).load()
     _cap_dropped2: list = []
+    # ---- reference budget（Phase D2：scene mode + 每角色 1 张人形）----
+    eligible, resolved_scene_mode = _apply_reference_budget(
+        eligible, shot=shot, scene_reference_mode=scene_reference_mode,
+        dropped=_cap_dropped2)
     eligible = _cap_provider_input_images(
         eligible, reserved_slots=1, dropped=_cap_dropped2)   # Phase D: +1 = 首帧构图基础
     refs, used_ids, dropped, diag2, roles = _resolve_media_loop(eligible, rdoc, project_dir)
@@ -621,4 +724,5 @@ def build_bound_last_frame_input(project_dir, project: Any, shot: Any, *,
     return BoundImageRequest(
         shot_id=sid, prompt=prompt, image_refs=image_refs,
         used_reference_ids=used_ids, dropped_optional=dropped,
-        diagnostics=diagnostics, semantic_roles=roles, basis=basis)
+        diagnostics=diagnostics, semantic_roles=roles, basis=basis,
+        scene_reference_mode=resolved_scene_mode)

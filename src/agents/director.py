@@ -93,6 +93,10 @@ from .director_vision_review import (
     VISION_REVIEW_TOOL,
     _execute_visual_review,
 )
+from .shot_review import (
+    REVIEW_SHOT_TOOL,
+    _execute_review_shot,
+)
 # —— Script Writer 共享基础设施（直接 import 复用，不改其文件）——
 from .script_writer import (
     MAX_WEB_SEARCH,
@@ -271,7 +275,7 @@ DIRECTOR_SYSTEM = """你是 AGNES 的 Director（导演/分镜设计者），负
 - shot.move(shot_id, before_shot_id?/after_shot_id?, expected_shots_revision)：把一个镜头在同段内移到某镜之前/之后（都省略则移到段尾）。镜头顺序是状态依赖操作：多个移动必须一步一步来，每步用最新指纹，不要试图一次重排整组。
 
 【视觉生产（分镜图/视频生成，长任务）】
-- shot.generate_images(targets[], variants?, force?)：批量为镜头生成分镜图（frame=first 首帧 / frame=last 尾帧）。复用系统既有生成管线：自动带角色三视图参考图与接力参考图保持角色一致性；生成后写入镜头数据并在分镜页展示（你看不到图片内容，成功与否以工具返回为准，【不要】向用户描述图片画面细节）。单个镜头也传一项；单批最多 {max_create_batch} 项。
+- shot.generate_images(targets[], variants?, force?, scene_reference_mode?)：批量为镜头生成分镜图（frame=first 首帧 / frame=last 尾帧）。复用系统既有生成管线：自动带角色参考图与接力参考图保持角色一致性；生成后写入镜头数据并在分镜页展示（你看不到图片内容，成功与否以工具返回为准，【不要】向用户描述图片画面细节）。单个镜头也传一项；单批最多 {max_create_batch} 项。scene_reference_mode（Phase D2）：full=场景图作为参考（空间确立）；context_only=只保留场景语义（近景/特写防构图拉宽）；auto=按景别自动。省略=full。
 - shot.generate_videos(shot_ids[])：批量为镜头生成视频（串行生成，每个约 1~3 分钟，单批最多 4 个）。前置：该镜有效开场画面就绪——普通镜头用本镜已生成的首帧；inherit 接力镜头用来源镜头末帧（不要替接力镜头生成本镜首帧）。
 - 生成顺序不要硬编码「首帧→尾帧→视频」全套：按用户需求和镜头实际形态决定——有的镜头只要首帧（静态分镜），keyframes 镜头才需要尾帧，视频在开场画面就绪后才能生成。工具会对不满足前置条件的项返回结构化原因（如「首帧未就绪」），按提示先补齐再重试，不要盲目重发。
 - 生成前的现状确认用 shot.list(scene_id=…) 一次看清该段全部镜头（id/是否有首帧/接力关系）即可，不要逐个 shot.read 拖慢回合。
@@ -279,6 +283,7 @@ DIRECTOR_SYSTEM = """你是 AGNES 的 Director（导演/分镜设计者），负
 
 【视觉审查（只读，真实看图）】
 - visual.review_image(shot_id, focus?, frame?)：用视觉模型真实查看该镜头已生成的分镜图，对照本镜 canonical 要求返回结构化反馈（verdict: pass/needs_fix/uncertain + issues）。focus 可选 shot_adherence（默认）/visual_defects（默认）/character_consistency（自动附角色三视图参考）/continuity（自动附同段上一镜画面）；frame 可选 first（默认）/last。
+- visual.review_shot(shot_id, frame?)：Shot-aware 分镜质量闸门（12 固定维度：人数/克隆/额外人物/缺角色/景别/占比/构图/机位语义/场景范围/identity/道具/伪影；overall 由代码按 hard gate 确定性推导，模型不能用整体印象翻案）。返回可执行导演反馈（如 expected CU observed MS）。分镜质量判断优先用本工具（比 review_image 更严更全）；根据反馈决定：修改 shot 意图（shot.update）→ 调整生成参数（scene_reference_mode）→ 重新生成。
 - 🔴 你没有任何直接看图能力：对生成画面内容下判断只有一条正路——调用本工具拿真实视觉反馈。用户问「这张图有没有问题/符不符合要求/检查一下画面」时必须调用本工具；绝不允许凭 shot 描述、prompt、文件名或想象去描述/评价画面（那是编造，违反 truth gate）。
 - 审查结果是视觉模型的判断（可能 uncertain 或出错），供决策参考，不是 canonical 事实；不要把 pass/needs_fix 当成已确认的项目真相向用户断言，也不要因反馈不佳就自动重新生成（生成永远等用户要求）。
 
@@ -804,6 +809,7 @@ DIRECTOR_TOOLS = [
     SHOT_PRODUCTION_BIND_TOOL, SHOT_PRODUCTION_REFRESH_TOOL,
     WEB_SEARCH_TOOL,
     VISION_REVIEW_TOOL,
+    REVIEW_SHOT_TOOL,
 ]
 
 
@@ -1493,6 +1499,7 @@ TOOL_EXECUTORS = {
     "shot.generate_images": _execute_shot_generate_images,
     "shot.generate_videos": _execute_shot_generate_videos,
     "visual.review_image": _execute_visual_review,
+    "visual.review_shot": _execute_review_shot,
     "project.visual_profile.read": _execute_visual_profile_read,
     "shot.production.inspect": _execute_shot_production_inspect,
     "shot.production.bind": _execute_shot_production_bind,
@@ -1561,6 +1568,10 @@ def _op_human(r: dict) -> str:
         v = r.get("review") or {}
         n = len(v.get("issues") or [])
         return f"视觉审查 {sid}（{v.get('verdict') or '—'}，{n} 条问题）"
+    if op == "visual.review_shot":
+        d = r.get("derived") or {}
+        n = len(d.get("hard_fails") or []) + len(d.get("soft_fails") or [])
+        return f"Shot 审查 {sid}（overall={d.get('overall') or '—'}，{n} 维度失败）"
     return f"{op}({sid or ''})"
 
 

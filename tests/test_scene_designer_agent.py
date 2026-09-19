@@ -1470,3 +1470,89 @@ def test_PD35_cap_multi_character_no_identity_fill():
     assert len(out2) == min(5, 6)   # scene + look + lookx + id_f + id_s
     assert {x["source_id"] for x in out2} == {"scene", "look_沈夜", "lookx_沈夜",
                                               "id_f_沈夜", "id_s_沈夜"}
+
+
+# ============ Phase D2（30.md §6-§9）：scene_reference_mode + 人形参考预算 ============
+class _FakeShot:
+    def __init__(self, shot_size="medium shot", camera_angle="", composition=""):
+        self.shot_size = shot_size
+        self.camera_angle = camera_angle
+        self.composition = composition
+
+
+def test_D2_resolve_scene_reference_mode_explicit():
+    from src.generation.image_adapter import resolve_scene_reference_mode
+    assert resolve_scene_reference_mode(None, _FakeShot()) == "full"       # 零回归默认
+    assert resolve_scene_reference_mode("full", _FakeShot()) == "full"
+    assert resolve_scene_reference_mode("context_only", _FakeShot()) == "context_only"
+    import pytest
+    with pytest.raises(ValueError):
+        resolve_scene_reference_mode("bogus", _FakeShot())
+
+
+def test_D2_resolve_scene_reference_mode_auto_mapping():
+    """30.md §7 起草映射：EWS/WS→full；MCU/CU/ECU/OTS/insert→context_only；
+    MS→context_only（A/B 后校准）。"""
+    from src.generation.image_adapter import resolve_scene_reference_mode as r
+    assert r("auto", _FakeShot("extreme wide shot")) == "full"
+    assert r("auto", _FakeShot("wide shot")) == "full"
+    assert r("auto", _FakeShot("extreme wide shot", camera_angle="establishing")) == "full"
+    assert r("auto", _FakeShot("close-up")) == "context_only"
+    assert r("auto", _FakeShot("extreme close-up")) == "context_only"
+    assert r("auto", _FakeShot("medium close-up")) == "context_only"
+    assert r("auto", _FakeShot("medium shot")) == "context_only"
+    assert r("auto", _FakeShot("medium shot", camera_angle="OTS 过肩")) == "context_only"
+    assert r("auto", _FakeShot("close-up", composition="insert of jade pendant")) == "context_only"
+
+
+def _d2_budget_items():
+    return [
+        {"source_id": "scene", "source_type": "scene_instance_view",
+         "reference_asset_id": "ref_scene", "priority": "primary"},
+        {"source_id": "legacy:沈夜:front", "source_type": "character_identity",
+         "reference_asset_id": "ref_if", "subject_character": "沈夜", "priority": "supporting"},
+        {"source_id": "legacy:沈夜:side", "source_type": "character_identity",
+         "reference_asset_id": "ref_is", "subject_character": "沈夜", "priority": "supporting"},
+        {"source_id": "look_沈夜", "source_type": "character_look",
+         "reference_asset_id": "ref_l1", "subject_character": "沈夜", "priority": "primary"},
+        {"source_id": "lookx_沈夜", "source_type": "character_look",
+         "reference_asset_id": "ref_l2", "subject_character": "沈夜", "priority": "supporting"},
+        {"source_id": "prop_玉佩", "source_type": "prop",
+         "reference_asset_id": "ref_p", "prop_id": "prop_玉佩", "priority": "primary"},
+    ]
+
+
+def test_D2_budget_one_human_ref_per_character():
+    """30.md §8：identity 一律裁剪；每角色仅 pack 序第一张 look；prop 不受影响。"""
+    from src.generation.image_adapter import _apply_reference_budget
+    dropped = []
+    kept, mode = _apply_reference_budget(_d2_budget_items(), shot=_FakeShot(),
+                                         scene_reference_mode=None, dropped=dropped)
+    assert mode == "full"
+    ids = [x["source_id"] for x in kept]
+    assert ids == ["scene", "look_沈夜", "prop_玉佩"], ids
+    reasons = {d["reason"] for d in dropped}
+    assert reasons == {"human_reference_budget"}
+    assert len(dropped) == 3   # 2 identity + 1 look extra
+
+
+def test_D2_budget_context_only_drops_scene_keeps_semantics_path():
+    """30.md §4 Mode B 语义：context_only 裁场景图（逐条记录），其余照旧——
+    场景语义仍在 prompt 生产上下文（由 _production_context_text 保证，非本层）。"""
+    from src.generation.image_adapter import _apply_reference_budget
+    dropped = []
+    kept, mode = _apply_reference_budget(_d2_budget_items(), shot=_FakeShot(),
+                                         scene_reference_mode="context_only",
+                                         dropped=dropped)
+    assert mode == "context_only"
+    assert [x["source_id"] for x in kept] == ["look_沈夜", "prop_玉佩"]
+    scene_drops = [d for d in dropped if d["reason"] == "scene_reference_context_only"]
+    assert len(scene_drops) == 1 and scene_drops[0]["source_id"] == "scene"
+
+
+def test_D2_budget_full_keeps_scene():
+    from src.generation.image_adapter import _apply_reference_budget
+    kept, mode = _apply_reference_budget(_d2_budget_items(), shot=_FakeShot(),
+                                         scene_reference_mode="full", dropped=[])
+    assert mode == "full" and kept[0]["source_type"] == "scene_instance_view"
+

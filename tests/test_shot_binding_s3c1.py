@@ -444,6 +444,8 @@ def test_k2_primary_unresolvable_provider_not_called(cenv):
 
 
 def test_k4_legacy_identity_via_compatibility_resolver(cenv):
+    """D2（30.md §8）语义更新：legacy identity 媒体仍可经隔离 resolver 解析，
+    但人形参考预算不再把它送进 provider——每角色仅 1 张 approved look 主参考。"""
     pdir, ids, svc, fake = cenv
     proj = ProjectStore(pdir).load()
     proj.get_character("Alice").views["front"] = Asset(
@@ -453,8 +455,12 @@ def test_k4_legacy_identity_via_compatibility_resolver(cenv):
     req = build_bound_first_frame_input(pdir, ProjectStore(pdir).load(),
                                         _load_shot(pdir))
     ident = [r for r in req.semantic_roles if r["source_type"] == "character_identity"]
-    assert ident, "legacy identity ref 经隔离 compatibility resolver 进入"
-    assert any("http://example/alice_front.png" in u for u in req.image_refs)
+    assert not ident, "legacy identity 不进 provider refs（D2 人形参考预算）"
+    assert not any("alice_front" in u for u in req.image_refs)
+    budget_drops = [d for d in req.dropped_optional
+                    if d.get("reason") == "human_reference_budget"]
+    assert budget_drops, "identity 裁剪逐条记录（不静默）"
+    assert any("legacy:Alice:front" in str(d.get("source_id")) for d in budget_drops)
 
 
 # ============ M/N. Race before dispatch（§47/§48）============
@@ -559,3 +565,37 @@ def test_handler_no_canonical_mutation(cenv):
     for n in ("resources.json", "scene_system.json", "project_profile.json",
               "shot_production_bindings.json"):
         assert h0[n] == h1[n], f"{n} 必须字节不变"
+
+
+# ============ Phase D2（30.md §6-§9）：scene_reference_mode 端到端 ============
+def test_D2_build_bound_request_records_scene_mode(cenv):
+    """request.scene_reference_mode 记录 resolved 结果；单角色镜头（原 5 refs：
+    scene+identity×3+look）在新人形预算下只发 scene+look。"""
+    pdir, ids, svc, fake = cenv
+    _bind_default(svc, ids)
+    proj = ProjectStore(pdir).load()
+    proj.get_character("Alice").views["front"] = Asset(
+        local=None, url="http://example/alice_front.png", status="done")
+    ProjectStore(pdir).save(proj)
+    req = build_bound_first_frame_input(pdir, ProjectStore(pdir).load(),
+                                        _load_shot(pdir))
+    assert req.scene_reference_mode == "full"
+    human = [r for r in req.semantic_roles
+             if r["source_type"] in ("character_look", "character_identity")]
+    assert len(human) == 1 and human[0]["source_type"] == "character_look"
+
+
+def test_D2_build_bound_request_context_only(cenv):
+    """context_only：场景图不进 refs；场景语义行仍在 prompt（Scene: ...）。"""
+    pdir, ids, svc, fake = cenv
+    _bind_default(svc, ids)
+    req = build_bound_first_frame_input(pdir, ProjectStore(pdir).load(),
+                                        _load_shot(pdir),
+                                        scene_reference_mode="context_only")
+    assert req.scene_reference_mode == "context_only"
+    scene_roles = [r for r in req.semantic_roles
+                   if r["source_type"] == "scene_instance_view"]
+    assert not scene_roles, "场景图不作为 conditioning 输入"
+    assert "Scene:" in req.prompt, "场景语义仍经 prompt 生产上下文进入"
+    assert any(d.get("reason") == "scene_reference_context_only"
+               for d in req.dropped_optional)
