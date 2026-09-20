@@ -561,7 +561,9 @@ async def _handler_first_frame(job, emit):
     if shot_has_visual_production_binding(project_dir, shot.shot_id):
         bound = build_bound_first_frame_input(project_dir, project, shot,
                                               scene_reference_mode=job.params.get(
-                                                  "scene_reference_mode"))
+                                                  "scene_reference_mode"),
+                                              human_reference_mode=job.params.get(
+                                                  "human_reference_mode"))
         refs = bound.image_refs
         prompt = bound.prompt
     else:
@@ -662,7 +664,8 @@ async def _handler_last_frame(job, emit):
     if shot_has_visual_production_binding(project_dir, shot.shot_id):
         bound_last = build_bound_last_frame_input(
             project_dir, project, shot, first_frame_url=ff_url,
-            scene_reference_mode=job.params.get("scene_reference_mode"))
+            scene_reference_mode=job.params.get("scene_reference_mode"),
+            human_reference_mode=job.params.get("human_reference_mode"))
         prompt = bound_last.prompt
         refs = bound_last.image_refs
     else:
