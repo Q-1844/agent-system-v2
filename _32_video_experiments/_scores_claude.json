@@ -262,7 +262,7 @@
   "notes": "孤儿恢复（杀进程后轮询收尾成功）；motion 2.188；接触表待补看。"
  },
  "_patterns": {
-  "asof": "batch2A X040",
+  "asof": "FINAL 63/63",
   "t2v": "动作链/人数遵从最好；风险=开头外景漂移+动作归属漂移；身份=服装级",
   "multi_look": "身份/服装最稳；风险=look plate 环境/人口渗入开头；仅 1 图槽（多角色镜只能送首位角色）",
   "multiS_scene": "场景保真最强=构图锚；结构=场景板复刻前缀(~2s)+后段内容；风险=压制文本人数/身份事实、开场近冻结",
@@ -270,7 +270,10 @@
   "ref_slot": "v2.0 ti2vid ≤1 图（n=6 实证）：multi=单图条件，与 i2v 同模式不同喂图",
   "s10_c03_mode_spread": "CU 表演镜模式排序：mS≈i2v>t2v>multi-look（multi-look 被 look plate 吞没；mS 疤痕在且前缀仅1帧；i2v 看资产质量；t2v 情绪最好脸通用化）",
   "keyframes_debut": "X040：端点锁定成立+瑕疵传播成立+中段结构冲突（锚构图vs prompt意图）；D 模式价值取决于首尾对质量",
-  "ref_cap_validated": "X014：1 look（主角色）+文本身份锚=多人镜 multi 的可行形态"
+  "ref_cap_validated": "X014：1 look（主角色）+文本身份锚=多人镜 multi 的可行形态",
+  "keyframes_verdict": "D 模式分野：干净首尾对→复杂动作/状态变化交付最好（X056/X049 动作节拍成立）；瑕疵首尾对→瑕疵传播+中段结构冲突（X040 巨手/X049 克隆）。首尾对质量=D 模式价值前提",
+  "prompt_style": "P2(最小充分) vs P0(legacy 2420字符) 同镜同模式对比：t2v 上 P2 道具遵从/意图达成更好（玉佩出现）；§九「先意图后事实+留自由度」原则成立",
+  "ms_prefix": "mS 场景板前缀成本 0.7~2.8s/5s 不可预测；前缀期间近冻结；后段内容质量好；会压制文本人数事实（X021 三人镜出 2 人）"
  },
  "X022": {
   "shot": "s10_c03",
@@ -501,5 +504,71 @@
   "scores": null,
   "severe": [],
   "notes": "motion 0.619；待细看。"
+ },
+ "X049": {
+  "shot": "s16_c05",
+  "mode": "keyframes",
+  "style": "P2",
+  "seeded": true,
+  "reviewer": "claude-frame-preview",
+  "scores": {
+   "identity": 2,
+   "action": 4,
+   "camera": 3,
+   "scene": 3,
+   "props": 4
+  },
+  "severe": [
+   "首尾对的克隆（2×柳衣）全程作为两个人物传播=REFERENCE 归因"
+  ],
+  "notes": "★状态变化交付：挥剑→格挡火光→断剑跌坐全链；中段还给了近景。有瑕疵首尾对的代价=克隆全程在场，但动作节拍本身成立。"
+ },
+ "X056": {
+  "shot": "s17_c01",
+  "mode": "keyframes",
+  "style": "P2",
+  "seeded": true,
+  "reviewer": "claude-frame-preview",
+  "scores": {
+   "identity": 4,
+   "action": 5,
+   "camera": 4,
+   "scene": 4,
+   "props": 4
+  },
+  "severe": [],
+  "notes": "★★复杂动作链+干净首尾对=keyframes 最优样本：击退→染血跌跪→开箱手部特写插入→止于尾帧锚；无克隆；血量中段偏重（次要漂移）。D 模式在干净锚+状态变化/复杂动作上价值确认。"
+ },
+ "X060": {
+  "shot": "s17_c03",
+  "mode": "t2v",
+  "style": "P2",
+  "seeded": true,
+  "reviewer": "claude-frame-preview",
+  "scores": {
+   "identity": 3,
+   "action": 4,
+   "camera": 4,
+   "scene": 4,
+   "props": 5
+  },
+  "severe": [],
+  "notes": "★P2 vs P0 消融（同镜同模式 t2v）：P2 玉佩出现（P0 全程无玉佩）+光线冷转暖意图达成+眼神变化。最小充分提示词在道具/意图遵从上直接胜过 2420 字符 legacy 编译。§九 证据。"
+ },
+ "X062": {
+  "shot": "s17_c03",
+  "mode": "multiS",
+  "style": "P2",
+  "seeded": true,
+  "reviewer": "claude-frame-preview",
+  "scores": {
+   "identity": 4,
+   "action": 4,
+   "camera": 3,
+   "scene": 4,
+   "props": 5
+  },
+  "severe": [],
+  "notes": "场景板前缀 3 帧(~2.1s)+玉佩特写交付（绿光/握紧/眼神上扬）。首次提交遇 Provider 瞬时下载失败，重试成功（transient，非系统性）。"
  }
 }
