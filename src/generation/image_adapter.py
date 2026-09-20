@@ -59,7 +59,10 @@ DEFAULT_SCENE_REFERENCE_MODE = "auto"
 
 # human_reference_mode（D2 §5.2 无参考实验后新增）：keep=每角色 1 张 look；
 # drop=人形参考全不进 provider（identity 走 prompt 文本）；auto=context_only 时 drop。
-HUMAN_REFERENCE_MODES = ("keep", "drop", "auto")
+# crop（31.md C4/G4）：每角色 1 张 look 的**确定性头肩裁剪派生**（identity_crop.py，
+# adapter 级派生物不落 canonical）——identity 信号保留、全身构图锚解除；auto 映射
+# 是否从 drop 翻到 crop 由真机 A/B 证据决定（31.md §19 证据门控，本 commit 不翻）。
+HUMAN_REFERENCE_MODES = ("keep", "drop", "crop", "auto")
 DEFAULT_HUMAN_REFERENCE_MODE = "auto"
 
 
@@ -144,7 +147,8 @@ class BoundImageRequest:
                 temporal_scope=str(r.get("temporal_scope") or ""),
                 subject_character=r.get("subject_character"),
                 prop_id=r.get("prop_id"),
-                media=m, checksum=r.get("checksum"))
+                media=m, checksum=r.get("checksum"),
+                derivation=r.get("derivation"))
                 for r, m in zip(roles, refs[:-1]))
             inputs.append(ReferenceInput(
                 source_type="continuity_previous_end", semantic_role="continuity",
@@ -158,7 +162,8 @@ class BoundImageRequest:
                 temporal_scope=str(r.get("temporal_scope") or ""),
                 subject_character=r.get("subject_character"),
                 prop_id=r.get("prop_id"),
-                media=m, checksum=r.get("checksum"))
+                media=m, checksum=r.get("checksum"),
+                derivation=r.get("derivation"))
                 for r, m in zip(roles, refs))
         return GenerationRequest(
             generation_type=generation_type, shot_id=self.shot_id,
@@ -546,14 +551,22 @@ _TIGHT_SIZE_KEYS = ("extreme close", "close-up", "closeup")
 def resolve_human_reference_mode(mode: Optional[str], shot: Any,
                                  resolved_scene_mode: str) -> str:
     """auto：scene 解析为 context_only（紧景别/OTS/insert 家族）→ drop（identity 走
-    prompt 文本，D2 §5.2 实验证据）；否则 keep。显式 keep/drop 直通；未知值 ValueError。"""
+    prompt 文本，D2 §5.2 实验证据）；否则 keep。显式 keep/drop/crop 直通；未知值
+    ValueError。（auto→crop 的默认翻转待真机 A/B 证据，31.md §19。）"""
     m = (str(mode or "").strip().lower() or DEFAULT_HUMAN_REFERENCE_MODE)
-    if m in ("keep", "drop"):
+    if m in ("keep", "drop", "crop"):
         return m
     if m != "auto":
         raise ValueError(f"human_reference_mode 非法: {mode!r}"
                          f"（允许 {'/'.join(HUMAN_REFERENCE_MODES)}）")
     return "drop" if resolved_scene_mode == "context_only" else "keep"
+
+
+def resolve_identity_crop_method(shot: Any) -> str:
+    """crop 档的确定性方法映射（输入只有 shot 字段）：extreme close → face（面部
+    特写档）；其余紧景别 → bust（头肩档）。纯确定性，与 scene mode 同风格。"""
+    size = (getattr(shot, "shot_size", "") or "").lower()
+    return "face" if "extreme close" in size else "bust"
 
 
 def _apply_reference_budget(eligible, *, shot, scene_reference_mode,
@@ -600,6 +613,11 @@ def _apply_reference_budget(eligible, *, shot, scene_reference_mode,
                                            "hint": "每角色仅 1 张人形参考（look 主参考已选）"}})
                 continue
             seen_look_char.add(char)
+            if resolved_human == "crop":
+                # 31.md C4：crop 档 = 保留的 look 主参考改为头肩裁剪派生（媒体解析层
+                # 消费 derived_crop；派生失败回落源媒体并记 diagnostic）。
+                it = dict(it)
+                it["derived_crop"] = resolve_identity_crop_method(shot)
         kept.append(it)
     return kept, resolved
 
@@ -672,7 +690,30 @@ def _resolve_media_loop(eligible: List[dict], rdoc: Any, project_dir: Path
     diagnostics: List[Dict[str, Any]] = []
     roles: List[Dict[str, Any]] = []
     for item in eligible:
-        media = _resolve_item_media(item, rdoc, project_dir)
+        media = None
+        derivation_note: Optional[Dict[str, Any]] = None
+        crop_method = item.get("derived_crop")
+        if crop_method:
+            # 31.md C4：identity crop 派生媒体（失败 → 回落源媒体 + diagnostic，
+            # 绝不 silent）。派生记录进 roles → provenance → ReferenceInput。
+            asset = rdoc.reference_assets.get(item.get("reference_asset_id")) \
+                if item.get("reference_asset_id") else None
+            if asset is not None:
+                from src.generation.identity_crop import resolve_identity_crop_media
+                derived = resolve_identity_crop_media(
+                    project_dir, url=asset.url, local=asset.local,
+                    method=str(crop_method))
+                if derived is not None:
+                    media = derived["media"]
+                    derivation_note = dict(derived["derivation"])
+                else:
+                    diagnostics.append({
+                        "reason": "identity_crop_derivation_failed",
+                        "detail": {"reference_asset_id": item.get("reference_asset_id"),
+                                   "method": str(crop_method),
+                                   "hint": "裁剪派生失败——回落源参考媒体（绝不 silent）"}})
+        if media is None:
+            media = _resolve_item_media(item, rdoc, project_dir)
         if media is None:
             if item.get("priority") == "primary":
                 raise BoundGenerationError(
@@ -697,7 +738,8 @@ def _resolve_media_loop(eligible: List[dict], rdoc: Any, project_dir: Path
                       "temporal_scope": item.get("temporal_scope"),
                       "subject_character": item.get("subject_character"),
                       "prop_id": item.get("prop_id"),
-                      "checksum": getattr(asset, "checksum", None)})
+                      "checksum": getattr(asset, "checksum", None),
+                      "derivation": derivation_note})
     return image_refs, used_ids, dropped, diagnostics, roles
 
 
