@@ -358,6 +358,7 @@ from src.generation.image_adapter import (
     BoundGenerationError,
     build_bound_first_frame_input,
     build_bound_last_frame_input,
+    post_generation_basis_guard,
     shot_has_visual_production_binding,
 )
 from src.generation.video_adapter import build_bound_video_input
@@ -621,6 +622,13 @@ async def _handler_first_frame(job, emit):
 
     char_snap = {name: {"url": project.get_character(name).ref_url()}
                  for name in shot.characters if project.get_character(name)}
+    # 31.md §13 阶段3（C2）：BOUND 生成窗口内 basis 复验——依赖已变 → 候选不 commit
+    # （文件保留为 diagnostic artifact；视频路径 native_av_pre_commit_check 同语义）。
+    if bound is not None:
+        from src.shot_binding import ShotBindingService
+        post_generation_basis_guard(
+            ShotBindingService(project_dir, project_dir.name),
+            shot.shot_id, bound.basis)
     new_batch = ImageBatch(batch_id=batch_id, kind="first_frame", created_at=now,
                            status=ShotStatus.PENDING.value, prompt_snapshot=prompt,
                            char_ref_snapshot=char_snap, candidates=cand_list,
@@ -708,6 +716,12 @@ async def _handler_last_frame(job, emit):
     else:
         await client.download(url, dest)
     # 写尾帧批次（基于当前 selected_first_frame）+ 设 selected_last_frame + 同步旧 last_frame
+    if bound_last is not None:
+        # 31.md §13 阶段3（C2）：同首帧——provider 窗口内 basis 复验，变化不 commit。
+        from src.shot_binding import ShotBindingService
+        post_generation_basis_guard(
+            ShotBindingService(project_dir, project_dir.name),
+            shot.shot_id, bound_last.basis)
     batch_id = f"lf_{uuid.uuid4().hex[:8]}"
     now = _time.time()
     cand = Candidate(candidate_id=f"{batch_id}_1", local=str(dest), url=url,

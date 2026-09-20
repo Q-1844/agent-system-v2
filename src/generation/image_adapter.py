@@ -377,6 +377,34 @@ def _pre_dispatch_guard(svc: Any, shot_id: str, basis: dict) -> None:
                                             "显式重试整个 generation（不 auto refresh）"})
 
 
+def post_generation_basis_guard(svc: Any, shot_id: str, basis: dict) -> None:
+    """31.md §13 阶段3（Phase C2）：provider 返回后、canonical commit 前复验 Pack
+    basis——生成窗口内生产依赖已变 → 候选不得 commit（绝不把旧 basis 结果冒充成
+    当前有效 candidate；文件保留为 diagnostic artifact，批次不落库，显式重新生成）。
+    对比键 = readiness + binding_revision + resolved SIV（actual-deps-only，与
+    _BOUNDARY_COMPARE_KEYS 同口径：document_revision 不比——别的 shot 的 binding
+    refresh 不得误伤本镜 commit；依赖内容变化 → validity NOT_READY → readiness 键
+    已覆盖）。"""
+    post = svc.read_validity(shot_id)
+    aligned = (
+        post["readiness"] == "READY"
+        and post["binding_revision"] == basis.get("binding_revision")
+        and post["resolved_dependencies"].get("scene_instance_view_id")
+        == basis.get("resolved_scene_instance_view_id")
+    )
+    if not aligned:
+        raise BoundGenerationError(
+            "dependency_changed_before_commit",
+            {"shot_id": shot_id,
+             "post_readiness": post["readiness"],
+             "issues": post["issues"],
+             "recorded_basis": {"binding_revision": basis.get("binding_revision"),
+                                "resolved_scene_instance_view_id":
+                                    basis.get("resolved_scene_instance_view_id")},
+             "hint": "provider 生成窗口内生产依赖已变化——候选文件保留为 diagnostic "
+                     "artifact，批次不 commit；显式重新生成（不 auto refresh）"})
+
+
 # ============ boundary-frame freshness（S3C.2 §1 Case C / §17）============
 # 现有 ImageBatch 历史上无 provenance（Case C 审计结论）——"Binding 现在 READY"≠
 # "磁盘上的旧 frame fresh"（T1 生成→T2 依赖变 stale→T3 refresh 后旧帧仍在盘上）。
