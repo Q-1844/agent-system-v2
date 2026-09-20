@@ -1,0 +1,22 @@
+{
+  "_meta": "Claude 视觉预评（接触表抽帧，非运动终评）。dims: identity/action/camera/scene/props 1-5 + severe[] + notes。motion/运镜终评以用户人评为准。",
+  "X057": {
+    "shot": "s17_c03", "mode": "t2v", "style": "P0", "reviewer": "claude-frame-preview",
+    "scores": {"identity": 3, "action": 4, "camera": 4, "scene": 3, "props": 3},
+    "severe": [],
+    "notes": "运镜 push in MS→CU 成立；人物近似保持（疤痕/发髻可见）；服装色调跨帧漂移（灰蓝→红棕）；木棚场景成立；玉佩未清晰出现（frame5 手部持物不清）。动作意图（迷茫→坚定→握紧站起）大体完成。"
+  },
+  "X058": {
+    "shot": "s17_c03", "mode": "multi", "style": "P0", "reviewer": "claude-frame-preview",
+    "scores": {"identity": 4, "action": 4, "camera": 3, "scene": 2, "props": 3},
+    "severe": ["场景后半段漂移为平面壁画/屏风画风（scene structure change）"],
+    "notes": "蹲→站动作完成（意图匹配最好）；前半身份/姿态稳（斗篷/低髻一致）；后半背景变成带小人的彩绘墙面=场景结构性回归，疑似 look plate 绘画质感带入。camera 弱（近乎无 push in）。"
+  },
+  "X059": {
+    "shot": "s17_c03", "mode": "i2v", "style": "P0", "reviewer": "claude-frame-preview",
+    "scores": {"identity": 3, "action": 2, "camera": 2, "scene": 4, "props": 2},
+    "severe": [],
+    "notes": "首秒近乎冻结（motion_proxy early/mid=0.358+抽帧证实）——31.md『开头僵』复现；构图锁死首帧躯干（无脸），后半推脸时面部出现异常红痕（非本镜设定的左颊疤痕）+服装漂移；场景（木棚）最稳。玉佩未出现。"
+  },
+  "X057_cmp": {"note": "与 31.md 同镜三条件原始结论方向一致：i2v 冻结启动 / t2v 自由但外观漂移 / multi 身份+动作最好但引入自身场景漂移。基线复现=方向性 PASS。"}
+}
