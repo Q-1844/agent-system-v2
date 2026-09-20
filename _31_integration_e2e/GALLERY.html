@@ -85,10 +85,24 @@ h3{margin:14px 0 2px}
 const STATES = ["", "ok", "best", "bad"];
 const LABELS = {"": "未评", "ok": "✅ 可用", "best": "⭐ 首选", "bad": "❌ 不可用"};
 const COLORS = {"": "#555", "ok": "#2a7", "best": "#fa0", "bad": "#c33"};
+const LS_KEY = "gallery31_feedback";
+function lsAll(){ try { return JSON.parse(localStorage.getItem(LS_KEY) || "{}"); }
+  catch(e){ return {}; } }
+function lsSave(body){ const all = lsAll();
+  if (body.key) (all.selections = all.selections || {})[body.key] =
+    {state: body.state, at: body.at};
+  if (body.note_key) (all.notes = all.notes || {})[body.note_key] = body.note;
+  try { localStorage.setItem(LS_KEY, JSON.stringify(all)); } catch(e){}
+  return all; }
+let serverDown = false;
+function post(body){ lsSave(body); if (serverDown) return;
+  fetch('/api/feedback', {method:'POST',
+  headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)})
+  .then(() => { serverDown = false; })
+  .catch(() => { serverDown = true;
+    console.warn('评审服务不可达——选定暂存本地，服务恢复后刷新自动同步'); }); }
 function paint(btn, st){ btn.textContent = LABELS[st];
   btn.style.background = COLORS[st]; btn.style.color = st ? "#111" : "#ddd"; }
-function post(body){ fetch('/api/feedback', {method:'POST',
-  headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)}); }
 document.querySelectorAll('button.sel').forEach(btn => {
   btn.onclick = () => {
     const cur = btn.dataset.state || "";
@@ -100,15 +114,26 @@ document.querySelectorAll('button.sel').forEach(btn => {
 document.querySelectorAll('input.note').forEach(inp => {
   inp.onchange = () => post({note_key: inp.dataset.noteKey, note: inp.value, at: Date.now()});
 });
-fetch('/api/feedback').then(r => r.json()).then(fb => {
-  const sel = (fb || {}).selections || {};
+fetch('/api/feedback').then(r => r.json()).then(fb => { serverDown = false;
+  const sel = Object.assign({}, (fb || {}).selections || {},
+                              lsAll().selections || {});   // 本地优先（最新操作在本地）
   document.querySelectorAll('button.sel').forEach(btn => {
     const s = sel[btn.dataset.key];
     if (s && s.state) { btn.dataset.state = s.state; paint(btn, s.state); }
   });
-  const notes = (fb || {}).notes || {};
+  const notes = Object.assign({}, (fb || {}).notes || {}, lsAll().notes || {});
   document.querySelectorAll('input.note').forEach(inp => {
     if (notes[inp.dataset.noteKey]) inp.value = notes[inp.dataset.noteKey];
+  });
+}).catch(() => { serverDown = true;   // file:// 或服务不可用——纯本地模式
+  const all = lsAll();
+  document.querySelectorAll('button.sel').forEach(btn => {
+    const s = (all.selections || {})[btn.dataset.key];
+    if (s && s.state) { btn.dataset.state = s.state; paint(btn, s.state); }
+  });
+  document.querySelectorAll('input.note').forEach(inp => {
+    const n = (all.notes || {})[inp.dataset.noteKey];
+    if (n) inp.value = n;
   });
 });
 </script>
