@@ -4660,5 +4660,46 @@
     "prompt": "Animate this image: 沈夜站起身，握紧拳头, camera movement: slow push in, pace: 缓慢坚定, keep character identity and outfit consistent, Scene: 落雁驿 (night, heavy_rain, 微弱火光从柴房缝隙透入，黑暗神秘, 柴房黑暗，灰尘弥漫). 沈夜 wearing 沈夜·战斗伤损造型 — 沈夜，25岁前镖师，战后状态。左脸颊至下颌有浅 diagonal 刀疤清晰可见。黑发散乱但仍束成低发髻（low topknot with loose strands）。青灰立领盘扣长袍破损，下摆和肩部沾满鲜血。蓑衣披在肩上被血染红。眼神疲惫但警惕复杂。腰间短剑仍在鞘中。Cinematic 2D animation, theatrical anime feature, atmospheric depth, rich cel shading, dark moody lighting.. Visual production style: 2D animated image. Do not render as live-action photography or 3D rendered CGI. Art direction: High-end cinematic 2D animation in the tradition of theatrical anime feature films. Refined hand-drawn linework with confident varied strokes, controlled cel shading over richly painted backgrounds, nuanced facial modeling and expressive but anatomically grounded acting, cinematic lighting with motivated key light and atmospheric depth (haze, rain, lantern glow), detailed period production design, polished color scripting with restrained palette accents, strong silhouettes and feature-film keyframe quality. Eastern historical setting: mountain roads, way-station inns, river towns.. Project style tags: 2d_animation, theatrical anime feature quality, hand-drawn linework, controlled cel shading, painted background art, cinematic lighting, atmospheric depth, strong silhouette, consistent character proportions, detailed production design. Negative style constraints (must avoid): photorealistic; 3D CGI render look; plastic skin; chibi proportions; cheap flat web-anime screenshot look; generic AI fantasy illustration; over-sharpened oversaturated rendering; low-detail faces; empty generic backgrounds; extra limbs or duplicated props. 沈夜 delivery direction (not spoken): 低声，坚定 On-screen spoken dialogue in Mandarin Chinese: Only the explicitly quoted dialogue is spoken aloud: do not speak, narrate, or read any visual description, camera instruction, action description, character motion, sound-effect instruction, or production note. 1. 沈夜 says: 这一次，我不会再逃了。 Keep every line assigned to its specified speaker. Do not swap the speakers. The characters' mouths move naturally in sync with their own spoken lines. Speak exactly the supplied dialogue: do not translate, paraphrase, summarize, or invent additional spoken lines; natural tone, breathing, and non-verbal vocalizations are allowed as long as the meaning of the lines is unchanged.",
     "params": {},
     "based_on": "auto c2 (ff_25716245_2)"
+  },
+  {
+    "group": "mitigate",
+    "shot_id": "s17_c03",
+    "variant": "t2v_probe",
+    "frame": "video",
+    "file": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\_31_integration_e2e\\mitigate\\s17_c03_probe_t2v.mp4",
+    "provider_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-v2.0/video_19af41d244894c9c9bc16757ccaaa674.mp4",
+    "generation_basis": {
+      "probe": "t2v",
+      "prompt_chars": 2420,
+      "num_frames": 121,
+      "refs": []
+    },
+    "prompt": "Animate this image: 沈夜站起身，握紧拳头, camera movement: slow push in, pace: 缓慢坚定, keep character identity and outfit consistent, Scene: 落雁驿 (night, heavy_rain, 微弱火光从柴房缝隙透入，黑暗神秘, 柴房黑暗，灰尘弥漫). 沈夜 wearing 沈夜·战斗伤损造型 — 沈夜，25岁前镖师，战后状态。左脸颊至下颌有浅 diagonal 刀疤清晰可见。黑发散乱但仍束成低发髻（low topknot with loose strands）。青灰立领盘扣长袍破损，下摆和肩部沾满鲜血。蓑衣披在肩上被血染红。眼神疲惫但警惕复杂。腰间短剑仍在鞘中。Cinematic 2D animation, theatrical anime feature, atmospheric depth, rich cel shading, dark moody lighting.. Visual production style: 2D animated image. Do not render as live-action photography or 3D rendered CGI. Art direction: High-end cinematic 2D animation in the tradition of theatrical anime feature films. Refined hand-drawn linework with confident varied strokes, controlled cel shading over richly painted backgrounds, nuanced facial modeling and expressive but anatomically grounded acting, cinematic lighting with motivated key light and atmospheric depth (haze, rain, lantern glow), detailed period production design, polished color scripting with restrained palette accents, strong silhouettes and feature-film keyframe quality. Eastern historical setting: mountain roads, way-station inns, river towns.. Project style tags: 2d_animation, theatrical anime feature quality, hand-drawn linework, controlled cel shading, painted background art, cinematic lighting, atmospheric depth, strong silhouette, consistent character proportions, detailed production design. Negative style constraints (must avoid): photorealistic; 3D CGI render look; plastic skin; chibi proportions; cheap flat web-anime screenshot look; generic AI fantasy illustration; over-sharpened oversaturated rendering; low-detail faces; empty generic backgrounds; extra limbs or duplicated props. 沈夜 delivery direction (not spoken): 低声，坚定 On-screen spoken dialogue in Mandarin Chinese: Only the explicitly quoted dialogue is spoken aloud: do not speak, narrate, or read any visual description, camera instruction, action description, character motion, sound-effect instruction, or production note. 1. 沈夜 says: 这一次，我不会再逃了。 Keep every line assigned to its specified speaker. Do not swap the speakers. The characters' mouths move naturally in sync with their own spoken lines. Speak exactly the supplied dialogue: do not translate, paraphrase, summarize, or invent additional spoken lines; natural tone, breathing, and non-verbal vocalizations are allowed as long as the meaning of the lines is unchanged.",
+    "params": {
+      "mode": "t2v"
+    }
+  },
+  {
+    "group": "mitigate",
+    "shot_id": "s17_c03",
+    "variant": "multi_probe",
+    "frame": "video",
+    "file": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\_31_integration_e2e\\mitigate\\s17_c03_probe_multi.mp4",
+    "provider_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-v2.0/video_8890250a7061464ea61fdcb0a80d57f2.mp4",
+    "generation_basis": {
+      "probe": "multi",
+      "prompt_chars": 2420,
+      "num_frames": 121,
+      "refs": [
+        "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_YrMkYVSWMIWeLLuIJKzLLDqJAQc81QkL/output.png"
+      ]
+    },
+    "prompt": "Animate this image: 沈夜站起身，握紧拳头, camera movement: slow push in, pace: 缓慢坚定, keep character identity and outfit consistent, Scene: 落雁驿 (night, heavy_rain, 微弱火光从柴房缝隙透入，黑暗神秘, 柴房黑暗，灰尘弥漫). 沈夜 wearing 沈夜·战斗伤损造型 — 沈夜，25岁前镖师，战后状态。左脸颊至下颌有浅 diagonal 刀疤清晰可见。黑发散乱但仍束成低发髻（low topknot with loose strands）。青灰立领盘扣长袍破损，下摆和肩部沾满鲜血。蓑衣披在肩上被血染红。眼神疲惫但警惕复杂。腰间短剑仍在鞘中。Cinematic 2D animation, theatrical anime feature, atmospheric depth, rich cel shading, dark moody lighting.. Visual production style: 2D animated image. Do not render as live-action photography or 3D rendered CGI. Art direction: High-end cinematic 2D animation in the tradition of theatrical anime feature films. Refined hand-drawn linework with confident varied strokes, controlled cel shading over richly painted backgrounds, nuanced facial modeling and expressive but anatomically grounded acting, cinematic lighting with motivated key light and atmospheric depth (haze, rain, lantern glow), detailed period production design, polished color scripting with restrained palette accents, strong silhouettes and feature-film keyframe quality. Eastern historical setting: mountain roads, way-station inns, river towns.. Project style tags: 2d_animation, theatrical anime feature quality, hand-drawn linework, controlled cel shading, painted background art, cinematic lighting, atmospheric depth, strong silhouette, consistent character proportions, detailed production design. Negative style constraints (must avoid): photorealistic; 3D CGI render look; plastic skin; chibi proportions; cheap flat web-anime screenshot look; generic AI fantasy illustration; over-sharpened oversaturated rendering; low-detail faces; empty generic backgrounds; extra limbs or duplicated props. 沈夜 delivery direction (not spoken): 低声，坚定 On-screen spoken dialogue in Mandarin Chinese: Only the explicitly quoted dialogue is spoken aloud: do not speak, narrate, or read any visual description, camera instruction, action description, character motion, sound-effect instruction, or production note. 1. 沈夜 says: 这一次，我不会再逃了。 Keep every line assigned to its specified speaker. Do not swap the speakers. The characters' mouths move naturally in sync with their own spoken lines. Speak exactly the supplied dialogue: do not translate, paraphrase, summarize, or invent additional spoken lines; natural tone, breathing, and non-verbal vocalizations are allowed as long as the meaning of the lines is unchanged.",
+    "params": {
+      "mode": "multi",
+      "image_urls": [
+        "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_YrMkYVSWMIWeLLuIJKzLLDqJAQc81QkL/output.png"
+      ]
+    }
   }
 ]
