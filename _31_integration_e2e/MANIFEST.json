@@ -4556,5 +4556,109 @@
         "msg": "s17_c03 已生成 2 个候选（批次 ff_fc2ab778），待选择"
       }
     ]
+  },
+  {
+    "group": "mitigate",
+    "shot_id": "s09_c01",
+    "variant": "video_auto",
+    "frame": "video",
+    "file": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\_31_integration_e2e\\mitigate\\s09_c01_video_auto.mp4",
+    "provider_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-v2.0/video_f200c5c6d167485ca5d2f7ef827280ff.mp4",
+    "generation_basis": {
+      "schema": "native_av_generation_basis_v1",
+      "shot_id": "s09_c01",
+      "visual_basis_fingerprint": "43dcc560",
+      "dialogue_fingerprint": null,
+      "speaker_map_fingerprint": null,
+      "spoken_language": null,
+      "prompt_compiler_schema": "native_av_prompt_v3",
+      "performance_intent_fingerprint": null,
+      "video_prompt_creative_fingerprint": "845cff6e",
+      "provider": "agnes",
+      "model": null,
+      "provider_mode": "i2v",
+      "provider_options_fingerprint": "255626c7"
+    },
+    "prompt": "Animate this image: 暴雨倾泻，老马艰难前行，沈夜身体前倾护住怀中信件, camera movement: slow push in, pace: 缓慢沉重, keep character identity and outfit consistent, Scene: 落雁驿 (night, heavy_rain, 暗黑暴雨，远处微弱烛光, 狂风暴雨，能见度极低，荒废驿站). 沈夜 wearing 沈夜·默认造型 v2 — 沈夜：25岁前镖师，瘦削结实，黑发束成低发髻（low topknot），左脸颊至下颌有浅 diagonal 刀疤，青灰色立领盘扣长袍（standing collar with frog buttons），腰间左侧悬短剑，眼神冷峻警惕而非愤怒，东方水墨电影质感。. Visual production style: 2D animated image. Do not render as live-action photography or 3D rendered CGI. Art direction: High-end cinematic 2D animation in the tradition of theatrical anime feature films. Refined hand-drawn linework with confident varied strokes, controlled cel shading over richly painted backgrounds, nuanced facial modeling and expressive but anatomically grounded acting, cinematic lighting with motivated key light and atmospheric depth (haze, rain, lantern glow), detailed period production design, polished color scripting with restrained palette accents, strong silhouettes and feature-film keyframe quality. Eastern historical setting: mountain roads, way-station inns, river towns.. Project style tags: 2d_animation, theatrical anime feature quality, hand-drawn linework, controlled cel shading, painted background art, cinematic lighting, atmospheric depth, strong silhouette, consistent character proportions, detailed production design. Negative style constraints (must avoid): photorealistic; 3D CGI render look; plastic skin; chibi proportions; cheap flat web-anime screenshot look; generic AI fantasy illustration; over-sharpened oversaturated rendering; low-detail faces; empty generic backgrounds; extra limbs or duplicated props.",
+    "params": {},
+    "based_on": "auto c2 (ff_06fa9dc5_2)"
+  },
+  {
+    "group": "mitigate",
+    "shot_id": "s16_c02",
+    "variant": "video_auto",
+    "frame": "video",
+    "file": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\_31_integration_e2e\\mitigate\\s16_c02_video_auto.mp4",
+    "provider_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-v2.0/video_c21fee7c7f8a490d960794740599bcc7.mp4",
+    "generation_basis": {
+      "schema": "native_av_generation_basis_v1",
+      "shot_id": "s16_c02",
+      "visual_basis_fingerprint": "98a046d1",
+      "dialogue_fingerprint": null,
+      "speaker_map_fingerprint": null,
+      "spoken_language": null,
+      "prompt_compiler_schema": "native_av_prompt_v3",
+      "performance_intent_fingerprint": null,
+      "video_prompt_creative_fingerprint": "202b3989",
+      "provider": "agnes",
+      "model": null,
+      "provider_mode": "keyframes",
+      "provider_options_fingerprint": "56bbbd6d"
+    },
+    "prompt": "Create a smooth cinematic transition from the first keyframe to the second keyframe, with this motion: 剑刃碰撞，火花飞溅，手臂颤抖, camera: static, pace: 快速, maintain consistency in character identity, scene layout, Scene: 落雁驿 (night, heavy_rain, dramatic candlelight with strong directional shadows, sword flashes, flickering violently, indoor melee chaos, broken furniture overturned, scattered weapons on ground, candle wax mixed with dark blood stains, broken porcelain shards, ruined lantern swaying from beams, rain streaming through open doors, muddy footprints). 柳衣 wearing 柳衣·默认造型 — 柳衣：27岁驿站主人，修长优雅，黑色长发及腰，部分编辫带细微装饰，深黑眼眸锐利如刀，穿墨黑色修身长衫（改良旗袍式，立领右衽，袖口领口暗纹刺绣），外罩深色薄外套，手持油纸伞（暖棕色/暗红色），颈间玉佩，东方水墨电影质感，冷峻神秘气质。. 萧寒 wearing 萧寒·黑色劲装默认造型 v2 — 萧寒，38岁左右男性刺客，身高体壮魁梧。黑发梳向脑后紧紧束成低发髻，额前碎发贴合，可见完整额头。面容冷峻轮廓深，颧骨略高，嘴唇紧抿薄唇，眼神如鹰隼般锐利——冷酷算计而非愤怒。身穿黑色粗布棉麻劲装，窄袖束腰，面料有明显织物纹理而非光滑紧身材质。腰间佩长剑在鞘中。双手自然垂放或背后。站在暗色调东方历史室内场景中，烛火微光。Cinematic 2D animation style, theatrical anime feature quality, atmospheric depth, dark moody background, controlled cel shading, rich color scripting.. Visual production style: 2D animated image. Do not render as live-action photography or 3D rendered CGI. Art direction: High-end cinematic 2D animation in the tradition of theatrical anime feature films. Refined hand-drawn linework with confident varied strokes, controlled cel shading over richly painted backgrounds, nuanced facial modeling and expressive but anatomically grounded acting, cinematic lighting with motivated key light and atmospheric depth (haze, rain, lantern glow), detailed period production design, polished color scripting with restrained palette accents, strong silhouettes and feature-film keyframe quality. Eastern historical setting: mountain roads, way-station inns, river towns.. Project style tags: 2d_animation, theatrical anime feature quality, hand-drawn linework, controlled cel shading, painted background art, cinematic lighting, atmospheric depth, strong silhouette, consistent character proportions, detailed production design. Negative style constraints (must avoid): photorealistic; 3D CGI render look; plastic skin; chibi proportions; cheap flat web-anime screenshot look; generic AI fantasy illustration; over-sharpened oversaturated rendering; low-detail faces; empty generic backgrounds; extra limbs or duplicated props.",
+    "params": {},
+    "based_on": "auto c2 (ff_71118d95_2)"
+  },
+  {
+    "group": "mitigate",
+    "shot_id": "s17_c02",
+    "variant": "video_auto",
+    "frame": "video",
+    "file": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\_31_integration_e2e\\mitigate\\s17_c02_video_auto.mp4",
+    "provider_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-v2.0/video_dba1547d1a0847e48fecddc23c7d85b7.mp4",
+    "generation_basis": {
+      "schema": "native_av_generation_basis_v1",
+      "shot_id": "s17_c02",
+      "visual_basis_fingerprint": "af279141",
+      "dialogue_fingerprint": "fc3334bd",
+      "speaker_map_fingerprint": "dc7ccf6b",
+      "spoken_language": "Mandarin Chinese",
+      "prompt_compiler_schema": "native_av_prompt_v3",
+      "performance_intent_fingerprint": null,
+      "video_prompt_creative_fingerprint": "734cb722",
+      "provider": "agnes",
+      "model": null,
+      "provider_mode": "i2v",
+      "provider_options_fingerprint": "d1736802"
+    },
+    "prompt": "Animate this image: 玉佩静止，只有光线的微弱变化, camera movement: static, pace: 静止, keep character identity and outfit consistent, Scene: 落雁驿 (night, heavy_rain, 微弱火光从柴房缝隙透入，黑暗神秘, 柴房黑暗，灰尘弥漫). 沈夜 wearing 沈夜·战斗伤损造型 — 沈夜，25岁前镖师，战后状态。左脸颊至下颌有浅 diagonal 刀疤清晰可见。黑发散乱但仍束成低发髻（low topknot with loose strands）。青灰立领盘扣长袍破损，下摆和肩部沾满鲜血。蓑衣披在肩上被血染红。眼神疲惫但警惕复杂。腰间短剑仍在鞘中。Cinematic 2D animation, theatrical anime feature, atmospheric depth, rich cel shading, dark moody lighting.. Visual production style: 2D animated image. Do not render as live-action photography or 3D rendered CGI. Art direction: High-end cinematic 2D animation in the tradition of theatrical anime feature films. Refined hand-drawn linework with confident varied strokes, controlled cel shading over richly painted backgrounds, nuanced facial modeling and expressive but anatomically grounded acting, cinematic lighting with motivated key light and atmospheric depth (haze, rain, lantern glow), detailed period production design, polished color scripting with restrained palette accents, strong silhouettes and feature-film keyframe quality. Eastern historical setting: mountain roads, way-station inns, river towns.. Project style tags: 2d_animation, theatrical anime feature quality, hand-drawn linework, controlled cel shading, painted background art, cinematic lighting, atmospheric depth, strong silhouette, consistent character proportions, detailed production design. Negative style constraints (must avoid): photorealistic; 3D CGI render look; plastic skin; chibi proportions; cheap flat web-anime screenshot look; generic AI fantasy illustration; over-sharpened oversaturated rendering; low-detail faces; empty generic backgrounds; extra limbs or duplicated props. 沈夜 delivery direction (not spoken): 低声 On-screen spoken dialogue in Mandarin Chinese: Only the explicitly quoted dialogue is spoken aloud: do not speak, narrate, or read any visual description, camera instruction, action description, character motion, sound-effect instruction, or production note. 1. 沈夜 says: 赵……大理寺卿赵…… Keep every line assigned to its specified speaker. Do not swap the speakers. The characters' mouths move naturally in sync with their own spoken lines. Speak exactly the supplied dialogue: do not translate, paraphrase, summarize, or invent additional spoken lines; natural tone, breathing, and non-verbal vocalizations are allowed as long as the meaning of the lines is unchanged.",
+    "params": {},
+    "based_on": "auto c1 (ff_94e61ede_1)"
+  },
+  {
+    "group": "mitigate",
+    "shot_id": "s17_c03",
+    "variant": "video_auto",
+    "frame": "video",
+    "file": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\_31_integration_e2e\\mitigate\\s17_c03_video_auto.mp4",
+    "provider_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-v2.0/video_17458187268f4ae69cf26e93e741d11e.mp4",
+    "generation_basis": {
+      "schema": "native_av_generation_basis_v1",
+      "shot_id": "s17_c03",
+      "visual_basis_fingerprint": "955b4ee5",
+      "dialogue_fingerprint": "98299dd5",
+      "speaker_map_fingerprint": "dc7ccf6b",
+      "spoken_language": "Mandarin Chinese",
+      "prompt_compiler_schema": "native_av_prompt_v3",
+      "performance_intent_fingerprint": null,
+      "video_prompt_creative_fingerprint": "58de0121",
+      "provider": "agnes",
+      "model": null,
+      "provider_mode": "i2v",
+      "provider_options_fingerprint": "f9da00e9"
+    },
+    "prompt": "Animate this image: 沈夜站起身，握紧拳头, camera movement: slow push in, pace: 缓慢坚定, keep character identity and outfit consistent, Scene: 落雁驿 (night, heavy_rain, 微弱火光从柴房缝隙透入，黑暗神秘, 柴房黑暗，灰尘弥漫). 沈夜 wearing 沈夜·战斗伤损造型 — 沈夜，25岁前镖师，战后状态。左脸颊至下颌有浅 diagonal 刀疤清晰可见。黑发散乱但仍束成低发髻（low topknot with loose strands）。青灰立领盘扣长袍破损，下摆和肩部沾满鲜血。蓑衣披在肩上被血染红。眼神疲惫但警惕复杂。腰间短剑仍在鞘中。Cinematic 2D animation, theatrical anime feature, atmospheric depth, rich cel shading, dark moody lighting.. Visual production style: 2D animated image. Do not render as live-action photography or 3D rendered CGI. Art direction: High-end cinematic 2D animation in the tradition of theatrical anime feature films. Refined hand-drawn linework with confident varied strokes, controlled cel shading over richly painted backgrounds, nuanced facial modeling and expressive but anatomically grounded acting, cinematic lighting with motivated key light and atmospheric depth (haze, rain, lantern glow), detailed period production design, polished color scripting with restrained palette accents, strong silhouettes and feature-film keyframe quality. Eastern historical setting: mountain roads, way-station inns, river towns.. Project style tags: 2d_animation, theatrical anime feature quality, hand-drawn linework, controlled cel shading, painted background art, cinematic lighting, atmospheric depth, strong silhouette, consistent character proportions, detailed production design. Negative style constraints (must avoid): photorealistic; 3D CGI render look; plastic skin; chibi proportions; cheap flat web-anime screenshot look; generic AI fantasy illustration; over-sharpened oversaturated rendering; low-detail faces; empty generic backgrounds; extra limbs or duplicated props. 沈夜 delivery direction (not spoken): 低声，坚定 On-screen spoken dialogue in Mandarin Chinese: Only the explicitly quoted dialogue is spoken aloud: do not speak, narrate, or read any visual description, camera instruction, action description, character motion, sound-effect instruction, or production note. 1. 沈夜 says: 这一次，我不会再逃了。 Keep every line assigned to its specified speaker. Do not swap the speakers. The characters' mouths move naturally in sync with their own spoken lines. Speak exactly the supplied dialogue: do not translate, paraphrase, summarize, or invent additional spoken lines; natural tone, breathing, and non-verbal vocalizations are allowed as long as the meaning of the lines is unchanged.",
+    "params": {},
+    "based_on": "auto c2 (ff_25716245_2)"
   }
 ]

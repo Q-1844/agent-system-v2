@@ -1,0 +1,109 @@
+{
+  "selections": {
+    "fixture||s01_c01||caseA_static||c2": {
+      "state": "bad",
+      "at": 1789894162110
+    },
+    "fixture||s01_c01||caseA_static||c1": {
+      "state": "bad",
+      "at": 1789894184587
+    },
+    "fixture||s01_c02||caseB_prop||c1": {
+      "state": "ok",
+      "at": 1789894270986
+    },
+    "fixture||s01_c02||caseB_prop||c2": {
+      "state": "ok",
+      "at": 1789894273437
+    },
+    "fixture||s01_c03||caseC_pickup_first||c2": {
+      "state": "ok",
+      "at": 1789894314044
+    },
+    "fixture||s01_c03||caseC_pickup_last||c1": {
+      "state": "ok",
+      "at": 1789894318880
+    },
+    "fixture||s01_c03||caseC_pickup_first||c1": {
+      "state": "ok",
+      "at": 1789894345059
+    },
+    "mitigate||s09_c01||auto||c2": {
+      "state": "best",
+      "at": 1789894400675
+    },
+    "mitigate||s09_c01||auto_pop||c1": {
+      "state": "ok",
+      "at": 1789894375616
+    },
+    "mitigate||s09_c01||auto_pop||c2": {
+      "state": "ok",
+      "at": 1789894377377
+    },
+    "mitigate||s09_c01||auto||c1": {
+      "state": "ok",
+      "at": 1789894379778
+    },
+    "mitigate||s16_c02||auto||c1": {
+      "state": "bad",
+      "at": 1789894431433
+    },
+    "mitigate||s16_c02||auto||c2": {
+      "state": "ok",
+      "at": 1789894429316
+    },
+    "mitigate||s16_c02||crop||c1": {
+      "state": "bad",
+      "at": 1789894439894
+    },
+    "mitigate||s16_c02||crop||c2": {
+      "state": "bad",
+      "at": 1789894442888
+    },
+    "mitigate||s16_c02||crop_pop||c1": {
+      "state": "bad",
+      "at": 1789894454638
+    },
+    "mitigate||s16_c02||crop_pop||c2": {
+      "state": "bad",
+      "at": 1789894456965
+    },
+    "mitigate||s16_c02||crop_v2||c2": {
+      "state": "bad",
+      "at": 1789894462029
+    },
+    "mitigate||s16_c02||crop_v2||c1": {
+      "state": "bad",
+      "at": 1789894464266
+    },
+    "mitigate||s17_c02||crop_v2||c2": {
+      "state": "ok",
+      "at": 1789894526852
+    },
+    "mitigate||s17_c02||auto||c1": {
+      "state": "ok",
+      "at": 1789894532608
+    },
+    "mitigate||s17_c03||auto||c1": {
+      "state": "ok",
+      "at": 1789894541693
+    },
+    "mitigate||s17_c03||auto||c2": {
+      "state": "best",
+      "at": 1789894551114
+    },
+    "mitigate||s17_c03||crop||c1": {
+      "state": "best",
+      "at": 1789894587623
+    }
+  },
+  "_updated_at": 1789894587623,
+  "notes": {
+    "fixture/s01_c02": "室内下雨，而且这是一个实验室。但是人物大小还行",
+    "fixture/s01_c01": "室内下雨，而且这是一个实验室。但是人物大小还行",
+    "fixture/s01_c03": "各有优缺点，c2的人物看着更自然",
+    "mitigate/s09_c01": "人物的视角都勉强还行",
+    "mitigate/s17_c02": "不太行，这里感觉很明显是连角色的动作都没有搞清楚",
+    "mitigate/s17_c03": "勉强"
+  }
+}
