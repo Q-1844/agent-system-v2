@@ -361,6 +361,10 @@ from src.generation.image_adapter import (
     shot_has_visual_production_binding,
 )
 from src.generation.video_adapter import build_bound_video_input
+from src.generation.agnes_adapter import (
+    compile_agnes_image_call,
+    compile_agnes_video_call,
+)
 
 
 def _shot_char_refs(project, shot):
@@ -564,8 +568,14 @@ async def _handler_first_frame(job, emit):
                                                   "scene_reference_mode"),
                                               human_reference_mode=job.params.get(
                                                   "human_reference_mode"))
-        refs = bound.image_refs
-        prompt = bound.prompt
+        # 31.md C1 seam：BOUND 输入经 provider-neutral GenerationRequest →
+        # Agnes compiler 到达 client（编译层=能力诚实映射；UNBOUND 保持 legacy
+        # 直调，行为逐字节不变）。
+        _gen_req = bound.to_generation_request(generation_type="first_frame",
+                                               size_tier=size_tier, ratio=ratio)
+        _call = compile_agnes_image_call(_gen_req)
+        refs = list(_call.image_refs or [])
+        prompt = _call.prompt
     else:
         typed_refs = _collect_first_frame_refs(project, shot)
         refs = [r["url"] for r in typed_refs]
@@ -666,8 +676,14 @@ async def _handler_last_frame(job, emit):
             project_dir, project, shot, first_frame_url=ff_url,
             scene_reference_mode=job.params.get("scene_reference_mode"),
             human_reference_mode=job.params.get("human_reference_mode"))
-        prompt = bound_last.prompt
-        refs = bound_last.image_refs
+        # 31.md C1 seam（同首帧）：provider-neutral 编译到 Agnes 形态。
+        _gen_req_lf = bound_last.to_generation_request(
+            generation_type="last_frame",
+            size_tier=project.style.size_tier or "1K",
+            ratio=project.style.aspect_ratio or "16:9")
+        _call_lf = compile_agnes_image_call(_gen_req_lf)
+        prompt = _call_lf.prompt
+        refs = list(_call_lf.image_refs or [])
     else:
         # P1 根因修复：同首帧——legacy 尾帧消费 ProjectVisualProfile（unspecified → 原行为）
         prompt = build_last_frame_prompt(
@@ -1306,9 +1322,19 @@ async def _handler_video(job, emit):
                                                   native_dialogue_control=ndc,
                                                   native_dialogue_language=ndc_lang,
                                                   provider_options=dict(provider_options))
-            prompt = bound_video.prompt
-            first_url = bound_video.first_frame
-            last_url = bound_video.last_frame
+            # 31.md C1 seam（同图片）：provider-neutral 编译到 Agnes 槽位形态
+            # （i2v→image_url 单槽 / keyframes→image_urls 双槽；公网 URL 约束
+            # 在编译层结构化拒绝）。
+            _gen_req_v = bound_video.to_generation_request(model=video_model)
+            _call_v = compile_agnes_video_call(_gen_req_v)
+            prompt = _call_v.prompt
+            _slots = _call_v.slots()
+            if "image_urls" in _slots:
+                first_url = _slots["image_urls"][0]
+                last_url = _slots["image_urls"][1]
+            else:
+                first_url = _slots["image_url"]
+                last_url = None
             native_generation_basis = dict(bound_video.generation_basis)
         elif mode == "keyframes":
             last_url = shot.last_frame.selected.url

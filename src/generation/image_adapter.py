@@ -97,6 +97,10 @@ class BoundImageRequest:
     basis: Dict[str, Any] = field(default_factory=dict)
     scene_reference_mode: str = DEFAULT_SCENE_REFERENCE_MODE  # D2：resolved 结果
     human_reference_mode: str = DEFAULT_HUMAN_REFERENCE_MODE  # D2 §5.2：resolved 结果
+    # refs 布局语义（31.md C1 seam：image_refs 与 semantic_roles 平行段的特例项位置）——
+    # pack_only=逐项对应；continuity_tail=末尾多一条 reference_previous 末帧（creative
+    # relay，无 pack role）；first_frame_head=头部多一条尾帧构图基础（已选首帧，无 pack role）。
+    ref_layout: str = "pack_only"
 
     def to_dict(self) -> dict:
         return {
@@ -110,7 +114,65 @@ class BoundImageRequest:
             "basis": dict(self.basis),
             "scene_reference_mode": self.scene_reference_mode,
             "human_reference_mode": self.human_reference_mode,
+            "ref_layout": self.ref_layout,
         }
+
+    def to_generation_request(self, *, generation_type: str = "first_frame",
+                              size_tier: str = "", ratio: str = "",
+                              model: Optional[str] = None):
+        """provider-neutral 投影（31.md §10）：BoundImageRequest → GenerationRequest。
+        generation_type 由调用方按构建器显式声明（first_frame/last_frame——本 dataclass
+        同时服务两者）。纯投影不重解释：media/顺序/取舍全部来自本 request（image_refs 与
+        semantic_roles 平行段 + ref_layout 特例项）；checksum 取自解析时的
+        ReferenceAsset（roles 可携带）；derivation 由预算/裁剪层在 roles 中标注。"""
+        from src.generation.request import GenerationRequest, ReferenceInput
+        refs = list(self.image_refs)
+        roles = list(self.semantic_roles)
+        inputs: List[ReferenceInput] = []
+        if self.ref_layout == "first_frame_head" and refs:
+            inputs.append(ReferenceInput(
+                source_type="first_frame_base", semantic_role="composition_base",
+                temporal_scope="start", media=refs[0]))
+            refs = refs[1:]
+        if self.ref_layout == "continuity_tail" and refs and len(refs) > len(roles):
+            tail = refs[-1]
+            inputs.extend(ReferenceInput(
+                asset_id=str(r.get("reference_asset_id") or r.get("source_id") or ""),
+                source_type=str(r.get("source_type") or ""),
+                semantic_role=str(r.get("purpose") or ""),
+                priority=str(r.get("priority") or ""),
+                temporal_scope=str(r.get("temporal_scope") or ""),
+                subject_character=r.get("subject_character"),
+                prop_id=r.get("prop_id"),
+                media=m, checksum=r.get("checksum"))
+                for r, m in zip(roles, refs[:-1]))
+            inputs.append(ReferenceInput(
+                source_type="continuity_previous_end", semantic_role="continuity",
+                temporal_scope="start", media=tail))
+        else:
+            inputs.extend(ReferenceInput(
+                asset_id=str(r.get("reference_asset_id") or r.get("source_id") or ""),
+                source_type=str(r.get("source_type") or ""),
+                semantic_role=str(r.get("purpose") or ""),
+                priority=str(r.get("priority") or ""),
+                temporal_scope=str(r.get("temporal_scope") or ""),
+                subject_character=r.get("subject_character"),
+                prop_id=r.get("prop_id"),
+                media=m, checksum=r.get("checksum"))
+                for r, m in zip(roles, refs))
+        return GenerationRequest(
+            generation_type=generation_type, shot_id=self.shot_id,
+            prompt=self.prompt, reference_inputs=inputs,
+            ratio=ratio, size_tier=size_tier, model=model,
+            diagnostics=list(self.diagnostics),
+            provenance={
+                "basis": dict(self.basis),
+                "used_reference_ids": list(self.used_reference_ids),
+                "dropped_optional": list(self.dropped_optional),
+                "scene_reference_mode": self.scene_reference_mode,
+                "human_reference_mode": self.human_reference_mode,
+                "ref_layout": self.ref_layout,
+            })
 
 
 def shot_has_binding(project_dir, shot_id: str) -> bool:
@@ -597,13 +659,17 @@ def _resolve_media_loop(eligible: List[dict], rdoc: Any, project_dir: Path
             continue
         image_refs.append(media)
         used_ids.append(str(item.get("reference_asset_id") or item.get("source_id") or ""))
+        # checksum（31.md §12：能记录则记录）——ReferenceAsset 内容指纹（可空，legacy 项无）
+        asset = rdoc.reference_assets.get(item.get("reference_asset_id")) \
+            if item.get("reference_asset_id") else None
         roles.append({"reference_asset_id": item.get("reference_asset_id"),
                       "source_type": item.get("source_type"),
                       "purpose": item.get("purpose"),
                       "priority": item.get("priority"),
                       "temporal_scope": item.get("temporal_scope"),
                       "subject_character": item.get("subject_character"),
-                      "prop_id": item.get("prop_id")})
+                      "prop_id": item.get("prop_id"),
+                      "checksum": getattr(asset, "checksum", None)})
     return image_refs, used_ids, dropped, diagnostics, roles
 
 
@@ -653,6 +719,7 @@ def build_bound_first_frame_input(project_dir, project: Any, shot: Any, *,
 
     # ---- continuity（Shot creative relay，Phase 6A 既有机制；append 尾部）----
     continuity_clause = ""
+    continuity_media_used = False
     from src.core.models import OpeningSource
     if shot.opening_source == OpeningSource.REFERENCE_PREVIOUS.value and shot.source_shot_id:
         prev = project.get_shot(shot.source_shot_id)
@@ -663,6 +730,7 @@ def build_bound_first_frame_input(project_dir, project: Any, shot: Any, *,
             media = to_agnes_image_ref(project_dir, url=end.url, local=end.local)
         if media:
             image_refs.append(media)
+            continuity_media_used = True
             continuity_clause = (
                 ". Maintain continuity with the previous shot's ending frame: keep "
                 "character identity, environment, outfit and lighting direction; "
@@ -688,7 +756,8 @@ def build_bound_first_frame_input(project_dir, project: Any, shot: Any, *,
         used_reference_ids=used_ids, dropped_optional=dropped,
         diagnostics=diagnostics, semantic_roles=roles, basis=basis,
         scene_reference_mode=resolved_scene_mode,
-        human_reference_mode=resolved_human_mode)
+        human_reference_mode=resolved_human_mode,
+        ref_layout="continuity_tail" if continuity_media_used else "pack_only")
 
 
 def build_bound_last_frame_input(project_dir, project: Any, shot: Any, *,
@@ -779,4 +848,5 @@ def build_bound_last_frame_input(project_dir, project: Any, shot: Any, *,
         diagnostics=diagnostics, semantic_roles=roles, basis=basis,
         scene_reference_mode=resolved_scene_mode,
         human_reference_mode=resolve_human_reference_mode(
-            human_reference_mode, shot, resolved_scene_mode))
+            human_reference_mode, shot, resolved_scene_mode),
+        ref_layout="first_frame_head")

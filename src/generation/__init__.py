@@ -15,6 +15,14 @@ from .image_adapter import (
     shot_has_visual_production_binding,
 )
 from .video_adapter import BoundVideoRequest, build_bound_video_input
+from .request import GenerationRequest, ReferenceInput
+from .agnes_adapter import (
+    AgnesImageCall,
+    AgnesRequestCompileError,
+    AgnesVideoCall,
+    compile_agnes_image_call,
+    compile_agnes_video_call,
+)
 from .dialogue_control import (
     DialogueControlError,
     DialogueDirection,
@@ -31,19 +39,26 @@ from .dialogue_control import (
 )
 
 __all__ = [
+    "AgnesImageCall",
+    "AgnesRequestCompileError",
+    "AgnesVideoCall",
     "BoundGenerationError",
     "BoundImageRequest",
     "BoundVideoRequest",
     "DialogueControlError",
     "DialogueDirection",
     "DialogueLineControl",
+    "GenerationRequest",
     "NativeDialogueControl",
+    "ReferenceInput",
     "append_dialogue_block",
     "build_bound_first_frame_input",
     "build_bound_last_frame_input",
     "build_bound_video_input",
     "build_dialogue_block",
     "classify_dialogue_body",
+    "compile_agnes_image_call",
+    "compile_agnes_video_call",
     "compile_prompt_with_native_dialogue",
     "resolve_dialogue_language",
     "resolve_native_dialogue",

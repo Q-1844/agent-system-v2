@@ -78,6 +78,36 @@ class BoundVideoRequest:
             "generation_basis": dict(self.generation_basis),
         }
 
+    def to_generation_request(self, *, model: Optional[str] = None):
+        """provider-neutral 投影（31.md §10）：BoundVideoRequest → GenerationRequest。
+        boundary frames 即视频的真实参考输入（provider 无任意 reference 槽，§5）——
+        投影为 ReferenceInput(source_type=boundary_frame)；seed/negative_prompt 不进
+        投影（Shot creative 字段，handler kwargs 既有通道传递，§24 不伪造槽位）。"""
+        from src.generation.request import GenerationRequest, ReferenceInput
+        inputs: List[ReferenceInput] = []
+        if self.first_frame:
+            inputs.append(ReferenceInput(
+                source_type="boundary_frame", semantic_role="first_slot",
+                temporal_scope="start", media=self.first_frame))
+        if self.last_frame:
+            inputs.append(ReferenceInput(
+                source_type="boundary_frame", semantic_role="last_slot",
+                temporal_scope="end", media=self.last_frame))
+        return GenerationRequest(
+            generation_type="video", shot_id=self.shot_id,
+            prompt=self.prompt, reference_inputs=inputs,
+            first_frame=self.first_frame or None,
+            last_frame=self.last_frame or None,
+            model=model,
+            diagnostics=list(self.diagnostics),
+            provenance={
+                "basis": dict(self.basis),
+                "generation_basis": dict(self.generation_basis),
+                "provider_mode": self.provider_mode,
+                "used_reference_ids": list(self.used_reference_ids),
+                "dropped_optional": list(self.dropped_optional),
+            })
+
 
 def _effective_relay_first_frame(project: Any, shot: Any) -> str:
     """inherit_previous：开场画面 = 来源镜头实际视频末帧 URL（routers/shots.py
