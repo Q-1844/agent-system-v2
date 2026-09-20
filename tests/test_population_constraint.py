@@ -67,6 +67,11 @@ def test_clause_off_by_default_and_on_by_param(cenv):
 def test_clause_multi_character_count(cenv):
     pdir, ids, svc, _fake = cenv
     _bind_default(svc, ids)
+    store = ProjectStore(pdir)
+
+    def _recast(s):
+        s.characters = ["Alice", "Bob"]
+    store.update_shot("s01_c02", _recast)
     _bind(svc, shot_id="s01_c02", inst=ids["inst"], view=ids["view_a"],
           characters=[{"character_name": "Alice", "look_id": LOOK},
                       {"character_name": "Bob", "look_id": LOOK_BOB}])
