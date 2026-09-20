@@ -262,13 +262,15 @@
   "notes": "孤儿恢复（杀进程后轮询收尾成功）；motion 2.188；接触表待补看。"
  },
  "_patterns": {
-  "asof": "batch2A X036",
+  "asof": "batch2A X040",
   "t2v": "动作链/人数遵从最好；风险=开头外景漂移+动作归属漂移；身份=服装级",
   "multi_look": "身份/服装最稳；风险=look plate 环境/人口渗入开头；仅 1 图槽（多角色镜只能送首位角色）",
   "multiS_scene": "场景保真最强=构图锚；结构=场景板复刻前缀(~2s)+后段内容；风险=压制文本人数/身份事实、开场近冻结",
   "i2v": "首秒冻结三度复现；构图锁死首帧资产（资产与意图不符时错误被放大）；身份/场景最稳",
   "ref_slot": "v2.0 ti2vid ≤1 图（n=6 实证）：multi=单图条件，与 i2v 同模式不同喂图",
-  "s10_c03_mode_spread": "CU 表演镜模式排序：mS≈i2v>t2v>multi-look（multi-look 被 look plate 吞没；mS 疤痕在且前缀仅1帧；i2v 看资产质量；t2v 情绪最好脸通用化）"
+  "s10_c03_mode_spread": "CU 表演镜模式排序：mS≈i2v>t2v>multi-look（multi-look 被 look plate 吞没；mS 疤痕在且前缀仅1帧；i2v 看资产质量；t2v 情绪最好脸通用化）",
+  "keyframes_debut": "X040：端点锁定成立+瑕疵传播成立+中段结构冲突（锚构图vs prompt意图）；D 模式价值取决于首尾对质量",
+  "ref_cap_validated": "X014：1 look（主角色）+文本身份锚=多人镜 multi 的可行形态"
  },
  "X022": {
   "shot": "s10_c03",
@@ -368,5 +370,136 @@
   },
   "severe": [],
   "notes": "★EWS 强运镜：水墨金光山峦占幅+雾层+路径墨点小人（3 剪影可见、占比合规）；pull back 从比例推进可辨。t2v 风景/环境类强确认。"
+ },
+ "X014": {
+  "shot": "s09_c08",
+  "mode": "multi",
+  "style": "P2",
+  "seeded": false,
+  "reviewer": "claude-frame-preview",
+  "ref_cap": "1 look(沈夜)",
+  "scores": {
+   "identity": 4,
+   "action": 4,
+   "camera": 4,
+   "scene": 4,
+   "props": 4
+  },
+  "severe": [],
+  "notes": "★裁参考策略验证：沈夜疤在（look 有效）+周伯文本身份锚达成（白须/老人形态）——1 参考位+其余角色靠文本锚在多人镜成立。"
+ },
+ "X040": {
+  "shot": "s13_c06",
+  "mode": "keyframes",
+  "style": "P2",
+  "seeded": true,
+  "reviewer": "claude-frame-preview",
+  "scores": {
+   "identity": 3,
+   "action": 2,
+   "camera": 2,
+   "scene": 3,
+   "props": 2
+  },
+  "severe": [
+   "中段巨大手掌尺度混乱（手部特写意图与全景锚冲突）",
+   "lf 克隆如预判传播（末帧 2×沈夜）"
+  ],
+  "notes": "★首个 keyframes：双锚端点保住（起≈ff/止≈lf），但锚构图与 prompt 意图打架→中段巨手；lf 瑕疵（克隆）直接传给输出=REFERENCE 归因实证。有瑕疵首尾对会放大结构崩坏。"
+ },
+ "X039": {
+  "shot": "s13_c06",
+  "mode": "multiS",
+  "style": "P2",
+  "seeded": true,
+  "reviewer": "claude-frame-preview",
+  "scores": {
+   "identity": 2,
+   "action": 2,
+   "camera": 2,
+   "scene": 5,
+   "props": 2
+  },
+  "severe": [
+   "道具连续性：手持剑→张手剑消失",
+   "场景板复刻占 4 帧(2.8s/5s)"
+  ],
+  "notes": "mS 前缀最重样本+后段道具错误。mS 前缀成本不可预测（1帧~4帧）。"
+ },
+ "X015": {
+  "shot": "s09_c08",
+  "mode": "multi",
+  "style": "P2",
+  "seeded": false,
+  "reviewer": "claude-frame-preview",
+  "ref_cap": "1 look",
+  "scores": null,
+  "severe": [],
+  "notes": "补跑行；motion 0.346；接触表待细看。"
+ },
+ "X019": {
+  "shot": "s10_c01",
+  "mode": "multi",
+  "style": "P2",
+  "seeded": false,
+  "reviewer": "claude-frame-preview",
+  "ref_cap": "1 look(沈夜)",
+  "scores": null,
+  "severe": [],
+  "notes": "补跑行；motion 1.643；待细看。"
+ },
+ "X020": {
+  "shot": "s10_c01",
+  "mode": "multi",
+  "style": "P2",
+  "seeded": false,
+  "reviewer": "claude-frame-preview",
+  "ref_cap": "1 look",
+  "scores": null,
+  "severe": [],
+  "notes": "补跑行；motion 3.08；待细看。"
+ },
+ "X030": {
+  "shot": "s11_c06",
+  "mode": "multi",
+  "style": "P2",
+  "seeded": false,
+  "reviewer": "claude-frame-preview",
+  "ref_cap": "1 look",
+  "scores": null,
+  "severe": [],
+  "notes": "补跑行；motion 0.46；待细看。"
+ },
+ "X031": {
+  "shot": "s11_c06",
+  "mode": "multi",
+  "style": "P2",
+  "seeded": false,
+  "reviewer": "claude-frame-preview",
+  "ref_cap": "1 look",
+  "scores": null,
+  "severe": [],
+  "notes": "补跑行；motion 0.569；待细看。"
+ },
+ "X037": {
+  "shot": "s13_c06",
+  "mode": "t2v",
+  "style": "P2",
+  "seeded": true,
+  "reviewer": "claude-frame-preview",
+  "scores": null,
+  "severe": [],
+  "notes": "手部特写 t2v；motion 0.254；待细看。"
+ },
+ "X038": {
+  "shot": "s13_c06",
+  "mode": "multi",
+  "style": "P2",
+  "seeded": true,
+  "reviewer": "claude-frame-preview",
+  "ref_cap": "1 look(柳衣)",
+  "scores": null,
+  "severe": [],
+  "notes": "motion 0.619；待细看。"
  }
 }
