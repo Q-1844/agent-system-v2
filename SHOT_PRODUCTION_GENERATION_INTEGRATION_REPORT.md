@@ -137,13 +137,13 @@ provider 真实支持（agnes_client.py + AGNES_API_FACTS §3）：
 
 ## 6. 真实缺口清单（Phase A 结论）
 
-| # | 缺口 | 31.md 条款 | 严重度 |
+| # | 缺口 | 31.md 条款 | 状态 |
 |---|---|---|---|
-| G1 | 图片 handler 无 post-provider commit guard：provider 窗口内 binding/Look/SIV/profile 变化后，旧 basis 候选仍会被 commit（视频侧已有，图片侧缺） | §13 阶段3 | 高（Truth Gate 级） |
-| G2 | 图片 provenance 不完整：used_reference_ids / semantic_roles / dropped(含理由) / human_reference_mode / size_tier / ratio / checksum 均未持久化；尾帧连 scene mode 都没记 | §12 | 中（可审计性） |
-| G3 | 无 provider-neutral GenerationRequest 层：BoundImageRequest 为 adapter 内部产物，handler 直接以 Agnes 形态调 client；未来 provider A/B 需要 seam | §10/§20 | 中（架构价值） |
-| G4 | 缓解实验未做：裁剪人形参考（identity 无构图锚）、人群约束、参考顺序——D2 只试过 full/context_only/无参考三档 | §19/§23（本轮真正目标） | 目标级 |
-| G5 | （记录）shot_review 比对图忽略 cover 的不一致 | §15 旁注 | 低 |
+| G1 | 图片 handler 无 post-provider commit guard | §13 阶段3 | ✅ C2 补齐（52445b3） |
+| G2 | 图片 provenance 不完整 | §12 | ✅ C3 补齐（e1e7235） |
+| G3 | 无 provider-neutral GenerationRequest 层 | §10/§20 | ✅ C1 落地（393ea1f） |
+| G4 | 缓解实验未做（crop/人群约束/顺序） | §19/§23 | ✅ 基建 C4/C5（3c80ec1/386d0c6）；真机 A/B 见 §8-§9 |
+| G5 | （记录）shot_review 比对图忽略 cover 的不一致 | §15 旁注 | 记录不改（review 用途；§26 known limitations） |
 
 ## 7. Phase B — 最小实施设计
 
@@ -218,9 +218,28 @@ Pack 塞路径或 provider 字段；不自动 refresh/approve；不 silent fallb
 - crop 依赖 rembg：确定性（同输入同输出），失败降级路径不阻断生成（记 diagnostic）。
 - 真机成本：串行+75s；实验矩阵规模受控（≤~40 calls/批）；差图只从 provider URL 重下（D2 教训）。
 
-## 8. Real E2E（Phase E）— 待执行
+## 8. Real E2E（Phase E）— 进行中
 
-（计划见 §7.3；执行后填充：case 结果、产物路径、review 矩阵、失败分类）
+驱动：`_31_e2e_driver.py`（fixture / mitigate / review 三子命令；串行+75s 纪律；候选逐批
+拷贝防覆盖；证据落 `_31_integration_e2e/`）。
+
+### 8.1 架构验证（§14 Case A/B/C）— fixture 项目 Golden_31_Integration_Fixture
+
+构建要点（离线干跑已验证）：
+- 跨域真实 canonical（make_pdir 骨架 + `_build_scene` 真链 SIV approved）+ **真实参考字节**
+  （look hero 1664×2496 / prop hero 2048×2048 / SIV 2624×1472，取自 Golden approved 事实）；
+- **顺序敏感**：profile（Golden 同值）与 prop 真实字节必须在 SIV 审批**之前**落位
+  （SIV basis 含可见 prop approved 参考内容 sha256 与 profile 维度——审批后换内容=stale）；
+- 三镜 binding 全 READY：c01 静态（scene+look）/ c02 人物+道具（prop primary held@right_hand）/
+  c03 pick_up（look throughout + prop supporting，无 end 态 comp 污染——pack refs 干跑核验）；
+- Case C 链：首帧→选定→尾帧→keyframes 视频（i2v/keyframes seam 双槽真机验证）。
+
+（真机结果待运行完成后填充。）
+
+### 8.2 缓解 A/B（Golden 紧景别代表镜）— 待运行
+
+矩阵：s16_c02(CU)/s17_c03(CU)/s17_c02(ECU) × {auto=drop 对照, crop, crop+pop} × 2 候选；
+s09_c01(EWS，D2 观测 9 人案例) × {auto, auto+pop} × 2。共 22 次 2K 生成，origin_run_id=e31_*。
 
 ## 9-27. （Phase C-G 完成后逐节填充：modified files / 架构图终稿 / mapping / 规则 / 集成细节 /
 provenance / OCC / 兼容性 / E2E / 证据 / 失败与修复 / LIMITATION / 测试结果 / 冻结区 diff /
