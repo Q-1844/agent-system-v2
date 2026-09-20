@@ -104,6 +104,8 @@ class BoundImageRequest:
     # pack_only=逐项对应；continuity_tail=末尾多一条 reference_previous 末帧（creative
     # relay，无 pack role）；first_frame_head=头部多一条尾帧构图基础（已选首帧，无 pack role）。
     ref_layout: str = "pack_only"
+    # 31.md C5：本请求是否启用人数排除子句（provenance 可追溯；默认关）
+    population_constraint: bool = False
 
     def to_dict(self) -> dict:
         return {
@@ -118,6 +120,7 @@ class BoundImageRequest:
             "scene_reference_mode": self.scene_reference_mode,
             "human_reference_mode": self.human_reference_mode,
             "ref_layout": self.ref_layout,
+            "population_constraint": self.population_constraint,
         }
 
     def to_generation_request(self, *, generation_type: str = "first_frame",
@@ -745,14 +748,33 @@ def _resolve_media_loop(eligible: List[dict], rdoc: Any, project_dir: Path
 
 # ============ 主入口 ============
 
+def _population_constraint_clause(shot: Any) -> str:
+    """31.md C5（G4 杠杆 2，确定性、参数门控）：人数排除语义——针对 D2 残余的
+    「偶发幻觉人群」（含 s09_c01 EWS 单人镜渲染 9 人案例）。人数 = shot.characters
+    确定性计数；不解释剧情（场景是否该有路人属创作意图，由提交方决定是否启用）。
+    只进 BOUND prompt tail；默认关（证据门控，与 crop 同纪律）。"""
+    names = [str(c or "").strip() for c in (getattr(shot, "characters", None) or [])
+             if str(c or "").strip()]
+    n = len(names)
+    if n <= 0:
+        return ""
+    if n == 1:
+        return ("Population constraint: exactly one person appears in this frame; "
+                "no bystanders, no background crowd, no extra unnamed people.")
+    return (f"Population constraint: exactly {n} people appear in this frame — the "
+            f"characters described above; no other people, no background crowd.")
+
+
 def build_bound_first_frame_input(project_dir, project: Any, shot: Any, *,
                                   scene_reference_mode: Optional[str] = None,
-                                  human_reference_mode: Optional[str] = None
+                                  human_reference_mode: Optional[str] = None,
+                                  population_constraint: bool = False
                                   ) -> BoundImageRequest:
     """BOUND shot 的首帧生成输入（§4.A/C；§27：BOUND 永不回落 legacy）。
     顺序：validity gate → compile pack（自带 pre/post 守卫）→ temporal 过滤（先于
     priority）→ reference budget（D2：scene mode + 人形预算）→ cap 护栏 → 媒体解析 →
-    prompt 组装 → pre-dispatch guard。"""
+    prompt 组装 → pre-dispatch guard。
+    population_constraint（31.md C5）：True → prompt tail 追加确定性人数排除子句。"""
     from src.shot_binding import ShotBindingService
 
     project_dir = Path(project_dir)
@@ -812,7 +834,8 @@ def build_bound_first_frame_input(project_dir, project: Any, shot: Any, *,
     creative = build_first_frame_prompt(project, shot, style_suffix="")
     ctx = _production_context_text(pack, rdoc, "first")
     style = _style_instruction_from_pack(pack)
-    tail = " ".join(x for x in (ctx, style) if x)
+    population = _population_constraint_clause(shot) if population_constraint else ""
+    tail = " ".join(x for x in (ctx, style, population) if x)
     prompt = build_first_frame_prompt(project, shot, style_suffix=tail) if tail \
         else creative
     prompt = prompt + continuity_clause
@@ -827,7 +850,8 @@ def build_bound_first_frame_input(project_dir, project: Any, shot: Any, *,
         diagnostics=diagnostics, semantic_roles=roles, basis=basis,
         scene_reference_mode=resolved_scene_mode,
         human_reference_mode=resolved_human_mode,
-        ref_layout="continuity_tail" if continuity_media_used else "pack_only")
+        ref_layout="continuity_tail" if continuity_media_used else "pack_only",
+        population_constraint=bool(population_constraint))
 
 
 def build_bound_last_frame_input(project_dir, project: Any, shot: Any, *,

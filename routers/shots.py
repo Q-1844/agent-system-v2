@@ -568,7 +568,10 @@ async def _handler_first_frame(job, emit):
                                               scene_reference_mode=job.params.get(
                                                   "scene_reference_mode"),
                                               human_reference_mode=job.params.get(
-                                                  "human_reference_mode"))
+                                                  "human_reference_mode"),
+                                              population_constraint=bool(
+                                                  job.params.get(
+                                                      "population_constraint")))
         # 31.md C1 seam：BOUND 输入经 provider-neutral GenerationRequest →
         # Agnes compiler 到达 client（编译层=能力诚实映射；UNBOUND 保持 legacy
         # 直调，行为逐字节不变）。
@@ -643,6 +646,7 @@ async def _handler_first_frame(job, emit):
                                              **({"scene_reference_mode": bound.scene_reference_mode,
                                                  "human_reference_mode": bound.human_reference_mode,
                                                  "ref_layout": bound.ref_layout,
+                                                 "population_constraint": bound.population_constraint,
                                                  "sent_ref_sequence": [r.get("source_type")
                                                                        for r in bound.semantic_roles],
                                                  "used_reference_ids": list(bound.used_reference_ids),
