@@ -46,16 +46,42 @@ def _get_segmentor():
     return _segmentor
 
 
-def _subject_bbox(img_rgba):
-    """rembg 输出的 alpha 通道 → 主体 bbox（无主体/退化 → None）。"""
-    alpha = img_rgba.split()[-1]
-    bbox = alpha.getbbox()
-    if bbox is None:
+def _subject_bbox(img_rgba, mass_percentile: float = 0.98):
+    """alpha 质量分位 bbox（Photoshop-trim 口径）→ 主体 bbox（无主体/退化 → None）。
+    🔴 不用 alpha.getbbox()——它对散点噪声过敏：场景风 look plate 的半透明雾/光晕
+    像素散布全画幅 → bbox=全画幅 → 裁剪反而搬运环境（Phase F 真机实证：
+    s16_c02 crop 变体渲染出参考图里的雪山夕阳背景）。改为取包含 central
+    `mass_percentile` alpha 质量（alpha>16 计数）的行/列窗口——确定性、无随机。"""
+    try:
+        import numpy as np
+    except ImportError:            # numpy 随 rembg 必在；防御性兜底 getbbox
+        alpha = img_rgba.split()[-1]
+        bbox = alpha.getbbox()
+        if bbox is None:
+            return None
+        l, t, r, b = bbox
+        if r - l < 4 or b - t < 4:
+            return None
+        return (l, t, r, b)
+    a = np.asarray(img_rgba.split()[-1], dtype=np.uint8)
+    mask = (a > 64).astype(np.uint8)     # 阈值 64：排除半透明雾/光晕散点（真机实证）
+    total = int(mask.sum())
+    if total < 64:
         return None
-    l, t, r, b = bbox
+    lo_frac, hi_frac = (1.0 - mass_percentile) / 2.0, (1.0 + mass_percentile) / 2.0
+
+    def _window(axis_mass):
+        cum = np.cumsum(axis_mass)
+        n = len(axis_mass)
+        lo = int(np.searchsorted(cum, total * lo_frac))
+        hi = int(np.searchsorted(cum, total * hi_frac))
+        return max(0, min(lo, n - 1)), max(1, min(hi, n))
+
+    l, r = _window(mask.sum(axis=0))
+    t, b = _window(mask.sum(axis=1))
     if r - l < 4 or b - t < 4:
         return None
-    return (l, t, r, b)
+    return (int(l), int(t), int(r), int(b))
 
 
 def _clamp(v: int, lo: int, hi: int) -> int:
@@ -115,6 +141,7 @@ def _derive(image_bytes: bytes, method: str) -> Optional[Dict[str, Any]]:
             "derivation": {
                 "version": _DERIVATION_VERSION,
                 "method": method,
+                "bbox_method": "alpha_mass_98",
                 "crop_box": [cx0, cy0, cx1, cy1],
                 "subject_bbox": [l, t, r, b],
                 "source_size": [img.width, img.height],
