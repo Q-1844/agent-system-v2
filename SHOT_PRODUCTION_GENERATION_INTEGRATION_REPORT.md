@@ -336,6 +336,44 @@ Binding→Validity→Pack（冻结）
   cast/identity 但尺寸宽 1-2 档；auto-drop 尺寸较准但 ECU 类镜丢角色；population
   子句证据不足维持默认关。最终质量口径待用户人评 GALLERY.html。
 
+## 14. 视频模式探针与方向转折（用户评审后追加，2026-09-20）
+
+### 14.1 探针（s17_c03 同镜同 prompt 三条件）
+
+| 条件 | 中帧抽帧证据 | 结论 |
+|---|---|---|
+| A i2v（现有） | 身份/场景锁死首帧 | 运动必须从静止帧"挣脱"→开头僵（用户：「首帧像多余」） |
+| B t2v 纯文本 | **身份崩塌**（中帧角色非本镜角色） | 无锚=自由但失控 |
+| **C multi 多图参考**（look+SIV URL，无首帧） | **角色在场+场景成立+身份近似保持** | **用户假设成立：真机首次验证 v2.0 接受 multi 形态**（FACTS 原标「未验证勿发」） |
+
+机制修正：不是「要素太多」，是视频模型无参考槽——i2v 把全部生产事实压缩进唯一首帧像素
++prompt，首帧=最强条件项。keyframes（s16_c02）效果好=双锚给中间自由。C=身份（参考图）
+与运动（无冻结）解耦。
+
+### 14.2 用户裁定（方向转折）——**视频先行（Video-first Production）**
+
+用户评审结论：B/C 明显优于 A；运镜自由（B 从拳头转到脸部）；视频尾声自然。
+新范式：
+1. **视频直生为主力**：multi（参考图=人物+场景）为默认候选、t2v（纯 prompt）为环境镜候选；
+   i2v 首帧冻结不再是主链
+2. **i2v 的剩余价值=接力**：最有用的图生视频=从上一镜**视频尾帧**开始生成下一镜
+   （视频尾声自然→尾帧是优质接力锚点）
+3. **生图降级为辅助**：外部要素越少越好、纯 prompt 最好；环境描写镜用 prompt 生成
+   首尾帧（keyframes 卡点用）
+4. 声音（Native AV 对白）不受影响
+
+### 14.3 现有基础设施的复用映射（改造不重建）
+
+| 新范式要素 | 既有设施 | 差距（下一阶段工作） |
+|---|---|---|
+| multi/t2v 直生 | client 已实现 mode="multi"/"t2v"（本次真机验证） | handler/preflight 不强制首帧；link_mode 扩展；provenance/freshness 改 refs basis |
+| 尾帧接力 | `video_end_frame` 自动提取（Phase 6A）+ `opening_source=inherit_previous` | 尾帧作为 multi 参考 vs i2v 首帧两种接力形态探针与策略 |
+| 参考来源 | Binding→Validity→Pack（本轮全链 provenance） | 不动——multi refs 直接由 Pack 供给 |
+| 环境镜 t2i 首尾帧 | UNBOUND/BOUND 生图链完整 | 按镜类型路由（环境镜 t2i、人物镜少要素） |
+| 编排反转 | autopilot/序列 S1 已有阶段编排 | 生产阶段顺序反转：视频先出→抽尾帧→下一镜 |
+
+**改造全部落在 generation 层与编排层，canonical/Binding/Pack 不动（冻结边界不破）。**
+
 ## 最终回归记录
 
 - 全量：2277 passed / 0 failed（Phase G，2026-09-20）
