@@ -90,7 +90,7 @@ button{background:#2a3140;color:#dde;border:0;border-radius:6px;padding:6px 14px
             eid = r["exp_id"]
             sc = scores.get(eid)
             sctxt = ""
-            if sc and "scores" in sc:
+            if sc and sc.get("scores"):
                 sctxt = "claude预评: " + " ".join(f"{k}={v}" for k, v in sc["scores"].items())
                 if sc.get("severe"):
                     sctxt += "  ⚠" + ";".join(sc["severe"])[:80]

@@ -1,0 +1,255 @@
+<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8">
+<title>32.md Video-First V1 评审</title>
+<style>
+body{font-family:system-ui,"Microsoft Yahei";background:#14161a;color:#dde;margin:0;padding:16px}
+h2{color:#9cf;margin:22px 0 6px;font-size:17px}
+.shotmeta{color:#889;font-size:12px;margin-bottom:8px;white-space:pre-wrap}
+.grid{display:flex;flex-wrap:wrap;gap:12px}
+.card{background:#1d2127;border:1px solid #2c313a;border-radius:8px;padding:8px;width:340px;cursor:pointer;user-select:none}
+.card video{width:100%;border-radius:4px;background:#000}
+.card .eid{font-weight:600;font-size:13px;margin:4px 0}
+.card .meta{font-size:11px;color:#99a;white-space:pre-wrap}
+.card .score{font-size:11px;color:#7c7;margin-top:2px;white-space:pre-wrap}
+.card .note{width:100%;margin-top:6px;background:#12151a;color:#ccd;border:1px solid #2c313a;border-radius:4px;font-size:11px;padding:3px}
+.card.ok{border-color:#3a7} .card.best{border-color:#fc0;box-shadow:0 0 6px #fc08} .card.bad{border-color:#c33}
+.badge{float:right;font-size:12px}
+#toolbar{position:sticky;top:0;background:#14161aee;padding:8px;border-bottom:1px solid #333;z-index:9}
+button{background:#2a3140;color:#dde;border:0;border-radius:6px;padding:6px 14px;margin-right:8px;cursor:pointer}
+.hidden{display:none}
+</style></head><body>
+<div id="toolbar">
+<button onclick="reveal()">揭示信息（当前：<b id="rv">盲评</b>）</button>
+<button onclick="exportLocal()">导出本地选择</button>
+<span id="cnt" style="color:#889;font-size:12px"></span>
+</div>
+<p style="color:#889;font-size:12px">点击卡片循环：未评 → ✅可用 → ⭐首选 → ❌不可用。运动/运镜请在播放中评价；抽帧接触表仅辅助。评价自动保存（服务在线落 FEEDBACK.json，离线存 localStorage）。</p>
+<h2>第 1 组</h2><div class="shotmeta hiddenR">3 条视频 ｜ 生成批次 [&#x27;batch1&#x27;] ｜ 提示词风格 [&#x27;P0&#x27;]</div><div class="grid">
+<div class="card" data-eid="X057" data-shot="s17_c03">
+  <span class="badge"></span>
+  <div class="eid blindR">X057 ｜ <span class="shotname">s17_c03</span></div>
+  <video src="videos/X057_s17_c03_t2v_p0.mp4" controls preload="metadata" loop></video>
+  <div class="meta hiddenR">mode=t2v style=P0 refs=1 seed=无 run1 motion=0.716</div>
+  <div class="score hiddenR">claude预评: identity=3 action=4 camera=4 scene=3 props=3</div>
+  <input class="note hiddenR" placeholder="备注…" data-notekey="X057">
+</div>
+<div class="card" data-eid="X058" data-shot="s17_c03">
+  <span class="badge"></span>
+  <div class="eid blindR">X058 ｜ <span class="shotname">s17_c03</span></div>
+  <video src="videos/X058_s17_c03_multil_p0.mp4" controls preload="metadata" loop></video>
+  <div class="meta hiddenR">mode=multi style=P0 refs=1 seed=无 run1 motion=2.519</div>
+  <div class="score hiddenR">claude预评: identity=4 action=4 camera=3 scene=2 props=3  ⚠场景后半段漂移为平面壁画/屏风画风（scene structure change）</div>
+  <input class="note hiddenR" placeholder="备注…" data-notekey="X058">
+</div>
+<div class="card" data-eid="X059" data-shot="s17_c03">
+  <span class="badge"></span>
+  <div class="eid blindR">X059 ｜ <span class="shotname">s17_c03</span></div>
+  <video src="videos/X059_s17_c03_i2v_p0.mp4" controls preload="metadata" loop></video>
+  <div class="meta hiddenR">mode=i2v style=P0 refs=1 seed=无 run1 motion=0.358</div>
+  <div class="score hiddenR">claude预评: identity=3 action=2 camera=2 scene=4 props=2</div>
+  <input class="note hiddenR" placeholder="备注…" data-notekey="X059">
+</div></div><h2>第 2 组</h2><div class="shotmeta hiddenR">6 条视频 ｜ 生成批次 [&#x27;batch2&#x27;] ｜ 提示词风格 [&#x27;P2&#x27;]</div><div class="grid">
+<div class="card" data-eid="X001" data-shot="s09_c01">
+  <span class="badge"></span>
+  <div class="eid blindR">X001 ｜ <span class="shotname">s09_c01</span></div>
+  <video src="videos/X001_s09_c01_t2v_p2.mp4" controls preload="metadata" loop></video>
+  <div class="meta hiddenR">mode=t2v style=P2 refs=1 seed=91577969 run1 motion=0.226</div>
+  <div class="score hiddenR">claude预评: identity=3 action=4 camera=4 scene=4 props=4</div>
+  <input class="note hiddenR" placeholder="备注…" data-notekey="X001">
+</div>
+<div class="card" data-eid="X002" data-shot="s09_c01">
+  <span class="badge"></span>
+  <div class="eid blindR">X002 ｜ <span class="shotname">s09_c01</span></div>
+  <video src="videos/X002_s09_c01_t2v_p2_r2.mp4" controls preload="metadata" loop></video>
+  <div class="meta hiddenR">mode=t2v style=P2 refs=1 seed=无 run2 motion=0.188</div>
+  <div class="score hiddenR">claude预评: identity=3 action=4 camera=4 scene=4 props=3</div>
+  <input class="note hiddenR" placeholder="备注…" data-notekey="X002">
+</div>
+<div class="card" data-eid="X003" data-shot="s09_c01">
+  <span class="badge"></span>
+  <div class="eid blindR">X003 ｜ <span class="shotname">s09_c01</span></div>
+  <video src="videos/X003_s09_c01_multil_p2.mp4" controls preload="metadata" loop></video>
+  <div class="meta hiddenR">mode=multi style=P2 refs=1 seed=91577969 run1 motion=1.461</div>
+  <div class="score hiddenR"></div>
+  <input class="note hiddenR" placeholder="备注…" data-notekey="X003">
+</div>
+<div class="card" data-eid="X004" data-shot="s09_c01">
+  <span class="badge"></span>
+  <div class="eid blindR">X004 ｜ <span class="shotname">s09_c01</span></div>
+  <video src="videos/X004_s09_c01_multil_p2_r2.mp4" controls preload="metadata" loop></video>
+  <div class="meta hiddenR">mode=multi style=P2 refs=1 seed=无 run2 motion=2.663</div>
+  <div class="score hiddenR">claude预评: identity=4 action=3 camera=4 scene=3 props=4  ⚠画面出现第二名骑马人+开头集市人群（违反「一人」意图）</div>
+  <input class="note hiddenR" placeholder="备注…" data-notekey="X004">
+</div>
+<div class="card" data-eid="X005" data-shot="s09_c01">
+  <span class="badge"></span>
+  <div class="eid blindR">X005 ｜ <span class="shotname">s09_c01</span></div>
+  <video src="videos/X005_s09_c01_multis_p2.mp4" controls preload="metadata" loop></video>
+  <div class="meta hiddenR">mode=multi style=P2 refs=1 seed=91577969 run1 motion=1.725</div>
+  <div class="score hiddenR"></div>
+  <input class="note hiddenR" placeholder="备注…" data-notekey="X005">
+</div>
+<div class="card" data-eid="X006" data-shot="s09_c01">
+  <span class="badge"></span>
+  <div class="eid blindR">X006 ｜ <span class="shotname">s09_c01</span></div>
+  <video src="videos/X006_s09_c01_i2v_p2.mp4" controls preload="metadata" loop></video>
+  <div class="meta hiddenR">mode=i2v style=P2 refs=1 seed=91577969 run1 motion=2.258</div>
+  <div class="score hiddenR">claude预评: identity=4 action=2 camera=2 scene=3 props=3</div>
+  <input class="note hiddenR" placeholder="备注…" data-notekey="X006">
+</div></div><h2>第 3 组</h2><div class="shotmeta hiddenR">5 条视频 ｜ 生成批次 [&#x27;batch2&#x27;] ｜ 提示词风格 [&#x27;P2&#x27;]</div><div class="grid">
+<div class="card" data-eid="X007" data-shot="s09_c02">
+  <span class="badge"></span>
+  <div class="eid blindR">X007 ｜ <span class="shotname">s09_c02</span></div>
+  <video src="videos/X007_s09_c02_t2v_p2.mp4" controls preload="metadata" loop></video>
+  <div class="meta hiddenR">mode=t2v style=P2 refs=1 seed=66233669 run1 motion=0.25</div>
+  <div class="score hiddenR">claude预评: identity=3 action=5 camera=3 scene=4 props=4</div>
+  <input class="note hiddenR" placeholder="备注…" data-notekey="X007">
+</div>
+<div class="card" data-eid="X008" data-shot="s09_c02">
+  <span class="badge"></span>
+  <div class="eid blindR">X008 ｜ <span class="shotname">s09_c02</span></div>
+  <video src="videos/X008_s09_c02_t2v_p2_r2.mp4" controls preload="metadata" loop></video>
+  <div class="meta hiddenR">mode=t2v style=P2 refs=1 seed=无 run2 motion=0.463</div>
+  <div class="score hiddenR">claude预评: identity=3 action=4 camera=3 scene=4 props=4</div>
+  <input class="note hiddenR" placeholder="备注…" data-notekey="X008">
+</div>
+<div class="card" data-eid="X009" data-shot="s09_c02">
+  <span class="badge"></span>
+  <div class="eid blindR">X009 ｜ <span class="shotname">s09_c02</span></div>
+  <video src="videos/X009_s09_c02_multil_p2.mp4" controls preload="metadata" loop></video>
+  <div class="meta hiddenR">mode=multi style=P2 refs=1 seed=66233669 run1 motion=4.603</div>
+  <div class="score hiddenR">claude预评: identity=4 action=3 camera=3 scene=3 props=4  ⚠frame1 集市人群复刻（look plate 渗入）</div>
+  <input class="note hiddenR" placeholder="备注…" data-notekey="X009">
+</div>
+<div class="card" data-eid="X010" data-shot="s09_c02">
+  <span class="badge"></span>
+  <div class="eid blindR">X010 ｜ <span class="shotname">s09_c02</span></div>
+  <video src="videos/X010_s09_c02_multil_p2_r2.mp4" controls preload="metadata" loop></video>
+  <div class="meta hiddenR">mode=multi style=P2 refs=1 seed=无 run2 motion=2.188</div>
+  <div class="score hiddenR"></div>
+  <input class="note hiddenR" placeholder="备注…" data-notekey="X010">
+</div>
+<div class="card" data-eid="X011" data-shot="s09_c02">
+  <span class="badge"></span>
+  <div class="eid blindR">X011 ｜ <span class="shotname">s09_c02</span></div>
+  <video src="videos/X011_s09_c02_multis_p2.mp4" controls preload="metadata" loop></video>
+  <div class="meta hiddenR">mode=multi style=P2 refs=1 seed=66233669 run1 motion=0.432</div>
+  <div class="score hiddenR">claude预评: identity=2 action=2 camera=2 scene=5 props=4</div>
+  <input class="note hiddenR" placeholder="备注…" data-notekey="X011">
+</div></div><h2>第 4 组</h2><div class="shotmeta hiddenR">3 条视频 ｜ 生成批次 [&#x27;batch2&#x27;] ｜ 提示词风格 [&#x27;P2&#x27;]</div><div class="grid">
+<div class="card" data-eid="X012" data-shot="s09_c08">
+  <span class="badge"></span>
+  <div class="eid blindR">X012 ｜ <span class="shotname">s09_c08</span></div>
+  <video src="videos/X012_s09_c08_t2v_p2.mp4" controls preload="metadata" loop></video>
+  <div class="meta hiddenR">mode=t2v style=P2 refs=2 seed=10712607 run1 motion=0.536</div>
+  <div class="score hiddenR">claude预评: identity=4 action=4 camera=4 scene=4 props=4</div>
+  <input class="note hiddenR" placeholder="备注…" data-notekey="X012">
+</div>
+<div class="card" data-eid="X013" data-shot="s09_c08">
+  <span class="badge"></span>
+  <div class="eid blindR">X013 ｜ <span class="shotname">s09_c08</span></div>
+  <video src="videos/X013_s09_c08_t2v_p2_r2.mp4" controls preload="metadata" loop></video>
+  <div class="meta hiddenR">mode=t2v style=P2 refs=2 seed=无 run2 motion=0.995</div>
+  <div class="score hiddenR"></div>
+  <input class="note hiddenR" placeholder="备注…" data-notekey="X013">
+</div>
+<div class="card" data-eid="X016" data-shot="s09_c08">
+  <span class="badge"></span>
+  <div class="eid blindR">X016 ｜ <span class="shotname">s09_c08</span></div>
+  <video src="videos/X016_s09_c08_multis_p2.mp4" controls preload="metadata" loop></video>
+  <div class="meta hiddenR">mode=multi style=P2 refs=1 seed=10712607 run1 motion=0.071</div>
+  <div class="score hiddenR">claude预评: identity=4 action=2 camera=2 scene=5 props=4</div>
+  <input class="note hiddenR" placeholder="备注…" data-notekey="X016">
+</div></div><h2>第 5 组</h2><div class="shotmeta hiddenR">3 条视频 ｜ 生成批次 [&#x27;batch2&#x27;] ｜ 提示词风格 [&#x27;P2&#x27;]</div><div class="grid">
+<div class="card" data-eid="X017" data-shot="s10_c01">
+  <span class="badge"></span>
+  <div class="eid blindR">X017 ｜ <span class="shotname">s10_c01</span></div>
+  <video src="videos/X017_s10_c01_t2v_p2.mp4" controls preload="metadata" loop></video>
+  <div class="meta hiddenR">mode=t2v style=P2 refs=3 seed=25137814 run1 motion=0.945</div>
+  <div class="score hiddenR">claude预评: identity=3 action=3 camera=3 scene=3 props=4  ⚠开头 2 帧漂移到外景庭院（意图内景）</div>
+  <input class="note hiddenR" placeholder="备注…" data-notekey="X017">
+</div>
+<div class="card" data-eid="X018" data-shot="s10_c01">
+  <span class="badge"></span>
+  <div class="eid blindR">X018 ｜ <span class="shotname">s10_c01</span></div>
+  <video src="videos/X018_s10_c01_t2v_p2_r2.mp4" controls preload="metadata" loop></video>
+  <div class="meta hiddenR">mode=t2v style=P2 refs=3 seed=无 run2 motion=1.099</div>
+  <div class="score hiddenR"></div>
+  <input class="note hiddenR" placeholder="备注…" data-notekey="X018">
+</div>
+<div class="card" data-eid="X021" data-shot="s10_c01">
+  <span class="badge"></span>
+  <div class="eid blindR">X021 ｜ <span class="shotname">s10_c01</span></div>
+  <video src="videos/X021_s10_c01_multis_p2.mp4" controls preload="metadata" loop></video>
+  <div class="meta hiddenR">mode=multi style=P2 refs=1 seed=25137814 run1 motion=1.875</div>
+  <div class="score hiddenR">claude预评: identity=2 action=3 camera=3 scene=5 props=4  ⚠人口 2/3（沈夜缺失）——场景参考下文本计数被压制</div>
+  <input class="note hiddenR" placeholder="备注…" data-notekey="X021">
+</div></div><h2>第 6 组</h2><div class="shotmeta hiddenR">2 条视频 ｜ 生成批次 [&#x27;batch2&#x27;] ｜ 提示词风格 [&#x27;P2&#x27;]</div><div class="grid">
+<div class="card" data-eid="X022" data-shot="s10_c03">
+  <span class="badge"></span>
+  <div class="eid blindR">X022 ｜ <span class="shotname">s10_c03</span></div>
+  <video src="videos/X022_s10_c03_t2v_p2.mp4" controls preload="metadata" loop></video>
+  <div class="meta hiddenR">mode=t2v style=P2 refs=1 seed=16327888 run1 motion=0.719</div>
+  <div class="score hiddenR"></div>
+  <input class="note hiddenR" placeholder="备注…" data-notekey="X022">
+</div>
+<div class="card" data-eid="X023" data-shot="s10_c03">
+  <span class="badge"></span>
+  <div class="eid blindR">X023 ｜ <span class="shotname">s10_c03</span></div>
+  <video src="videos/X023_s10_c03_t2v_p2_r2.mp4" controls preload="metadata" loop></video>
+  <div class="meta hiddenR">mode=t2v style=P2 refs=1 seed=无 run2 motion=0.519</div>
+  <div class="score hiddenR"></div>
+  <input class="note hiddenR" placeholder="备注…" data-notekey="X023">
+</div></div>
+<script>
+const KEY='v32_feedback_v1';
+let fb={};
+try{fb=JSON.parse(localStorage.getItem(KEY)||'{}')}catch(e){}
+function cls(c){c.classList.remove('ok','best','bad');}
+function applyCard(c){
+  const st=fb[c.dataset.eid]?.state||'';
+  cls(c); if(st==='ok')c.classList.add('ok'); if(st==='best')c.classList.add('best'); if(st==='bad')c.classList.add('bad');
+  c.querySelector('.badge').textContent=st==='ok'?'✅可用':st==='best'?'⭐首选':st==='bad'?'❌不可用':'';
+  if(fb[c.dataset.eid]?.note)c.querySelector('.note').value=fb[c.dataset.eid].note;
+}
+document.querySelectorAll('.card').forEach(c=>{
+  applyCard(c);
+  c.addEventListener('click',e=>{
+    if(e.target.classList.contains('note')||e.target.tagName==='VIDEO')return;
+    const cur=fb[c.dataset.eid]?.state||'';
+    const nxt={'':'ok','ok':'best','best':'bad','bad':''}[cur];
+    fb[c.dataset.eid]=Object.assign({},fb[c.dataset.eid],{state:nxt});
+    applyCard(c); save(c.dataset.eid,nxt,null); count();
+  });
+  c.querySelector('.note').addEventListener('change',e=>{
+    fb[c.dataset.eid]=Object.assign({},fb[c.dataset.eid],{note:e.target.value});
+    save(c.dataset.eid,null,e.target.value);
+  });
+});
+function save(eid,state,note){
+  const body={};
+  if(state!==null)body.key=eid,body.state=state;
+  if(note!==null)body.note_key=eid,body.note=note;
+  fetch('/api/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).catch(()=>{});
+  localStorage.setItem(KEY,JSON.stringify(fb));
+}
+async function exportLocal(){ // 服务恢复后把 localStorage 合并回服务端
+  for(const [eid,v] of Object.entries(fb)){
+    if(v.state)await fetch('/api/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:eid,state:v.state})}).catch(()=>{});
+    if(v.note)await fetch('/api/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({note_key:eid,note:v.note})}).catch(()=>{});
+  }
+  alert('已尝试合并本地选择到服务端');
+}
+let blind=true;
+function reveal(){blind=!blind;document.getElementById('rv').textContent=blind?'盲评':'已揭示';
+  document.querySelectorAll('.hiddenR').forEach(e=>e.classList.toggle('hidden',blind));
+  document.querySelectorAll('.shotname').forEach(e=>e.classList.toggle('hidden',blind));}
+function count(){const n={};document.querySelectorAll('.card').forEach(c=>{const s=fb[c.dataset.eid]?.state||'';n[s]=(n[s]||0)+1});
+  document.getElementById('cnt').textContent=Object.entries(n).map(([k,v])=>(k||'未评')+'='+v).join('  ');}
+// 启动：先取服务端 FEEDBACK 合并（本地优先）
+(async()=>{try{const r=await fetch('/api/feedback');const srv=await r.json();
+  for(const [eid,v] of Object.entries((srv.selections||{})))
+    fb[eid]=Object.assign({},fb[eid]||{},{state:v.state||''});
+  for(const [eid,note] of Object.entries(srv.notes||{}))
+    fb[eid]=Object.assign({},fb[eid]||{},{note:note});
+}catch(e){} document.querySelectorAll('.card').forEach(applyCard); count();})();
+</script></body></html>

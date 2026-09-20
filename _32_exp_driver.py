@@ -320,10 +320,16 @@ async def run(limit=None, only=None, batch=None):
     for r in rows:
         exp_id, shot_id, mode = r["exp_id"], r["shot_id"], r["mode"]
         refs, basis, _ = shot_refs(shot_id, r.get("with_scene_ref", False))
+        rec_note = None
         if r.get("scene_only"):
             # v2.0 实测 ti2vid 最多 1 图（X005: "ti2vid supports at most 1 image"）——
             # 原 look+scene 双参考格改为仅场景参考（身份靠文本锚）
             refs = [x for x in refs if x["role"] == "scene_instance_view"]
+        elif mode == "multi" and len(refs) > 1:
+            # look-only multi 同受 1 图上限约束：多角色镜只送 binding 首位角色 look
+            # （X014/X015/X019/X020 实证 2-3 look 全部 400）
+            refs = refs[:1]
+            rec_note = "ref_cap:v2.0 ti2vid ≤1 image, binding 首位角色"
         rec = {"exp_id": exp_id, "batch": r["batch"], "shot_id": shot_id,
                "mode": mode, "prompt_style": r["style"], "tag": r["tag"],
                "run_index": r["run_index"], "seed": r["seed"],
@@ -331,6 +337,8 @@ async def run(limit=None, only=None, batch=None):
                "refs": refs, "num_frames": r["num_frames"], "frame_rate": r["frame_rate"],
                "width": r["width"], "height": r["height"], "model": "agnes-video-v2.0",
                "binding_basis": basis, "submitted_at": time.time()}
+        if rec_note:
+            rec["ref_cap_note"] = rec_note
         store = ProjectStore(GOLDEN)
         sh = store.load().get_shot(shot_id)
         if mode in ("i2v", "keyframes"):

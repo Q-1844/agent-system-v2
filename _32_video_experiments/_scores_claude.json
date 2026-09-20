@@ -1,22 +1,272 @@
 {
-  "_meta": "Claude 视觉预评（接触表抽帧，非运动终评）。dims: identity/action/camera/scene/props 1-5 + severe[] + notes。motion/运镜终评以用户人评为准。",
-  "X057": {
-    "shot": "s17_c03", "mode": "t2v", "style": "P0", "reviewer": "claude-frame-preview",
-    "scores": {"identity": 3, "action": 4, "camera": 4, "scene": 3, "props": 3},
-    "severe": [],
-    "notes": "运镜 push in MS→CU 成立；人物近似保持（疤痕/发髻可见）；服装色调跨帧漂移（灰蓝→红棕）；木棚场景成立；玉佩未清晰出现（frame5 手部持物不清）。动作意图（迷茫→坚定→握紧站起）大体完成。"
+ "_meta": "Claude 视觉预评（接触表抽帧，非运动终评）。dims: identity/action/camera/scene/props 1-5 + severe[] + notes。motion/运镜终评以用户人评为准。（批次2A 预评随生成增量更新；motion/运镜终评以人评为准）",
+ "X057": {
+  "shot": "s17_c03",
+  "mode": "t2v",
+  "style": "P0",
+  "reviewer": "claude-frame-preview",
+  "scores": {
+   "identity": 3,
+   "action": 4,
+   "camera": 4,
+   "scene": 3,
+   "props": 3
   },
-  "X058": {
-    "shot": "s17_c03", "mode": "multi", "style": "P0", "reviewer": "claude-frame-preview",
-    "scores": {"identity": 4, "action": 4, "camera": 3, "scene": 2, "props": 3},
-    "severe": ["场景后半段漂移为平面壁画/屏风画风（scene structure change）"],
-    "notes": "蹲→站动作完成（意图匹配最好）；前半身份/姿态稳（斗篷/低髻一致）；后半背景变成带小人的彩绘墙面=场景结构性回归，疑似 look plate 绘画质感带入。camera 弱（近乎无 push in）。"
+  "severe": [],
+  "notes": "运镜 push in MS→CU 成立；人物近似保持（疤痕/发髻可见）；服装色调跨帧漂移（灰蓝→红棕）；木棚场景成立；玉佩未清晰出现（frame5 手部持物不清）。动作意图（迷茫→坚定→握紧站起）大体完成。"
+ },
+ "X058": {
+  "shot": "s17_c03",
+  "mode": "multi",
+  "style": "P0",
+  "reviewer": "claude-frame-preview",
+  "scores": {
+   "identity": 4,
+   "action": 4,
+   "camera": 3,
+   "scene": 2,
+   "props": 3
   },
-  "X059": {
-    "shot": "s17_c03", "mode": "i2v", "style": "P0", "reviewer": "claude-frame-preview",
-    "scores": {"identity": 3, "action": 2, "camera": 2, "scene": 4, "props": 2},
-    "severe": [],
-    "notes": "首秒近乎冻结（motion_proxy early/mid=0.358+抽帧证实）——31.md『开头僵』复现；构图锁死首帧躯干（无脸），后半推脸时面部出现异常红痕（非本镜设定的左颊疤痕）+服装漂移；场景（木棚）最稳。玉佩未出现。"
+  "severe": [
+   "场景后半段漂移为平面壁画/屏风画风（scene structure change）"
+  ],
+  "notes": "蹲→站动作完成（意图匹配最好）；前半身份/姿态稳（斗篷/低髻一致）；后半背景变成带小人的彩绘墙面=场景结构性回归，疑似 look plate 绘画质感带入。camera 弱（近乎无 push in）。"
+ },
+ "X059": {
+  "shot": "s17_c03",
+  "mode": "i2v",
+  "style": "P0",
+  "reviewer": "claude-frame-preview",
+  "scores": {
+   "identity": 3,
+   "action": 2,
+   "camera": 2,
+   "scene": 4,
+   "props": 2
   },
-  "X057_cmp": {"note": "与 31.md 同镜三条件原始结论方向一致：i2v 冻结启动 / t2v 自由但外观漂移 / multi 身份+动作最好但引入自身场景漂移。基线复现=方向性 PASS。"}
+  "severe": [],
+  "notes": "首秒近乎冻结（motion_proxy early/mid=0.358+抽帧证实）——31.md『开头僵』复现；构图锁死首帧躯干（无脸），后半推脸时面部出现异常红痕（非本镜设定的左颊疤痕）+服装漂移；场景（木棚）最稳。玉佩未出现。"
+ },
+ "X057_cmp": {
+  "note": "与 31.md 同镜三条件原始结论方向一致：i2v 冻结启动 / t2v 自由但外观漂移 / multi 身份+动作最好但引入自身场景漂移。基线复现=方向性 PASS。"
+ },
+ "X001": {
+  "shot": "s09_c01",
+  "mode": "t2v",
+  "style": "P2",
+  "seeded": true,
+  "reviewer": "claude-frame-preview",
+  "scores": {
+   "identity": 3,
+   "action": 4,
+   "camera": 4,
+   "scene": 4,
+   "props": 4
+  },
+  "severe": [],
+  "notes": "单人骑马全片保持无克隆（图片侧高危形态未复现）；蓑衣斗笠+怀中黄信可见；push in 成立（结尾近脸）；风格一致。身份=服装级达成，脸部细节远景不可辨。"
+ },
+ "X002": {
+  "shot": "s09_c01",
+  "mode": "t2v",
+  "style": "P2",
+  "seeded": false,
+  "reviewer": "claude-frame-preview",
+  "scores": {
+   "identity": 3,
+   "action": 4,
+   "camera": 4,
+   "scene": 4,
+   "props": 3
+  },
+  "severe": [],
+  "notes": "无 seed 复跑同向：单人保持、构图相近（帧差大于 seed 版=自然方差）；黄信要素在。"
+ },
+ "X004": {
+  "shot": "s09_c01",
+  "mode": "multi",
+  "style": "P2",
+  "seeded": false,
+  "reviewer": "claude-frame-preview",
+  "scores": {
+   "identity": 4,
+   "action": 3,
+   "camera": 4,
+   "scene": 3,
+   "props": 4
+  },
+  "severe": [
+   "画面出现第二名骑马人+开头集市人群（违反「一人」意图）"
+  ],
+  "notes": "look plate 环境/人口渗入开头（frame1 集市人群复刻）+中段远处灯笼骑手；身份要素最全（蓑衣斗笠黄信手持细节）；山路夜景成立。multi 代价=参考图环境污染、收益=身份保真。"
+ },
+ "X006": {
+  "shot": "s09_c01",
+  "mode": "i2v",
+  "style": "P2",
+  "seeded": true,
+  "reviewer": "claude-frame-preview",
+  "scores": {
+   "identity": 4,
+   "action": 2,
+   "camera": 2,
+   "scene": 3,
+   "props": 3
+  },
+  "severe": [],
+  "notes": "首4帧近冻结（开头僵再次实证）；构图锁死首帧资产=驿站院前（与镜头意图「山道」不符——REFERENCE 归因：首帧资产构图错误）；后半溶解转场到山路有 ghost 重影伪影；骑手身份保持。"
+ },
+ "X007": {
+  "shot": "s09_c02",
+  "mode": "t2v",
+  "style": "P2",
+  "seeded": true,
+  "reviewer": "claude-frame-preview",
+  "scores": {
+   "identity": 3,
+   "action": 5,
+   "camera": 3,
+   "scene": 4,
+   "props": 4
+  },
+  "severe": [],
+  "notes": "★下马→牵马→烛光门口动作链完整发生（t2v 全身动作远超预期）；单人无克隆；马匹/马厩环境稳定；身份=服装级。"
+ },
+ "X008": {
+  "shot": "s09_c02",
+  "mode": "t2v",
+  "style": "P2",
+  "seeded": false,
+  "reviewer": "claude-frame-preview",
+  "scores": {
+   "identity": 3,
+   "action": 4,
+   "camera": 3,
+   "scene": 4,
+   "props": 4
+  },
+  "severe": [],
+  "notes": "无 seed 复跑动作链同样完成（马色/布景有方差）；结尾牵马到位。"
+ },
+ "X009": {
+  "shot": "s09_c02",
+  "mode": "multi",
+  "style": "P2",
+  "seeded": true,
+  "reviewer": "claude-frame-preview",
+  "scores": {
+   "identity": 4,
+   "action": 3,
+   "camera": 3,
+   "scene": 3,
+   "props": 4
+  },
+  "severe": [
+   "frame1 集市人群复刻（look plate 渗入）"
+  ],
+  "notes": "无下马（起始已站立）但牵马→烛光门口成立；单人+马保持；frame1 人群=参考环境污染（与 X004 同型）。"
+ },
+ "X011": {
+  "shot": "s09_c02",
+  "mode": "multiS",
+  "style": "P2",
+  "seeded": true,
+  "reviewer": "claude-frame-preview",
+  "scores": {
+   "identity": 2,
+   "action": 2,
+   "camera": 2,
+   "scene": 5,
+   "props": 4
+  },
+  "severe": [],
+  "notes": "★mS 首格：场景板 1:1 复刻开场（~3帧冻结）→骑手入场→止于井边（骑在马上，下马意图未发生）。场景保真极强=构图锚（与 i2v 同型取舍）；文本身份锚弱。motion 0.432。"
+ },
+ "X012": {
+  "shot": "s09_c08",
+  "mode": "t2v",
+  "style": "P2",
+  "seeded": true,
+  "reviewer": "claude-frame-preview",
+  "scores": {
+   "identity": 4,
+   "action": 4,
+   "camera": 4,
+   "scene": 4,
+   "props": 4
+  },
+  "severe": [],
+  "notes": "★双人 CU 全对：人数 2/2、烛光分割打光、黑背景、沈夜颊疤可见+周伯白须（文本身份锚达成）；运动细微（静态表演类）。t2v 人数控制 3/3。"
+ },
+ "X016": {
+  "shot": "s09_c08",
+  "mode": "multiS",
+  "style": "P2",
+  "seeded": true,
+  "reviewer": "claude-frame-preview",
+  "scores": {
+   "identity": 4,
+   "action": 2,
+   "camera": 2,
+   "scene": 5,
+   "props": 4
+  },
+  "severe": [],
+  "notes": "mS 结构复现：前半=庭院场景板复刻（motion 0.071 近冻结）→后半切到双人烛光 CU（后半质量好：疤/白须/黑背景）。场景板=「建立镜前缀」代价 ~2s。"
+ },
+ "X017": {
+  "shot": "s10_c01",
+  "mode": "t2v",
+  "style": "P2",
+  "seeded": true,
+  "reviewer": "claude-frame-preview",
+  "scores": {
+   "identity": 3,
+   "action": 3,
+   "camera": 3,
+   "scene": 3,
+   "props": 4
+  },
+  "severe": [
+   "开头 2 帧漂移到外景庭院（意图内景）"
+  ],
+  "notes": "三人到齐（2/2 人口合格）、三角构图+烛光+信件字迹成立；开盒动作 attribution 漂移（沈夜手而非柳衣）；开头外景漂移 2 帧。"
+ },
+ "X021": {
+  "shot": "s10_c01",
+  "mode": "multiS",
+  "style": "P2",
+  "seeded": true,
+  "reviewer": "claude-frame-preview",
+  "scores": {
+   "identity": 2,
+   "action": 3,
+   "camera": 3,
+   "scene": 5,
+   "props": 4
+  },
+  "severe": [
+   "人口 2/3（沈夜缺失）——场景参考下文本计数被压制"
+  ],
+  "notes": "mS 内景稳定（场景板锁定）、柳衣+周伯在、沈夜整段缺席。mS 代价再+1：人物齐性受场景板压制。"
+ },
+ "X010": {
+  "shot": "s09_c02",
+  "mode": "multi",
+  "style": "P2",
+  "seeded": false,
+  "reviewer": "claude-frame-preview",
+  "recovered": true,
+  "scores": null,
+  "severe": [],
+  "notes": "孤儿恢复（杀进程后轮询收尾成功）；motion 2.188；接触表待补看。"
+ },
+ "_patterns": {
+  "asof": "batch2A X021",
+  "t2v": "动作链/人数遵从最好；风险=开头外景漂移+动作归属漂移；身份=服装级",
+  "multi_look": "身份/服装最稳；风险=look plate 环境/人口渗入开头；仅 1 图槽（多角色镜只能送首位角色）",
+  "multiS_scene": "场景保真最强=构图锚；结构=场景板复刻前缀(~2s)+后段内容；风险=压制文本人数/身份事实、开场近冻结",
+  "i2v": "首秒冻结三度复现；构图锁死首帧资产（资产与意图不符时错误被放大）；身份/场景最稳",
+  "ref_slot": "v2.0 ti2vid ≤1 图（n=6 实证）：multi=单图条件，与 i2v 同模式不同喂图"
+ }
 }
