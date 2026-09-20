@@ -635,10 +635,19 @@ async def _handler_first_frame(job, emit):
                            origin_run_id=job.params.get("origin_run_id"),
                            generation_basis={**(dict(bound.basis) if bound else {}),
                                              "image_provider": provider,
+                                             "size_tier": size_tier,
+                                             "ratio": ratio,
                                              # D2 观测：本批实际使用的场景参考策略与发送序列
+                                             # 31.md C3：完整 provenance（additive；只记
+                                             # id/角色/取舍清单——media 字节绝不进 project.json）
                                              **({"scene_reference_mode": bound.scene_reference_mode,
+                                                 "human_reference_mode": bound.human_reference_mode,
+                                                 "ref_layout": bound.ref_layout,
                                                  "sent_ref_sequence": [r.get("source_type")
-                                                                       for r in bound.semantic_roles]}
+                                                                       for r in bound.semantic_roles],
+                                                 "used_reference_ids": list(bound.used_reference_ids),
+                                                 "semantic_roles": [dict(r) for r in bound.semantic_roles],
+                                                 "dropped_optional": [dict(d) for d in bound.dropped_optional]}
                                                 if bound else {})})
 
     def mut(s):
@@ -734,7 +743,19 @@ async def _handler_last_frame(job, emit):
                            based_on_first_frame=shot.selected_first_frame, candidates=[cand],
                            origin_run_id=job.params.get("origin_run_id"),
                            generation_basis={**(dict(bound_last.basis) if bound_last else {}),
-                                             "image_provider": provider})
+                                             "image_provider": provider,
+                                             "size_tier": project.style.size_tier or "1K",
+                                             "ratio": project.style.aspect_ratio or "16:9",
+                                             # 31.md C3：同首帧——完整 provenance（含 D2 观测键补齐）
+                                             **({"scene_reference_mode": bound_last.scene_reference_mode,
+                                                 "human_reference_mode": bound_last.human_reference_mode,
+                                                 "ref_layout": bound_last.ref_layout,
+                                                 "sent_ref_sequence": [r.get("source_type")
+                                                                       for r in bound_last.semantic_roles],
+                                                 "used_reference_ids": list(bound_last.used_reference_ids),
+                                                 "semantic_roles": [dict(r) for r in bound_last.semantic_roles],
+                                                 "dropped_optional": [dict(d) for d in bound_last.dropped_optional]}
+                                                if bound_last else {})})
     def mut(s, b=new_batch, cid=cand.candidate_id, d=str(dest), u=url):
         s.last_frame_batches.append(b)
         s.selected_last_frame = cid
