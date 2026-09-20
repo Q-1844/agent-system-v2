@@ -190,6 +190,7 @@ OpenAI 兼容。
 ```
 
 **D. 多图指导** — `extra_body.image` 是数组，**不带** mode
+> 🔴 **2026-09-20 真机勘误（32.md X005）**：此形态在 .cn v2.0 路由实测**服务端按默认 ti2vid 处理且最多只收 1 张图**——2 张参考提交 400：`ti2vid supports at most 1 image`（litellm.BadRequestError 包裹）。即 v2.0 实际**不存在 2+ 参考槽**；31.md 探针「multi 可用」实质=单图条件（恰好只传了 1 张 look）。multi（1 图）与 i2v（1 图顶层 image）在服务端同为 ti2vid，实验差异来自**喂什么图**（look 立绘 vs 成品首帧），不是模式本身。
 
 ### 3.3 🔴 视频接口的图片必须是公网可访问 URL
 

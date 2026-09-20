@@ -320,6 +320,10 @@ async def run(limit=None, only=None, batch=None):
     for r in rows:
         exp_id, shot_id, mode = r["exp_id"], r["shot_id"], r["mode"]
         refs, basis, _ = shot_refs(shot_id, r.get("with_scene_ref", False))
+        if r.get("scene_only"):
+            # v2.0 实测 ti2vid 最多 1 图（X005: "ti2vid supports at most 1 image"）——
+            # 原 look+scene 双参考格改为仅场景参考（身份靠文本锚）
+            refs = [x for x in refs if x["role"] == "scene_instance_view"]
         rec = {"exp_id": exp_id, "batch": r["batch"], "shot_id": shot_id,
                "mode": mode, "prompt_style": r["style"], "tag": r["tag"],
                "run_index": r["run_index"], "seed": r["seed"],
