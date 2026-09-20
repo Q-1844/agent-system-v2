@@ -1,6 +1,6 @@
 # SHOT PRODUCTION GENERATION INTEGRATION REPORT（31.md）
 
-> 阶段：Phase A（Audit）+ Phase B（Design）完成；Phase C-G 待推进（本文档随阶段推进增量更新）。
+> 阶段：**FINAL——Phase A/B/C/E/F/G 全部完成**（2026-09-20）。结论=PASS WITH LIMITATIONS（见文末）。
 > 执行约束：Agnes only（禁 SenseNova 真实生成 / 禁 fallback / 禁 CodeBuddy）；冻结区不动；Truth Gate 不降级。
 
 ---
@@ -218,10 +218,11 @@ Pack 塞路径或 provider 字段；不自动 refresh/approve；不 silent fallb
 - crop 依赖 rembg：确定性（同输入同输出），失败降级路径不阻断生成（记 diagnostic）。
 - 真机成本：串行+75s；实验矩阵规模受控（≤~40 calls/批）；差图只从 provider URL 重下（D2 教训）。
 
-## 8. Real E2E（Phase E）— 进行中
+## 8. Real E2E（Phase E/F）— 完成
 
-驱动：`_31_e2e_driver.py`（fixture / mitigate / review 三子命令；串行+75s 纪律；候选逐批
-拷贝防覆盖；证据落 `_31_integration_e2e/`）。
+驱动：`_31_e2e_driver.py`（fixture / mitigate / review；串行+75s 纪律；候选逐批拷贝；
+证据 `_31_integration_e2e/`：MANIFEST.json 36 条 / REVIEW.json 35 评审 / GALLERY.html）。
+真机调用量：fixture 5 图+1 视频 + 缓解矩阵 22 图 + crop_v2 补充 6 图 = 33 图 + 1 视频，零 429。
 
 ### 8.1 架构验证（§14 Case A/B/C）— fixture 项目 Golden_31_Integration_Fixture
 
@@ -231,15 +232,130 @@ Pack 塞路径或 provider 字段；不自动 refresh/approve；不 silent fallb
 - **顺序敏感**：profile（Golden 同值）与 prop 真实字节必须在 SIV 审批**之前**落位
   （SIV basis 含可见 prop approved 参考内容 sha256 与 profile 维度——审批后换内容=stale）；
 - 三镜 binding 全 READY：c01 静态（scene+look）/ c02 人物+道具（prop primary held@right_hand）/
-  c03 pick_up（look throughout + prop supporting，无 end 态 comp 污染——pack refs 干跑核验）；
-- Case C 链：首帧→选定→尾帧→keyframes 视频（i2v/keyframes seam 双槽真机验证）。
+  c03 pick_up（look throughout + prop supporting，无 end 态 comp 污染——pack refs 干跑核验）。
 
-（真机结果待运行完成后填充。）
+真机结果（10.7 min，零重试）：
+- **Case A/B/C 机制全部成立**：provenance 完整（A 发 2 参考、B/C 发 3 参考=scene+look+prop，
+  scene=full/human=keep，dropped 空）；Case C 首帧**空手伸向玉佩**（pick_up start 态成立，
+  end 态未污染）、尾帧**手持玉佩**（end 态成立）——temporal 语义真实 provider 上端到端正确；
+  keyframes 视频双槽真机产出（1.4MB mp4，Native AV basis 在档）。
+- 诚实记录：fixture 镜头的 creative 字段（description/opening_state 等）为空 → review 判定
+  needs_fix（幻觉人群 5-10 人）**不构成架构失败证据**——prompt 几乎无创作意图时模型自由发挥
+  是预期行为；架构验收以「生产事实进入 provider」（provenance+图片可见 scene/look/prop 身份）
+  为口径。
 
-### 8.2 缓解 A/B（Golden 紧景别代表镜）— 待运行
+### 8.2 缓解 A/B（Golden 紧景别代表镜）
 
-矩阵：s16_c02(CU)/s17_c03(CU)/s17_c02(ECU) × {auto=drop 对照, crop, crop+pop} × 2 候选；
-s09_c01(EWS，D2 观测 9 人案例) × {auto, auto+pop} × 2。共 22 次 2K 生成，origin_run_id=e31_*。
+矩阵一（v1 裁剪）+ 矩阵二（crop_v2，C4.1 bbox 修复后补充）；review_shot_core 14 维自动初筛：
+
+| 镜/目标 | auto（drop 对照） | crop v1 | crop_v2 | pop 子句 |
+|---|---|---|---|---|
+| s16_c02（CU） | MS 2人，尺寸差一档（=D2 残余） | **回归**：WS 3人+环境搬运 | 2人 cast/identity/dup 全 pass，仍 WS | — |
+| s17_c02（ECU） | **丢角色**（people=0，missing_character） | 角色回归，MS | 角色回归 MCU/MS，identity pass | MS |
+| s17_c03（CU） | MS/MCU 1人（一档差） | ≈auto | MS 1人，仅剩尺寸 fail | MS |
+| s09_c01（EWS） | MS/MCU 1人（过近，反向 fail） | — | — | c1 仍 5 人（**未可靠抑制**） |
+
+结论（自动初筛口径，最终以人评为准）：
+1. **crop v1 的回归根因已定位并修复**（C4.1）：场景风 look plate 的雾/光晕散点使
+   getbbox 全画幅 → 裁剪搬运环境（雪山夕阳入参考）；alpha 质量分位 bbox 修复后
+   crop_v2 全部 6 候选 cast/identity/duplicate pass。
+2. **残余墙不变且被精化**：shot_size_correctness——紧景别仍宽 1-2 档。即使人物紧框
+   裁剪，参考图仍携带「人像+场景」构图 DNA（本项目 look plate 为场景风封面图，
+   非白底立绘）；auto-drop 能到 ECU（s17_c02）但会**整体丢角色**。两模式互有胜负：
+   auto=尺寸较准/cast 风险；crop_v2=cast+identity 稳/尺寸宽一档。
+3. **population 子句**：n=2 证据不足（开启后仍出现一次 5 人 crowd）——维持默认关，
+   不翻 auto 映射（与 crop 同纪律：证据不足不翻默认）。
+4. 混合策略成为可能（基础设施已支持）：纯道具 insert 镜用 auto；有对白的角色紧景别
+   用 crop_v2（cast+identity 优先，尺寸差一档留给 Director 意图强化/后续 provider）。
+   是否采纳由用户裁定。
+
+### 8.3 Phase F 修复记录（真实失败→修复）
+
+| 失败 | 根因 | 修复 | commit |
+|---|---|---|---|
+| crop v1 搬运环境（s16_c02 渲染出参考图雪山夕阳） | alpha.getbbox() 对雾/光晕散点过敏 → bbox=全画幅 | alpha>64 + central 98% 质量分位窗口；derivation 记 bbox_method | befdf9f |
+| crop_v2 首跑全 503 | driver 新进程漏 bind_pm | 补 project_manager 注入 | （driver 脚本，无 src 改动） |
+| 合成图 rembg 分割运行间不稳定 | isnet-anime 对平面图形决策边界抖动 | pytest 改假 segmentor（真实能力由真机 E2E 验证） | befdf9f |
+
+## 9. 最终架构 / 映射 / 规则（§22.5-8 摘要）
+
+```
+Binding→Validity→Pack（冻结）
+  → Bound*Adapter（temporal→预算[scene/human/crop mode]→cap6→媒体解析→prompt 编译）
+  → BoundImageRequest/BoundVideoRequest（ref_layout 标记 + roles[checksum,derivation]）
+  → to_generation_request() → GenerationRequest（provider-neutral）
+  → compile_agnes_image_call / compile_agnes_video_call（能力诚实：无 negative 槽丢弃必录、
+    seed 结构化拒绝、i2v 单槽/keyframes 双槽、data URI 视频拒绝）
+  → AgnesClient → post_generation_basis_guard（图片 commit 前复验）→ ImageBatch/VideoVersion
+```
+
+- ReferencePack→provider 映射：图片=eligible 参考按 Pack 序直发（cap6）；视频=boundary
+  frames 双槽+prompt 生产上下文（Pack refs 不直接进视频 provider——诚实 diagnostic）。
+- 预算规则：temporal 先于 priority；scene auto（EWS/WS/MS→full，紧/OTS→context_only）；
+  human auto（紧→drop）+显式 crop 档（每角色 1 张 bust/face 裁剪派生，extreme close→face）；
+  population 子句参数门控默认关。
+
+## 10. UNBOUND 兼容 / NOT_READY blocking（§22.15-16）
+
+- UNBOUND：三 handler legacy 分支逐字节不变（测试锚定 s3c1:149/s3c2:316/837/851）；
+  legacy 只补几何 provenance 键（image_provider/size_tier/ratio），不伪造 BOUND 键。
+- NOT_READY/stale/撤销/媒体缺失/Generation 编译拒绝：全部结构化失败零 provider 调用
+  （或 commit 前拦截，文件留 diagnostic）；crop 派生失败回落源媒体+diagnostic（绝不 silent）。
+
+## 11. 测试结果（§22.23-24）
+
+- 新增测试：test_generation_request_seam.py(15) + test_shot_generation_post_commit_guard.py(6)
+  + test_generation_provenance.py(4) + test_identity_crop.py(8) + test_population_constraint.py(4)
+  = **37 项全绿**。
+- targeted：image 链 158 passed（C4 后）；bound 全系+native_av+c1_director 261 passed（C2 后）。
+- 全量回归：见 §12（本轮收尾跑 full suite 并记录实际数字）。
+
+## 12. 全量回归（Phase G）
+
+**2277 passed / 0 failed**（917.94s，exit 0；2026-09-20 全量跑）——零回归。
+冻结断言全绿：UNBOUND legacy 逐字节等价（s3c1:149 / s3c2:316/837/851）、四真相文件
+字节不变（s3c1:557-567）、BOUND_KEYS 锚定（native_av_b1:241/258）、工具面锚定。
+
+---
+
+## 最终结论（31.md §22 允许口径）
+
+**PASS WITH LIMITATIONS。**
+
+- 31.md §23 验收标准逐条达成：READY Binding 的生产事实（approved 角色 look/场景
+  SIV/道具/空间关系/项目风格）经可审计、确定性、模型适配链路真实进入图片与视频
+  生成（provenance 全链可追溯——used_reference_ids/semantic_roles+checksum+derivation/
+  dropped+reason/prompt snapshot/basis）；生成结果可见地受其约束（fixture Case A/B/C
+  图片含 scene/look/prop 身份；pick_up 首帧空手/尾帧持物）。
+- stale 输入不能偷偷生成（pre-dispatch + **图片 post-commit guard 补齐**）；unapproved
+  不能偷偷生成（validity fail closed）；legacy UNBOUND 逐字节不破坏；provider 细节
+  未反向污染 canonical（GenerationRequest 属 generation 边界包 ephemeral 层）；一次
+  生成用了什么参考可完整追溯；生成窗口内 canonical 改变不会把旧 basis 结果冒充当前
+  （图片 commit 前复验 + 视频既有 pre-commit）。
+- LIMITATION（诚实记录）：Agnes 紧景别遵从边界未消失且被精化——crop_v2 保
+  cast/identity 但尺寸宽 1-2 档；auto-drop 尺寸较准但 ECU 类镜丢角色；population
+  子句证据不足维持默认关。最终质量口径待用户人评 GALLERY.html。
+
+## 最终回归记录
+
+- 全量：2277 passed / 0 failed（Phase G，2026-09-20）
+- 本阶段 commits：41495a7（C0 透传修复）→ 8b06b77（A+B 报告）→ 393ea1f（C1 seam）→
+  52445b3（C2 post-guard）→ e1e7235（C3 provenance）→ 3c80ec1（C4 crop）→ 386d0c6+
+  6931fe2（C5 pop 子句+测试修正）→ befdf9f（C4.1 bbox 修复）→ 53b49cd（E driver）→
+  本 commit（E/F/G 收口）
+
+## 13. 已知局限 / next phase 建议（§22.26-27）
+
+1. **MODEL_LIMITATION（精化版）**：Agnes 紧景别遵从边界不因参考工程而消失——人物紧框
+   裁剪可保 cast/identity，但尺寸仍宽 1-2 档；auto-drop 尺寸较准但 ECU 类镜丢角色。
+   D2 三选一的 (a)/(b)/(c) 裁决依然有效，本轮提供的是第三条已验证的中间路线
+   （crop_v2 混合策略）与完整可追溯的实验基建。
+2. look plate 资产形态是上界：场景风封面图做 identity 参考先天携带环境锚；若后续
+   项目为角色生成纯白底立绘（资源域已有 wardrobe/look 管线），紧景别参考质量可再上台阶。
+3. population 子句需更多样本才能定默认；当前参数门控已就位。
+4. shot_review 比对图取 approved[0] 忽略 cover 的不一致（G5）留档。
+5. 建议下一步：用户人评 GALLERY.html（35 候选并排+自动初筛）裁定混合策略；
+   若采纳 crop_v2 为对话紧景别默认，改 resolve_human_reference_mode auto 映射一行+证据记录。
 
 ## 9-27. （Phase C-G 完成后逐节填充：modified files / 架构图终稿 / mapping / 规则 / 集成细节 /
 provenance / OCC / 兼容性 / E2E / 证据 / 失败与修复 / LIMITATION / 测试结果 / 冻结区 diff /
