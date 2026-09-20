@@ -2,55 +2,57 @@
 body{font-family:sans-serif;background:#111;color:#ddd}
 table{border-collapse:collapse}td{border:1px solid #444;padding:6px;vertical-align:top}
 img{width:320px}video{width:320px}h3{margin:10px 0 4px}
+.legend{background:#222;padding:10px;border-radius:6px;font-size:14px;line-height:1.6;max-width:1100px}
 </style></head><body><h1>31.md Integration E2E Gallery</h1>
+<div class='legend'><b>变体图例</b>：auto=现状默认（紧景别人形参考全退/宽景全发）· crop=look hero 头肩/面部裁剪参考（v1 旧 bbox）· <b>crop_v2=修复 bbox 后的裁剪参考（人物紧框）</b> · crop_pop/auto_pop=裁剪/默认 + 人数排除子句<br><b>评审行</b>：overall | 人形=实到人数 | 实际景别 | hard fails（自动 Vision 初筛口径——<b>最终以人评为准</b>）。fixture 组镜头无 creative 描述，人群幻觉属预期，不作为质量证据。</div>
 <h3>fixture / s01_c01</h3><table><tr>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\fixture\s01_c01_caseA_static_c1.png'><br>caseA_static c1<br><small>scene=full human=keep pop=</small><br><b>needs_fix</b> | 人形=6 | 实际景别=WS(wide)<br>hard: duplicate_identity、unexpected_people、missing_character、shot_size_correctness</td>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\fixture\s01_c01_caseA_static_c2.png'><br>caseA_static c2<br><small>scene=full human=keep pop=</small><br><b>needs_fix</b> | 人形=1 | 实际景别=WS<br>hard: shot_size_correctness</td>
+<td><img src='fixture/s01_c01_caseA_static_c1.png'><br>caseA_static c1<br><small>scene=full human=keep pop=</small><br><b>needs_fix</b> | 人形=6 | 实际景别=WS(wide)<br>hard: duplicate_identity、unexpected_people、missing_character、shot_size_correctness</td>
+<td><img src='fixture/s01_c01_caseA_static_c2.png'><br>caseA_static c2<br><small>scene=full human=keep pop=</small><br><b>needs_fix</b> | 人形=1 | 实际景别=WS<br>hard: shot_size_correctness</td>
 </tr>
 <h3>fixture / s01_c02</h3><table><tr>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\fixture\s01_c02_caseB_prop_c1.png'><br>caseB_prop c1<br><small>scene=full human=keep pop=</small><br><b>needs_fix</b> | 人形=5 | 实际景别=MS(medium)<br>hard: unexpected_people</td>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\fixture\s01_c02_caseB_prop_c2.png'><br>caseB_prop c2<br><small>scene=full human=keep pop=</small><br><b>needs_fix</b> | 人形=10 | 实际景别=WS<br>hard: unexpected_people、shot_size_correctness</td>
+<td><img src='fixture/s01_c02_caseB_prop_c1.png'><br>caseB_prop c1<br><small>scene=full human=keep pop=</small><br><b>needs_fix</b> | 人形=5 | 实际景别=MS(medium)<br>hard: unexpected_people</td>
+<td><img src='fixture/s01_c02_caseB_prop_c2.png'><br>caseB_prop c2<br><small>scene=full human=keep pop=</small><br><b>needs_fix</b> | 人形=10 | 实际景别=WS<br>hard: unexpected_people、shot_size_correctness</td>
 </tr>
 <h3>fixture / s01_c03</h3><table><tr>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\fixture\s01_c03_caseC_pickup_first_c1.png'><br>caseC_pickup_first c1<br><small>scene=full human=keep pop=</small><br><b>needs_fix</b> | 人形=6 | 实际景别=WS (Wide Shot)<br>hard: duplicate_identity、unexpected_people、missing_character、shot_size_correctness、framing_and_composition</td>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\fixture\s01_c03_caseC_pickup_first_c2.png'><br>caseC_pickup_first c2<br><small>scene=full human=keep pop=</small><br><b>needs_fix</b> | 人形=10 | 实际景别=MS<br>hard: duplicate_identity、unexpected_people、missing_character</td>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\fixture\s01_c03_caseC_pickup_last_c1.png'><br>caseC_pickup_last c1<br><small>scene=full human=keep pop=</small><br><b>needs_fix</b> | 人形=5 | 实际景别=WS<br>hard: duplicate_identity、unexpected_people、shot_size_correctness、anatomy_artifact</td>
-<td><video src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\fixture\caseC_video.mp4' controls></video><br>caseC_video c<br><small>scene= human= pop=</small><br><i>（未审查）</i></td>
+<td><img src='fixture/s01_c03_caseC_pickup_first_c1.png'><br>caseC_pickup_first c1<br><small>scene=full human=keep pop=</small><br><b>needs_fix</b> | 人形=6 | 实际景别=WS (Wide Shot)<br>hard: duplicate_identity、unexpected_people、missing_character、shot_size_correctness、framing_and_composition</td>
+<td><img src='fixture/s01_c03_caseC_pickup_first_c2.png'><br>caseC_pickup_first c2<br><small>scene=full human=keep pop=</small><br><b>needs_fix</b> | 人形=10 | 实际景别=MS<br>hard: duplicate_identity、unexpected_people、missing_character</td>
+<td><img src='fixture/s01_c03_caseC_pickup_last_c1.png'><br>caseC_pickup_last c1<br><small>scene=full human=keep pop=</small><br><b>needs_fix</b> | 人形=5 | 实际景别=WS<br>hard: duplicate_identity、unexpected_people、shot_size_correctness、anatomy_artifact</td>
+<td><video src='fixture/caseC_video.mp4' controls></video><br>caseC_video c<br><small>scene= human= pop=</small><br><i>（未审查）</i></td>
 </tr>
 <h3>mitigate / s09_c01</h3><table><tr>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\mitigate\s09_c01_auto_c1.png'><br>auto c1<br><small>scene=full human=keep pop=</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MS (medium)<br>hard: shot_size_correctness、framing_and_composition</td>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\mitigate\s09_c01_auto_c2.png'><br>auto c2<br><small>scene=full human=keep pop=</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MCU (Medium Close-Up)<br>hard: shot_size_correctness</td>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\mitigate\s09_c01_auto_pop_c1.png'><br>auto_pop c1<br><small>scene=full human=keep pop=True</small><br><b>needs_fix</b> | 人形=5 | 实际景别=MCU (Medium Close-Up)<br>hard: unexpected_people、shot_size_correctness</td>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\mitigate\s09_c01_auto_pop_c2.png'><br>auto_pop c2<br><small>scene=full human=keep pop=True</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MCU(medium close-up)<br>hard: shot_size_correctness</td>
+<td><img src='mitigate/s09_c01_auto_c1.png'><br>auto c1<br><small>scene=full human=keep pop=</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MS (medium)<br>hard: shot_size_correctness、framing_and_composition</td>
+<td><img src='mitigate/s09_c01_auto_c2.png'><br>auto c2<br><small>scene=full human=keep pop=</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MCU (Medium Close-Up)<br>hard: shot_size_correctness</td>
+<td><img src='mitigate/s09_c01_auto_pop_c1.png'><br>auto_pop c1<br><small>scene=full human=keep pop=True</small><br><b>needs_fix</b> | 人形=5 | 实际景别=MCU (Medium Close-Up)<br>hard: unexpected_people、shot_size_correctness</td>
+<td><img src='mitigate/s09_c01_auto_pop_c2.png'><br>auto_pop c2<br><small>scene=full human=keep pop=True</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MCU(medium close-up)<br>hard: shot_size_correctness</td>
 </tr>
 <h3>mitigate / s16_c02</h3><table><tr>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\mitigate\s16_c02_auto_c1.png'><br>auto c1<br><small>scene=context_only human=drop pop=</small><br><b>needs_fix</b> | 人形=2 | 实际景别=Medium Shot (MS)<br>hard: shot_size_correctness、framing_and_composition</td>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\mitigate\s16_c02_auto_c2.png'><br>auto c2<br><small>scene=context_only human=drop pop=</small><br><b>needs_fix</b> | 人形=2 | 实际景别=MS<br>hard: shot_size_correctness</td>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\mitigate\s16_c02_crop_c1.png'><br>crop c1<br><small>scene=context_only human=crop pop=</small><br><b>needs_fix</b> | 人形=3 | 实际景别=WS<br>hard: unexpected_people、missing_character、shot_size_correctness、framing_and_composition</td>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\mitigate\s16_c02_crop_c2.png'><br>crop c2<br><small>scene=context_only human=crop pop=</small><br><b>needs_fix</b> | 人形=3 | 实际景别=WS<br>hard: unexpected_people、shot_size_correctness、framing_and_composition</td>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\mitigate\s16_c02_crop_pop_c1.png'><br>crop_pop c1<br><small>scene=context_only human=crop pop=True</small><br><b>needs_fix</b> | 人形=3 | 实际景别=WS<br>hard: unexpected_people、shot_size_correctness、framing_and_composition</td>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\mitigate\s16_c02_crop_pop_c2.png'><br>crop_pop c2<br><small>scene=context_only human=crop pop=True</small><br><b>needs_fix</b> | 人形=3 | 实际景别=WS<br>hard: unexpected_people、shot_size_correctness、framing_and_composition</td>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\mitigate\s16_c02_crop_v2_c1.png'><br>crop_v2 c1<br><small>scene=context_only human=crop pop=</small><br><b>needs_fix</b> | 人形=2 | 实际景别=WS<br>hard: shot_size_correctness、framing_and_composition</td>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\mitigate\s16_c02_crop_v2_c2.png'><br>crop_v2 c2<br><small>scene=context_only human=crop pop=</small><br><b>needs_fix</b> | 人形=2 | 实际景别=WS(wide)<br>hard: shot_size_correctness</td>
+<td><img src='mitigate/s16_c02_auto_c1.png'><br>auto c1<br><small>scene=context_only human=drop pop=</small><br><b>needs_fix</b> | 人形=2 | 实际景别=Medium Shot (MS)<br>hard: shot_size_correctness、framing_and_composition</td>
+<td><img src='mitigate/s16_c02_auto_c2.png'><br>auto c2<br><small>scene=context_only human=drop pop=</small><br><b>needs_fix</b> | 人形=2 | 实际景别=MS<br>hard: shot_size_correctness</td>
+<td><img src='mitigate/s16_c02_crop_c1.png'><br>crop c1<br><small>scene=context_only human=crop pop=</small><br><b>needs_fix</b> | 人形=3 | 实际景别=WS<br>hard: unexpected_people、missing_character、shot_size_correctness、framing_and_composition</td>
+<td><img src='mitigate/s16_c02_crop_c2.png'><br>crop c2<br><small>scene=context_only human=crop pop=</small><br><b>needs_fix</b> | 人形=3 | 实际景别=WS<br>hard: unexpected_people、shot_size_correctness、framing_and_composition</td>
+<td><img src='mitigate/s16_c02_crop_pop_c1.png'><br>crop_pop c1<br><small>scene=context_only human=crop pop=True</small><br><b>needs_fix</b> | 人形=3 | 实际景别=WS<br>hard: unexpected_people、shot_size_correctness、framing_and_composition</td>
+<td><img src='mitigate/s16_c02_crop_pop_c2.png'><br>crop_pop c2<br><small>scene=context_only human=crop pop=True</small><br><b>needs_fix</b> | 人形=3 | 实际景别=WS<br>hard: unexpected_people、shot_size_correctness、framing_and_composition</td>
+<td><img src='mitigate/s16_c02_crop_v2_c1.png'><br>crop_v2 c1<br><small>scene=context_only human=crop pop=</small><br><b>needs_fix</b> | 人形=2 | 实际景别=WS<br>hard: shot_size_correctness、framing_and_composition</td>
+<td><img src='mitigate/s16_c02_crop_v2_c2.png'><br>crop_v2 c2<br><small>scene=context_only human=crop pop=</small><br><b>needs_fix</b> | 人形=2 | 实际景别=WS(wide)<br>hard: shot_size_correctness</td>
 </tr>
 <h3>mitigate / s17_c02</h3><table><tr>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\mitigate\s17_c02_auto_c1.png'><br>auto c1<br><small>scene=context_only human=drop pop=</small><br><b>needs_fix</b> | 人形=0 | 实际景别=ECU<br>hard: missing_character</td>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\mitigate\s17_c02_auto_c2.png'><br>auto c2<br><small>scene=context_only human=drop pop=</small><br><b>needs_fix</b> | 人形=0 | 实际景别=MCU(medium close-up)<br>hard: missing_character、shot_size_correctness</td>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\mitigate\s17_c02_crop_c1.png'><br>crop c1<br><small>scene=context_only human=crop pop=</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MS<br>hard: shot_size_correctness</td>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\mitigate\s17_c02_crop_c2.png'><br>crop c2<br><small>scene=context_only human=crop pop=</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MS<br>hard: shot_size_correctness</td>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\mitigate\s17_c02_crop_pop_c1.png'><br>crop_pop c1<br><small>scene=context_only human=crop pop=True</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MS(medium)<br>hard: shot_size_correctness、framing_and_composition</td>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\mitigate\s17_c02_crop_pop_c2.png'><br>crop_pop c2<br><small>scene=context_only human=crop pop=True</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MS (Medium Shot)<br>hard: shot_size_correctness</td>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\mitigate\s17_c02_crop_v2_c1.png'><br>crop_v2 c1<br><small>scene=context_only human=crop pop=</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MCU<br>hard: shot_size_correctness</td>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\mitigate\s17_c02_crop_v2_c2.png'><br>crop_v2 c2<br><small>scene=context_only human=crop pop=</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MS<br>hard: shot_size_correctness</td>
+<td><img src='mitigate/s17_c02_auto_c1.png'><br>auto c1<br><small>scene=context_only human=drop pop=</small><br><b>needs_fix</b> | 人形=0 | 实际景别=ECU<br>hard: missing_character</td>
+<td><img src='mitigate/s17_c02_auto_c2.png'><br>auto c2<br><small>scene=context_only human=drop pop=</small><br><b>needs_fix</b> | 人形=0 | 实际景别=MCU(medium close-up)<br>hard: missing_character、shot_size_correctness</td>
+<td><img src='mitigate/s17_c02_crop_c1.png'><br>crop c1<br><small>scene=context_only human=crop pop=</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MS<br>hard: shot_size_correctness</td>
+<td><img src='mitigate/s17_c02_crop_c2.png'><br>crop c2<br><small>scene=context_only human=crop pop=</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MS<br>hard: shot_size_correctness</td>
+<td><img src='mitigate/s17_c02_crop_pop_c1.png'><br>crop_pop c1<br><small>scene=context_only human=crop pop=True</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MS(medium)<br>hard: shot_size_correctness、framing_and_composition</td>
+<td><img src='mitigate/s17_c02_crop_pop_c2.png'><br>crop_pop c2<br><small>scene=context_only human=crop pop=True</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MS (Medium Shot)<br>hard: shot_size_correctness</td>
+<td><img src='mitigate/s17_c02_crop_v2_c1.png'><br>crop_v2 c1<br><small>scene=context_only human=crop pop=</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MCU<br>hard: shot_size_correctness</td>
+<td><img src='mitigate/s17_c02_crop_v2_c2.png'><br>crop_v2 c2<br><small>scene=context_only human=crop pop=</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MS<br>hard: shot_size_correctness</td>
 </tr>
 <h3>mitigate / s17_c03</h3><table><tr>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\mitigate\s17_c03_auto_c1.png'><br>auto c1<br><small>scene=context_only human=drop pop=</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MS(medium)<br>hard: shot_size_correctness</td>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\mitigate\s17_c03_auto_c2.png'><br>auto c2<br><small>scene=context_only human=drop pop=</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MCU(medium close-up)<br>hard: shot_size_correctness</td>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\mitigate\s17_c03_crop_c1.png'><br>crop c1<br><small>scene=context_only human=crop pop=</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MS<br>hard: shot_size_correctness、framing_and_composition</td>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\mitigate\s17_c03_crop_c2.png'><br>crop c2<br><small>scene=context_only human=crop pop=</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MS<br>hard: shot_size_correctness、framing_and_composition</td>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\mitigate\s17_c03_crop_pop_c1.png'><br>crop_pop c1<br><small>scene=context_only human=crop pop=True</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MS (Medium Shot)<br>hard: shot_size_correctness、framing_and_composition</td>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\mitigate\s17_c03_crop_pop_c2.png'><br>crop_pop c2<br><small>scene=context_only human=crop pop=True</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MS<br>hard: shot_size_correctness</td>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\mitigate\s17_c03_crop_v2_c1.png'><br>crop_v2 c1<br><small>scene=context_only human=crop pop=</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MS<br>hard: shot_size_correctness</td>
-<td><img src='C:\Users\曹文淇\Desktop\ai工作流\animation-storyboard\_31_integration_e2e\mitigate\s17_c03_crop_v2_c2.png'><br>crop_v2 c2<br><small>scene=context_only human=crop pop=</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MS<br>hard: shot_size_correctness</td>
+<td><img src='mitigate/s17_c03_auto_c1.png'><br>auto c1<br><small>scene=context_only human=drop pop=</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MS(medium)<br>hard: shot_size_correctness</td>
+<td><img src='mitigate/s17_c03_auto_c2.png'><br>auto c2<br><small>scene=context_only human=drop pop=</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MCU(medium close-up)<br>hard: shot_size_correctness</td>
+<td><img src='mitigate/s17_c03_crop_c1.png'><br>crop c1<br><small>scene=context_only human=crop pop=</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MS<br>hard: shot_size_correctness、framing_and_composition</td>
+<td><img src='mitigate/s17_c03_crop_c2.png'><br>crop c2<br><small>scene=context_only human=crop pop=</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MS<br>hard: shot_size_correctness、framing_and_composition</td>
+<td><img src='mitigate/s17_c03_crop_pop_c1.png'><br>crop_pop c1<br><small>scene=context_only human=crop pop=True</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MS (Medium Shot)<br>hard: shot_size_correctness、framing_and_composition</td>
+<td><img src='mitigate/s17_c03_crop_pop_c2.png'><br>crop_pop c2<br><small>scene=context_only human=crop pop=True</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MS<br>hard: shot_size_correctness</td>
+<td><img src='mitigate/s17_c03_crop_v2_c1.png'><br>crop_v2 c1<br><small>scene=context_only human=crop pop=</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MS<br>hard: shot_size_correctness</td>
+<td><img src='mitigate/s17_c03_crop_v2_c2.png'><br>crop_v2 c2<br><small>scene=context_only human=crop pop=</small><br><b>needs_fix</b> | 人形=1 | 实际景别=MS<br>hard: shot_size_correctness</td>
 </tr>
 </table></body></html>

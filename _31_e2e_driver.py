@@ -445,18 +445,30 @@ def run_review():
             "table{border-collapse:collapse}td{border:1px solid #444;padding:6px;"
             "vertical-align:top}",
             "img{width:320px}video{width:320px}h3{margin:10px 0 4px}",
-            "</style></head><body><h1>31.md Integration E2E Gallery</h1>"]
+            ".legend{background:#222;padding:10px;border-radius:6px;font-size:14px;"
+            "line-height:1.6;max-width:1100px}",
+            "</style></head><body><h1>31.md Integration E2E Gallery</h1>",
+            "<div class='legend'>"
+            "<b>变体图例</b>：auto=现状默认（紧景别人形参考全退/宽景全发）· "
+            "crop=look hero 头肩/面部裁剪参考（v1 旧 bbox）· "
+            "<b>crop_v2=修复 bbox 后的裁剪参考（人物紧框）</b> · "
+            "crop_pop/auto_pop=裁剪/默认 + 人数排除子句<br>"
+            "<b>评审行</b>：overall | 人形=实到人数 | 实际景别 | hard fails"
+            "（自动 Vision 初筛口径——<b>最终以人评为准</b>）。"
+            "fixture 组镜头无 creative 描述，人群幻觉属预期，不作为质量证据。</div>"]
     for (group, shot_id), entries in sorted(rows.items()):
         html.append(f"<h3>{esc(group)} / {esc(shot_id)}</h3><table><tr>")
         for e in entries:
             key = (f"{e['group']}||{e['shot_id']}||{e['variant']}"
                    f"||c{e.get('cand_index', 0)}")
             rv = results.get(key)
+            # 相对路径（Gallery 与图片同目录树——HTTP/file 双协议可用）
+            rel = Path(e["file"]).relative_to(E2E).as_posix() if e.get("file") else None
             if e.get("frame") == "video":
-                media = (f"<video src='{e['file']}' controls></video>"
-                         if e.get("file") else "<i>missing</i>")
+                media = (f"<video src='{rel}' controls></video>"
+                         if rel else "<i>missing</i>")
             else:
-                media = (f"<img src='{e['file']}'>" if e.get("file")
+                media = (f"<img src='{rel}'>" if rel
                          else f"<i>{esc(e.get('error', 'missing'))}</i>")
             gb = e.get("generation_basis") or {}
             meta = (f"scene={esc(gb.get('scene_reference_mode'))} "
