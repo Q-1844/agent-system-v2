@@ -447,6 +447,12 @@ def run_review():
             "img{width:320px}video{width:320px}h3{margin:10px 0 4px}",
             ".legend{background:#222;padding:10px;border-radius:6px;font-size:14px;"
             "line-height:1.6;max-width:1100px}",
+            "button.sel{padding:4px 10px;border:0;border-radius:4px;cursor:pointer;"
+            "font-size:14px}",
+            "img.pickable{cursor:zoom-in}",
+            "input.note{background:#1c1c1c;color:#ddd;border:1px solid #444;"
+            "padding:4px 8px;margin:2px 0 6px}",
+            "h3{margin:14px 0 2px}",
             "</style></head><body><h1>31.md Integration E2E Gallery</h1>",
             "<div class='legend'>"
             "<b>变体图例</b>：auto=现状默认（紧景别人形参考全退/宽景全发）· "
@@ -457,7 +463,10 @@ def run_review():
             "（自动 Vision 初筛口径——<b>最终以人评为准</b>）。"
             "fixture 组镜头无 creative 描述，人群幻觉属预期，不作为质量证据。</div>"]
     for (group, shot_id), entries in sorted(rows.items()):
-        html.append(f"<h3>{esc(group)} / {esc(shot_id)}</h3><table><tr>")
+        html.append(f"<h3>{esc(group)} / {esc(shot_id)}</h3>")
+        html.append(f"<input class='note' data-note-key='{esc(group)}/{esc(shot_id)}' "
+                    f"placeholder='本镜备注（自动保存）' style='width:600px'>")
+        html.append("<table><tr>")
         for e in entries:
             key = (f"{e['group']}||{e['shot_id']}||{e['variant']}"
                    f"||c{e.get('cand_index', 0)}")
@@ -468,16 +477,52 @@ def run_review():
                 media = (f"<video src='{rel}' controls></video>"
                          if rel else "<i>missing</i>")
             else:
-                media = (f"<img src='{rel}'>" if rel
+                media = (f"<img src='{rel}' class='pickable'>" if rel
                          else f"<i>{esc(e.get('error', 'missing'))}</i>")
             gb = e.get("generation_basis") or {}
             meta = (f"scene={esc(gb.get('scene_reference_mode'))} "
                     f"human={esc(gb.get('human_reference_mode'))} "
                     f"pop={esc(gb.get('population_constraint'))}")
+            sel_btn = (f"<button class='sel' data-key='{esc(key)}'>未评</button>"
+                       if e.get("frame") != "video" else "")
             html.append(f"<td>{media}<br>{esc(e['variant'])} c{e.get('cand_index', '')}"
-                        f"<br><small>{meta}</small><br>{review_line(rv)}</td>")
+                        f"<br><small>{meta}</small><br>{review_line(rv)}"
+                        f"<br>{sel_btn}</td>")
         html.append("</tr>")
-    html.append("</table></body></html>")
+    html.append("</table>")
+    html.append("""
+<script>
+const STATES = ["", "ok", "best", "bad"];
+const LABELS = {"": "未评", "ok": "✅ 可用", "best": "⭐ 首选", "bad": "❌ 不可用"};
+const COLORS = {"": "#555", "ok": "#2a7", "best": "#fa0", "bad": "#c33"};
+function paint(btn, st){ btn.textContent = LABELS[st];
+  btn.style.background = COLORS[st]; btn.style.color = st ? "#111" : "#ddd"; }
+function post(body){ fetch('/api/feedback', {method:'POST',
+  headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)}); }
+document.querySelectorAll('button.sel').forEach(btn => {
+  btn.onclick = () => {
+    const cur = btn.dataset.state || "";
+    const next = STATES[(STATES.indexOf(cur) + 1) % STATES.length];
+    btn.dataset.state = next; paint(btn, next);
+    post({key: btn.dataset.key, state: next, at: Date.now()});
+  };
+});
+document.querySelectorAll('input.note').forEach(inp => {
+  inp.onchange = () => post({note_key: inp.dataset.noteKey, note: inp.value, at: Date.now()});
+});
+fetch('/api/feedback').then(r => r.json()).then(fb => {
+  const sel = (fb || {}).selections || {};
+  document.querySelectorAll('button.sel').forEach(btn => {
+    const s = sel[btn.dataset.key];
+    if (s && s.state) { btn.dataset.state = s.state; paint(btn, s.state); }
+  });
+  const notes = (fb || {}).notes || {};
+  document.querySelectorAll('input.note').forEach(inp => {
+    if (notes[inp.dataset.noteKey]) inp.value = notes[inp.dataset.noteKey];
+  });
+});
+</script>
+</body></html>""")
     (E2E / "GALLERY.html").write_text("\n".join(html), encoding="utf-8")
     print(f"gallery → {E2E / 'GALLERY.html'}", flush=True)
 
