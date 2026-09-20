@@ -278,6 +278,31 @@ async def run(limit=None, only=None, batch=None):
     import _31_e2e_driver as d31
     d31.load_env()
     client = d31.setup_clients()
+    # 恢复：上次中断留下 status=submitted 的孤儿任务——先轮询收尾，不重复提交
+    recs_latest = {}
+    if RECORDS.exists():
+        for line in RECORDS.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                r = json.loads(line)
+                recs_latest[r["exp_id"]] = r
+    orphans = [r for r in recs_latest.values() if r.get("status") == "submitted" and r.get("video_id")]
+    for r in orphans:
+        print(f"[{r['exp_id']}] orphan submitted — recovering poll", flush=True)
+        dest = VIDS / f"{r['exp_id']}_{r['shot_id']}_{r['tag']}.mp4"
+        try:
+            res = await client.poll_video(r["video_id"], interval=5)
+            await client.download(res["url"], dest)
+            r.update({"status": "done", "provider_url": res["url"], "local_mp4": str(dest),
+                      "bytes": dest.stat().st_size, "completed_at": time.time(),
+                      "recovered_orphan": True})
+            _append(r)
+            print(f"[{r['exp_id']}] recovered", flush=True)
+        except Exception as e:  # noqa: BLE001
+            r["status"] = "error"
+            r["error"] = f"recovery failed {type(e).__name__}: {str(e)[:300]}"
+            _append(r)
+            print(f"[{r['exp_id']}] recovery failed: {r['error'][:120]}", flush=True)
+        await asyncio.sleep(5)
     rows = [json.loads(l) for l in PLAN_FILE.read_text(encoding="utf-8").splitlines() if l.strip()]
     if batch:
         rows = [r for r in rows if r["batch"] == batch]
