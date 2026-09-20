@@ -244,7 +244,7 @@ def _frames_and_metrics(mp4, exp_id, duration):
     for i, t in enumerate(ts):
         p = FRAMES / f"{exp_id}_f{i}.png"
         subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", str(t), "-i", str(mp4),
-                        "-frames:v", "1", str(p)], check=True)
+                        "-frames:v", "1", str(p)], check=True, timeout=120)
         paths.append(p)
     # 首秒运动代理：0.1s→1.0s 平均像素差 / 中段 50%→75% 平均像素差
     try:
@@ -272,6 +272,130 @@ def _frames_and_metrics(mp4, exp_id, duration):
         sheet = None
         print(f"  sheet err {e}")
     return {"early_diff": early, "mid_diff": mid, "early_over_mid": ratio}, sheet
+
+
+PER_EXP_TIMEOUT = 900  # 单条实验看门狗：提交+轮询+下载+抽帧 正常 <6min，超 15min 必为挂死
+
+
+async def _run_row(r, client, shot_refs):
+    """单条实验：解析参考→构造请求→提交→轮询→下载→抽帧指标→记录。
+    任何路径都恰好落一条最终记录（done/error/blocked）；continue 语义改为 return。"""
+    from src.core.store import ProjectStore
+    exp_id, shot_id, mode = r["exp_id"], r["shot_id"], r["mode"]
+    refs, basis, _ = shot_refs(shot_id, r.get("with_scene_ref", False))
+    rec_note = None
+    if r.get("scene_only"):
+        # v2.0 实测 ti2vid 最多 1 图（X005: "ti2vid supports at most 1 image"）——
+        # 原 look+scene 双参考格改为仅场景参考（身份靠文本锚）
+        refs = [x for x in refs if x["role"] == "scene_instance_view"]
+    elif mode == "multi" and len(refs) > 1:
+        # look-only multi 同受 1 图上限约束：多角色镜只送 binding 首位角色 look
+        # （X014/X015/X019/X020 实证 2-3 look 全部 400）
+        refs = refs[:1]
+        rec_note = "ref_cap:v2.0 ti2vid ≤1 image, binding 首位角色"
+    rec = {"exp_id": exp_id, "batch": r["batch"], "shot_id": shot_id,
+           "mode": mode, "prompt_style": r["style"], "tag": r["tag"],
+           "run_index": r["run_index"], "seed": r["seed"],
+           "prompt": r["prompt"], "prompt_chars": len(r["prompt"]),
+           "refs": refs, "num_frames": r["num_frames"], "frame_rate": r["frame_rate"],
+           "width": r["width"], "height": r["height"], "model": "agnes-video-v2.0",
+           "binding_basis": basis, "submitted_at": time.time()}
+    if rec_note:
+        rec["ref_cap_note"] = rec_note
+    store = ProjectStore(GOLDEN)
+    sh = store.load().get_shot(shot_id)
+    if mode in ("i2v", "keyframes"):
+        ff = (sh.first_frame.candidates[sh.first_frame.selected_index]
+              if sh.first_frame and sh.first_frame.candidates else None)
+        ff_url = getattr(ff, "url", None)
+        if not ff_url:
+            rec["status"] = "blocked"
+            rec["error"] = "selected first frame has no public url"
+            _append(rec); print(f"[{exp_id}] BLOCKED no ff url", flush=True); return
+        rec["first_frame_url"] = ff_url
+    if mode == "keyframes":
+        lf = (sh.last_frame.candidates[sh.last_frame.selected_index]
+              if sh.last_frame and sh.last_frame.candidates else None)
+        lf_url = getattr(lf, "url", None)
+        if not lf_url:
+            rec["status"] = "blocked"
+            rec["error"] = "selected last frame has no public url"
+            _append(rec); print(f"[{exp_id}] BLOCKED no lf url", flush=True); return
+        rec["last_frame_url"] = lf_url
+    kw = {"num_frames": r["num_frames"], "frame_rate": r["frame_rate"],
+          "width": r["width"], "height": r["height"]}
+    if r["seed"] is not None:
+        kw["seed"] = r["seed"]
+    if mode == "t2v":
+        kw["mode"] = "t2v"
+    elif mode == "multi":
+        kw.update(mode="multi", image_urls=[x["url"] for x in refs])
+    elif mode == "i2v":
+        kw.update(mode="i2v", image_url=rec["first_frame_url"])
+    elif mode == "keyframes":
+        kw.update(mode="keyframes", image_urls=[rec["first_frame_url"], rec["last_frame_url"]])
+    rec["request_kwargs"] = {k: (v if k != "image_urls" else [u[:60] + "..." for u in v])
+                             for k, v in kw.items()}
+    dest = VIDS / f"{exp_id}_{shot_id}_{r['tag']}.mp4"
+    try:
+        created = await client.create_video(r["prompt"], **kw)
+        vid = created.get("video_id") or created.get("task_id")
+        rec["video_id"] = vid
+        rec["status"] = "submitted"
+        _append(rec)
+        print(f"[{exp_id}] {shot_id} {r['tag']} submitted {str(vid)[:30]} refs={len(refs)}", flush=True)
+        res = await client.poll_video(vid, interval=5, on_progress=lambda pct, st, w:
+                                      print(f"  [{exp_id}] {st} {pct}% {int(w)}s", flush=True))
+        await client.download(res["url"], dest)
+        rec.update({"status": "done", "provider_url": res["url"],
+                    "local_mp4": str(dest), "bytes": dest.stat().st_size,
+                    "completed_at": time.time()})
+        pr = subprocess.run(["ffprobe", "-v", "quiet", "-print_format", "json",
+                             "-show_format", "-show_streams", str(dest)],
+                            capture_output=True, text=True, timeout=120)
+        try:
+            finfo = json.loads(pr.stdout)
+            vst = next(s for s in finfo["streams"] if s["codec_type"] == "video")
+            rec["ffprobe"] = {"duration": finfo["format"].get("duration"),
+                              "size": f"{vst.get('width')}x{vst.get('height')}",
+                              "has_audio": any(s["codec_type"] == "audio"
+                                               for s in finfo["streams"])}
+            dur = float(finfo["format"].get("duration") or 5)
+        except Exception:
+            dur = 5.0
+        metrics, sheet = _frames_and_metrics(dest, exp_id, dur)
+        rec["motion_proxy"] = metrics
+        rec["contact_sheet"] = str(sheet) if sheet else None
+        _append(rec)
+        print(f"[{exp_id}] done {dest.name} dur={rec.get('ffprobe',{}).get('duration')} "
+              f"motion_ratio={metrics.get('early_over_mid')}", flush=True)
+    except Exception as e:  # noqa: BLE001 失败也是记录
+        msg = f"{type(e).__name__}: {str(e)[:400]}"
+        if "429" in msg or "rate" in msg.lower():
+            print(f"[{exp_id}] 429/backoff, retry once after 90s", flush=True)
+            await asyncio.sleep(90)
+            try:
+                created = await client.create_video(r["prompt"], **kw)
+                vid = created.get("video_id") or created.get("task_id")
+                rec["video_id"] = vid
+                rec["status"] = "submitted"
+                _append(rec)
+                res = await client.poll_video(vid, interval=5)
+                await client.download(res["url"], dest)
+                rec.update({"status": "done", "provider_url": res["url"],
+                            "local_mp4": str(dest), "bytes": dest.stat().st_size,
+                            "completed_at": time.time(), "retried_429": True})
+                _append(rec)
+                print(f"[{exp_id}] done after retry", flush=True)
+                return
+            except Exception as e2:  # noqa: BLE001
+                msg = f"{type(e2).__name__}: {str(e2)[:400]}"
+        rec["status"] = "error"
+        rec["error"] = msg
+        _append(rec)
+        print(f"[{exp_id}] ERROR {msg[:160]}", flush=True)
+        if "quota" in msg.lower() or "配额" in msg:
+            raise RuntimeError("QUOTA_SIGNAL: " + msg[:100])
 
 
 async def run(limit=None, only=None, batch=None):
@@ -318,123 +442,22 @@ async def run(limit=None, only=None, batch=None):
     from src.core.store import ProjectStore
 
     for r in rows:
-        exp_id, shot_id, mode = r["exp_id"], r["shot_id"], r["mode"]
-        refs, basis, _ = shot_refs(shot_id, r.get("with_scene_ref", False))
-        rec_note = None
-        if r.get("scene_only"):
-            # v2.0 实测 ti2vid 最多 1 图（X005: "ti2vid supports at most 1 image"）——
-            # 原 look+scene 双参考格改为仅场景参考（身份靠文本锚）
-            refs = [x for x in refs if x["role"] == "scene_instance_view"]
-        elif mode == "multi" and len(refs) > 1:
-            # look-only multi 同受 1 图上限约束：多角色镜只送 binding 首位角色 look
-            # （X014/X015/X019/X020 实证 2-3 look 全部 400）
-            refs = refs[:1]
-            rec_note = "ref_cap:v2.0 ti2vid ≤1 image, binding 首位角色"
-        rec = {"exp_id": exp_id, "batch": r["batch"], "shot_id": shot_id,
-               "mode": mode, "prompt_style": r["style"], "tag": r["tag"],
-               "run_index": r["run_index"], "seed": r["seed"],
-               "prompt": r["prompt"], "prompt_chars": len(r["prompt"]),
-               "refs": refs, "num_frames": r["num_frames"], "frame_rate": r["frame_rate"],
-               "width": r["width"], "height": r["height"], "model": "agnes-video-v2.0",
-               "binding_basis": basis, "submitted_at": time.time()}
-        if rec_note:
-            rec["ref_cap_note"] = rec_note
-        store = ProjectStore(GOLDEN)
-        sh = store.load().get_shot(shot_id)
-        if mode in ("i2v", "keyframes"):
-            ff = (sh.first_frame.candidates[sh.first_frame.selected_index]
-                  if sh.first_frame and sh.first_frame.candidates else None)
-            ff_url = getattr(ff, "url", None)
-            if not ff_url:
-                rec["status"] = "blocked"
-                rec["error"] = "selected first frame has no public url"
-                _append(rec); print(f"[{exp_id}] BLOCKED no ff url"); continue
-            rec["first_frame_url"] = ff_url
-        if mode == "keyframes":
-            lf = (sh.last_frame.candidates[sh.last_frame.selected_index]
-                  if sh.last_frame and sh.last_frame.candidates else None)
-            lf_url = getattr(lf, "url", None)
-            if not lf_url:
-                rec["status"] = "blocked"
-                rec["error"] = "selected last frame has no public url"
-                _append(rec); print(f"[{exp_id}] BLOCKED no lf url"); continue
-            rec["last_frame_url"] = lf_url
-        kw = {"num_frames": r["num_frames"], "frame_rate": r["frame_rate"],
-              "width": r["width"], "height": r["height"]}
-        if r["seed"] is not None:
-            kw["seed"] = r["seed"]
-        if mode == "t2v":
-            kw["mode"] = "t2v"
-        elif mode == "multi":
-            kw.update(mode="multi", image_urls=[x["url"] for x in refs])
-        elif mode == "i2v":
-            kw.update(mode="i2v", image_url=rec["first_frame_url"])
-        elif mode == "keyframes":
-            kw.update(mode="keyframes", image_urls=[rec["first_frame_url"], rec["last_frame_url"]])
-        rec["request_kwargs"] = {k: (v if k != "image_urls" else [u[:60] + "..." for u in v])
-                                 for k, v in kw.items()}
-        dest = VIDS / f"{exp_id}_{shot_id}_{r['tag']}.mp4"
         try:
-            created = await client.create_video(r["prompt"], **kw)
-            vid = created.get("video_id") or created.get("task_id")
-            rec["video_id"] = vid
-            rec["status"] = "submitted"
+            await asyncio.wait_for(_run_row(r, client, shot_refs), timeout=PER_EXP_TIMEOUT)
+        except asyncio.TimeoutError:
+            rec = {"exp_id": r["exp_id"], "batch": r["batch"], "shot_id": r["shot_id"],
+                   "mode": r["mode"], "prompt_style": r["style"], "tag": r["tag"],
+                   "run_index": r["run_index"], "seed": r["seed"],
+                   "prompt": r["prompt"], "refs": [], "model": "agnes-video-v2.0",
+                   "status": "error", "error": f"watchdog timeout after {PER_EXP_TIMEOUT}s",
+                   "submitted_at": time.time()}
             _append(rec)
-            print(f"[{exp_id}] {shot_id} {r['tag']} submitted {str(vid)[:30]} refs={len(refs)}", flush=True)
-            res = await client.poll_video(vid, interval=5, on_progress=lambda pct, st, w:
-                                          print(f"  [{exp_id}] {st} {pct}% {int(w)}s", flush=True))
-            await client.download(res["url"], dest)
-            rec.update({"status": "done", "provider_url": res["url"],
-                        "local_mp4": str(dest), "bytes": dest.stat().st_size,
-                        "completed_at": time.time()})
-            pr = subprocess.run(["ffprobe", "-v", "quiet", "-print_format", "json",
-                                 "-show_format", "-show_streams", str(dest)],
-                                capture_output=True, text=True)
-            try:
-                finfo = json.loads(pr.stdout)
-                vst = next(s for s in finfo["streams"] if s["codec_type"] == "video")
-                rec["ffprobe"] = {"duration": finfo["format"].get("duration"),
-                                  "size": f"{vst.get('width')}x{vst.get('height')}",
-                                  "has_audio": any(s["codec_type"] == "audio"
-                                                   for s in finfo["streams"])}
-                dur = float(finfo["format"].get("duration") or 5)
-            except Exception:
-                dur = 5.0
-            metrics, sheet = _frames_and_metrics(dest, exp_id, dur)
-            rec["motion_proxy"] = metrics
-            rec["contact_sheet"] = str(sheet) if sheet else None
-            _append(rec)
-            print(f"[{exp_id}] done {dest.name} dur={rec.get('ffprobe',{}).get('duration')} "
-                  f"motion_ratio={metrics.get('early_over_mid')}", flush=True)
-        except Exception as e:  # noqa: BLE001 失败也是记录
-            msg = f"{type(e).__name__}: {str(e)[:400]}"
-            if "429" in msg or "rate" in msg.lower():
-                print(f"[{exp_id}] 429/backoff, retry once after 90s", flush=True)
-                await asyncio.sleep(90)
-                try:
-                    created = await client.create_video(r["prompt"], **kw)
-                    vid = created.get("video_id") or created.get("task_id")
-                    rec["video_id"] = vid
-                    rec["status"] = "submitted"
-                    _append(rec)
-                    res = await client.poll_video(vid, interval=5)
-                    await client.download(res["url"], dest)
-                    rec.update({"status": "done", "provider_url": res["url"],
-                                "local_mp4": str(dest), "bytes": dest.stat().st_size,
-                                "completed_at": time.time(), "retried_429": True})
-                    _append(rec)
-                    print(f"[{exp_id}] done after retry", flush=True)
-                    await asyncio.sleep(INTERVAL)
-                    continue
-                except Exception as e2:  # noqa: BLE001
-                    msg = f"{type(e2).__name__}: {str(e2)[:400]}"
-            rec["status"] = "error"
-            rec["error"] = msg
-            _append(rec)
-            print(f"[{exp_id}] ERROR {msg[:160]}", flush=True)
-            if "quota" in msg.lower() or "配额" in msg:
+            print(f"[{r['exp_id']}] WATCHDOG TIMEOUT after {PER_EXP_TIMEOUT}s", flush=True)
+        except RuntimeError as e:
+            if str(e).startswith("QUOTA_SIGNAL"):
                 print("quota signal — stopping run for safety", flush=True)
                 break
+            raise
         await asyncio.sleep(INTERVAL)
 
 
