@@ -262,11 +262,111 @@
   "notes": "孤儿恢复（杀进程后轮询收尾成功）；motion 2.188；接触表待补看。"
  },
  "_patterns": {
-  "asof": "batch2A X021",
+  "asof": "batch2A X036",
   "t2v": "动作链/人数遵从最好；风险=开头外景漂移+动作归属漂移；身份=服装级",
   "multi_look": "身份/服装最稳；风险=look plate 环境/人口渗入开头；仅 1 图槽（多角色镜只能送首位角色）",
   "multiS_scene": "场景保真最强=构图锚；结构=场景板复刻前缀(~2s)+后段内容；风险=压制文本人数/身份事实、开场近冻结",
   "i2v": "首秒冻结三度复现；构图锁死首帧资产（资产与意图不符时错误被放大）；身份/场景最稳",
-  "ref_slot": "v2.0 ti2vid ≤1 图（n=6 实证）：multi=单图条件，与 i2v 同模式不同喂图"
+  "ref_slot": "v2.0 ti2vid ≤1 图（n=6 实证）：multi=单图条件，与 i2v 同模式不同喂图",
+  "s10_c03_mode_spread": "CU 表演镜模式排序：mS≈i2v>t2v>multi-look（multi-look 被 look plate 吞没；mS 疤痕在且前缀仅1帧；i2v 看资产质量；t2v 情绪最好脸通用化）"
+ },
+ "X022": {
+  "shot": "s10_c03",
+  "mode": "t2v",
+  "style": "P2",
+  "seeded": true,
+  "reviewer": "claude-frame-preview",
+  "scores": {
+   "identity": 3,
+   "action": 5,
+   "camera": 5,
+   "scene": 4,
+   "props": 5
+  },
+  "severe": [],
+  "notes": "★CU 情绪表演交付：攥信到脸/泪涌（后半 tears streaming）/瞳孔表情/烛光构图全程稳。身份=服装级（无疤，脸通用化偏成熟）。t2v 静态表演类成立。"
+ },
+ "X024": {
+  "shot": "s10_c03",
+  "mode": "multi",
+  "style": "P2",
+  "seeded": true,
+  "reviewer": "claude-frame-preview",
+  "scores": {
+   "identity": 2,
+   "action": 3,
+   "camera": 3,
+   "scene": 1,
+   "props": 4
+  },
+  "severe": [
+   "后半整段漂出镜头场景进 look plate 集市人群世界",
+   "脸部变 look 板风格（疤消失/更年轻圆脸）"
+  ],
+  "notes": "multi-look 在 CU 镜最差样本：look plate 不只开头渗入，可反客为主吞掉全片（frame6-7 完全是集市）。参考=场景风 look plate 的先天缺陷在视频模式放大。"
+ },
+ "X026": {
+  "shot": "s10_c03",
+  "mode": "multiS",
+  "style": "P2",
+  "seeded": true,
+  "reviewer": "claude-frame-preview",
+  "scores": {
+   "identity": 4,
+   "action": 4,
+   "camera": 4,
+   "scene": 4,
+   "props": 5
+  },
+  "severe": [],
+  "notes": "★本镜最优：场景板前缀仅 1 帧(~0.7s)→CU 交付且【疤痕在】（文本身份锚未被场景板压制，与 X021 三人镜相反）；攥信/泪/构图全对。motion 3.473=板→CU 快速转场。"
+ },
+ "X027": {
+  "shot": "s10_c03",
+  "mode": "i2v",
+  "style": "P2",
+  "seeded": true,
+  "reviewer": "claude-frame-preview",
+  "scores": {
+   "identity": 4,
+   "action": 3,
+   "camera": 3,
+   "scene": 4,
+   "props": 4
+  },
+  "severe": [],
+  "notes": "i2v 身份=首帧资产质量（本镜资产好：疤+灰蓝袍在）；开场冻结再现（0.365）；泪/攥信有交付。i2v 结论=资产好则身份稳但开头僵。"
+ },
+ "X028": {
+  "shot": "s11_c06",
+  "mode": "t2v",
+  "style": "P2",
+  "seeded": true,
+  "reviewer": "claude-frame-preview",
+  "scores": {
+   "identity": 4,
+   "action": 5,
+   "camera": 4,
+   "scene": 4,
+   "props": 5
+  },
+  "severe": [],
+  "notes": "★道具交互满分：起身→怀中取印→递出（印章清晰在持）；周伯形象（灰发/胡茬/深衣）文本身份锚达成。t2v 道具类确认。"
+ },
+ "X033": {
+  "shot": "s13_c01",
+  "mode": "t2v",
+  "style": "P2",
+  "seeded": true,
+  "reviewer": "claude-frame-preview",
+  "scores": {
+   "identity": 3,
+   "action": 4,
+   "camera": 4,
+   "scene": 5,
+   "props": 3
+  },
+  "severe": [],
+  "notes": "★EWS 强运镜：水墨金光山峦占幅+雾层+路径墨点小人（3 剪影可见、占比合规）；pull back 从比例推进可辨。t2v 风景/环境类强确认。"
  }
 }
