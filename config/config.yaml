@@ -70,11 +70,12 @@ image_host:
   # tunnel:    # 未启用（降级调试）
   #   public_base / serve_root
 
-# 每日配额账本（Token Plan 口径：视频 500 秒/天，官方 Token Plan FAQ；2026-09-20 用户确认账户为 Token Plan）
+# 每日配额账本（Token Plan 口径，2026-09-20 用户核对官方文档确认）：
+#   视频 500 秒/天；生图 4000 张/天；文本 1500 次/5 小时（账本按日计，7200=滚动窗口的 24h 理论上限）
 quota:
   video_seconds: 500
-  images: 500
-  text_calls: 2000
+  images: 4000
+  text_calls: 7200
 
 mimo:
   base_url: "https://token-plan-cn.xiaomimimo.com/v1/chat/completions"
