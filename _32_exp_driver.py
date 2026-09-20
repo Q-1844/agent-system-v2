@@ -401,6 +401,12 @@ async def _run_row(r, client, shot_refs):
 async def run(limit=None, only=None, batch=None):
     import _31_e2e_driver as d31
     d31.load_env()
+    # 配额账本与后端同一事实源：config.yaml 的 quota 段（api_server.py:122 同构初始化）。
+    # 必须在 AgnesClient 创建前初始化单例，否则 client 内部 get_default() 会落到 300 保守默认。
+    import yaml
+    from src.core.quota import QuotaLedger
+    _cfg = yaml.safe_load((ROOT / "config" / "config.yaml").read_text(encoding="utf-8"))
+    QuotaLedger.get_default(ROOT / "cache" / "quota.json", limits=_cfg.get("quota"))
     client = d31.setup_clients()
     # 恢复：上次中断留下 status=submitted 的孤儿任务——先轮询收尾，不重复提交
     recs_latest = {}

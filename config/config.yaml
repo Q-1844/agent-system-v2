@@ -70,9 +70,9 @@ image_host:
   # tunnel:    # 未启用（降级调试）
   #   public_base / serve_root
 
-# 每日配额账本（免费用户官方未公布确切数值，给保守默认值）
+# 每日配额账本（Token Plan 口径：视频 500 秒/天，官方 Token Plan FAQ；2026-09-20 用户确认账户为 Token Plan）
 quota:
-  video_seconds: 300
+  video_seconds: 500
   images: 500
   text_calls: 2000
 
