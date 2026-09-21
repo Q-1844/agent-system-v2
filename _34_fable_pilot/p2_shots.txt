@@ -1,0 +1,19 @@
+关于狐狸角色：我检查了 Cinematic Identity Reference 的全部生成图，发现严重偏离规格，请让 Resource Agent 修正后重新生成。
+
+问题（全部 4 张候选图都存在）：
+1. 狐狸全部是双足直立/拟人化站姿（前爪像手臂垂在身前，脊柱竖直）——规格明确要求"四足动物狐狸，不做人形化双足角色"。需要的是像真实狐狸那样的自然四足姿态：四条腿着地、脊柱水平、侧面 3/4 视角。
+2. 其中一张（灰色柔和背景那张）漂移成了 3D 渲染质感——风格行要求 stylized 2D animated look，禁 3D rendered CGI。
+3. 直立姿态会把"全身立绘"的直立构图锚定进后续所有镜头（上一校准阶段已实证这是背景/构图问题的主根因），必须在参考图层面就修正。
+
+修正建议（供 Resource Agent 参考）：
+- 生成提示词以真实动物学描述为主语（例如 "A natural quadruped red fox ... standing on all four legs, horizontal spine, side 3/4 view, like a real fox in nature"），把 "storybook/cute" 这类角色感词从姿态相关语句中移除——上一阶段《狐狸和葡萄》校准的同款动物学描述生成出了完全正确的四足狐狸。
+- 角色板（白底）也应该是四足侧姿，不要直立正面立绘。
+- 身份锚保持：左耳 V 型小缺口。不要再加其他高强度标记。
+- Cinematic Identity Reference 最终形态（已验证语义）：同一只狐、单主体、全身可见、自然四足姿态、无强动作、电影光线、简化的葡萄园兼容环境、无白底、无文字、无其他角色。
+
+确认修正后的参考图形态正确（我会目检）之后，请继续推进：
+1. 葡萄园场景收口（1 个 Location + SceneInstance/SceneState，光线/时间/藤蔓结构一致）。
+2. 导演按既定 8 镜结构建立正式分镜：每镜明确 cast（狐狸）、场景实例、镜头意图；每镜目标时长约 5 秒；视频模式请使用 link_mode=multi（单参考直生——这是本项目已验证的正式视频路径），参考图=已批准的 Cinematic Identity Reference（无狐狸的建立镜用场景参考）。
+3. 8 镜的 production binding 全部就绪（cast/look/SIV/profile/readiness）。
+
+请按正式生产链路推进。

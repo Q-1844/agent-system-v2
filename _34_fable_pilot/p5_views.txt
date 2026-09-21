@@ -1,0 +1,26 @@
+根因已经查明，这一轮按下面的精确步骤执行，只做狐狸角色这一件事，其他什么都不要动。
+
+【根因（为什么不成功）】
+Look 候选图是从角色三视图 i2i 派生的——i2i 会强烈保持输入图的姿态。当前狐狸的 front 三视图是直立姿态，所以后面无论重试多少次 Look 生成，都会继承直立。真正需要修的是【角色三视图的 front（t2i 直连文本生成）】。front 修成四足后，side/back（i2i）与 Look（i2i）都会自然四足。
+
+【第一步：把狐狸的 description_en 整体替换为以下文本（校准阶段验证过的动物学配方原文 + 固定风格行）】
+"A natural quadruped red fox with red-orange fur, white muzzle and chest, dark brown-black lower legs, large expressive pointed ears, amber eyes, and a full bushy tail with a pale tip. Realistic stable fox body proportions. A small distinctive notch in its left ear. No clothing, no accessories. Cinematic storybook animation, stylized 2D animated look. Do not render as live-action photography or 3D rendered CGI."
+注意：把现有描述里 "storybook animation style / clean silhouette" 之类的角色设计语感从描述中移除——它们会把构图拉向直立吉祥物。左耳缺口锚保留（上文已含）。
+
+【第二步：重新生成角色三视图（character.generate_views）】
+目检标准（生成后我会亲自看图，你也按此判断）：狐狸四条腿着地、脊柱大致水平、自然侧站或 3/4 站姿；不是蹲坐、不是双脚直立。若 front 仍直立，重试（最多 3 次；每次都是新的 t2i 采样，上一校准阶段同配方一次即中）。
+
+【第三步：front 四足成功后，重新生成 Look 候选（resource.look.prepare，用现有 look_2c6a01d45db5，label=Cinematic Identity Reference，不要新建 Look）】
+appearance_description 用以下原文（校准阶段 R3 构造）：
+"Red fox in natural quadrupedal pose on all four legs, full body visible, single subject. The fox stands on a dirt path in a quiet vineyard, a few hanging grape clusters on the vines behind it, cinematic soft warm daylight, clearly the focus of the frame, no other subjects, simple uncluttered composition, three-quarter view."
+（i2i 会从现在已四足的三视图派生，姿态应保持四足。）
+
+【第四步：批准】
+Look 候选通过正式 vision review 后批准（approve_if_pass 或 look.approve），cover=该候选。
+
+【边界】
+- 之前 5 个多出来的 look 和旧资产：不批准、不删除。
+- 不要动镜头/场景/binding/视频。
+- 如果 front 三次 t2i 都直立（可能性低），停下来如实报告，不要继续烧图——我会走备选路径。
+
+完成后报告：三视图状态、look 候选 asset_id、审批状态。

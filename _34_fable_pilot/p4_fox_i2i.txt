@@ -1,0 +1,19 @@
+上一轮的结论我已核实，现在给出确切解法。你说 t2i 持续生成直立狐狸是"模型固有限制"——这不成立：上一校准阶段同一配方的 t2i（seed=777）生成出了完全正确的四足狐狸白底板，且 R2/R3 都是从它 i2i 派生的。区别只是 t2i 采样的随机落点。所以不要再从文本硬碰——直接用校准阶段已验证的四足狐狸图作为 i2i 基底做构造性派生（这正是规格 §9 允许并推荐的路径）。
+
+【本轮唯一任务：i2i 派生 + 登记 + 批准。不要动镜头/场景/任何其他东西。】
+
+R3 电影感参考图（校准阶段胜出样本，公网 URL 可直接用作 i2i ref，不需要本地文件）：
+https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_jbijO6J52qog8nlPpa09DUkGNxUiBn2h/output.png
+
+R1 白底角色板（同一只狐的上游身份源，公网 URL）：
+https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_SskxbjycIjPY2ZLnSHPV2kkRruSMTPCF/output_e2c954ad3205488082e093c67923a799.png
+
+【执行步骤】
+1. 用 R3 的 provider URL 作为 i2i ref 生成本项目的 Cinematic Identity Reference，prompt 用以下原文（校准阶段验证过的构造）：
+   "A natural quadruped red fox with red-orange fur, white muzzle and chest, dark brown-black lower legs, large expressive pointed ears, amber eyes, and a full bushy tail with a pale tip. Realistic stable fox body proportions. A small distinctive notch in its left ear. No clothing, no accessories. The fox stands on a dirt path in a quiet vineyard, a few hanging grape clusters on the vines behind it, cinematic soft warm daylight, full body visible, clearly the focus of the frame, no other subjects, simple uncluttered composition, three-quarter view. Cinematic storybook animation, stylized 2D animated look. Do not render as live-action photography or 3D rendered CGI."
+   若工具支持 seed，建议试 777 或附近值；不支持就不传。
+2. 目检标准：四足着地（继承基底姿态）、单主体、全身可见、葡萄园环境、无白底、无文字。i2i 从四足基底派生应当稳定保持四足；若意外直立可重试（最多 2 次）。
+3. 成功后：把它登记为本项目狐狸 Look（用现有 look_2c6a01d45db5，label 已是 Cinematic Identity Reference）的正式参考资产，cover 指向它，走正式审批流程批准。provenance 记录：i2i 基底=校准阶段 R3 资产（附上述 URL 与来源说明）。
+4. 同样方式把 R1 板 URL 登记为身份源参考资产（可批准为 supporting/identity 来源，不作为 cover）。
+5. 之前那 5 个新 look 和旧资产都不要批准、不要删除（留档即可）。
+6. 完成后报告：新资产 ID、cover、审批状态。

@@ -727,16 +727,22 @@ async def register_reference_asset(project: str, req: RegisterReferenceAssetRequ
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class RehostReferenceAssetRequest(BaseModel):
+    expected_document_revision: str
+    url_override: Optional[str] = None   # 直接提供同源 provider URL（下载校验 checksum 后写入）
+    force: bool = False                  # 已有 url 时强制覆盖（如 imgbb 换国内可达的 provider URL）
+
+
 @router.post("/api/project/{project}/reference-assets/{asset_id}/rehost")
 async def rehost_reference_asset(project: str, asset_id: str,
-                                 req: RegisterReferenceAssetRequest):
+                                 req: RehostReferenceAssetRequest):
     """为 local-only ReferenceAsset 补公网 URL（34.md §5：视频接口只接受公网 URL，
-    场景域资产以 local 登记——视频消费前经标准 ImageHost 托管回写）。幂等：
-    已有 url 的资产 unchanged。复用 RegisterReferenceAssetRequest 的
-    expected_document_revision 字段做 OCC。"""
+    场景域资产以 local 登记——视频消费前经标准 ImageHost 托管回写；或提供同源
+    provider URL（下载校验 checksum 一致后直写）。幂等：已有 url 的资产 unchanged。"""
     try:
         receipt = await _write_service(project).rehost_reference_asset(
-            asset_id, expected_document_revision=req.expected_document_revision)
+            asset_id, expected_document_revision=req.expected_document_revision,
+            url_override=req.url_override, force=req.force)
         _raise_for_receipt(receipt)
         return receipt
     except HTTPException:

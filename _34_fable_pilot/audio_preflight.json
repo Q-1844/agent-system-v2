@@ -1,0 +1,65 @@
+{
+ "F004": {
+  "file": "F004_A_R3.mp4",
+  "audio_stream": {
+   "codec": "aac",
+   "sample_rate": "48000",
+   "channels": 2,
+   "duration": "5.041000"
+  },
+  "signal": {
+   "duration_s": 5.056,
+   "rms_dbfs_mean": -46.9,
+   "rms_dbfs_p90": -44.3,
+   "flatness_mean": 0.409,
+   "flatness_p25": 0.374,
+   "peak_ratio_p90": 124.3,
+   "musical_frame_ratio": 0.0,
+   "onsets_per_s": 0.0,
+   "silent_frame_ratio": 0.032,
+   "loudness_tail_to_head": 1.7
+  }
+ },
+ "F008": {
+  "file": "F008_B_R3.mp4",
+  "audio_stream": {
+   "codec": "aac",
+   "sample_rate": "48000",
+   "channels": 2,
+   "duration": "5.041000"
+  },
+  "signal": {
+   "duration_s": 5.056,
+   "rms_dbfs_mean": -45.0,
+   "rms_dbfs_p90": -41.4,
+   "flatness_mean": 0.381,
+   "flatness_p25": 0.292,
+   "peak_ratio_p90": 134.1,
+   "musical_frame_ratio": 0.026,
+   "onsets_per_s": 0.0,
+   "silent_frame_ratio": 0.058,
+   "loudness_tail_to_head": 6.1
+  }
+ },
+ "F013": {
+  "file": "F013_C_R3.mp4",
+  "audio_stream": {
+   "codec": "aac",
+   "sample_rate": "48000",
+   "channels": 2,
+   "duration": "5.041000"
+  },
+  "signal": {
+   "duration_s": 5.056,
+   "rms_dbfs_mean": -46.1,
+   "rms_dbfs_p90": -42.8,
+   "flatness_mean": 0.454,
+   "flatness_p25": 0.313,
+   "peak_ratio_p90": 132.1,
+   "musical_frame_ratio": 0.051,
+   "onsets_per_s": 0.4,
+   "silent_frame_ratio": 0.064,
+   "loudness_tail_to_head": -0.9
+  }
+ }
+}

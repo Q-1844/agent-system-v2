@@ -745,11 +745,17 @@ class ResourceWriteService:
     # 正式入口（generate 才会追加）。镜像 attach_clothing_reference 全部语义。）
     # ==================================================================
     async def rehost_reference_asset(self, asset_id: str, *,
-                                     expected_document_revision: str) -> dict:
+                                     expected_document_revision: str,
+                                     url_override: Optional[str] = None,
+                                     force: bool = False) -> dict:
         """为 local-only 的 ReferenceAsset 补公网 URL（34.md §5 最小修复）：
         视频接口只接受公网 URL（FACTS §3.3），而场景域资产以 local 登记（图片
-        走 data URI 无碍）——视频消费前经标准 ImageHost（imgbb，100% 保真）
-        托管并回写 url。幂等：已有 url 的资产 unchanged。OCC 同 register。"""
+        走 data URI 无碍）——视频消费前补公网 URL 并回写。两种来源：
+        - url_override：直接提供该资产的原始 provider URL（如 Agnes 生成记录中的
+          cos-platform-outputs URL）——必须先下载校验 sha256 == asset.checksum
+          （同源证明，绝不把不同图片的 URL 写进资产）；
+        - 缺省：经标准 ImageHost（imgbb，100% 保真）托管。
+        幂等：已有 url 的资产 unchanged。OCC 同 register。"""
         op = "resource.rehost_reference_asset"
         async with self.store.write_lock():
             doc = self.store.load()
@@ -760,27 +766,50 @@ class ResourceWriteService:
             cur = document_revision(doc)
             if expected_document_revision != cur:
                 return self._stale_receipt(op, expected_document_revision, cur)
-            if getattr(a, "url", None):
+            if getattr(a, "url", None) and not force:
                 return self._receipt(op, ok=True, target=asset_id, after=a.to_dict(),
                                      revision=reference_asset_revision(a),
                                      verified=True, unchanged=True, error=None)
             local = getattr(a, "local", None)
-            if not local:
-                return self._receipt(op, ok=False, target=asset_id,
-                                     error="no_local_media",
-                                     detail="资产无 local 媒体，无法托管")
-            from deps import get_rehost_host
-            try:
-                url = await get_rehost_host().upload(
-                    str(self.project_dir / local))
-            except Exception as e:
-                return self._receipt(op, ok=False, target=asset_id,
-                                     error="rehost_failed",
-                                     detail=str(e)[:300])
-            if not url:
-                return self._receipt(op, ok=False, target=asset_id,
-                                     error="rehost_failed",
-                                     detail="ImageHost 未返回 URL")
+            url: Optional[str] = None
+            if url_override:
+                if not str(url_override).startswith(("http://", "https://")):
+                    return self._receipt(op, ok=False, target=asset_id,
+                                         error="invalid_reference_input",
+                                         detail="url_override 必须是 http(s) URL")
+                import httpx as _httpx
+                try:
+                    resp = await _httpx.AsyncClient(timeout=60).get(str(url_override))
+                    resp.raise_for_status()
+                except Exception as e:
+                    return self._receipt(op, ok=False, target=asset_id,
+                                         error="rehost_failed",
+                                         detail=f"url_override 下载校验失败: {str(e)[:200]}")
+                digest = hashlib.sha256(resp.content).hexdigest()
+                if digest != getattr(a, "checksum", None):
+                    return self._receipt(op, ok=False, target=asset_id,
+                                         error="checksum_mismatch",
+                                         detail=("url_override 内容与资产 checksum 不一致"
+                                                 f"（{digest[:12]} != {str(getattr(a, 'checksum', ''))[:12]}）"
+                                                 "——拒绝把不同图片的 URL 写进资产"))
+                url = str(url_override)
+            else:
+                if not local:
+                    return self._receipt(op, ok=False, target=asset_id,
+                                         error="no_local_media",
+                                         detail="资产无 local 媒体，无法托管")
+                from deps import get_rehost_host
+                try:
+                    url = await get_rehost_host().upload(
+                        str(self.project_dir / local))
+                except Exception as e:
+                    return self._receipt(op, ok=False, target=asset_id,
+                                         error="rehost_failed",
+                                         detail=str(e)[:300])
+                if not url:
+                    return self._receipt(op, ok=False, target=asset_id,
+                                         error="rehost_failed",
+                                         detail="ImageHost 未返回 URL")
             a.url = url
             a.updated_at = time.time()
             self.store.save(doc)

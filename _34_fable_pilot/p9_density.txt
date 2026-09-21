@@ -1,0 +1,17 @@
+视频生产前的最后一轮提示词密度校准（34.md §2：提示词密度必须对齐校准胜出配方 P1/base）。当前编译出的视频 prompt 约 1300-1400 字符，含中文混杂与大量重复——校准配方是 258-349 字符纯英文。请精确完成以下四类字段修订，不要动其他任何东西，不要生成图片/视频：
+
+【一、所有 8 镜的 motion_pace 改为英文】
+当前是"缓慢/先慢后快/急促后转慢（落地瞬间）"等中文。逐镜改为简短英文（如 slow / slow then quick / quick, easing as it lands / gentle and steady）。空也可以（空则不编译该字段）。
+
+【二、所有含动作的镜头（s02-s07）：清空 action_sequence 字段】
+校准实证：P1（无时序脚手架）胜出，P2 时序结构无增益，P3 式约束有物体消失副作用。这些镜头每个只有一组简单动作，motion 字段已经完整表达，action_sequence 只造成"The actions must unfold in this exact order"的重复强约束。把 motion 保留为唯一动作表达（若 motion 里缺了 action_sequence 里的关键细节，先把细节并进 motion 再清空）。
+
+【三、狐狸 Look（look_2c6a01d45db5）的 appearance_description 缩短】
+当前值把整段生成提示词都带进来了（含 dirt path/vineyard 场景描述）——视频 prompt 会把它整个编进去，而身份信息由参考图承载。请把它改为一行简洁英文身份描述，例如：
+"Natural quadruped red fox, red-orange fur, white muzzle and chest, dark lower legs, bushy pale-tipped tail, small notch in left ear."
+注意：只改 appearance_description 文本，不重新生成任何图片，不改动 cover/approved 资产。
+
+【四、葡萄园 Location 名称改为英文】
+"葡萄园 (Vineyard)" → "Vineyard"（视频 prompt 的 Scene 行会引用它；保持其余场景事实不变）。
+
+完成后逐镜报告：motion_pace 新值、action_sequence 是否已清空；以及 look/location 的修改确认。提示：修订后我会重新编译校验，然后开始 16 条候选视频的生产。

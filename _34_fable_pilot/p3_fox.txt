@@ -1,0 +1,23 @@
+本轮只有一个任务：修正狐狸的参考图并完成正式审批。其他一切（镜头、场景、首帧图、视频）都不要动。
+
+背景：镜头修订与 link_mode=multi 已完成（很好）。现在整个生产链唯一阻塞是狐狸 Look 没有可批准的四足参考（当前 4 张全是双足直立姿态，其中一张还是 3D 质感，全部不可用；你上一轮上报的"模型固有限制"判断不成立——上一校准阶段用下面的配方稳定生成了正确的四足狐狸，这是已验证结论，不是猜测）。
+
+【必须使用的生成配方（校准阶段实证原文，可直接用）】
+
+角色板（白底 t2i）：
+"A natural quadruped red fox with red-orange fur, white muzzle and chest, dark brown-black lower legs, large expressive pointed ears, amber eyes, and a full bushy tail with a pale tip. Realistic stable fox body proportions. A small distinctive notch in its left ear. No clothing, no accessories. Full body visible, standing on all four legs, side three-quarter view, like a real fox in nature. Plain pure white backdrop, character reference sheet style."
+
+要点解析（为什么你之前的尝试失败）：
+- "quadruped / on all four legs / side three-quarter view / like a real fox in nature / Realistic stable fox body proportions" 这些动物学措辞必须连用，才能压住模型把狐狸画成直立吉祥物的倾向；
+- 姿态语句附近不要出现 character、cute、storybook、expressive face 这类词——它们会把构图拉回"角色立绘"；
+- 左耳缺口锚保留（可沿用你现有的 V 形缺口描述措辞）。
+
+Cinematic Identity Reference（i2i，用刚生成的四足板作 ref 派生，保证同一只狐）：
+"{同一狐狸身份段原文} The fox stands on a dirt path in a quiet vineyard, a few hanging grape clusters on the vines behind it, cinematic soft warm daylight, full body visible, clearly the focus of the frame, no other subjects, simple uncluttered composition, three-quarter view. Cinematic storybook animation, stylized 2D animated look. Do not render as live-action photography or 3D rendered CGI."
+
+【执行要求】
+1. 生成角色板（四足侧姿）→ 目检标准：四条腿着地、脊柱大致水平、非直立；若直立重试（最多 3 次）。
+2. 板成功后 i2i 派生 Cinematic Identity Reference（葡萄园环境）；目检标准：同一只狐、单主体、全身四足、电影光、无白底、无文字。
+3. 若文本配方 3 次仍失败：改用备选路径——直接以校准阶段留档的 R3 参考图为 i2i 基底重新生成（构造性同狐），并通过正式 ReferenceAsset + provenance 登记（注明来源为校准资产）。R3 图本地在 _33_fox_calibration/references/R3_cinematic.png，需公网 URL 走 imgbb 重托管或使用其 provider URL（provenance 里有）。
+4. 成功后：把角色板 + Cinematic Identity Reference 登记为 Look 的正式参考资产并走正式审批流程批准（cover 指向 Cinematic Identity Reference），记录完整 provenance。旧的 4 张双足资产不要批准、不要删除（留档）。
+5. 完成后报告：新资产 ID、审批状态、provenance 摘要。binding 的刷新我会另行处理，你不用动镜头。

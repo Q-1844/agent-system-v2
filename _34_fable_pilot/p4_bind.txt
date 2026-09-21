@@ -1,0 +1,15 @@
+狐狸参考已修正并批准（我已目检通过）。本轮做三件小事然后收口，不要生成任何图片或视频：
+
+【一、三处镜头字段修订（Director）】
+1. s03_c01（Discovery CU）：当前 motion 写成了"爪子伸向葡萄+眼睛在画面边缘"——这偏离了本镜的叙事功能（发现/渴望的特写表演），且"爪子够葡萄"动作与 S5 跳跃镜重复、还会诱导模型画抓取。请改为已验证的发现特写配方（上一校准阶段 Shot A 原文语义）：
+   motion: "The fox notices the grapes above and slowly raises its gaze. Its ears make a subtle natural movement and its expression becomes quietly attentive. The camera remains in a gentle cinematic close-up with very slight natural movement."
+   （action_sequence 同步对齐：close-up on the fox's face as it notices the hanging grapes, gaze rises, ears twitch subtly, eyes focus upward.）
+2. s07_c01：motion 里 "tail拖地" 是中英混杂，改为 "tail dragging behind"。
+3. s01_c01 与 s08_c01：这两镜画面中没有狐狸（远景环境/空镜收尾），请把 cast（characters 字段）清空——这两镜的视频参考将使用已批准的场景参考（SceneInstanceView），而不是狐狸参考。其余六镜 cast 保持不变。
+
+【二、8 镜 production binding 全部建立/刷新到 READY】
+狐狸 Look 已批准（cover=Cinematic Identity Reference）。请为 8 个镜头逐一建立/刷新正式 production binding（cast + 已批准 Look + 各镜 SceneInstanceView + ProjectVisualProfile），8/8 READY。注意 s01/s08 cast 清空后 binding 只含场景依赖。
+
+【三、完成后报告】
+逐镜一行：shot_id / link_mode（应为 multi）/ binding readiness（应为 READY）/ 参考走向（狐狸参考 or 场景参考）。
+不要启动视频生成。

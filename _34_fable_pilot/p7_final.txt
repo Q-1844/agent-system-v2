@@ -1,0 +1,11 @@
+最后两处收尾，完成后视频生产即刻开始。不要做任何其他事。
+
+【一、s07_c01：清空 dialogue 字段】
+s07 的 dialogue="（低声）酸葡萄，肯定酸" 必须清空为空字符串——本项目规格明确无对白、无口型依赖；这句自言自语属于后期旁白层（Sequence narration layer），不属于镜头 dialogue。留空即可，不要把台词挪到别的字段。
+
+【二、s01_c01 与 s08_c01：建立场景专属 production binding】
+这两镜 cast 已清空（纯环境镜）。请为它们各建一个正式 production binding：character_bindings 为空数组、scene_binding 指向各自场景的 SceneInstance + 已批准 view（s01 用开场/远景 view，s08 用收尾 view），prop_bindings 为空，并刷新到 READY。这两镜的视频参考将走已批准的 SceneInstanceView 参考资产。
+
+【三、完成后报告】
+s01/s02/s03/s04/s05/s06/s07/s08 各一行：binding readiness（全部应为 READY）+ s07 dialogue 是否已清空。
+不要生成任何图片或视频。

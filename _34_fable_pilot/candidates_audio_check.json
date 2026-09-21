@@ -1,0 +1,87 @@
+{
+ "s01_c01_A": {
+  "musical": 0.333,
+  "rms": -39.1,
+  "onsets": 1.19
+ },
+ "s01_c01_B": {
+  "musical": 0.064,
+  "rms": -40.6,
+  "onsets": 0.4
+ },
+ "s01_c01_C": {
+  "musical": 0.0,
+  "rms": -41.4,
+  "onsets": 0.0
+ },
+ "s02_c01_A": {
+  "musical": 0.09,
+  "rms": -46.3,
+  "onsets": 0.0
+ },
+ "s02_c01_B": {
+  "musical": 0.0,
+  "rms": -49.8,
+  "onsets": 0.2
+ },
+ "s03_c01_A": {
+  "musical": 0.0,
+  "rms": -53.7,
+  "onsets": 0.0
+ },
+ "s03_c01_B": {
+  "musical": 0.0,
+  "rms": -59.1,
+  "onsets": 0.2
+ },
+ "s04_c01_A": {
+  "musical": 0.0,
+  "rms": -53.1,
+  "onsets": 0.2
+ },
+ "s04_c01_B": {
+  "musical": 0.224,
+  "rms": -42.4,
+  "onsets": 0.2
+ },
+ "s05_c01_A": {
+  "musical": 0.109,
+  "rms": -41.9,
+  "onsets": 0.79
+ },
+ "s05_c01_B": {
+  "musical": 0.045,
+  "rms": -36.7,
+  "onsets": 0.4
+ },
+ "s06_c01_A": {
+  "musical": 0.365,
+  "rms": -45.6,
+  "onsets": 0.2
+ },
+ "s06_c01_B": {
+  "musical": 0.0,
+  "rms": -48.6,
+  "onsets": 0.2
+ },
+ "s07_c01_A": {
+  "musical": 0.141,
+  "rms": -42.3,
+  "onsets": 0.0
+ },
+ "s07_c01_B": {
+  "musical": 0.0,
+  "rms": -53.4,
+  "onsets": 0.0
+ },
+ "s08_c01_A": {
+  "musical": 0.0,
+  "rms": -47.4,
+  "onsets": 2.37
+ },
+ "s08_c01_B": {
+  "musical": 0.0,
+  "rms": -51.4,
+  "onsets": 0.2
+ }
+}
