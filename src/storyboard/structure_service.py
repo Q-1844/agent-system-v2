@@ -492,9 +492,10 @@ def update_shot_fields(project: Project, shot_id: str, fields: Optional[dict] = 
             setattr(shot, key,
                     PerformanceIntent.from_dict(val) if isinstance(val, dict) else None)
         elif key == "link_mode":
-            # Phase D §25.C：只接受 i2v | keyframes（尾帧生成前置）；非法值忽略。
-            # 自管 changed（合法才追加），不落到链尾的统一 append。
-            if str(val) in ("i2v", "keyframes"):
+            # Phase D §25.C：尾帧生成需 keyframes 模式；34.md §13 增 multi（单参考
+            # 直生，仅 BOUND 可用——handler/video_adapter fail closed 把关）。
+            # 非法值忽略。自管 changed（合法才追加），不落到链尾的统一 append。
+            if str(val) in ("i2v", "keyframes", "multi"):
                 setattr(shot, key, str(val))
                 changed.append(key)
             continue

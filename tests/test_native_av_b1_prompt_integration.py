@@ -44,6 +44,7 @@ LANG = "Mandarin Chinese"
 # §11/§14：request shape 不变——BoundVideoRequest 字段集合硬断言
 #（C1 §22：+generation_basis——Native AV 派生 basis，仍 ephemeral 不落盘字段）
 BOUND_KEYS = {"shot_id", "prompt", "provider_mode", "first_frame", "last_frame",
+              "video_reference",  # 34.md §13：multi 单语义参考槽（i2v/keyframes 下为空串）
               "used_reference_ids", "dropped_optional", "diagnostics",
               "semantic_roles", "basis", "generation_basis"}
 FAKE_VIDEO_KEYS = {"prompt", "mode", "image_url", "image_urls", "num_frames",

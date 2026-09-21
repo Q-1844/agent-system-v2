@@ -11,6 +11,7 @@
 #     （req.negative_prompt 非空 → 丢弃并记 dropped diagnostic，绝不伪造传参）；
 #     图片 seed 不支持（req.seed 非空 → 结构化拒绝，防静默丢参）。
 #   - 视频：i2v → image_url=first_frame 槽；keyframes → image_urls=[first,last]；
+#     multi → extra_body.image=[单参考]（v2.0 ti2vid 单图上限，34.md §13）；
 #     视频接口图片必须公网 URL（FACTS §3.3：无 data URI 支持）→ data URI 进槽 =
 #     结构化拒绝（AgnesRequestCompileError），绝不静默改写。
 from dataclasses import dataclass, field
@@ -88,12 +89,16 @@ def compile_agnes_video_call(req: GenerationRequest) -> AgnesVideoCall:
     """video 请求 → Agnes 视频槽位形态。i2v 只认 first 槽（end_state 仅语义目标，
     video_adapter §8 不伪造 last-frame conditioning）；keyframes 需 first+last 齐
     （缺 last = 结构化拒绝，不降级成 i2v——mode 是 creative 策略字段，编译层绝不
-    重解释）。data URI 进槽 = 拒绝（视频接口仅公网 URL）。"""
+    重解释）；multi（34.md §13）需恰好 1 个 video_reference（v2.0 ti2vid 单图上限，
+    32.md 7×400 实证——多参考结构化拒绝，绝不静默裁剪）。data URI 进槽 = 拒绝
+    （视频接口仅公网 URL）。"""
     if req.generation_type != "video":
         raise AgnesRequestCompileError(
             "generation_type_not_video", {"generation_type": req.generation_type})
     prompt = req.prompt
-    is_keyframes = (req.provenance or {}).get("provider_mode") == "keyframes"
+    provider_mode = (req.provenance or {}).get("provider_mode")
+    is_keyframes = provider_mode == "keyframes"
+    is_multi = provider_mode == "multi"
     first = req.first_frame
     last = req.last_frame
     for slot, media in (("first", first), ("last", last)):
@@ -102,6 +107,26 @@ def compile_agnes_video_call(req: GenerationRequest) -> AgnesVideoCall:
                 "data_uri_not_supported_video_provider",
                 {"slot": slot,
                  "hint": "视频接口图片必须公网 URL（AGNES_API_FACTS §3.3）"})
+    if is_multi:
+        if first or last:
+            raise AgnesRequestCompileError(
+                "multi_slots_conflict",
+                {"first_present": bool(first), "last_present": bool(last),
+                 "hint": "multi 模式不消费 boundary frames——视觉输入只有单语义参考"})
+        multi_refs = [ri.media for ri in req.reference_inputs
+                      if ri.source_type == "video_reference" and ri.media]
+        if len(multi_refs) != 1:
+            raise AgnesRequestCompileError(
+                "multi_reference_slot_invalid",
+                {"reference_count": len(multi_refs),
+                 "hint": "multi 需要恰好 1 个公网参考（v2.0 ti2vid 单图上限）——"
+                         "缺失或多于 1 个都属上游结构化失败，编译层不裁剪不降级"})
+        if str(multi_refs[0]).startswith("data:"):
+            raise AgnesRequestCompileError(
+                "data_uri_not_supported_video_provider",
+                {"slot": "multi_reference",
+                 "hint": "视频接口图片必须公网 URL（AGNES_API_FACTS §3.3）"})
+        return AgnesVideoCall(prompt=prompt, image_urls=[multi_refs[0]])
     if is_keyframes:
         if not first or not last:
             raise AgnesRequestCompileError(

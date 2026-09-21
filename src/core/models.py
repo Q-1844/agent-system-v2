@@ -22,6 +22,10 @@ class LinkMode(str, Enum):
     KEYFRAMES = "keyframes"   # 首帧+尾帧，服务端插值（同场景连续动作）
     I2V       = "i2v"         # 单图动画化（跨场景硬切，默认）
     NONE      = "none"        # 共用参考图，各镜独立
+    # 34.md §13：multi 单参考直生（v2.0 ti2vid 单图槽，31/32/33.md 真机验证）——
+    # 参考图是身份/场景语义参考而非首帧（不做 first-frame conditioning）。仅
+    # BOUND 路径可用（参考由 Binding 决定，§12）；provider 能力见 agnes_adapter。
+    MULTI     = "multi"
 
 
 class OpeningSource(str, Enum):

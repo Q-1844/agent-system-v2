@@ -332,8 +332,9 @@ def _default_provider_options(project: Any, shot: Any) -> Dict[str, Any]:
         w, h = map(int, resolve_size(
             getattr(style, "size_tier", None) or "1K", ratio).split("x"))
     video = getattr(shot, "video", None)
-    return {"mode": "keyframes" if getattr(shot, "link_mode", "") == "keyframes"
-            else "i2v",
+    return {"mode": ("keyframes" if getattr(shot, "link_mode", "") == "keyframes"
+                     else "multi" if getattr(shot, "link_mode", "") == "multi"
+                     else "i2v"),
             "model": None,
             "num_frames": getattr(video, "num_frames", None),
             "frame_rate": getattr(video, "frame_rate", None),
@@ -395,7 +396,8 @@ def compute_current_dependency_keys(project_dir, project: Any, shot: Any, *,
                     "scene_instance_view_id"),
         }
     else:
-        mode = "keyframes" if shot.link_mode == "keyframes" else "i2v"
+        mode = ("keyframes" if shot.link_mode == "keyframes"
+                else "multi" if shot.link_mode == "multi" else "i2v")
         visual = unbound_visual_basis(shot, provider_mode=mode)
     keys["visual_basis_fingerprint"] = fingerprint(visual)
 

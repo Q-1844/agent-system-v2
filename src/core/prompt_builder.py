@@ -157,6 +157,26 @@ def _video_prompt_core(shot: Shot, mode: str) -> str:
             parts.append(preserve_custom)
         return _join(parts)
 
+    if mode == "multi":
+        # 34.md §13/§2：multi 单参考直生——无图可 animate，动作文本独立成句
+        # （33.md P1/base 胜出形态：动作句 + camera intent，不做 first-frame 指令，
+        # 也不追加 consistency 模板——身份一致性由参考图承载，提示词密度对齐 P1/base）。
+        parts = [motion]
+        if env:
+            parts.append(f"environment: {env}")
+        if cam:
+            parts.append(f"camera: {cam}")
+        if pace:
+            parts.append(f"pace: {pace}")
+        if seq:
+            # C2（22.md §7）同口径：canonical 动作顺序 verbatim，只加强时序框架。
+            parts.append(f"The actions must unfold in this exact order: {seq}")
+        if preserve:
+            parts.append("keep stable: " + ", ".join(preserve))
+        if preserve_custom:
+            parts.append(preserve_custom)
+        return _join(parts)
+
     # i2v（含 none，handler 已把 none 映射为 i2v）
     parts = [f"Animate this image: {motion}"]
     if env:

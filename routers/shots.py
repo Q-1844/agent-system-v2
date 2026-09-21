@@ -1208,13 +1208,14 @@ from src.api.agnes_client import resolve_size as _resolve_size, PollTransientErr
 def _video_preflight(shot, quota, seconds, eff_ff_ready):
     """视频前置硬校验（缺一不可，不通过就不提交，省 60s）。
     仅检查「硬失败」；keyframes 尾帧 in-progress 的有界等待在 handler 里做。
-    eff_ff_ready：effective 首帧是否就绪（inherit_previous 用来源末帧 url，其余用本镜已选首帧 url）。"""
+    eff_ff_ready：effective 首帧是否就绪（inherit_previous 用来源末帧 url，其余用本镜已选首帧 url）。
+    multi（34.md §13）：视觉输入=BOUND 参考而非首帧——首帧就绪不是本镜硬前置。"""
     from src.core.models import ShotStatus
     if shot.locked:
         return False, "镜头已锁定"
     if not shot.video.num_frames:
         return False, "未设置视频时长"
-    if not eff_ff_ready:
+    if shot.link_mode != "multi" and not eff_ff_ready:
         return False, "开场画面未就绪：请先生成并选择首帧，或来源镜头末帧未就绪"
     if shot.link_mode == "keyframes":
         if shot.last_frame.status == ShotStatus.FAILED.value:
@@ -1298,7 +1299,8 @@ async def _handler_video(job, emit):
     if not ok:
         raise RuntimeError(why)   # 不发起 API 请求
 
-    mode = "keyframes" if shot.link_mode == "keyframes" else "i2v"
+    mode = ("keyframes" if shot.link_mode == "keyframes"
+            else "multi" if shot.link_mode == "multi" else "i2v")
     # keyframes 尾帧 in-progress 有界等待
     if mode == "keyframes" and not shot.last_frame.url_ready:
         await emit("wait", f"{shot.shot_id} 等待尾帧就绪", 5)
@@ -1370,13 +1372,21 @@ async def _handler_video(job, emit):
             _slots = _call_v.slots()
             if "image_urls" in _slots:
                 first_url = _slots["image_urls"][0]
-                last_url = _slots["image_urls"][1]
+                # multi（34.md §13）= 单语义参考；keyframes = 首尾双帧
+                last_url = (_slots["image_urls"][1]
+                            if len(_slots["image_urls"]) > 1 else None)
             else:
                 first_url = _slots["image_url"]
                 last_url = None
             native_generation_basis = dict(bound_video.generation_basis)
         elif mode == "keyframes":
             last_url = shot.last_frame.selected.url
+        if mode == "multi" and bound_video is None:
+            # 34.md §12：multi 参考由 Binding 决定（BOUND-only）——UNBOUND 走 multi
+            # 无从解析参考，fail closed（不静默回落首帧/legacy）。
+            raise RuntimeError(
+                "multi 模式需要 production binding（视觉参考由 Binding 决定）；"
+                "当前镜头无 BOUND binding——先通过 Producer/Director 建立 binding")
         if ndc and bound_video is None:
             # C1 UNBOUND 路径（21.md §17 统一编译点）：visual prompt 原样 + 同一
             # NativeAVGenerationPack → Prompt Compiler（dialogue/language/
@@ -1399,6 +1409,8 @@ async def _handler_video(job, emit):
                       width=w, height=h, seed=shot.seed, negative_prompt=shot.negative_prompt)
         if mode == "keyframes":
             kwargs["image_urls"] = [first_url, last_url]
+        elif mode == "multi":
+            kwargs["image_urls"] = [first_url]
         else:
             kwargs["image_url"] = first_url
         if video_model:

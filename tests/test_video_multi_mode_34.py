@@ -1,0 +1,210 @@
+# tests/test_video_multi_mode_34.py
+# 34.md §13 — LinkMode.MULTI（单语义参考直生）最小接线验收。
+#
+# 背景与边界（34.md §1/§2/§5/§13/§27）：
+#   - 33.md calibration 胜出配方 = R3 参考格式 + multi 单参考直生（无首帧 conditioning）；
+#     生产 handler 此前只有 i2v/keyframes → 「正式 pipeline 无法正确消费 R3」属
+#     34.md §27 System blocker 类型 → 按 §5 允许的最小修复，经既有 GenerationRequest
+#     seam（31.md §10）接线，Binding/Pack 零改动。
+#   - multi 仅 BOUND 可用（参考由 Binding 决定，34.md §12）；UNBOUND fail closed。
+#   - v2.0 ti2vid 单图上限（32.md 7×400 实证）→ 编译层恰好 1 参考结构化校验。
+#
+# 覆盖：prompt_builder multi 分支 / BoundVideoRequest multi 投影 / compile multi
+# 结构化校验 / BOUND adapter 参考解析（look hero 优先→场景回退）/ handler multi
+# 端到端（Fake provider）/ UNBOUND multi fail closed。全程零真实外部调用。
+import asyncio
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+
+import deps
+from src.core.store import ProjectStore
+from src.core.write_lock import _clear_for_test
+from src.generation.agnes_adapter import (
+    AgnesRequestCompileError,
+    compile_agnes_video_call,
+)
+from src.generation.video_adapter import (
+    BoundGenerationError,
+    BoundVideoRequest,
+    build_bound_video_input,
+)
+from src.shot_binding import ShotBindingService
+
+sys_path = Path(__file__).parent
+if str(sys_path) not in sys.path:
+    sys.path.insert(0, str(sys_path))
+from test_shot_binding_s3b1 import (  # noqa: E402
+    LOOK, make_pdir, run,
+)
+from test_shot_binding_s3b2 import (  # noqa: E402
+    _bind, _build_scene,
+)
+from test_shot_binding_s3c2 import (  # noqa: E402
+    FakeMediaClient, _load_project, _load_shot, _set_video_ready,
+    _StubPM, _run_video_handler,
+)
+from src.resources.store import ResourceStore  # noqa: E402
+
+URL = "http://example/alice.png"
+
+
+# ============ prompt_builder multi 分支 ============
+
+def _shot(**kw):
+    from src.core.models import Shot
+    s = Shot(shot_id="s01_c01", scene_id="s01", index=1)
+    for k, v in kw.items():
+        setattr(s, k, v)
+    return s
+
+
+def test_prompt_multi_branch_action_first_no_animate_prefix():
+    from src.core.prompt_builder import _video_prompt_core
+    s = _shot(motion="The fox walks along the vineyard path.",
+              camera="low angle tracking shot", motion_pace="unhurried",
+              environment_motion="leaves sway gently")
+    p = _video_prompt_core(s, "multi")
+    assert "Animate this image" not in p
+    assert "Create a smooth cinematic transition" not in p
+    assert "The fox walks along the vineyard path." in p
+    assert "camera: low angle tracking shot" in p
+    assert "pace: unhurried" in p
+    assert "environment: leaves sway gently" in p
+
+
+def test_prompt_multi_action_sequence_verbatim_and_override_precedence():
+    from src.core.prompt_builder import _video_prompt_core
+    s = _shot(motion="walk", action_sequence="crouch, leap, land")
+    p = _video_prompt_core(s, "multi")
+    assert "The actions must unfold in this exact order: crouch, leap, land" in p
+    s2 = _shot(motion="walk", video_prompt_override="Custom override text")
+    assert _video_prompt_core(s2, "multi") == "Custom override text"
+
+
+# ============ 投影与编译（multi 槽位契约）============
+
+def test_multi_projection_video_reference_not_first_frame():
+    req = BoundVideoRequest(shot_id="s01_c01", prompt="p",
+                            provider_mode="multi", video_reference=URL,
+                            used_reference_ids=["ref_alice000001"]
+                            ).to_generation_request(model=None)
+    assert req.first_frame is None and req.last_frame is None
+    assert [r.source_type for r in req.reference_inputs] == ["video_reference"]
+    assert req.reference_inputs[0].semantic_role == "multi_reference"
+    assert req.reference_inputs[0].temporal_scope == "throughout"
+    call = compile_agnes_video_call(req)
+    assert call.slots() == {"image_urls": [URL]}
+
+
+def test_multi_compile_requires_exactly_one_reference():
+    def _req(refs):
+        from src.generation.request import GenerationRequest, ReferenceInput
+        return GenerationRequest(
+            generation_type="video", shot_id="s01_c01", prompt="p",
+            reference_inputs=[ReferenceInput(source_type="video_reference",
+                                             media=u) for u in refs],
+            provenance={"provider_mode": "multi"})
+
+    with pytest.raises(AgnesRequestCompileError) as ei:
+        compile_agnes_video_call(_req([]))
+    assert ei.value.code == "multi_reference_slot_invalid"
+
+    with pytest.raises(AgnesRequestCompileError) as ei:
+        compile_agnes_video_call(_req([URL, "http://example/b.png"]))
+    assert ei.value.code == "multi_reference_slot_invalid"
+
+    with pytest.raises(AgnesRequestCompileError) as ei:
+        compile_agnes_video_call(_req(["data:image/png;base64,AAAA"]))
+    assert ei.value.code == "data_uri_not_supported_video_provider"
+
+    with pytest.raises(AgnesRequestCompileError) as ei:
+        compile_agnes_video_call(BoundVideoRequest(
+            shot_id="s01_c01", prompt="p", provider_mode="multi",
+            video_reference=URL, first_frame="http://example/ff.png"
+        ).to_generation_request())
+    assert ei.value.code == "multi_slots_conflict"
+
+
+# ============ BOUND adapter / handler（跨域真实夹具）============
+
+@pytest.fixture()
+def venv(tmp_path, monkeypatch):
+    _clear_for_test()
+    pdir = make_pdir(tmp_path)
+    (pdir / "output" / "scene_system.json").unlink()
+    ids = run(_build_scene(pdir))
+    svc = ShotBindingService(pdir)
+    fake = FakeMediaClient()
+    monkeypatch.setattr(deps, "project_manager", _StubPM(pdir))
+    monkeypatch.setattr(deps, "agnes_client", fake)
+    yield pdir, ids, svc, fake
+    _clear_for_test()
+
+
+def test_bound_multi_resolves_look_hero_reference(venv):
+    pdir, ids, svc, fake = venv
+    _bind(svc, inst=ids["inst"], view=ids["view_a"])
+    _set_video_ready(pdir, link_mode="multi")
+    req = build_bound_video_input(pdir, _load_project(pdir), _load_shot(pdir))
+    assert req.provider_mode == "multi"
+    assert req.first_frame == "" and req.last_frame is None
+    # look hero（approved 首项）= multi 单参考的确定性落点
+    assert req.video_reference == URL
+    assert req.used_reference_ids == ["ref_alice000001"]
+    reasons = [d["reason"] for d in req.diagnostics]
+    assert "multi_reference_direct" in reasons
+    assert req.semantic_roles[0]["slot"] == "multi_reference"
+    assert req.semantic_roles[0]["reference_asset_id"] == "ref_alice000001"
+
+
+def test_bound_multi_handler_end_to_end_fake_provider(venv):
+    pdir, ids, svc, fake = venv
+    _bind(svc, inst=ids["inst"], view=ids["view_a"])
+    _set_video_ready(pdir, link_mode="multi")
+    _run_video_handler(pdir)
+    assert len(fake.video_calls) == 1
+    call = fake.video_calls[0]
+    assert call["mode"] == "multi"
+    assert call["image_urls"] == [URL]
+    assert call["image_url"] is None
+    # provenance：generation_basis 记录 multi provider_mode
+    project = _load_project(pdir)
+    shot = project.get_shot("s01_c01")
+    versions = list(shot.video_versions or [])
+    assert versions and versions[-1].generation_basis.get("provider_mode") == "multi"
+
+
+def test_bound_multi_preflight_skips_first_frame_requirement(venv):
+    """multi 不消费首帧——未生成/未选首帧也能通过 preflight（34.md §13：
+    视觉输入=BOUND 参考而非首帧）。"""
+    pdir, ids, svc, fake = venv
+    _bind(svc, inst=ids["inst"], view=ids["view_a"])
+    _set_video_ready(pdir, link_mode="multi")
+    # 未 _seed_first_frame：首帧无 selected
+    shot = _load_shot(pdir)
+    assert not shot.first_frame.url_ready
+    _run_video_handler(pdir)
+    assert len(fake.video_calls) == 1
+
+
+def test_unbound_multi_fail_closed(venv):
+    """UNBOUND 无从解析参考 → fail closed（不静默回落首帧 legacy）。"""
+    pdir, ids, svc, fake = venv
+    _set_video_ready(pdir, link_mode="multi")
+    with pytest.raises(RuntimeError) as ei:
+        _run_video_handler(pdir)
+    assert "binding" in str(ei.value)
+    assert fake.video_calls == []
+
+
+def test_freshness_read_model_multi_mode_mapping(venv):
+    """freshness 读模型的默认 provider 投影 = multi（否则重算键谎报 i2v → STALE）。"""
+    from src.generation.native_av_pack import _default_provider_options
+    pdir, ids, svc, fake = venv
+    _bind(svc, inst=ids["inst"], view=ids["view_a"])
+    _set_video_ready(pdir, link_mode="multi")
+    opts = _default_provider_options(_load_project(pdir), _load_shot(pdir))
+    assert opts["mode"] == "multi"

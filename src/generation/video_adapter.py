@@ -45,17 +45,19 @@ from src.generation.image_adapter import (
 class BoundVideoRequest:
     """Adapter 结果（§24）：ephemeral、无业务 ID、不落盘、不写回任何 canonical。
     字段以真实 provider API 为准：i2v 只消费 first_frame；keyframes 消费
-    first_frame + last_frame；无 invented 参数槽（seed/negative_prompt 属 Shot
-    creative/config，由 handler 既有路径传递，不在此伪造）。
+    first_frame + last_frame；multi（34.md §13）消费 video_reference（单图语义
+    参考，非 first-frame conditioning）。无 invented 参数槽（seed/negative_prompt
+    属 Shot creative/config，由 handler 既有路径传递，不在此伪造）。
     generation_basis（C1 §22/§23）：Native AV 派生 basis（dialogue/speaker/
     language/audio intent/visual/provider/compiler）——由 handler 写入
     VideoVersion.generation_basis；空 dict = 本 generation 未走 Native AV
     编译（显式 override off）。"""
     shot_id: str = ""
     prompt: str = ""
-    provider_mode: str = ""                 # "i2v" | "keyframes"（shot.link_mode 既有映射）
+    provider_mode: str = ""                 # "i2v" | "keyframes" | "multi"
     first_frame: str = ""                   # 公网 URL（i2v/keyframes first slot）
     last_frame: Optional[str] = None        # 公网 URL（仅 keyframes last slot）
+    video_reference: str = ""               # 公网 URL（仅 multi：单语义参考）
     used_reference_ids: List[str] = field(default_factory=list)   # 消费的 boundary candidate ids
     dropped_optional: List[Dict[str, Any]] = field(default_factory=list)
     diagnostics: List[Dict[str, Any]] = field(default_factory=list)
@@ -70,6 +72,7 @@ class BoundVideoRequest:
             "provider_mode": self.provider_mode,
             "first_frame": self.first_frame,
             "last_frame": self.last_frame,
+            "video_reference": self.video_reference,
             "used_reference_ids": list(self.used_reference_ids),
             "dropped_optional": list(self.dropped_optional),
             "diagnostics": list(self.diagnostics),
@@ -80,9 +83,12 @@ class BoundVideoRequest:
 
     def to_generation_request(self, *, model: Optional[str] = None):
         """provider-neutral 投影（31.md §10）：BoundVideoRequest → GenerationRequest。
-        boundary frames 即视频的真实参考输入（provider 无任意 reference 槽，§5）——
-        投影为 ReferenceInput(source_type=boundary_frame)；seed/negative_prompt 不进
-        投影（Shot creative 字段，handler kwargs 既有通道传递，§24 不伪造槽位）。"""
+        i2v/keyframes：boundary frames 即视频的真实参考输入（provider 无任意
+        reference 槽，§5）——投影为 ReferenceInput(source_type=boundary_frame)。
+        multi（34.md §13）：单语义参考投影为 ReferenceInput(source_type=
+        video_reference)（不冒充 first frame——它不做 first-frame conditioning）。
+        seed/negative_prompt 不进投影（Shot creative 字段，handler kwargs 既有
+        通道传递，§24 不伪造槽位）。"""
         from src.generation.request import GenerationRequest, ReferenceInput
         inputs: List[ReferenceInput] = []
         if self.first_frame:
@@ -93,6 +99,10 @@ class BoundVideoRequest:
             inputs.append(ReferenceInput(
                 source_type="boundary_frame", semantic_role="last_slot",
                 temporal_scope="end", media=self.last_frame))
+        if self.video_reference:
+            inputs.append(ReferenceInput(
+                source_type="video_reference", semantic_role="multi_reference",
+                temporal_scope="throughout", media=self.video_reference))
         return GenerationRequest(
             generation_type="video", shot_id=self.shot_id,
             prompt=self.prompt, reference_inputs=inputs,
@@ -149,6 +159,53 @@ def _resolve_boundary_frame(shot: Any, pack_basis: dict, slot: str,
     return cand.url
 
 
+def _resolve_video_reference_media(rdoc: Any, asset_id: str) -> str:
+    """multi 槽参考媒体解析（34.md §13）：ReferenceAsset → 公网 URL。
+    视频接口只接受公网 URL（FACTS §3.3，无 data URI）——与 boundary frames 同一
+    约束，local-only 资产 fail closed（不静默 rehost：参考资产由 Agnes 生成、
+    自带 provider URL；缺失属上游登记问题）。"""
+    asset = (getattr(rdoc, "reference_assets", None) or {}).get(asset_id)
+    if asset is None:
+        raise BoundGenerationError(
+            "reference_media_unresolvable",
+            {"video_reference_asset_id": asset_id,
+             "hint": "multi 视频参考 asset 在 Resources 中不存在（§16 selection truth）"})
+    url = getattr(asset, "url", None) or ""
+    if not url:
+        raise BoundGenerationError(
+            "reference_media_unresolvable",
+            {"video_reference_asset_id": asset_id,
+             "hint": "multi 视频参考无公网 URL（视频接口无 data URI 槽，FACTS §3.3）"
+                     "——先经正式 rehost/登记流程补 URL"})
+    return url
+
+
+def _select_video_reference(pack: dict) -> Dict[str, Any]:
+    """multi 槽参考的确定性选择（34.md §13：优先已验证的 identity reference 语义）。
+    选择规则（确定性，无 LLM、无 glob）：
+      1. cast 角色 look 参考（source_type=character_look）中 priority=primary 者
+         （= look 的 hero approved 参考——R3 式身份参考的正式落点）；
+      2. 否则任一 character_look 参考；
+      3. 否则场景参考（scene_instance_view——无 cast 的环境建立镜）；
+      4. 都没有 = 结构化失败（Binding READY 却无任何参考 = 上游错误）。
+    顺序 = pack.references 存储顺序（cast 顺序 → look hero → extras，§34 语义序）。"""
+    refs = [r for r in (pack.get("references") or [])
+            if r.get("reference_asset_id")]
+    char = [r for r in refs if r.get("source_type") == "character_look"]
+    for r in char:
+        if r.get("priority") == "primary":
+            return r
+    if char:
+        return char[0]
+    scene = [r for r in refs if r.get("source_type") == "scene_instance_view"]
+    if scene:
+        return scene[0]
+    raise BoundGenerationError(
+        "reference_media_unresolvable",
+        {"slot": "multi_reference",
+         "hint": "pack 无任何可解析参考（Binding READY 但 references 空）——上游错误"})
+
+
 def build_bound_video_input(project_dir, project: Any, shot: Any, *,
                             native_dialogue_control: bool = True,
                             native_dialogue_language: Optional[str] = None,
@@ -177,10 +234,33 @@ def build_bound_video_input(project_dir, project: Any, shot: Any, *,
     basis = pack.get("basis") or {}
     diagnostics: List[Dict[str, Any]] = []
 
-    mode = "keyframes" if shot.link_mode == "keyframes" else "i2v"
+    mode = ("keyframes" if shot.link_mode == "keyframes"
+            else "multi" if shot.link_mode == "multi" else "i2v")
+
+    # ---- multi（34.md §13）：单语义参考直生，无 boundary frame 消费 ----
+    video_ref_url = ""
+    _multi_ref_item: Optional[Dict[str, Any]] = None
+    if mode == "multi":
+        from src.resources.store import ResourceStore as _RS
+        _multi_ref_item = _select_video_reference(pack)
+        rdoc0 = _RS(project_dir, project_dir.name).load()
+        video_ref_url = _resolve_video_reference_media(
+            rdoc0, str(_multi_ref_item.get("reference_asset_id") or ""))
+        diagnostics.append({
+            "reason": "multi_reference_direct",
+            "detail": {
+                "reference_asset_id": _multi_ref_item.get("reference_asset_id"),
+                "source_type": _multi_ref_item.get("source_type"),
+                "subject_character": _multi_ref_item.get("subject_character"),
+                "priority": _multi_ref_item.get("priority"),
+                "hint": "multi 单参考直生（v2.0 ti2vid 单图槽）——参考是身份/场景"
+                        "语义参考，不做 first-frame conditioning（33.md R3 配方）"}})
 
     # ---- boundary frame 解析（§16 selection truth + §17 freshness）----
-    if shot.opening_source == OpeningSource.INHERIT_PREVIOUS.value and shot.source_shot_id:
+    first_url = ""
+    if mode == "multi":
+        pass   # multi 不消费 boundary frames——参考即视觉输入
+    elif shot.opening_source == OpeningSource.INHERIT_PREVIOUS.value and shot.source_shot_id:
         # relay 物料：来源镜头实际视频末帧——creative relay（Phase 6A 既有机制），
         # 非本镜 Binding 产物 → 无 basis 可比 → diagnostic，不阻断（与 S3C.1
         # continuity 不做 basis 检查同口径）。
@@ -247,26 +327,35 @@ def build_bound_video_input(project_dir, project: Any, shot: Any, *,
             "detail": {"hint": "真实 provider i2v 只有 first frame 视觉槽——end_state 仅"
                                "作为 motion target 文本表达，无 visual last-frame "
                                "conditioning（不伪造 last-frame 能力）"}})
-    diagnostics.append({
-        "reason": "pack_references_not_provider_consumed",
-        "detail": {"hint": "真实 provider i2v/keyframes 无 arbitrary reference 槽——"
-                           "Pack references 经 boundary frames（由 Pack 生成）+ prompt "
-                           "生产上下文进入，不直接进 provider 请求"}})
+    if mode != "multi":
+        diagnostics.append({
+            "reason": "pack_references_not_provider_consumed",
+            "detail": {"hint": "真实 provider i2v/keyframes 无 arbitrary reference 槽——"
+                               "Pack references 经 boundary frames（由 Pack 生成）+ prompt "
+                               "生产上下文进入，不直接进 provider 请求"}})
 
     used_ids: List[str] = []
     roles: List[Dict[str, Any]] = []
-    if first_url:
-        fb, fc = selected_boundary_batch(shot, "first")
-        used_ids.append(fc.candidate_id if fc else "relay_first_frame")
-        roles.append({"slot": "first", "temporal_semantics": "start",
-                      "candidate_id": fc.candidate_id if fc else None,
-                      "batch_id": getattr(fb, "batch_id", None)})
-    if last_url:
-        lb, lc = selected_boundary_batch(shot, "last")
-        used_ids.append(lc.candidate_id if lc else "")
-        roles.append({"slot": "last", "temporal_semantics": "end",
-                      "candidate_id": lc.candidate_id if lc else None,
-                      "batch_id": getattr(lb, "batch_id", None)})
+    if mode == "multi":
+        used_ids.append(str(_multi_ref_item.get("reference_asset_id") or ""))
+        roles.append({"slot": "multi_reference", "temporal_semantics": "throughout",
+                      "candidate_id": None,
+                      "reference_asset_id": _multi_ref_item.get("reference_asset_id"),
+                      "source_type": _multi_ref_item.get("source_type"),
+                      "batch_id": None})
+    else:
+        if first_url:
+            fb, fc = selected_boundary_batch(shot, "first")
+            used_ids.append(fc.candidate_id if fc else "relay_first_frame")
+            roles.append({"slot": "first", "temporal_semantics": "start",
+                          "candidate_id": fc.candidate_id if fc else None,
+                          "batch_id": getattr(fb, "batch_id", None)})
+        if last_url:
+            lb, lc = selected_boundary_batch(shot, "last")
+            used_ids.append(lc.candidate_id if lc else "")
+            roles.append({"slot": "last", "temporal_semantics": "end",
+                          "candidate_id": lc.candidate_id if lc else None,
+                          "batch_id": getattr(lb, "batch_id", None)})
 
     # ---- pre-dispatch race guard（§18：compile 之后的第二个时间窗）----
     _pre_dispatch_guard(svc, sid, basis)
@@ -274,5 +363,6 @@ def build_bound_video_input(project_dir, project: Any, shot: Any, *,
     return BoundVideoRequest(
         shot_id=sid, prompt=prompt, provider_mode=mode,
         first_frame=first_url, last_frame=last_url,
+        video_reference=video_ref_url,
         used_reference_ids=used_ids, diagnostics=diagnostics,
         semantic_roles=roles, basis=basis, generation_basis=generation_basis)
