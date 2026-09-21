@@ -1,0 +1,14 @@
+{
+  "name": "R1_plate",
+  "mode": "t2i",
+  "prompt": "A natural quadruped red fox with red-orange fur, white muzzle and chest, dark brown-black lower legs, large expressive pointed ears, amber eyes, and a full bushy tail with a pale tip. Realistic stable fox body proportions. A small distinctive notch in its left ear. No clothing, no accessories. Single small character centered, pure white backdrop, full body, standing straight, lots of white space around the character, the character takes up 40-50% of the image height, high quality, detailed character design. Cinematic storybook animation, stylized 2D animated look. Do not render as live-action photography or 3D rendered CGI.",
+  "seed": 777,
+  "image_refs": [],
+  "provider_url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_SskxbjycIjPY2ZLnSHPV2kkRruSMTPCF/output_e2c954ad3205488082e093c67923a799.png",
+  "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\_33_fox_calibration\\references\\R1_plate.png",
+  "bytes": 981260,
+  "sha256": "d7d540b736bab37373f001f588a9138f0926da1eb76fc4f84026fb3c8773e10d",
+  "size_tier": "2K",
+  "ratio": "16:9",
+  "elapsed_s": 10.4
+}

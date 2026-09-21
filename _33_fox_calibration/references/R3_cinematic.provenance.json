@@ -1,0 +1,16 @@
+{
+  "name": "R3_cinematic",
+  "mode": "i2i",
+  "prompt": "A natural quadruped red fox with red-orange fur, white muzzle and chest, dark brown-black lower legs, large expressive pointed ears, amber eyes, and a full bushy tail with a pale tip. Realistic stable fox body proportions. A small distinctive notch in its left ear. No clothing, no accessories. The fox stands on a dirt path in a quiet vineyard, a few hanging grape clusters on the vines behind it, cinematic soft warm daylight, full body visible, clearly the focus of the frame, no other subjects, simple uncluttered composition, three-quarter view. Cinematic storybook animation, stylized 2D animated look. Do not render as live-action photography or 3D rendered CGI.",
+  "seed": null,
+  "image_refs": [
+    "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_SskxbjycIjPY2ZLnSHPV2kkRruSMTPCF/output_e2c954ad3205488082e093c67923a799.png"
+  ],
+  "provider_url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_jbijO6J52qog8nlPpa09DUkGNxUiBn2h/output.png",
+  "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\_33_fox_calibration\\references\\R3_cinematic.png",
+  "bytes": 4440013,
+  "sha256": "3701233defb2efcf97120e62b8bdb45c2aeb21692d1cad366bf580bc1ed31b9f",
+  "size_tier": "2K",
+  "ratio": "16:9",
+  "elapsed_s": 62.5
+}
