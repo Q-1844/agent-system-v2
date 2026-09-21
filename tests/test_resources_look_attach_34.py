@@ -96,3 +96,47 @@ def test_attach_look_reference_rejections(env):
     # 拒绝后文件不变（candidate 集仍为空）
     back = ResourceStore(env["pdir"], env["pdir"].name).load().looks[look_id]
     assert back.reference_asset_ids == []
+
+
+def test_rehost_reference_asset(tmp_path, monkeypatch):
+    """34.md §5：local-only 资产经标准 ImageHost 补公网 URL（视频消费前置）；
+    幂等（已有 url → unchanged）；OCC；无 local → 结构化拒绝。"""
+    from tests.test_resources_phase1c1 import make_project
+    _clear_for_test()
+    pdir = make_project(tmp_path, with_character=False)
+    ws = ResourceWriteService(pdir, pdir.name)
+    rev = document_revision(ws.store.load())
+
+    # local 文件真实存在（register 校验 local 必须在项目内）
+    img = pdir / "o" / "scene.png"
+    img.parent.mkdir(parents=True, exist_ok=True)
+    img.write_bytes(b"PNG")
+
+    r = run(ws.register_reference_asset(local="o/scene.png", source="scene_system",
+                                        expected_document_revision=rev))
+    assert r["ok"] and r["target"]
+    aid = r["target"]
+    rev2 = r["document_revision_after"]
+    assert ResourceStore(pdir, pdir.name).load().reference_assets[aid].url is None
+
+    class _FakeHost:
+        async def upload(self, path):
+            assert str(path).endswith("scene.png")
+            return "https://i.ibb.co/fake/scene.png"
+
+    import deps
+    monkeypatch.setattr(deps, "get_rehost_host", lambda: _FakeHost())
+
+    r2 = run(ws.rehost_reference_asset(aid, expected_document_revision=rev2))
+    assert r2["ok"] and r2["verified"]
+    assert r2["after"]["url"] == "https://i.ibb.co/fake/scene.png"
+
+    # 幂等：已有 url → unchanged
+    r3 = run(ws.rehost_reference_asset(
+        aid, expected_document_revision=r2["document_revision_after"]))
+    assert r3["ok"] and r3.get("unchanged") is True
+
+    # stale OCC → 拒绝
+    r4 = run(ws.rehost_reference_asset(aid, expected_document_revision=rev))
+    assert r4["ok"] is False and r4["error"] == "stale_revision"
+    _clear_for_test()

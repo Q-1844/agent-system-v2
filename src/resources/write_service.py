@@ -744,6 +744,54 @@ class ResourceWriteService:
     # review/approve 端点都在，唯独没有把【已注册外部资产】挂进 Look 候选集的
     # 正式入口（generate 才会追加）。镜像 attach_clothing_reference 全部语义。）
     # ==================================================================
+    async def rehost_reference_asset(self, asset_id: str, *,
+                                     expected_document_revision: str) -> dict:
+        """为 local-only 的 ReferenceAsset 补公网 URL（34.md §5 最小修复）：
+        视频接口只接受公网 URL（FACTS §3.3），而场景域资产以 local 登记（图片
+        走 data URI 无碍）——视频消费前经标准 ImageHost（imgbb，100% 保真）
+        托管并回写 url。幂等：已有 url 的资产 unchanged。OCC 同 register。"""
+        op = "resource.rehost_reference_asset"
+        async with self.store.write_lock():
+            doc = self.store.load()
+            a = doc.reference_assets.get(asset_id)
+            if a is None:
+                return self._receipt(op, ok=False, target=asset_id, error="not_found",
+                                     detail=f"reference asset 不存在: {asset_id}")
+            cur = document_revision(doc)
+            if expected_document_revision != cur:
+                return self._stale_receipt(op, expected_document_revision, cur)
+            if getattr(a, "url", None):
+                return self._receipt(op, ok=True, target=asset_id, after=a.to_dict(),
+                                     revision=reference_asset_revision(a),
+                                     verified=True, unchanged=True, error=None)
+            local = getattr(a, "local", None)
+            if not local:
+                return self._receipt(op, ok=False, target=asset_id,
+                                     error="no_local_media",
+                                     detail="资产无 local 媒体，无法托管")
+            from deps import get_rehost_host
+            try:
+                url = await get_rehost_host().upload(
+                    str(self.project_dir / local))
+            except Exception as e:
+                return self._receipt(op, ok=False, target=asset_id,
+                                     error="rehost_failed",
+                                     detail=str(e)[:300])
+            if not url:
+                return self._receipt(op, ok=False, target=asset_id,
+                                     error="rehost_failed",
+                                     detail="ImageHost 未返回 URL")
+            a.url = url
+            a.updated_at = time.time()
+            self.store.save(doc)
+            doc_rev = self._verify_after_save()
+            reloaded = self.store.load().reference_assets.get(asset_id)
+            verified = reloaded is not None and bool(reloaded.url)
+            return self._receipt(op, ok=True, target=asset_id,
+                                 before=None, after=a.to_dict(),
+                                 revision=reference_asset_revision(a),
+                                 verified=verified,
+                                 document_revision_after=doc_rev)
     async def attach_look_reference(self, look_id: str, asset_id: str, *,
                                     expected_revision: str) -> dict:
         op = "resource.attach_look_reference"

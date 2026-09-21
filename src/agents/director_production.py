@@ -214,10 +214,11 @@ async def _execute_shot_production_bind(rt, project: str, arguments: str,
     char_bindings = _loose_json(args.get("character_bindings"))
     if not shot_id:
         raise AgentError("bad_arguments", "缺少 shot_id")
-    if not isinstance(char_bindings, list) or not char_bindings:
+    if not isinstance(char_bindings, list):
         raise AgentError("bad_arguments",
-                         "character_bindings 必须是非空数组"
-                         "（[{character_name, look_id}, ...]）")
+                         "character_bindings 必须是数组"
+                         "（[{character_name, look_id}, ...]；纯环境镜允许空数组"
+                         "——scene-only binding，34.md §5 最小修复）")
     pdir = rt._resolve_project_dir(project)
     from src.core.store import ProjectStore
     from src.shot_binding.service import ShotBindingService

@@ -208,3 +208,48 @@ def test_freshness_read_model_multi_mode_mapping(venv):
     _set_video_ready(pdir, link_mode="multi")
     opts = _default_provider_options(_load_project(pdir), _load_shot(pdir))
     assert opts["mode"] == "multi"
+
+
+def test_scene_only_binding_multi_uses_scene_reference(venv):
+    """34.md §13：纯环境镜（cast 空）scene-only binding → multi 参考走已批准
+    SceneInstanceView 资产（34.md §5 最小修复：bind 工具允许空 character_bindings）。
+    场景资产需有公网 URL（视频接口约束；local-only 由 rehost 通路补齐）。"""
+    pdir, ids, svc, fake = venv
+    # 清空 shot cast（纯环境镜）+ 注册带 URL 的场景资产并挂到 SIV（模拟 rehost 后状态）
+    ProjectStore(pdir).update_shot("s01_c01", lambda s: setattr(s, "characters", []))
+    rd = ResourceStore(pdir, pdir.name).load()
+    from src.resources.models import ReferenceAsset
+    rd.reference_assets["ref_sciv0000001"] = ReferenceAsset(
+        asset_id="ref_sciv0000001", url="http://example/sciv.png")
+    ResourceStore(pdir, pdir.name).save(rd)
+    _link_sciv_asset(pdir, ids, "ref_sciv0000001")
+    r0 = _bind(svc, inst=ids["inst"], view=ids["view_a"], characters=[])
+    assert r0["ok"], r0
+    _set_video_ready(pdir, link_mode="multi")
+    req = build_bound_video_input(pdir, _load_project(pdir), _load_shot(pdir))
+    assert req.provider_mode == "multi"
+    # 无 cast → 参考回退到场景参考（SIV 注册资产），而非 fox look
+    assert req.video_reference == "http://example/sciv.png"
+    assert req.semantic_roles[0]["source_type"] == "scene_instance_view"
+    _run_video_handler(pdir)
+    assert fake.video_calls[0]["image_urls"] == ["http://example/sciv.png"]
+
+
+def _scene_ref_asset_id(pdir):
+    """读 binding 的场景视图注册资产 id（scene_binding.reference_asset_id）。"""
+    import json as _json
+    b = _json.loads((pdir / "output" / "shot_production_bindings.json")
+                    .read_text(encoding="utf-8"))
+    bd = (b.get("bindings") or {}).get("s01_c01") or {}
+    return (bd.get("scene_binding") or {}).get("reference_asset_id")
+
+
+def _link_sciv_asset(pdir, ids, asset_id):
+    """把 SIV 的 reference_asset_id 指到给定资产（真实系统由 scene approval 注册）。"""
+    import json as _json
+    p = pdir / "output" / "scene_system.json"
+    d = _json.loads(p.read_text(encoding="utf-8"))
+    for sciv in (d.get("scene_instance_views") or {}).values():
+        if sciv.get("scene_instance_id") == ids["inst"]:
+            sciv["reference_asset_id"] = asset_id
+    p.write_text(_json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
