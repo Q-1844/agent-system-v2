@@ -493,6 +493,10 @@ def test_api_read_only_no_mutation_endpoints(client):
         ("POST", "/api/project/{project}/compositions/{composition_id}/review"),
         ("POST", "/api/project/{project}/compositions/{composition_id}/approve"),
         ("POST", "/api/project/{project}/compositions/{composition_id}/revoke-approval"),
+        # 34.md §5/§9：Look 候选 attach（外部正式资产经 register→attach→review→approve
+        # 链进入）+ 人评审查证据（用户人评=最高审查层级，34.md §16/§18）
+        ("POST", "/api/project/{project}/looks/{look_id}/references"),
+        ("POST", "/api/project/{project}/looks/{look_id}/review/human"),
     }
     write_routes = []
     for route in rres.router.routes:

@@ -834,6 +834,30 @@ class ApproveLookReferenceRequest(BaseModel):
     set_cover: Optional[bool] = None        # None=首个 approved 自动成为封面
 
 
+class AttachLookReferenceRequest(BaseModel):
+    asset_id: str
+    expected_revision: str                  # look 的 resource revision
+
+
+@router.post("/api/project/{project}/looks/{look_id}/references")
+async def attach_look_reference(project: str, look_id: str,
+                                req: AttachLookReferenceRequest):
+    """把已注册的 ReferenceAsset 挂进 Look 候选集（34.md §5/§9：外部正式资产
+    （如校准阶段资产）经 register → attach → review → approve 链进入项目的
+    缺口补齐；幂等；不产生 approved 状态，批准仍走 /approve 的 pass 证据门槛）。"""
+    try:
+        receipt = await _write_service(project).attach_look_reference(
+            look_id, req.asset_id, expected_revision=req.expected_revision)
+        _raise_for_receipt(receipt)
+        return receipt
+    except HTTPException:
+        raise
+    except ResourceSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"资源数据错误: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/api/project/{project}/looks/{look_id}/review")
 async def review_look_candidates(project: str, look_id: str, req: ReviewLookRequest):
     """视觉审查候选（身份一致/服装一致/视觉缺陷三维度）→ 独立 review evidence。
@@ -852,6 +876,37 @@ async def review_look_candidates(project: str, look_id: str, req: ReviewLookRequ
         raise
     except ResourceSchemaError as e:
         raise HTTPException(status_code=500, detail=f"资源数据错误: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class HumanLookReviewRequest(BaseModel):
+    asset_id: str
+    overall: str                           # pass | fail | uncertain
+    note: str                              # 裁定理由（必填，不可追溯 = 不落盘）
+    reviewer: Optional[str] = None
+
+
+@router.post("/api/project/{project}/looks/{look_id}/review/human")
+async def human_look_review(project: str, look_id: str, req: HumanLookReviewRequest):
+    """人评审查证据（34.md §16/§18：用户人评是最高审查层级）。与机器 vision 审查
+    同一 append-only 证据通道落盘；approve 闸门逻辑不变（仍走 pass 证据门槛）。
+    机器审查风格标记与用户人评矛盾时（如 33.md R3 三镜全⭐ vs 机器 uncertain），
+    以用户显式裁定为准——记录裁定人与理由，绝不静默。"""
+    try:
+        project_dir = get_project_manager().get_project_dir(project)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"项目不存在: {project}")
+    try:
+        from src.resources.look_review import record_human_review
+        result = record_human_review(project_dir, look_id, req.asset_id,
+                                     overall=req.overall, note=req.note,
+                                     reviewer=req.reviewer or "user")
+        if not result.get("ok"):
+            raise HTTPException(status_code=400, detail=result)
+        return result
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

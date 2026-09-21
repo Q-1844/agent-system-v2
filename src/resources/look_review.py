@@ -198,6 +198,40 @@ def has_pass_evidence(project_dir, look_id: str, asset_id: str) -> bool:
     return bool(cr) and cr.get("overall") == "pass"
 
 
+def record_human_review(project_dir, look_id: str, asset_id: str, *, overall: str,
+                        note: str, reviewer: str = "user") -> dict:
+    """人评审查证据（34.md §16/§18：真实的人评是最高审查层级）。把用户对某张
+    候选的显式裁定作为一条 completed review record 落盘（append-only，与机器
+    vision 审查同一证据通道）；approve 闸门逻辑不变（仍走 has_pass_evidence）。
+    - overall ∈ pass | fail | uncertain（诚实落盘——不限于 pass 才能记录）；
+    - note 必须非空（无理由的人评 = 不可追溯，拒绝落盘）；
+    - model="human"，reviewer 记录裁定来源。绝不覆盖/改写既有机器审查记录。"""
+    if overall not in ("pass", "fail", "uncertain"):
+        return {"ok": False, "error": "invalid_overall",
+                "detail": "overall 必须是 pass | fail | uncertain"}
+    if not str(note or "").strip():
+        return {"ok": False, "error": "note_required",
+                "detail": "人评必须附裁定理由（无理由 = 不可追溯，不落盘）"}
+    review_id = f"hr_{uuid.uuid4().hex[:12]}"
+    record = {
+        "review_id": review_id, "operation": "look.human_review", "look_id": look_id,
+        "model": "human", "reviewer": str(reviewer or "user"),
+        "candidate_asset_ids": [asset_id],
+        "candidate_reviews": [{
+            "asset_id": asset_id, "overall": overall,
+            "summary": str(note).strip(),
+        }],
+        "project_style_consistency": "human_judgment",
+        "started_at": time.time(), "completed_at": time.time(),
+        "status": "completed", "error": None, "verified": True,
+    }
+    from .generation_records import append_record
+    append_record(project_dir, record, path=review_records_path(project_dir))
+    return {"ok": True, "operation": "look.human_review", "review_id": review_id,
+            "look_id": look_id, "asset_id": asset_id, "overall": overall,
+            "status": "completed"}
+
+
 # ============ 审查执行 ============
 async def review_look_candidates(project_dir, look_id: str, *,
                                  asset_ids: Optional[List[str]] = None,

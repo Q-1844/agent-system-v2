@@ -738,6 +738,44 @@ class ResourceWriteService:
     # ==================================================================
     # Approval（Phase 1C2）：review pass ≠ approved（双向严格分开）
     # ==================================================================
+    # ==================================================================
+    # Look ↔ ReferenceAsset 绑定（34.md §5/§9：规格指定的「正式注册校准资产经
+    # provenance 合同进入本项目」路径的唯一缺口——register/reference-assets 与
+    # review/approve 端点都在，唯独没有把【已注册外部资产】挂进 Look 候选集的
+    # 正式入口（generate 才会追加）。镜像 attach_clothing_reference 全部语义。）
+    # ==================================================================
+    async def attach_look_reference(self, look_id: str, asset_id: str, *,
+                                    expected_revision: str) -> dict:
+        op = "resource.attach_look_reference"
+        async with self.store.write_lock():
+            doc = self.store.load()
+            lk = doc.looks.get(look_id)
+            if lk is None:
+                return self._receipt(op, ok=False, target=look_id, error="not_found",
+                                     detail=f"look 不存在: {look_id}")
+            cur = look_revision(lk)
+            if expected_revision != cur:
+                return self._stale_receipt(op, expected_revision, cur, lk.to_dict())
+            if asset_id not in doc.reference_assets:
+                return self._receipt(op, ok=False, target=look_id, error="asset_not_found",
+                                     detail=f"reference asset 不存在: {asset_id}")
+            if asset_id in lk.reference_asset_ids:
+                # 幂等 attach：已在候选集 → 不改文档，诚实返回 unchanged
+                return self._receipt(op, ok=True, target=look_id,
+                                     after=lk.to_dict(), revision=cur, verified=True,
+                                     unchanged=True, error=None)
+            before = lk.to_dict()
+            lk.reference_asset_ids.append(asset_id)
+            lk.updated_at = time.time()
+            self.store.save(doc)
+            doc_rev = self._verify_after_save()
+            reloaded = self.store.load().looks.get(look_id)
+            verified = reloaded is not None and asset_id in reloaded.reference_asset_ids
+            return self._receipt(op, ok=True, target=look_id,
+                                 before=before, after=lk.to_dict(),
+                                 revision=look_revision(lk), verified=verified,
+                                 document_revision_after=doc_rev)
+
     async def approve_look_reference(self, look_id: str, asset_id: str, *,
                                      expected_revision: str,
                                      set_cover: Optional[bool] = None) -> dict:
