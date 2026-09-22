@@ -16,7 +16,7 @@ REVIEW = {
     "ref_e5c261d74890": "identity✓ style✗",
     "ref_6bfdc88e57da": "identity⚠️ style✗",
     "ref_c19d9a0df2ec": "identity✓ style✗",
-    "ref_8b3b3c13e9bc": "审查中",
+    "ref_8b3b3c13e9bc": "identity✗（正面视角身份漂移，慎选）style✓",
 }
 REFS = [
     ("R3 站姿 3/4（现 cover，校准资产）", "ref_bcfeac7ed0d9"),

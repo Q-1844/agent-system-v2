@@ -122,6 +122,19 @@ HEAD `3832ed0` 生产视频链真实能力：
 - s05（跳跃）：A/B 均完成蓄力→腾空→落地全动作、四足解剖正常 ✓；**顶点嘴部接近/接触葡萄**（33.md 已知顶点触葡萄条件化限制复现）；B 末段疑似葡萄脱落红点
 - s01/s08（空镜）：场景一致、无狐 ✓
 
+## 六B、V1B 方向（Human Gate 用户提出，进行中）
+
+用户观察（机器证实）：8 狐镜首帧逐像素级相同（R3 参考强条件化开场）→ 同一身份多姿态参考库、按镜起始状态选用。
+
+已落地：
+
+- `derive_look_reference`（commit 9e3d921）：从 approved 参考 i2i 派生姿态变体的正式能力（两阶段协议；产物入候选不自动批准）
+- `Shot.video_reference_asset_id` 按镜参考选择（adapter 资格校验 + 进 creative freshness 指纹）
+- 6 变体生成 + vision 审查（identity 结论）：walk_side ✓ / crouch_ready ✓ / sit_look_up ✓ / alert_gaze ✓ / turned_away ⚠️ / stand_front ✗（正面视角身份漂移）
+- `REFERENCE_SELECT.html` 选择页（含审查徽标）→ 等用户按镜选择 → 按选择重生成
+
+机器审查徽标只作参考——用户选择+人评记录是最高证据层（与 R3 cover 同机制）。
+
 ## 六、Human Gate（§18）——已到达，等待用户逐镜评价
 
 **生产已停止**（8 镜第一轮 candidates + Gallery + 机器证据全部就绪）。未自动选择 winner、未自动 regenerate、未开始下一部作品。
