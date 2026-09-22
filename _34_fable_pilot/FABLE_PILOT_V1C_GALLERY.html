@@ -1,0 +1,65 @@
+<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8">
+<title>Fable Pilot V1C — 尾帧接力对比</title>
+<style>body{font-family:system-ui;background:#141414;color:#eee;max-width:1150px;margin:0 auto;padding:1.5rem}
+h1{color:#ffd166}h2{color:#ffd166;margin-top:2rem}.meta{color:#aaa;font-size:.85rem}
+.cand{background:#1e1e1e;border-radius:10px;padding:.9rem;margin:.8rem 0}
+video{width:100%;max-width:700px;border-radius:8px;background:#000}
+.pill{display:inline-block;padding:1px 8px;border-radius:10px;font-size:.75rem;margin-right:6px;background:#1b4332}
+.pill.warn{background:#5c4a00}
+details{margin-top:.5rem}summary{cursor:pointer;color:#8ecae6;font-size:.85rem}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+</style></head><body>
+<h1>Fable Pilot V1C — 尾帧接力 vs 姿态参考 vs 第一轮</h1>
+<p class="meta">尾帧接力=参考用上一镜实际视频末帧（开场衔接上一镜结尾，动作由 prompt 驱动）。
+衔接量化（上一镜末帧 vs 本镜首帧 diff）：s03=28.1 / s04=3.5 / s05=9.0 / s06=4.3 / s07=3.3（低=衔接紧）。</p>
+<h2>s02_c01 — V1C 尾帧接力</h2>
+<p class="meta">参考=s01 尾帧（空园土路）——狐狸从画外入画 ｜ 衔接 diff=— ｜ <span class='pill'>音频无BGM信号</span></p>
+<div class="cand"><span class="pill">V1C 尾帧接力</span> <span class="meta">vv_d7faab7f</span>
+<br><video src="../_34_fable_pilot/recovered_v1c/s02_c01_V1C.mp4" controls preload="metadata"></video></div>
+<details open><summary>V1B 姿态参考版（对比：开场=walk_side）</summary>
+<div class="cand"><video src="../_34_fable_pilot/recovered_v1b/s02_c01_V1B.mp4" controls preload="metadata"></video></div></details>
+<details><summary>第一轮候选（开场=R3 站姿）</summary><div class="row"><div class="cand"><span class="pill">R1 A</span>
+<video src="../_34_fable_pilot/recovered/s02_c01_A.mp4" controls preload="metadata"></video></div><div class="cand"><span class="pill">R1 B</span>
+<video src="../_34_fable_pilot/recovered/s02_c01_B.mp4" controls preload="metadata"></video></div></div></details><h2>s03_c01 — V1C 尾帧接力</h2>
+<p class="meta">参考=s02 尾帧（行走中） ｜ 衔接 diff=28.1 ｜ <span class='pill'>音频无BGM信号</span></p>
+<div class="cand"><span class="pill">V1C 尾帧接力</span> <span class="meta">vv_1a6b05ba</span>
+<br><video src="../_34_fable_pilot/recovered_v1c/s03_c01_V1C.mp4" controls preload="metadata"></video></div>
+<details open><summary>V1B 姿态参考版（对比：开场=alert_gaze）</summary>
+<div class="cand"><video src="../_34_fable_pilot/recovered_v1b/s03_c01_V1B.mp4" controls preload="metadata"></video></div></details>
+<details><summary>第一轮候选（开场=R3 站姿）</summary><div class="row"><div class="cand"><span class="pill">R1 A</span>
+<video src="../_34_fable_pilot/recovered/s03_c01_A.mp4" controls preload="metadata"></video></div><div class="cand"><span class="pill">R1 B</span>
+<video src="../_34_fable_pilot/recovered/s03_c01_B.mp4" controls preload="metadata"></video></div></div></details><h2>s04_c01 — V1C 尾帧接力</h2>
+<p class="meta">参考=s03 尾帧（CU 状态） ｜ 衔接 diff=3.5 ｜ <span class='pill warn'>⚠️BGM信号（后段）</span></p>
+<div class="cand"><span class="pill">V1C 尾帧接力</span> <span class="meta">vv_06406c1a</span>
+<br><video src="../_34_fable_pilot/recovered_v1c/s04_c01_V1C.mp4" controls preload="metadata"></video></div>
+<details open><summary>V1B 姿态参考版（对比：开场=crouch_ready）</summary>
+<div class="cand"><video src="../_34_fable_pilot/recovered_v1b/s04_c01_V1B.mp4" controls preload="metadata"></video></div></details>
+<details><summary>第一轮候选（开场=R3 站姿）</summary><div class="row"><div class="cand"><span class="pill">R1 A</span>
+<video src="../_34_fable_pilot/recovered/s04_c01_A.mp4" controls preload="metadata"></video></div><div class="cand"><span class="pill">R1 B</span>
+<video src="../_34_fable_pilot/recovered/s04_c01_B.mp4" controls preload="metadata"></video></div></div></details><h2>s05_c01 — V1C 尾帧接力</h2>
+<p class="meta">参考=s04 尾帧（蓄力结束态） ｜ 衔接 diff=9.0 ｜ <span class='pill warn'>⚠️BGM信号（后段）</span></p>
+<div class="cand"><span class="pill">V1C 尾帧接力</span> <span class="meta">vv_1d6ca886</span>
+<br><video src="../_34_fable_pilot/recovered_v1c/s05_c01_V1C.mp4" controls preload="metadata"></video></div>
+<details open><summary>V1B 姿态参考版（对比：开场=crouch_ready）</summary>
+<div class="cand"><video src="../_34_fable_pilot/recovered_v1b/s05_c01_V1B.mp4" controls preload="metadata"></video></div></details>
+<details><summary>第一轮候选（开场=R3 站姿）</summary><div class="row"><div class="cand"><span class="pill">R1 A</span>
+<video src="../_34_fable_pilot/recovered/s05_c01_A.mp4" controls preload="metadata"></video></div><div class="cand"><span class="pill">R1 B</span>
+<video src="../_34_fable_pilot/recovered/s05_c01_B.mp4" controls preload="metadata"></video></div></div></details><h2>s06_c01 — V1C 尾帧接力</h2>
+<p class="meta">参考=s05 尾帧（落地状态） ｜ 衔接 diff=4.3 ｜ <span class='pill'>音频无BGM信号</span></p>
+<div class="cand"><span class="pill">V1C 尾帧接力</span> <span class="meta">vv_da6952ea</span>
+<br><video src="../_34_fable_pilot/recovered_v1c/s06_c01_V1C.mp4" controls preload="metadata"></video></div>
+<details open><summary>V1B 姿态参考版（对比：开场=sit_look_up）</summary>
+<div class="cand"><video src="../_34_fable_pilot/recovered_v1b/s06_c01_V1B.mp4" controls preload="metadata"></video></div></details>
+<details><summary>第一轮候选（开场=R3 站姿）</summary><div class="row"><div class="cand"><span class="pill">R1 A</span>
+<video src="../_34_fable_pilot/recovered/s06_c01_A.mp4" controls preload="metadata"></video></div><div class="cand"><span class="pill">R1 B</span>
+<video src="../_34_fable_pilot/recovered/s06_c01_B.mp4" controls preload="metadata"></video></div></div></details><h2>s07_c01 — V1C 尾帧接力</h2>
+<p class="meta">参考=s06 尾帧（坐地仰望态） ｜ 衔接 diff=3.3 ｜ <span class='pill warn'>⚠️BGM信号（后段）</span></p>
+<div class="cand"><span class="pill">V1C 尾帧接力</span> <span class="meta">vv_01ba3871</span>
+<br><video src="../_34_fable_pilot/recovered_v1c/s07_c01_V1C.mp4" controls preload="metadata"></video></div>
+<details open><summary>V1B 姿态参考版（对比：开场=turned_away）</summary>
+<div class="cand"><video src="../_34_fable_pilot/recovered_v1b/s07_c01_V1B.mp4" controls preload="metadata"></video></div></details>
+<details><summary>第一轮候选（开场=R3 站姿）</summary><div class="row"><div class="cand"><span class="pill">R1 A</span>
+<video src="../_34_fable_pilot/recovered/s07_c01_A.mp4" controls preload="metadata"></video></div><div class="cand"><span class="pill">R1 B</span>
+<video src="../_34_fable_pilot/recovered/s07_c01_B.mp4" controls preload="metadata"></video></div></div></details><p class="meta">本轮评价重点：①尾帧接力的镜间衔接（连续播放看）②接力链上狐狸身份是否漂移（逐代条件化风险）③
+每个衔接点的构图是否被尾帧拖死（发挥空间）④音频。点名问题组发 Claude Code，只重做该组。</p>
+</body></html>
