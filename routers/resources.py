@@ -937,6 +937,33 @@ async def human_look_review(project: str, look_id: str, req: HumanLookReviewRequ
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class DeriveLookReferenceRequest(BaseModel):
+    base_asset_id: str                     # i2i 基底（必须是该 Look 的 approved 参考）
+    prompt: str                            # 姿态/视角描述（英文；风格指令由服务侧拼接）
+    expected_revision: str                 # look 的 resource revision
+    seed: Optional[int] = None
+
+
+@router.post("/api/project/{project}/looks/{look_id}/derive")
+async def derive_look_reference(project: str, look_id: str,
+                                req: DeriveLookReferenceRequest):
+    """从已批准参考派生姿态/视角变体（34.md Human Gate 用户方向：同一身份的
+    多姿态参考库，按镜起始状态选用）。i2i 基底必须是 approved 参考（构造性同狐）；
+    产物登记为候选——不自动批准，vision 审查与人评门槛原样生效。"""
+    try:
+        receipt = await _write_service(project).derive_look_reference(
+            look_id, base_asset_id=req.base_asset_id, prompt=req.prompt,
+            expected_revision=req.expected_revision, seed=req.seed)
+        _raise_for_receipt(receipt)
+        return receipt
+    except HTTPException:
+        raise
+    except ResourceSchemaError as e:
+        raise HTTPException(status_code=500, detail=f"资源数据错误: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/api/project/{project}/looks/{look_id}/approve")
 async def approve_look_reference(project: str, look_id: str, req: ApproveLookReferenceRequest):
     """显式审批：把某张候选放入 approved_reference_asset_ids。

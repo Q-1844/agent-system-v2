@@ -853,6 +853,137 @@ class ResourceWriteService:
                                  revision=look_revision(lk), verified=verified,
                                  document_revision_after=doc_rev)
 
+    # ==================================================================
+    # Look 参考姿态/视角派生（34.md Human Gate 用户方向：同一只狐的多姿态参考库
+    # ——按镜起始状态选用，消除"每镜开场都复刻同一张参考"的准首帧锁）。
+    # i2i 基底必须是该 Look 的 approved 参考（身份构造性同源）；产物登记为候选
+    # （不自动批准——vision 审查与人评门槛原样生效）。
+    # ==================================================================
+    async def derive_look_reference(self, look_id: str, *, base_asset_id: str,
+                                    prompt: str, expected_revision: str,
+                                    seed: Optional[int] = None) -> dict:
+        op = "resource.derive_look_reference"
+        if not str(prompt or "").strip():
+            return self._receipt(op, ok=False, target=look_id, error="validation_error",
+                                 detail="prompt（姿态/视角描述）必填")
+        # ---- 阶段1：短锁验证 + 快照（OCC / base 资格 / 风格）----
+        async with self.store.write_lock():
+            doc = self.store.load()
+            lk = doc.looks.get(look_id)
+            if lk is None:
+                return self._receipt(op, ok=False, target=look_id, error="not_found",
+                                     detail=f"look 不存在: {look_id}")
+            cur = look_revision(lk)
+            if expected_revision != cur:
+                return self._stale_receipt(op, expected_revision, cur, lk.to_dict())
+            if base_asset_id not in lk.approved_reference_asset_ids:
+                return self._receipt(op, ok=False, target=look_id,
+                                     error="base_not_approved",
+                                     detail=(f"i2i 基底必须是该 Look 的 approved 参考"
+                                             f"（{base_asset_id} 不在 approved 列表）——"
+                                             "身份派生只从已批准资产出发"))
+            base = doc.reference_assets.get(base_asset_id)
+            if base is None:
+                return self._receipt(op, ok=False, target=look_id,
+                                     error="asset_not_found",
+                                     detail=f"reference asset 不存在: {base_asset_id}")
+            from src.visual_profile import load_profile_or_none
+            try:
+                visual_profile = load_profile_or_none(self.project_dir)
+            except Exception as e:
+                return self._receipt(op, ok=False, target=look_id,
+                                     error="visual_profile_unreadable", detail=str(e)[:200])
+            if visual_profile is None:
+                return self._receipt(op, ok=False, target=look_id,
+                                     error="project_visual_profile_required",
+                                     detail="项目未设置 ProjectVisualProfile（fail closed）")
+            from src.visual_profile.compiler import compile_project_style_instruction
+            full_prompt = f"{str(prompt).strip()} {compile_project_style_instruction(visual_profile)}".strip()
+            base_media = None
+            if getattr(base, "local", None):
+                from .generation import to_agnes_image_ref
+                base_media = to_agnes_image_ref(self.project_dir, url=None,
+                                                local=base.local)
+            base_media = base_media or getattr(base, "url", None)
+            if not base_media:
+                return self._receipt(op, ok=False, target=look_id,
+                                     error="base_media_unresolvable",
+                                     detail="基底资产无可读媒体（local/url 皆缺）")
+            project = ProjectStore(self.project_dir).load()
+            size_tier = project.style.size_tier or "1K"
+            ratio = "16:9"   # 视频参考与视频画幅同形（横版，避免竖版直立偏置）
+            snapshot_doc_rev = document_revision(doc)
+
+        # ---- 阶段2：无锁生成 ----
+        from deps import get_agnes_client
+        client = get_agnes_client()
+        generation_id = f"gld_{uuid.uuid4().hex[:12]}"
+        try:
+            result = await client.generate_image(
+                prompt=full_prompt, image_refs=[base_media],
+                size_tier=size_tier, ratio=ratio, seed=seed)
+        except Exception as e:
+            return self._receipt(op, ok=False, target=look_id,
+                                 error="provider_failed", detail=str(e)[:300])
+        url = (result or {}).get("url")
+        b64 = (result or {}).get("b64")
+        if not url and not b64:
+            return self._receipt(op, ok=False, target=look_id,
+                                 error="provider_failed",
+                                 detail="provider 未返回 url/b64（不伪造 asset）")
+        import base64 as _b64mod
+        import httpx as _httpx
+        if b64:
+            data = _b64mod.b64decode(b64)
+        else:
+            async with _httpx.AsyncClient(timeout=120) as hc:
+                resp = await hc.get(url)
+                resp.raise_for_status()
+                data = resp.content
+
+        # ---- 阶段3：短锁提交（重验证 + 注册 + attach + record）----
+        async with self.store.write_lock():
+            doc2 = self.store.load()
+            lk2 = doc2.looks.get(look_id)
+            if lk2 is None or look_revision(lk2) != cur:
+                return self._receipt(op, ok=False, target=look_id,
+                                     error="stale_revision",
+                                     detail="生成窗口内 Look 已变化——候选不提交")
+            files = save_candidate_files(self.project_dir, look_id, generation_id, [data])
+            local_rel = Path(files[0]).as_posix() if files else None
+            asset = ReferenceAsset(
+                asset_id=new_reference_asset_id(),
+                local=local_rel, url=url,
+                checksum=sha256_bytes(data),
+                view="", purpose="look_reference_derive",
+                background_type="", source="look_reference_derive")
+            doc2.reference_assets[asset.asset_id] = asset
+            lk2.reference_asset_ids.append(asset.asset_id)
+            lk2.updated_at = time.time()
+            self.store.save(doc2)
+            doc_rev = self._verify_after_save()
+            reloaded = self.store.load()
+            verified = (asset.asset_id in reloaded.reference_assets
+                        and asset.asset_id in reloaded.looks[look_id].reference_asset_ids)
+            from . import generation_records as _gr
+            _gr.append_record(self.project_dir, {
+                "generation_id": generation_id, "operation": op, "look_id": look_id,
+                "base_asset_id": base_asset_id, "prompt": full_prompt,
+                "model": client.models.get("image"), "seed": seed,
+                "candidate_asset_ids": [asset.asset_id],
+                "candidate_files": files, "candidate_urls": [url] if url else [],
+                "started_at": None, "completed_at": time.time(),
+                "status": "committed", "error": None, "verified": verified,
+                "resource_document_revision_after": doc_rev,
+                "detail": None,
+            })
+            return self._receipt(op, ok=True, target=asset.asset_id,
+                                 before=None, after=asset.to_dict(),
+                                 revision=reference_asset_revision(asset),
+                                 verified=verified,
+                                 document_revision_after=doc_rev,
+                                 generation_id=generation_id, look_id=look_id)
+
     async def approve_look_reference(self, look_id: str, asset_id: str, *,
                                      expected_revision: str,
                                      set_cover: Optional[bool] = None) -> dict:

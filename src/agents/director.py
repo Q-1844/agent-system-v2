@@ -187,6 +187,7 @@ SHOT_UPDATABLE_FIELDS = (
     "video_preserve_elements", "video_preserve_custom",
     "note",
     "link_mode",   # Phase D §25.C：i2v | keyframes（尾帧生产前置）；34.md §13 增 multi
+    "video_reference_asset_id",   # 34.md Human Gate：multi 按镜参考（须 ∈ look approved）
     "source_shot_id",
 )
 _LIST_FIELDS = ("characters", "required_elements", "preserve_elements",

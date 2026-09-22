@@ -346,6 +346,7 @@ _SHOT_WRITABLE_FIELDS = (
     "composition", "lighting", "motion", "motion_pace",
     "environment_motion", "action_sequence",
     "performance_intent",   # C2 22.md §13：表演意图（dict{emotion,intensity,note}）
+    "video_reference_asset_id",   # 34.md Human Gate：multi 按镜参考选择（adapter 校验资格）
     "opening_state", "important_details", "required_elements",
     "last_frame_description", "end_state", "frame_change",
     "add_elements", "remove_elements", "end_composition",

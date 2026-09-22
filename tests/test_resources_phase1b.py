@@ -499,6 +499,8 @@ def test_api_read_only_no_mutation_endpoints(client):
         ("POST", "/api/project/{project}/looks/{look_id}/references"),
         ("POST", "/api/project/{project}/looks/{look_id}/review/human"),
         ("POST", "/api/project/{project}/reference-assets/{asset_id}/rehost"),
+        # 34.md Human Gate：从 approved 参考派生姿态/视角变体（同一身份多姿态参考库）
+        ("POST", "/api/project/{project}/looks/{look_id}/derive"),
     }
     write_routes = []
     for route in rres.router.routes:

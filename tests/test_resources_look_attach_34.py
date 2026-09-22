@@ -140,3 +140,59 @@ def test_rehost_reference_asset(tmp_path, monkeypatch):
     r4 = run(ws.rehost_reference_asset(aid, expected_document_revision=rev))
     assert r4["ok"] is False and r4["error"] == "stale_revision"
     _clear_for_test()
+
+
+def test_derive_look_reference(tmp_path, monkeypatch):
+    """34.md Human Gate：从 approved 参考派生姿态/视角变体——基底资格校验
+    （只许 approved）、候选登记进 look（不自动批准）、OCC、诚实 record。"""
+    from tests.test_resources_phase1c1 import make_project
+    _clear_for_test()
+    pdir = make_project(tmp_path, with_character=True)
+    ws = ResourceWriteService(pdir, pdir.name)
+    rev = document_revision(ws.store.load())
+    r = run(ws.register_reference_asset(url="https://cos.example/r3.png",
+                                        expected_document_revision=rev))
+    r2 = run(ws.create_look(character_name="Alice",
+                            appearance_description="quadruped red fox",
+                            expected_document_revision=r["document_revision_after"]))
+    look_id = r2["target"]
+    # base 不在 approved → 拒绝（派生只从已批准身份出发）
+    r3 = run(ws.derive_look_reference(look_id, base_asset_id=r["target"],
+                                      prompt="walking side profile",
+                                      expected_revision=r2["revision"]))
+    assert r3["ok"] is False and r3["error"] == "base_not_approved"
+
+    # 把资产放入 approved 后再派生（直接构造 approved 状态——真实链走 review+approve）
+    doc = ws.store.load()
+    doc.looks[look_id].approved_reference_asset_ids.append(r["target"])
+    ws.store.save(doc)
+
+    class _FakeClient:
+        models = {"image": "agnes-image-test"}
+        async def generate_image(self, *, prompt, image_refs=None, size_tier="1K",
+                                 ratio="16:9", seed=None, **kw):
+            assert image_refs and image_refs[0].startswith("data:") or image_refs[0].startswith("http")
+            assert "walking side profile" in prompt
+            return {"url": "https://cos.example/derived.png",
+                    "b64": __import__("base64").b64encode(b"PNGDATA").decode()}
+    import deps as _deps
+    monkeypatch.setattr(_deps, "get_agnes_client", lambda: _FakeClient())
+
+    lk_now = ws.store.load().looks[look_id]
+    from src.resources.models import look_revision
+    r5 = run(ws.derive_look_reference(look_id, base_asset_id=r["target"],
+                                      prompt="walking side profile",
+                                      expected_revision=look_revision(lk_now)))
+    assert r5["ok"], r5
+    new_aid = r5["target"]
+    back = ResourceStore(pdir, pdir.name).load()
+    assert new_aid in back.reference_assets
+    assert new_aid in back.looks[look_id].reference_asset_ids
+    # 候选不自动批准（审批门槛不变）
+    assert new_aid not in back.looks[look_id].approved_reference_asset_ids
+    # 空 prompt → 拒绝
+    r6 = run(ws.derive_look_reference(look_id, base_asset_id=r["target"],
+                                      prompt="  ",
+                                      expected_revision=r5["revision"]))
+    assert r6["ok"] is False and r6["error"] == "validation_error"
+    _clear_for_test()

@@ -174,6 +174,8 @@ def _video_creative_dict(shot: Any) -> Dict[str, Any]:
         "transition_description": str(getattr(shot, "transition_description", "") or ""),
         "video_preserve_elements": list(getattr(shot, "video_preserve_elements", None) or []),
         "video_preserve_custom": str(getattr(shot, "video_preserve_custom", "") or ""),
+        # 34.md Human Gate：multi 按镜参考选择是实际生成输入——进 creative 指纹
+        "video_reference_asset_id": str(getattr(shot, "video_reference_asset_id", "") or ""),
         "characters": list(getattr(shot, "characters", None) or []),
         "video_prompt_override": str(getattr(shot, "video_prompt_override", "") or ""),
         "video_prompt_en": str(getattr(shot, "video_prompt_en", "") or ""),

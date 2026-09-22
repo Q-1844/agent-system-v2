@@ -349,6 +349,10 @@ class Shot:
 
     # ---- 生成策略 ----
     link_mode: str = LinkMode.I2V.value
+    # 34.md Human Gate：multi 模式的视频参考按镜选择（必须 ∈ cast look 的 approved
+    # 参考集；空/非法 → 回退 look hero 的确定性规则）。消费与校验见
+    # video_adapter._select_video_reference；参与 video_prompt_creative_fingerprint。
+    video_reference_asset_id: Optional[str] = None
     seed: Optional[int] = None
 
     # ---- 产物 ----

@@ -180,9 +180,14 @@ def _resolve_video_reference_media(rdoc: Any, asset_id: str) -> str:
     return url
 
 
-def _select_video_reference(pack: dict) -> Dict[str, Any]:
+def _select_video_reference(pack: dict, shot: Any = None,
+                            diagnostics: Optional[List[Dict[str, Any]]] = None
+                            ) -> Dict[str, Any]:
     """multi 槽参考的确定性选择（34.md §13：优先已验证的 identity reference 语义）。
     选择规则（确定性，无 LLM、无 glob）：
+      0. shot.video_reference_asset_id 按镜选择（34.md Human Gate）——必须命中本
+         pack 的 character_look 候选（非法/不属于本镜 cast → 记 diagnostic 并回落
+         下面的确定性规则，绝不静默采用无法证明属于本镜的资产）；
       1. cast 角色 look 参考（source_type=character_look）中 priority=primary 者
          （= look 的 hero approved 参考——R3 式身份参考的正式落点）；
       2. 否则任一 character_look 参考；
@@ -192,6 +197,19 @@ def _select_video_reference(pack: dict) -> Dict[str, Any]:
     refs = [r for r in (pack.get("references") or [])
             if r.get("reference_asset_id")]
     char = [r for r in refs if r.get("source_type") == "character_look"]
+    override = str(getattr(shot, "video_reference_asset_id", "") or "").strip() \
+        if shot is not None else ""
+    if override:
+        match = next((r for r in char
+                      if r.get("reference_asset_id") == override), None)
+        if match is not None:
+            return match
+        if diagnostics is not None:
+            # override 非法：显式 diagnostic 后回落（不静默、不阻断）
+            diagnostics.append({
+                "reason": "video_reference_override_invalid",
+                "detail": {"video_reference_asset_id": override,
+                           "hint": "override 不属于本镜 cast 的 look 候选集——回落确定性规则"}})
     for r in char:
         if r.get("priority") == "primary":
             return r
@@ -242,7 +260,7 @@ def build_bound_video_input(project_dir, project: Any, shot: Any, *,
     _multi_ref_item: Optional[Dict[str, Any]] = None
     if mode == "multi":
         from src.resources.store import ResourceStore as _RS
-        _multi_ref_item = _select_video_reference(pack)
+        _multi_ref_item = _select_video_reference(pack, shot, diagnostics)
         rdoc0 = _RS(project_dir, project_dir.name).load()
         video_ref_url = _resolve_video_reference_media(
             rdoc0, str(_multi_ref_item.get("reference_asset_id") or ""))
