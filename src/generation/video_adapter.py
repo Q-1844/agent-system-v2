@@ -132,6 +132,39 @@ def _effective_relay_first_frame(project: Any, shot: Any) -> str:
     return ""
 
 
+# 34.md V1C（Human Gate 用户方向）：multi 按镜参考的尾帧接力哨兵——
+# shot.video_reference_asset_id == "prev_tail" → 参考 = 影片顺序上一镜的
+# 实际视频末帧（Phase 6A 自动提取+托管）。不要求逐像素衔接（那会锁死模型
+# 发挥），只钉住"上一镜结尾的狐狸位置状态"作为开场语义。接力解析是实际
+# 生成依赖——build 与 freshness（compute_current_dependency_keys）两路对称纳入。
+VIDEO_REFERENCE_RELAY = "prev_tail"
+
+
+def resolve_multi_relay_source(project: Any, shot: Any) -> Optional[Dict[str, Any]]:
+    """解析 multi 尾帧接力来源：影片顺序（scenes→shots 既有顺序）的上一镜 +
+    其 video_end_frame（url/来源版本）。非 relay / 无上一镜 / 末帧未就绪 → None。"""
+    if str(getattr(shot, "video_reference_asset_id", "") or "") != VIDEO_REFERENCE_RELAY:
+        return None
+    prev = None
+    for sc in (getattr(project, "scenes", None) or []):
+        shots = list(getattr(sc, "shots", None) or [])
+        for idx, s in enumerate(shots):
+            if s.shot_id == shot.shot_id and idx > 0:
+                prev = shots[idx - 1]
+                break
+        if prev is not None:
+            break
+    if prev is None:
+        return None
+    ef = getattr(prev, "video_end_frame", None)
+    url = (getattr(ef, "url", None) or "") if ef is not None else ""
+    if not url:
+        return None
+    return {"source_shot_id": prev.shot_id,
+            "end_source_version": getattr(prev, "video_end_source_version", None),
+            "url": url}
+
+
 def _resolve_boundary_frame(shot: Any, pack_basis: dict, slot: str,
                             diagnostics: List[Dict[str, Any]]) -> str:
     """§16/§17：authoritative selection → URL + freshness gate。
@@ -258,7 +291,21 @@ def build_bound_video_input(project_dir, project: Any, shot: Any, *,
     # ---- multi（34.md §13）：单语义参考直生，无 boundary frame 消费 ----
     video_ref_url = ""
     _multi_ref_item: Optional[Dict[str, Any]] = None
+    _relay_item: Optional[Dict[str, Any]] = None
     if mode == "multi":
+        from src.generation.video_adapter import resolve_multi_relay_source
+        _relay_item = resolve_multi_relay_source(project, shot)
+    if mode == "multi" and _relay_item is not None:
+        # V1C 尾帧接力：参考 = 影片顺序上一镜的实际视频末帧（Phase 6A 提取+托管）。
+        video_ref_url = _relay_item["url"]
+        diagnostics.append({
+            "reason": "multi_relay_reference",
+            "detail": {"source_shot_id": _relay_item["source_shot_id"],
+                       "end_source_version": _relay_item.get("end_source_version"),
+                       "hint": "尾帧接力（用户方向）：参考=上一镜实际视频末帧——开场"
+                               "位置状态衔接上一镜结尾，动作由 prompt 驱动；不追求"
+                               "逐像素一致（那会锁死模型发挥）"}})
+    elif mode == "multi":
         from src.resources.store import ResourceStore as _RS
         _multi_ref_item = _select_video_reference(pack, shot, diagnostics)
         rdoc0 = _RS(project_dir, project_dir.name).load()
@@ -323,9 +370,16 @@ def build_bound_video_input(project_dir, project: Any, shot: Any, *,
             build_native_av_pack,
         )
         from src.generation.av_prompt_compiler import compile_native_av_prompt
+        _vb = bound_visual_basis(basis)
+        if _relay_item is not None:
+            # V1C 尾帧接力是实际生成依赖——进 visual basis 指纹（freshness 对称：
+            # compute_current_dependency_keys 同规则重算）
+            _vb = dict(_vb)
+            _vb["relay"] = {"source_shot_id": _relay_item["source_shot_id"],
+                            "end_source_version": _relay_item.get("end_source_version")}
         nav_pack = build_native_av_pack(
             project_dir, project, shot,
-            visual_route="bound", visual_basis=bound_visual_basis(basis),
+            visual_route="bound", visual_basis=_vb,
             provider_options=dict(provider_options or {}) | {"mode": mode},
             language_override=native_dialogue_language)
         prompt = compile_native_av_prompt(nav_pack, prompt)
@@ -354,7 +408,16 @@ def build_bound_video_input(project_dir, project: Any, shot: Any, *,
 
     used_ids: List[str] = []
     roles: List[Dict[str, Any]] = []
-    if mode == "multi":
+    if mode == "multi" and _relay_item is not None:
+        used_ids.append(f"relay:{_relay_item['source_shot_id']}:"
+                        f"{_relay_item.get('end_source_version') or ''}")
+        roles.append({"slot": "multi_reference", "temporal_semantics": "throughout",
+                      "candidate_id": None, "reference_asset_id": None,
+                      "source_type": "prev_tail_relay",
+                      "source_shot_id": _relay_item["source_shot_id"],
+                      "end_source_version": _relay_item.get("end_source_version"),
+                      "batch_id": None})
+    elif mode == "multi":
         used_ids.append(str(_multi_ref_item.get("reference_asset_id") or ""))
         roles.append({"slot": "multi_reference", "temporal_semantics": "throughout",
                       "candidate_id": None,

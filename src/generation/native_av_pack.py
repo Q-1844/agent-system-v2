@@ -397,6 +397,15 @@ def compute_current_dependency_keys(project_dir, project: Any, shot: Any, *,
                 validity.get("resolved_dependencies") or {}).get(
                     "scene_instance_view_id"),
         }
+        # 34.md V1C：multi 尾帧接力是实际生成依赖——与 video_adapter build 侧
+        # 同规则重算（resolve_multi_relay_source），relay 信息进 visual 指纹。
+        if str(getattr(shot, "link_mode", "") or "") == "multi":
+            from src.generation.video_adapter import resolve_multi_relay_source
+            relay = resolve_multi_relay_source(project, shot)
+            if relay is not None:
+                visual = dict(visual)
+                visual["relay"] = {"source_shot_id": relay["source_shot_id"],
+                                   "end_source_version": relay.get("end_source_version")}
     else:
         mode = ("keyframes" if shot.link_mode == "keyframes"
                 else "multi" if shot.link_mode == "multi" else "i2v")

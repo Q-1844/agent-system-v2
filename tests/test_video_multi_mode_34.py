@@ -253,3 +253,81 @@ def _link_sciv_asset(pdir, ids, asset_id):
         if sciv.get("scene_instance_id") == ids["inst"]:
             sciv["reference_asset_id"] = asset_id
     p.write_text(_json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def test_multi_relay_prev_tail_reference(venv):
+    """34.md V1C：video_reference_asset_id="prev_tail" → multi 参考=影片顺序
+    上一镜的实际视频末帧（Phase 6A 提取+托管）；provenance 记 prev_tail_relay；
+    freshness 对称（build 侧与重算侧同指纹）。"""
+    pdir, ids, svc, fake = venv
+    _bind(svc, inst=ids["inst"], view=ids["view_a"])
+    # 夹具只有 s01——补建影片顺序第二镜 s02_c01（relay 的目标镜）
+    from src.core.models import Scene, Shot
+    proj = ProjectStore(pdir).load()
+    proj.scenes[0].shots.append(Shot(shot_id="s02_c01", scene_id="s01", index=2))
+    ProjectStore(pdir).save(proj)
+    r_s2 = _bind(svc, shot_id="s02_c01", inst=ids["inst"], view=ids["view_a"],
+                 characters=[])
+    assert r_s2["ok"], r_s2
+    # s01 末帧（模拟 Phase 6A 提取+托管产物）
+    from src.core.models import Asset, ShotStatus
+    # 影片顺序：夹具场景含 s01_c01(0), s01_c02(1) + 追加的 s02_c01(2)
+    # → relay 前一镜 = s01_c02（跨镜解析按 film order，非 shot_id 数字）
+    def _mut(s):
+        s.video_end_frame = Asset(url="http://example/s01_tail.png",
+                                  status=ShotStatus.DONE.value)
+        s.video_end_source_version = "vv_prev000001"
+    ProjectStore(pdir).update_shot("s01_c02", _mut)
+    def _mut2(s):
+        s.video_reference_asset_id = "prev_tail"
+        s.link_mode = "multi"
+        s.video.num_frames = 73
+        s.video.frame_rate = 24
+    ProjectStore(pdir).update_shot("s02_c01", _mut2)
+    project = _load_project(pdir)
+    shot = project.get_shot("s02_c01")
+    req = build_bound_video_input(pdir, project, shot)
+    assert req.provider_mode == "multi"
+    assert req.video_reference == "http://example/s01_tail.png"
+    assert req.first_frame == "" and req.last_frame is None
+    reasons = [d["reason"] for d in req.diagnostics]
+    assert "multi_relay_reference" in reasons
+    assert req.semantic_roles[0]["source_type"] == "prev_tail_relay"
+    assert req.semantic_roles[0]["source_shot_id"] == "s01_c02"
+    assert req.used_reference_ids == ["relay:s01_c02:vv_prev000001"]
+    # freshness 对称：build 的 visual_basis_fingerprint == 重算侧
+    from src.generation.native_av_pack import compute_current_dependency_keys
+    keys = compute_current_dependency_keys(pdir, project, shot)
+    assert req.generation_basis["visual_basis_fingerprint"] == \
+        keys["visual_basis_fingerprint"]
+
+
+def test_multi_relay_prev_missing_end_frame_falls_back(venv):
+    """上一镜无末帧 → relay 解析 None → 回落确定性 look hero 规则（不中断）。"""
+    pdir, ids, svc, fake = venv
+    _bind(svc, inst=ids["inst"], view=ids["view_a"])
+    from src.core.models import Shot
+    proj = ProjectStore(pdir).load()
+    proj.scenes[0].shots.append(Shot(shot_id="s02_c01", scene_id="s01", index=2))
+    ProjectStore(pdir).save(proj)
+    r_s2 = _bind(svc, shot_id="s02_c01", inst=ids["inst"], view=ids["view_a"],
+                 characters=[])
+    assert r_s2["ok"], r_s2
+    # 场景参考回退需要 SIV 资产带公网 URL（同 scene-only 测试手法）
+    from src.resources.models import ReferenceAsset
+    rd = ResourceStore(pdir, pdir.name).load()
+    rd.reference_assets["ref_sciv0000001"] = ReferenceAsset(
+        asset_id="ref_sciv0000001", url="http://example/sciv.png")
+    ResourceStore(pdir, pdir.name).save(rd)
+    _link_sciv_asset(pdir, ids, "ref_sciv0000001")
+    def _mut2(s):
+        s.video_reference_asset_id = "prev_tail"
+        s.link_mode = "multi"
+        s.video.num_frames = 73
+        s.video.frame_rate = 24
+    ProjectStore(pdir).update_shot("s02_c01", _mut2)
+    req = build_bound_video_input(pdir, _load_project(pdir),
+                                  _load_project(pdir).get_shot("s02_c01"))
+    # s01_c02 无 video_end_frame → relay=None → 空 cast 镜回落场景参考（确定性规则）
+    assert req.video_reference == "http://example/sciv.png"
+    assert req.semantic_roles[0]["source_type"] == "scene_instance_view"
