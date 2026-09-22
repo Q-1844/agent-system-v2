@@ -331,3 +331,33 @@ def test_multi_relay_prev_missing_end_frame_falls_back(venv):
     # s01_c02 无 video_end_frame → relay=None → 空 cast 镜回落场景参考（确定性规则）
     assert req.video_reference == "http://example/sciv.png"
     assert req.semantic_roles[0]["source_type"] == "scene_instance_view"
+
+
+def test_multi_relay_cross_scene_resolution():
+    """跨场景接力解析（Pilot 实际形态：每段 1 镜）——上一镜=上一场景最后一镜。
+    V1C 首跑实证 bug 回归：同场景 idx>0 找 prev → 每段 1 镜时永远 None →
+    静默回落 hero。resolver 按影片顺序展平解析（完整 build 路径由同场景
+    relay 测试覆盖）。"""
+    from src.core.models import Project, Scene, Shot, Asset, ShotStatus
+    from src.generation.video_adapter import resolve_multi_relay_source
+    proj = Project(name="p")
+    s1 = Scene(scene_id="s01", shots=[Shot(shot_id="s01_c01", scene_id="s01", index=1)])
+    s2 = Scene(scene_id="s02", shots=[Shot(shot_id="s02_c01", scene_id="s02", index=1)])
+    proj.scenes = [s1, s2]
+    s1.shots[0].video_end_frame = Asset(url="http://example/s01_tail.png",
+                                        status=ShotStatus.DONE.value)
+    s1.shots[0].video_end_source_version = "vv_prev000001"
+    target = s2.shots[0]
+    target.video_reference_asset_id = "prev_tail"
+    r = resolve_multi_relay_source(proj, target)
+    assert r is not None
+    assert r["source_shot_id"] == "s01_c01"
+    assert r["url"] == "http://example/s01_tail.png"
+    # 非 relay / 首镜无上一镜 → None
+    target.video_reference_asset_id = None
+    assert resolve_multi_relay_source(proj, target) is None
+    first = s1.shots[0]
+    first.video_reference_asset_id = "prev_tail"
+    assert resolve_multi_relay_source(proj, first) is None
+
+

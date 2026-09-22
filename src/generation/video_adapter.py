@@ -141,18 +141,21 @@ VIDEO_REFERENCE_RELAY = "prev_tail"
 
 
 def resolve_multi_relay_source(project: Any, shot: Any) -> Optional[Dict[str, Any]]:
-    """解析 multi 尾帧接力来源：影片顺序（scenes→shots 既有顺序）的上一镜 +
-    其 video_end_frame（url/来源版本）。非 relay / 无上一镜 / 末帧未就绪 → None。"""
+    """解析 multi 尾帧接力来源：影片顺序（scenes→shots 展平顺序）的上一镜 +
+    其 video_end_frame（url/来源版本）。⚠️ 跨场景衔接是常态（本 Pilot 每段
+    1 镜）——上一镜 = 展平序列的前一项，绝不仅在同场景内找（V1C 首跑实证
+    的 bug：idx>0 同场景找 prev → 每段 1 镜时永远 None → 静默回落 hero）。
+    非 relay / 无上一镜 / 末帧未就绪 → None。"""
     if str(getattr(shot, "video_reference_asset_id", "") or "") != VIDEO_REFERENCE_RELAY:
         return None
-    prev = None
+    flat: List[Any] = []
     for sc in (getattr(project, "scenes", None) or []):
-        shots = list(getattr(sc, "shots", None) or [])
-        for idx, s in enumerate(shots):
-            if s.shot_id == shot.shot_id and idx > 0:
-                prev = shots[idx - 1]
-                break
-        if prev is not None:
+        flat.extend(getattr(sc, "shots", None) or [])
+    prev = None
+    for idx, s in enumerate(flat):
+        if s.shot_id == shot.shot_id:
+            if idx > 0:
+                prev = flat[idx - 1]
             break
     if prev is None:
         return None
