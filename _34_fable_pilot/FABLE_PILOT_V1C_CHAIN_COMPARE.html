@@ -25,7 +25,7 @@ td.good{color:#7CFC98}td.mid{color:#ffd166}td.bad{color:#ff7b72}.note{color:#888
 </div>
 
 <h2>衔接 diff 矩阵（机器量化）</h2>
-<table class="mtx"><tr><th>衔接链接（本镜首帧 vs 上镜末帧）</th><th>无接力对照（bug 白跑批）</th><th>接力链 1（09-23 00:19）</th><th>接力链 2（09-23 13:xx 本轮）</th></tr><tr><td>s02_c01<span class='note'> 参考=s01 尾帧（空园土路）——狐狸从画外入画</span></td><td class='bad'>57.8</td><td class='good'>4.2</td><td class='good'>4.4</td></tr><tr><td>s03_c01<span class='note'> 参考=s02 尾帧（行走中）</span></td><td class='bad'>49.3</td><td class='mid'>27.7</td><td class='mid'>25.4</td></tr><tr><td>s04_c01<span class='note'> 参考=s03 尾帧（CU 状态）</span></td><td class='bad'>49.7</td><td class='good'>3.5</td><td class='good'>3.6</td></tr><tr><td>s05_c01<span class='note'> 参考=s04 尾帧（蓄力结束态）</span></td><td class='bad'>37.7</td><td class='good'>8.5</td><td class='good'>6.8</td></tr><tr><td>s06_c01<span class='note'> 参考=s05 尾帧（落地状态）</span></td><td class='mid'>18.3</td><td class='good'>4.3</td><td class='bad'>—</td></tr><tr><td>s07_c01<span class='note'> 参考=s06 尾帧（坐地仰望态）</span></td><td class='bad'>61.4</td><td class='good'>3.3</td><td class='bad'>—</td></tr></table>
+<table class="mtx"><tr><th>衔接链接（本镜首帧 vs 上镜末帧）</th><th>无接力对照（bug 白跑批）</th><th>接力链 1（09-23 00:19）</th><th>接力链 2（09-23 13:xx 本轮）</th></tr><tr><td>s02_c01<span class='note'> 参考=s01 尾帧（空园土路）——狐狸从画外入画</span></td><td class='bad'>57.8</td><td class='good'>4.2</td><td class='good'>4.4</td></tr><tr><td>s03_c01<span class='note'> 参考=s02 尾帧（行走中）</span></td><td class='bad'>49.3</td><td class='mid'>27.7</td><td class='mid'>25.4</td></tr><tr><td>s04_c01<span class='note'> 参考=s03 尾帧（CU 状态）</span></td><td class='bad'>49.7</td><td class='good'>3.5</td><td class='good'>3.6</td></tr><tr><td>s05_c01<span class='note'> 参考=s04 尾帧（蓄力结束态）</span></td><td class='bad'>37.7</td><td class='good'>8.5</td><td class='good'>6.8</td></tr><tr><td>s06_c01<span class='note'> 参考=s05 尾帧（落地状态）</span></td><td class='mid'>18.3</td><td class='good'>4.3</td><td class='good'>3.9</td></tr><tr><td>s07_c01<span class='note'> 参考=s06 尾帧（坐地仰望态）</span></td><td class='bad'>61.4</td><td class='good'>3.3</td><td class='good'>3.3</td></tr></table>
 <div class="meta">v1c_fallback 列=resolver bug 白跑批（首帧逐像素同 hero 开场）——历史事故批，数值上恰构成
 「无接力」对照组；relay1/relay2=修复后独立接力链。s03 链接天然偏高（上镜尾=行走中态，开场重构图），
 两条接力链一致复现（27.7/25.4），非回落信号。</div>
@@ -86,9 +86,9 @@ td.good{color:#7CFC98}td.mid{color:#ffd166}td.bad{color:#ff7b72}.note{color:#888
 <span class="pill">5.0s</span><br><video src="recovered_v1c/v1c_relay1/s06_c01_v1c_relay1.mp4" controls preload="metadata"></video>
 <div class="note">首帧 <img src="_frames/v1c_relay1/s06_c01_ff.png"> 末帧 <img src="_frames/v1c_relay1/s06_c01_tail.png"></div>
 <div class="note">version=vv_da6952ea</div></div><div class="cand"><b>接力链 2（09-23 13:xx 本轮）</b>
-<span class="pill warn">衔接 —</span>
-<span class="pill">—s</span><br><div class="miss">缺档</div>
-<div class="note">首帧  末帧 </div>
+<span class="pill warn">衔接 3.9</span>
+<span class="pill">—s</span><br><video src="recovered_v1c/v1c_relay2/s06_c01_v1c_relay2.mp4" controls preload="metadata"></video>
+<div class="note">首帧 <img src="_frames/v1c_relay2/s06_c01_ff.png"> 末帧 <img src="_frames/v1c_relay2/s06_c01_tail.png"></div>
 <div class="note">version=—</div></div></div><h2>s07_c01 <span class='note'>参考=s06 尾帧（坐地仰望态） ｜ 漂移观察：坐地仰望：链尾=累计漂移终态</span></h2><div class='cols'><div class="cand"><b>无接力对照（bug 白跑批）</b>
 <span class="pill warn">衔接 61.4</span>
 <span class="pill">5.0s</span><br><video src="recovered_v1c/v1c_fallback/s07_c01_v1c_fallback.mp4" controls preload="metadata"></video>
@@ -98,9 +98,9 @@ td.good{color:#7CFC98}td.mid{color:#ffd166}td.bad{color:#ff7b72}.note{color:#888
 <span class="pill">5.0s</span><br><video src="recovered_v1c/v1c_relay1/s07_c01_v1c_relay1.mp4" controls preload="metadata"></video>
 <div class="note">首帧 <img src="_frames/v1c_relay1/s07_c01_ff.png"> 末帧 <img src="_frames/v1c_relay1/s07_c01_tail.png"></div>
 <div class="note">version=vv_01ba3871</div></div><div class="cand"><b>接力链 2（09-23 13:xx 本轮）</b>
-<span class="pill warn">衔接 —</span>
-<span class="pill">—s</span><br><div class="miss">缺档</div>
-<div class="note">首帧  末帧 </div>
+<span class="pill warn">衔接 3.3</span>
+<span class="pill">—s</span><br><video src="recovered_v1c/v1c_relay2/s07_c01_v1c_relay2.mp4" controls preload="metadata"></video>
+<div class="note">首帧 <img src="_frames/v1c_relay2/s07_c01_ff.png"> 末帧 <img src="_frames/v1c_relay2/s07_c01_tail.png"></div>
 <div class="note">version=—</div></div></div>
 <h2>人评（漂移数据扩充轮）</h2>
 <div class="meta">逐镜 ⭐/✅/❌ + 备注，重点：①同镜跨链漂移是否复现（relay1 vs relay2 同镜对比）

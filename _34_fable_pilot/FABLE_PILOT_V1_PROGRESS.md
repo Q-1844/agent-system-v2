@@ -177,8 +177,8 @@ HEAD `3832ed0` 生产视频链真实能力：
 | s03←s02 | 49.3 | 27.7 | 25.4 |
 | s04←s03 | 49.7 | 3.5 | 3.6 |
 | s05←s04 | 37.7 | 8.5 | 6.8 |
-| s06←s05 | 18.3 | 4.3 | ⏳ 待补 |
-| s07←s06 | 61.4 | 3.3 | ⏳ 排队 |
+| s06←s05 | 18.3 | 4.3 | 3.9 |
+| s07←s06 | 61.4 | 3.3 | 3.3 |
 
 \* **历史修正（本轮机器证实）**：09-22 23:48「V1C 首跑」实为 resolver bug 白跑批（六镜首帧互 diff≈1.0=静默回落 hero），重标 `v1c_fallback`，数值上构成免费的无接力对照组。
 
@@ -191,3 +191,11 @@ HEAD `3832ed0` 生产视频链真实能力：
 - 评审站 :8779 独立进程常驻（脱离会话，防内存压力误杀）；`FABLE_PILOT_V1C_CHAIN_COMPARE.html` 三列对比可评审
 
 **产物**：`_34_chain_run.py`（断点续跑+金丝雀+逐镜量化）/ `_34_chain_analysis.py`（历史整备+统一量化）/ `_34_build_chain_gallery.py` / `chain_metrics.json` / 三列对比 Gallery / per-run 视频存档（recovered_v1c/{v1c_fallback,v1c_relay1,v1c_relay2}）。
+
+### §九 收口补记（同日 23:45）——6/6 补齐 + Pages 图床实证
+
+- **imgbb 故障根因确诊（只读诊断）**：i.ibb.co 在中国线路被 SNI 级域名阻断（同 IP 换 SNI 即通、TLS 握手被杀、任意对象全灭、上传 key 亦被拒），非宕机非我方回归；Agnes 侧自述抓图 read timeout=30s。
+- **替代图床落地**：`Q-1844/agnes-frame-host` 公开仓库 + GitHub Pages（`<user>.github.io`）。实测：raw.githubusercontent.com 仅 2/10 可达（弃用）；`github.io` 路由健康；尾帧 JPEG q88（168KB，PNG 的 1/6——PNG 1MB 在晚高峰吞吐下会撞 Agnes 30s 抓图超时，JPEG 5 连验收全过）。
+- **s06/s07 补齐流程（新图床首证）**：抽末帧→JPEG→push→轮询 Pages 200→`_34_set_relay_url.py` 手术改接力参考 URL（store.update_shot 原子写，freshness 只看 version 不受影响）→ 单镜补跑。s06 生成成功=Agnes 服务端实际抓取 Pages URL 实证。
+- **最终 6/6**：[4.4, 25.4, 3.6, 6.8, 3.9, 3.3]——与 relay1 逐链接最大偏差 1.7，衔接复现性铁证。
+- **系统固化（下一轮，待用户确认范围）**：ImageHost 家族新增 github_pages kind（~60 行+配置+回归）或驱动内置「抽帧→JPEG→上传→轮询」；imgbb 退役。

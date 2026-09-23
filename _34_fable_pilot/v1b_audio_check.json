@@ -1,0 +1,32 @@
+{
+ "s02_c01_V1B": {
+  "musical": 0.0,
+  "rms": -45.6,
+  "onsets": 0.0
+ },
+ "s03_c01_V1B": {
+  "musical": 0.0,
+  "rms": -50.8,
+  "onsets": 0.0
+ },
+ "s04_c01_V1B": {
+  "musical": 0.41,
+  "rms": -42.9,
+  "onsets": 0.0
+ },
+ "s05_c01_V1B": {
+  "musical": 0.038,
+  "rms": -38.3,
+  "onsets": 1.19
+ },
+ "s06_c01_V1B": {
+  "musical": 0.0,
+  "rms": -46.3,
+  "onsets": 0.0
+ },
+ "s07_c01_V1B": {
+  "musical": 0.058,
+  "rms": -50.3,
+  "onsets": 0.0
+ }
+}

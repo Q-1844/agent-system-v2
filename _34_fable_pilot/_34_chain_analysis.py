@@ -50,13 +50,19 @@ def mae(a, b, w=128, h=128):
     return sum(abs(x - y) for x, y in zip(pa, pb)) / len(pa)
 
 
-def repair_run(run_id, src_round, lo, hi):
+def repair_run(run_id, src_round, pick="last"):
     """把某 run 的 6 条视频归位到 recovered_v1c/<run_id>/ 并确保本地存在。
-    jsonl 里两条链同为 round='v1c'，按序数 [lo:hi) 区分（r1=前 6 条，r2=后 6 条）。"""
+    jsonl 同 shot 可能有多条 done（重试/复跑追加剧本）——每镜取第一条或最后一条。
+    fallback 批与 relay1 同记 round='v1c'：fallback 取每镜第一条，relay1 取最后一条。"""
     d = HERE / "recovered_v1c" / run_id
     d.mkdir(parents=True, exist_ok=True)
-    same = [r for r in records() if r.get("round") == src_round
-            and r.get("job_status") == "done"][lo:hi]
+    same = {}
+    for r in records():
+        if r.get("round") == src_round and r.get("job_status") == "done" and r.get("url"):
+            if pick == "first":
+                same.setdefault(r["shot_id"], r)
+            else:
+                same[r["shot_id"]] = r
     got = {}
     for shot in CHAIN:
         dest = d / f"{shot}_{run_id}.mp4"
@@ -66,10 +72,7 @@ def repair_run(run_id, src_round, lo, hi):
                 if old.exists():
                     old.replace(dest)
             else:
-                url = None
-                for r in same:
-                    if r.get("shot_id") == shot and r.get("url"):
-                        url = r["url"]
+                url = (same.get(shot) or {}).get("url")
                 if url:
                     try:
                         dest.write_bytes(httpx.get(url, timeout=300).content)
@@ -83,13 +86,15 @@ def repair_run(run_id, src_round, lo, hi):
 def main():
     # 语义标签 → (jsonl round 名, 序数区间)。历史两条链同记 round='v1c'：
     # 前 6 条 = resolver bug 白跑批（hero 回落，充作无接力对照），后 6 条 = 接力链 1。
-    SPECS = {"v1c_fallback": ("v1c", 0, 6), "v1c_relay1": ("v1c", 6, 12),
-             "v1c_relay2": ("v1c_r3", 0, 6)}
+    # 历史两条链同记 round='v1c'（jsonl 单一顺序流，fallback 在前 relay1 在后）；
+    # 修复后 repair_run 按「每镜第一条/最后一条 done」取数，序数区间废弃。
+    SPECS = {"v1c_fallback": ("v1c", "first"), "v1c_relay1": ("v1c", "last"),
+             "v1c_relay2": ("v1c_r3", "last")}
     run_ids = sys.argv[1:] or ["v1c_fallback", "v1c_relay1"]
     result = {}
     for run_id in run_ids:
-        src_round, lo, hi = SPECS.get(run_id, (run_id, 0, 6))
-        vids = repair_run(run_id, src_round, lo, hi)
+        src_round, pick = SPECS.get(run_id, (run_id, "last"))
+        vids = repair_run(run_id, src_round, pick)
         fr = HERE / "_frames" / run_id
         fr.mkdir(parents=True, exist_ok=True)
         links = {}
