@@ -17,7 +17,8 @@ CHAIN = ["s02_c01", "s03_c01", "s04_c01", "s05_c01", "s06_c01", "s07_c01"]
 RUNS = [  # (语义标签, 展示名, jsonl round 名, 序数区间)
     ("v1c_fallback", "无接力对照（bug 白跑批）", "v1c", (0, 6)),
     ("v1c_relay1", "接力链 1（09-23 00:19）", "v1c", (6, 12)),
-    ("v1c_relay2", "接力链 2（09-23 13:xx 本轮）", "v1c_r3", (0, 6)),
+    ("v1c_relay2", "接力链 2（Pages 图床）", "v1c_r3", (0, 6)),
+    ("v1d_action", "动作接力（v1d：只接力动作，环境不接续）", "v1d", (0, 6)),
 ]
 # 运行期目录名与语义标签的映射（目录统一为语义名后为空）
 DIR_ALIAS = {}
@@ -40,8 +41,16 @@ DRIFT_WATCH = {
 
 
 def records():
-    return [json.loads(l) for l in
-            (HERE / "v1c_runs.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
+    out = []
+    for name in ("v1c_runs.jsonl", "v1d_runs.jsonl"):
+        f = HERE / name
+        if f.exists():
+            for l in f.read_text(encoding="utf-8").splitlines():
+                if l.strip():
+                    r = json.loads(l)
+                    r.setdefault("round", r.get("run"))   # v1d_runs 用 run 字段，归一
+                    out.append(r)
+    return out
 
 
 def r3_cover_url():
@@ -138,13 +147,20 @@ td.good{{color:#7CFC98}}td.mid{{color:#ffd166}}td.bad{{color:#ff7b72}}.note{{col
                      f" ｜ 漂移观察：{html.escape(DRIFT_WATCH[shot])}</span></h2><div class='cols'>")
         for label, name, _r, _s in RUNS:
             d = runs_data[label].get(shot, {})
-            dirname = DIR_ALIAS.get(label, label)
-            base = f"recovered_v1c/{dirname}/{shot}_{dirname}.mp4"
-            ff = f"_frames/{dirname}/{shot}_ff.png"
-            tl = f"_frames/{dirname}/{shot}_tail.png"
-            diff = (metrics.get(label) or {}).get("links", {}).get(shot)
+            if label == "v1d_action":
+                base = f"recovered_v1d/{shot}_v1d.mp4"
+                ff = f"_frames/v1d/{shot}_ff.png"
+                tl = f"_frames/v1d/{shot}_tail.png"
+                diff = (metrics.get("v1d_action") or {}).get("ref_diff", {}).get(shot)
+            else:
+                dirname = DIR_ALIAS.get(label, label)
+                base = f"recovered_v1c/{dirname}/{shot}_{dirname}.mp4"
+                ff = f"_frames/{dirname}/{shot}_ff.png"
+                tl = f"_frames/{dirname}/{shot}_tail.png"
+                diff = (metrics.get(label) or {}).get("links", {}).get(shot)
+            pill_label = "姿态命中" if label == "v1d_action" else "衔接"
             parts.append(f"""<div class="cand"><b>{html.escape(name)}</b>
-<span class="pill warn">衔接 {diff if diff is not None else '—'}</span>
+<span class="pill warn">{pill_label} {diff if diff is not None else '—'}</span>
 <span class="pill">{d.get('seconds', '—')}s</span><br>{vid(base)}
 <div class="note">首帧 {img(ff)} 末帧 {img(tl)}</div>
 <div class="note">version={html.escape(str(d.get('version_id') or '—'))}</div></div>""")
