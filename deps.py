@@ -139,19 +139,23 @@ _rehost_host = None
 
 
 def get_rehost_host():
-    """安全获取重新托管 ImageHost（imgbb 单例）。未就绪返回 503。
-    🔴 imgbb 实测唯一可用方案（2026-07-31）：上传原字节 100% 保真，Agnes 服务端能下载。
-    用于把 v1 迁移的本地首帧（local有/url空）补公网 URL（/first-frame/rehost + video preflight 自动调用）。
-    按文件哈希缓存（cache/imgbb_cache.json），上传失败明示抛错不静默回落。"""
+    """安全获取重新托管 ImageHost（单例）。未就绪返回 503。
+    🔴 2026-09-24 起默认 github_pages（i.ibb.co SNI 级线路阻断，35.md）——统一工厂
+    build_image_host 分派 kind（imgbb 保留为 config 回退开关）。
+    用于：视频末帧提取+托管（relay/boundary 物料）/ 首帧补托管 / v1 迁移首帧重托管 / 参考资产 rehost。
+    上传失败明示抛错不静默回落。"""
     global _rehost_host
     if _rehost_host is None:
-        from src.core.image_host import ImgbbHost
-        ih = (_APP_CFG.get("image_host") or {}).get("imgbb") or {}
-        key = ih.get("api_key", "")
-        if "${IMGBB_API_KEY}" in str(key):
-            key = os.environ.get("IMGBB_API_KEY", "")
-        _rehost_host = ImgbbHost(key, ih.get("expiration", 0),
-                                 cache_path=str(BASE_DIR / "cache" / "imgbb_cache.json"))
+        from src.core.image_host import build_image_host
+        ih = dict(_APP_CFG.get("image_host") or {})
+        # ${VAR} env 替换（token/key 类字段；与 AGNES_API_KEY 同机制）
+        for sect in ("github_pages", "imgbb"):
+            sub = ih.get(sect) or {}
+            for k, v in list(sub.items()):
+                if isinstance(v, str) and v.startswith("${") and v.endswith("}"):
+                    sub[k] = os.environ.get(v[2:-1], "")
+        _rehost_host = build_image_host(ih,
+                                        cache_path=str(BASE_DIR / "cache" / "imgbb_cache.json"))
     return _rehost_host
 
 

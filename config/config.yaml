@@ -61,7 +61,14 @@ sensenova:
 # tunnel：URL 不稳定（重启换域名），降级调试用，不做默认。
 # passthrough：不能上传本地图，仅复用 Agnes 原始 URL。
 image_host:
-  kind: "imgbb"
+  # 🔴 2026-09-24 起 github_pages 为默认（i.ibb.co SNI 级线路阻断，35.md）；
+  # imgbb 保留为回退开关：kind 改回 "imgbb" 一行即切回（线路恢复后可用）。
+  kind: "github_pages"
+  github_pages:
+    owner: "Q-1844"
+    repo: "agnes-frame-host"
+    branch: "main"
+    token: "${GITHUB_TOKEN}"   # fine-grained PAT：仅该仓库 + Contents: RW（.env）
   imgbb:
     api_key: "${IMGBB_API_KEY}"
     expiration: 0          # 0=永不过期

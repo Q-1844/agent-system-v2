@@ -198,6 +198,21 @@ OpenAI 兼容。
 
 **视频接口没有任何地方提到支持 Data URI base64。** 这是整个项目最大的架构约束，直接导致必须有 ImageHost 抽象层（见阶段 1）。
 
+#### 3.3.2 🔴 图床切换：imgbb → GitHub Pages（2026-09-23/24 实测，35.md）
+
+- **imgbb 停用原因**：`i.ibb.co`（取图域名）在中国线路被 **SNI 级域名阻断**（同 IP 换 SNI
+  即通、TLS 握手被杀、任意新旧对象全灭、上传 key 亦被拒）；非宕机非我方回归；Agnes 侧
+  自述抓图 `Read timed out (timeout=30)`。
+- **实测（后端出口）**：`raw.githubusercontent.com` 仅 2/10 可达→**弃用**；`*.github.io`
+  路由健康 → **默认图床=GitHub Pages**（`Q-1844/agnes-frame-host`，Contents API 上传 +
+  `<owner>.github.io` 直链）。
+- **JPEG q88 策略（仅末帧业务）**：1280×704 PNG≈1MB，晚高峰吞吐 33KB/s → 30.5s **撞
+  Agnes 30s 抓图超时**；JPEG q88=168KB（1/6）5 连验收 1.6–8.0s 全过。仅末帧转；首帧/
+  资源图原字节（Host 纯托管层，MIME 无关）。
+- **Pages 限额**：构建 **10 builds/hour soft**（1 PUT=1 commit=1 build）= 真实吞吐瓶颈；
+  站点 1GB 硬 / 100GB 月带宽 soft；REST 5000 req/h。
+- 端到端实证：s06/s07 真实生成成功（Agnes 服务端实抓 Pages URL）。
+
 #### 3.3.1 "用 Agnes 图生图把本地图洗成公网 URL" 的保真待测（阶段 3 回答）
 
 参考项目 `agnes_video.py::_upload_image_to_url` 用图片接口（i2i + prompt "Keep the image exactly as is"）把本地图片重新生成成一个公网 URL，**零配置图床**，是 ImageHost 的一种潜在实现（`agnes_rehost`）。但它在视频管线里能不能用，取决于两个**尚未实测**的保真问题：

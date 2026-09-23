@@ -3,12 +3,24 @@
 # 🔴 这是阶段 1 最值钱的改动：视频接口只吃公网 URL，本地处理过的图永久失去公网身份，
 # 这层接口把该风险永久隔离。默认 passthrough（直通，仅复用 Agnes 原始 URL）。
 from __future__ import annotations
-import abc, base64, hashlib, json, logging, mimetypes
+import abc, asyncio, base64, hashlib, json, logging, mimetypes, ssl
 from pathlib import Path
 from typing import Optional
 import httpx
 
 log = logging.getLogger("ImageHost")
+
+
+def _system_verify():
+    """系统信任库 SSLContext（Windows 存储含本机加速代理的自签根，如 SteamTools/Watt
+    Toolkit——certifi 不含它们，github 域名会被本地 MITM 后验证失败 2026-09-24 实测）。
+    失败回退 certifi 默认（verify=True 等价）。"""
+    try:
+        ctx = ssl.create_default_context()
+        ctx.load_default_certs()
+        return ctx
+    except Exception:
+        return True
 
 class ImageHost(abc.ABC):
     """把本地图片变成 Agnes 服务端能访问的公网 URL。"""
@@ -181,10 +193,15 @@ class AgnesRehostHost(ImageHost):
 
 
 def build_image_host(cfg: dict, cache_path=None) -> ImageHost:
-    """构造 ImageHost。🔴 默认 imgbb（2026-07-31 实测唯一可用方案，Agnes 服务端能下载 imgbb URL）。
+    """构造 ImageHost。🔴 2026-09-24 起默认 github_pages（i.ibb.co SNI 级线路阻断，35.md）。
     passthrough/r2/tunnel/agnes_rehost 均不作为默认：passthrough 不能上传本地图；
-    r2 未配置；tunnel URL 不稳定；agnes_rehost 不保真（仅参考图，且需 client 注入不在此构造）。"""
-    kind = (cfg or {}).get("kind", "imgbb")
+    r2 未配置；tunnel URL 不稳定；agnes_rehost 不保真（仅参考图，且需 client 注入不在此构造）。
+    imgbb 保留：线路恢复后 config 一行切回（回退开关）。"""
+    kind = (cfg or {}).get("kind", "github_pages")
+    if kind == "github_pages":
+        gp = cfg.get("github_pages") or {}
+        return GithubPagesHost(gp.get("owner", ""), gp.get("repo", ""),
+                               gp.get("branch", "main"), gp.get("token", ""))
     if kind == "imgbb":
         return ImgbbHost(cfg.get("api_key", ""), cfg.get("expiration", 0),
                          cache_path or cfg.get("cache_path"))
@@ -192,6 +209,126 @@ def build_image_host(cfg: dict, cache_path=None) -> ImageHost:
                                         cfg["secret_key"], cfg["bucket"], cfg["public_base"])
     if kind == "tunnel":  return TunnelHost(cfg["public_base"], cfg["serve_root"])
     if kind == "passthrough": return AgnesPassthroughHost()
-    # 默认 imgbb（唯一可用方案）
-    return ImgbbHost(cfg.get("api_key", ""), cfg.get("expiration", 0),
-                     cache_path or cfg.get("cache_path"))
+    # 默认 github_pages
+    gp = cfg.get("github_pages") or {}
+    return GithubPagesHost(gp.get("owner", ""), gp.get("repo", ""),
+                           gp.get("branch", "main"), gp.get("token", ""))
+
+
+class GithubPagesHost(ImageHost):
+    """GitHub Pages 图床（Contents API PUT → Pages 构建 → <owner>.github.io 直链）。
+    🔴 纯托管层：MIME 无关，原字节进出（JPEG 转换是末帧业务的事，不在这里）。
+    命名 objects/{sha256_hex16}.{ext}（64-bit 内容哈希，唯一命名防 CDN 缓存旧内容）。
+    GET-first：内容寻址命中即直接返回（不 PUT、不烧 Pages build）；
+    PUT 409/422=冲突或已存在：GET 目标解码字节 sha256 对比，匹配=幂等成功；否则退避重试 ×2 后 fail-loud。
+    ⚠️ GET 返回的 sha 字段是 git blob sha（sha1("blob <len>\\0"+内容)），不能与 sha256 直接比。
+    同 repo 写入串行锁（实例级 asyncio.Lock；deps 单例保证四调用点共享）。
+    上传成功后轮询 Pages URL 至 200（构建实测 ~40s，上限 180s）；超时抛 PagesNotReadyError
+    （PUT 已成功、URL 已建，可重试轮询）——不静默回落。
+    实测依据（2026-09-23）：raw.githubusercontent.com 仅 2/10 可达弃用；github.io 路由健康；
+    Pages 构建 soft limit 10 builds/hour（1 PUT=1 build）= 真实吞吐瓶颈，密集上传须批量。"""
+
+    class PagesNotReadyError(RuntimeError):
+        """PUT 已成功但 Pages 尚未构建到 200——URL 已建，可稍后重试轮询。"""
+
+    _MIME_EXT = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp",
+                 "image/gif": ".gif"}
+
+    def __init__(self, owner: str, repo: str, branch: str, token: str,
+                 poll_timeout: float = 180.0, poll_interval: float = 5.0,
+                 client_factory=None):
+        self.owner, self.repo, self.branch, self.token = owner, repo, branch, token
+        self.poll_timeout = poll_timeout
+        self.poll_interval = poll_interval
+        self._client_factory = client_factory or (
+            lambda timeout=60: httpx.AsyncClient(timeout=timeout, verify=_system_verify()))
+        self._lock = asyncio.Lock()
+
+    # ---- helpers ----
+    def _api(self, path: str) -> str:
+        return f"https://api.github.com/repos/{self.owner}/{self.repo}/contents/{path}"
+
+    def _headers(self) -> dict:
+        return {"Authorization": f"Bearer {self.token}",
+                "Accept": "application/vnd.github+json"}
+
+    def _object_path(self, data: bytes, name: str) -> str:
+        digest = hashlib.sha256(data).hexdigest()[:16]
+        mime = mimetypes.guess_type(name)[0] or "application/octet-stream"
+        ext = self._MIME_EXT.get(mime, Path(name).suffix or ".bin")
+        return f"objects/{digest}{ext}"
+
+    def _pages_url(self, path: str) -> str:
+        return f"https://{self.owner}.github.io/{self.repo}/{path}"
+
+    def _client(self):
+        return self._client_factory(timeout=60)
+
+    # ---- core ----
+    async def upload(self, local_path):
+        p = Path(local_path)
+        if not p.exists():
+            raise FileNotFoundError(f"本地图片不存在: {p}")
+        data = p.read_bytes()
+        path = self._object_path(data, p.name)
+        url = self._pages_url(path)
+        async with self._lock:                     # 同 repo 写入串行（四调用点共享单例）
+            # GET-first：内容寻址命中=已在线，直接返回（省一次 Pages build）
+            if await self._remote_matches(path, data):
+                log.info("github_pages 幂等命中: %s", path)
+                return url
+            await self._put_with_retry(path, data)
+        await self._wait_ready(url)
+        return url
+
+    async def _remote_matches(self, path: str, data: bytes) -> bool:
+        try:
+            async with self._client() as c:
+                r = await c.get(self._api(path), headers=self._headers(),
+                                params={"ref": self.branch})
+            if r.status_code != 200:
+                return False
+            remote = base64.b64decode(r.json().get("content") or "")
+            return hashlib.sha256(remote).hexdigest() == hashlib.sha256(data).hexdigest()
+        except httpx.HTTPError:
+            return False   # 网络错 → 视为未命中，走 PUT 路径（PUT 内还有重试）
+
+    async def _put_with_retry(self, path: str, data: bytes):
+        body = {"message": f"host {path}",
+                "content": base64.b64encode(data).decode(), "branch": self.branch}
+        delays = (2.0, 4.0)                            # 重试退避；PUT×3 + 409 幂等核对
+        for attempt in range(3):
+            try:
+                async with self._client() as c:
+                    r = await c.put(self._api(path), json=body, headers=self._headers())
+                if r.status_code in (200, 201):
+                    return
+                if r.status_code in (409, 422):        # Conflict / sha required
+                    if await self._remote_matches(path, data):
+                        return                          # 已存在且字节一致=幂等成功
+                    raise RuntimeError(
+                        f"github_pages PUT {r.status_code} 真冲突（远端存在但内容不匹配）: {path}")
+                if r.status_code >= 500 and attempt < 2:
+                    await asyncio.sleep(delays[attempt]); continue
+                raise RuntimeError(
+                    f"github_pages PUT HTTP {r.status_code}: {r.text[:200]}")
+            except httpx.HTTPError as e:
+                if attempt < 2:
+                    await asyncio.sleep(delays[attempt]); continue
+                raise RuntimeError(f"github_pages PUT 网络错误: {e}") from e
+
+    async def _wait_ready(self, url: str):
+        import time as _time
+        deadline = _time.monotonic() + self.poll_timeout
+        async with self._client() as c:
+            while _time.monotonic() < deadline:
+                try:
+                    r = await c.get(url)
+                    if r.status_code == 200:
+                        return
+                except httpx.HTTPError:
+                    pass                                # 网络抖动继续轮询
+                await asyncio.sleep(self.poll_interval)
+        raise self.PagesNotReadyError(
+            f"github_pages 上传成功但 Pages 未在 {self.poll_timeout}s 内就绪: {url}"
+            f"（URL 已建，可稍后重试轮询）")

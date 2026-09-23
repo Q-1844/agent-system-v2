@@ -507,10 +507,16 @@ async def _extract_video_end_frame(project_dir, shot_id, video_local, version_id
                          error=f"ffmpeg 末帧提取失败: {(r.stderr or '')[:200]}"), False
     except Exception as e:
         return Asset(status=ShotStatus.FAILED.value, error=f"ffmpeg 异常: {e}"), False
-    # 上传 imgbb 取公网 URL（inherit 接力进视频接口必需；reference 可走 base64）
+    # 上传取公网 URL（inherit 接力进视频接口必需；reference 可走 base64）。
+    # 🔴 末帧业务层 PNG→JPEG q88（35.md）：接力只钉位置状态，轻压缩无碍；168KB≈PNG 1/6，
+    # 避开晚高峰吞吐下 Agnes 30s 抓图超时（PNG 1MB 实测 30.5s）。仅此入口转换——
+    # 首帧/rehost 保持原字节（i2v 像素锚 + rehost 保真承诺）。
     try:
-        url = await get_rehost_host().upload(str(end_path))
-        return Asset(local=str(end_path), url=url, status=ShotStatus.DONE.value), True
+        jpg_path = end_path.with_suffix(".jpg")
+        from PIL import Image as _PILImage
+        _PILImage.open(end_path).convert("RGB").save(jpg_path, "JPEG", quality=88)
+        url = await get_rehost_host().upload(str(jpg_path))
+        return Asset(local=str(jpg_path), url=url, status=ShotStatus.DONE.value), True
     except Exception as e:
         # 提取成功但托管失败：local 有（reference 可 base64）、url 无（inherit 不可用）
         return Asset(local=str(end_path), status=ShotStatus.DONE.value,
