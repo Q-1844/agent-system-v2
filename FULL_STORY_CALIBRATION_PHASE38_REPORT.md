@@ -1,0 +1,146 @@
+# FULL_STORY_CALIBRATION_PHASE38_REPORT — 《狐狸进村》第二轮完整故事（38.md §5 T2）
+
+日期：2026-09-25 ｜ 项目：Fable_Pilot_Fox_and_Grapes_V1 ｜ 执行依据：38.md（§5 T2，用户指令：新乡村场景+森林→乡村过渡）
+正式 Calibration Trace：run `cal_20260925_004933_6b30`（completed，12 links + 9 story_plan）
+冻结剧本：`_37_fable/STORY_FROZEN_38.md` + `_38_story.py`（唯一事实源）｜ 人评页：`:8781/CHECKPOINT_38.html`
+
+---
+
+## 0. 一句话结论
+
+**跨 Location 尾帧接力（森林→乡村）一次成立**——村庄 identity 完整渲染、森林零残留、狐狸身份零漂移；
+校准协议继续有效：**retry 3/3 单次修复**（累计 5/5）、**minor 吸收 7/7**；新增失败模式 4 类入档
+（极远景吸引子、relay 道具丢失、场景 identity 漂移、smirk 表情吸引子）；多体接触精度首次直接命中（M7 叶落鼻尖）。
+
+## 1. 实际修改文件
+
+- **src/ 核心零改动**（本轮全部战役脚本层）。
+- `_37_fable/`：STORY_FROZEN_38.md、_38_story.py、_38_setup_story.py、_38_setup_scene.py、
+  _38_generate.py（submit/record/status/links，含 attempt 归档与 REST links 双落档）、
+  _38_checkpoint.py、_38_detached.py、_38_trace_run.json、_38_run_id.txt、CHECKPOINT_38.html、media/M1-M9。
+- 新实体：乡村 Location `loc_2039debe6f68`、View `view_21c6bab8b0fb`（approved r0）、
+  SceneInstance s11=`scin_7f922f31e5f2` / s12=`scin_c20fc5401d1e`、
+  SIV s11=`sciv_f5e6aa46e5bc`（r5 过审）/ s12=`sciv_0de0502fef03`（r0 过审）、9 个 binding。
+- 故事结构：s11（3 镜）/ s12（6 镜），全部 link_mode=multi。
+
+## 2. 阻断与修复（本轮 2 起）
+
+1. **新 Shot 默认 link_mode=i2v**：首镜提交报「开场画面未就绪」——Shot 模型默认 i2v，
+   multi 直生/接力必须显式 link_mode=multi（37A 的镜是显式设过的）。修复=update_shot_fields
+   批量改 9 镜（正式路径）。**教训入档：新故事段落库时 link_mode 必须显式写进 setup 脚本。**
+2. **_38_setup_scene.py 首跑 NameError**（json 导入位置）：幂等重跑即愈，无数据损伤。
+
+## 3. Link-level table（§10.A 同型；12 attempts）
+
+| 镜 | 时长 | attempt | 尾帧 vs 预期 | Vision | 人工 | 处置 | 下一镜结果 |
+|---|---|---|---|---|---|---|---|
+| M1 | 8s | a1 | 狐狸被蕨叶遮挡仅露臀部+红鸟入画 | none(漏主体遮挡) | **major** | **retry** | a2 修复 |
+| M1 | 8s | a2 | 主体/环境/风格/无fauna✓；狐狸朝镜头非朝深处 | minor | minor | 按预编剧继续 | M2 一次成功 |
+| M2 | 10s | a1 | 叙事✓背对镜头朝亮处奔；机位极远景（狐狸占比~4%） | **解析失败** | minor | 按预编剧继续（M3 中景拉回） | M3 一次成功 |
+| M3 | 8s | a1 | **ECU 脸部特写**+狡黠表情（情绪偏）+地理全丢 | major | **major** | **retry** | a2 修复 |
+| M3 | 8s | a2 | 全身中景✓情绪✓；潜行未停定+朝向偏右 | minor | minor | 按预编剧继续 | M4 一次成功 |
+| M4 | 10s | a1 | **跨 Location 接力成立**：村庄✓森林零残留；急停+回头未落 | minor | minor | 按预编剧继续 | M5 一次成功 |
+| M5 | 5s | a1 | 嗅姿✓但**南瓜丢失**+瓦顶/电线杆/街道化+golden hour 漂移 | major | **major** | **retry** | a2 修复 |
+| M5 | 5s | a2 | 南瓜恢复✓鼻尖凑近✓；机位偏近一档；smirk 复发 | minor | minor | 按预编剧继续 | M6 一次成功 |
+| M6 | 8s | a1 | 南瓜静止✓同框✓；**情绪反转**（吓→play-bow 开心） | minor | minor | accept+adapt（N9 判据：强先验 retry 无效） | M7 一次成功 |
+| M7 | 10s | a1 | **叶停鼻尖直接命中**+眼盯鼻尖+站定（smirk 未发作） | none | **none** | 按预编剧继续（vision 判 none 经亲验属实） | M8 一次成功 |
+| M8 | 5s | a1 | 端坐+午后暖金✓；尾未环爪+前爪微抬小怪异 | minor | minor | 按预编剧继续 | M9 一次成功 |
+| M9 | 8s | a1 | 暮色渲染✓剪影收束✓；小跑回望端点未落（坐姿面村） | none | minor | 按预编剧继续（收官无下镜） | **链闭合 9/9** |
+
+## 4. 主测点：跨 Location 尾帧接力（M3→M4）
+
+- **结论：成立**。M4 以 M3 雨林尾帧为开口参考，正午村庄（土路/木栅栏/南瓜/茅草顶小屋）
+  一次性完整渲染，森林背景零残留，狐狸全身中景进村，链根身份无漂移，负面约束（空村）保持。
+- **MAE 基线数据**（128 灰度同刻度）：跨 Location 接力 M4=59.6，同段接力均值≈50.1
+  （M2 55.6 / M3 46.6 / M5 47.6 / M6 55.3 / M7 56.3 / M8 39.4），M9=92.7（同段但暮色大远景构图剧变）。
+  **环境切换不是 MAE 主导因子——构图/明度剧变才是**（同段 M9 远超跨段 M4）。
+  用法：跨场景接力的 MAE 告警阈值应按「构图变化量」校准而非按「是否换场景」。
+- 与 37A §17.5（段边界环境切换可靠）互证，并把边界从「同 Location 换 View」推进到「跨 Location」。
+
+## 5. 失败分类学增量（本轮新发生）
+
+| 类别 | 次数 | 实例 | 与 37A 分类学关系 |
+|---|---|---|---|
+| 极远景吸引子（主体占比 <5%） | 1 | M2（新增——特写吸引子的反面） | **新类** |
+| relay 道具丢失（上镜有→本镜无） | 1 | M5-a1（M4 尾帧有南瓜，M5 丢） | **新类**；与 N9「道具难消除」互证：**道具继承双向都不可靠** |
+| 场景 identity 漂移（瓦顶/电线杆/街道化） | 1 | M5-a1（retry 修复） | 新类（v1g 时代 style drift 的场景级变体） |
+| smirk/play-bow 表情吸引子 | 4 | M3-a1、M4、M5-a2、M6（M7-M9 未发作） | **新类**：模型对「狐狸+物体交互」的强先验；retry 无效（N9 同理），accept+adapt 且常被下镜叙事吸收 |
+| ECU 特写吸引子 | 1 | M3-a1（retry 修复） | 37A 已知，复发 |
+| 动作端点未落尾帧 | 3 | M3-a2、M4、M9 | 37A 已知（N2/N5 同类），全部 accept+adapt |
+| 情绪反转（可接受方向） | 1 | M6（吓→开心 play-bow） | N6-a1 的反例：情绪反转但其余全成立且利好下镜→不 retry |
+| **多体接触直接命中** | 1 | M7（叶停鼻尖） | **37A「接触精度极限」的边界条件**：接触目标更大（叶>蝶）+freeze 收势指令→可命中 |
+| Vision 解析失败 | 1 | M2（assessment JSON 内嵌引号，repair 后仍不可解析） | **新类**（37A 仅 1 次解析 repair 成功） |
+
+## 6. Retry vs Adapt 判据（本轮新增/强化）
+
+- **retry 3/3 单次修复**（M1 主体遮挡+fauna、M3 ECU+情绪+地理、M5 道具+场景漂移+光照），
+  与 37A 2/2 合并 → **累计 5/5**。retry 判据继续有效：主体不可见/叙事断裂/地理丢失/情绪反转+多偏叠加。
+- **不 retry 的两个新判据**：
+  1. 强先验情绪吸引子（smirk/play-bow）单独出现且不破坏叙事 → accept+adapt（N9 道具先例同理）；
+  2. 机位偏但叙事命中 → 下镜构图字段拉回（M2 极远景→M3 中景一次成功；机位控制权在新镜 prompt+binding）。
+- **minor 吸收 7/7**：M1→M2（方向重建）、M3→M4（跃出吸收潜行）、M4→M5（挪近吸收行走）、
+  M5→M6（顶南瓜）、M6→M7（兴奋态利好追叶）、M7→M8（喷嚏后坐下）、M8→M9（起身小跑）。
+  预编剧首句自带过渡句的设计两轮 12/12 全部成立。
+
+## 7. Vision 可靠性边界（累计）
+
+- 本轮 11 次评估：9 次与人工一致（含 M7 none 亲验属实）、1 次解析失败（M2）、
+  1 次轻微过宽（M9 none vs 人工 minor，端点类偏离漏判）。
+- **未再出现 37A N6-a1 型「描述不存在画面」的恶性误报**；但 M1-a1 主体被遮挡 50%+ 时
+  vision 仍报 none（漏检主体可见性）——**主体占比/遮挡是 vision 的新盲区**，人工看图不可省。
+- M2 解析失败属 tail_assessment 管线问题（JSON 容错），37C 可列为改进项（失败时降级为 raw 记录）。
+
+## 8. 时长配方（两轮累计 20 attempts 零截断）
+
+静态/反应 5s（M5/M8 全过）；动态 8s（M1/M3/M6/M9 全过）；高运动/复杂交互 10s
+（M2/M4/M7 全过，**M7 复杂交互+接触命中即 10s 镜**）。配方继续成立。
+
+## 9. 场景系统（新 Location 全流程）纪律实证
+
+- **禁 fauna 条款从 identity_description 一开始就写入**（38.md §3.1 教训执行）：
+  乡村 View r0 一次过审、s12 SIV r0 一次过审（对比第一轮雨林补条款后的多轮清图）。
+- s11 SIV 经 6 轮清图过审（uncertain×4+needs_fix×1：动物混入×1、白板伪影×1——审查器在起作用）。
+- 乡村空板亲验：地理（土路/栅栏/南瓜地/干草垛/茅草顶/背景雨林边缘）全部命中 identity，零动物零人。
+
+## 10. Provider evidence
+
+provider=agnes / agnes-video-v2.0，12 次真实生成零 provider 失败零 429；
+单镜端到端 ≈4 分钟（JobQueue 串行 1 RPM）。今日视频消耗 ≈93s（500s/日配额内），
+图片消耗 ≈10 张（View 1 + SIV 6 + 首末帧托管）。Vision=agnes-2.5-flash。
+
+## 11. 系统问题 vs 模型问题
+
+**系统/流程**：新 Shot 默认 link_mode=i2v（setup 纪律缺失，已修复+入档）；
+tail_assessment JSON 容错（M2 解析失败，建议 37C 降级 raw）；REST PATCH curl 转义（工具层，无碍）。
+**模型（Agnes 能力边界）**：极远景吸引子、smirk/play-bow 强先验、relay 道具双向不稳定、
+动作端点系统性不落尾帧、主体遮挡时 vision 漏检（评估模型边界）。
+
+## 12. 可固化规则增量（≥2 次独立证据才固化；本轮单证候选标 ★）
+
+- 跨 Location 尾帧接力成立 ★（M4 单证，建议 37B 多场景复验后固化）
+- retry 5/5（两轮累计，可固化）
+- 预编剧首句吸收 minor（两轮 12/12，可固化）
+- 机位控制权在新镜 prompt+binding，relay 不锁机位 ★（M2→M3 单证 + N4→N5 旁证）
+- 接触精度边界条件：大目标+freeze 可命中 ★（M7 单证 vs N7 反例）
+- 禁 fauna 条款开头写入 identity → 清图成本骤降（两轮对比实证，可固化）
+- smirk/play-bow 强先验 retry 无效 ★（4 次出现+M6 accept 实证）
+
+## 13. 37C Shadow Replay 输入完整性
+
+12 link 全字段（含 3 个 attempt 归档 M1_a1/M3_a1/M5_a1 的完整裁定链）、story_plan 9 镜冻结全文、
+prompt_hash/snapshot 全新鲜、vision 11 维+meta、human 三档+reason、shot_patch 全空（零字段修改链）、
+next_shot_id+result_after_correction 齐备。`AgentCalibrationInput` 可直接构造，含 3 个 retry 决策点。
+
+## 14. 验收回答（38.md 用户关切：数据是否足以彰显改进优势）
+
+**显著增强**。第一轮证明的是「同场景双段内」的接力与校准；本轮把最硬的两个变量加压：
+①跨 Location（森林→全新村庄）；②T1 打点全编入（接触精度/高运动收势/道具/光照渐进/负面约束）。
+结果：接力与校准方法在加压下**全部存活**（9/9 闭链、retry 3/3、minor 吸收 7/7、M4 主测点成立、
+M7 打点直接命中），同时收获 4 类新失败模式的结构化样本。两轮合并：21 attempts、20 链接点、
+11 条失败分类学记录、retry 5/5、minor 吸收 12/12——方法有效性的证据链完整。
+
+## 15. STOP（38.md §4）
+
+第二轮完整故事收官并形成本报告——**STOP**。未接入备用 API、未动 Provider Router、
+未做前端面板、未重构 Producer/Director、未跨入 38 之后阶段。stress cases 补充批（T1 剩余打点）
+与下一轮测试待用户指令。

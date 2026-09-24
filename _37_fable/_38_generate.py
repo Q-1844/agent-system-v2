@@ -208,9 +208,15 @@ def submit(nkey):
         except Exception as e:
             print("   vision FAIL:", str(e)[:150], flush=True)
 
-    # 7) trace 落档（本地 + REST run links）
+    # 7) trace 落档（本地 + REST run links）；已有裁定记录先归档为 attempt（重试不丢历史）
     first_of_story = nkey == keys[0]
     rec = trace_load()
+    old = rec.get(nkey)
+    if old and old.get("human_deviation_level"):
+        n_att = 1 + sum(1 for k in rec if k.startswith(f"{nkey}_a"))
+        rec[f"{nkey}_a{n_att}"] = old
+        print(f"   archived attempt: {nkey}_a{n_att} "
+              f"({old.get('human_deviation_level')}/{old.get('human_action')})", flush=True)
     rec[nkey] = {
         "shot_id": shot_id, "segment": spec["segment"],
         "provider_id": "agnes", "provider_model": "agnes-video-v2.0",
@@ -228,7 +234,7 @@ def submit(nkey):
         "human_deviation_level": None, "human_action": None, "human_reason": "",
         "shot_patch": {}, "prompt_rebuilt": True,
         "next_shot_id": "", "result_after_correction": "",
-        "retry_or_adapt": "", "choice_reason": "",
+        "retry_or_adapt": None, "choice_reason": "",
     }
     trace_save(rec)
     rest_upsert_link(nkey, rec[nkey])
