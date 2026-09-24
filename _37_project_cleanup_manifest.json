@@ -1,0 +1,173 @@
+{
+  "executed_at": "2026-09-24 19:29:39",
+  "freed_bytes": 684171164,
+  "deleted": [
+    {
+      "name": "__c2_scene_dir_e2e",
+      "bytes": 6240801
+    },
+    {
+      "name": "__c2_scene_e2e",
+      "bytes": 28748222
+    },
+    {
+      "name": "__native_av_b1_e2e",
+      "bytes": 16012
+    },
+    {
+      "name": "__native_av_c1_e2e",
+      "bytes": 48945968
+    },
+    {
+      "name": "__native_av_c1r_e2e",
+      "bytes": 14420138
+    },
+    {
+      "name": "__producer_phase2_smoke",
+      "bytes": 487935
+    },
+    {
+      "name": "__producer_phase2b_replay",
+      "bytes": 61976
+    },
+    {
+      "name": "__producer_phase2c_r2",
+      "bytes": 2053604
+    },
+    {
+      "name": "__producer_phase2d_r3",
+      "bytes": 3283306
+    },
+    {
+      "name": "__producer_phase3_room",
+      "bytes": 160300
+    },
+    {
+      "name": "__producer_phase3_stop",
+      "bytes": 38363
+    },
+    {
+      "name": "__res_1c1_e2e",
+      "bytes": 3371738
+    },
+    {
+      "name": "__res_1c5_e2e",
+      "bytes": 11277285
+    },
+    {
+      "name": "__res_1c5_e2e_b",
+      "bytes": 7872043
+    },
+    {
+      "name": "__res_1c5_e2e_c",
+      "bytes": 7872398
+    },
+    {
+      "name": "__scene_multi_e2e",
+      "bytes": 54231572
+    },
+    {
+      "name": "__scene_s2a_e2e",
+      "bytes": 13024239
+    },
+    {
+      "name": "__scene_s2a_e2e_r2",
+      "bytes": 6798743
+    },
+    {
+      "name": "__scene_s2b_e2e",
+      "bytes": 43375629
+    },
+    {
+      "name": "__shot_binding_visual_final_gp",
+      "bytes": 20522831
+    },
+    {
+      "name": "__video25_smoke",
+      "bytes": 8200609
+    },
+    {
+      "name": "__voice_a2_e2e",
+      "bytes": 24917831
+    },
+    {
+      "name": "__voice_foundation_a1",
+      "bytes": 8802671
+    },
+    {
+      "name": "_test_7cs_soakD",
+      "bytes": 2179
+    },
+    {
+      "name": "Subagent_Smoke_20260903_1515",
+      "bytes": 114951784
+    },
+    {
+      "name": "Subagent_Longrun_20260903_1203",
+      "bytes": 25671998
+    },
+    {
+      "name": "Subagent_Freeze_20260903",
+      "bytes": 25520665
+    },
+    {
+      "name": "Subagent_Smoke3_20260903",
+      "bytes": 25352256
+    },
+    {
+      "name": "Subagent_Freeze2_20260903",
+      "bytes": 25340774
+    },
+    {
+      "name": "Subagent_Smoke2_20260903",
+      "bytes": 25305678
+    },
+    {
+      "name": "Stress_Medium_20260901",
+      "bytes": 25584245
+    },
+    {
+      "name": "Replay_Gov_20260902",
+      "bytes": 299946
+    },
+    {
+      "name": "PhaseB_ResourceAgent_E2E",
+      "bytes": 13916373
+    },
+    {
+      "name": "PhaseC1_Joint_E2E",
+      "bytes": 9128434
+    },
+    {
+      "name": "PhaseC1_Director_E2E",
+      "bytes": 3511233
+    },
+    {
+      "name": "PhaseC1_Cast_E2E",
+      "bytes": 1213743
+    },
+    {
+      "name": "PhaseC1_Stale_E2E",
+      "bytes": 1210106
+    },
+    {
+      "name": "PhaseC1_Missing_E2E",
+      "bytes": 42082
+    },
+    {
+      "name": "Director冒烟测试",
+      "bytes": 12905496
+    },
+    {
+      "name": "Golden_Path_AI_20260901_1132",
+      "bytes": 43044522
+    },
+    {
+      "name": "AGNES_GoldenPath_H",
+      "bytes": 16445436
+    }
+  ],
+  "missing": [
+    "_test_full_project"
+  ]
+}
