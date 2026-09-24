@@ -1,0 +1,107 @@
+# _37_fable/_38_checkpoint.py — 《狐狸进村》人评页生成（从 _38_trace_run.json 重建）。
+# 媒体本地化：output/videos/{shot_id}.mp4 + output/frames/{shot_id}_video_end.jpg
+#   → media/M{n}.mp4 / M{n}_end.jpg（相对路径，:8781 直接托管）。
+# 用法: python _38_checkpoint.py   （每镜 submit/record 后重跑刷新页面）
+import io
+import json
+import shutil
+import sys
+from pathlib import Path
+
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _38_story import SHOTS  # noqa: E402
+
+HERE = Path(__file__).parent
+ROOT = HERE.parent
+PROJ = ROOT / "projects" / "Fable_Pilot_Fox_and_Grapes_V1"
+TRACE = HERE / "_38_trace_run.json"
+MEDIA = HERE / "media"
+
+
+def localize(nkey, shot_id):
+    src_v = PROJ / "output" / "videos" / f"{shot_id}.mp4"
+    src_f = PROJ / "output" / "frames" / f"{shot_id}_video_end.jpg"
+    dst_v = MEDIA / f"{nkey}.mp4"
+    dst_f = MEDIA / f"{nkey}_end.jpg"
+    if src_v.exists():
+        shutil.copy2(src_v, dst_v)
+    if src_f.exists():
+        shutil.copy2(src_f, dst_f)
+    return dst_v.name, dst_f.name
+
+
+def esc(s):
+    return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def main():
+    rec = json.loads(TRACE.read_text(encoding="utf-8")) if TRACE.exists() else {}
+    cards = []
+    for spec in SHOTS:
+        k = spec["shot"]
+        r = rec.get(k)
+        if not r:
+            continue
+        shot_id = r["shot_id"]
+        vname, fname = localize(k, shot_id)
+        va = r.get("vision_assessment") or {}
+        sug = va.get("suggested_deviation", "-")
+        human = r.get("human_deviation_level") or "待裁定"
+        action = r.get("human_action") or "-"
+        dims = ""
+        for dk in ("expected_tail_match", "camera_framing_match", "lighting_consistency",
+                   "narrative_action_match", "next_shot_readiness", "unexpected_elements"):
+            if dk in va:
+                dims += f"<div class='dim'><b>{dk}</b>: {esc(str(va.get(dk)))}</div>"
+        mae = r.get("mae_prev")
+        mae_note = " （跨Location接力，预期偏高）" if k == "M4" else ""
+        cards.append(f"""
+<div class="card" id="{k}">
+  <h3>{k} = {shot_id} <span class="tag {r.get('human_deviation_level') or 'pending'}">人工: {human}</span>
+      <span class="tag {'major' if sug=='major' else ('minor' if sug=='minor' else 'none')}">vision建议: {sug}</span></h3>
+  <video controls preload="metadata" src="media/{vname}"></video>
+  <div class="cols">
+    <div><h4>末帧（实际尾帧）</h4><img src="media/{fname}"></div>
+    <div>
+      <h4>预编剧</h4><p class="cn">{esc(spec['fields']['description'])}</p>
+      <h4>expected_tail</h4><p class="cn">{esc(r.get('expected_tail',''))}</p>
+      <h4>MAE vs 上镜尾帧</h4><p>{mae if mae is not None else '-'}{mae_note}</p>
+      <h4>Vision 11维（仅证据）</h4>{dims or '<p>无</p>'}
+      <h4>人工裁定</h4><p>{esc(action)} — {esc(r.get('human_reason',''))}</p>
+      <h4>prompt hash</h4><p class="mono">{esc(str(r.get('prompt_hash','')))}</p>
+    </div>
+  </div>
+</div>""")
+
+    done = sum(1 for s in SHOTS if (rec.get(s["shot"]) or {}).get("human_deviation_level"))
+    html = f"""<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8">
+<title>狐狸进村 — 38 第二轮检查点</title><style>
+body{{font-family:"Microsoft YaHei",sans-serif;max-width:1100px;margin:24px auto;padding:0 12px;background:#faf7f2}}
+h1{{color:#8b4513}} .card{{background:#fff;border:1px solid #e0d5c3;border-radius:10px;padding:16px;margin:18px 0;box-shadow:0 1px 4px rgba(0,0,0,.06)}}
+video{{width:100%;max-height:420px;background:#000;border-radius:6px}}
+.cols{{display:flex;gap:18px;margin-top:12px;flex-wrap:wrap}} .cols>div{{flex:1;min-width:320px}}
+img{{width:100%;border-radius:6px;border:1px solid #ddd}}
+.tag{{display:inline-block;padding:2px 10px;border-radius:12px;font-size:13px;margin-left:8px;color:#fff}}
+.none{{background:#4caf50}} .minor{{background:#ff9800}} .major{{background:#f44336}} .pending{{background:#9e9e9e}}
+.dim{{font-size:13px;color:#555;margin:2px 0}} .cn{{font-size:14px}} .mono{{font-family:monospace;font-size:12px;color:#777;word-break:break-all}}
+.meta{{background:#fff8e1;border:1px solid #ffe082;border-radius:8px;padding:12px;font-size:14px}}
+</style></head><body>
+<h1>《狐狸进村》— Phase 38 第二轮检查点</h1>
+<div class="meta"><b>run</b>: {_38_runid()} ｜ <b>链根</b>: ref_d27e1a01c36f ｜ <b>裁定进度</b>: {done}/{len(SHOTS)}<br>
+<b>主测点</b>: M3→M4 跨 Location 尾帧接力 ｜ 打点: M7 落叶停鼻尖（多体接触）、M2/M4/M7 高运动收势、M5/M6 南瓜道具继承、M4-M9 光照渐进、全片空村负面约束<br>
+播放序: M1→M2→M3→M4→M5→M6→M7→M8→M9（段C=s11 雨林小径 / 段D=s12 村庄村口）</div>
+{''.join(cards) or '<p>暂无已生成镜头</p>'}
+</body></html>"""
+    out = HERE / "CHECKPOINT_38.html"
+    out.write_text(html, encoding="utf-8")
+    print(f"checkpoint page rebuilt: {out}（{done}/{len(SHOTS)} 裁定）")
+
+
+def _38_runid():
+    f = HERE / "_38_run_id.txt"
+    return f.read_text(encoding="utf-8").strip() if f.exists() else "(未创建)"
+
+
+if __name__ == "__main__":
+    main()
