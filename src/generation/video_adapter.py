@@ -356,10 +356,43 @@ def build_bound_video_input(project_dir, project: Any, shot: Any, *,
                 "detail": {"hint": "first/last 为同一 candidate——provider 将收到相同双帧"}})
 
     # ---- prompt（§13：creative motion intent + Pack 生产上下文 video 口径 + P1 风格）----
-    from src.core.prompt_builder import build_video_prompt
+    from src.core.prompt_builder import build_video_prompt, video_prompt_freshness
     from src.resources.store import ResourceStore
     rdoc = ResourceStore(project_dir, project_dir.name).load()
+    # 37.md §1.1 freshness gate（消费端兜底，multi 专属）：
+    #   - stale/untracked：旧 *_prompt_en 不再 shadow 新字段——按「无 en」重编译
+    #     （deterministic rebuild 消费端语义；legacy i2v/keyframes 不走此 gate）；
+    #   - missing（无 override/en）且 description 非空：multi 编译不含 description
+    #     ——静默生成 = 旧语义/无语义污染（v1g 实证：雨林校准全未生效）→ fail
+    #     closed，由 handler 侧自动重建先行（本 gate 是最后防线）；
+    #   - fresh / override：正常（override 语义保留，用户自负其责）。
+    _fr_state = "n/a"
+    if mode == "multi":
+        _fr = video_prompt_freshness(shot)
+        _fr_state = _fr["state"]
+        if _fr["state"] in ("stale", "untracked"):
+            import copy as _copy
+            shot = _copy.copy(shot)
+            shot.video_prompt_en = ""
+            diagnostics.append({
+                "reason": "video_prompt_en_stale_ignored",
+                "detail": {"freshness": _fr["state"],
+                           "recorded_sig": _fr["recorded"], "current_sig": _fr["sig"],
+                           "hint": "旧 video_prompt_en 与当前字段签名不符——按字段重编译"}})
     creative = build_video_prompt(shot, mode)
+    if mode == "multi" and _fr_state == "missing" \
+            and (getattr(shot, "description", "") or "").strip():
+        raise BoundGenerationError(
+            "video_prompt_stale",
+            {"freshness": _fr_state,
+             "hint": "multi 模式 description 不会进入字段编译的 video prompt——"
+                     "先重建 prompt（POST /shot/{id}/prompt/rebuild 或让生成链"
+                     "自动重建）再生成，否则校准语义静默丢失（37.md §1.1）"})
+    if mode == "multi":
+        diagnostics.append({
+            "reason": "video_prompt_freshness",
+            "detail": {"state": _fr_state,
+                       "has_override": bool(getattr(shot, "video_prompt_override", None))}})
     ctx = _production_context_text(pack, rdoc, "video")
     style = _style_instruction_from_pack(pack)
     tail = " ".join(x for x in (ctx, style) if x)

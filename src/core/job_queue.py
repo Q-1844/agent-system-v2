@@ -50,6 +50,13 @@ class Job:
     finished_at: Optional[float] = None
     attempts: int = 0
     last_progress_at: Optional[float] = None   # 看门狗：progress 值上次变化时间
+    # 37.md §1.2 错误可观测性：str(e) 为空的异常（如 httpcore.ReadError）不得
+    # 产生空错误——最终至少落异常类名 + 最后到达阶段 + provider/model（如 handler
+    # 在 params 提供）。只改善排障，不改变 retry/fallback 行为。
+    error_class: Optional[str] = None
+    error_stage: Optional[str] = None
+    error_provider: Optional[str] = None
+    error_model: Optional[str] = None
 
 
 class JobQueue:
@@ -252,6 +259,8 @@ class JobQueue:
                 if pct is not None and int(pct) != job.progress:
                     job.progress = int(pct)
                     job.last_progress_at = time.time()
+                # 37.md §1.2：记录最后到达阶段（失败时定位 provider 调用前/后）
+                job.error_stage = stage
                 self._save()
                 await self._broadcast(job)
 
@@ -274,8 +283,22 @@ class JobQueue:
             if job.state not in (JobState.CANCELLED.value, JobState.FAILED.value):
                 log.exception("[%s] 任务失败 %s", name, job.job_id)
                 job.state = JobState.FAILED.value
-                job.error = str(e)[:800]
-                job.message = f"失败: {str(e)[:200]}"
+                # 37.md §1.2：str(e) 为空的异常（httpcore.ReadError 等）以异常类名
+                # 兜底——绝不让 job.error/message 落空串。
+                msg = str(e).strip()
+                if not msg:
+                    ectx = type(e)
+                    msg = (ectx.__name__ if ectx.__module__ in ("builtins", "exceptions")
+                           else f"{ectx.__module__}.{ectx.__name__}")
+                job.error = msg[:800]
+                job.message = f"失败: {msg[:200]}"
+                job.error_class = f"{type(e).__module__}.{type(e).__qualname__}"
+                params = job.params or {}
+                job.error_provider = (str(params.get("provider"))
+                                      if params.get("provider") else None)
+                model = (params.get("video_model") or params.get("model")
+                         or params.get("image_model"))
+                job.error_model = str(model) if model else None
         finally:
             watchdog.cancel()
             # 终态才记 finished_at；shutdown 保留 RUNNING 的 Job 不记（restart 视为 in-flight）

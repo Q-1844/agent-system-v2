@@ -196,3 +196,95 @@ def _video_prompt_core(shot: Shot, mode: str) -> str:
     parts.append("keep character identity and outfit consistent" if has_char
                  else "keep the overall composition and style consistent")
     return _join(parts)
+
+
+# ============================================================================
+# Prompt 语义签名（37.md §1.1：单一可靠 mutation 路径的 freshness 引擎）。
+#
+# 背景（36.md §1.2.3 缺口的系统级修复）：*_prompt_en 是生成时的字段快照（tier-2），
+# 字段再改后旧快照会静默 shadow 新字段（v1g 实证：雨林校准写在 description，
+# 实际发给 provider 的仍是旧 motion 文本）。*_prompt_sig 由此接线：
+#   - 写入 *_prompt_en 时记录当时的字段签名；
+#   - 消费端（视频生成/手动检查）重算签名比对 → 不一致 = stale。
+# 签名只覆盖**本镜字段**（链上 prev/next 上下文漂移由接力参考与 binding freshness
+# 负责，不在此混入——否则接力链每镜都 stale，签名失去区分度）。
+# ============================================================================
+import hashlib
+import json as _json
+
+# 与 structure_service 的 invalidation 映射对齐：签名集合 = 该阶段 prompt 真正
+# 依赖的本镜字段（LLM 生成上下文 + 字段编译两条路的并集）。
+_FIRST_FRAME_SIG_FIELDS = (
+    "description", "characters", "shot_size", "camera_angle", "lighting",
+    "composition", "important_details", "required_elements", "opening_state",
+    "source_shot_id",
+)
+_LAST_FRAME_SIG_FIELDS = (
+    "motion", "frame_change", "last_frame_description", "end_state",
+    "add_elements", "remove_elements", "end_composition",
+    "preserve_elements", "preserve_custom", "characters",
+)
+# multi（34.md §13）无首帧 conditioning：description 是校准语义的载体，
+# 必须进视频签名（v1g 缺口的直接教训）。
+_VIDEO_SIG_FIELDS = (
+    "description", "characters", "dialogue",
+    "motion", "camera", "camera_movement", "camera_movement_detail",
+    "motion_pace", "environment_motion", "action_sequence",
+    "transition_description", "video_preserve_elements", "video_preserve_custom",
+    "performance_intent",
+    "target_duration_s", "opening_source", "source_shot_id", "link_mode",
+)
+_SIG_FIELD_SETS = {
+    "first": _FIRST_FRAME_SIG_FIELDS,
+    "last": _LAST_FRAME_SIG_FIELDS,
+    "video": _VIDEO_SIG_FIELDS,
+}
+
+
+def prompt_semantic_sig(shot: Shot, stage: str) -> str:
+    """本镜 stage 相关语义字段的稳定签名（sha256 前 16 位）。
+    list 字段排序后参与（避免顺序无关的改写误判失效）；None/空统一归 ""。
+    stage ∈ {first, last, video}，非法 stage 返回 ""。"""
+    fields = _SIG_FIELD_SETS.get(stage)
+    if not fields:
+        return ""
+    payload = {}
+    for name in fields:
+        val = getattr(shot, name, None)
+        if val is None or val == "" or val == []:
+            payload[name] = ""
+        elif isinstance(val, list):
+            payload[name] = sorted(str(x) for x in val)
+        elif isinstance(val, dict):
+            payload[name] = _json.dumps(val, ensure_ascii=False, sort_keys=True,
+                                        default=str)
+        elif isinstance(val, float):
+            payload[name] = round(float(val), 3)
+        else:
+            payload[name] = str(val)
+    blob = _json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
+
+
+def video_prompt_freshness(shot: Shot) -> dict:
+    """视频 prompt 消费端的新鲜度判定（37.md §1.1）。
+    state:
+      override     — 手动 override，用户自负其责（override 语义保留）
+      fresh        — video_prompt_en 与当前字段签名一致
+      stale        — 有 video_prompt_en 但签名不符（字段在 prompt 生成后被改过）
+      untracked    — 有 video_prompt_en 但无签名（本功能之前写入的旧数据）
+      missing      — 无 override / 无 video_prompt_en（消费端回退字段编译；
+                      multi 模式下若 description 非空，编译不带 description，
+                      消费端须 rebuild——见 video_adapter gate）"""
+    current = prompt_semantic_sig(shot, "video")
+    if getattr(shot, "video_prompt_override", None):
+        return {"state": "override", "sig": current, "recorded": ""}
+    en = (getattr(shot, "video_prompt_en", None) or "").strip()
+    recorded = (getattr(shot, "video_prompt_sig", None) or "").strip()
+    if not en:
+        return {"state": "missing", "sig": current, "recorded": ""}
+    if not recorded:
+        return {"state": "untracked", "sig": current, "recorded": ""}
+    if recorded != current:
+        return {"state": "stale", "sig": current, "recorded": recorded}
+    return {"state": "fresh", "sig": current, "recorded": recorded}

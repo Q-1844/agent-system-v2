@@ -378,12 +378,14 @@ _VIDEO_FIELDS = frozenset({
 })
 
 
-def _invalidate_stale_prompts(shot, changed: list[str]) -> dict:
+def invalidate_stale_prompts(shot, changed: list[str]) -> dict:
     """改了影响画面的字段后，让旧的自动英文 prompt 失效（下次生成按新字段重拼）。
     - 有手动 *_prompt_override 的：不清（用户刻意手动覆盖），标记 manual_override。
     - 有 *_prompt_en 的：清空，标记 cleared（旧 prompt 不再代表新字段）。
     - 都没有：无需处理（本就走字段拼接）。
-    不删已生成的图片/视频文件（用户可能要对比）。返回 {first_frame,last_frame,video} 的动作。"""
+    不删已生成的图片/视频文件（用户可能要对比）。返回 {first_frame,last_frame,video} 的动作。
+    （37.md §1.1：公开为正式 mutation receipt 入口——REST PUT 与 agent 工具共用，
+    不再只服务 update_shot_fields 一条路。）"""
     actions = {}
     changed_set = set(changed)
     mapping = [
@@ -407,7 +409,14 @@ def _invalidate_stale_prompts(shot, changed: list[str]) -> dict:
             setattr(shot, en_attr, "")
             setattr(shot, sig_attr, "")
             actions[label] = "cleared"
+        elif getattr(shot, sig_attr, None):
+            setattr(shot, sig_attr, "")
+            actions.setdefault(label, "cleared")
     return actions
+
+
+# 兼容旧名（tests/内部调用沿用私有名）。
+_invalidate_stale_prompts = invalidate_stale_prompts
 
 
 def update_shot_relay(project: Project, shot_id: str, source_shot_id) -> dict:

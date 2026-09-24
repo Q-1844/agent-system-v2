@@ -5,6 +5,7 @@ last-frame/video/update-shot/orchestrate。
 job handlers：first_frame/last_frame/video/audio（注册到 deps.JOB_HANDLERS，供 JobQueue 调用）。
 """
 import asyncio
+import hashlib
 import json
 import uuid
 import base64 as _base64
@@ -982,6 +983,11 @@ class PromptAIRequest(BaseModel):
     text: Optional[str] = None     # optimize 时必填（当前编辑器内容）
 
 
+class PromptRebuildRequest(BaseModel):
+    """37.md §1.1 prompt 重建请求：stages 缺省 first+video（last 仅 keyframes 有意义）。"""
+    stages: Optional[List[str]] = None
+
+
 def _collect_prompt_context(project, shot, stage: str) -> dict:
     """按优先级收集当前阶段上下文（结构化、只读紧邻上下镜、不累积所有历史）。
     优先级：本镜意图(description) > 故事段 > 镜头位置 > 紧邻上一镜 > 紧邻下一镜 >
@@ -1207,6 +1213,49 @@ async def shot_prompt_optimize(project_name: str, shot_id: str, req: PromptAIReq
         raise HTTPException(500, str(e))
 
 
+@router.post("/api/project/{project_name}/shot/{shot_id}/prompt/rebuild")
+async def shot_prompt_rebuild(project_name: str, shot_id: str,
+                              req: PromptRebuildRequest):
+    """重建并落库镜头英文 prompt（37.md §1.1：把 36.md §1.2.3 的手工三步
+    「改字段 → /prompt/generate → PUT prompt_en」收敛为一个正式后端契约）。
+    每个目标 stage 走 generate_prompt_for_stage(persist=True)（同一生成逻辑 +
+    签名落库）；单 stage 失败不阻断其余 stage（receipt 中如实记 error）。
+    stages 缺省 = first + video（last 仅 keyframes 有意义，显式点名才重建）。"""
+    try:
+        project_dir = get_project_manager().get_project_dir(project_name)
+        from src.core.store import ProjectStore
+        project = ProjectStore(project_dir).load()
+        shot = project.get_shot(shot_id)
+        if shot is None:
+            raise HTTPException(404, f"镜头 {shot_id} 不存在")
+        stages = req.stages or ["first", "video"]
+        invalid = [st for st in stages if st not in ("first", "last", "video")]
+        if invalid:
+            raise HTTPException(400, f"非法 stage: {invalid}")
+        results = {}
+        for st in stages:
+            try:
+                r = await generate_prompt_for_stage(project_name, shot_id, st,
+                                                    persist=True)
+                text = r.get("prompt") or ""
+                results[st] = {"ok": True,
+                               "prompt_hash": hashlib.sha256(
+                                   text.encode("utf-8")).hexdigest()[:16],
+                               "prompt": text,
+                               "inferred_shot_intent": r.get("inferred_shot_intent", "")}
+            except HTTPException:
+                raise
+            except Exception as e:
+                results[st] = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+        return {"shot_id": shot_id, "stages": results}
+    except FileNotFoundError:
+        raise HTTPException(404, "项目不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
 # ==================== 阶段 3：镜头视频生成（shot 级，走 JobQueue 串行视频 worker）====================
 from src.api.agnes_client import resolve_size as _resolve_size, PollTransientError, AgnesError
 
@@ -1244,6 +1293,38 @@ async def _await_last_frame_url(store, shot_id, emit, timeout=180, interval=5):
     return None
 
 
+async def _ensure_multi_video_prompt(project_name: str, shot_id: str, emit) -> dict:
+    """37.md §1.1：multi 生成前自动重建过期/缺失的 video prompt——36.md §1.2.3
+    缺口（改字段后 prompt 不重建 = 视频用旧剧本）的系统级闭环，不再依赖执行者
+    「记得手工 prompt generate」。
+    - fresh / override：不动（override 语义保留，用户自负其责）；
+    - missing 且 description 空：字段编译已覆盖全部语义，无需重建；
+    - 其余（stale / untracked / missing+description 非空）：走
+      generate_prompt_for_stage(video, persist=True)——与 POST /prompt/rebuild
+      同一生成逻辑 + 签名落库；失败抛 RuntimeError（fail closed，绝不带旧语义
+      提交 provider）。
+    返回 receipt {rebuilt, freshness_before, prompt_hash}。"""
+    from src.core.store import ProjectStore
+    from src.core.prompt_builder import video_prompt_freshness
+    project_dir = get_project_manager().get_project_dir(project_name)
+    shot = ProjectStore(project_dir).load().get_shot(shot_id)
+    if shot is None:
+        raise RuntimeError(f"镜头 {shot_id} 不存在")
+    fr = video_prompt_freshness(shot)
+    desc = (shot.description or "").strip()
+    if fr["state"] in ("fresh", "override") or (fr["state"] == "missing" and not desc):
+        return {"rebuilt": False, "freshness_before": fr["state"], "prompt_hash": ""}
+    await emit("prompt_rebuild",
+               f"{shot_id} video prompt 过期（{fr['state']}）——按当前字段自动重建", 4)
+    r = await generate_prompt_for_stage(project_name, shot_id, "video", persist=True)
+    text = (r.get("prompt") or "").strip()
+    if not text:
+        raise RuntimeError("video prompt 自动重建返回空文本（fail closed，不提交生成）")
+    ph = hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+    await emit("prompt_rebuild", f"{shot_id} video prompt 已重建 hash={ph}", 5)
+    return {"rebuilt": True, "freshness_before": fr["state"], "prompt_hash": ph}
+
+
 async def _handler_video(job, emit):
     """镜头视频生成（PHASE_3 §3.4）。
     preflight -> keyframes 等尾帧 -> 提交立刻落库 video_id -> 轮询 -> 下载 -> 回读秒数/尺寸。
@@ -1251,6 +1332,8 @@ async def _handler_video(job, emit):
     from src.core.store import ProjectStore
     from src.core.prompt_builder import build_video_prompt
     from src.core.models import ShotStatus, OpeningSource
+    # 37.md §1.2：失败可观测——provider/model 归档在 job（model 由 submit 时 params 带入）
+    job.params.setdefault("provider", "agnes")
     project_dir = get_project_manager().get_project_dir(job.project)
     store = ProjectStore(project_dir)
     project = store.load()
@@ -1358,6 +1441,13 @@ async def _handler_video(job, emit):
         vid = shot.video.video_id
         await emit("recover", f"{shot.shot_id} 续轮询 video_id={vid}（不重提交）", 10)
     else:
+        # 37.md §1.1：multi 生成前自动重建过期 video prompt（36.md §1.2.3 缺口闭环）。
+        # 仅 fresh-submit 且 BOUND（multi 生成走 BOUND path；unbound multi 本就
+        # fail closed，不白烧 LLM）。恢复/续轮询不重建（无新生成输入）。
+        if mode == "multi" and shot_has_visual_production_binding(project_dir, shot.shot_id):
+            _rebuild_receipt = await _ensure_multi_video_prompt(job.project, job.shot_id, emit)
+            if _rebuild_receipt["rebuilt"]:
+                shot = store.load().get_shot(job.shot_id)   # 重建后取最新
         # S3C.2 双路径（§21）：BOUND 视频重提交走 Binding-aware path（READY→Pack→
         # Adapter：boundary selection truth + generation_basis freshness + pre-dispatch
         # race guard；NOT_READY→BLOCK，绝不 fallback legacy）；UNBOUND 保持 legacy 行为
@@ -1799,12 +1889,29 @@ class UpdateShotRequest(BaseModel):
 
 @router.put("/api/project/{project_name}/shot/{shot_id}")
 async def update_shot(project_name: str, shot_id: str, req: UpdateShotRequest):
-    """更新镜头创作字段（工作台编辑），写回 project.json。None 字段不改动。"""
+    """更新镜头创作字段（工作台编辑），写回 project.json。None 字段不改动。
+
+    37.md §1.1 单一可靠 mutation 路径：本端点与 update_shot_fields（agent/脚本侧）
+    同口径——改了影响 prompt 语义的字段自动 invalidate 对应 *_prompt_en（保留
+    override），响应带 prompts_invalidated receipt；写 *_prompt_en 文本而未显式
+    传 *_prompt_sig 时，服务端按改后字段计算并落签名（消费端新鲜度可判）。"""
     try:
         project_dir = get_project_manager().get_project_dir(project_name)
         from src.core.store import ProjectStore
         from src.core.models import LinkMode
+        from src.core.prompt_builder import prompt_semantic_sig
+        from src.storyboard.structure_service import invalidate_stale_prompts
         valid = {m.value for m in LinkMode}
+        provided = {k: v for k, v in req.model_dump().items() if v is not None}
+        # 创作字段（参与 invalidation 判定的）——sig/prompt 文本/结构关系字段除外
+        from src.storyboard.structure_service import (
+            _FIRST_FRAME_FIELDS, _LAST_FRAME_FIELDS, _VIDEO_FIELDS)
+        creative_changed = [k for k in provided
+                            if k in _FIRST_FRAME_FIELDS or k in _LAST_FRAME_FIELDS
+                            or k in _VIDEO_FIELDS]
+        prompt_sig_fields = {"prompt_en": ("first_frame_prompt_sig", "first"),
+                             "last_frame_prompt_en": ("last_frame_prompt_sig", "last"),
+                             "video_prompt_en": ("video_prompt_sig", "video")}
         def mut(s):
             if req.link_mode is not None:
                 if req.link_mode not in valid:
@@ -1814,8 +1921,6 @@ async def update_shot(project_name: str, shot_id: str, req: UpdateShotRequest):
                 s.locked = req.locked
             if req.description is not None:
                 s.description = req.description
-            if req.prompt_en is not None:
-                s.prompt_en = req.prompt_en
             if req.negative_prompt is not None:
                 s.negative_prompt = req.negative_prompt
             if req.shot_size is not None:
@@ -1843,19 +1948,47 @@ async def update_shot(project_name: str, shot_id: str, req: UpdateShotRequest):
                 "preserve_custom", "camera_movement", "motion_pace", "environment_motion",
                 "action_sequence", "camera_movement_detail", "transition_description",
                 "video_preserve_elements", "video_preserve_custom", "target_duration_s",
-                "last_frame_prompt_en", "video_prompt_en",
-                "first_frame_prompt_override", "last_frame_prompt_override", "video_prompt_override",
-                "first_frame_prompt_sig", "last_frame_prompt_sig", "video_prompt_sig",
                 "opening_source", "source_shot_id", "source_version",
             ):
-                v = getattr(req, f)
-                if v is not None:
-                    setattr(s, f, list(v) if isinstance(v, list) else v)
+                if f in provided:
+                    setattr(s, f, list(provided[f]) if isinstance(provided[f], list)
+                            else provided[f])
+            # 🔴 invalidation 先于 prompt 文本写入：同一请求既改字段又写 prompt
+            #  文本时（执行者「改字段+重建 prompt」合并调用），旧 en 先失效、新文本
+            #  带新签名落库——绝不能把本次新写的 prompt 又清掉。
+            prompts_invalidated.update(invalidate_stale_prompts(s, creative_changed))
+            # prompt 文本 + 签名（显式传 sig 尊重手工值；否则服务端按改后字段计算）
+            if req.prompt_en is not None:
+                s.prompt_en = req.prompt_en
+            if req.last_frame_prompt_en is not None:
+                s.last_frame_prompt_en = req.last_frame_prompt_en
+            if req.video_prompt_en is not None:
+                s.video_prompt_en = req.video_prompt_en
+            for text_attr, (sig_attr, stage) in prompt_sig_fields.items():
+                if getattr(req, text_attr) is None:
+                    continue
+                if getattr(req, sig_attr) is not None:
+                    setattr(s, sig_attr, getattr(req, sig_attr))
+                else:
+                    setattr(s, sig_attr, prompt_semantic_sig(s, stage))
+            for f in (
+                "first_frame_prompt_override", "last_frame_prompt_override",
+                "video_prompt_override",
+                "first_frame_prompt_sig", "last_frame_prompt_sig", "video_prompt_sig",
+            ):
+                if f in provided:
+                    setattr(s, f, provided[f])
         store = ProjectStore(project_dir)
         if store.load().get_shot(shot_id) is None:
             raise HTTPException(404, f"镜头 {shot_id} 不存在")
+        prompts_invalidated: dict = {}
         store.update_shot(shot_id, mut)
-        return {"shot_id": shot_id}
+        shot_after = store.load().get_shot(shot_id)
+        sigs_recorded = {stage: (getattr(shot_after, sig_attr) or "")
+                         for text_attr, (sig_attr, stage) in prompt_sig_fields.items()
+                         if getattr(req, text_attr) is not None}
+        return {"shot_id": shot_id, "prompts_invalidated": prompts_invalidated,
+                "prompt_sigs_recorded": sigs_recorded}
     except FileNotFoundError:
         raise HTTPException(404, "项目不存在")
     except ValueError as e:
@@ -2162,9 +2295,18 @@ async def generate_prompt_for_stage(project_name: str, shot_id: str, stage: str,
         prompt = en.strip()
 
     if persist:
+        from src.core.prompt_builder import prompt_semantic_sig
         field = {"first": "prompt_en", "last": "last_frame_prompt_en",
                  "video": "video_prompt_en"}[stage]
-        ProjectStore(project_dir).update_shot(shot_id, lambda s, f=field, p=prompt: setattr(s, f, p))
+        sig_field = {"first": "first_frame_prompt_sig",
+                     "last": "last_frame_prompt_sig",
+                     "video": "video_prompt_sig"}[stage]
+
+        def _persist_prompt(s, f=field, sf=sig_field, p=prompt):
+            setattr(s, f, p)
+            # 37.md §1.1：写入 en 的同时记录当时字段签名（消费端 freshness 可判）
+            setattr(s, sf, prompt_semantic_sig(s, stage))
+        ProjectStore(project_dir).update_shot(shot_id, _persist_prompt)
     return {"prompt": prompt, "inferred_shot_intent": inferred}
 
 
