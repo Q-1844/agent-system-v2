@@ -25,7 +25,7 @@ td.good{color:#7CFC98}td.mid{color:#ffd166}td.bad{color:#ff7b72}.note{color:#888
 </div>
 
 <h2>衔接 diff 矩阵（机器量化）</h2>
-<table class="mtx"><tr><th>衔接链接（本镜首帧 vs 上镜末帧）</th><th>无接力对照（bug 白跑批）</th><th>接力链 1（09-23 00:19）</th><th>接力链 2（Pages 图床）</th><th>动作接力（v1d：只接力动作，环境不接续）</th><th>分组接力（v1e：组内尾帧接力+断链重锚定 8s/10s）</th></tr><tr><td>s02_c01<span class='note'> 参考=s01 尾帧（空园土路）——狐狸从画外入画</span></td><td class='bad'>57.8</td><td class='good'>4.2</td><td class='good'>4.4</td><td class='bad'>44.1</td><td class='bad'>—</td></tr><tr><td>s03_c01<span class='note'> 参考=s02 尾帧（行走中）</span></td><td class='bad'>49.3</td><td class='mid'>27.7</td><td class='mid'>25.4</td><td class='mid'>29.2</td><td class='good'>6.5</td></tr><tr><td>s04_c01<span class='note'> 参考=s03 尾帧（CU 状态）</span></td><td class='bad'>49.7</td><td class='good'>3.5</td><td class='good'>3.6</td><td class='bad'>55.5</td><td class='bad'>60.1</td></tr><tr><td>s05_c01<span class='note'> 参考=s04 尾帧（蓄力结束态）</span></td><td class='bad'>37.7</td><td class='good'>8.5</td><td class='good'>6.8</td><td class='bad'>54.2</td><td class='mid'>23.4</td></tr><tr><td>s06_c01<span class='note'> 参考=s05 尾帧（落地状态）</span></td><td class='mid'>18.3</td><td class='good'>4.3</td><td class='good'>3.9</td><td class='bad'>55.5</td><td class='bad'>53.3</td></tr><tr><td>s07_c01<span class='note'> 参考=s06 尾帧（坐地仰望态）</span></td><td class='bad'>61.4</td><td class='good'>3.3</td><td class='good'>3.3</td><td class='bad'>55.0</td><td class='good'>3.5</td></tr></table>
+<table class="mtx"><tr><th>衔接链接（本镜首帧 vs 上镜末帧）</th><th>无接力对照（bug 白跑批）</th><th>接力链 1（09-23 00:19）</th><th>接力链 2（Pages 图床）</th><th>动作接力（v1d：只接力动作，环境不接续）</th><th>分组接力（v1e：组内尾帧接力+断链重锚定 8s/10s）</th><th>自适应分组接力（v1f：新故事《狐狸与蝴蝶》，全程尾帧链+看帧写剧本）</th></tr><tr><td>s02_c01<span class='note'> 参考=s01 尾帧（空园土路）——狐狸从画外入画</span></td><td class='bad'>57.8</td><td class='good'>4.2</td><td class='good'>4.4</td><td class='bad'>44.1</td><td class='bad'>—</td><td class='bad'>—</td></tr><tr><td>s03_c01<span class='note'> 参考=s02 尾帧（行走中）</span></td><td class='bad'>49.3</td><td class='mid'>27.7</td><td class='mid'>25.4</td><td class='mid'>29.2</td><td class='good'>6.5</td><td class='mid'>17.7</td></tr><tr><td>s04_c01<span class='note'> 参考=s03 尾帧（CU 状态）</span></td><td class='bad'>49.7</td><td class='good'>3.5</td><td class='good'>3.6</td><td class='bad'>55.5</td><td class='bad'>60.1</td><td class='good'>4.6</td></tr><tr><td>s05_c01<span class='note'> 参考=s04 尾帧（蓄力结束态）</span></td><td class='bad'>37.7</td><td class='good'>8.5</td><td class='good'>6.8</td><td class='bad'>54.2</td><td class='mid'>23.4</td><td class='mid'>28.2</td></tr><tr><td>s06_c01<span class='note'> 参考=s05 尾帧（落地状态）</span></td><td class='mid'>18.3</td><td class='good'>4.3</td><td class='good'>3.9</td><td class='bad'>55.5</td><td class='bad'>53.3</td><td class='good'>5.7</td></tr><tr><td>s07_c01<span class='note'> 参考=s06 尾帧（坐地仰望态）</span></td><td class='bad'>61.4</td><td class='good'>3.3</td><td class='good'>3.3</td><td class='bad'>55.0</td><td class='good'>3.5</td><td class='good'>3.3</td></tr></table>
 <div class="meta">v1c_fallback 列=resolver bug 白跑批（首帧逐像素同 hero 开场）——历史事故批，数值上恰构成
 「无接力」对照组；relay1/relay2=修复后独立接力链。s03 链接天然偏高（上镜尾=行走中态，开场重构图），
 两条接力链一致复现（27.7/25.4），非回落信号。</div>
@@ -49,7 +49,11 @@ td.good{color:#7CFC98}td.mid{color:#ffd166}td.bad{color:#ff7b72}.note{color:#888
 <span class="pill warn">衔接 —</span>
 <span class="pill">5.0s</span><br><video src="recovered_v1e/s02_c01_v1e.mp4" controls preload="metadata"></video>
 <div class="note">首帧 <img src="_frames/v1e/s02_c01_ff.png"> 末帧 <img src="_frames/v1e/s02_c01_tail.png"></div>
-<div class="note">version=vv_612f60aa</div></div></div><h2>s03_c01 <span class='note'>参考=s02 尾帧（行走中） ｜ 漂移观察：近景面部：眼距/吻部白斑/耳形</span></h2><div class='cols'><div class="cand"><b>无接力对照（bug 白跑批）</b>
+<div class="note">version=vv_612f60aa</div></div><div class="cand"><b>自适应分组接力（v1f：新故事《狐狸与蝴蝶》，全程尾帧链+看帧写剧本）</b>
+<span class="pill warn">衔接 —</span>
+<span class="pill">5.0s</span><br><video src="recovered_v1f/s02_c01_v1f.mp4" controls preload="metadata"></video>
+<div class="note">首帧 <img src="_frames/v1f/s02_c01_ff.png"> 末帧 <img src="_frames/v1f/s02_c01_tail.png"></div>
+<div class="note">version=vv_43863450</div></div></div><h2>s03_c01 <span class='note'>参考=s02 尾帧（行走中） ｜ 漂移观察：近景面部：眼距/吻部白斑/耳形</span></h2><div class='cols'><div class="cand"><b>无接力对照（bug 白跑批）</b>
 <span class="pill warn">衔接 49.3</span>
 <span class="pill">5.0s</span><br><video src="recovered_v1c/v1c_fallback/s03_c01_v1c_fallback.mp4" controls preload="metadata"></video>
 <div class="note">首帧 <img src="_frames/v1c_fallback/s03_c01_ff.png"> 末帧 <img src="_frames/v1c_fallback/s03_c01_tail.png"></div>
@@ -69,7 +73,11 @@ td.good{color:#7CFC98}td.mid{color:#ffd166}td.bad{color:#ff7b72}.note{color:#888
 <span class="pill warn">衔接 6.5</span>
 <span class="pill">5.0s</span><br><video src="recovered_v1e/s03_c01_v1e.mp4" controls preload="metadata"></video>
 <div class="note">首帧 <img src="_frames/v1e/s03_c01_ff.png"> 末帧 <img src="_frames/v1e/s03_c01_tail.png"></div>
-<div class="note">version=vv_873d7f3b</div></div></div><h2>s04_c01 <span class='note'>参考=s03 尾帧（CU 状态） ｜ 漂移观察：CU：面部细节漂移高发位</span></h2><div class='cols'><div class="cand"><b>无接力对照（bug 白跑批）</b>
+<div class="note">version=vv_873d7f3b</div></div><div class="cand"><b>自适应分组接力（v1f：新故事《狐狸与蝴蝶》，全程尾帧链+看帧写剧本）</b>
+<span class="pill warn">衔接 17.7</span>
+<span class="pill">5.0s</span><br><video src="recovered_v1f/s03_c01_v1f.mp4" controls preload="metadata"></video>
+<div class="note">首帧 <img src="_frames/v1f/s03_c01_ff.png"> 末帧 <img src="_frames/v1f/s03_c01_tail.png"></div>
+<div class="note">version=vv_54aee122</div></div></div><h2>s04_c01 <span class='note'>参考=s03 尾帧（CU 状态） ｜ 漂移观察：CU：面部细节漂移高发位</span></h2><div class='cols'><div class="cand"><b>无接力对照（bug 白跑批）</b>
 <span class="pill warn">衔接 49.7</span>
 <span class="pill">5.0s</span><br><video src="recovered_v1c/v1c_fallback/s04_c01_v1c_fallback.mp4" controls preload="metadata"></video>
 <div class="note">首帧 <img src="_frames/v1c_fallback/s04_c01_ff.png"> 末帧 <img src="_frames/v1c_fallback/s04_c01_tail.png"></div>
@@ -89,7 +97,11 @@ td.good{color:#7CFC98}td.mid{color:#ffd166}td.bad{color:#ff7b72}.note{color:#888
 <span class="pill warn">断链跳变(设计) 60.1</span>
 <span class="pill">8.0s</span><br><video src="recovered_v1e/s04_c01_v1e.mp4" controls preload="metadata"></video>
 <div class="note">首帧 <img src="_frames/v1e/s04_c01_ff.png"> 末帧 <img src="_frames/v1e/s04_c01_tail.png"></div>
-<div class="note">version=vv_e0e4aadc</div></div></div><h2>s05_c01 <span class='note'>参考=s04 尾帧（蓄力结束态） ｜ 漂移观察：腾空：四肢/体型比例</span></h2><div class='cols'><div class="cand"><b>无接力对照（bug 白跑批）</b>
+<div class="note">version=vv_e0e4aadc</div></div><div class="cand"><b>自适应分组接力（v1f：新故事《狐狸与蝴蝶》，全程尾帧链+看帧写剧本）</b>
+<span class="pill warn">衔接 4.6</span>
+<span class="pill">8.0s</span><br><video src="recovered_v1f/s04_c01_v1f.mp4" controls preload="metadata"></video>
+<div class="note">首帧 <img src="_frames/v1f/s04_c01_ff.png"> 末帧 <img src="_frames/v1f/s04_c01_tail.png"></div>
+<div class="note">version=vv_008a2cdd</div></div></div><h2>s05_c01 <span class='note'>参考=s04 尾帧（蓄力结束态） ｜ 漂移观察：腾空：四肢/体型比例</span></h2><div class='cols'><div class="cand"><b>无接力对照（bug 白跑批）</b>
 <span class="pill warn">衔接 37.7</span>
 <span class="pill">5.0s</span><br><video src="recovered_v1c/v1c_fallback/s05_c01_v1c_fallback.mp4" controls preload="metadata"></video>
 <div class="note">首帧 <img src="_frames/v1c_fallback/s05_c01_ff.png"> 末帧 <img src="_frames/v1c_fallback/s05_c01_tail.png"></div>
@@ -109,7 +121,11 @@ td.good{color:#7CFC98}td.mid{color:#ffd166}td.bad{color:#ff7b72}.note{color:#888
 <span class="pill warn">衔接 23.4</span>
 <span class="pill">10.0s</span><br><video src="recovered_v1e/s05_c01_v1e.mp4" controls preload="metadata"></video>
 <div class="note">首帧 <img src="_frames/v1e/s05_c01_ff.png"> 末帧 <img src="_frames/v1e/s05_c01_tail.png"></div>
-<div class="note">version=vv_f99527e3</div></div></div><h2>s06_c01 <span class='note'>参考=s05 尾帧（落地状态） ｜ 漂移观察：落地：体型+毛色</span></h2><div class='cols'><div class="cand"><b>无接力对照（bug 白跑批）</b>
+<div class="note">version=vv_f99527e3</div></div><div class="cand"><b>自适应分组接力（v1f：新故事《狐狸与蝴蝶》，全程尾帧链+看帧写剧本）</b>
+<span class="pill warn">衔接 28.2</span>
+<span class="pill">8.0s</span><br><video src="recovered_v1f/s05_c01_v1f.mp4" controls preload="metadata"></video>
+<div class="note">首帧 <img src="_frames/v1f/s05_c01_ff.png"> 末帧 <img src="_frames/v1f/s05_c01_tail.png"></div>
+<div class="note">version=vv_a31d521a</div></div></div><h2>s06_c01 <span class='note'>参考=s05 尾帧（落地状态） ｜ 漂移观察：落地：体型+毛色</span></h2><div class='cols'><div class="cand"><b>无接力对照（bug 白跑批）</b>
 <span class="pill warn">衔接 18.3</span>
 <span class="pill">5.0s</span><br><video src="recovered_v1c/v1c_fallback/s06_c01_v1c_fallback.mp4" controls preload="metadata"></video>
 <div class="note">首帧 <img src="_frames/v1c_fallback/s06_c01_ff.png"> 末帧 <img src="_frames/v1c_fallback/s06_c01_tail.png"></div>
@@ -129,7 +145,11 @@ td.good{color:#7CFC98}td.mid{color:#ffd166}td.bad{color:#ff7b72}.note{color:#888
 <span class="pill warn">断链跳变(设计) 53.3</span>
 <span class="pill">8.0s</span><br><video src="recovered_v1e/s06_c01_v1e.mp4" controls preload="metadata"></video>
 <div class="note">首帧 <img src="_frames/v1e/s06_c01_ff.png"> 末帧 <img src="_frames/v1e/s06_c01_tail.png"></div>
-<div class="note">version=vv_391f1ad7</div></div></div><h2>s07_c01 <span class='note'>参考=s06 尾帧（坐地仰望态） ｜ 漂移观察：坐地仰望：链尾=累计漂移终态</span></h2><div class='cols'><div class="cand"><b>无接力对照（bug 白跑批）</b>
+<div class="note">version=vv_391f1ad7</div></div><div class="cand"><b>自适应分组接力（v1f：新故事《狐狸与蝴蝶》，全程尾帧链+看帧写剧本）</b>
+<span class="pill warn">衔接 5.7</span>
+<span class="pill">8.0s</span><br><video src="recovered_v1f/s06_c01_v1f.mp4" controls preload="metadata"></video>
+<div class="note">首帧 <img src="_frames/v1f/s06_c01_ff.png"> 末帧 <img src="_frames/v1f/s06_c01_tail.png"></div>
+<div class="note">version=vv_99ea8954</div></div></div><h2>s07_c01 <span class='note'>参考=s06 尾帧（坐地仰望态） ｜ 漂移观察：坐地仰望：链尾=累计漂移终态</span></h2><div class='cols'><div class="cand"><b>无接力对照（bug 白跑批）</b>
 <span class="pill warn">衔接 61.4</span>
 <span class="pill">5.0s</span><br><video src="recovered_v1c/v1c_fallback/s07_c01_v1c_fallback.mp4" controls preload="metadata"></video>
 <div class="note">首帧 <img src="_frames/v1c_fallback/s07_c01_ff.png"> 末帧 <img src="_frames/v1c_fallback/s07_c01_tail.png"></div>
@@ -149,7 +169,11 @@ td.good{color:#7CFC98}td.mid{color:#ffd166}td.bad{color:#ff7b72}.note{color:#888
 <span class="pill warn">衔接 3.5</span>
 <span class="pill">5.0s</span><br><video src="recovered_v1e/s07_c01_v1e.mp4" controls preload="metadata"></video>
 <div class="note">首帧 <img src="_frames/v1e/s07_c01_ff.png"> 末帧 <img src="_frames/v1e/s07_c01_tail.png"></div>
-<div class="note">version=vv_78c1dcb1</div></div></div>
+<div class="note">version=vv_78c1dcb1</div></div><div class="cand"><b>自适应分组接力（v1f：新故事《狐狸与蝴蝶》，全程尾帧链+看帧写剧本）</b>
+<span class="pill warn">衔接 3.3</span>
+<span class="pill">5.0s</span><br><video src="recovered_v1f/s07_c01_v1f.mp4" controls preload="metadata"></video>
+<div class="note">首帧 <img src="_frames/v1f/s07_c01_ff.png"> 末帧 <img src="_frames/v1f/s07_c01_tail.png"></div>
+<div class="note">version=vv_f6a6a78d</div></div></div>
 <h2>人评（漂移数据扩充轮）</h2>
 <div class="meta">逐镜 ⭐/✅/❌ + 备注，重点：①同镜跨链漂移是否复现（relay1 vs relay2 同镜对比）
 ②链位越深漂移越重（s04/s07 累计位）③与锚图的身份偏差方向（毛色/面部/体型/背景）。

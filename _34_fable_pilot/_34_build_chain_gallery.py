@@ -20,6 +20,7 @@ RUNS = [  # (语义标签, 展示名, jsonl round 名, 序数区间)
     ("v1c_relay2", "接力链 2（Pages 图床）", "v1c_r3", (0, 6)),
     ("v1d_action", "动作接力（v1d：只接力动作，环境不接续）", "v1d", (0, 6)),
     ("v1e_segmented", "分组接力（v1e：组内尾帧接力+断链重锚定 8s/10s）", "v1e", (0, 6)),
+    ("v1f_adaptive", "自适应分组接力（v1f：新故事《狐狸与蝴蝶》，全程尾帧链+看帧写剧本）", "v1f", (0, 6)),
 ]
 # 运行期目录名与语义标签的映射（目录统一为语义名后为空）
 DIR_ALIAS = {}
@@ -43,7 +44,7 @@ DRIFT_WATCH = {
 
 def records():
     out = []
-    for name in ("v1c_runs.jsonl", "v1d_runs.jsonl", "v1e_runs.jsonl"):
+    for name in ("v1c_runs.jsonl", "v1d_runs.jsonl", "v1e_runs.jsonl", "v1f_runs.jsonl"):
         f = HERE / name
         if f.exists():
             for l in f.read_text(encoding="utf-8").splitlines():
@@ -158,6 +159,11 @@ td.good{{color:#7CFC98}}td.mid{{color:#ffd166}}td.bad{{color:#ff7b72}}.note{{col
                 ff = f"_frames/v1e/{shot}_ff.png"
                 tl = f"_frames/v1e/{shot}_tail.png"
                 diff = (metrics.get("v1e_segmented") or {}).get("links", {}).get(shot)
+            elif label == "v1f_adaptive":
+                base = f"recovered_v1f/{shot}_v1f.mp4"
+                ff = f"_frames/v1f/{shot}_ff.png"
+                tl = f"_frames/v1f/{shot}_tail.png"
+                diff = (metrics.get("v1f_adaptive") or {}).get("links", {}).get(shot)
             else:
                 dirname = DIR_ALIAS.get(label, label)
                 base = f"recovered_v1c/{dirname}/{shot}_{dirname}.mp4"
