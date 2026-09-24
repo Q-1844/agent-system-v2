@@ -446,5 +446,59 @@
     "user_feedback": "N7/8/9 可；N5/N6 不满意。两案：1) 从4加情节接7  2) 重生成6+在4和6之间加情节使其流畅。授权：重生成+加情节+自行判断方法（将并入偏离方法论）",
     "method_judgment": "选方案2扩展：根因=N4尾帧夜景化+ECU（异常源，同时弄坏4→5亮度接点与构图衔接）；方案1废N5会丢失段B场景建立（水塘=N6-N9舞台）。修复序：N4重生成（白天光尘锚定，与N2/N3日光光尘一致）→N5重生成→N6重生成+最小情节（惊吓→好奇→朝蕨丛挪近，为N7蝴蝶出蕨+落尾铺垫动机）",
     "plot_insertion_authority": "用户明确授权增加情节使之合理；N6 微情节=正式校准协议路径（36.md §2 MAJOR→插最小情节），记录在案"
+  },
+  "N67_BRIDGE": {
+    "shot_id": "s10_c06",
+    "segment": "B",
+    "kind": "bridge_shot",
+    "provider_id": "agnes",
+    "provider_model": "agnes-video-v2.0",
+    "generation_mode": "keyframes_bridge",
+    "duration_s": 10.0,
+    "prompt_hash": "64566f13ab6eba39",
+    "prompt_snapshot": "The fox slowly rises from a crouched position, its body extending as it steps forward into the shallow water. It stops at the edge of the fern cluster, ears perked up high, sniffing the air. Its gaze remains fixed intently on the slightly swaying ferns, holding a breath in anticipation. Sunlight slants down through the trees, creating a dreamy atmosphere with floating light particles around the scene.",
+    "reference_asset_ids": [
+      "prev_tail"
+    ],
+    "opening_reference_type": "prev_tail_relay(N6 r2 tail)",
+    "expected_tail": "狐狸四足站立在浅水中蕨丛边缘，侧面朝右，耳朵竖起紧盯蕨丛（=N7 实际首帧状态）",
+    "end_frame_url": "https://Q-1844.github.io/agnes-frame-host/objects/a37e7a743bbf3bd7.jpg",
+    "end_frame_local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\Fable_Pilot_Fox_and_Grapes_V1\\output\\frames\\s10_c06_video_end.jpg",
+    "mae_prev": 43.3,
+    "mae_to_next_first": 2.9,
+    "vision_assessment": {
+      "identity_consistency": "Fox correctly rendered as orange with white markings and dark-tipped ears.",
+      "environment_consistency": "Forest setting with green ferns visible, consistent with expected tail.",
+      "character_pose_state": "Close-up portrait only; full body not visible, ears upright, gaze forward.",
+      "character_position": "Centered face fill; position relative to water edge or fern丛 cannot be confirmed from this shot.",
+      "prop_state": "Fern fronds visible in foreground on the right; no props present.",
+      "action_endpoint": "Fox appears alert and calm, but does not clearly show 'staring at fern丛'; expression is ambiguous.",
+      "camera_state": "Extreme close-up on fox's face; tight framing differs from planned wide shot.",
+      "expected_tail_match": "Mismatch: expected full-body side profile standing in shallow water near ferns; actual frame shows only face in close-up.",
+      "next_shot_readiness": "Limited readiness for transition due to lack of environmental context and body positioning.",
+      "narrative_state": "Ambiguous emotional state conveyed; unclear whether fox is cautiously watching or simply curious.",
+      "unexpected_elements": "No water, paws, or background depth visible; framing is too tight compared to expected tail.",
+      "suggested_deviation": "major",
+      "notes": "Frame is a tight close-up lacking environmental cues; fails to establish spatial continuity with next shot."
+    },
+    "vision_meta": {
+      "model": "agnes-2.5-flash",
+      "latency_s": 4.18,
+      "parse_repair_used": false
+    },
+    "human_deviation_level": "none",
+    "human_action": "continue",
+    "human_reason": "用户方法实证：桥梁镜 keyframes 模式——首帧槽=N6尾帧（接力）、尾帧槽=N7首帧（seed），两端视觉钉死，provider 插值过渡；尾帧与 N7 首帧 MAE 2.9（多参考版 43.6 被特写吸引子劫持已弃用）",
+    "shot_patch": {},
+    "prompt_rebuilt": true,
+    "next_shot_id": "s10_c03",
+    "result_after_correction": "播放序 N6→桥梁→N7 接续成立",
+    "retry_or_adapt": "adapt",
+    "choice_reason": "",
+    "notes": "用户裁定的桥梁镜方法实证：N6尾帧生成桥梁镜、N7首帧定义桥梁镜收尾——首尾都被使用；时长10s平滑过渡",
+    "vision_vs_human_diff": "attempt1(multi): vision major=人工一致（特写吸引子）；attempt2(keyframes): 尾态视觉钉死无需 vision 裁定",
+    "notes_add": "系统级发现：keyframes 模式=接续桥梁的正式工具（首尾双边界视觉钉死，吸引子无法漂移尾态）；系统缺口在档：提取帧作尾边界需 script 级 seed（batch+指针+basis），无正式路径；basis 时序坑=seed 后不可再 refresh（binding_revision 会被顶掉）",
+    "repair_round": 2,
+    "attempt1_rejected": "multi 版尾帧被特写吸引子劫持（face close-up，MAE 43.6）"
   }
 }
