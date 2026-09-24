@@ -1,0 +1,50 @@
+{
+  "N1": {
+    "shot_id": "s09_c01",
+    "segment": "A",
+    "provider_id": "agnes",
+    "provider_model": "agnes-video-v2.0",
+    "generation_mode": "multi_reference",
+    "duration_s": 8.0,
+    "prompt_hash": "d1df12377879d7b4",
+    "prompt_snapshot": "Low-angle tracking shot moves steadily right, keeping pace with a red fox sprinting along a mossy forest path. The camera holds the fox in frame while tree trunks and dense fern fronds sweep past in parallax, morning mist swirling around the runner's legs. As the fox darts from left to right, the background trees shift continuously, fog wisps blur across the lens, and soft golden rays pierce through the canopy above.",
+    "reference_asset_ids": [
+      "ref_d27e1a01c36f"
+    ],
+    "opening_reference_type": "chain_root_reference",
+    "expected_tail": "狐狸在小径中段减速站定，四足着地，身体朝向画面右侧，耳朵竖起",
+    "end_frame_url": "https://Q-1844.github.io/agnes-frame-host/objects/19dace30333b9e6e.jpg",
+    "end_frame_local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\Fable_Pilot_Fox_and_Grapes_V1\\output\\frames\\s09_c01_video_end.jpg",
+    "mae_prev": null,
+    "vision_assessment": {
+      "identity_consistency": "The fox is correctly depicted with orange fur, white-tipped tail, and characteristic fox features",
+      "environment_consistency": "Forest path environment matches expected setting with dappled sunlight, ferns, and trees",
+      "character_pose_state": "Fox is standing still but not yet fully stationary - appears to be mid-deceleration rather than completely stopped",
+      "character_position": "Fox positioned on the path in the middle ground, facing right as expected",
+      "prop_state": "No props present; only natural forest elements visible",
+      "action_endpoint": "Fox is slowing down/stopping but not yet fully static - body still shows some forward momentum",
+      "camera_state": "Static shot composition consistent with previous frame",
+      "expected_tail_match": "CLOSE - fox is stopping but not yet at rest position; ears are up but body language suggests motion continuing",
+      "next_shot_readiness": "Ready for next shot to begin from this near-stationary position",
+      "narrative_state": "Action progressing toward completion - deceleration phase visible",
+      "unexpected_elements": "None - all elements align with expected storyboard direction",
+      "suggested_deviation": "minor",
+      "notes": "Fox appears to be in transition from walking to standing still; body shows slight forward lean indicating recent movement"
+    },
+    "vision_meta": {
+      "model": "agnes-2.5-flash",
+      "latency_s": 3.39,
+      "parse_repair_used": false
+    },
+    "human_deviation_level": null,
+    "human_action": null,
+    "human_reason": "",
+    "shot_patch": {},
+    "prompt_rebuilt": true,
+    "next_shot_id": "",
+    "result_after_correction": "",
+    "retry_or_adapt": "",
+    "choice_reason": "",
+    "notes": "首个生成尝试即成功；末帧提取曾因后端进程环境退化失败，重启后成功"
+  }
+}

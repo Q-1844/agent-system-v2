@@ -105,8 +105,11 @@ def submit(nkey):
     print(f"   video prompt rebuilt hash={vp['prompt_hash']}", flush=True)
     print(f"   prompt: {vp['prompt'][:180]}", flush=True)
 
-    # 2) binding refresh（SIV/字段变更后同步 pack）
-    rb = api("POST", f"/api/project/{PROJ}/shot-bindings/{shot_id}/refresh")
+    # 2) binding refresh（OCC：先取 revision，36.md §1.2.5 口径）
+    b = api("GET", f"/api/project/{PROJ}/shot-bindings/{shot_id}")
+    brev = b.get("binding_revision") or (b.get("binding") or {}).get("binding_revision") or ""
+    rb = api("POST", f"/api/project/{PROJ}/shot-bindings/{shot_id}/refresh",
+             json={"expected_binding_revision": brev})
     print("   binding:", str(rb.get("status") or rb)[:40], flush=True)
 
     # 3) 提交视频（JobQueue 串行 1 RPM）

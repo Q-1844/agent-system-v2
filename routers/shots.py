@@ -504,8 +504,14 @@ async def _extract_video_end_frame(project_dir, shot_id, video_local, version_id
             await emit("endframe", f"{shot_id} 提取视频末帧", None)
         r = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace", timeout=60)
         if r.returncode != 0 or not end_path.exists():
+            # 37.md §1.2 同纪律：错误不得为空——returncode/二进制路径/stderr 长度入错误，
+            # 空 stderr 时也能定位（返回码非零 vs 文件未落盘是两类故障）。
+            import shutil as _shutil
+            which = _shutil.which("ffmpeg") or "PATH-not-found"
             return Asset(status=ShotStatus.FAILED.value,
-                         error=f"ffmpeg 末帧提取失败: {(r.stderr or '')[:200]}"), False
+                         error=(f"ffmpeg 末帧提取失败: rc={r.returncode} "
+                                f"ffmpeg={which} out_exists={end_path.exists()} "
+                                f"stderr[{len(r.stderr or '')}]={(r.stderr or '')[-300:]}")), False
     except Exception as e:
         return Asset(status=ShotStatus.FAILED.value, error=f"ffmpeg 异常: {e}"), False
     # 上传取公网 URL（inherit 接力进视频接口必需；reference 可走 base64）。

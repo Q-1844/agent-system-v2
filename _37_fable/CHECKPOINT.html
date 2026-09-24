@@ -1,0 +1,32 @@
+<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8">
+<title>37A《雨林奇遇》校准检查点</title>
+<style>
+body{font-family:'Segoe UI',system-ui,sans-serif;max-width:1080px;margin:24px auto;padding:0 16px;background:#fafafa;color:#222}
+h1{font-size:22px} h2{font-size:18px;margin-top:28px}
+.card{background:#fff;border:1px solid #e3e3e3;border-radius:10px;padding:16px 20px;margin:14px 0;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+video{max-width:100%;border-radius:8px;background:#000}
+img.endframe{max-width:100%;border-radius:8px;border:1px solid #ddd}
+table{border-collapse:collapse;width:100%;font-size:14px}
+td{border-bottom:1px solid #f0f0f0}
+.tag{display:inline-block;padding:2px 10px;border-radius:12px;font-size:13px;font-weight:600}
+.minor{background:#fff3cd;color:#8a6d00} .none{background:#d4edda;color:#186a2c} .major{background:#f8d7da;color:#8a1c1c}
+.exp{background:#f4f8ff;border-left:4px solid #4a7fd4;padding:8px 12px;margin:8px 0;border-radius:0 6px 6px 0;font-size:14px}
+.mut{color:#777;font-size:13px}
+</style></head><body>
+<h1>Phase 37A《雨林奇遇》— 完整故事校准战役</h1>
+<div class="mut">项目 Fable_Pilot_Fox_and_Grapes_V1 ｜ 9 镜 × 2 故事段 ｜ 生成前冻结（STORY_FROZEN.md）｜ 每镜裁定后推进下一镜</div>
+
+<div class="card">
+<h2>N1（s09_c01）· 晨雾小径 · 8s · 链根参考直生</h2>
+<video controls src="media/N1.mp4"></video>
+<p><b>预期尾帧：</b></p><div class="exp">狐狸在小径中段减速站定，四足着地，身体朝向画面右侧，耳朵竖起</div>
+<p><b>实际末帧：</b></p><img class="endframe" src="media/N1_end.jpg">
+<p>Vision 建议 <span class="tag minor">minor</span>（仅证据，人工裁定为准）</p>
+<table>
+<tr><td style='padding:4px 10px;color:#666;white-space:nowrap'>expected_tail_match</td><td style='padding:4px'>CLOSE - fox is stopping but not yet at rest position; ears are up but body language suggests motion continuing</td></tr><tr><td style='padding:4px 10px;color:#666;white-space:nowrap'>character_pose_state</td><td style='padding:4px'>Fox is standing still but not yet fully stationary - appears to be mid-deceleration rather than completely stopped</td></tr><tr><td style='padding:4px 10px;color:#666;white-space:nowrap'>character_position</td><td style='padding:4px'>Fox positioned on the path in the middle ground, facing right as expected</td></tr><tr><td style='padding:4px 10px;color:#666;white-space:nowrap'>next_shot_readiness</td><td style='padding:4px'>Ready for next shot to begin from this near-stationary position</td></tr><tr><td style='padding:4px 10px;color:#666;white-space:nowrap'>identity_consistency</td><td style='padding:4px'>The fox is correctly depicted with orange fur, white-tipped tail, and characteristic fox features</td></tr><tr><td style='padding:4px 10px;color:#666;white-space:nowrap'>environment_consistency</td><td style='padding:4px'>Forest path environment matches expected setting with dappled sunlight, ferns, and trees</td></tr><tr><td style='padding:4px 10px;color:#666;white-space:nowrap'>unexpected_elements</td><td style='padding:4px'>None - all elements align with expected storyboard direction</td></tr>
+</table>
+<p class="mut">执行者备注：2D 风格继承链根；朝向右侧符合预期；姿态为中途减速奔跑而非完全站定（收势未完成）。下一镜 N2 预编剧首句「狐狸忽然停下」已含自然过渡，可直接吸收该偏离。</p>
+<p><b>人工裁定（三档）：</b>none=按预编剧继续 / minor=下一镜加过渡 / major=插情节拉回。
+把裁定发我或在对话里回复即可（例：「N1 minor 继续」）。</p>
+</div>
+</body></html>
