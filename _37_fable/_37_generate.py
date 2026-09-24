@@ -91,6 +91,32 @@ def trace_save(rec):
                           encoding="utf-8")
 
 
+def _vision_client():
+    """独立进程的 Vision client（后端 deps 未配置时按 config 直构）。"""
+    try:
+        import deps
+        return deps.get_agnes_client()
+    except Exception:
+        import os
+        import re
+        import yaml
+        from src.api.agnes_client import AgnesClient
+        envp = ROOT / ".env"
+        if envp.exists():
+            for line in envp.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line \
+                        and not os.environ.get(line.split("=", 1)[0]):
+                    k, _, v = line.partition("=")
+                    os.environ[k.strip()] = v.strip()
+        cfg = yaml.safe_load((ROOT / "config" / "config.yaml").read_text(encoding="utf-8"))
+        ag = json.loads(json.dumps(cfg["agnes"]))
+        if isinstance(ag.get("api_key"), str) and "${AGNES_API_KEY}" in ag["api_key"]:
+            ag["api_key"] = re.sub(r"\$\{AGNES_API_KEY\}",
+                                   os.environ.get("AGNES_API_KEY", ""), ag["api_key"])
+        return AgnesClient(ag)
+
+
 def submit(nkey):
     """单镜全流程：rebuild → refresh → 提交 → 等待 → vision 评估 → trace。"""
     shot_id, spec = seg_shot_map()[nkey]
@@ -144,7 +170,7 @@ def submit(nkey):
     vision = None
     if local and Path(local).exists():
         from src.experiments.tail_assessment import assess_tail, _image_entry
-        agnes = __import__("deps").get_agnes_client()
+        agnes = _vision_client()
         tail_img = _image_entry(Path(local), None)
         try:
             out = httpx_sync_vision(agnes, spec, tail_img)
