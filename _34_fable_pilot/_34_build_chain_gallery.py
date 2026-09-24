@@ -19,6 +19,7 @@ RUNS = [  # (语义标签, 展示名, jsonl round 名, 序数区间)
     ("v1c_relay1", "接力链 1（09-23 00:19）", "v1c", (6, 12)),
     ("v1c_relay2", "接力链 2（Pages 图床）", "v1c_r3", (0, 6)),
     ("v1d_action", "动作接力（v1d：只接力动作，环境不接续）", "v1d", (0, 6)),
+    ("v1e_segmented", "分组接力（v1e：组内尾帧接力+断链重锚定 8s/10s）", "v1e", (0, 6)),
 ]
 # 运行期目录名与语义标签的映射（目录统一为语义名后为空）
 DIR_ALIAS = {}
@@ -42,7 +43,7 @@ DRIFT_WATCH = {
 
 def records():
     out = []
-    for name in ("v1c_runs.jsonl", "v1d_runs.jsonl"):
+    for name in ("v1c_runs.jsonl", "v1d_runs.jsonl", "v1e_runs.jsonl"):
         f = HERE / name
         if f.exists():
             for l in f.read_text(encoding="utf-8").splitlines():
@@ -152,6 +153,11 @@ td.good{{color:#7CFC98}}td.mid{{color:#ffd166}}td.bad{{color:#ff7b72}}.note{{col
                 ff = f"_frames/v1d/{shot}_ff.png"
                 tl = f"_frames/v1d/{shot}_tail.png"
                 diff = (metrics.get("v1d_action") or {}).get("ref_diff", {}).get(shot)
+            elif label == "v1e_segmented":
+                base = f"recovered_v1e/{shot}_v1e.mp4"
+                ff = f"_frames/v1e/{shot}_ff.png"
+                tl = f"_frames/v1e/{shot}_tail.png"
+                diff = (metrics.get("v1e_segmented") or {}).get("links", {}).get(shot)
             else:
                 dirname = DIR_ALIAS.get(label, label)
                 base = f"recovered_v1c/{dirname}/{shot}_{dirname}.mp4"
@@ -159,6 +165,8 @@ td.good{{color:#7CFC98}}td.mid{{color:#ffd166}}td.bad{{color:#ff7b72}}.note{{col
                 tl = f"_frames/{dirname}/{shot}_tail.png"
                 diff = (metrics.get(label) or {}).get("links", {}).get(shot)
             pill_label = "姿态命中" if label == "v1d_action" else "衔接"
+            if label == "v1e_segmented" and shot in ("s04_c01", "s06_c01"):
+                pill_label = "断链跳变(设计)"
             parts.append(f"""<div class="cand"><b>{html.escape(name)}</b>
 <span class="pill warn">{pill_label} {diff if diff is not None else '—'}</span>
 <span class="pill">{d.get('seconds', '—')}s</span><br>{vid(base)}
