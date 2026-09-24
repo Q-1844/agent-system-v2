@@ -43,7 +43,7 @@ def doc_rev():
 def res_rev():
     # resources 文档修订：/compositions 响应带 document_revision（resources 文档级 OCC）
     return api("GET", f"/api/project/{PROJ}/compositions",
-               timeout=15).json().get("document_revision") or ""
+               timeout=15).get("document_revision") or ""
 
 
 def try_approve(path, label):
@@ -66,7 +66,7 @@ def try_approve(path, label):
     return False
 
 
-def clean_loop(kind, eid, label, rounds=10):
+def clean_loop(kind, eid, label, rounds=24):
     """generate/review/approve 清图循环（view 与 sciv 通用）。"""
     path = (f"scene-system/views/{eid}" if kind == "view"
             else f"scene-system/scene-instance-views/{eid}")
@@ -164,20 +164,21 @@ def main():
         sid = "s09" if seg["key"] == "A" else "s10"
         inst = by_scene.get(sid)
         if not inst:
-            i = api("POST", f"/api/project/{PROJ}/scene-system/scene-instances", json={
+            api("POST", f"/api/project/{PROJ}/scene-system/scene-instances", json={
                 "story_scene_id": sid, "location_id": LOCATION_ID,
                 "expected_document_revision": doc_rev()})
-            inst = i.get("scene_instance") or i.get("target") or i
+            time.sleep(1)
+            insts = api("GET", f"/api/project/{PROJ}/scene-system/scene-instances")
+            lst = insts.get("scene_instances") if isinstance(insts, dict) else insts
+            inst = next(i for i in (lst or []) if i.get("story_scene_id") == sid)
             print(f"[{sid}] instance created:", inst.get("scene_instance_id"))
         else:
             print(f"[{sid}] instance exists:", inst.get("scene_instance_id"))
         iid = inst["scene_instance_id"]
         if (inst.get("location_id") or "") != LOCATION_ID:
-            inst2 = next(x for x in (lst or []) if x["scene_instance_id"] == iid) \
-                if by_scene.get(sid) else inst
             api("PATCH", f"/api/project/{PROJ}/scene-system/scene-instances/{iid}/location",
                 json={"location_id": LOCATION_ID,
-                      "expected_revision": inst2.get("revision") or doc_rev()})
+                      "expected_revision": inst.get("revision") or doc_rev()})
             print(f"[{sid}] location rebound")
         fresh = api("GET", f"/api/project/{PROJ}/scene-system/scene-instances/{iid}")
         st = dict(seg["state"], expected_revision=fresh.get("revision"))
@@ -204,16 +205,28 @@ def main():
             sciv_id = mine[0]["scene_instance_view_id"]
             print(f"[seg {seg_key}] SCIV exists (unapproved):", sciv_id)
         else:
-            api("POST", f"/api/project/{PROJ}/scene-system/scene-instance-views",
-                json={"scene_instance_id": iid, "location_view_id": vid})
-            time.sleep(1)
-            ss = api("GET", f"/api/project/{PROJ}/scene-system/scene-instance-views")
-            slist2 = ss.get("scene_instance_views") if isinstance(ss, dict) else ss
-            mine2 = [s for s in (slist2 or [])
-                     if s.get("scene_instance_id") == iid
-                     and s.get("location_view_id") == vid]
-            sciv_id = mine2[0]["scene_instance_view_id"] if mine2 else None
-            print(f"[seg {seg_key}] SCIV created:", sciv_id)
+            sciv_id = None
+            try:
+                api("POST", f"/api/project/{PROJ}/scene-system/scene-instance-views",
+                    json={"scene_instance_id": iid, "location_view_id": vid,
+                          "expected_document_revision": doc_rev()})
+                time.sleep(1)
+                ss = api("GET", f"/api/project/{PROJ}/scene-system/scene-instance-views")
+                slist2 = ss.get("scene_instance_views") if isinstance(ss, dict) else ss
+                mine2 = [s for s in (slist2 or [])
+                         if s.get("scene_instance_id") == iid
+                         and s.get("location_view_id") == vid]
+                sciv_id = mine2[0]["scene_instance_view_id"] if mine2 else None
+                print(f"[seg {seg_key}] SCIV created:", sciv_id)
+            except RuntimeError as e:
+                m2 = re.search(r'"scene_instance_view_id"\s*:\s*"(sciv_[0-9a-f]+)"', str(e))
+                if m2:
+                    sciv_id = m2.group(1)
+                    print(f"[seg {seg_key}] SCIV exists (from 409):", sciv_id)
+                else:
+                    raise
+            if not sciv_id:
+                print(f"FATAL: seg {seg_key} SCIV id 未取得"); return
         if not clean_loop("sciv", sciv_id, f"seg-{seg_key}-siv"):
             print(f"FATAL: seg {seg_key} SIV 未过审"); return
         sciv_of_seg[seg_key] = sciv_id
@@ -236,7 +249,11 @@ def main():
                 print(f"[{sid}] binding exists")
             else:
                 raise
-        r = api("POST", f"/api/project/{PROJ}/shot-bindings/{sid}/refresh")
+        # OCC：先取当前 binding revision（36.md §1.2.5 口径）
+        b = api("GET", f"/api/project/{PROJ}/shot-bindings/{sid}")
+        brev = b.get("binding_revision") or (b.get("binding") or {}).get("binding_revision") or ""
+        r = api("POST", f"/api/project/{PROJ}/shot-bindings/{sid}/refresh",
+                json={"expected_binding_revision": brev})
         print(f"[{sid}] binding refresh ->", str(r.get("status") or r)[:50])
     print("done: 场景系统接线完成", sciv_of_seg)
 
