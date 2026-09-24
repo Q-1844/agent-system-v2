@@ -86,6 +86,7 @@ from routers import resources  # noqa: E402  Production Resources V1 Phase 1B (r
 from routers import scene_system  # noqa: E402  Scene System V1 Phase S1（空间事实系统；不与 /scenes 冲突）
 from routers import sequences  # noqa: E402  Sequence S1 Assembly Foundation（24.md；Shot Production 的消费者）
 from routers import shot_binding  # noqa: E402  Shot Production Binding HTTP 层（S3B.4；业务在 src/shot_binding）
+from routers import experiments  # noqa: E402  Phase 37A Calibration Trace（37.md §2/§16；非 canonical 实验记录）
 app.include_router(system.router)
 app.include_router(projects.router)
 app.include_router(script.router)
@@ -107,6 +108,7 @@ app.include_router(resources.router)   # Production Resources V1 Phase 1B (read-
 app.include_router(scene_system.router)   # Scene System V1 Phase S1（Location/Anchor/Layout/View/SceneInstance）
 app.include_router(sequences.router)   # Sequence S1 Assembly Foundation（24.md；hard cut + trim + render versioning）
 app.include_router(shot_binding.router)   # Shot Production Binding（S3B.4；BOUND 生成参考）
+app.include_router(experiments.router)   # Calibration Trace（37A；尾帧接力校准实验记录）
 
 
 @app.on_event("startup")
