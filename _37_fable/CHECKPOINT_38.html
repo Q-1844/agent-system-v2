@@ -103,10 +103,10 @@ img{width:100%;border-radius:6px;border:1px solid #ddd}
     <div>
       <h4>预编剧</h4><p class="cn">狐狸压低身子，沿着木栅栏小心挪近南瓜地，在一只有它半个身子大的橙色大南瓜旁停下，伸头低头嗅闻，尾巴平伸保持平衡</p>
       <h4>expected_tail</h4><p class="cn">狐狸在大南瓜旁低头嗅闻，姿态压低，尾巴平伸</p>
-      <h4>MAE vs 上镜尾帧</h4><p>47.6</p>
-      <h4>Vision 11维（仅证据）</h4><div class='dim'><b>expected_tail_match</b>: Partial mismatch: expected tail平伸 (stretched flat) not visible; head低头 (lowered) partially met</div><div class='dim'><b>next_shot_readiness</b>: Ready: fox oriented toward pumpkin suggests possible transition to interaction or reaction shot</div><div class='dim'><b>unexpected_elements</b>: Fox's facial expression appears sly/smirking; small flies/debris on pumpkin not mentioned in expected tail</div>
-      <h4>人工裁定</h4><p>continue — a2:南瓜恢复+鼻尖凑近嗅闻叙事核心成立，电线杆/瓦顶漂移消失。机位偏近一档（头+南瓜近景双人镜头式）但对M6顶南瓜是理想开口；尾巴平伸被裁切不可见；smirk表情第3次复发（吸引子数据点）不构成叙事反转。continue</p>
-      <h4>prompt hash</h4><p class="mono">bfbfa6b27837161a</p>
+      <h4>MAE vs 上镜尾帧</h4><p>57.4</p>
+      <h4>Vision 11维（仅证据）</h4><div class='dim'><b>expected_tail_match</b>: Mismatch. The tail is held high and straight out, not resting flat on the ground as specified in the plan.</div><div class='dim'><b>next_shot_readiness</b>: Poor readiness. The character's upright, smug posture does not seamlessly transition into the next shot, which requires the fox to be low and engaged with the pumpkin.</div><div class='dim'><b>unexpected_elements</b>: The fox's specific facial expression (smug/disdainful) and upright posture are deviations from the planned low sniffing action.</div>
+      <h4>人工裁定</h4><p>continue — 定版a3：M4→M5接缝MAE 2.1近零（重生成级联修复达成）；狐狸已到大南瓜旁但低头嗅闻端点未落（直立smug，attractor，N2/N5类accept）；M5→M6接缝46.5切近级可接受；a4重试被children事故否决后回滚</p>
+      <h4>prompt hash</h4><p class="mono">81e4754b7d6d91d2</p>
     </div>
   </div>
 </div>
