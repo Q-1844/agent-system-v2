@@ -35,14 +35,17 @@ Scene Agent 按【场景依赖条件】参与，不是每轮必跑：
                 duration_s/opening intent/negative constraints）
         ↓
 [Director] 逐镜循环（禁止跳步）：
-   1. 提交生成 shot.generate_videos（multi 显式 link_mode=multi，
+   1. 提交前双预检：参考姿态↔镜头动作匹配 + 场景参考↔冻结 description
+      逐项对照（冲突停下报告，不带冲突生成）；负面约束经 shot.update
+      写进 negative_prompt 字段
+   2. 提交生成 shot.generate_videos（multi 显式 link_mode=multi，
       尾帧接力=video_reference_asset_id=="prev_tail"）
-   2. 等末帧就绪（extract 自动托管）
-   3. 接缝测量 calibration.seam_measure(shot_id)
-   4. Vision 证据（尾帧 11 维评估 / visual.review_shot）——证据不是裁定
-   5. 综合判断（叙事/情绪/状态/机位/负面约束 + MAE 经验区间）
-   6. 三档裁定 → none / minor / major
-   7. trace 落档 calibration.trace_upsert（裁定是验收对象）
+   3. 等末帧就绪（extract 自动托管）
+   4. 接缝测量 calibration.seam_measure(shot_id)
+   5. Vision 证据（尾帧 11 维评估 / visual.review_shot）——证据不是裁定
+   6. 综合判断（叙事/情绪/状态/机位/负面约束 + MAE 经验区间）
+   7. 三档裁定 → none / minor / major
+   8. trace 落档 calibration.trace_upsert（裁定枚举字段非空——裁定是验收对象）
         ↓
    none  → 按预编剧继续（自动推进）
    minor → accept+adapt：预编剧首句自然吸收，零文字修改零重试，自动继续
@@ -108,6 +111,8 @@ Producer 按档执行编排策略：
   selected_action/why/retry_or_adapt/negative_constraint_check/cascade_check
   + repair 决策链全文）；
 - 每条链路裁定明确（none/minor/major）；major 有用户决策记录或停在升级点；
+- **裁定枚举字段非空**：缺裁定字段的落档视为未完成（Phase D replay 实证：
+  加载了方法 ≠ 执行完方法，zero-write 纠偏话语不是交付物）；
 - 重试/重生成的旧 attempt 用 archive_existing=true 归档（历史不覆盖）；
 - 下游接缝全部复查（级联无遗漏）；
 - 检查点统计已按段落向用户汇报。
@@ -129,3 +134,15 @@ Producer 按档执行编排策略：
 5. **Shadow Replay 纪律**：Agent 批量评测必须沙盒隔离、每决策点独立全新
    会话；委派 envelope 必须携带明确 shot_id 映射；纯审查意图走 Clean Review，
    有显式 mutation 意图（校准/落档/修复/重试/插桥）走正常 tool-loop。
+6. **P39C Canary 实证（2026-09-25，亲眼看图归档 manual_review_20260925）**：
+   a) **prompt-reference 姿态冲突**——静态站姿身份参考 × 飞行类镜头文本，
+   模型把主体拽回参考姿态，镜内飞行→站姿硬切（night_cloak 同类两次实证）
+   ——提交前参考姿态匹配核对是硬步骤（§0 预检）；
+   b) **冻结↔场景参考冲突无人核对**——SIV 含森林湖泊 vs 冻结"纯天空"，
+   生成前无任何一道检查比对两者——bind 前逐项对照（§0 预检）；
+   c) **像素接缝≠内容接缝**——接力镜钉在漂移尾帧上，MAE 照样低位，但语义链
+   已断——接缝测量之外必须核对 expected_tail↔实际尾帧的语义一致性；
+   d) **结构纪律**——段=地点/叙事单元、段内多镜（建立-发展-收束），禁止
+   N 段×每段 1 镜的碎片结构（6×1 实证：段失去叙事容量）；
+   e) **负面约束进字段**——冻结负面约束没进 negative_prompt 字段 = 生成端
+   拿不到，只写 trace 无效。
