@@ -706,9 +706,12 @@ def _empty_changed_refs() -> dict:
 async def _delegate_specialist(rt, project: str, agent_id: str,
                                envelope: dict, *, event_cb, cancel_event,
                                prev_task_id: Optional[str],
-                               workflow_id: str) -> dict:
+                               workflow_id: str,
+                               thinking: bool = False) -> dict:
     """委派给真实 Specialist *_turn。锁与 *.changed 事件在 Bridge 的 _cb 里复制
-    （§5.3-⑤b）——直接调 *_turn 而不复制接线时前端所有页面都看不到锁与内容变化。"""
+    （§5.3-⑤b）——直接调 *_turn 而不复制接线时前端所有页面都看不到锁与内容变化。
+    thinking 随 Producer turn 的快照透传（Phase 39：用户指令——agent 系统测试
+    打开 Agnes 文本模型思考能力；不再硬编码 False）。"""
     # ① envelope 校验：objective 非空必填
     objective = (envelope.get("objective") or "").strip()
     if not objective:
@@ -813,7 +816,7 @@ async def _delegate_specialist(rt, project: str, agent_id: str,
         # ⑥ result = await turn_fn(..., event_cb=_bridge_cb, cancel_event=cancel_event)
         #    cancel_event 直接透传（用户停 Producer → Specialist 协作停止）
         turn_result = await turn_fn(rt, project, sid, envelope_text,
-                                    thinking=False, event_cb=_bridge_cb,
+                                    thinking=thinking, event_cb=_bridge_cb,
                                     cancel_event=cancel_event)
     except _TurnStopped:  # type: ignore[name-defined]  # 防御：Specialist 通常内部捕获
         err = "stopped"
@@ -1204,7 +1207,8 @@ async def producer_turn(rt, project: str, session_id: str, content: str, *,
                 tr = await _delegate_specialist(
                     rt, project, agent_id, envelope,
                     event_cb=event_cb, cancel_event=cancel_event,
-                    prev_task_id=prev_ref[0], workflow_id=wf["workflow_id"])
+                    prev_task_id=prev_ref[0], workflow_id=wf["workflow_id"],
+                    thinking=thinking)
                 if tr.get("task_id"):
                     prev_ref[0] = tr["task_id"]
                     ProducerWorkflowStore(pdir, project).add_task(wf["workflow_id"], tr["task_id"])
