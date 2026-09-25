@@ -970,7 +970,8 @@ def test_S48_cannot_create_prop(tmp_path):
     assert not any("prop" in n and "scene" in n for n in names)
     # 工具面总数在 14~18 区间（28.md §6）
     # Phase D §35：+scene.instance.delete（服务层既有能力接线；C2 §6 预算 14~18 → 14~19）
-    assert 14 <= len(names) <= 19, names
+    # 40.md Skill System V1：+skill.list/load/read_resource（只读 3 个；14~19 → 17~22）
+    assert 17 <= len(names) <= 22, names
 
 
 # ============ Commit G：scene.state_view.prepare（S49-S55）============

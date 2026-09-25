@@ -94,9 +94,11 @@ def test_C4_legacy_director_tests_not_regressed():
     # 39（39.md §6）：+calibration.seam_measure / calibration.trace_read /
     #   calibration.trace_upsert / video.extract_frame / visual.sample_frames /
     #   shot.bridge_create（连续性校准与桥的正式工具面）→ 28
-    assert len(DIRECTOR_TOOLS) == 28, (
-        "Director 工具面 = 22（C1/D2 锚定值）+ 6 新增（Phase 39：seam/trace×2/"
-        "extract_frame/sample_frames/bridge_create，39.md §6）")
+    # 40（40.md Skill System V1）：+skill.list / skill.load / skill.read_resource
+    #   （生产技能发现/加载，只读不占写槽）→ 31
+    assert len(DIRECTOR_TOOLS) == 31, (
+        "Director 工具面 = 28（Phase 39 锚定值）+ 3 新增（40.md Skill System V1："
+        "skill.list/load/read_resource）")
 
 
 # ============ Production inspect（C5-C14）============

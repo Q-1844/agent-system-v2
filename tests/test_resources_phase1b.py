@@ -351,6 +351,7 @@ def test_t15_character_designer_tools_intact():
     names = {t["function"]["name"] for t in CHARACTER_DESIGNER_TOOLS}
     # Agent System V2 Phase B 最终工具面（14 基础 + shot.list/read 过滤并入）：
     # + profile/inventory/read 只读 + clothing/look/prop/composition 任务型 mutation
+    # 40.md Skill System V1：+skill.list / skill.load / skill.read_resource（只读）
     assert names == {"character.list", "character.read", "character.create",
                      "character.update", "character.delete",
                      "character.generate_views", "web.search",
@@ -359,7 +360,8 @@ def test_t15_character_designer_tools_intact():
                      "resource.clothing.upsert", "resource.look.prepare",
                      "resource.look.approve",
                      "resource.prop.register", "resource.composition.prepare",
-                     "resource.library.publish", "resource.library.import"}
+                     "resource.library.publish", "resource.library.import",
+                     "skill.list", "skill.load", "skill.read_resource"}
     assert {"character.create", "character.update", "character.delete"} <= CHARACTER_WRITE_OPERATIONS
     # 越权写工具仍不得出现（Scene/Story/Shot/Binding/底层细碎 API）
     assert not any(n in ("look.approve", "prop.approve", "revoke_look_approval",

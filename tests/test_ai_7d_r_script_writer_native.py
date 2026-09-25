@@ -566,12 +566,14 @@ def test_tools_registry_includes_all():
     """写/读工具齐全。原 script.update / story.create 测试断言 tools == SCRIPT_WRITER_TOOLS
     （列表对象），工具增减不破坏对象身份；本测试守名字集合。"""
     names = set(t["function"]["name"] for t in SCRIPT_WRITER_TOOLS)
+    # 40.md Skill System V1：+skill.list / skill.load / skill.read_resource（只读）
     assert names == {"script.update", "script.read",
                      "story.create", "story.list", "story.read",
                      "story.move", "story.update", "story.delete",
                      "story.create_many", "story.update_many",
                      "story.delete_many", "story.insert_many",
-                     "web.search"}
+                     "web.search",
+                     "skill.list", "skill.load", "skill.read_resource"}
 
 
 # ============================================================
