@@ -35,11 +35,39 @@ def esc(s):
     return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def _bridge_card(r):
+    """M3B 跨 Location keyframes 桥卡片（播放序插在 M3/M4 之间）。"""
+    shot_id = r["shot_id"]
+    vname, fname = localize("M3B", shot_id)
+    mae_t = r.get("mae_bridge_tail_vs_target")
+    return f"""
+<div class="card" id="M3B" style="border-color:#8b4513;background:#fffdf5">
+  <h3>桥 M3B = {shot_id} <span class="tag none">人工: {r.get('human_deviation_level')}</span>
+      <span class="tag none">keyframes_bridge</span></h3>
+  <video controls preload="metadata" src="media/{vname}"></video>
+  <div class="cols">
+    <div><h4>末帧（着陆村庄，=M4f60 目标）</h4><img src="media/{fname}"></div>
+    <div>
+      <h4>桥配置</h4><p class="cn">首槽=M3 尾帧（雨林边缘）｜尾槽=M4 视频第 60 帧（落到村口土路）｜keyframes 插值 10s</p>
+      <h4>transition_description</h4><p>{esc(r.get('prompt_snapshot',''))}</p>
+      <h4>MAE</h4><p>桥尾帧 vs 着陆目标: <b>{mae_t}</b>（37A 对标：同场景桥 2.9 / 多参考劫持 43.6）｜ vs M3 尾帧: {r.get('mae_bridge_tail_vs_m3_tail')}</p>
+      <h4>验收</h4><p class="cn">{esc(r.get('human_reason',''))}</p>
+      <h4>修复决策链 _repair_plan</h4><p class="cn">{esc(json.dumps(r.get('_repair_plan',{}), ensure_ascii=False))}</p>
+    </div>
+  </div>
+</div>"""
+
+
 def main():
     rec = json.loads(TRACE.read_text(encoding="utf-8")) if TRACE.exists() else {}
     cards = []
+    bridge_card = None
+    if "M3B" in rec:
+        bridge_card = _bridge_card(rec["M3B"])
     for spec in SHOTS:
         k = spec["shot"]
+        if k == "M4" and bridge_card is not None:
+            cards.append(bridge_card)   # 桥行插在 M3 与 M4 之间（播放序）
         r = rec.get(k)
         if not r:
             continue

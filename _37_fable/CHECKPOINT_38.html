@@ -63,19 +63,34 @@ img{width:100%;border-radius:6px;border:1px solid #ddd}
     </div>
   </div>
 </div>
+<div class="card" id="M3B" style="border-color:#8b4513;background:#fffdf5">
+  <h3>桥 M3B = s11_c04 <span class="tag none">人工: none</span>
+      <span class="tag none">keyframes_bridge</span></h3>
+  <video controls preload="metadata" src="media/M3B.mp4"></video>
+  <div class="cols">
+    <div><h4>末帧（着陆村庄，=M4f60 目标）</h4><img src="media/M3B_end.jpg"></div>
+    <div>
+      <h4>桥配置</h4><p class="cn">首槽=M3 尾帧（雨林边缘）｜尾槽=M4 视频第 60 帧（落到村口土路）｜keyframes 插值 10s</p>
+      <h4>transition_description</h4><p>The fox breaks into a full sprint from the shadowed treeline and bursts out of the forest into blinding sunlight; in a surge of golden light the last trees sweep past and the world opens into the bright village outskirts, the fox landing on the sunlit dirt road with a puff of dust, fences and pumpkins flashing by on both sides</p>
+      <h4>MAE</h4><p>桥尾帧 vs 着陆目标: <b>26.0</b>（37A 对标：同场景桥 2.9 / 多参考劫持 43.6）｜ vs M3 尾帧: 59.5</p>
+      <h4>验收</h4><p class="cn">跨Location keyframes 桥成立：内部帧渐进穿越（森林冲刺→金色光爆腾跃→混合世界→村口土路），尾帧落点与 M4f60 目标同地理（栅栏/南瓜/森林背景），MAE 26.0（37A 对标 2.9 同场景 / 43.6 劫持；跨场景难度更高属合理区间）</p>
+      <h4>修复决策链 _repair_plan</h4><p class="cn">{"root_cause": "用户裁定：M4 跨场景虽流畅但是「森林→乡村」镜头内硬切（模型把跃出渲染成 1-2s 内的突转），不够优秀", "options": ["A 重试 M4（同类硬切大概率复发，provider 强先验）", "B 接受现状（用户已否决：要测桥）", "C keyframes 桥 M3→M4f60 + M4 重生成（把穿越独立成镜，M4 从桥尾帧接力）"], "chosen": "C", "why": "桥方法第一轮同场景实证（MAE 2.9）；本测把桥推进到跨 Location（新地面）；M4f60（落地村庄帧）作为尾槽钉死着陆状态，硬切被桥内部渐变吸收；M4 重生成后播放序 M3→桥→M4′ 为最小改动", "basis_timing_discipline": "refresh→compile+seed→提交，seed 后零 refresh（boundary_frame_stale 规避）"}</p>
+    </div>
+  </div>
+</div>
 <div class="card" id="M4">
-  <h3>M4 = s12_c01 <span class="tag minor">人工: minor</span>
-      <span class="tag minor">vision建议: minor</span></h3>
+  <h3>M4 = s12_c01 <span class="tag none">人工: none</span>
+      <span class="tag none">vision建议: none</span></h3>
   <video controls preload="metadata" src="media/M4.mp4"></video>
   <div class="cols">
     <div><h4>末帧（实际尾帧）</h4><img src="media/M4_end.jpg"></div>
     <div>
       <h4>预编剧</h4><p class="cn">狐狸深吸一口气，从雨林边缘一跃而出，冲进正午阳光下的小村村口：脚下变成土路，两侧是木栅栏，路边一片橙色南瓜地，远处干草垛和茅草顶小屋。它冲过村口土路猛地急停，爪下扬起一小片尘土，回头看一眼来路的树林，再转回头打量村庄，村子空无一人</p>
       <h4>expected_tail</h4><p class="cn">狐狸站在村口土路中央，身后是雨林边缘树影，面前是木栅栏与南瓜地，正午阳光，尘土未定</p>
-      <h4>MAE vs 上镜尾帧</h4><p>59.6 （跨Location接力，预期偏高）</p>
-      <h4>Vision 11维（仅证据）</h4><div class='dim'><b>expected_tail_match</b>: Partial mismatch - scene elements correct but fox is walking instead of standing still and dust particles are not visible</div><div class='dim'><b>next_shot_readiness</b>: Fox in motion may create continuity issues if next shot expects a stationary starting position</div><div class='dim'><b>unexpected_elements</b>: Small house structure visible on right side not mentioned in expected description</div>
-      <h4>人工裁定</h4><p>continue — 跨Location接力主测点成立：村庄identity完整渲染（土路/栅栏/南瓜/小屋/正午光），森林背景零残留，狐狸全身中景进村，身份无漂移，无fauna。偏离=急停+回头端点未落（尾帧行走中，N2/N5同类accept+adapt）。MAE59.6高值=环境剧变（雨林→村庄）基线数据点。M5首句压低身子挪近可吸收</p>
-      <h4>prompt hash</h4><p class="mono">88d213e1917f6b68</p>
+      <h4>MAE vs 上镜尾帧</h4><p>55.9 （跨Location接力，预期偏高）</p>
+      <h4>Vision 11维（仅证据）</h4><div class='dim'><b>expected_tail_match</b>: High match — all key elements (fox, road, fence, pumpkins, trees, sun position) align with expected tail description.</div><div class='dim'><b>next_shot_readiness</b>: Scene is stable and composed; suitable for transition or continuation depending on next shot intent.</div><div class='dim'><b>unexpected_elements</b>: None significant — all visual components conform to expected setting and mood.</div>
+      <h4>人工裁定</h4><p>continue — a4(尾态尺寸锚定后):远景全身+村口地理全要素(茅草顶/栅栏/南瓜/干草垛/光柱)+狐狸立于土路中央打量=expected_tail高匹配,亲验同意vision none;MAE vs 桥尾帧59.4(构图微变)。经验:桥尾帧近景开口强先验下,description首句远景锚定+收束句全身端立是有效抗特写杠杆(三连击破解)</p>
+      <h4>prompt hash</h4><p class="mono">8d05139d5ecc14f8</p>
     </div>
   </div>
 </div>
