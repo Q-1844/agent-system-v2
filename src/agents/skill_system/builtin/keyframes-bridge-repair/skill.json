@@ -1,0 +1,41 @@
+{
+  "skill_id": "keyframes-bridge-repair",
+  "version": "1.0.0",
+  "name": "keyframes 接续桥：接缝修复的标准手段",
+  "description": "当需要同时固定两侧边界（首尾都对齐）的过渡时，用 keyframes 桥插镜修复接缝：双端钉死+provider 插值，级联影响=0。",
+  "category": "workflow",
+  "source": "builtin_core",
+  "status": "active",
+  "applicability": "重生成级联造成的下游断缝、跨 Location 且需要连续过渡、大姿态反转、任何需要「首尾都对齐」的过渡；或用户直接要求在两镜之间加过渡镜头。",
+  "triggers": [
+    "插桥", "接续桥", "过渡镜头", "过渡镜", "keyframes", "bridge",
+    "桥", "断缝", "级联", "首尾对齐", "双端", "过渡", "cascade"
+  ],
+  "required_capabilities": {
+    "producer": ["project.quota", "director.delegate"],
+    "director": [
+      "shot.bridge_create",
+      "calibration.seam_measure",
+      "calibration.trace_upsert",
+      "visual.sample_frames",
+      "video.extract_frame"
+    ]
+  },
+  "depends_on": ["full-story-relay-calibration"],
+  "bindings": [
+    {
+      "agent_id": "director",
+      "role": "primary_executor",
+      "routing_priority": 90,
+      "authority_tier": "builtin_core",
+      "activation_mode": "hinted"
+    },
+    {
+      "agent_id": "producer",
+      "role": "coordinator",
+      "routing_priority": 40,
+      "authority_tier": "builtin_core",
+      "activation_mode": "hinted"
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+{
+  "skill_id": "full-story-relay-calibration",
+  "version": "1.0.0",
+  "name": "全片尾帧接力连续性校准",
+  "description": "整条故事镜头链的尾帧接力连续性生产协作：预编剧冻结→逐镜生成→接缝测量→Vision 证据→三档裁定（none/minor/major）→trace 落档→按档继续/修复/升级。",
+  "category": "workflow",
+  "source": "builtin_core",
+  "status": "active",
+  "applicability": "整条故事镜头链按尾帧接力（multi relay / inherit_previous）逐镜生成视频、需要保持跨镜头连续性时；或用户要求进行全片连续性校准/检查。",
+  "triggers": [
+    "校准", "连续性", "接缝", "尾帧接力", "接力", "calibration",
+    "continuity", "seam", "relay", "三档", "裁定", "major", "minor",
+    "预编剧", "逐镜生成", "整条故事", "全片生成", "整条链"
+  ],
+  "required_capabilities": {
+    "producer": [
+      "project.quota",
+      "director.delegate",
+      "script_writer.delegate",
+      "scene_designer.delegate",
+      "character_designer.delegate"
+    ],
+    "director": [
+      "calibration.seam_measure",
+      "calibration.trace_read",
+      "calibration.trace_upsert",
+      "video.extract_frame",
+      "visual.review_shot",
+      "visual.review_image",
+      "shot.generate_videos",
+      "shot.production.inspect",
+      "shot.production.bind",
+      "shot.production.refresh",
+      "shot.update"
+    ],
+    "script_writer": ["story.list", "story.read", "story.update"],
+    "character_designer": [
+      "character.list",
+      "character.read",
+      "resource.look.prepare"
+    ],
+    "scene_designer": [
+      "scene.production.inspect",
+      "scene.view.prepare",
+      "scene.state_view.prepare",
+      "scene.state.update"
+    ]
+  },
+  "depends_on": [],
+  "bindings": [
+    {
+      "agent_id": "director",
+      "role": "primary_executor",
+      "routing_priority": 100,
+      "authority_tier": "builtin_core",
+      "activation_mode": "hinted"
+    },
+    {
+      "agent_id": "producer",
+      "role": "coordinator",
+      "routing_priority": 80,
+      "authority_tier": "builtin_core",
+      "activation_mode": "hinted"
+    },
+    {
+      "agent_id": "script_writer",
+      "role": "contributor",
+      "routing_priority": 60,
+      "authority_tier": "builtin_core",
+      "activation_mode": "hinted"
+    },
+    {
+      "agent_id": "character_designer",
+      "role": "conditional",
+      "routing_priority": 40,
+      "authority_tier": "builtin_core",
+      "activation_mode": "hinted"
+    },
+    {
+      "agent_id": "scene_designer",
+      "role": "conditional",
+      "routing_priority": 40,
+      "authority_tier": "builtin_core",
+      "activation_mode": "hinted"
+    }
+  ]
+}
