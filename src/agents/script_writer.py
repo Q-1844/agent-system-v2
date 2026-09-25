@@ -44,6 +44,13 @@ from src.storyboard.structure_service import (
 from .models import AgentMessage, ResultStatus
 from .runtime import AgentRuntime, AgentError
 from .revision_audit import DirectEditAuditStore
+# —— Skill System V1（40.md）：生产技能工具面（只读，不占写槽）——
+from .skill_system.tools import (
+    SKILL_TOOLS,
+    activation_hint as _skill_activation_hint,
+    make_skill_executors,
+)
+from .skill_system.runtime import get_skill_runtime as _get_skill_runtime
 
 log = logging.getLogger("agents.script_writer")
 
@@ -238,11 +245,14 @@ def _scenes_content_token(scenes) -> str:
 def _build_system(proj) -> str:
     """精简 system：只放职责、权限、工具说明、项目元信息（名称/字数/段数）。
     不注入完整 story_text 或 scenes 列表——Agent 需要时用 read/list 工具按需取。"""
-    return SCRIPT_WRITER_SYSTEM.format(
+    base = SCRIPT_WRITER_SYSTEM.format(
         project_name=proj.name or "（未命名）",
         story_len=len(proj.story_text or ""),
         scenes_count=len(proj.scenes or []),
     )
+    # Skill System V1（40.md §七）：L1 catalog 常驻尾部（只看到自己的 Skill view）
+    base += _get_skill_runtime().catalog_block("script_writer")
+    return base
 
 
 SCRIPT_WRITER_SYSTEM = """你是 AGNES 的 Script Writer，负责项目的【剧本正文】与【故事段结构】（故事段 Scene 的增删与排序）。
@@ -732,6 +742,8 @@ SCRIPT_WRITER_TOOLS = [
     STORY_CREATE_MANY_TOOL, STORY_UPDATE_MANY_TOOL,
     STORY_DELETE_MANY_TOOL, STORY_INSERT_MANY_TOOL,
     WEB_SEARCH_TOOL,
+    # Skill System V1（40.md）：生产技能发现/加载（只读）
+    *SKILL_TOOLS,
 ]
 
 
@@ -1856,6 +1868,8 @@ TOOL_EXECUTORS = {
     "story.delete_many": _execute_story_delete_many,
     "story.insert_many": _execute_story_insert_many,
     "web.search": _execute_web_search,
+    # Skill System V1（40.md）：skill.list/load/read_resource（只读）
+    **make_skill_executors("script_writer"),
 }
 
 
@@ -1970,7 +1984,10 @@ async def script_writer_turn(rt: AgentRuntime, project: str, session_id: str,
             system += "\n\n" + mem
         messages: list[dict] = [{"role": "system", "content": system}]
         messages += history
-        messages.append({"role": "user", "content": content})
+        # Skill System V1（40.md §七）：turn 入口确定性 trigger hint（不落盘）
+        _skill_hint = _skill_activation_hint("script_writer", content, pdir)
+        messages.append({"role": "user", "content":
+                         (_skill_hint + "\n\n" + content) if _skill_hint else content})
 
         # —— 删除两阶段：用户已确认但模型上轮没发 confirmed=true 的兜底 ——
         # 上一条 assistant 若有 pending_delete_scenes（预览未确认），且本轮 user 内容像确认，
@@ -2092,6 +2109,8 @@ async def script_writer_turn(rt: AgentRuntime, project: str, session_id: str,
             "trace": trace,   # 执行轨迹（需求 #7）：每步 tool→target→result→revision
             "reasonings": reasoning,   # 每步思考文本（持久化，前端刷新后重建折叠条 reasoning）
             "search_sources": search_sources,   # web.search 轻量来源（title+url，供 UI 展示；无正文）
+            # Skill System V1（40.md §十三）：本 turn 技能激活/加载证据
+            "skills": _get_skill_runtime().collect_and_reset("script_writer"),
             "pending_delete_scenes": pending_delete_scenes}   # 本轮预览未确认的删除目标
     asst = AgentMessage(role="assistant", content=assistant_text, status=status, meta=meta)
     store.append_message(session_id, asst)

@@ -47,6 +47,13 @@ from .project_events import (get_project_bus, emit_changed,
                              RESOURCE_STORY, RESOURCE_CHARACTER, RESOURCE_STORYBOARD,
                              RESOURCE_SCENE_SYSTEM)
 from . import turn_registry
+# —— Skill System V1（40.md）：生产技能工具面（只读，不占写槽）——
+from .skill_system.tools import (
+    SKILL_TOOLS,
+    activation_hint as _skill_activation_hint,
+    make_skill_executors,
+)
+from .skill_system.runtime import get_skill_runtime as _get_skill_runtime
 
 log = logging.getLogger("producer")
 
@@ -172,14 +179,17 @@ def _build_producer_system(rt, project: str) -> str:
         pdir = rt._resolve_project_dir(project)
         proj = ProjectStore(pdir).load()
         n_shots = sum(len(sc.shots or []) for sc in (proj.scenes or []))
-        return PRODUCER_SYSTEM.format(
+        base = PRODUCER_SYSTEM.format(
             project_name=proj.name or "（未命名）",
             scenes_count=len(proj.scenes or []),
             shots_count=n_shots,
             characters_count=len(proj.characters or []))
     except Exception:
-        return PRODUCER_SYSTEM.format(
+        base = PRODUCER_SYSTEM.format(
             project_name=project, scenes_count="?", shots_count="?", characters_count="?")
+    # Skill System V1（40.md §七）：L1 catalog 常驻尾部（只看到自己的 Skill view）
+    base += _get_skill_runtime().catalog_block("producer")
+    return base
 
 
 def _refresh_producer_system(messages: list, rt, project: str) -> None:
@@ -330,6 +340,9 @@ def _build_producer_tools() -> tuple:
         **read_executors,
         "project.quota": _execute_project_quota,
     }
+    # Skill System V1（40.md）：生产技能发现/加载（只读，不占写槽）
+    offered = offered + list(SKILL_TOOLS)
+    read_executors = {**read_executors, **make_skill_executors("producer")}
     return offered, read_executors
 
 
@@ -1187,7 +1200,10 @@ async def producer_turn(rt, project: str, session_id: str, content: str, *,
         system = _build_producer_system(rt, project)
         messages: list[dict] = [{"role": "system", "content": system}]
         messages += history
-        messages.append({"role": "user", "content": content})
+        # Skill System V1（40.md §七）：turn 入口确定性 trigger hint（不落盘）
+        _skill_hint = _skill_activation_hint("producer", content, pdir)
+        messages.append({"role": "user", "content":
+                         (_skill_hint + "\n\n" + content) if _skill_hint else content})
         tel_system_chars = len(system)
 
         offered, read_executors = _build_producer_tools()
@@ -1289,6 +1305,8 @@ async def producer_turn(rt, project: str, session_id: str, content: str, *,
     meta = {"intent": intent, "events": events, "evidence_refs": [],
             "receipts": receipts, "trace": trace, "reasonings": reasonings,
             "linked_task_ids": linked_task_ids, "window_renewals": window_renewals,
+            # Skill System V1（40.md §十三）：本 turn 技能激活/加载证据
+            "skills": _get_skill_runtime().collect_and_reset("producer"),
             "zero_tool_claim": zero_tool_claim}
     asst_msg = AgentMessage(role="assistant", content=assistant_text,
                             status=status, meta=meta)

@@ -63,6 +63,13 @@ from .script_writer import (
     _parse_args,
     strip_reserved_fact_blocks,
 )
+# —— Skill System V1（40.md）：生产技能工具面（只读，不占写槽）——
+from .skill_system.tools import (
+    SKILL_TOOLS,
+    activation_hint as _skill_activation_hint,
+    make_skill_executors,
+)
+from .skill_system.runtime import get_skill_runtime as _get_skill_runtime
 
 log = logging.getLogger("agents.character_designer")
 
@@ -213,13 +220,16 @@ def _build_system(proj, pdir=None) -> str:
     vp_summary = "（未知）"
     if pdir is not None:
         vp_summary = _visual_profile_summary(pdir)
-    return CHARACTER_DESIGNER_SYSTEM.format(
+    base = CHARACTER_DESIGNER_SYSTEM.format(
         project_name=proj.name or "（未命名）",
         story_len=len(proj.story_text or ""),
         scenes_count=len(proj.scenes or []),
         characters_count=len(proj.characters or []),
         visual_profile_summary=vp_summary,
     )
+    # Skill System V1（40.md §七）：L1 catalog 常驻尾部（只看到自己的 Skill view）
+    base += _get_skill_runtime().catalog_block("character_designer")
+    return base
 
 
 CHARACTER_DESIGNER_SYSTEM = """你是 AGNES 的 Resource Agent（资源设计师 / Production Resource Designer）——动画项目的生产视觉资源负责人。你负责把故事中的角色与生产需求转化为【稳定、可复用、可审查、可批准】的生产视觉资源：角色身份（Character）、三视图、服装（Clothing）、造型（CharacterLook）、道具（Prop）、组合参考（Composition）与共享库操作。（内部兼容说明：你的会话/工具名沿用历史 id character_designer，这只是技术标识，对外身份就是 Resource Agent。）
@@ -766,6 +776,8 @@ CHARACTER_DESIGNER_TOOLS = [
     LIBRARY_PUBLISH_TOOL, LIBRARY_IMPORT_TOOL,
     VISUAL_PROFILE_READ_TOOL,
     WEB_SEARCH_TOOL,
+    # Skill System V1（40.md）：生产技能发现/加载（只读）
+    *SKILL_TOOLS,
 ]
 
 # shot.list / shot.read（Phase B §12：让 Agent 能看到当前分镜需要哪些资源——只读，
@@ -2415,6 +2427,8 @@ TOOL_EXECUTORS = {
     "story.read": _execute_story_read,
     "script.read": _execute_script_read,
     "web.search": _execute_web_search,
+    # Skill System V1（40.md）：skill.list/load/read_resource（只读）
+    **make_skill_executors("character_designer"),
 }
 
 
@@ -3074,7 +3088,10 @@ async def character_designer_turn(rt: AgentRuntime, project: str, session_id: st
             system += "\n\n" + mem
         messages: list[dict] = [{"role": "system", "content": system}]
         messages += history
-        messages.append({"role": "user", "content": content})
+        # Skill System V1（40.md §七）：turn 入口确定性 trigger hint（不落盘）
+        _skill_hint = _skill_activation_hint("character_designer", content, pdir)
+        messages.append({"role": "user", "content":
+                         (_skill_hint + "\n\n" + content) if _skill_hint else content})
 
         loop_state: dict = {}
         try:
@@ -3177,6 +3194,8 @@ async def character_designer_turn(rt: AgentRuntime, project: str, session_id: st
             "reasonings": reasoning,
             "search_sources": search_sources,
             "generated_views": generated_views,   # 本轮真实生成的三视图（路径，窗口渲染用）
+            # Skill System V1（40.md §十三）：本 turn 技能激活/加载证据
+            "skills": _get_skill_runtime().collect_and_reset("character_designer"),
             "pending_delete_scenes": []}
     asst = AgentMessage(role="assistant", content=assistant_text, status=status, meta=meta)
     store.append_message(session_id, asst)

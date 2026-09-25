@@ -58,6 +58,13 @@ from .script_writer import (
     _parse_args,
     strip_reserved_fact_blocks,
 )
+# —— Skill System V1（40.md）：生产技能工具面（只读，不占写槽）——
+from .skill_system.tools import (
+    SKILL_TOOLS,
+    activation_hint as _skill_activation_hint,
+    make_skill_executors,
+)
+from .skill_system.runtime import get_skill_runtime as _get_skill_runtime
 
 log = logging.getLogger("agents.scene_designer")
 
@@ -110,13 +117,16 @@ def _build_system(proj, pdir=None) -> str:
     vp_summary = "（未知）"
     if pdir is not None:
         vp_summary = _visual_profile_summary_line(pdir)
-    return SCENE_DESIGNER_SYSTEM.format(
+    base = SCENE_DESIGNER_SYSTEM.format(
         project_name=proj.name or "（未命名）",
         story_len=len(proj.story_text or ""),
         scenes_count=len(proj.scenes or []),
         characters_count=len(proj.characters or []),
         visual_profile_summary=vp_summary,
     )
+    # Skill System V1（40.md §七）：L1 catalog 常驻尾部（只看到自己的 Skill view）
+    base += _get_skill_runtime().catalog_block("scene_designer")
+    return base
 
 
 SCENE_DESIGNER_SYSTEM = """你是 AGNES 的 Scene Agent（Scene Production Designer，场景设计师）——动画项目的场景生产负责人。你的工作不是写剧情，也不是设计 Shot，而是把故事中的地点和场景状态转化为可供导演稳定使用的【生产场景系统】与 approved 场景视觉参考。
@@ -1755,7 +1765,9 @@ SCENE_DESIGNER_TOOLS: list = [SCENE_INVENTORY_TOOL, SCENE_PRODUCTION_INSPECT_TOO
                               SCENE_LAYOUT_SET_TOOL, SCENE_VIEW_PREPARE_TOOL,
                               SCENE_INSTANCE_PREPARE_TOOL, SCENE_INSTANCE_DELETE_TOOL,
                               SCENE_STATE_UPDATE_TOOL,
-                              SCENE_STATE_VIEW_PREPARE_TOOL]
+                              SCENE_STATE_VIEW_PREPARE_TOOL,
+                              # Skill System V1（40.md）：生产技能发现/加载（只读）
+                              *SKILL_TOOLS]
 
 TOOL_EXECUTORS["scene.inventory"] = _execute_scene_inventory
 TOOL_EXECUTORS["scene.production.inspect"] = _execute_scene_production_inspect
@@ -1767,6 +1779,8 @@ TOOL_EXECUTORS["scene.instance.prepare"] = _execute_scene_instance_prepare
 TOOL_EXECUTORS["scene.instance.delete"] = _execute_scene_instance_delete
 TOOL_EXECUTORS["scene.state.update"] = _execute_scene_state_update
 TOOL_EXECUTORS["scene.state_view.prepare"] = _execute_scene_state_view_prepare
+# Skill System V1（40.md）：skill.list/load/read_resource（只读）
+TOOL_EXECUTORS.update(make_skill_executors("scene_designer"))
 TOOL_LABELS["scene.inventory"] = "列出场景系统地图"
 TOOL_LABELS["scene.production.inspect"] = "检查场景生产准备"
 TOOL_LABELS["scene.location.upsert"] = "创建/更新地点"
@@ -2220,7 +2234,10 @@ async def scene_designer_turn(rt: AgentRuntime, project: str, session_id: str,
             system += "\n\n" + mem
         messages: list[dict] = [{"role": "system", "content": system}]
         messages += history
-        messages.append({"role": "user", "content": content})
+        # Skill System V1（40.md §七）：turn 入口确定性 trigger hint（不落盘）
+        _skill_hint = _skill_activation_hint("scene_designer", content, pdir)
+        messages.append({"role": "user", "content":
+                         (_skill_hint + "\n\n" + content) if _skill_hint else content})
 
         loop_state: dict = {}
         try:
@@ -2298,6 +2315,8 @@ async def scene_designer_turn(rt: AgentRuntime, project: str, session_id: str,
             "trace": trace,
             "reasonings": reasoning,
             "search_sources": search_sources,
+            # Skill System V1（40.md §十三）：本 turn 技能激活/加载证据
+            "skills": _get_skill_runtime().collect_and_reset("scene_designer"),
             "pending_delete_scenes": []}
     asst = AgentMessage(role="assistant", content=assistant_text, status=status, meta=meta)
     store.append_message(session_id, asst)

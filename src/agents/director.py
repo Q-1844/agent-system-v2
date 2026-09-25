@@ -113,6 +113,15 @@ from .director_bridge import (
     SHOT_BRIDGE_CREATE_TOOL,
     TOOL_EXECUTORS as _BRIDGE_EXECUTORS,
 )
+# —— Skill System V1（40.md）：生产技能工具面（skill.list/load/read_resource，
+#    只读、不占写槽；catalog 注入 _build_system；hint 注入 director_turn）——
+from .skill_system.tools import (
+    SKILL_TOOLS,
+    SKILL_TOOL_NAMES,
+    activation_hint as _skill_activation_hint,
+    make_skill_executors,
+)
+from .skill_system.runtime import get_skill_runtime as _get_skill_runtime
 # —— Script Writer 共享基础设施（直接 import 复用，不改其文件）——
 from .script_writer import (
     MAX_WEB_SEARCH,
@@ -269,6 +278,10 @@ def _build_system(proj, pdir=None) -> str:
     )
     if _SUBAGENT_SYSTEM_SUFFIX:
         base += "\n\n" + _SUBAGENT_SYSTEM_SUFFIX
+    # Skill System V1（40.md §七）：L1 catalog 常驻尾部（registry mtime 缓存，
+    # 每轮渲染确定性且廉价；Agent 只看到属于自己的 Skill view）
+    from .skill_system.runtime import get_skill_runtime
+    base += get_skill_runtime().catalog_block("director")
     return base
 
 
@@ -900,6 +913,8 @@ DIRECTOR_TOOLS = [
     CALIBRATION_TRACE_UPSERT_TOOL,
     VIDEO_EXTRACT_FRAME_TOOL, VISUAL_SAMPLE_FRAMES_TOOL,
     SHOT_BRIDGE_CREATE_TOOL,
+    # Skill System V1（40.md）：生产技能发现/加载（只读）
+    *SKILL_TOOLS,
 ]
 
 
@@ -1677,6 +1692,8 @@ TOOL_EXECUTORS = {
     **_CALIBRATION_EXECUTORS,
     **_FRAMES_EXECUTORS,
     **_BRIDGE_EXECUTORS,
+    # Skill System V1（40.md）：skill.list/load/read_resource（只读）
+    **make_skill_executors("director"),
 }
 
 
@@ -2563,7 +2580,7 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
 # 17 次工具调用、14/14 全读、几乎全命中（F4）。→ 不发明新 Checker Agent 定义，
 # 用「现有 Director 定义 + 一次性只读会话」做审查实例。
 # 触发：A（结构写操作累计 ≥ CLEAN_REVIEW_THRESHOLD，自动）/ B（用户审查意图，必触发）。
-REVIEW_READ_TOOLS = DIRECTOR_READ_TOOLS | {"web.search"}
+REVIEW_READ_TOOLS = DIRECTOR_READ_TOOLS | {"web.search"} | SKILL_TOOL_NAMES
 
 _REVIEW_PREAMBLE = """你是本项目派出的【只读连续性审查者】——同一 Director 定义、独立干净会话。规则：
 1. 你必须用读工具（story.list / story.read / script.read / character.list / character.read / shot.list / shot.read / web.search）自主读取当前真实状态后再下结论。除了本消息附带的创作约束与项目状态头，你没有任何历史上下文；禁止凭空推断任何镜头的具体内容。
@@ -2805,7 +2822,11 @@ async def director_turn(rt: AgentRuntime, project: str, session_id: str,
             system += "\n\n" + mem
         messages: list[dict] = [{"role": "system", "content": system}]
         messages += history
-        messages.append({"role": "user", "content": content})
+        # Skill System V1（40.md §七）：turn 入口确定性 trigger hint——命中时拼进
+        # user 消息（不落盘：session 中仍只存原 content，L2742 已 append）。
+        _skill_hint = _skill_activation_hint("director", content, pdir)
+        messages.append({"role": "user", "content":
+                         (_skill_hint + "\n\n" + content) if _skill_hint else content})
         tel_system_chars = len(system)
 
         loop_state: dict = {}
@@ -2992,6 +3013,8 @@ async def director_turn(rt: AgentRuntime, project: str, session_id: str,
             "search_sources": search_sources,
             "generated_assets": generated_assets,   # 本轮真实生成的分镜图/视频（路径，窗口渲染用）
             "prerequisite_warnings": prerequisite_warnings,   # Phase C1：生产前置（turn 级聚合）
+            # Skill System V1（40.md §十三）：本 turn 技能激活/加载/资源读取证据
+            "skills": _get_skill_runtime().collect_and_reset("director"),
             "pending_delete_scenes": []}
     asst = AgentMessage(role="assistant", content=assistant_text, status=status, meta=meta)
     store.append_message(session_id, asst)

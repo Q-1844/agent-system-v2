@@ -20,8 +20,15 @@ from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 from ..runtime import AgentError, AgentRuntime
-from ..script_writer import _parse_args
 from .runtime import get_skill_runtime
+
+
+def _parse_args(arguments: str) -> dict:
+    """工具参数 JSON 解析（本地实现，避免反向 import 各 Agent 模块造成环）。"""
+    try:
+        return json.loads(arguments) if arguments else {}
+    except Exception as e:
+        raise AgentError("bad_arguments", f"工具参数不是合法 JSON：{e}")
 
 SKILL_LIST_TOOL = {
     "type": "function",
@@ -169,13 +176,14 @@ def make_skill_executors(agent_id: str) -> Dict[str, object]:
 
 # ============ turn 入口辅助（discovery hint；不落盘）============
 
-def activation_hint(agent_id: str, content: str) -> Optional[str]:
+def activation_hint(agent_id: str, content: str,
+                    project_dir: Optional[Path] = None) -> Optional[str]:
     """turn 入口确定性 hint（cheap/确定/可 trace）。Agent 接线示例：
 
-        hint = skill_system.tools.activation_hint("director", content)
+        hint = skill_system.tools.activation_hint("director", content, pdir)
         final_content = (hint + "\\n\\n" + content) if hint else content
         # messages.append({"role": "user", "content": final_content})
         # ——session 落盘的仍是原 content（user_msg 在 turn 开头已 append）。
 
     注意：本函数不修改 messages/session，只返回提示文本。"""
-    return get_skill_runtime().activation_hint(agent_id, content)
+    return get_skill_runtime().activation_hint(agent_id, content, project_dir)
