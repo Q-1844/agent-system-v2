@@ -2,13 +2,13 @@
 
 日期：2026-09-25 ｜ 仓库：`animation-storyboard`（子仓库）｜ 执行依据：用户 Phase 39 指令 + `详细流程文件/修复阶段/39.md`（唯一执行依据）+ `FULL_STORY_CALIBRATION_PHASE38_REPORT.md` §16-§18（必读）+ `AGENT_SYSTEM_V2_CURRENT_STATE_AUDIT.md`（只作地图）
 
-本阶段任务（Phase 39 总目标）：把前两轮人工实证的两种协作模式（**①尾帧接力+自适应校准、②keyframes 接续桥**）集成进项目 Agent 系统（4 Agent：producer / script_writer / character_designer / director），然后**只通过项目 Agent** 完成 Shadow Replay 与真实生成测试。本报告当前覆盖 **Phase A（Prompt + Tool Integration）**；§13 以后（Shadow Replay / LIVE Test）待用户放行后逐 STOP 填充。
+本阶段任务（Phase 39 总目标）：把前两轮人工实证的两种协作模式（**①尾帧接力+自适应校准、②keyframes 接续桥**）集成进项目 Agent 系统，然后**只通过项目 Agent** 完成 Shadow Replay 与真实生成测试。**Agent 名单（用户 2026-09-25 两步定版）**：完整生产协作 roster = **5 Agent**（producer 总调节 + script_writer 剧本 + character_designer 资源 + scene_designer 场景 + director 分镜）；两种校准模式的**默认 active set = 4**（不含 scene_designer）；**Scene Agent 按【场景依赖条件】参与**（缺场景参考 / SIV stale / SceneState 或 Location 根因 / 需重新生成审批场景参考时由 Producer 路由进入，修场景真相后回 Director binding refresh → 重生成 → 校准继续），**即便参与也不拿校准工具**（接缝/trace/裁定/桥专属 Director）。本报告当前覆盖 **Phase A（Prompt + Tool Integration）**；§13 以后（Shadow Replay / LIVE Test）待用户放行后逐 STOP 填充。
 
 ---
 
 ## 0. 一句话结论
 
-**Phase A 完成**：两种模式的全部纪律已按 4-Agent 分工写进系统提示词；缺口的正式工具面已补齐（接缝测量 / 校准 trace 读写 / 帧提取与托管 / 中间帧采样 / 桥构造七步 / 配额可见），全部走正式 service（无脚本手术、无 curl、无 GITHUB_TOKEN 暴露）；`boundary_frame_stale` 防线在桥服务内强制（seed 后零 refresh，fail closed 绝不重新 seed）；Phase 39 新增确定性+集成测试 41 项全绿；全量回归对照**开工前冻结的 baseline manifest** 达成 **0 new failures**。STOP 等待用户审查后进入 Phase B（Shadow Replay）。
+**Phase A 完成**：两种模式的全部纪律已按 Agent 分工写进系统提示词（含用户定版的 5-Agent roster / 4-Agent 默认 active set / Scene Agent 条件参与）；缺口的正式工具面已补齐（接缝测量 / 校准 trace 读写 / 帧提取与托管 / 中间帧采样 / 桥构造七步 / 配额可见），全部走正式 service（无脚本手术、无 curl、无 GITHUB_TOKEN 暴露）；`boundary_frame_stale` 防线在桥服务内强制（seed 后零 refresh，fail closed 绝不重新 seed）；Phase 39 新增确定性+集成测试 43 项全绿；全量回归对照**开工前冻结的 baseline manifest** 达成 **0 new failures**。STOP 等待用户审查后进入 Phase B（Shadow Replay）。
 
 ---
 
@@ -21,7 +21,7 @@
 
 ### 1.2 Agent 框架事实
 - 固定 8 身份在册（`src/agents/registry.py:27-30`）；原生 tool-loop Specialist 5 个（script_writer / character_designer / scene_designer / director / producer），各自模块内 `*_turn` + 镜像 `_run_tool_loop`（仓库惯例，每文件一份）。
-- **用户锁定的协作名单（本阶段生效）＝4 个：producer / script_writer / character_designer / director**。scene_designer 及 production_planner / shot_producer / continuity_reviewer / editor 本阶段禁止激活（本阶段零改动它们的 capability / 工具面，见 §5 测试）。
+- **用户锁定的协作名单（2026-09-25 第一次定版）＝4 个：producer / script_writer / character_designer / director**，scene_designer 等禁用；**（同日第二次定版，Phase A 收尾时）**：完整生产协作 roster = **5 Agent**，Scene Agent 恢复为合法第五 Specialist 但**条件参与**（见 §0 与 §3），production_planner / shot_producer / continuity_reviewer / editor 维持禁用。
 - `visual.review_image`（`director_vision_review.py:49-77`）与 `visual.review_shot`（`shot_review.py:151-173`）确认为 Director 的无状态只读工具（agnes-2.5-flash、strict JSON + 一次 repair、append-only 遥测）——是"眼睛"，不是审查 agent。
 - 写序列化 / stale fail-closed / zero-write recovery / MAX_REPEAT_FAIL=3 / renewable window 全部在位（director.py:2260 单写槽、:1164-1175 镜头级 stale、script_writer.py:2170-2230 zero-write recovery）。
 
@@ -48,8 +48,9 @@
 | **Producer** | 编排节奏；none/minor 自动推进；major 升级用户；配额感知；checkpoint | 校准编排段（major 报告要素清单、绝不代批、quota 实时读数不硬编码、检查点节奏） | project.quota |
 | **Script Writer** | 预编剧冻结；minor 吸收首句设计；major anchor patch 建议 | 预编剧冻结段（六要素、冻结定义、吸收设计、anchor patch 输出给 Director 落库——**零新增写权**） | 无（ownership 纪律：不获 Shot 写权） |
 | **Character Designer** | 链上身份一致性；identity drift 证据与建议 | 链上身份一致性段（检查/建议不自动改 Look；drift 严重→Producer 升级独立资源修复；不静默改 production identity） | 无 |
+| **Scene Agent**（第五 Specialist，**条件参与**） | 上游场景真相 owner（Location/Anchor/SceneState/SIV）；只在场景依赖条件出现时由 Producer 路由进来 | 校准协作中的上游场景 owner 段（5-Agent roster / 默认 active set 4 / 需要与不需要你 / 修复后回 Director binding refresh / **接缝·trace·裁定·桥不属于它** / 绝不为迁就单镜改场景 canonical / resource_prerequisite 沿用） | 无（校准工具为 Director 专属） |
 
-禁用名单复核：scene_designer / production_planner / shot_producer / continuity_reviewer / editor 零改动、零激活（测试 `test_disabled_agents_get_nothing_new` 锚定）。
+禁用名单复核（修订后）：production_planner / shot_producer / continuity_reviewer / editor 零改动、零激活；scene_designer 由「禁用」改为「合法第五 Specialist、条件参与」——capability 面保持 `scene.inspect/scene.prepare` 不变，校准工具经 `_scene_agent_tools()` 白名单排除持续隔离（测试 `test_scene_designer_conditional_fifth_member` 锚定）。
 
 ## 4. Prompt 修改（全部保留「禁止/必须」句式；纪律一字不减）
 
@@ -59,6 +60,9 @@
 | `src/agents/producer.py` | PRODUCER_SYSTEM 新增【连续性校准编排（Phase 39）】 | none/minor 自动继续；major → 停下等用户 + 完整报告要素（发生了什么/为什么 major/Vision/Director 观察/冲突/seam/建议修复/cascade 风险/预计消耗）；quota 实时读数；检查点节奏 |
 | `src/agents/script_writer.py` | SCRIPT_WRITER_SYSTEM 新增【预编剧冻结与 minor 吸收】 | 冻结六要素（description/motion/expected_tail/duration/opening intent/negative constraints）；冻结=不根据生成结果偷偷改写；opening 首句吸收设计；anchor patch 结构化建议交给 Director（无镜头写权） |
 | `src/agents/character_designer.py` | CHARACTER_DESIGNER_SYSTEM 新增【链上身份一致性（校准协作）】 | drift 检查/证据/建议；不静默改 production Look（binding 快照失效代价）；升级为独立资源修复 |
+| `src/agents/scene_designer.py` | SCENE_DESIGNER_SYSTEM 新增【校准协作中的上游场景 owner（条件参与）】 | 5-Agent roster / 默认 active set 4 / 需要与不需要你 / 修复后回 Director binding refresh→重生成→校准 / 裁定与桥工具不属于它 / 绝不为迁就单镜改场景真相 |
+| `src/agents/director.py`（既有段增补） | 校准段第 6 点（级联纪律）追加场景侧根因路由句 | 场景侧根因（SIV stale / SceneState·Location 与画面不符 / 缺场景参考）→ scene_production_prerequisite 上报 → Scene Agent 条件参与上游修复 → binding refresh → 重生成 → 校准继续；场景 fresh 时直接消费 |
+| `src/agents/producer.py`（既有段增补） | 校准编排段头部追加条件参与规则；修正开头遗留的「三个专业 Agent」计数为四个 Specialist | Scene Agent 按场景依赖条件路由（与既有 scene_production_prerequisite 路由同构）；即便参与裁定仍属 Director |
 
 提示词纪律由 `tests/test_p39_prompts_discipline.py` 锚定（关键词断言，允许措辞演进、不允许纪律丢失）。
 
@@ -117,13 +121,14 @@
 
 ## 12. pytest final（本阶段收口）
 
-- Phase 39 新增测试 **41 项全绿**：`test_p39_continuity_service.py`(9) + `test_p39_bridge_service.py`(10) + `test_p39_agent_tools.py`(13) + `test_p39_prompts_discipline.py`(9)。
-- 全量回归（`_p39_final_regression.log`，最终代码状态）：**39 failed / 2331 passed**（2290 基线 passed + 41 新测试，计数吻合）。
+- Phase 39 新增测试 **43 项全绿**：`test_p39_continuity_service.py`(9) + `test_p39_bridge_service.py`(10) + `test_p39_agent_tools.py`(14，含名单修订后的 `test_scene_designer_conditional_fifth_member`) + `test_p39_prompts_discipline.py`(10，含 Scene Agent 条件参与段锚定)。
+- 全量回归（`_p39_final_regression3.log`，名单修订后的最终代码状态）：**39 failed / 2333 passed**（2290 基线 passed + 43 新测试，计数吻合）。
 - **闸门核验（对照 `_p39_baseline_manifest.json` 逐 nodeid 比对）**：
   - `final_failures − baseline_39 = ∅` → **0 new failures**；
   - baseline 39 个全部仍在失败（**零转绿、零 baseline drift**）；
-  - 根因核验：终跑日志 78 处 FileNotFoundError 全部为同一签名（`projects/AGNES_GoldenPath_H/output/videos/s01_c01.mp4` 缺失），与 baseline 签名逐一相同——**无一根因变化**；
+  - 根因核验：终跑 78 处 FileNotFoundError 全部为同一签名（`projects/AGNES_GoldenPath_H/output/videos/s01_c01.mp4` 缺失），与 baseline 签名逐一相同——**无一根因变化**；
   - 全部 39 个 FAILED 均在 `test_av_sync_a2_*` 三文件（本阶段零触碰域）。
+- **第 40 个失败事件记录（透明披露，已按闸门处置）**：名单修订批次的第一次全量（`_p39_final_regression2.log`）出现 1 个新增失败 `test_ai_7ch_cancel_race.py::test_case1_stale_object_resurrection`（断言 `len(cpx._INFLIGHT_POSTCOMMIT)==0` 得 1）。按纪律未提交、先归因：①隔离复跑 3/3 全绿；②该测试打的是 change_protocol 执行服务取消语义（`_INFLIGHT_POSTCOMMIT` 经 `add_done_callback` 清理，回调晚于 status 轮询即撞 1==0——调度竞态），与本批改动（提示词/校准工具/桥服务）零代码路径交集；③同代码两次全量一红一绿（且前两轮含全部 Phase A 代码均绿）。复跑全量（regression3）干净通过→ 判定为该既有竞态测试在负载下的时序偶发，非本阶段引入。**本批次以 regression3 收口。**
 
 ## 13. Shadow Replay 方法 —— 待 Phase B
 ## 14. Replay 逐镜表 —— 待 Phase B
@@ -146,6 +151,7 @@
 2. **`test_c1_director_production.py::test_C4` 工具面护栏** 22→28：护栏本义是「工具面变更必须有意识确认」；本变更有意识且逐工具注明出处（39.md §6），非降低判据。
 3. **无 prompt rebuild 独立工具**：39.md §6 未将其列入必须补齐清单；multi 提交路径已有 `_ensure_multi_video_prompt` 自动重建（stale→重建→fail closed），遵循"最小正式工具面"原则（§5）未再加工具。
 4. **`shot.bridge_create` 为同步长任务**（构造+提交+等待+写后验证一体的工具语义），与 `shot.generate_videos` 等长任务工具同型；服务层（构造/seed/守卫）与工具层（等待/取消）分离，均可确定性测试。
+5. **Agent 名单修订（用户 2026-09-25 第二次定版，Phase A 收尾时）**：39.md 原文「可协作仅 4 Agent、scene_designer 禁用」由用户修订为——**完整生产协作 roster 5 Agent；两种校准模式默认 active set 4；Scene Agent 条件参与**（缺场景参考 / SIV stale / SceneState·Location 根因 / 需重新生成审批场景参考时 Producer 路由进入；修复后回 Director binding refresh→重生成→校准继续；**即便参与也不拿接缝/trace/裁定/桥工具**）。落点：Scene Agent 提示词条件参与段、Director 校准段场景侧根因句、Producer 编排段条件路由规则、`instance.py` 排除注释同步、名单锚定测试改版（`test_scene_designer_conditional_fifth_member`）。production_planner / shot_producer / continuity_reviewer / editor 禁用不变。
 
 ## 31. Blockers
 
@@ -161,6 +167,7 @@
 - MAE 算法版本化（`gray128_bicubic_v1_phase38`）——历史基线只在同算法下有效。
 - attempt 归档不覆盖——37A/38 双轮实践 → trace_upsert `archive_existing`。
 - minor 不重试 / major 用户闸门 / 单次锚定重试 / 重试后重查负面约束——两轮实证 → Director/Producer 提示词纪律段。
+- **5-Agent roster + 4-Agent 默认 active set + Scene Agent 条件参与**（用户 2026-09-25 定版）——三处提示词 + `_scene_agent_tools()` 白名单排除 + 名单锚定测试。
 
 ## 34. 仍需人工的规则
 

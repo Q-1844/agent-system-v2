@@ -7,6 +7,7 @@ from src.agents.director import DIRECTOR_SYSTEM
 from src.agents.producer import PRODUCER_SYSTEM
 from src.agents.registry import _AGENT_SYSTEM_PROMPTS, SPEC_AGENT_IDS
 from src.agents.script_writer import SCRIPT_WRITER_SYSTEM
+from src.agents.scene_designer import SCENE_DESIGNER_SYSTEM
 
 
 # ============ Director：两种模式的执行主体 ============
@@ -24,6 +25,8 @@ def test_director_prompt_relay_calibration_discipline():
         "boundary_frame_stale",                           # trace enum / attempt 归档
         "cascade",                                        # 级联纪律
         "vision_assessment", "root_cause", "retry_or_adapt",  # trace 必存字段
+        "scene_production_prerequisite",                  # 场景侧根因路由（条件参与）
+        "由 Scene Agent 条件参与",                          # Scene Agent 不接手裁定
     ):
         assert kw in DIRECTOR_SYSTEM, f"Director 提示词缺少纪律锚点: {kw}"
 
@@ -62,6 +65,8 @@ def test_director_prompt_no_robot_vision_trust():
 def test_producer_prompt_calibration_orchestration():
     for kw in (
         "连续性校准编排",
+        "默认 active set 是 4",                            # 条件参与：4-Agent 默认集
+        "按【场景依赖条件】参与",                           # Scene Agent 条件参与
         "自动继续",                                       # none/minor 自动推进
         "立即停下等用户",                                  # major STOP/WAIT USER
         "为什么判 major", "Vision 说了什么", "当前 seam 数据",   # 报告要素
@@ -99,13 +104,33 @@ def test_character_designer_prompt_identity_discipline():
         assert kw in CHARACTER_DESIGNER_SYSTEM, f"CD 提示词缺少锚点: {kw}"
 
 
-# ============ 名单纪律（39.md §2：只允许四 Agent）============
-def test_registry_roster_unchanged_four_agent_collaboration():
-    """协作名单锁定 producer/script_writer/character_designer/director；
-    其余身份仍在册（identity 勿改）但本阶段禁用——没有任何新身份被加入。"""
+# ============ 名单纪律（用户 2026-09-25 定版：5-Agent roster + 条件参与）============
+def test_registry_roster_five_agent_conditional():
+    """完整生产协作 roster = 5 Agent（producer 总调节 + script_writer 剧本 +
+    character_designer 资源 + scene_designer 场景 + director 分镜）；
+    两种校准模式默认 active set = 4；scene_designer 条件参与（合法可路由，
+    普通校准不调用，永不拿校准工具——行为锚定见 test_p39_agent_tools.py
+    ::test_scene_designer_conditional_fifth_member）。
+    registry 固定 8 身份不变（identity 勿改纪律）。"""
     assert SPEC_AGENT_IDS == ["producer"] + [
         "script_writer", "character_designer", "scene_designer", "director",
         "production_planner", "shot_producer", "continuity_reviewer", "editor"]
+
+
+def test_scene_designer_prompt_conditional_calibration_role():
+    """Scene Agent 提示词必须写明条件参与的上游场景 owner 角色（名单修订落档）。"""
+    for kw in (
+        "上游场景 owner（条件参与",
+        "默认 active set 是 4",
+        "按【场景依赖条件】加入",
+        "SIV stale",
+        "scene_production_prerequisite",
+        "binding refresh 不是你的工具",
+        "接缝测量、校准 trace、三档裁定、接缝桥都【不属于你】",
+        "绝不修改场景 canonical 去迁就某一镜的画面",
+        "resource_prerequisite",
+    ):
+        assert kw in SCENE_DESIGNER_SYSTEM, f"Scene Agent 提示词缺少锚点: {kw}"
 
 
 def test_chat_prompt_stubs_mention_calibration_not_required():

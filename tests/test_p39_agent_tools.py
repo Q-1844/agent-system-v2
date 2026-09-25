@@ -20,7 +20,7 @@ from src.agents.director_frames import _execute_extract_frame, _execute_sample_f
 from src.agents.producer import _build_producer_tools, _execute_project_quota
 from src.agents.producer import _derive_changed_refs
 from src.agents.script_writer import SCRIPT_WRITER_TOOLS
-from src.agents.registry import SPECIALISTS, _build_agents
+from src.agents.registry import _build_agents
 from src.experiments import calibration_trace as ct
 
 
@@ -61,7 +61,10 @@ def test_write_read_classification():
 
 
 def test_disabled_agents_get_nothing_new():
-    """四 Agent 名单纪律：禁用身份不得获得校准/桥能力；Script Writer 无 shot 写。"""
+    """禁用身份纪律（Phase 39 名单修订后仍生效的剩余部分）：
+    continuity_reviewer / editor / shot_producer / production_planner 零校准/桥能力；
+    scene_designer 已按用户 2026-09-25 修订恢复为合法第五 Specialist（条件参与），
+    见 test_scene_designer_conditional_fifth_member。"""
     sw_names = {t["function"]["name"] for t in SCRIPT_WRITER_TOOLS}
     assert not any(n.startswith("shot.") for n in sw_names)
     assert not any(n.startswith("calibration.") for n in sw_names)
@@ -71,13 +74,43 @@ def test_disabled_agents_get_nothing_new():
     assert "project.quota" in pnames
     assert not any(n.startswith("calibration.") for n in pnames)
     assert "project.quota" in executors
-    # 禁用身份保持零校准/桥能力（registry 名单未变；能力面未扩）
-    assert "continuity_reviewer" in SPECIALISTS and "editor" in SPECIALISTS
     agents = {a.id: a for a in _build_agents()}
     for disabled in ("continuity_reviewer", "editor", "shot_producer",
-                     "production_planner", "scene_designer"):
+                     "production_planner"):
         caps = agents[disabled].allowed_capabilities
         assert not any("calibration" in c or "bridge" in c for c in caps)
+
+
+def test_scene_designer_conditional_fifth_member():
+    """用户 2026-09-25 名单定版：完整生产协作 roster = 5 Agent；
+    两种校准模式默认 active set = 4；scene_designer 是合法第五 Specialist，
+    【条件参与】——合法可路由，但普通校准不要求调用，且永远不拿校准工具。"""
+    from src.agents.producer import DELEGATE_TOOLS
+    from src.agents.scene_designer import SCENE_DESIGNER_TOOLS
+    from src.agents.subagent.instance import _scene_agent_tools
+    agents = {a.id: a for a in _build_agents()}
+    # 1) 合法 roster 成员：场景能力在位
+    assert agents["scene_designer"].allowed_capabilities == [
+        "scene.inspect", "scene.prepare"]
+    # 2) 校准/桥/镜头写能力绝不在它手上（即便条件参与也不拿）
+    caps = agents["scene_designer"].allowed_capabilities
+    assert not any("calibration" in c or "bridge" in c or "shot" in c for c in caps)
+    scene_tool_names = {t["function"]["name"] for t in SCENE_DESIGNER_TOOLS}
+    assert not any(n.startswith("calibration.") or "bridge" in n
+                   for n in scene_tool_names)
+    assert not any(n in ("shot.update", "shot.create", "shot.create_many",
+                         "shot.update_many", "shot.delete", "shot.move",
+                         "shot.generate_images", "shot.generate_videos")
+                   for n in scene_tool_names)
+    # 3) Producer 可路由（条件参与的接线必须通）
+    offered, _ = _build_producer_tools()
+    assert "scene_designer.delegate" in {t["function"]["name"] for t in offered}
+    assert "scene_designer.delegate" in DELEGATE_TOOLS
+    # 4) 校准工具不进场景子代理提案白名单（Director 裁定链专属，维持排除）
+    assert not (_scene_agent_tools() & {
+        "calibration.seam_measure", "calibration.trace_read",
+        "calibration.trace_upsert", "video.extract_frame",
+        "visual.sample_frames", "shot.bridge_create"})
 
 
 # ============ seam 工具 ============

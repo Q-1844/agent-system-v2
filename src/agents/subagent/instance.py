@@ -55,9 +55,9 @@ def _scene_agent_tools() -> set:
     global SCENE_AGENT_TOOLS
     if SCENE_AGENT_TOOLS is None:
         from src.agents.director import DIRECTOR_READ_TOOLS
-        # Phase 39（39.md §2/§5）：连续性校准与帧级工具是 Director 的校准职责面，
-        # 不进 Scene Agent 提示词白名单（scene_designer 本阶段禁用，提案实例
-        # 只做分镜设计提案——保持其工具面与 Phase 38 基线逐字节一致）。
+        # Phase 39（39.md §6；用户 2026-09-25 名单定版）：校准与帧级工具是 Director
+        # 连续性裁定链的专属工具——即便 Scene Agent 作为第五 Specialist 条件参与
+        # 校准协作，也不拿 seam/trace/帧工具（上游场景 owner 只修场景真相）。
         _P39_EXCLUDED = {"calibration.seam_measure", "calibration.trace_read",
                          "video.extract_frame", "visual.sample_frames"}
         SCENE_AGENT_TOOLS = (set(DIRECTOR_READ_TOOLS) - _P39_EXCLUDED
