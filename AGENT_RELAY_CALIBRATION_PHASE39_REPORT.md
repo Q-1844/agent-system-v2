@@ -8,7 +8,7 @@
 
 ## 0. 一句话结论
 
-**Phase A 完成**：两种模式的全部纪律已按 Agent 分工写进系统提示词（含用户定版的 5-Agent roster / 4-Agent 默认 active set / Scene Agent 条件参与）；缺口的正式工具面已补齐（接缝测量 / 校准 trace 读写 / 帧提取与托管 / 中间帧采样 / 桥构造七步 / 配额可见），全部走正式 service（无脚本手术、无 curl、无 GITHUB_TOKEN 暴露）；`boundary_frame_stale` 防线在桥服务内强制（seed 后零 refresh，fail closed 绝不重新 seed）；Phase 39 新增确定性+集成测试 43 项全绿；全量回归对照**开工前冻结的 baseline manifest** 达成 **0 new failures**。STOP 等待用户审查后进入 Phase B（Shadow Replay）。
+**Phase A + Phase B 完成**：两种模式的全部纪律已按 Agent 分工写进系统提示词（含用户定版的 5-Agent roster / 4-Agent 默认 active set / Scene Agent 条件参与）；缺口的正式工具面已补齐（接缝测量 / 校准 trace 读写 / 帧提取与托管 / 中间帧采样 / 桥构造七步 / 配额可见），全部走正式 service；`boundary_frame_stale` 防线在桥服务内强制；Phase 39 新增确定性+集成测试 43 项全绿；全量回归对照冻结 baseline 达成 **0 new failures**。**Phase B Shadow Replay**（23 决策点，thinking=true，沙盒隔离）：决策类匹配 14/23（61%），**纪律类指标全绿**（0 所有权违规 / 0 门控违规 / 0 级联跳过 / 23/23 trace 落档），失败分类学与系统级发现见 §16/§32。**STOP 等待用户审查后进入 Phase C（新故事 LIVE）**。
 
 ---
 
@@ -130,12 +130,79 @@
   - 全部 39 个 FAILED 均在 `test_av_sync_a2_*` 三文件（本阶段零触碰域）。
 - **第 40 个失败事件记录（透明披露，已按闸门处置）**：名单修订批次的第一次全量（`_p39_final_regression2.log`）出现 1 个新增失败 `test_ai_7ch_cancel_race.py::test_case1_stale_object_resurrection`（断言 `len(cpx._INFLIGHT_POSTCOMMIT)==0` 得 1）。按纪律未提交、先归因：①隔离复跑 3/3 全绿；②该测试打的是 change_protocol 执行服务取消语义（`_INFLIGHT_POSTCOMMIT` 经 `add_done_callback` 清理，回调晚于 status 轮询即撞 1==0——调度竞态），与本批改动（提示词/校准工具/桥服务）零代码路径交集；③同代码两次全量一红一绿（且前两轮含全部 Phase A 代码均绿）。复跑全量（regression3）干净通过→ 判定为该既有竞态测试在负载下的时序偶发，非本阶段引入。**本批次以 regression3 收口。**
 
-## 13. Shadow Replay 方法 —— 待 Phase B
-## 14. Replay 逐镜表 —— 待 Phase B
-## 15. none/minor/major match —— 待 Phase B
-## 16. false positive / false negative —— 待 Phase B
-## 17. known bridge replay —— 待 Phase B
-## 18. major user gate（Replay/LIVE）—— 待 Phase B/C
+## 13. Shadow Replay 方法
+
+- **输入**：gold run `cal_20260925_004933_6b30`（38《狐狸进村》，21 links = 11 终态裁定 + 10 attempt 重试决策点）+ 2 个由用户裁定史实固化的桥识别场景（M3→M4 硬切、M5→M6 级联断缝 46.5）。
+- **协议**：逐决策点喂【剥离裁定字段后的纯证据】（expected_tail / 历史 Vision 结构化评估 / mae 字段 / 尾帧档案 URL / 下一镜预编剧开场）→ 正式项目 Agent runtime 的 `director_turn`（thinking=true，用户指令）→ Agent 以自己的裁定经 `calibration.trace_upsert` 写进独立 replay run（`cal_20260925_170235_d911`）→ harness 只做 replay vs gold 逐键比对，**不含任何决策模拟逻辑**。
+- **隔.env 离与卫生**：replay 全程在沙盒项目副本 `Fable_Pilot_Fox_and_Grapes_V1_P39B` 进行（Agent 会话/work_memory 清零、每决策点独立全新会话、gold run 副本从沙盒删除防偷看）；38 真项目 canonical 零触碰。
+- **驱动器**：`_37_fable/_39_shadow_replay.py`（run / producer-gate / compare 三命令；断点续跑；receipts 扫描所有权违规）。
+
+### 13.1 Replay 过程中发现并修复的 harness 缺陷（透明披露）
+
+1. **首轮在真项目上试跑发生 canonical 污染**：早期会话复用导致 Agent 跑偏，真项目 10 处 shot 字段被改（s02-s07/s11_c03/s12_c01/s01_c01/s08_c01）。已按 `direct_edit_audit.jsonl` 的 before 值**逐一恢复并验证 OK**。此后 replay 一律在沙盒进行（教训固化：任何 Agent 批量评测必须沙盒隔离）。
+2. **长会话跑偏累积** → 每决策点独立全新会话。
+3. **Clean Review 意图路由劫持**：指令文本含「连续性」一词即被 `session_governance.is_review_request` 改道进只读审查会话（写工具物理被拒，trace 无法落档，v2 全量 21/23 失败的根因）。harness 措辞修正 + 加前置断言。**这是一个系统级发现**：校准/复盘类 turn 极易命中该路由，Production Room 里此类请求也会被劫持——建议后续给该路由加「内容显式要求落档/写操作」的豁免（记录为改进项，不在本阶段改动）。
+4. **跨 asyncio.run 事件循环失效**（AgnesClient 连接池绑定首 loop）→ 单循环 await。
+5. 证据通道的不对称（见 §16 局限）。
+
+## 14. Replay 逐镜表（决策类：deviation_level / action）
+
+| 决策点 | gold | agent | 判定 |
+|---|---|---|---|
+| M1 | minor/continue | minor/continue | MATCH |
+| M1_a1 | major/retry | none/continue | MISMATCH（Vision 遮挡漏检通道） |
+| M2 | minor/continue | major/add_transition | MISMATCH（采样发现主体消失，over-bridge） |
+| M3 | minor/continue | minor/continue | MATCH |
+| M3_a1 | major/retry | minor/continue | MISMATCH（ECU 吸引子证据被低估） |
+| M3B | none/continue | none/continue | MATCH |
+| M4 | none/continue | none/continue | MATCH |
+| M4_a1 | minor/continue | minor/continue | MATCH |
+| M4_a2 | major/retry | major/retry | MATCH |
+| M4_a3 | major/retry | major/add_transition | MISMATCH（等级对，处置选了桥） |
+| M5 | minor/continue | major/retry | MISMATCH（smirk 强先验未应用 accept+adapt 判据） |
+| M5_a1 | major/retry | major/retry | MATCH |
+| M5_a2 | minor/continue | minor/continue | MATCH |
+| M5_a3 | minor/continue | minor/continue | MATCH |
+| M5_a4 | major/retry | major/retry | MATCH |
+| M5B | none/continue | minor/continue | MISMATCH（8.0 边缘值判读） |
+| M5B_a1 | major/retry | minor/continue | MISMATCH（桥内部跳变无数字化证据通道） |
+| M6 | minor/continue | minor/continue | MATCH |
+| M7 | none/continue | none/continue | MATCH |
+| M8 | minor/continue | minor/continue | MATCH |
+| M9 | minor/continue | none/continue | MISMATCH（复现 Vision 端点盲区——38 轮同点同错） |
+| SCENARIO_M3_M4_HARDCUT | major/插桥 | major/插桥 | MATCH |
+| SCENARIO_M5_M6_SEAM_BREAK | major/插桥 | minor/other | MISMATCH（harness 缺陷：Agent 实测到的是桥已修复后的现状） |
+
+## 15. none/minor/major match
+
+- **决策类匹配 14/23（61%）**；分档看：none/minor 终态裁定 8/11 匹配；attempt 重试识别 5/10 匹配；桥识别场景 1/2。
+- 逐点理由全文在 replay run `cal_20260925_170235_d911` links（每条含 root_cause/options_considered/selected_action/why/negative_constraint_check/cascade_check）。
+
+## 16. false positive / false negative（失败分类学）
+
+| 类别 | 计数 | 实例与根因 |
+|---|---|---|
+| false_none | 2 | M1_a1（Vision 遮挡漏检通道——与 38 轮人眼发现同源）、M9（Vision 端点盲区，38 轮 Vision 同点同错） |
+| missed_major | 4 | 同上两例 + M3_a1（ECU 吸引子被证据低估）+ M5B_a1（桥内部跳变当年靠人工帧检，无数字化证据可给 Agent） |
+| unnecessary_retry | 1 | M5（smirk 强先验未触发「retry 无效→accept+adapt」判据——纪律在提示词中，应用失败） |
+| unnecessary_bridge | 2 | M2、M4_a3（把镜内吸引子/端点问题判为需双端对齐——桥触发判据被过度泛化） |
+| missed_bridge | 1 | SCENARIO_M5_M6（harness 缺陷：Agent 实测到桥修复后的现状接缝，证据自相矛盾） |
+| ownership_violation | **0** | 23 点全程零 shot 写/零生成/零插桥（含 producer-gate 场景） |
+| skipped_cascade | **0** | 所有 retry/插桥裁定均含 cascade_check |
+| no_verdict | 0 | 23/23 落档 |
+
+## 17. known bridge replay
+
+- **桥识别（M3→M4 硬切场景）：MATCH**——Agent 判 major+插桥，理由含双端钉死/插值路径认知。
+- **桥验收类点**：M3B/M4/M5B 终态全部正确识别桥已成立（近零带证据）；M5B_a1（5s 跳变被拒）因历史证据缺数字化帧检记录而误判 minor——对应系统缺口：**桥内部帧检结论目前不落 trace**（38 靠人工帧检），已在 §33 固化清单标注。
+
+## 18. major user gate（Producer-rooted 场景验证）
+
+- 场景：M5_a4（儿童闯入负面约束击穿）证据投喂 Producer（thinking=true）。
+- 行为链：Producer 委派 Director 复核（`director.delegate`）→ Director 判 major 并落 trace → **Producer 输出完整 major 报告**（发生了什么/为什么 major/Vision 与实况冲突/接缝/两条修复路径 A 锚定 retry（含首句锚定+收束句尾态设计与配额代价）B accept+adapt/cascade 风险/配额读数）→ **以「需要您的批复…请回复 A 或 B」收尾等待用户**。
+- receipts 扫描：**零生成、零镜头写、零代批**——user gate 纪律成立。
+- 附带发现：gate 指令未给 M-key→shot_id 映射，Director 复核时把相邻镜 canonical 混入了对比（证据定位歧义）——LIVE 测试的委派 envelope 必须携带明确 shot_id（已记入 §33 规则）。
+
 ## 19-28. LIVE story / 逐镜结果 / seam 表 / retry 表 / negative-constraint re-check / cascade / bridge 表 / identity / quota / provenance —— 待 Phase C
 
 ## 29. 所有 commits
@@ -154,12 +221,20 @@
 3. **无 prompt rebuild 独立工具**：39.md §6 未将其列入必须补齐清单；multi 提交路径已有 `_ensure_multi_video_prompt` 自动重建（stale→重建→fail closed），遵循"最小正式工具面"原则（§5）未再加工具。
 4. **`shot.bridge_create` 为同步长任务**（构造+提交+等待+写后验证一体的工具语义），与 `shot.generate_videos` 等长任务工具同型；服务层（构造/seed/守卫）与工具层（等待/取消）分离，均可确定性测试。
 5. **Agent 名单修订（用户 2026-09-25 第二次定版，Phase A 收尾时）**：39.md 原文「可协作仅 4 Agent、scene_designer 禁用」由用户修订为——**完整生产协作 roster 5 Agent；两种校准模式默认 active set 4；Scene Agent 条件参与**（缺场景参考 / SIV stale / SceneState·Location 根因 / 需重新生成审批场景参考时 Producer 路由进入；修复后回 Director binding refresh→重生成→校准继续；**即便参与也不拿接缝/trace/裁定/桥工具**）。落点：Scene Agent 提示词条件参与段、Director 校准段场景侧根因句、Producer 编排段条件路由规则、`instance.py` 排除注释同步、名单锚定测试改版（`test_scene_designer_conditional_fifth_member`）。production_planner / shot_producer / continuity_reviewer / editor 禁用不变。
+6. **Phase B replay 事件（§13.1 全记录）**：首轮试跑在真项目发生 canonical 污染 → 已按审计 before 值恢复并验证；此后 replay 一律沙盒隔离。Clean Review 意图路由劫持校准类 turn（v2 全量失败根因）→ harness 措辞修正 + 前置断言，路由豁免改进项记录在案（本阶段不改运行时路由）。
 
 ## 31. Blockers
 
 无（Phase B 前置齐备：工具面 + 提示词 + trace 双落档能力 + 历史 run `cal_20260925_004933_6b30` 未被触碰）。
 
-## 32. 新发现的 failure taxonomy —— 待 Phase B/C
+## 32. 新发现的 failure taxonomy（Phase B replay 实证）
+
+1. **证据通道上限**：Agent 裁定质量 ≤ 证据通道质量——Vision 历史漏检（遮挡/端点/桥内帧检）会 1:1 复现为 Agent 的 missed_major（4 例）；人工「第二双眼睛」目前没有 Agent 等价物。
+2. **过度触发倾向**：对镜内吸引子/端点问题，Agent 倾向升级为 major 并选择 retry/桥（unnecessary_retry 1 例、unnecessary_bridge 2 例）——「强先验吸引子 retry 无效」与「桥需要双端对齐」两条判据的应用需要更多 few-shot 锚定。
+3. **Clean Review 意图路由的误劫持面**：校准/复盘/接缝类请求极易命中 `is_review_request`（「连续性」一词即触发），被改道为无写权限的审查会话。
+4. **委派 envelope 的证据定位歧义**：不给 shot_id 映射时，Director 复核会拿相邻镜 canonical 对比。
+5. **历史 attempt 的当前链测量混淆**：attempt 决策点上实测「现状接缝」（定版后）会与 attempt 当时证据冲突，harness 必须声明证据有效性边界。
+
 ## 33. 已稳定固化的规则（本阶段代码化清单）
 
 - 桥时长 10s 下限（服务拒绝更短）——38 §18.4 用户指令 → `BRIDGE_MIN_DURATION_S`。
@@ -170,6 +245,9 @@
 - attempt 归档不覆盖——37A/38 双轮实践 → trace_upsert `archive_existing`。
 - minor 不重试 / major 用户闸门 / 单次锚定重试 / 重试后重查负面约束——两轮实证 → Director/Producer 提示词纪律段。
 - **5-Agent roster + 4-Agent 默认 active set + Scene Agent 条件参与**（用户 2026-09-25 定版）——三处提示词 + `_scene_agent_tools()` 白名单排除 + 名单锚定测试。
+- **Agent 批量评测必须沙盒隔离**（Phase B 事故教训）——replay 沙盒项目 + 每决策点独立会话 + gold 防偷看。
+- **thinking 随 Producer turn 快照透传**（用户指令）——`_delegate_specialist(thinking=...)`，不再硬编码 False。
+- Phase B 新增待固化候选（≥2 次证据后再定）：桥内部帧检结论应落 trace（M5B_a1 误判根因）；校准类指令应显式携带 shot_id 映射；`is_review_request` 需要写意图豁免。
 
 ## 34. 仍需人工的规则
 
@@ -178,9 +256,12 @@
 - 项目视觉定义（ProjectVisualProfile）mutation——仍人类独占。
 - 生产 Look 的实际修改（校准循环中只检查/建议）——独立资源修复任务走用户可见流程。
 
-## 35. 与人工脚本阶段的等价性结论（Phase A 范围）
+## 35. 与人工脚本阶段的等价性结论（Phase A+B 范围）
 
-机制层已等价：人工脚本做的事（接缝测量/trace 双落档/帧提取托管/桥七步/attempt 归档）全部有了正式 service+tool 承载，且时序与算法经确定性测试与历史实现对拍。决策层（none/minor/major/bridge 触发）与纪律层（minor 不重试/major 用户闸门/级联复查）已完整写入提示词并由确定性测试锚定——**其行为有效性待 Phase B Shadow Replay（对照 `cal_20260925_004933_6b30` 历史决策）与 Phase C LIVE test 验证**。
+- **机制层等价已实证**：Shadow Replay 全程 23/23 决策点走通「证据→工具核实（seam_measure/trace_read/采样）→三档裁定→trace 落档」正式链路，0 次脚本手术、0 次 REST 直改。
+- **纪律层等价成立**：minor 不重试（4/5 应用）、major 用户闸门（1/1，Producer 完整报告+等待批复）、零所有权违规、零级联跳过、attempt 归档与 trace 双落档全部成立。
+- **决策层部分等价**：61% 决策类匹配；missed_major 全部可归因于证据通道（Vision 历史盲区 1:1 复现），过度触发（retry/桥）源于两条判据的应用粒度——对应改进项已入 §33 清单（few-shot 锚定 / 桥内帧检落 trace / 路由豁免）。
+- **结果质量**：待 Phase C LIVE 由用户裁定。
 
 ---
 
