@@ -1,0 +1,250 @@
+# src/agents/director_calibration.py
+# Phase 39（39.md §6.1/§6.2）：Director 的连续性校准工具面——
+#   calibration.seam_measure  接缝测量（上镜实际尾帧 → 本镜实际首帧，Phase38 同算法）
+#   calibration.trace_read    校准 run/link 只读
+#   calibration.trace_upsert  校准 link 记录/更新（含 attempt 归档，历史不覆盖）
+#
+# 定位：
+#   - 本模块只是工具接线（schema + executor），测量本体在
+#     src/storyboard/continuity_service.py（确定性，零 LLM）；trace 持久化在
+#     src/experiments/calibration_trace.py（既有正式服务层，REST 同源）——
+#     Agent 绝不直接拼 JSON / 改实验文件 / curl REST（39.md §22）。
+#   - trace 非 canonical：trace_upsert 占一个写槽（写纪律），但回执用 trace_key
+#     而非 shot_id（不参与 Producer changed_refs 的 shot 变更派生——trace 不是
+#     canonical 变更）。读工具回执不设 verified=True（读不是写执行）。
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional
+
+from .runtime import AgentError, AgentRuntime
+from .script_writer import _base_receipt, _parse_args
+
+from src.core.store import ProjectStore
+from src.experiments.calibration_trace import (
+    CalibrationTraceError, get_link, get_run, list_links, list_runs,
+    upsert_link,
+)
+from src.storyboard import continuity_service
+
+
+# ============ calibration.seam_measure ============
+CALIBRATION_SEAM_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "calibration.seam_measure",
+        "description": (
+            "测量接缝：上一镜（播放序）实际视频尾帧 → 本镜实际视频首帧的 MAE"
+            "（128 灰度同刻度，与历史校准同一算法）。只读。返回 tail_to_first_mae"
+            "（接续性指标）与可选 end_to_end_mae（端点构图漂移，另一个量，禁止混写）、"
+            "两侧资产 provenance、预处理版本与历史基线提示。基线：同场景正常接力≈2"
+            "（近零带 1.7-2.4）；跨场景/构图切换 26-60；剧变构图 90+。"
+            "注意：MAE 不是 none/minor/major 分类器，要结合语义判断。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "shot_id": {"type": "string",
+                            "description": "本镜镜头 id（测它与播放序上一镜之间的接缝）。"},
+                "include_end_to_end": {"type": "boolean",
+                                       "description": "是否同时返回 end_to_end_mae"
+                                                      "（本镜尾帧就绪时才有值）。缺省 false。"},
+            },
+            "required": ["shot_id"],
+        },
+    },
+}
+
+
+async def _execute_seam_measure(rt: AgentRuntime, project: str, arguments: str,
+                                instruction, message_id) -> dict:
+    args = _parse_args(arguments)
+    shot_id = (args.get("shot_id") or "").strip()
+    if not shot_id:
+        raise AgentError("bad_arguments", "缺少 shot_id")
+    include_e2e = bool(args.get("include_end_to_end") or False)
+    pdir = rt._resolve_project_dir(project)
+    proj = ProjectStore(pdir).load()
+    try:
+        r = continuity_service.measure_seam(pdir, proj, shot_id,
+                                            include_end_to_end=include_e2e)
+    except continuity_service.ContinuityError as e:
+        raise AgentError(e.code, e.message)
+    return _base_receipt(
+        "calibration.seam_measure", ok=True, target=shot_id,
+        shot_id=None,   # 显式置 None：测量是只读分析，不进 shot 变更派生
+        tail_to_first_mae=r["tail_to_first_mae"],
+        end_to_end_mae=r["end_to_end_mae"],
+        left=r["left"], right=r["right"],
+        preprocessing_version=r["preprocessing_version"],
+        baseline_hint=r["baseline_hint"],
+        **({"end_to_end_mae_error": r["end_to_end_mae_error"]}
+           if r.get("end_to_end_mae_error") else {}),
+        note=(f"接缝（{r['left']['shot_id']} 尾帧 → {r['right']['shot_id']} 首帧）"
+              f"tail_to_first_mae={r['tail_to_first_mae']}"
+              f"（{r['preprocessing_version']}）。"
+              "这是测量值不是裁定——结合叙事/情绪/状态判断 none/minor/major。"))
+
+
+# ============ calibration.trace_read ============
+CALIBRATION_TRACE_READ_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "calibration.trace_read",
+        "description": (
+            "读校准 trace（只读）。三种粒度：不带参数=列出全部校准 run（轻量地图）；"
+            "带 run_id=读该 run（story_plan/status/notes + 已有 link 键清单）；"
+            "带 run_id+trace_key=读一条 link 全文（预期尾帧/MAE/vision/人工裁定/"
+            "repair 决策链/历史 attempt）。裁定量最大化复用历史纪律：判镜前先读"
+            "同 run 的相邻 link。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "run_id": {"type": "string",
+                           "description": "校准 run id（cal_开头）。省略=列出全部 run。"},
+                "trace_key": {"type": "string",
+                              "description": "link 键（通常为镜头 key，如 M3 或 s11_c04）。"
+                                             "省略=读 run 概要。"},
+            },
+            "required": [],
+        },
+    },
+}
+
+
+async def _execute_trace_read(rt: AgentRuntime, project: str, arguments: str,
+                              instruction, message_id) -> dict:
+    args = _parse_args(arguments)
+    run_id = (args.get("run_id") or "").strip()
+    trace_key = (args.get("trace_key") or "").strip()
+    pdir = rt._resolve_project_dir(project)
+    try:
+        if not run_id:
+            runs = list_runs(pdir)
+            return {"ok": True, "operation": "calibration.trace_read",
+                    "runs": [{"run_id": r.get("run_id"), "title": r.get("title"),
+                              "story_id": r.get("story_id"), "status": r.get("status"),
+                              "created_at": r.get("created_at"),
+                              "updated_at": r.get("updated_at"),
+                              "story_plan_count": len(r.get("story_plan") or [])}
+                             for r in runs],
+                    "count": len(runs),
+                    "note": "带 run_id 读单个 run；带 run_id+trace_key 读单条 link。"}
+        run = get_run(pdir, run_id)
+        if not trace_key:
+            keys = sorted(l.get("shot_id", "") for l in list_links(pdir, run_id))
+            return {"ok": True, "operation": "calibration.trace_read",
+                    "run": {"run_id": run.get("run_id"), "title": run.get("title"),
+                            "story_id": run.get("story_id"), "status": run.get("status"),
+                            "story_frozen": run.get("story_frozen"),
+                            "chain_root_reference_id": run.get("chain_root_reference_id"),
+                            "notes": run.get("notes"),
+                            "story_plan": run.get("story_plan") or [],
+                            "link_keys": keys, "link_count": len(keys)},
+                    "note": "带 trace_key 读单条 link 全文。"}
+        link = get_link(pdir, run_id, trace_key)
+        return {"ok": True, "operation": "calibration.trace_read",
+                "run_id": run_id, "trace_key": trace_key, "link": link}
+    except CalibrationTraceError as e:
+        raise AgentError(e.code, str(e))
+
+
+# ============ calibration.trace_upsert ============
+CALIBRATION_TRACE_UPSERT_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "calibration.trace_upsert",
+        "description": (
+            "记录/更新一条校准 link（合并语义：顶层键覆盖、dict 深合并——vision 先记、"
+            "裁定后补不丢字段）。每次裁定至少保存：expected_tail / actual_tail / "
+            "tail_to_first_mae / end_to_end_mae / vision_assessment / "
+            "director_visual_observation / vision_vs_director_diff / deviation_level"
+            "（none/minor/major）/ root_cause / options_considered / selected_action / "
+            "why / retry_or_adapt（retry/adapt）/ negative_constraint_check / "
+            "cascade_check / repair 决策链全文。枚举字段传 null 可省略，绝不能传空字符串。"
+            "🔴 记录同键新 attempt 前必须 archive_existing=true：把已有已裁定的旧 link "
+            "归档为 {key}_a{N}（历史 attempt 不覆盖）。写工具（占一个写槽）。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "run_id": {"type": "string", "description": "校准 run id（cal_开头）。"},
+                "trace_key": {"type": "string",
+                              "description": "link 键（通常为镜头 key，如 M3）。"},
+                "record": {
+                    "type": "object",
+                    "description": ("要写入的字段（合并语义，只传本次要写的）。"
+                                    "枚举校验：human_deviation_level ∈ none/minor/major；"
+                                    "human_action ∈ continue/add_transition/"
+                                    "insert_story_beat/retry_generation/"
+                                    "break_chain_and_reanchor/other；"
+                                    "retry_or_adapt ∈ retry/adapt。None 可省略，"
+                                    "空字符串会被拒绝。"),
+                },
+                "archive_existing": {
+                    "type": "boolean",
+                    "description": "记录前把该键已有【已裁定】的旧 link 归档为 "
+                                   "{key}_a{N}（attempt 历史不覆盖）。重试/重生成"
+                                   "录新 attempt 时必须传 true。缺省 false。",
+                },
+            },
+            "required": ["run_id", "trace_key", "record"],
+        },
+    },
+}
+
+
+def _archive_adjudicated_link(pdir, run_id: str, trace_key: str) -> Optional[str]:
+    """已有【已裁定】（human_deviation_level 非空）的 link 归档为 {key}_a{N}
+    （N = 已有 _a 归档数 + 1）。与 _38_generate.py 的 attempt 归档同语义。
+    返回归档键；无需归档返回 None。"""
+    try:
+        existing = get_link(pdir, run_id, trace_key)
+    except CalibrationTraceError:
+        return None
+    if not (existing.get("human_deviation_level") or "").strip():
+        return None
+    prefix = f"{trace_key}_a"
+    n = 1 + sum(1 for k in (str(l.get("shot_id") or "")
+                            for l in list_links(pdir, run_id))
+                if k.startswith(prefix))
+    archive_key = f"{prefix}{n}"
+    upsert_link(pdir, run_id, archive_key, existing)
+    return archive_key
+
+
+async def _execute_trace_upsert(rt: AgentRuntime, project: str, arguments: str,
+                                instruction, message_id) -> dict:
+    args = _parse_args(arguments)
+    run_id = (args.get("run_id") or "").strip()
+    trace_key = (args.get("trace_key") or "").strip()
+    record = args.get("record")
+    archive_existing = bool(args.get("archive_existing") or False)
+    if not run_id or not trace_key:
+        raise AgentError("bad_arguments", "缺少 run_id 或 trace_key")
+    if not isinstance(record, dict) or not record:
+        raise AgentError("bad_arguments",
+                         "record 必须是非空对象（要写入的 trace 字段）")
+    pdir = rt._resolve_project_dir(project)
+
+    archived_to = None
+    if archive_existing:
+        archived_to = _archive_adjudicated_link(pdir, run_id, trace_key)
+    try:
+        merged = upsert_link(pdir, run_id, trace_key, record)
+    except CalibrationTraceError as e:
+        raise AgentError(e.code, str(e))
+    return _base_receipt(
+        "calibration.trace_upsert", ok=True,
+        target=f"{run_id}/{trace_key}", verified=True, unchanged=False,
+        run_id=run_id, trace_key=trace_key,
+        archived_to=archived_to, updated_at=merged.get("updated_at"),
+        fields_written=sorted(record.keys()),
+        note=("trace 已记录（合并语义）"
+              + (f"；旧 attempt 已归档为 {archived_to}（历史不覆盖）" if archived_to
+                 else "；无历史归档（archive_existing=true 且存在已裁定旧记录时才归档）")
+              + "。trace 是校准验收对象：确认记录里包含裁定理由与 repair 决策链全文。"))
+
+
+TOOL_EXECUTORS = {
+    "calibration.seam_measure": _execute_seam_measure,
+    "calibration.trace_read": _execute_trace_read,
+    "calibration.trace_upsert": _execute_trace_upsert,
+}

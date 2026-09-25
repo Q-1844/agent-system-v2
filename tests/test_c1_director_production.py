@@ -91,7 +91,12 @@ def test_C4_legacy_director_tests_not_regressed():
     """C4：legacy Director creative 行为回归由 tests/test_director_agent.py 全量承载
     （本阶段 CI 同批运行）；此处锚定工具面规模不膨胀。"""
     # D2（30.md §21/§22）：+shot.select_frame（候选选定闭环）→ 22
-    assert len(DIRECTOR_TOOLS) == 22, "Director 工具面 = 17 既有 + 4 新增（§18）+ select_frame（D2）"
+    # 39（39.md §6）：+calibration.seam_measure / calibration.trace_read /
+    #   calibration.trace_upsert / video.extract_frame / visual.sample_frames /
+    #   shot.bridge_create（连续性校准与桥的正式工具面）→ 28
+    assert len(DIRECTOR_TOOLS) == 28, (
+        "Director 工具面 = 22（C1/D2 锚定值）+ 6 新增（Phase 39：seam/trace×2/"
+        "extract_frame/sample_frames/bridge_create，39.md §6）")
 
 
 # ============ Production inspect（C5-C14）============

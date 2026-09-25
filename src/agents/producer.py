@@ -152,6 +152,12 @@ execution 任务第一次返回 completed 但 verified=false（无 changed_refs�
 第二次仍 verified=false 时：不再机械调用同一 Specialist 处理同一目标。重新判断根因：①问题其实属其他领域（如 Director 说"故事层无法解决"）→ 换 Script Writer；②Specialist 明确说"无值得修改的问题"→ 接受 no-change，不写也是正确结果；③Specialist 仍只给建议未执行 → 不再重复，如实向用户报告"已完成检查但未能让该 Specialist 产生实际修改"，据剩余目标换 Agent 或报告 blocker。
 禁止为得到 verified=true 强迫 Specialist 做没有价值的修改。正确标准是"如果发现真实问题且用户要求解决就应实际执行；如果没有真实问题可以不写"，不是"必须写"。已对某问题发过一次[执行性纠偏]后，不要再发第二次（看本 turn 历史）。
 
+【连续性校准编排（Phase 39）】Director 主导逐镜校准链路（提交→接缝测量→Vision 证据→综合判断→三档裁定→trace 记录）。你的编排纪律：
+- none/minor：Director 裁定后【自动继续】下一镜（minor 靠预编剧首句吸收，不重试），不要为此打断用户。
+- major：🔴 立即停下等用户——本轮 turn 在最终消息里完整报告：发生了什么 / 为什么判 major / Vision 说了什么 / Director 看到了什么 / 二者是否冲突 / 当前 seam 数据 / 建议的修复（retry 或 bridge）/ 预计 cascade 风险 / 预计新增视频消耗。你【绝不】代替用户批准重试；用户批准 retry_generation 后才委派 Script Writer 设计锚定 patch、再委派 Director 执行单次锚定重试+完整复查。
+- 配额感知：规划任何生成任务前先 project.quota() 读真实配额与已用量，向用户如实报告剩余额度；数值每次以工具返回为准——不要把任何写死的数字（如 500s/天）当成永远成立的事实。桥（10s+）与重试都会消耗视频配额，排计划时把 major retry reserve 与 bridge reserve 算进去。
+- 检查点节奏：长故事按段落向用户汇报接缝/裁定统计（none/minor/major 计数、当前接缝值），不要闷头跑完全程。
+
 【最终汇报结构】向用户汇报：①调用了哪些 Agent、为什么 / ②各自做了什么 / ③跳过了谁及理由 / ④项目哪些内容变化 / ⑤是否仍有 blocker。
 
 当前 project：{project_name}（{scenes_count} 场景 / {shots_count} 镜头 / {characters_count} 角色）。
@@ -190,6 +196,32 @@ def _project_inspect_schema() -> dict:
         "name": "project.inspect",
         "description": "读取项目整体结构（场景/镜头/角色数、剧本长度）。轻量，默认先读它。",
         "parameters": {"type": "object", "properties": {}, "required": []}}}
+
+
+def _project_quota_schema() -> dict:
+    return {"type": "function", "function": {
+        "name": "project.quota",
+        "description": ("读取真实每日配额与已用量（video_seconds/images/text_calls，"
+                        "单位分别为秒/张/次）。排生成类计划（视频/图片）前先读它；"
+                        "数值每次以返回为准——配额随消耗实时变化，不要把任何写死的"
+                        "数字当成永远成立的事实。只读。"),
+        "parameters": {"type": "object", "properties": {}, "required": []}}}
+
+
+def _execute_project_quota(rt, project: str, arguments: str,
+                           instruction, message_id) -> dict:
+    """project.quota（Phase 39，39.md §6.6）：真实配额可见性。
+    读进程级 QuotaLedger 单例（与 /api/system/limits、AgnesClient 同一账本）——
+    Agent 不读 hardcode，不猜余额。"""
+    try:
+        from src.core.quota import QuotaLedger
+        snap = QuotaLedger.get_default().snapshot()
+        return {"ok": True, "operation": "project.quota", "quota": snap,
+                "note": ("每日配额实时读数（used/limit）。数值以本次返回为准，随生成"
+                         "消耗实时变化；规划视频/图片生成前先读，向用户报告剩余额度。")}
+    except Exception as e:
+        return {"ok": False, "operation": "project.quota",
+                "error": f"配额读取失败: {e}"}
 
 
 def _delegate_schema(agent_id: str, label: str, desc: str) -> dict:
@@ -290,12 +322,17 @@ def _build_producer_tools() -> tuple:
                          "【要点】Director 会自己读最新 canonical——situation 写发生了什么+为什么找它，不要把分镜列表全文复制进去。\n"
                          "【重要】若任务是'检查并优化/修改'：发现真实问题就用 shot 写工具直接执行修改，不要只返回审查报告或只列建议；若确认没有值得修改的问题，明确说明无需修改，不要为了产生写操作而乱改。"),
     ]
-    offered = [_project_inspect_schema()] + read_schemas + delegate_schemas
+    offered = [_project_inspect_schema(), _project_quota_schema()] + read_schemas + delegate_schemas
+    read_executors = {
+        **read_executors,
+        "project.quota": _execute_project_quota,
+    }
     return offered, read_executors
 
 
 _TOOL_LABELS = {
     "project.inspect": "查看项目概览",
+    "project.quota": "读取真实配额用量",
     "story.list": "列出故事段", "story.read": "读取故事段", "script.read": "读取剧本正文",
     "character.list": "列出角色", "character.read": "读取角色",
     "shot.list": "列出镜头", "shot.read": "读取镜头",

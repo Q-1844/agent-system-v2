@@ -1,0 +1,177 @@
+# AGENT_RELAY_CALIBRATION_PHASE39_REPORT — 把人工实证的协作模式正式集成进项目 Agent（Phase A：Prompt + Tool 集成）
+
+日期：2026-09-25 ｜ 仓库：`animation-storyboard`（子仓库）｜ 执行依据：用户 Phase 39 指令 + `详细流程文件/修复阶段/39.md`（唯一执行依据）+ `FULL_STORY_CALIBRATION_PHASE38_REPORT.md` §16-§18（必读）+ `AGENT_SYSTEM_V2_CURRENT_STATE_AUDIT.md`（只作地图）
+
+本阶段任务（Phase 39 总目标）：把前两轮人工实证的两种协作模式（**①尾帧接力+自适应校准、②keyframes 接续桥**）集成进项目 Agent 系统（4 Agent：producer / script_writer / character_designer / director），然后**只通过项目 Agent** 完成 Shadow Replay 与真实生成测试。本报告当前覆盖 **Phase A（Prompt + Tool Integration）**；§13 以后（Shadow Replay / LIVE Test）待用户放行后逐 STOP 填充。
+
+---
+
+## 0. 一句话结论
+
+**Phase A 完成**：两种模式的全部纪律已按 4-Agent 分工写进系统提示词；缺口的正式工具面已补齐（接缝测量 / 校准 trace 读写 / 帧提取与托管 / 中间帧采样 / 桥构造七步 / 配额可见），全部走正式 service（无脚本手术、无 curl、无 GITHUB_TOKEN 暴露）；`boundary_frame_stale` 防线在桥服务内强制（seed 后零 refresh，fail closed 绝不重新 seed）；Phase 39 新增确定性+集成测试 41 项全绿；全量回归对照**开工前冻结的 baseline manifest** 达成 **0 new failures**。STOP 等待用户审查后进入 Phase B（Shadow Replay）。
+
+---
+
+## 1. Preflight 当前代码事实（开工前复核，全部 file:line 级验证）
+
+### 1.1 Git 状态
+- 父仓库 `ai工作流` master @ `913eecf`（chore: submodule pointer - 39.md scene_designer事实修正）。
+- 子仓库 `animation-storyboard` 分支 `feat/agent-v2-phase-d-golden-run` @ `2ed524a`。
+- 已跟踪文件零修改、零暂存；424 个未跟踪文件全部为历史 `_` 前缀测试产物（不触碰、不提交）。
+
+### 1.2 Agent 框架事实
+- 固定 8 身份在册（`src/agents/registry.py:27-30`）；原生 tool-loop Specialist 5 个（script_writer / character_designer / scene_designer / director / producer），各自模块内 `*_turn` + 镜像 `_run_tool_loop`（仓库惯例，每文件一份）。
+- **用户锁定的协作名单（本阶段生效）＝4 个：producer / script_writer / character_designer / director**。scene_designer 及 production_planner / shot_producer / continuity_reviewer / editor 本阶段禁止激活（本阶段零改动它们的 capability / 工具面，见 §5 测试）。
+- `visual.review_image`（`director_vision_review.py:49-77`）与 `visual.review_shot`（`shot_review.py:151-173`）确认为 Director 的无状态只读工具（agnes-2.5-flash、strict JSON + 一次 repair、append-only 遥测）——是"眼睛"，不是审查 agent。
+- 写序列化 / stale fail-closed / zero-write recovery / MAX_REPEAT_FAIL=3 / renewable window 全部在位（director.py:2260 单写槽、:1164-1175 镜头级 stale、script_writer.py:2170-2230 zero-write recovery）。
+
+### 1.3 校准 trace / 生成链路 / 桥先例事实
+- 校准 REST：`routers/experiments.py`（runs CRUD + `PUT /runs/{run_id}/links/{shot_id}` merge 语义）；服务层 `src/experiments/calibration_trace.py`（枚举校验 :47-54——**None 可过、空串 400** 已确认）；存储 `output/experiments/calibration_runs/<run_id>/{run.json,links/*.json}`。
+- `tail_to_first` vs `end_to_end`：服务端此前**零 MAE 实现**，Phase38 算法只存在于 4 份战役脚本副本（`_37_fable/_38_generate.py:75-80` 等）：PIL → convert("L") → resize((128,128)) → 逐像素绝对差均值，round 1 位。
+- 桥七步此前为 script 手术：任意帧提取无端点（M4f60 为会话外手工 ffmpeg）、`last_frame_batches` seed 为脚本直写 ProjectStore（`_38_bridge_m3b.py:130-152`）；`insert_shots_after` / `update_shot_relay` 为服务函数无 REST；`boundary_frame_stale` 已是正式错误码（`video_adapter.py:184` freshness gate，复用其语义）。
+- 配额：`QuotaLedger`（`src/core/quota.py`，进程单例，config 500s/天）+ 现成查询 `GET /api/system/limits`——Agent 工具面此前不暴露。
+
+## 2. Audit 与当前代码差异（按纪律：以代码为准，只记录不倒改）
+
+| 旧 Audit 断言（2026-09-18） | 当前代码事实 | 处置 |
+|---|---|---|
+| scene_designer「无注册表身份、仅 Director 委派实例」 | 完整原生 tool-loop Specialist（registry.py:62-73） | 按 39.md 已知过时项；本阶段禁用不动 |
+| Script Writer 14 工具 | 实为 13（SCRIPT_WRITER_TOOLS L722-729） | 只记录；本阶段 SW 工具面不变 |
+| Director「不知道 Binding」 | 已有 `shot.production.inspect/bind/refresh` + profile read（C1 已集成） | Audit 过时；本阶段在其上增量 |
+| 8 大生产域对 Agent 0 tool 0 prompt | 校准/桥/帧域确为 0（本阶段的集成对象）；resources/scene 域已有（34/38 前序阶段） | 部分过时，按域区分 |
+
+## 3. 最终 4 Agent ownership（本阶段锁定）
+
+| Agent | 本阶段职责 | 新增提示词纪律 | 新增工具 |
+|---|---|---|---|
+| **Director** | 两种模式的执行主体；连续性质量与 Shot 执行 owner | 逐镜链路（禁止跳步）、MAE 语义与三档基线、三档裁定协议、不重试判据、Vision 盲区与分歧、major 用户闸门（不自行重试）、锚定重试杠杆、重试后完整复查、级联纪律、桥定位/触发/10s+节拍/验收/级联=0、intentional_cut 标注 | calibration.seam_measure / calibration.trace_read / calibration.trace_upsert / video.extract_frame / visual.sample_frames / shot.bridge_create |
+| **Producer** | 编排节奏；none/minor 自动推进；major 升级用户；配额感知；checkpoint | 校准编排段（major 报告要素清单、绝不代批、quota 实时读数不硬编码、检查点节奏） | project.quota |
+| **Script Writer** | 预编剧冻结；minor 吸收首句设计；major anchor patch 建议 | 预编剧冻结段（六要素、冻结定义、吸收设计、anchor patch 输出给 Director 落库——**零新增写权**） | 无（ownership 纪律：不获 Shot 写权） |
+| **Character Designer** | 链上身份一致性；identity drift 证据与建议 | 链上身份一致性段（检查/建议不自动改 Look；drift 严重→Producer 升级独立资源修复；不静默改 production identity） | 无 |
+
+禁用名单复核：scene_designer / production_planner / shot_producer / continuity_reviewer / editor 零改动、零激活（测试 `test_disabled_agents_get_nothing_new` 锚定）。
+
+## 4. Prompt 修改（全部保留「禁止/必须」句式；纪律一字不减）
+
+| 文件 | 位置 | 内容 |
+|---|---|---|
+| `src/agents/director.py` | DIRECTOR_SYSTEM 新增两段（【连续性校准：尾帧接力与接缝裁定】/【keyframes 接续桥】） | 39.md §1.3 底稿全部 8 点 + 桥全部纪律；含三档裁定协议、Vision 盲区、vision_vs_director_diff、级联、trace 必存字段清单 |
+| `src/agents/producer.py` | PRODUCER_SYSTEM 新增【连续性校准编排（Phase 39）】 | none/minor 自动继续；major → 停下等用户 + 完整报告要素（发生了什么/为什么 major/Vision/Director 观察/冲突/seam/建议修复/cascade 风险/预计消耗）；quota 实时读数；检查点节奏 |
+| `src/agents/script_writer.py` | SCRIPT_WRITER_SYSTEM 新增【预编剧冻结与 minor 吸收】 | 冻结六要素（description/motion/expected_tail/duration/opening intent/negative constraints）；冻结=不根据生成结果偷偷改写；opening 首句吸收设计；anchor patch 结构化建议交给 Director（无镜头写权） |
+| `src/agents/character_designer.py` | CHARACTER_DESIGNER_SYSTEM 新增【链上身份一致性（校准协作）】 | drift 检查/证据/建议；不静默改 production Look（binding 快照失效代价）；升级为独立资源修复 |
+
+提示词纪律由 `tests/test_p39_prompts_discipline.py` 锚定（关键词断言，允许措辞演进、不允许纪律丢失）。
+
+## 5. 新 Tool surface（最小正式工具面；6 Director + 1 Producer）
+
+| 工具 | 类别 | 语义 | 实现（机械部分） |
+|---|---|---|---|
+| `calibration.seam_measure(shot_id, include_end_to_end?)` | Director 只读 | 上镜实际尾帧→本镜实际首帧 MAE；字段名严格区分 `tail_to_first_mae` / `end_to_end_mae`；返回两侧资产 provenance + 预处理版本 + 基线提示 | `src/storyboard/continuity_service.py::measure_seam`（播放序解析与 `resolve_multi_relay_source` 同口径） |
+| `calibration.trace_read(run_id?, trace_key?)` | Director 只读 | 三粒度：runs 地图 / run 概要（story_plan+link 键）/ link 全文 | `src/experiments/calibration_trace.py`（既有服务层，与 REST 同源） |
+| `calibration.trace_upsert(run_id, trace_key, record, archive_existing?)` | Director 写（占写槽；回执用 trace_key，**不进 changed_refs**） | merge 语义 upsert；`archive_existing=true` 时把已裁定旧 link 归档为 `{key}_a{N}`（attempt 历史不覆盖）；枚举 None 可过空串拒绝（服务层继承） | 同上 + `_archive_adjudicated_link` |
+| `video.extract_frame(shot_id, position?, purpose?)` | Director 只读 | 从最终视频正式提取帧并托管（§6.3 正式化；GITHUB_TOKEN 由注入 host 持有，不进 Agent 上下文） | `continuity_service.extract_shot_frame`（async，host 依赖注入） |
+| `visual.sample_frames(shot_id)` | Director 只读 | 五位采样（beginning/early-middle/middle/late-middle/ending）+ 相邻帧对视觉连续性检查（none/suspected/severe/unresolved，一次 repair）——桥验收"不能只看两个端点"的证据来源 | `continuity_service.sample_frames` + agnes vision（与 review 工具同调用模式） |
+| `shot.bridge_create(after_shot_id, transition_description, duration_s, …)` | Director 写 + 长任务（wait/取消/总超时 2400s 语义对齐 generate_videos） | 桥构造七步事务；确定性校验前移（时长/节拍不达标零消耗拒绝）；提交后写后重读 canonical 按 origin marker 验证；幂等（已存在即返回） | `src/storyboard/bridge_service.py`（见 §9） |
+| `project.quota()` | Producer 只读 | 真实配额读数（进程级 QuotaLedger 单例，与 /api/system/limits、AgnesClient 同账本）；prompt 明令不把写死数字当事实 | `src/core/quota.py` |
+
+工具面规模护栏更新：`test_c1_director_production.py::test_C4` 22 → 28（Phase 39 增 6，注明出处）。
+
+## 6. Tool receipts（回执语义）
+
+- 统一走 `_base_receipt` 骨架（ok/operation/target/verified/…）。
+- **读类回执不设 verified=True**（测量/读 trace/提帧不是写执行）；**trace_upsert 回执无 shot_id 键**（`_derive_changed_refs` 派生验证：`refs["shots"]==[]`，trace 不是 canonical 变更）；**bridge_create 回执含 shot_id=桥 id**（正确触发 Producer 的 shot 变更感知）+ 完整 bridge 凭据（插镜/relay/binding/seed/job_id/origin marker/discipline）。
+- 所有失败结构化（ContinuityError/BridgeError/CalibrationTraceError → AgentError code），不伪装 5xx、不编造结论（帧对检查两次解析失败 → 如实标 unresolved 留人工目检）。
+
+## 7. Seam algorithm（与历史逐字一致）
+
+- `mae_gray128`：PIL open → `convert("L")` → `resize((128,128))`（PIL 默认 BICUBIC）→ 逐像素绝对差均值 → round 1 位。**与 `_37_fable/_38_generate.py:75-80` 参考实现数值相等**（测试 `test_mae_gray128_matches_phase38_reference` 双向对拍）。
+- 预处理版本随每个测量结果返回：`MAE_PREPROCESSING_VERSION = "gray128_bicubic_v1_phase38"`——任何算法变更必须换版本并重校历史三档基线（≈2 / 26-60 / 90+）。
+- 播放序上一镜 = scenes→shots 展平序列前一项（跨场景成立），与 `video_adapter.resolve_multi_relay_source` 同口径。
+
+## 8. Trace integration
+
+- Agent 经工具读写 `calibration_trace` 服务（同一份服务层同时服务 REST 与 Agent，无第二套写路径）；agent 不拼 JSON、不 curl。
+- 单次裁定必存字段已写进 Director 提示词 + 工具描述：expected_tail / actual_tail / tail_to_first_mae / end_to_end_mae / vision_assessment / director_visual_observation / vision_vs_director_diff / deviation_level / root_cause / options_considered / selected_action / why / retry_or_adapt / negative_constraint_check / cascade_check / repair 决策链全文。
+- **attempt 归档**：`archive_existing=true` → 已裁定旧 link 复制为 `{key}_a{N}`（N 递增）；测试覆盖两级归档（M3_a1、M3_a2）且原档只读不变——与 `_38_generate.py:212-219` 同语义的正式化。
+- 枚举纪律保持：`None` 通过、空字符串 400（服务层 `_validate_link_payload` 未动，工具层转 AgentError("invalid")）。
+
+## 9. Bridge service（`src/storyboard/bridge_service.py`）
+
+- **事务顺序强制**：校验 → 边界帧提取+托管 → `insert_shots_after`（位次=锚点后）→ `update_shot_relay` + `update_shot_fields`(keyframes/过渡文本/时长) + `opening_source=inherit_previous` + `video_prompt_en=""`（与 REST PUT 同口径）→ binding 创建（复制锚点 intent）+ refresh（OCC）→ `compile_reference_pack` → basis → **seed 尾边界**（`last_frame_batches` 增批 + `selected_last_frame` + `last_frame.mark_done`，正式化 38 的脚本手术）→ 预提交守卫 → JobQueue 提交（origin_run_id marker）。
+- 内部**全部复用正式服务**（structure_service / ShotBindingService / continuity_service / JobQueue），零旁路；agent 只表达意图（39.md §36）。
+- UNBOUND 回路：锚点无 binding → 不创建、basis=`{"binding_readiness":"UNBOUND"}`、照常 seed+提交（keyframes 生成路径 UNBOUND 分支本就允许 selected 尾帧）。
+- 确定性验收前移：时长 <10s → `bridge_duration_below_minimum`；节拍 <3 段（按 →/-/，/；等分隔）→ `bridge_transition_beats_missing`——M5B a1（5s 被拒）与 M5B a2（10s+节拍定版）的实证教训固化为代码。
+- 幂等：锚点紧随后继已是接力锚点的 keyframes 镜 → `already_exists` 返回，不重复插镜/提交。
+
+## 10. basis stale 防线（39.md 测试重点 6）
+
+- `ensure_boundary_fresh(project_dir, project_name, bridge_id, seed_basis)`：seed basis 记录的 `binding_revision` 若在提交前被任何 refresh 顶掉 → **`boundary_frame_stale`** fail closed（含 seed/当前 revision 详情），**绝不偷偷重新 seed**（测试断言 seed 批次仍为 1、job 未提交）。
+- 双保险：生成路径的 BOUND boundary freshness gate（`video_adapter.py` freshness gate，同错误码）独立生效——即使绕过桥服务提交，stale seed 也进不了 provider。
+- UNBOUND（无 binding_revision）不适用本守卫（生成路径本就无 basis 门槛），basis 仅作 provenance。
+
+## 11. pytest baseline（开工前冻结）
+
+- 开工前全量：**2290 passed / 39 failed**（`_p39_baseline.log`）。
+- 39 个失败 100% 为**同一环境性根因**：`AGNES_GoldenPath_H` fixture 媒体缺失（该项目目录被 2026-09-24 `_37_project_cleanup_manifest.json` 清理删除，684MB；A2 音画同步测试硬引用 `projects/AGNES_GoldenPath_H/output/videos/s01_c01.mp4`，测试提交于 f98487b 当时 fixture 在位）。
+- 用户裁定（2026-09-25）：**选择 1——按环境性旧失败 baseline 继续 Phase A**；冻结 39 个 nodeid + failure signature 为 `_p39_baseline_manifest.json`；不修改 av_sync 测试、不恢复 fixture、不碰 av_sync 生产代码。闸门：`final_failures − baseline_39 = ∅`；原 39 个须保持同一 fixture-missing 根因；意外转绿记 baseline drift（不作验收要求）；**第 40 个失败或根因变化 = 不可接受**。
+
+## 12. pytest final（本阶段收口）
+
+- Phase 39 新增测试 **41 项全绿**：`test_p39_continuity_service.py`(9) + `test_p39_bridge_service.py`(10) + `test_p39_agent_tools.py`(13) + `test_p39_prompts_discipline.py`(9)。
+- 全量回归（`_p39_final_regression.log`，最终代码状态）：**39 failed / 2331 passed**（2290 基线 passed + 41 新测试，计数吻合）。
+- **闸门核验（对照 `_p39_baseline_manifest.json` 逐 nodeid 比对）**：
+  - `final_failures − baseline_39 = ∅` → **0 new failures**；
+  - baseline 39 个全部仍在失败（**零转绿、零 baseline drift**）；
+  - 根因核验：终跑日志 78 处 FileNotFoundError 全部为同一签名（`projects/AGNES_GoldenPath_H/output/videos/s01_c01.mp4` 缺失），与 baseline 签名逐一相同——**无一根因变化**；
+  - 全部 39 个 FAILED 均在 `test_av_sync_a2_*` 三文件（本阶段零触碰域）。
+
+## 13. Shadow Replay 方法 —— 待 Phase B
+## 14. Replay 逐镜表 —— 待 Phase B
+## 15. none/minor/major match —— 待 Phase B
+## 16. false positive / false negative —— 待 Phase B
+## 17. known bridge replay —— 待 Phase B
+## 18. major user gate（Replay/LIVE）—— 待 Phase B/C
+## 19-28. LIVE story / 逐镜结果 / seam 表 / retry 表 / negative-constraint re-check / cascade / bridge 表 / identity / quota / provenance —— 待 Phase C
+
+## 29. 所有 commits
+
+（本批次提交后回填）
+
+## 30. Deviations（与指令字面的差异，全部已声明）
+
+1. **Baseline 处置**：39.md §4 要求 baseline 失败即 STOP。已 STOP 并报告；用户裁定改为「环境性旧失败 baseline manifest 闸门」继续（见 §11）——闸门强度不低于原纪律（0 new failures + 根因核验 + manifest 冻结）。
+2. **`test_c1_director_production.py::test_C4` 工具面护栏** 22→28：护栏本义是「工具面变更必须有意识确认」；本变更有意识且逐工具注明出处（39.md §6），非降低判据。
+3. **无 prompt rebuild 独立工具**：39.md §6 未将其列入必须补齐清单；multi 提交路径已有 `_ensure_multi_video_prompt` 自动重建（stale→重建→fail closed），遵循"最小正式工具面"原则（§5）未再加工具。
+4. **`shot.bridge_create` 为同步长任务**（构造+提交+等待+写后验证一体的工具语义），与 `shot.generate_videos` 等长任务工具同型；服务层（构造/seed/守卫）与工具层（等待/取消）分离，均可确定性测试。
+
+## 31. Blockers
+
+无（Phase B 前置齐备：工具面 + 提示词 + trace 双落档能力 + 历史 run `cal_20260925_004933_6b30` 未被触碰）。
+
+## 32. 新发现的 failure taxonomy —— 待 Phase B/C
+## 33. 已稳定固化的规则（本阶段代码化清单）
+
+- 桥时长 10s 下限（服务拒绝更短）——38 §18.4 用户指令 → `BRIDGE_MIN_DURATION_S`。
+- 桥 transition_description 中间节拍 ≥3 段（两点一线拒绝）——M5B a2 实证 → `count_transition_beats`。
+- 接缝指标 tail→first 与 end→end 分字段——CHECKPOINT_38 增补教训 → 连续性服务字段命名 + 提示词红线。
+- seed 后零 refresh → `boundary_frame_stale` fail closed——38 桥时序坑 → 桥服务守卫（生成路径 gate 之外的第二道防线）。
+- MAE 算法版本化（`gray128_bicubic_v1_phase38`）——历史基线只在同算法下有效。
+- attempt 归档不覆盖——37A/38 双轮实践 → trace_upsert `archive_existing`。
+- minor 不重试 / major 用户闸门 / 单次锚定重试 / 重试后重查负面约束——两轮实证 → Director/Producer 提示词纪律段。
+
+## 34. 仍需人工的规则
+
+- major 的最终裁定（retry_generation 批准权）——保留用户。
+- 桥验收的最终目检（帧文件路径随 `visual.sample_frames` 回执供人审）——Agent 证据 + 用户裁定。
+- 项目视觉定义（ProjectVisualProfile）mutation——仍人类独占。
+- 生产 Look 的实际修改（校准循环中只检查/建议）——独立资源修复任务走用户可见流程。
+
+## 35. 与人工脚本阶段的等价性结论（Phase A 范围）
+
+机制层已等价：人工脚本做的事（接缝测量/trace 双落档/帧提取托管/桥七步/attempt 归档）全部有了正式 service+tool 承载，且时序与算法经确定性测试与历史实现对拍。决策层（none/minor/major/bridge 触发）与纪律层（minor 不重试/major 用户闸门/级联复查）已完整写入提示词并由确定性测试锚定——**其行为有效性待 Phase B Shadow Replay（对照 `cal_20260925_004933_6b30` 历史决策）与 Phase C LIVE test 验证**。
+
+---
+
+## STOP（Phase A 边界）
+
+按 39.md §35：Prompt + Tool integration + full regression 已完成 → **STOP**。未接入备用 API / Provider Router / 前端面板 / Agent 架构重排；未激活禁用身份；未改 Scene/Binding 核心数据模型；未触碰 37A/38 trace 与先例脚本（`_37_fable/` 零改动）。等待用户审查后进入 Phase B（Shadow Replay）。
