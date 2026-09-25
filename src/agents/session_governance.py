@@ -57,6 +57,34 @@ def is_review_request(content: str) -> bool:
     return bool(_REVIEW_INTENT_RE.search(content or ""))
 
 
+# ============ Phase 39 hardening A（用户 2026-09-25 定版）：Clean Review 窄豁免 ============
+# 实证（39B replay，_37_fable/_39_shadow_replay.py）：「连续性」这类领域词只表达
+# 【话题】，不表达【意图】——含它的校准/修复任务被整 turn 劫持进只读审查会话
+# （写工具物理被拒，trace 永远无法落档）。N2 的 bridge-envelope 豁免是同型问题的
+# 第一个特例；本节把它推广为内容级窄规则（非关键词粗暴豁免）：
+#   Clean Review ⇔ 话题命中（is_review_request）且【无显式 mutation 意图】。
+#   - 显式 mutation 意图（修复/重试/重生成/插桥/落档/写入/校准/裁定/执行…）→
+#     正常 Agent runtime——写工具不被剥夺，写或不写由 Agent 按纪律自主判断；
+#   - 纯审查请求（话题命中且无 mutation 动词）→ 仍走 Clean Review（行为不变）；
+#   - 否定窗口保护：「不要修改」「禁止重试」不算 mutation 意图。
+_MUTATION_INTENT_RE = re.compile(
+    r"(?<!不要)(?<!禁止)(?<!不得)(?<!不能)(?<!无需)(?<!不许)(?<!不)"
+    r"(修复|修正|修好|修改|解决|重试|重新生成|重生成|插桥|补桥|落档|写入|记录到|"
+    r"校准|裁定|执行|落实|apply|fix|repair|retry|regenerat|calibrat|adjudicat)")
+
+
+def has_mutation_intent(content: str) -> bool:
+    """内容是否含【显式 mutation 意图】动词（否定窗口保护，见 _MUTATION_INTENT_RE）。"""
+    return bool(_MUTATION_INTENT_RE.search(content or ""))
+
+
+def should_route_to_clean_review(content: str) -> bool:
+    """Clean Review 路由窄规则（director 主 turn 改道判定入口）。
+    - True：纯审查请求 → 只读审查会话（原行为保持）；
+    - False：含显式 mutation 意图 → 正常 tool-loop（不物理剥夺写工具）。"""
+    return is_review_request(content) and not has_mutation_intent(content)
+
+
 # ============ Zero-read Gate 检测特征（改动一，三 agent tool-loop 共用）============
 # 触发条件（两者同时满足才命中，宁窄勿误——纯探讨轮不拦）：
 #   1. 本 turn 零次读工具调用（读工具集由各 agent 自己的 READ_TOOLS 定义）；

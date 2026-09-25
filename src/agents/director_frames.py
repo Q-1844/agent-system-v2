@@ -209,6 +209,15 @@ async def _execute_sample_frames(rt: AgentRuntime, project: str, arguments: str,
     severe = [e for e in evidence if e.get("discontinuity") == "severe"]
     suspected = [e for e in evidence if e.get("discontinuity") == "suspected"]
     unresolved = [e for e in evidence if e.get("discontinuity") == "unresolved"]
+    shot = proj.get_shot(shot_id)
+    # Phase 39 hardening B（用户定版）：keyframes 桥的帧检证据必须落 trace——
+    # 39B replay 实证 M5B_a1 误判根因即「桥内跳变无数字化证据通道」。
+    bridge_trace_reminder = None
+    if shot is not None and shot.link_mode == "keyframes":
+        bridge_trace_reminder = (
+            "该镜为 keyframes 桥——按校准纪律，把本次帧检证据（frames 清单 + "
+            "pairwise_evidence 结论摘要）作为 bridge_frame_check 字段写入该桥的 "
+            "calibration.trace_upsert record；只有两端 MAE、无帧检记录不得宣布桥成立。")
     return _base_receipt(
         "visual.sample_frames", ok=True, target=shot_id,
         frames=[{"label": f["label"], "at_seconds": f["at_seconds"],
@@ -216,6 +225,7 @@ async def _execute_sample_frames(rt: AgentRuntime, project: str, arguments: str,
         pairwise_evidence=evidence,
         discontinuity_summary={"severe": len(severe), "suspected": len(suspected),
                                "unresolved": len(unresolved)},
+        **({"trace_reminder": bridge_trace_reminder} if bridge_trace_reminder else {}),
         note=("五位采样 + 帧对检查完成：severe={0} suspected={1} unresolved={2}"
               "（帧文件路径已列出，可交用户目检）。这是证据不是裁定——结合双侧接缝 "
               "MAE 与过渡叙事自己判断桥是否成立。").format(

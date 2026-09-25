@@ -203,7 +203,13 @@
 - receipts 扫描：**零生成、零镜头写、零代批**——user gate 纪律成立。
 - 附带发现：gate 指令未给 M-key→shot_id 映射，Director 复核时把相邻镜 canonical 混入了对比（证据定位歧义）——LIVE 测试的委派 envelope 必须携带明确 shot_id（已记入 §33 规则）。
 
-## 19-28. LIVE story / 逐镜结果 / seam 表 / retry 表 / negative-constraint re-check / cascade / bridge 表 / identity / quota / provenance —— 待 Phase C
+## 18.1 LIVE 前硬ening（用户 2026-09-25 第三次定版，Phase C Canary 前置）
+
+1. **Clean Review 路由窄豁免**（session_governance + director 主 turn）：领域词（连续性等）只表达话题；新增 `has_mutation_intent`（修复/重试/重生成/插桥/落档/校准/裁定/执行等显式 mutation 动词，**否定窗口保护**——「不要修改/禁止重试」不算）；`should_route_to_clean_review = is_review_request and not has_mutation_intent`。纯审查请求仍走 Clean Review（test_clean_review 全量保持绿）；mutation 任务不再被物理剥夺写工具。39B replay 的 21/23 劫持事故针对性回归入 `test_p39_live_hardening.py`。
+2. **桥内帧检证据落 trace**（hardening B）：`visual.sample_frames` 对 keyframes 桥镜在回执中携带确定性 `trace_reminder`（把 frames+pairwise_evidence 作为 `bridge_frame_check` 写进该桥 trace record）；Director 提示词加规则「只有两端 MAE、无帧检记录，不得在 trace 中宣布桥成立」——针对 M5B_a1 误判根因（桥内跳变无数字化证据通道）。
+3. **窄决策锚定**（规则，非 gold 包）：①非关键表情偏差（smirk/嘴角/眼神）单独出现且其余全成立＝minor accept+adapt，不得仅凭表情升级 retry；②插桥判定必须依据双端证据或多帧连续性证据，单一端点/单帧异常不构成插桥依据——针对 over-trigger 3 例。
+4. **回归**：针对性测试 8 项（路由确定性×4 / 否定窗口 / 桥提醒×2 参数化 / 提示词锚定×2）+ 全量 pytest（2340 passed；39 环境性旧失败照挂账；cancel_race 已知间歇 1 次复现，隔离即绿——按用户裁定维持独立 issue 不扩 scope）。
+5. **Phase B 结论（用户措辞）**：Control/Safety Layer: PASS；Decision Layer: PASS WITH KNOWN EVIDENCE LIMITATIONS；批准受控 LIVE canary，不批准"已校准的自主决策"。
 
 ## 29. 所有 commits
 
@@ -268,3 +274,5 @@
 ## STOP（Phase A 边界）
 
 按 39.md §35：Prompt + Tool integration + full regression 已完成 → **STOP**。未接入备用 API / Provider Router / 前端面板 / Agent 架构重排；未激活禁用身份；未改 Scene/Binding 核心数据模型；未触碰 37A/38 trace 与先例脚本（`_37_fable/` 零改动）。等待用户审查后进入 Phase B（Shadow Replay）。
+
+## 19-28. LIVE story / 逐镜结果 / seam 表 / retry 表 / negative-constraint re-check / cascade / bridge 表 / identity / quota / provenance —— 待 Phase C（Canary 2 镜 → 放行 3-6 镜）

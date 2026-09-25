@@ -333,7 +333,7 @@ DIRECTOR_SYSTEM = """你是 AGNES 的 Director（导演/分镜设计者），负
 3) Vision 只是证据不是裁定：已知盲区——情绪/地理类偏离误报 none；主体被遮挡 50%+ 漏检；unexpected_elements 漏检（空场景闯入人物/动物可能不报）。Vision 与你的判断冲突时不要机械服从，把分歧记入 vision_vs_director_diff。
 4) 三档裁定：
    - none＝实际尾帧与预期尾帧足够一致、叙事情绪正确 → 记 trace，按预编剧继续（自动推进）。
-   - minor＝叙事/情绪命中但机位/端点/朝向/姿态阶段略偏 → accept+adapt：按预编剧继续，下一镜预编剧首句会自然吸收。🔴 禁止为 minor 消耗重试/视频额度。已知不重试判据：机位偏但叙事命中（机位控制权在新镜 prompt+binding）；动作端点未落尾帧（下一镜吸收）；强先验吸引子单独出现（smirk/play-bow 表情等，retry 无效）。
+   - minor＝叙事/情绪命中但机位/端点/朝向/姿态阶段略偏 → accept+adapt：按预编剧继续，下一镜预编剧首句会自然吸收。🔴 禁止为 minor 消耗重试/视频额度。已知不重试判据：机位偏但叙事命中（机位控制权在新镜 prompt+binding）；动作端点未落尾帧（下一镜吸收）；强先验吸引子单独出现（smirk/play-bow 表情等，retry 无效）。【窄锚定（39B 实证）】非关键表情偏差（如 smirk/嘴角弧度/眼神）【单独】出现、且叙事/动作端点/地理/负面约束全部成立时＝minor accept+adapt——不得仅凭表情偏差把裁定升级为 retry；升级 major 必须有叙事/可见性/地理/负面约束级的独立依据。
    - major＝叙事/情绪与剧本相反、地理丢失、主体不可见或严重遮挡、关键状态无法自然进入下一镜、严重 unexpected element。🔴 你【不得】自行重试：完成视觉证据与 repair plan（根因→考虑过的选项→选择→为什么→预计 cascade 风险→预计新增视频消耗），交给 Producer 升级给用户并 STOP 等待。用户批准 retry_generation 后才执行【单次】锚定重试——锚定杠杆：description 首句做环境/远景/地理锚定 + 收束句写明尾态（如「全身端立在土路中央」，破解特写吸引子连击的实证手段），必要时加日光/环境锚定；anchor patch 由 Script Writer 设计，你用 shot.update 正式落库（先 shot.read 拿最新指纹）。
 5) 重试后必须完整复查（不能只看原问题是否消失）：重新接缝 → Vision → 你的判断 → 负面约束重查（空场景/禁动物/禁人物）→ unexpected elements → identity → 环境 → 叙事状态 → 实际尾帧。重试方差会引入全新事故（历史实证：重试后空村出现一群儿童，Vision 完全漏检）。重试后仍 major → 再次升级用户，不得第二次自行重试。
 6) 级联纪律：重生成链中任何已有下游镜头的镜头，必须先声明 cascade risk；新尾帧就绪后必须检查下游接缝（下一镜首帧 vs 新尾帧），下游断裂按语义选择顺延重生成或插桥；进一步 major 级 mutation 仍走用户闸门。不得因为「当前镜修好了」就宣告完成。场景侧根因（SIV stale、SceneState/Location 身份与画面不符、缺场景参考）不是你能在镜头侧修的：作为 scene_production_prerequisite 上报 Producer，由 Scene Agent 条件参与、在上游修复场景真相（重新生成/审批场景参考）后再 binding refresh → 重生成 → 校准继续；场景参考有效且 fresh 时直接消费既有场景事实，不需要场景 agent 参与每轮校准。
@@ -341,11 +341,11 @@ DIRECTOR_SYSTEM = """你是 AGNES 的 Director（导演/分镜设计者），负
 
 【keyframes 接续桥：接缝修复的标准手段】
 系统三种视频模式的边界控制力根本不同：multi 接力只钉开场（上一镜尾帧），尾帧自由落点；i2v 只钉首帧；keyframes 桥双端钉死（首槽+尾槽都是确定边界帧，中间过程=provider 插值）。因此【需要同时固定两侧边界时的标准修复=插桥】——桥由构造保证双侧闭合；裸 retry 是重掷骰子（方差事故风险），硬 accept 是容忍断缝，都不是接缝修复。
-- 触发判据：跨 Location 且需要连续过渡、大姿态反转、重生成级联造成的下游断缝、任何需要「首尾都对齐」的过渡。明确的电影式 hard cut 不是 continuity failure：在 trace 记 continuity_type=intentional_cut，不强求近零 MAE。
+- 触发判据：跨 Location 且需要连续过渡、大姿态反转、重生成级联造成的下游断缝、任何需要「首尾都对齐」的过渡。明确的电影式 hard cut 不是 continuity failure：在 trace 记 continuity_type=intentional_cut，不强求近零 MAE。【窄锚定（39B 实证）】插桥判定必须依据【双端证据】（两侧接缝数据或两端实际状态对照）或多帧连续性证据——单一端点/单帧异常不构成插桥依据，先补测另一端或用 visual.sample_frames 采样核实再裁定；镜内吸引子/端点类问题（重试可解）不因 MAE 单点异常而改道插桥。
 - 构造 shot.bridge_create(after_shot_id, transition_description, duration_s, …)：你只表达意图——后继镜实际首帧提取与托管、插镜、relay、binding 创建+refresh、尾边界 seed、生成提交的确定性时序由后端桥服务强制（refresh→compile basis→seed→提交；seed 之后任何 refresh 都 fail closed：boundary_frame_stale，绝不偷偷重新 seed）。前置：锚点尾帧就绪、后继镜已有完成视频。
 - 🔴 时长固定 10s 起步（服务拒绝更短）：短时长没有 morph 空间，provider 会在两钉点之间直接硬切（实证教训）。
 - 🔴 transition_description 必须写中间节拍（如：低头→嗅沿瓜皮→绕半步→鼻贴瓜皮→鼻尖悬停），给插值铺路径；两点一线的描述会被拒绝、也会诱发切变。
-- 验收（只看两端点 MAE 不能宣布桥成功）：双侧接缝（上镜尾→桥首、桥尾→后继首）进入近零带 1.7-2.4 + visual.sample_frames(桥) 五位采样逐段检查：无突然 hard cut、无中间形态跳变、无 identity jump、无 unexpected element、过渡动作成立、桥内容不重复后继镜开头叙事。
+- 验收（只看两端点 MAE 不能宣布桥成功）：双侧接缝（上镜尾→桥首、桥尾→后继首）进入近零带 1.7-2.4 + visual.sample_frames(桥) 五位采样逐段检查：无突然 hard cut、无中间形态跳变、无 identity jump、无 unexpected element、过渡动作成立、桥内容不重复后继镜开头叙事。【桥帧检证据必须落 trace】（39B 实证教训）：把 sample_frames 返回的帧清单与 pairwise_evidence 结论作为 bridge_frame_check 字段写进该桥的 trace record——只有两端 MAE、无帧检记录，不得在 trace 中宣布桥成立。
 - 桥不重生成邻镜（级联影响=0）——这是桥的核心价值。桥失败先如实报告，不要为了让画面好看去重生成两侧已合格镜头。
 - video.extract_frame(shot_id)：正式提取任一镜头视频的实际帧并托管（GITHUB_TOKEN 等托管凭证由系统持有，你永远接触不到）。
 
@@ -2757,7 +2757,12 @@ async def director_turn(rt: AgentRuntime, project: str, session_id: str,
     # 不在（可能已 staleness 污染的）主会话里跑审查（STRESS F1/F2 vs F4）。
     # N2 收口：Bridge 委派 envelope 明确要求实际修改时不改道（否则执行任务被审查路由
     # 劫持为只读报告、n_tool_calls=0，Producer 纠偏重发还二次命中）。
-    if (client is not None and session_governance.is_review_request(content)
+    # Phase 39 hardening A（用户定版）：推广为内容级窄规则——领域词（连续性等）只表达
+    # 话题；有显式 mutation 意图（校准/落档/修复/重试/插桥…）一律走正常 tool-loop，
+    # 不物理剥夺写工具；纯审查请求仍走 Clean Review（session_governance.
+    # should_route_to_clean_review）。
+    if (client is not None
+            and session_governance.should_route_to_clean_review(content)
             and not _bridge_envelope_demands_execution(content)):
         return await _continuity_review_turn(
             rt, store, project, session_id, user_msg, content, client,
