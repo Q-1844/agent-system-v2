@@ -50,10 +50,13 @@ def esc(s):
     return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+BRIDGES = {"M3B": "M4", "M5B": "M6"}   # 桥 key → 后继镜 key（播放序插在后继之前）
+
+
 def _bridge_card(r, vname, fname, sname, seam_mae):
-    """M3B 跨 Location keyframes 桥卡片（播放序插在 M3/M4 之间）。"""
+    """keyframes 桥卡片（双端钉死：首槽=上镜尾帧、尾槽=后继镜首帧）。"""
     shot_id = r["shot_id"]
-    mae_t = r.get("mae_bridge_tail_vs_target")
+    mae_t = r.get("seam_bridge_tail_to_m6_first") or r.get("mae_bridge_tail_vs_target")
     seam = f"<b>{seam_mae}</b>" if seam_mae is not None else "-"
     return f"""
 <div class="card" id="M3B" style="border-color:#8b4513;background:#fffdf5">
@@ -84,8 +87,9 @@ def main():
     order = []
     for spec in SHOTS:
         k = spec["shot"]
-        if k == "M4" and "M3B" in rec:
-            order.append("M3B")
+        for bk, succ in BRIDGES.items():
+            if k == succ and bk in rec:
+                order.append(bk)
         order.append(k)
     media = {}
     for k in order:
@@ -107,8 +111,9 @@ def main():
     cards = []
     for spec in SHOTS:
         k = spec["shot"]
-        if k == "M4" and "M3B" in rec and "M3B" in media:
-            cards.append(_bridge_card(rec["M3B"], *media["M3B"], seam.get("M3B")))
+        for bk, succ in BRIDGES.items():
+            if k == succ and bk in rec and bk in media:
+                cards.append(_bridge_card(rec[bk], *media[bk], seam.get(bk)))
         r = rec.get(k)
         if not r or k not in media:
             continue
@@ -168,7 +173,7 @@ img{{width:100%;border-radius:6px;border:1px solid #ddd}}
 <h1>《狐狸进村》— Phase 38 第二轮检查点</h1>
 <div class="meta"><b>run</b>: {_38_runid()} ｜ <b>链根</b>: ref_d27e1a01c36f ｜ <b>裁定进度</b>: {done}/{len(SHOTS)}<br>
 <b>接缝一览（上镜尾帧→本镜首帧 MAE，128 灰度；基线：同场景正常接力≈2 / 跨场景26-60 / 剧变构图90+）</b>:<br>{seam_line}<br>
-播放序: M1→M2→M3→<b>M3B桥</b>→M4→M5→M6→M7→M8→M9（段C=s11 雨林小径 / 段D=s12 村庄村口）</div>
+播放序: M1→M2→M3→<b>M3B桥</b>→M4→M5→<b>M5B桥</b>→M6→M7→M8→M9（段C=s11 雨林小径 / 段D=s12 村庄村口）</div>
 {''.join(cards) or '<p>暂无已生成镜头</p>'}
 </body></html>"""
     out = HERE / "CHECKPOINT_38.html"
