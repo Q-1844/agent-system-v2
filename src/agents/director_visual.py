@@ -303,6 +303,40 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
         submittable = allowed
         blocked = blocked + policy_blocked
 
+    # ---- Phase 39D（HANDOFF §3.3）：prompt-reference 姿态冲突预检 ----
+    # night_cloak / P39C s01 实证：静态站姿身份参考 × 飞行/奔跑类镜头文本 →
+    # 模型把主体拽回参考姿态（镜内硬切）。bound_required 图片生成下阻断提交；
+    # 其余路径附结构化 warning 进回执（skill §0：收到预警停下处置，不带冲突
+    # 生成）。预检只读，自身失败绝不阻断。
+    from src.agents.pregen_checks import shot_pose_reference_conflict
+    pose_warnings: list = []
+    still_ok: list = []
+    for t in submittable:
+        conflict = None
+        try:
+            _shot_obj = proj.get_shot(t["shot_id"])
+            if _shot_obj is not None:
+                conflict = shot_pose_reference_conflict(pdir, pdir.name, _shot_obj)
+        except Exception:
+            conflict = None
+        if conflict is None:
+            still_ok.append(t)
+            continue
+        if is_image and reference_policy == "bound_required":
+            blocked.append({
+                **t, "status": "pose_reference_conflict", "ok": False,
+                "verified": False, "error": "pose_reference_conflict",
+                "pose_conflict": conflict,
+                "fix_hint": ("参考姿态与镜头动作冲突（静态姿态参考 × 位移动作）。"
+                             "先补动作匹配参考（多姿态 Look）并用 shot.update 把 "
+                             "video_reference_asset_id 指向它，或换参考；确属误报时"
+                             "改用 reference_policy=legacy_allowed 并在 trace 记录"
+                             "原因。不要原样重试。")})
+        else:
+            pose_warnings.append({**t, **conflict})
+            still_ok.append(t)
+    submittable = still_ok
+
     # 提交：origin_run_id = 每目标唯一 marker（ImageBatch/VideoVersion 记录同值，
     # 写后验证按它精确匹配；JobQueue.find_by_origin 也可据此查询）。
     jobs: list = []   # (target, job, marker)
@@ -458,6 +492,14 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
                  "可稍后用 shot.list 查看最新状态。")
     if is_image and done_items:
         note += " 首帧候选已自动选中第一张（可在分镜页更换）；图片请用户在 UI 中查看验收。"
+    if pose_warnings:
+        note += (" ⚠️ 姿态冲突预警：" + "；".join(
+            f"{w['shot_id']} 静态姿态参考×位移动作"
+            f"（{'/'.join(w['matched_motion_keywords'][:3])}）"
+            for w in pose_warnings)
+            + "——identity 可能被参考姿态拽回（P39C s01/night_cloak 实证）；"
+              "按 skill §0 处置（补动作匹配参考并 video_reference_asset_id 指向它，"
+              "或换参考）后再继续链路。")
 
     return _base_receipt(
         op, ok=ok, target=",".join(t["shot_id"] for t in targets),
@@ -467,6 +509,7 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
         cancelled=cancelled, timed_out=timed_out,
         reference_policy=reference_policy if is_image else None,
         **({"variants": variants} if is_image else {}),
+        pose_reference_warnings=pose_warnings,
         elapsed_s=elapsed, note=note)
 
 

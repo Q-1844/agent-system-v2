@@ -210,6 +210,8 @@ def _shots_token(scenes) -> str:
 # （存在/同段/无环/相邻校验）。创建时不可指定（新镜 id 未知，先建后锚）。
 SHOT_UPDATABLE_FIELDS = (
     "description", "characters", "target_duration_s", "dialogue",
+    "negative_prompt",   # Phase 39D：负面约束的正式生成字段（shot.update 可写；
+                         # native_av_pack 携带为独立 API 参数——P39C 实证只进 trace 无效）
     "shot_size", "camera", "camera_angle", "camera_movement",
     "composition", "lighting", "motion", "motion_pace",
     "environment_motion", "action_sequence",

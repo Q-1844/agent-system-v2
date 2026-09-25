@@ -340,8 +340,11 @@ def update_scene_fields(project: Project, scene_id: str, *,
 # 这些字段都被 src/core/prompt_builder.py 消费，最终决定生成画面。
 # dialogue（对白文本）是 TTS 配音（routers/shots.py audio）的创作输入，同样是镜头
 # canonical 创作字段——不进图片 prompt，但归属镜头创作数据，故列在白名单内。
+# negative_prompt 不进正向 prompt 拼接（独立 API 参数，native_av_pack 携带），
+# 但它是视频生成的正式负面约束通路（Phase 39D；P39C 实证：只进 trace 无效）。
 _SHOT_WRITABLE_FIELDS = (
     "description", "characters", "target_duration_s", "dialogue",
+    "negative_prompt",   # Phase 39D：负面约束的正式生成字段通路
     "shot_size", "camera", "camera_angle", "camera_movement",
     "composition", "lighting", "motion", "motion_pace",
     "environment_motion", "action_sequence",
