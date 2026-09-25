@@ -159,16 +159,17 @@ class SkillRuntime:
         pkg = self._registry.get(skill_id)
         if pkg is None:
             return self._fail(agent_id, skill_id, "load", "unknown_skill",
-                              f"技能不存在: {skill_id}",
+                              f"技能不存在: {skill_id}", project_dir,
                               hint="先 skill.list 查看你可用的技能目录。")
         if pkg.status != "active":
             return self._fail(agent_id, skill_id, "load", "skill_disabled",
-                              f"技能 {skill_id} 已停用。")
+                              f"技能 {skill_id} 已停用。", project_dir)
         b = self._registry.binding_for(agent_id, skill_id)
         if b is None:
             return self._fail(
                 agent_id, skill_id, "load", "skill_not_visible",
                 f"技能 {skill_id} 未对你启用（不属于你的技能目录）。",
+                project_dir,
                 hint="skill.list 查看你可用的技能；该技能可能属于其他 Agent。")
         cap = _capability_check(pkg, agent_id, agent_tools)
         role_path = pkg.role_resource_path(b)
@@ -221,16 +222,16 @@ class SkillRuntime:
         pkg = self._registry.get(skill_id)
         if pkg is None:
             return self._fail(agent_id, skill_id, "resource", "unknown_skill",
-                              f"技能不存在: {skill_id}")
+                              f"技能不存在: {skill_id}", project_dir)
         b = self._registry.binding_for(agent_id, skill_id)
         if b is None:
             return self._fail(agent_id, skill_id, "resource", "skill_not_visible",
-                              f"技能 {skill_id} 未对你启用。")
+                              f"技能 {skill_id} 未对你启用。", project_dir)
         allowed = pkg.list_resources()
         if resource not in allowed:
             return self._fail(
                 agent_id, skill_id, "resource", "unknown_resource",
-                f"资源不存在或不允许读取: {resource!r}",
+                f"资源不存在或不允许读取: {resource!r}", project_dir,
                 hint=f"可用资源: {allowed}")
         text = (pkg.package_dir / resource).read_text(encoding="utf-8")
         self._note(agent_id, pkg, "resource", True, project_dir,
@@ -267,8 +268,9 @@ class SkillRuntime:
             self._pending.setdefault(("_", agent_id), []).append(rec)
 
     def _fail(self, agent_id: str, skill_id: str, event: str, code: str,
-              message: str, *, hint: str = "") -> Dict:
-        self._note(agent_id, None, event + "_fail", False,
+              message: str, project_dir: Optional[Path] = None,
+              *, hint: str = "") -> Dict:
+        self._note(agent_id, None, event + "_fail", False, project_dir,
                    detail={"skill_id": skill_id, "code": code,
                            "message": message})
         out = {"ok": False, "operation": f"skill.{event}",

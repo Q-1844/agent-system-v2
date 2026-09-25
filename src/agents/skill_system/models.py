@@ -229,10 +229,13 @@ class SkillPackage:
         if len(text) < 40:
             raise SkillValidationError(f"SKILL.md 内容过短（<40 字符）: {self.skill_id}")
         for b in self.bindings:
-            res = self.role_resource_path(b)
-            if res is not None and not res.is_file():
-                raise SkillValidationError(
-                    f"binding 声明的 role_resource 不存在: {res}")
+            if b.role_resource is not None:
+                # 显式声明的 role_resource 必须存在（fail closed）；派生默认
+                # references/<agent>.md 是可选的（不存在即无 role 专属文件）。
+                p = self.package_dir / b.role_resource
+                if not p.is_file():
+                    raise SkillValidationError(
+                        f"binding 声明的 role_resource 不存在: {p}")
 
     # ---------- 文件访问 ----------
 
