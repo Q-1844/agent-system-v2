@@ -141,8 +141,10 @@
 ## 29. 所有 commits
 
 - **Phase A 批次（代码+测试+manifest+报告）**：子仓库 `feat/agent-v2-phase-d-golden-run` @ `3b983f5c5c2dd3f1f8a84a2a8553dde2e257a3b7`（17 files, +2628/−6）。
-- 报告回填（本条 + §12 终跑数字）：子仓库 HEAD（下一提交）。
-- 父仓库 submodule pointer 提交：随本批次更新（hash 见父仓库 log「chore: submodule pointer - Phase39 PhaseA」）。
+- 报告回填（§12 Phase A 终跑数字 + 本节）：`75e2a77`。
+- **名单修订批次（用户 2026-09-25 第二次定版：5-Agent roster / 条件参与）**：`536b4409cabde4fa5148ddd10cdb8ca66735518c`（7 files, +99/−22；回归收口 `_p39_final_regression3.log` 39F/2333P，0 new failures，见 §12 第 40 失败事件记录）。
+- 报告回填（本条）：子仓库 HEAD（下一提交）。
+- 父仓库 submodule pointer 提交：`115c62f`（Phase A 批次）、`f2e5804`（名单修订批次）。
 - 后续批次（Phase B / Phase C）commits 在各 STOP 后回填。
 
 ## 30. Deviations（与指令字面的差异，全部已声明）
