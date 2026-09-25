@@ -2,7 +2,8 @@
 # A. Clean Review 路由窄豁免——纯审查仍走 Clean Review；显式 mutation 意图不被劫持；
 #    否定窗口（「不要修改」≠ mutation）。
 # B. keyframes 桥帧检证据落 trace——sample_frames 对桥镜返回确定性 trace 提醒。
-# C. Director 提示词窄锚定（smirk 不单独升级 retry / 桥需双端证据 / bridge_frame_check）。
+# C. 窄锚定纪律迁移锚定（Skill System V1 prompt 减法后：校准/桥 workflow 纪律
+#    1:1 迁入 skill 包，prompt 只留身份/权限/真相纪律——本节断言锚点在包内）。
 import asyncio
 import json
 import subprocess
@@ -11,7 +12,6 @@ from pathlib import Path
 import pytest
 
 from src.agents import session_governance
-from src.agents.director import DIRECTOR_SYSTEM
 from src.core.models import Project, Scene, Shot, StyleAnchor, VideoVersion
 from src.core.store import ProjectStore
 
@@ -120,14 +120,26 @@ def test_sample_frames_bridge_trace_reminder(tmp_path, link_mode, expect_reminde
         assert "calibration.trace_upsert" in out["trace_reminder"]
 
 
-# ============ C. Director 提示词窄锚定 ============
-def test_director_prompt_narrow_decision_anchors():
-    assert "非关键表情偏差" in DIRECTOR_SYSTEM
-    assert "不得仅凭表情偏差把裁定升级为 retry" in DIRECTOR_SYSTEM
-    assert "插桥判定必须依据【双端证据】" in DIRECTOR_SYSTEM
-    assert "单一端点/单帧异常不构成插桥依据" in DIRECTOR_SYSTEM
+# ============ C. 窄锚定纪律在 skill 包中（prompt 减法后的迁移回归） ============
+_SKILL_BUILTIN = Path(__file__).resolve().parents[1] / "src" / "agents" / "skill_system" / "builtin"
 
 
-def test_director_prompt_bridge_frame_check_into_trace():
-    assert "bridge_frame_check" in DIRECTOR_SYSTEM
-    assert "只有两端 MAE、无帧检记录，不得在 trace 中宣布桥成立" in DIRECTOR_SYSTEM
+def _skill_text(relpath: str) -> str:
+    return (_SKILL_BUILTIN / relpath).read_text(encoding="utf-8")
+
+
+def test_director_narrow_decision_anchors_in_skill():
+    """窄锚定：smirk 不单独升级 retry 在校准包；桥需双端证据在桥包。"""
+    relay = _skill_text("full-story-relay-calibration/references/director.md")
+    assert "非关键表情偏差" in relay
+    assert "不得仅凭表情偏差把裁定升级为 retry" in relay
+    bridge = _skill_text("keyframes-bridge-repair/references/director.md")
+    assert "插桥判定必须依据【双端证据】" in bridge
+    assert "单一端点/单帧异常不构成插桥依据" in bridge
+
+
+def test_director_bridge_frame_check_into_trace_in_skill():
+    """bridge_frame_check 落 trace 纪律在 keyframes-bridge-repair 包中。"""
+    bridge = _skill_text("keyframes-bridge-repair/references/director.md")
+    assert "bridge_frame_check" in bridge
+    assert "只有两端 MAE、无帧检记录，不得在 trace 中宣布桥成立" in bridge
