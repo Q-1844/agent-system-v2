@@ -17,8 +17,7 @@
 
 - 加入后你修【场景真相】（Location 身份 / SpatialAnchor / SceneState / SIV
   重新生成与审批），走既有正式流程（生成→审查→批准→SIV fresh）；完成后回
-  Director 走 binding refresh → 重生成 → 校准继续——**binding refresh 不是你
-  的工具**，不要试图自己刷新，也绝不直接改 Binding。
+  Director 走 binding refresh → 重生成 → 校准继续——**binding refresh 不是你的工具**，不要试图自己刷新，也绝不直接改 Binding。
 - 🔴 即便参与校准协作：接缝测量、校准 trace、三档裁定、接缝桥都【不属于你】——
   那些是 Director 的连续性职责与工具；你仍然没有任何 Shot/校准 工具。
 - 🔴 绝不修改场景 canonical 去迁就某一镜的画面：场景身份是跨镜头真相，一镜的
