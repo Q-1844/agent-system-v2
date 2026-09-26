@@ -150,3 +150,28 @@ def test_skill_anchor_bridge_cross_reference():
     t = p.read_text(encoding="utf-8")
     assert "与插曲的分工" in t
     assert "full-story-relay-calibration" in t
+
+
+# ============ 裁定完整性警告（39C/39E 两次实证后的牙齿）============
+def test_adjudication_incomplete_warning_fires(env):
+    """视频已生成但 record 无裁定字段 → 警告（不阻断落档）。"""
+    pdir, rt, run = env
+    out = _upsert(rt, pdir.name, run, "s01_c02",
+                  {"tail_to_first_mae": 2.8})   # 有视频、有证据、无裁定
+    assert out["ok"] is True
+    assert "adjudication_incomplete_warning" in out
+    assert "human_deviation_level" in out["adjudication_incomplete_warning"]
+
+
+def test_adjudication_warning_not_fired_when_verdict_present(env):
+    pdir, rt, run = env
+    out = _upsert(rt, pdir.name, run, "s01_c02",
+                  {"human_deviation_level": "minor", "human_action": "continue"})
+    assert "adjudication_incomplete_warning" not in out
+
+
+def test_adjudication_warning_not_fired_without_video(env):
+    """trace_key 非镜头（无视频概念）→ 不触发。"""
+    pdir, rt, run = env
+    out = _upsert(rt, pdir.name, run, "M1", {"tail_to_first_mae": 2.0})
+    assert "adjudication_incomplete_warning" not in out

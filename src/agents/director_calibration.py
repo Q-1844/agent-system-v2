@@ -287,6 +287,15 @@ def _trace_input_hints(pdir, trace_key: str, record: dict) -> dict:
                     f"独立镜/hard cut，请在 trace 记 continuity_type=intentional_cut"
                     f"（或 reference_only_note 说明理由），本提醒即不再出现；"
                     f"若叙述意图实为接续，请先补 relay（vref=prev_tail）再生成。")
+
+    # 3) 裁定完整性警告（39C/39E 两次实证：视频已生成但裁定枚举字段空置——
+    #    skill 的 prose 收口条款未改变行为，这里给牙齿）
+    has_video = bool(shot.final_video)
+    if has_video and not str(record.get("human_deviation_level") or "").strip():
+        out["adjudication_incomplete_warning"] = (
+            f"镜头 {shot.shot_id} 已有最终视频，但本次 record 缺 human_deviation_level"
+            f"（none/minor/major）与 human_action——裁定未落档=方法未完成。请立即"
+            f"补一次 trace_upsert 写全裁定字段（档位+依据+下一步）。")
     return out
 
 
