@@ -1,0 +1,428 @@
+{
+  "schema_version": 3,
+  "locations": {
+    "loc_db2b48908019": {
+      "location_id": "loc_db2b48908019",
+      "name": "天空",
+      "description": "",
+      "identity_description": "Vast sky in 2D animation style, with drifting white clouds and soft golden-hour lighting. The scene is an open aerial expanse above a forest and lake landscape, with a gentle gradient from pale blue at the zenith to warm cream near the horizon. Clouds are stylized with soft edges and subtle shading, evoking a serene natural atmosphere.",
+      "style_notes": "",
+      "created_at": 1790418645.7698634,
+      "updated_at": 1790418645.7698636
+    },
+    "loc_33bd14817564": {
+      "location_id": "loc_33bd14817564",
+      "name": "森林边缘",
+      "description": "2D animation style forest edge: rolling canopy of green treetops stretching across the landscape, with a distant lake visible as a silver reflection on the horizon. Lush evergreen and deciduous trees with soft layered greens.",
+      "identity_description": "Forest edge in 2D animation style: a sweeping vista of green tree canopy stretching to the horizon, with a distant lake visible as a silver reflective patch. The forest is dense but not dark—soft dappled light filters through the canopy. Colors range from deep emerald in the foreground to pale jade and mint in the distance, consistent with the project's elegant natural landscape aesthetic.",
+      "style_notes": "",
+      "created_at": 1790418736.7202206,
+      "updated_at": 1790418736.720221
+    },
+    "loc_92e17556bf7c": {
+      "location_id": "loc_92e17556bf7c",
+      "name": "湖泊",
+      "description": "2D animation style tranquil lake scene featuring calm water surface with gentle ripples, reflecting the sky above. The water is clear and still near the center where the crane will land gracefully.",
+      "identity_description": "Serene lake in 2D animation style: calm, mirror-like water surface reflecting the sky and surrounding natural landscape. Clear, still waters with subtle ripple effects around the landing zone. Soft natural lighting with gentle color palette emphasizing tranquility and reflection.",
+      "style_notes": "",
+      "created_at": 1790418970.516408,
+      "updated_at": 1790418970.5164082
+    }
+  },
+  "anchors": {
+    "anc_0d80618d88d0": {
+      "anchor_id": "anc_0d80618d88d0",
+      "location_id": "loc_db2b48908019",
+      "name": "sky_zenith",
+      "kind": "landmark",
+      "description": "Zenith area of the sky, center-top region where the blue gradient is deepest. Acts as the primary vertical reference for aerial shots.",
+      "semantic_zone": "",
+      "relations": [],
+      "created_at": 1790418664.9000611,
+      "updated_at": 1790418664.9000614
+    },
+    "anc_9e09535e34bf": {
+      "anchor_id": "anc_9e09535e34bf",
+      "location_id": "loc_db2b48908019",
+      "name": "cloud_bank_north",
+      "kind": "other",
+      "description": "Stylized cloud formation in the northern sector, soft-edged cumulus shapes drifting slowly.",
+      "semantic_zone": "",
+      "relations": [],
+      "created_at": 1790418668.8913245,
+      "updated_at": 1790418668.891325
+    },
+    "anc_07c9cd96374a": {
+      "anchor_id": "anc_07c9cd96374a",
+      "location_id": "loc_db2b48908019",
+      "name": "cloud_bank_south",
+      "kind": "other",
+      "description": "Stylized cloud formation in the southern sector, lighter and more diffuse than the north.",
+      "semantic_zone": "",
+      "relations": [],
+      "created_at": 1790418671.7856717,
+      "updated_at": 1790418671.785672
+    },
+    "anc_c2e267686b18": {
+      "anchor_id": "anc_c2e267686b18",
+      "location_id": "loc_db2b48908019",
+      "name": "horizon_line",
+      "kind": "zone",
+      "description": "Horizon line where sky meets distant forest/treeline, warm cream-to-pale blue gradient transition.",
+      "semantic_zone": "",
+      "relations": [],
+      "created_at": 1790418674.825058,
+      "updated_at": 1790418674.8250585
+    },
+    "anc_93b2d37c3106": {
+      "anchor_id": "anc_93b2d37c3106",
+      "location_id": "loc_db2b48908019",
+      "name": "sun_position",
+      "kind": "other",
+      "description": "Soft golden-hour light source position, slightly off-center to create gentle illumination on clouds.",
+      "semantic_zone": "",
+      "relations": [],
+      "created_at": 1790418678.2904394,
+      "updated_at": 1790418678.2904396
+    },
+    "anc_4958e75fa407": {
+      "anchor_id": "anc_4958e75fa407",
+      "location_id": "loc_33bd14817564",
+      "name": "forest_canopy",
+      "kind": "zone",
+      "description": "Dense forest canopy in the foreground and midground, layered greens from deep emerald to lighter jade. The main body of the forest.",
+      "semantic_zone": "",
+      "relations": [],
+      "created_at": 1790418741.7085032,
+      "updated_at": 1790418741.7085032
+    },
+    "anc_d8a73bea8ad6": {
+      "anchor_id": "anc_d8a73bea8ad6",
+      "location_id": "loc_33bd14817564",
+      "name": "lake_reflection",
+      "kind": "landmark",
+      "description": "Distant silver reflection of the lake on the horizon, visible through a gap in the tree line. Acts as the focal point for aerial shots.",
+      "semantic_zone": "",
+      "relations": [],
+      "created_at": 1790418750.3173897,
+      "updated_at": 1790418750.31739
+    },
+    "anc_2b9d0a23117b": {
+      "anchor_id": "anc_2b9d0a23117b",
+      "location_id": "loc_33bd14817564",
+      "name": "forest_edge_boundary",
+      "kind": "zone",
+      "description": "Forest edge boundary where canopy meets open sky, transitional zone with mixed light and shadow.",
+      "semantic_zone": "",
+      "relations": [],
+      "created_at": 1790418755.4122958,
+      "updated_at": 1790418755.4122963
+    },
+    "anc_742c914d14c6": {
+      "anchor_id": "anc_742c914d14c6",
+      "location_id": "loc_92e17556bf7c",
+      "name": "lake_center",
+      "kind": "zone",
+      "description": "Center area of the calm lake surface, ideal for crane landing with gentle ripples.",
+      "semantic_zone": "",
+      "relations": [],
+      "created_at": 1790418974.0187867,
+      "updated_at": 1790418974.018787
+    },
+    "anc_f5226afe10f8": {
+      "anchor_id": "anc_f5226afe10f8",
+      "location_id": "loc_92e17556bf7c",
+      "name": "lake_shore",
+      "kind": "zone",
+      "description": "Shoreline area with reeds and willow trees along the lake edge, providing natural framing.",
+      "semantic_zone": "",
+      "relations": [],
+      "created_at": 1790418979.6759865,
+      "updated_at": 1790418979.6759868
+    }
+  },
+  "layouts": {
+    "layout_7cace1d03bd9": {
+      "layout_id": "layout_7cace1d03bd9",
+      "location_id": "loc_db2b48908019",
+      "orientation_convention": "north_up",
+      "notes": "",
+      "placements": [
+        {
+          "anchor_id": "anc_0d80618d88d0",
+          "zone": "north-center area",
+          "x": 0.5,
+          "y": 0.8,
+          "note": ""
+        },
+        {
+          "anchor_id": "anc_9e09535e34bf",
+          "zone": "north-west area",
+          "x": 0.3,
+          "y": 0.7,
+          "note": ""
+        },
+        {
+          "anchor_id": "anc_07c9cd96374a",
+          "zone": "north-east area",
+          "x": 0.7,
+          "y": 0.65,
+          "note": ""
+        },
+        {
+          "anchor_id": "anc_c2e267686b18",
+          "zone": "south horizon area",
+          "x": 0.5,
+          "y": 0.15,
+          "note": ""
+        },
+        {
+          "anchor_id": "anc_93b2d37c3106",
+          "zone": "center-left sky area",
+          "x": 0.35,
+          "y": 0.55,
+          "note": ""
+        }
+      ],
+      "reference_asset_id": null,
+      "created_at": 1790418707.2393608,
+      "updated_at": 1790418707.239361
+    },
+    "layout_37eed213e07f": {
+      "layout_id": "layout_37eed213e07f",
+      "location_id": "loc_33bd14817564",
+      "orientation_convention": "north_up",
+      "notes": "",
+      "placements": [
+        {
+          "anchor_id": "anc_4958e75fa407",
+          "zone": "forest center area",
+          "x": 0.3,
+          "y": 0.5,
+          "note": ""
+        },
+        {
+          "anchor_id": "anc_d8a73bea8ad6",
+          "zone": "northeast horizon area",
+          "x": 0.8,
+          "y": 0.2,
+          "note": ""
+        },
+        {
+          "anchor_id": "anc_2b9d0a23117b",
+          "zone": "east boundary area",
+          "x": 0.5,
+          "y": 0.35,
+          "note": ""
+        }
+      ],
+      "reference_asset_id": null,
+      "created_at": 1790418760.3119135,
+      "updated_at": 1790418760.3119137
+    }
+  },
+  "views": {
+    "view_2644fc4fb8d7": {
+      "view_id": "view_2644fc4fb8d7",
+      "location_id": "loc_db2b48908019",
+      "label": "sky_hero",
+      "camera_zone": "front",
+      "look_direction": "",
+      "visible_anchor_ids": [
+        "anc_0d80618d88d0",
+        "anc_9e09535e34bf",
+        "anc_07c9cd96374a",
+        "anc_c2e267686b18"
+      ],
+      "reference_asset_id": "ref_208435b12102",
+      "approval_status": "approved",
+      "generation_status": "ready",
+      "active_generation_id": "gen_84b2cfa02a2e",
+      "created_at": 1790418711.704192,
+      "updated_at": 1790418884.1422849
+    },
+    "view_a26ffa058119": {
+      "view_id": "view_a26ffa058119",
+      "location_id": "loc_33bd14817564",
+      "label": "forest_hero",
+      "camera_zone": "front",
+      "look_direction": "",
+      "visible_anchor_ids": [
+        "anc_4958e75fa407",
+        "anc_d8a73bea8ad6",
+        "anc_2b9d0a23117b"
+      ],
+      "reference_asset_id": "ref_4e208e1528b7",
+      "approval_status": "approved",
+      "generation_status": "ready",
+      "active_generation_id": "gen_36b05b8f5684",
+      "created_at": 1790418767.0657856,
+      "updated_at": 1790419326.022542
+    },
+    "view_fed2eb9a5593": {
+      "view_id": "view_fed2eb9a5593",
+      "location_id": "loc_33bd14817564",
+      "label": "forest_overhead",
+      "camera_zone": "overhead",
+      "look_direction": "",
+      "visible_anchor_ids": [
+        "anc_4958e75fa407",
+        "anc_d8a73bea8ad6"
+      ],
+      "reference_asset_id": null,
+      "approval_status": "unreviewed",
+      "generation_status": "ready",
+      "active_generation_id": "gen_f04f997f09bd",
+      "created_at": 1790418826.2750485,
+      "updated_at": 1790418826.2750487
+    },
+    "view_e801984f0530": {
+      "view_id": "view_e801984f0530",
+      "location_id": "loc_33bd14817564",
+      "label": "forest_overhead",
+      "camera_zone": "overhead",
+      "look_direction": "",
+      "visible_anchor_ids": [
+        "anc_4958e75fa407",
+        "anc_d8a73bea8ad6"
+      ],
+      "reference_asset_id": null,
+      "approval_status": "unreviewed",
+      "generation_status": "ready",
+      "active_generation_id": "gen_5e48ce58a89c",
+      "created_at": 1790418855.3499207,
+      "updated_at": 1790418855.349921
+    },
+    "view_ee7d280f0e1e": {
+      "view_id": "view_ee7d280f0e1e",
+      "location_id": "loc_92e17556bf7c",
+      "label": "lake_hero",
+      "camera_zone": "front",
+      "look_direction": "",
+      "visible_anchor_ids": [
+        "anc_742c914d14c6",
+        "anc_f5226afe10f8"
+      ],
+      "reference_asset_id": "ref_bc3f774906b2",
+      "approval_status": "approved",
+      "generation_status": "ready",
+      "active_generation_id": "gen_e66e47d332f3",
+      "created_at": 1790418986.5012567,
+      "updated_at": 1790419425.150506
+    },
+    "view_ba76606405cd": {
+      "view_id": "view_ba76606405cd",
+      "location_id": "loc_92e17556bf7c",
+      "label": "lake_hero_2d",
+      "camera_zone": "front",
+      "look_direction": "",
+      "visible_anchor_ids": [
+        "anc_742c914d14c6",
+        "anc_f5226afe10f8"
+      ],
+      "reference_asset_id": null,
+      "approval_status": "unreviewed",
+      "generation_status": "ready",
+      "active_generation_id": "gen_08686c8fab2a",
+      "created_at": 1790419032.3881226,
+      "updated_at": 1790419056.596485
+    }
+  },
+  "scene_instances": {
+    "scin_d6ad097c1db9": {
+      "scene_instance_id": "scin_d6ad097c1db9",
+      "story_scene_id": "s01",
+      "location_id": "loc_db2b48908019",
+      "location_revision_at_bind": "14d71897",
+      "status": "active",
+      "state": {
+        "time_of_day": "清晨",
+        "weather": "晴朗",
+        "lighting": "柔和的金色晨光，从东南方向斜射",
+        "environment_conditions": "高空气流平稳，云层稀薄",
+        "anchor_states": {},
+        "prop_placements": {},
+        "notes": "大鹤正在高空滑翔，俯瞰下方连绵的森林与远方隐约可见的湖泊反光"
+      },
+      "created_at": 1790419114.5070364,
+      "updated_at": 1790419153.9890215
+    },
+    "scin_64690c4eaad3": {
+      "scene_instance_id": "scin_64690c4eaad3",
+      "story_scene_id": "s02",
+      "location_id": "loc_33bd14817564",
+      "location_revision_at_bind": "31cd191b",
+      "status": "active",
+      "state": {
+        "time_of_day": "上午",
+        "weather": "晴朗",
+        "lighting": "柔和的自然光从侧上方洒落",
+        "environment_conditions": "能见度良好，气流平稳",
+        "anchor_states": {},
+        "prop_placements": {},
+        "notes": "大鹤飞越森林边缘，远处地平线处出现湖泊的银色反光"
+      },
+      "created_at": 1790419158.5310712,
+      "updated_at": 1790419657.5460577
+    },
+    "scin_c3032a178fa6": {
+      "scene_instance_id": "scin_c3032a178fa6",
+      "story_scene_id": "s03",
+      "location_id": "loc_92e17556bf7c",
+      "location_revision_at_bind": "5b3b5fef",
+      "status": "active",
+      "state": {
+        "time_of_day": "上午",
+        "weather": "晴朗",
+        "lighting": "柔和的自然光，水面波光粼粼",
+        "environment_conditions": "微风轻拂，湖面泛起细微涟漪",
+        "anchor_states": {},
+        "prop_placements": {},
+        "notes": "大鹤减速接近湖面，准备降落，水面如镜倒映着天空与鹤影"
+      },
+      "created_at": 1790419168.39264,
+      "updated_at": 1790419172.8513277
+    }
+  },
+  "scene_instance_views": {
+    "sciv_34e5d133ada1": {
+      "scene_instance_view_id": "sciv_34e5d133ada1",
+      "scene_instance_id": "scin_d6ad097c1db9",
+      "location_view_id": "view_2644fc4fb8d7",
+      "label": "sky_scene_state",
+      "generation_status": "ready",
+      "active_generation_id": "gen_d01018d4ce0f",
+      "reference_asset_id": "ref_0fbb4afdec35",
+      "approval_status": "approved",
+      "approved_basis_fingerprint": "e64c3c27",
+      "created_at": 1790419198.678976,
+      "updated_at": 1790419198.6789763
+    },
+    "sciv_8218d26d3299": {
+      "scene_instance_view_id": "sciv_8218d26d3299",
+      "scene_instance_id": "scin_64690c4eaad3",
+      "location_view_id": "view_a26ffa058119",
+      "label": "forest_scene_state",
+      "generation_status": "ready",
+      "active_generation_id": "gen_ed1afc3d881d",
+      "reference_asset_id": "ref_cd859377bdc8",
+      "approval_status": "approved",
+      "approved_basis_fingerprint": "93d448ef",
+      "created_at": 1790419322.0179584,
+      "updated_at": 1790419322.0179589
+    },
+    "sciv_96882e7dc2f4": {
+      "scene_instance_view_id": "sciv_96882e7dc2f4",
+      "scene_instance_id": "scin_c3032a178fa6",
+      "location_view_id": "view_ee7d280f0e1e",
+      "label": "lake_scene_state",
+      "generation_status": "ready",
+      "active_generation_id": "gen_2e592259eea3",
+      "reference_asset_id": "ref_e9732a7fe99d",
+      "approval_status": "approved",
+      "approved_basis_fingerprint": "da8b7591",
+      "created_at": 1790419465.1547601,
+      "updated_at": 1790419465.1547606
+    }
+  }
+}

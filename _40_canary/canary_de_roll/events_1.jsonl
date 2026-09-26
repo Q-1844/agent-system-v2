@@ -1,0 +1,664 @@
+{"type": "tool.pending", "step_id": 0, "name": "shot.list", "label": "读取分镜"}
+{"type": "tool.pending", "step_id": 0, "name": "shot.read", "label": "读取镜头"}
+{"type": "tool.pending", "step_id": 0, "name": "story.list", "label": "读取故事段"}
+{"type": "tool.started", "step_id": 0, "call_id": "call_686645af04834396bd230202", "name": "shot.list", "label": "读取分镜"}
+{"type": "tool.completed", "step_id": 0, "call_id": "call_686645af04834396bd230202", "name": "shot.list", "ok": true, "summary": "读取分镜完成"}
+{"type": "tool.started", "step_id": 0, "call_id": "call_b4658c7b831c4cf08be9e9e4", "name": "shot.read", "label": "读取镜头"}
+{"type": "tool.completed", "step_id": 0, "call_id": "call_b4658c7b831c4cf08be9e9e4", "name": "shot.read", "ok": true, "summary": "读取镜头完成"}
+{"type": "tool.started", "step_id": 0, "call_id": "call_f23752bff91d4104bbb5b85b", "name": "story.list", "label": "读取故事段"}
+{"type": "tool.completed", "step_id": 0, "call_id": "call_f23752bff91d4104bbb5b85b", "name": "story.list", "ok": true, "summary": "读取故事段完成"}
+{"type": "tool.pending", "step_id": 1, "name": "shot.read", "label": "读取镜头"}
+{"type": "tool.pending", "step_id": 1, "name": "shot.read", "label": "读取镜头"}
+{"type": "tool.pending", "step_id": 1, "name": "calibration.seam_measure", "label": "测量接缝 MAE"}
+{"type": "tool.started", "step_id": 1, "call_id": "call_080300382b1a44438a289616", "name": "shot.read", "label": "读取镜头"}
+{"type": "tool.completed", "step_id": 1, "call_id": "call_080300382b1a44438a289616", "name": "shot.read", "ok": true, "summary": "读取镜头完成"}
+{"type": "tool.started", "step_id": 1, "call_id": "call_4c9913340e504e7bbf3be65a", "name": "shot.read", "label": "读取镜头"}
+{"type": "tool.completed", "step_id": 1, "call_id": "call_4c9913340e504e7bbf3be65a", "name": "shot.read", "ok": true, "summary": "读取镜头完成"}
+{"type": "tool.started", "step_id": 1, "call_id": "call_d58e3e9b0f2049e0ae792971", "name": "calibration.seam_measure", "label": "测量接缝 MAE"}
+{"type": "tool.completed", "step_id": 1, "call_id": "call_d58e3e9b0f2049e0ae792971", "name": "calibration.seam_measure", "ok": true, "summary": "calibration.seam_measure()"}
+{"type": "tool.pending", "step_id": 2, "name": "calibration.seam_measure", "label": "测量接缝 MAE"}
+{"type": "tool.pending", "step_id": 2, "name": "shot.generate_videos", "label": "生成镜头视频"}
+{"type": "tool.started", "step_id": 2, "call_id": "call_68245a9aac124e58b04d4368", "name": "calibration.seam_measure", "label": "测量接缝 MAE"}
+{"type": "tool.completed", "step_id": 2, "call_id": "call_68245a9aac124e58b04d4368", "name": "calibration.seam_measure", "ok": true, "summary": "calibration.seam_measure()"}
+{"type": "tool.started", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频"}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "已提交 1 个视频生成任务，开始等待完成…", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "视频排队中（串行 worker，1 RPM）… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.progress", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "label": "生成镜头视频", "message": "正在生成 s02_c02 视频… 已完成 0/1", "done": 0, "total": 1, "pct": 0}
+{"type": "tool.completed", "step_id": 2, "call_id": "call_208e17f69d024f78bfebc877", "name": "shot.generate_videos", "ok": true, "summary": "为 1/1 个镜头生成视频（s02_c02）"}
+{"type": "tool.pending", "step_id": 3, "name": "calibration.seam_measure", "label": "测量接缝 MAE"}
+{"type": "tool.pending", "step_id": 3, "name": "calibration.seam_measure", "label": "测量接缝 MAE"}
+{"type": "tool.started", "step_id": 3, "call_id": "call_9bd639cb16e84b50b52552d9", "name": "calibration.seam_measure", "label": "测量接缝 MAE"}
+{"type": "tool.completed", "step_id": 3, "call_id": "call_9bd639cb16e84b50b52552d9", "name": "calibration.seam_measure", "ok": true, "summary": "calibration.seam_measure()"}
+{"type": "tool.started", "step_id": 3, "call_id": "call_c829f0b99bab460c92c07681", "name": "calibration.seam_measure", "label": "测量接缝 MAE"}
+{"type": "tool.completed", "step_id": 3, "call_id": "call_c829f0b99bab460c92c07681", "name": "calibration.seam_measure", "ok": true, "summary": "calibration.seam_measure()"}
+{"type": "assistant.delta", "delta": "重新"}
+{"type": "assistant.delta", "delta": "生"}
+{"type": "assistant.delta", "delta": "成了"}
+{"type": "assistant.delta", "delta": " s"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "_c"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "的视频"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "并"}
+{"type": "assistant.delta", "delta": "检查"}
+{"type": "assistant.delta", "delta": "了"}
+{"type": "assistant.delta", "delta": "与"}
+{"type": "assistant.delta", "delta": "上下"}
+{"type": "assistant.delta", "delta": "镜"}
+{"type": "assistant.delta", "delta": "的"}
+{"type": "assistant.delta", "delta": "接缝"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "assistant.delta", "delta": "以下是"}
+{"type": "assistant.delta", "delta": "检查结果"}
+{"type": "assistant.delta", "delta": "："}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "---"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": "s"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "_c"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "视频"}
+{"type": "assistant.delta", "delta": "重新"}
+{"type": "assistant.delta", "delta": "生成"}
+{"type": "assistant.delta", "delta": " ✅"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "新"}
+{"type": "assistant.delta", "delta": "视频"}
+{"type": "assistant.delta", "delta": "路径"}
+{"type": "assistant.delta", "delta": "已"}
+{"type": "assistant.delta", "delta": "更新"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "版本"}
+{"type": "assistant.delta", "delta": " vv"}
+{"type": "assistant.delta", "delta": "_"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "e"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "---"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": "接缝"}
+{"type": "assistant.delta", "delta": "测量"}
+{"type": "assistant.delta", "delta": "结果"}
+{"type": "assistant.delta", "delta": "：**"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "接缝"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " MA"}
+{"type": "assistant.delta", "delta": "E"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "值"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "判定"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": "------"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": "--------"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": "------"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " s"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "_c"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "尾"}
+{"type": "assistant.delta", "delta": "帧"}
+{"type": "assistant.delta", "delta": " →"}
+{"type": "assistant.delta", "delta": " s"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "_c"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "首"}
+{"type": "assistant.delta", "delta": "帧"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " ✅"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "正常"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "同"}
+{"type": "assistant.delta", "delta": "场景"}
+{"type": "assistant.delta", "delta": "接力"}
+{"type": "assistant.delta", "delta": "基准"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": "7"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "）"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " s"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "_c"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "尾"}
+{"type": "assistant.delta", "delta": "帧"}
+{"type": "assistant.delta", "delta": " →"}
+{"type": "assistant.delta", "delta": " s"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "_c"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "首"}
+{"type": "assistant.delta", "delta": "帧"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "⚠"}
+{"type": "assistant.delta", "delta": "️"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "跨"}
+{"type": "assistant.delta", "delta": "场景"}
+{"type": "assistant.delta", "delta": "/"}
+{"type": "assistant.delta", "delta": "构图"}
+{"type": "assistant.delta", "delta": "切换"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "基准"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "）"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "---"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": "导演"}
+{"type": "assistant.delta", "delta": "判断"}
+{"type": "assistant.delta", "delta": "：**"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "前"}
+{"type": "assistant.delta", "delta": "接"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "s"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "_c"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": " →"}
+{"type": "assistant.delta", "delta": " s"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "_c"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "）"}
+{"type": "assistant.delta", "delta": "衔接"}
+{"type": "assistant.delta", "delta": "良好"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": "："}
+{"type": "assistant.delta", "delta": "MA"}
+{"type": "assistant.delta", "delta": "E"}
+{"type": "assistant.delta", "delta": "="}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "处于"}
+{"type": "assistant.delta", "delta": "正常"}
+{"type": "assistant.delta", "delta": "接力"}
+{"type": "assistant.delta", "delta": "区间"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "assistant.delta", "delta": "大"}
+{"type": "assistant.delta", "delta": "鹤"}
+{"type": "assistant.delta", "delta": "从"}
+{"type": "assistant.delta", "delta": "森林"}
+{"type": "assistant.delta", "delta": "上空"}
+{"type": "assistant.delta", "delta": "滑"}
+{"type": "assistant.delta", "delta": "翔"}
+{"type": "assistant.delta", "delta": "转向"}
+{"type": "assistant.delta", "delta": "俯"}
+{"type": "assistant.delta", "delta": "冲"}
+{"type": "assistant.delta", "delta": "湖泊"}
+{"type": "assistant.delta", "delta": "的"}
+{"type": "assistant.delta", "delta": "过渡"}
+{"type": "assistant.delta", "delta": "连贯"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "后"}
+{"type": "assistant.delta", "delta": "接"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "s"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "_c"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": " →"}
+{"type": "assistant.delta", "delta": " s"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "_c"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "）"}
+{"type": "assistant.delta", "delta": "存在"}
+{"type": "assistant.delta", "delta": "显著"}
+{"type": "assistant.delta", "delta": "构图"}
+{"type": "assistant.delta", "delta": "跃"}
+{"type": "assistant.delta", "delta": "迁"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": "："}
+{"type": "assistant.delta", "delta": "MA"}
+{"type": "assistant.delta", "delta": "E"}
+{"type": "assistant.delta", "delta": "="}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "处于"}
+{"type": "assistant.delta", "delta": "跨"}
+{"type": "assistant.delta", "delta": "场景"}
+{"type": "assistant.delta", "delta": "切换"}
+{"type": "assistant.delta", "delta": "区间"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "assistant.delta", "delta": "这是因为"}
+{"type": "assistant.delta", "delta": "两"}
+{"type": "assistant.delta", "delta": "镜"}
+{"type": "assistant.delta", "delta": "之间的"}
+{"type": "assistant.delta", "delta": "空间"}
+{"type": "assistant.delta", "delta": "关系"}
+{"type": "assistant.delta", "delta": "发生了"}
+{"type": "assistant.delta", "delta": "本质"}
+{"type": "assistant.delta", "delta": "变化"}
+{"type": "assistant.delta", "delta": "："}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "  "}
+{"type": "assistant.delta", "delta": " -"}
+{"type": "assistant.delta", "delta": " s"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "_c"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "尾"}
+{"type": "assistant.delta", "delta": "帧"}
+{"type": "assistant.delta", "delta": "："}
+{"type": "assistant.delta", "delta": "高空"}
+{"type": "assistant.delta", "delta": "俯"}
+{"type": "assistant.delta", "delta": "视角"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "湖泊"}
+{"type": "assistant.delta", "delta": "占据"}
+{"type": "assistant.delta", "delta": "画面"}
+{"type": "assistant.delta", "delta": "大部分"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "大"}
+{"type": "assistant.delta", "delta": "鹤"}
+{"type": "assistant.delta", "delta": "在"}
+{"type": "assistant.delta", "delta": "调整"}
+{"type": "assistant.delta", "delta": "姿态"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "  "}
+{"type": "assistant.delta", "delta": " -"}
+{"type": "assistant.delta", "delta": " s"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "_c"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "首"}
+{"type": "assistant.delta", "delta": "帧"}
+{"type": "assistant.delta", "delta": "："}
+{"type": "assistant.delta", "delta": "近"}
+{"type": "assistant.delta", "delta": "景"}
+{"type": "assistant.delta", "delta": " eye"}
+{"type": "assistant.delta", "delta": " level"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "角度"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "大"}
+{"type": "assistant.delta", "delta": "鹤"}
+{"type": "assistant.delta", "delta": "即将"}
+{"type": "assistant.delta", "delta": "接触"}
+{"type": "assistant.delta", "delta": "水面"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "倒影"}
+{"type": "assistant.delta", "delta": "清晰"}
+{"type": "assistant.delta", "delta": "\n   \n"}
+{"type": "assistant.delta", "delta": "  "}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "这是"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": "有意"}
+{"type": "assistant.delta", "delta": "为之"}
+{"type": "assistant.delta", "delta": "的"}
+{"type": "assistant.delta", "delta": "叙事"}
+{"type": "assistant.delta", "delta": "切换"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": "——"}
+{"type": "assistant.delta", "delta": "从"}
+{"type": "assistant.delta", "delta": "「"}
+{"type": "assistant.delta", "delta": "发现"}
+{"type": "assistant.delta", "delta": "湖泊"}
+{"type": "assistant.delta", "delta": "、"}
+{"type": "assistant.delta", "delta": "俯"}
+{"type": "assistant.delta", "delta": "冲"}
+{"type": "assistant.delta", "delta": "过程"}
+{"type": "assistant.delta", "delta": "」"}
+{"type": "assistant.delta", "delta": "切"}
+{"type": "assistant.delta", "delta": "到"}
+{"type": "assistant.delta", "delta": "「"}
+{"type": "assistant.delta", "delta": "接近"}
+{"type": "assistant.delta", "delta": "水面"}
+{"type": "assistant.delta", "delta": "、"}
+{"type": "assistant.delta", "delta": "准备"}
+{"type": "assistant.delta", "delta": "降落"}
+{"type": "assistant.delta", "delta": "」"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "景"}
+{"type": "assistant.delta", "delta": "别"}
+{"type": "assistant.delta", "delta": "从"}
+{"type": "assistant.delta", "delta": " medium"}
+{"type": "assistant.delta", "delta": " shot"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "跳到"}
+{"type": "assistant.delta", "delta": " medium"}
+{"type": "assistant.delta", "delta": " close"}
+{"type": "assistant.delta", "delta": "-up"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "视角"}
+{"type": "assistant.delta", "delta": "从"}
+{"type": "assistant.delta", "delta": " high"}
+{"type": "assistant.delta", "delta": " angle"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "降到"}
+{"type": "assistant.delta", "delta": " eye"}
+{"type": "assistant.delta", "delta": " level"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "assistant.delta", "delta": "这种"}
+{"type": "assistant.delta", "delta": "切换"}
+{"type": "assistant.delta", "delta": "在"}
+{"type": "assistant.delta", "delta": "剪辑"}
+{"type": "assistant.delta", "delta": "逻辑"}
+{"type": "assistant.delta", "delta": "上是"}
+{"type": "assistant.delta", "delta": "合理的"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "但"}
+{"type": "assistant.delta", "delta": "视觉"}
+{"type": "assistant.delta", "delta": "上的"}
+{"type": "assistant.delta", "delta": "连续性"}
+{"type": "assistant.delta", "delta": "会有"}
+{"type": "assistant.delta", "delta": "明显"}
+{"type": "assistant.delta", "delta": "跳"}
+{"type": "assistant.delta", "delta": "变"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "建议"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": "："}
+{"type": "assistant.delta", "delta": "如果你觉得"}
+{"type": "assistant.delta", "delta": "这种"}
+{"type": "assistant.delta", "delta": "跳"}
+{"type": "assistant.delta", "delta": "变"}
+{"type": "assistant.delta", "delta": "太强"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "有两个"}
+{"type": "assistant.delta", "delta": "方案"}
+{"type": "assistant.delta", "delta": "可选"}
+{"type": "assistant.delta", "delta": "："}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "  "}
+{"type": "assistant.delta", "delta": " -"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "方案"}
+{"type": "assistant.delta", "delta": "A"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": "："}
+{"type": "assistant.delta", "delta": "接受"}
+{"type": "assistant.delta", "delta": "当前"}
+{"type": "assistant.delta", "delta": "剪辑"}
+{"type": "assistant.delta", "delta": "节奏"}
+{"type": "assistant.delta", "delta": "——"}
+{"type": "assistant.delta", "delta": "俯"}
+{"type": "assistant.delta", "delta": "冲"}
+{"type": "assistant.delta", "delta": "结束"}
+{"type": "assistant.delta", "delta": "直接"}
+{"type": "assistant.delta", "delta": "切"}
+{"type": "assistant.delta", "delta": "近"}
+{"type": "assistant.delta", "delta": "景"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "依靠"}
+{"type": "assistant.delta", "delta": "动作"}
+{"type": "assistant.delta", "delta": "的"}
+{"type": "assistant.delta", "delta": "连续性"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "俯"}
+{"type": "assistant.delta", "delta": "冲"}
+{"type": "assistant.delta", "delta": "→"}
+{"type": "assistant.delta", "delta": "减速"}
+{"type": "assistant.delta", "delta": "）"}
+{"type": "assistant.delta", "delta": "来"}
+{"type": "assistant.delta", "delta": "维系"}
+{"type": "assistant.delta", "delta": "观"}
+{"type": "assistant.delta", "delta": "感"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "无需"}
+{"type": "assistant.delta", "delta": "额外"}
+{"type": "assistant.delta", "delta": "过渡"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "  "}
+{"type": "assistant.delta", "delta": " -"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "方案"}
+{"type": "assistant.delta", "delta": "B"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": "："}
+{"type": "assistant.delta", "delta": "在"}
+{"type": "assistant.delta", "delta": " s"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "_c"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "和"}
+{"type": "assistant.delta", "delta": " s"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "_c"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "之间"}
+{"type": "assistant.delta", "delta": "插入"}
+{"type": "assistant.delta", "delta": "一个"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": "接续"}
+{"type": "assistant.delta", "delta": "桥"}
+{"type": "assistant.delta", "delta": "镜头"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "key"}
+{"type": "assistant.delta", "delta": "frames"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "模式"}
+{"type": "assistant.delta", "delta": "），"}
+{"type": "assistant.delta", "delta": "让"}
+{"type": "assistant.delta", "delta": "高度"}
+{"type": "assistant.delta", "delta": "和"}
+{"type": "assistant.delta", "delta": "景"}
+{"type": "assistant.delta", "delta": "别"}
+{"type": "assistant.delta", "delta": "逐步"}
+{"type": "assistant.delta", "delta": "过渡"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "软化"}
+{"type": "assistant.delta", "delta": "构图"}
+{"type": "assistant.delta", "delta": "跃"}
+{"type": "assistant.delta", "delta": "迁"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "需要"}
+{"type": "assistant.delta", "delta": "我"}
+{"type": "assistant.delta", "delta": "执行"}
+{"type": "assistant.delta", "delta": "哪个"}
+{"type": "assistant.delta", "delta": "方案"}
+{"type": "assistant.delta", "delta": "？"}
+{"type": "assistant.delta", "delta": "或者"}
+{"type": "assistant.delta", "delta": "你对"}
+{"type": "assistant.delta", "delta": "当前的"}
+{"type": "assistant.delta", "delta": "衔接"}
+{"type": "assistant.delta", "delta": "是否"}
+{"type": "assistant.delta", "delta": "满意"}
+{"type": "assistant.delta", "delta": "？"}

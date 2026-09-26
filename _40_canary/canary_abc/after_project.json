@@ -1,0 +1,1905 @@
+{
+  "name": "Crane_Lake_P40A",
+  "schema_version": 2,
+  "created_at": 1790417097.1950371,
+  "updated_at": 1790447929.5940213,
+  "style": {
+    "art_style": "anime, cinematic composition",
+    "palette": "",
+    "aspect_ratio": "16:9",
+    "size_tier": "1K",
+    "era": "",
+    "extra": "high detail, consistent art style"
+  },
+  "native_av": {
+    "spoken_language": ""
+  },
+  "story_text": "一只大鹤在天上飞，下方是一片森林，然后遇到了一个湖，于是大鹤下降落到湖中心。\n\n【Scene 1：天空】2镜，动态飞行序列\n- 镜1（s01_c01）：大鹤翱翔于高空，俯瞰下方连绵森林。双翼展开，滑翔姿态优雅，镜头仰视跟随。尾帧：大鹤继续向前滑翔，位置居中偏上，森林背景绵延至远方地平线。时长8s。\n- 镜2（s01_c02）：云层掠过画面，大鹤穿越薄云，光线穿透云层形成光束。镜头跟随飞行轨迹，展现光影变化。尾帧：大鹤飞出云层，前方视野开阔，隐约可见地面反光。时长8s。\n\n【Scene 2：森林上空/湖泊发现】2镜，发现与转向序列\n- 镜1（s02_c01）：大鹤飞越森林边缘，树冠如绿色海洋。远方地平线处出现一片银色反光——湖泊。镜头保持高空俯拍视角，展现广阔自然。尾帧：大鹤朝向湖泊方向，身体开始微转向。时长8s。\n- 镜2（s02_c02）：大鹤确认湖泊位置，双翼调整姿态，向湖泊方向俯冲。镜头跟随下降，湖面积逐渐扩大，水面细节清晰。尾帧：大鹤开始减速，双翼微收，接近水面。时长8s。\n\n【Scene 3：湖泊】2镜，降落序列\n- 镜1（s03_c01）：大鹤接近湖面，展开双翼减速，羽翼扇动激起微弱气流。水面如镜，倒映着鹤影与天空。尾帧：大鹤双脚伸出，准备接触水面。时长8s。\n- 镜2（s03_c02）：大鹤降落于湖中心，水面轻轻荡开涟漪。双翼缓缓收回，身体稳稳浮在水面，周围波光粼粼。尾帧：大鹤静浮湖心，涟漪渐缓，宁静收尾。时长5s。",
+  "characters": [
+    {
+      "name": "大鹤",
+      "description_en": "Grus japonensis, an elegant Asian red-crowned crane with slender graceful body, long neck and long legs. Pure white body plumage with black secondary and tertiary flight feathers on the wings. Distinctive bright red bare skin patch on the crown of the head. Black neck feathers extending down the throat. Overall elegant, elongated proportions characteristic of the species.",
+      "views": {
+        "front": {
+          "local": "projects\\Crane_Lake_P40A\\output\\characters\\_\\front_d2807c97_seg.png",
+          "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_809jeUDmlfZXsgl8svM0sKngnDWeGzQ6/output_b3bcca95debf4f3e8d43c7e073c0a741.png",
+          "status": "done",
+          "error": null,
+          "updated_at": 0.0
+        },
+        "side": {
+          "local": "projects\\Crane_Lake_P40A\\output\\characters\\_\\side_d2807c97_seg.png",
+          "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_qiemO0WW10li7b4PHY17S4JMSeZcgZF4/output.png",
+          "status": "done",
+          "error": null,
+          "updated_at": 0.0
+        },
+        "back": {
+          "local": "projects\\Crane_Lake_P40A\\output\\characters\\_\\back_d2807c97_seg.png",
+          "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_M8tupDvRiHblxyrvNWRV1Zj7mxgvV4ds/output.png",
+          "status": "done",
+          "error": null,
+          "updated_at": 0.0
+        }
+      }
+    }
+  ],
+  "scenes": [
+    {
+      "scene_id": "s01",
+      "title": "",
+      "location": "天空",
+      "time_of_day": "",
+      "summary": "【天空·大鹤翱翔】2镜，时长16s\n\n镜1（s01_c01）8s：\n- description：高空仰视，大鹤双翼展开优雅滑翔，俯瞰连绵森林，光影柔和，色彩清雅，构图舒展\n- motion：大鹤保持滑翔姿态，双翼缓慢扇动或展开稳定高度，身体随气流微调整方向，镜头跟随飞行轨迹\n- expected_tail：大鹤继续向前滑翔，位置居中偏上，森林背景绵延至远方地平线，画面开阔\n- opening intent：下一镜可从相同高空视角延续，或穿越云层后视野变化，承接自然\n- negative constraints：空无一人, 禁动物, 禁现代物, 禁建筑, 禁道路\n\n镜2（s01_c02）8s：\n- description：云层缓缓掠过，光线穿透云层形成柔和光束，大鹤穿越薄云，镜头跟随飞行轨迹\n- motion：大鹤穿越云层，光影在羽毛上流动变化，身体平稳滑翔\n- expected_tail：大鹤飞出云层，前方视野开阔，隐约可见地面反光\n- opening intent：视野开阔后可见远方景物，自然承接发现湖泊\n- negative constraints：空无一人, 禁动物, 禁现代物, 禁建筑, 禁道路",
+      "characters": [
+        "大鹤"
+      ],
+      "shots": [
+        {
+          "shot_id": "s01_c01",
+          "scene_id": "s01",
+          "index": 1,
+          "description": "高空仰视，大鹤双翼完全展开优雅滑翔，俯瞰连绵森林，光影柔和，色彩清雅，构图舒展。画面呈现优美自然风光，大鹤作为视觉中心，森林背景绵延至远方地平线。",
+          "prompt_en": "",
+          "negative_prompt": "空无一人, 禁现代建筑, 禁道路, 禁车辆, 禁动物(除大鹤)",
+          "shot_size": "wide shot",
+          "camera": "",
+          "lighting": "柔和漫射光，云层过滤后的自然光，色彩清雅。",
+          "motion": "大鹤保持滑翔姿态，双翼缓慢扇动或展开稳定高度，身体随气流微调整方向，镜头跟随飞行轨迹平稳推进。",
+          "characters": [
+            "大鹤"
+          ],
+          "dialogue": "",
+          "opening_state": "双翼完全展开，头部微抬，目光俯瞰下方。",
+          "camera_angle": "low angle",
+          "composition": "大鹤居中偏上，森林延展至地平线，天空占比约三分之一，构图舒展。",
+          "important_details": "大鹤羽毛细节，光影在翼面上流动，森林纹理清晰可见。",
+          "required_elements": [],
+          "last_frame_description": "大鹤在云层边缘，双翼仍展开，前方视野被薄云半遮，光影开始变化，为穿越云层动作预留承接空间。",
+          "end_state": "",
+          "frame_change": "",
+          "preserve_elements": [],
+          "add_elements": "",
+          "remove_elements": "",
+          "end_composition": "",
+          "preserve_custom": "",
+          "camera_movement": "static follow",
+          "motion_pace": "",
+          "environment_motion": "",
+          "action_sequence": "",
+          "performance_intent": null,
+          "camera_movement_detail": "",
+          "transition_description": "",
+          "video_preserve_elements": [],
+          "video_preserve_custom": "",
+          "target_duration_s": 8.0,
+          "last_frame_prompt_en": "",
+          "video_prompt_en": "",
+          "first_frame_prompt_override": "",
+          "last_frame_prompt_override": "",
+          "video_prompt_override": "",
+          "first_frame_prompt_sig": "",
+          "last_frame_prompt_sig": "",
+          "video_prompt_sig": "",
+          "link_mode": "i2v",
+          "video_reference_asset_id": null,
+          "seed": null,
+          "first_frame": {
+            "candidates": [
+              {
+                "local": "projects\\Crane_Lake_P40A\\output\\frames\\s01_c01_first_v1.png",
+                "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_qUSYcvZQakzXjElpkseVYwkLWcVpJIQ5/output.png",
+                "status": "done",
+                "error": null,
+                "updated_at": 0.0
+              }
+            ],
+            "selected_index": 0,
+            "status": "pending",
+            "error": null,
+            "updated_at": 1790420339.8221805
+          },
+          "last_frame": {
+            "candidates": [],
+            "selected_index": 0,
+            "status": "pending",
+            "error": null,
+            "updated_at": 0.0
+          },
+          "audio": {
+            "local": null,
+            "url": null,
+            "status": "pending",
+            "error": null,
+            "updated_at": 0.0,
+            "duration_ms": 0,
+            "words": [],
+            "voice": "zh-CN-XiaoxiaoNeural",
+            "rate": "+0%"
+          },
+          "subtitle_srt": null,
+          "video": {
+            "local": "projects\\Crane_Lake_P40A\\output\\videos\\s01_c01.mp4",
+            "url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-v2.0/video_e37f832bb9d94fe5ba29ab51c4b32d90.mp4",
+            "status": "done",
+            "error": null,
+            "updated_at": 1790420515.617699,
+            "video_id": "video_bGl0ZWxsbTpjdXN0b21fbGxtX3Byb3ZpZGVyOm9wZW5haTttb2RlbF9pZDphZ25lcy12aWRlby12Mi4wO3ZpZGVvX2lkOnZpZGVvX2UzN2Y4MzJiYjlkOTRmZTViYTI5YWI1MWM0YjMyZDkw",
+            "task_id": "task_FsTjkbGt4KaB1S010eZDv9u7s2Ae62SQ",
+            "num_frames": 193,
+            "frame_rate": 24,
+            "seconds_returned": 8.0,
+            "size_returned": "1280x704",
+            "model": null,
+            "attempts": 1
+          },
+          "first_frame_batches": [
+            {
+              "batch_id": "ff_a9dd74ec",
+              "kind": "first_frame",
+              "created_at": 1790420339.8221805,
+              "status": "pending",
+              "prompt_snapshot": "[SHOT SIZE: wide shot, low angle. 大鹤居中偏上，森林延展至地平线，天空占比约三分之一，构图舒展。], Grus japonensis, an elegant Asian red-crowned crane with slender graceful body, long neck and long legs. Pure white body plumage with black secondary and tertiary flight feathers on the wings. Distinctive bright red bare skin patch on the crown of the head. Black neck feathers extending down the throat. Overall elegant, elongated proportions characteristic of the species., 高空仰视，大鹤双翼完全展开优雅滑翔，俯瞰连绵森林，光影柔和，色彩清雅，构图舒展。画面呈现优美自然风光，大鹤作为视觉中心，森林背景绵延至远方地平线。, 双翼完全展开，头部微抬，目光俯瞰下方。, 柔和漫射光，云层过滤后的自然光，色彩清雅。, 大鹤羽毛细节，光影在翼面上流动，森林纹理清晰可见。, Scene: 天空 (清晨, 晴朗, 柔和的金色晨光，从东南方向斜射, 高空气流平稳，云层稀薄). 大鹤 wearing default crane look — An elegant Asian red-crowned crane (Grus japonensis) in a graceful standing pose, viewed in 2D animation style with soft natural lighting and refined color palette. Pure white body plumage with black secondary and tertiary flight feathers. Distinctive bright red crown patch. Long neck curved elegantly, long slender legs. Refined 2D animation aesthetic with clean lines and gentle shading.. Visual production style: 2D animated image. Do not render as live-action photography or 3D rendered CGI. Art direction: 优美自然风光：大鹤与森林湖泊，光影柔和，色彩清雅，构图舒展.",
+              "char_ref_snapshot": {
+                "大鹤": {
+                  "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_809jeUDmlfZXsgl8svM0sKngnDWeGzQ6/output_b3bcca95debf4f3e8d43c7e073c0a741.png"
+                }
+              },
+              "based_on_first_frame": null,
+              "candidates": [
+                {
+                  "candidate_id": "ff_a9dd74ec_1",
+                  "local": "projects\\Crane_Lake_P40A\\output\\frames\\s01_c01_first_v1.png",
+                  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_qUSYcvZQakzXjElpkseVYwkLWcVpJIQ5/output.png",
+                  "status": "done",
+                  "error": null,
+                  "created_at": 1790420339.8221805
+                }
+              ],
+              "origin_run_id": "dgv_b2cb06ba",
+              "generation_basis": {
+                "binding_revision": "f2739038",
+                "binding_document_revision": "43c9fbd5",
+                "binding_readiness": "READY",
+                "dependency_fingerprints": {
+                  "visual_profile": "060b75f3",
+                  "characters": {
+                    "大鹤": "eae5546f"
+                  },
+                  "looks": {
+                    "look_aa18634a3553": "cad1e42c"
+                  },
+                  "props": {},
+                  "compositions": {},
+                  "scene_instance": "6958366d",
+                  "scene_instance_view": null
+                },
+                "resolved_scene_instance_view_id": "sciv_34e5d133ada1",
+                "visual_profile_fingerprint": "060b75f3",
+                "image_provider": "agnes",
+                "size_tier": "1K",
+                "ratio": "16:9",
+                "scene_reference_mode": "full",
+                "human_reference_mode": "keep",
+                "ref_layout": "pack_only",
+                "population_constraint": false,
+                "sent_ref_sequence": [
+                  "scene_instance_view",
+                  "character_look"
+                ],
+                "used_reference_ids": [
+                  "ref_0fbb4afdec35",
+                  "ref_310e243e4f14"
+                ],
+                "semantic_roles": [
+                  {
+                    "reference_asset_id": "ref_0fbb4afdec35",
+                    "source_type": "scene_instance_view",
+                    "purpose": "scene_context",
+                    "priority": "primary",
+                    "temporal_scope": "throughout",
+                    "subject_character": null,
+                    "prop_id": null,
+                    "checksum": "44f0ab5b2b602102cb70f0e226a93caa79ac2f8a444d7452a7da370d24f93ace",
+                    "derivation": null
+                  },
+                  {
+                    "reference_asset_id": "ref_310e243e4f14",
+                    "source_type": "character_look",
+                    "purpose": "character_appearance",
+                    "priority": "primary",
+                    "temporal_scope": "static",
+                    "subject_character": "大鹤",
+                    "prop_id": null,
+                    "checksum": "65f8bfec1fad9b794af64183bcdefc8b084b7237c7226ef95532d71d6b61a3ac",
+                    "derivation": null
+                  }
+                ],
+                "dropped_optional": [
+                  {
+                    "source_id": "legacy:大鹤:front",
+                    "reference_asset_id": "legacy:大鹤:front",
+                    "reason": "human_reference_budget",
+                    "detail": {
+                      "subject_character": "大鹤",
+                      "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+                    }
+                  },
+                  {
+                    "source_id": "legacy:大鹤:side",
+                    "reference_asset_id": "legacy:大鹤:side",
+                    "reason": "human_reference_budget",
+                    "detail": {
+                      "subject_character": "大鹤",
+                      "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+                    }
+                  },
+                  {
+                    "source_id": "legacy:大鹤:back",
+                    "reference_asset_id": "legacy:大鹤:back",
+                    "reason": "human_reference_budget",
+                    "detail": {
+                      "subject_character": "大鹤",
+                      "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "last_frame_batches": [],
+          "video_versions": [
+            {
+              "version_id": "legacy_video",
+              "created_at": 0.0,
+              "status": "generating",
+              "prompt_snapshot": "",
+              "char_ref_snapshot": {},
+              "first_frame_candidate_id": null,
+              "last_frame_candidate_id": null,
+              "video_id": "video_bGl0ZWxsbTpjdXN0b21fbGxtX3Byb3ZpZGVyOm9wZW5haTttb2RlbF9pZDphZ25lcy12aWRlby12Mi4wO3ZpZGVvX2lkOnZpZGVvX2UzN2Y4MzJiYjlkOTRmZTViYTI5YWI1MWM0YjMyZDkw",
+              "task_id": "task_FsTjkbGt4KaB1S010eZDv9u7s2Ae62SQ",
+              "local": null,
+              "url": null,
+              "seconds_returned": null,
+              "size_returned": null,
+              "num_frames": 193,
+              "frame_rate": 24,
+              "origin_run_id": null,
+              "model": null,
+              "generation_basis": {},
+              "input_visuals": []
+            },
+            {
+              "version_id": "vv_d54e150d",
+              "created_at": 1790420515.6150715,
+              "status": "done",
+              "prompt_snapshot": "Animate this image: 大鹤保持滑翔姿态，双翼缓慢扇动或展开稳定高度，身体随气流微调整方向，镜头跟随飞行轨迹平稳推进。, camera movement: static follow, keep character identity and outfit consistent, Scene: 天空 (清晨, 晴朗, 柔和的金色晨光，从东南方向斜射, 高空气流平稳，云层稀薄). 大鹤 wearing default crane look — An elegant Asian red-crowned crane (Grus japonensis) in a graceful standing pose, viewed in 2D animation style with soft natural lighting and refined color palette. Pure white body plumage with black secondary and tertiary flight feathers. Distinctive bright red crown patch. Long neck curved elegantly, long slender legs. Refined 2D animation aesthetic with clean lines and gentle shading.. Visual production style: 2D animated image. Do not render as live-action photography or 3D rendered CGI. Art direction: 优美自然风光：大鹤与森林湖泊，光影柔和，色彩清雅，构图舒展.",
+              "char_ref_snapshot": {
+                "大鹤": {
+                  "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_809jeUDmlfZXsgl8svM0sKngnDWeGzQ6/output_b3bcca95debf4f3e8d43c7e073c0a741.png"
+                }
+              },
+              "first_frame_candidate_id": "ff_a9dd74ec_1",
+              "last_frame_candidate_id": null,
+              "video_id": "video_bGl0ZWxsbTpjdXN0b21fbGxtX3Byb3ZpZGVyOm9wZW5haTttb2RlbF9pZDphZ25lcy12aWRlby12Mi4wO3ZpZGVvX2lkOnZpZGVvX2UzN2Y4MzJiYjlkOTRmZTViYTI5YWI1MWM0YjMyZDkw",
+              "task_id": "task_FsTjkbGt4KaB1S010eZDv9u7s2Ae62SQ",
+              "local": "projects\\Crane_Lake_P40A\\output\\videos\\s01_c01.mp4",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-v2.0/video_e37f832bb9d94fe5ba29ab51c4b32d90.mp4",
+              "seconds_returned": 8.0,
+              "size_returned": "1280x704",
+              "num_frames": 193,
+              "frame_rate": 24,
+              "origin_run_id": "dgv_bd219d49",
+              "model": null,
+              "generation_basis": {
+                "schema": "native_av_generation_basis_v1",
+                "shot_id": "s01_c01",
+                "visual_basis_fingerprint": "bb285a77",
+                "dialogue_fingerprint": null,
+                "speaker_map_fingerprint": null,
+                "spoken_language": null,
+                "prompt_compiler_schema": "native_av_prompt_v3",
+                "performance_intent_fingerprint": null,
+                "video_prompt_creative_fingerprint": "af431660",
+                "provider": "agnes",
+                "model": null,
+                "provider_mode": "i2v",
+                "provider_options_fingerprint": "33de220b"
+              },
+              "input_visuals": [
+                {
+                  "slot": "first",
+                  "semantic_role": "hard_start_boundary",
+                  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_qUSYcvZQakzXjElpkseVYwkLWcVpJIQ5/output.png",
+                  "candidate_id": "ff_a9dd74ec_1",
+                  "batch_id": "ff_a9dd74ec"
+                }
+              ]
+            }
+          ],
+          "selected_first_frame": "ff_a9dd74ec_1",
+          "selected_last_frame": null,
+          "final_video": "vv_d54e150d",
+          "opening_source": "independent",
+          "source_shot_id": null,
+          "source_version": null,
+          "video_end_frame": {
+            "local": "projects\\Crane_Lake_P40A\\output\\frames\\s01_c01_video_end.jpg",
+            "url": "https://Q-1844.github.io/agnes-frame-host/objects/6f93c71caad021fc.jpg",
+            "status": "done",
+            "error": null,
+            "updated_at": 0.0
+          },
+          "video_end_source_version": "vv_d54e150d",
+          "status": "pending",
+          "locked": false,
+          "note": "独立开场：建立大鹤高翱翔姿态，森林与天空作为空间背景，为后续穿越云层预留视觉纵深。",
+          "split_next": null
+        },
+        {
+          "shot_id": "s01_c02",
+          "scene_id": "s01",
+          "index": 2,
+          "description": "云层缓缓掠过，光线穿透云层形成柔和光束，大鹤穿越薄云，镜头跟随飞行轨迹。画面展现光影变化，云气流转，优美自然风光。",
+          "prompt_en": "",
+          "negative_prompt": "空无一人, 禁现代建筑, 禁道路, 禁车辆, 禁动物(除大鹤)",
+          "shot_size": "medium shot",
+          "camera": "",
+          "lighting": "光束穿透云层，明暗交替，柔和暖调。",
+          "motion": "大鹤穿越云层，光影在羽毛上流动变化，身体平稳滑翔，穿过云隙后前方视野豁然开朗。",
+          "characters": [
+            "大鹤"
+          ],
+          "dialogue": "",
+          "opening_state": "刚刚进入云层边缘，羽毛微湿，光影开始变化。",
+          "camera_angle": "eye level",
+          "composition": "大鹤居中，云层环绕，光线穿透形成光束，空间纵深感强。",
+          "important_details": "云层质感，光影流动，大鹤穿越时的羽毛光影变化。",
+          "required_elements": [],
+          "last_frame_description": "大鹤穿越云层后视野豁然开朗，前方出现远方反光，身体朝向转为水平滑翔，为发现湖泊预留方向引导。",
+          "end_state": "",
+          "frame_change": "",
+          "preserve_elements": [],
+          "add_elements": "",
+          "remove_elements": "",
+          "end_composition": "",
+          "preserve_custom": "",
+          "camera_movement": "slow push in",
+          "motion_pace": "",
+          "environment_motion": "",
+          "action_sequence": "",
+          "performance_intent": null,
+          "camera_movement_detail": "",
+          "transition_description": "",
+          "video_preserve_elements": [],
+          "video_preserve_custom": "",
+          "target_duration_s": 8.0,
+          "last_frame_prompt_en": "",
+          "video_prompt_en": "Camera tracks alongside a red-crowned crane as it glides steadily into and through soft luminous clouds. Sunlight pierces the cloud layer in volumetric god rays, casting shifting golden highlights across the crane's white plumage. The bird maintains level flight, wings held in elegant sustained glide, occasionally making micro-adjustments to altitude. Clouds drift laterally past the frame as the crane moves forward through varying opacity—bright sunlit patches alternating with soft overcast shadows on the body. The background transitions from clear sky to translucent cloud veils, with diffused light rays sweeping across the scene. No cut, no scene change.",
+          "first_frame_prompt_override": "",
+          "last_frame_prompt_override": "",
+          "video_prompt_override": "",
+          "first_frame_prompt_sig": "",
+          "last_frame_prompt_sig": "",
+          "video_prompt_sig": "95bd6f7b4903701a",
+          "link_mode": "multi",
+          "video_reference_asset_id": "prev_tail",
+          "seed": null,
+          "first_frame": {
+            "candidates": [
+              {
+                "local": "projects\\Crane_Lake_P40A\\output\\frames\\s01_c01_video_end.jpg",
+                "url": "https://Q-1844.github.io/agnes-frame-host/objects/6f93c71caad021fc.jpg",
+                "status": "done",
+                "error": null,
+                "updated_at": 0.0
+              }
+            ],
+            "selected_index": 0,
+            "status": "done",
+            "error": null,
+            "updated_at": 1790422248.4339142
+          },
+          "last_frame": {
+            "candidates": [],
+            "selected_index": 0,
+            "status": "pending",
+            "error": null,
+            "updated_at": 0.0
+          },
+          "audio": {
+            "local": null,
+            "url": null,
+            "status": "pending",
+            "error": null,
+            "updated_at": 0.0,
+            "duration_ms": 0,
+            "words": [],
+            "voice": "zh-CN-XiaoxiaoNeural",
+            "rate": "+0%"
+          },
+          "subtitle_srt": null,
+          "video": {
+            "local": "projects\\Crane_Lake_P40A\\output\\videos\\s01_c02.mp4",
+            "url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-v2.0/video_a372134dcd5c40c2822dac72a5f60015.mp4",
+            "status": "done",
+            "error": null,
+            "updated_at": 1790420824.0722697,
+            "video_id": "video_bGl0ZWxsbTpjdXN0b21fbGxtX3Byb3ZpZGVyOm9wZW5haTttb2RlbF9pZDphZ25lcy12aWRlby12Mi4wO3ZpZGVvX2lkOnZpZGVvX2EzNzIxMzRkY2Q1YzQwYzI4MjJkYWM3MmE1ZjYwMDE1",
+            "task_id": "task_s79UkNCsAggUD9faF11oQHQNltuBrD8d",
+            "num_frames": 193,
+            "frame_rate": 24,
+            "seconds_returned": 8.0,
+            "size_returned": "1280x704",
+            "model": null,
+            "attempts": 1
+          },
+          "first_frame_batches": [
+            {
+              "batch_id": "ff_4cbfe983",
+              "kind": "first_frame",
+              "created_at": 1790420371.4181743,
+              "status": "pending",
+              "prompt_snapshot": "[SHOT SIZE: medium shot, eye level angle. 大鹤居中，云层环绕，光线穿透形成光束，空间纵深感强。], Grus japonensis, an elegant Asian red-crowned crane with slender graceful body, long neck and long legs. Pure white body plumage with black secondary and tertiary flight feathers on the wings. Distinctive bright red bare skin patch on the crown of the head. Black neck feathers extending down the throat. Overall elegant, elongated proportions characteristic of the species., 云层缓缓掠过，光线穿透云层形成柔和光束，大鹤穿越薄云，镜头跟随飞行轨迹。画面展现光影变化，云气流转，优美自然风光。, 刚刚进入云层边缘，羽毛微湿，光影开始变化。, 光束穿透云层，明暗交替，柔和暖调。, 云层质感，光影流动，大鹤穿越时的羽毛光影变化。, Scene: 天空 (清晨, 晴朗, 柔和的金色晨光，从东南方向斜射, 高空气流平稳，云层稀薄). 大鹤 wearing default crane look — An elegant Asian red-crowned crane (Grus japonensis) in a graceful standing pose, viewed in 2D animation style with soft natural lighting and refined color palette. Pure white body plumage with black secondary and tertiary flight feathers. Distinctive bright red crown patch. Long neck curved elegantly, long slender legs. Refined 2D animation aesthetic with clean lines and gentle shading.. Visual production style: 2D animated image. Do not render as live-action photography or 3D rendered CGI. Art direction: 优美自然风光：大鹤与森林湖泊，光影柔和，色彩清雅，构图舒展.",
+              "char_ref_snapshot": {
+                "大鹤": {
+                  "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_809jeUDmlfZXsgl8svM0sKngnDWeGzQ6/output_b3bcca95debf4f3e8d43c7e073c0a741.png"
+                }
+              },
+              "based_on_first_frame": null,
+              "candidates": [
+                {
+                  "candidate_id": "ff_4cbfe983_1",
+                  "local": "projects\\Crane_Lake_P40A\\output\\frames\\s01_c02_first_v1.png",
+                  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_6wvwMPI2MC9ZDMzueSf5LE6LjouHqPxJ/output.png",
+                  "status": "done",
+                  "error": null,
+                  "created_at": 1790420371.4181743
+                }
+              ],
+              "origin_run_id": "dgv_aa7f8e49",
+              "generation_basis": {
+                "binding_revision": "82a3bf5b",
+                "binding_document_revision": "e3a3e829",
+                "binding_readiness": "READY",
+                "dependency_fingerprints": {
+                  "visual_profile": "060b75f3",
+                  "characters": {
+                    "大鹤": "eae5546f"
+                  },
+                  "looks": {
+                    "look_aa18634a3553": "cad1e42c"
+                  },
+                  "props": {},
+                  "compositions": {},
+                  "scene_instance": "6958366d",
+                  "scene_instance_view": null
+                },
+                "resolved_scene_instance_view_id": "sciv_34e5d133ada1",
+                "visual_profile_fingerprint": "060b75f3",
+                "image_provider": "agnes",
+                "size_tier": "1K",
+                "ratio": "16:9",
+                "scene_reference_mode": "full",
+                "human_reference_mode": "keep",
+                "ref_layout": "pack_only",
+                "population_constraint": false,
+                "sent_ref_sequence": [
+                  "scene_instance_view",
+                  "character_look"
+                ],
+                "used_reference_ids": [
+                  "ref_0fbb4afdec35",
+                  "ref_310e243e4f14"
+                ],
+                "semantic_roles": [
+                  {
+                    "reference_asset_id": "ref_0fbb4afdec35",
+                    "source_type": "scene_instance_view",
+                    "purpose": "scene_context",
+                    "priority": "primary",
+                    "temporal_scope": "throughout",
+                    "subject_character": null,
+                    "prop_id": null,
+                    "checksum": "44f0ab5b2b602102cb70f0e226a93caa79ac2f8a444d7452a7da370d24f93ace",
+                    "derivation": null
+                  },
+                  {
+                    "reference_asset_id": "ref_310e243e4f14",
+                    "source_type": "character_look",
+                    "purpose": "character_appearance",
+                    "priority": "primary",
+                    "temporal_scope": "static",
+                    "subject_character": "大鹤",
+                    "prop_id": null,
+                    "checksum": "65f8bfec1fad9b794af64183bcdefc8b084b7237c7226ef95532d71d6b61a3ac",
+                    "derivation": null
+                  }
+                ],
+                "dropped_optional": [
+                  {
+                    "source_id": "legacy:大鹤:front",
+                    "reference_asset_id": "legacy:大鹤:front",
+                    "reason": "human_reference_budget",
+                    "detail": {
+                      "subject_character": "大鹤",
+                      "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+                    }
+                  },
+                  {
+                    "source_id": "legacy:大鹤:side",
+                    "reference_asset_id": "legacy:大鹤:side",
+                    "reason": "human_reference_budget",
+                    "detail": {
+                      "subject_character": "大鹤",
+                      "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+                    }
+                  },
+                  {
+                    "source_id": "legacy:大鹤:back",
+                    "reference_asset_id": "legacy:大鹤:back",
+                    "reason": "human_reference_budget",
+                    "detail": {
+                      "subject_character": "大鹤",
+                      "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "batch_id": "batch_relayff_f87109",
+              "kind": "first_frame",
+              "created_at": 1790422248.4316185,
+              "status": "ready",
+              "prompt_snapshot": "[relay sync] 实际首帧 = 上镜 s01_c01 尾帧（接力边界，版本 vv_fff51dbf）",
+              "char_ref_snapshot": {},
+              "based_on_first_frame": null,
+              "candidates": [
+                {
+                  "candidate_id": "cand_relayff_95ee25",
+                  "local": "projects\\Crane_Lake_P40A\\output\\frames\\s01_c01_video_end.jpg",
+                  "url": "https://Q-1844.github.io/agnes-frame-host/objects/6f93c71caad021fc.jpg",
+                  "status": "done",
+                  "error": null,
+                  "created_at": 1790422248.4316185
+                }
+              ],
+              "origin_run_id": null,
+              "generation_basis": {}
+            }
+          ],
+          "last_frame_batches": [],
+          "video_versions": [
+            {
+              "version_id": "legacy_video",
+              "created_at": 0.0,
+              "status": "generating",
+              "prompt_snapshot": "",
+              "char_ref_snapshot": {},
+              "first_frame_candidate_id": null,
+              "last_frame_candidate_id": null,
+              "video_id": "video_bGl0ZWxsbTpjdXN0b21fbGxtX3Byb3ZpZGVyOm9wZW5haTttb2RlbF9pZDphZ25lcy12aWRlby12Mi4wO3ZpZGVvX2lkOnZpZGVvX2EzNzIxMzRkY2Q1YzQwYzI4MjJkYWM3MmE1ZjYwMDE1",
+              "task_id": "task_s79UkNCsAggUD9faF11oQHQNltuBrD8d",
+              "local": null,
+              "url": null,
+              "seconds_returned": null,
+              "size_returned": null,
+              "num_frames": 193,
+              "frame_rate": 24,
+              "origin_run_id": null,
+              "model": null,
+              "generation_basis": {},
+              "input_visuals": []
+            },
+            {
+              "version_id": "vv_fff51dbf",
+              "created_at": 1790420824.0691526,
+              "status": "done",
+              "prompt_snapshot": "Camera tracks alongside a red-crowned crane as it glides steadily into and through soft luminous clouds. Sunlight pierces the cloud layer in volumetric god rays, casting shifting golden highlights across the crane's white plumage. The bird maintains level flight, wings held in elegant sustained glide, occasionally making micro-adjustments to altitude. Clouds drift laterally past the frame as the crane moves forward through varying opacity—bright sunlit patches alternating with soft overcast shadows on the body. The background transitions from clear sky to translucent cloud veils, with diffused light rays sweeping across the scene. No cut, no scene change., Scene: 天空 (清晨, 晴朗, 柔和的金色晨光，从东南方向斜射, 高空气流平稳，云层稀薄). 大鹤 wearing default crane look — An elegant Asian red-crowned crane (Grus japonensis) in a graceful standing pose, viewed in 2D animation style with soft natural lighting and refined color palette. Pure white body plumage with black secondary and tertiary flight feathers. Distinctive bright red crown patch. Long neck curved elegantly, long slender legs. Refined 2D animation aesthetic with clean lines and gentle shading.. Visual production style: 2D animated image. Do not render as live-action photography or 3D rendered CGI. Art direction: 优美自然风光：大鹤与森林湖泊，光影柔和，色彩清雅，构图舒展.",
+              "char_ref_snapshot": {
+                "大鹤": {
+                  "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_809jeUDmlfZXsgl8svM0sKngnDWeGzQ6/output_b3bcca95debf4f3e8d43c7e073c0a741.png"
+                }
+              },
+              "first_frame_candidate_id": "ff_4cbfe983_1",
+              "last_frame_candidate_id": null,
+              "video_id": "video_bGl0ZWxsbTpjdXN0b21fbGxtX3Byb3ZpZGVyOm9wZW5haTttb2RlbF9pZDphZ25lcy12aWRlby12Mi4wO3ZpZGVvX2lkOnZpZGVvX2EzNzIxMzRkY2Q1YzQwYzI4MjJkYWM3MmE1ZjYwMDE1",
+              "task_id": "task_s79UkNCsAggUD9faF11oQHQNltuBrD8d",
+              "local": "projects\\Crane_Lake_P40A\\output\\videos\\s01_c02.mp4",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-v2.0/video_a372134dcd5c40c2822dac72a5f60015.mp4",
+              "seconds_returned": 8.0,
+              "size_returned": "1280x704",
+              "num_frames": 193,
+              "frame_rate": 24,
+              "origin_run_id": "dgv_4a8717d1",
+              "model": null,
+              "generation_basis": {
+                "schema": "native_av_generation_basis_v1",
+                "shot_id": "s01_c02",
+                "visual_basis_fingerprint": "2559a991",
+                "dialogue_fingerprint": null,
+                "speaker_map_fingerprint": null,
+                "spoken_language": null,
+                "prompt_compiler_schema": "native_av_prompt_v3",
+                "performance_intent_fingerprint": null,
+                "video_prompt_creative_fingerprint": "198f2764",
+                "provider": "agnes",
+                "model": null,
+                "provider_mode": "multi",
+                "provider_options_fingerprint": "d18797bb"
+              },
+              "input_visuals": [
+                {
+                  "slot": "first",
+                  "semantic_role": "relay_start_boundary",
+                  "url": "https://Q-1844.github.io/agnes-frame-host/objects/6f93c71caad021fc.jpg",
+                  "source_type": "prev_tail_relay",
+                  "source_shot_id": "s01_c01",
+                  "end_source_version": "vv_d54e150d",
+                  "reference_asset_id": null
+                }
+              ]
+            }
+          ],
+          "selected_first_frame": "cand_relayff_95ee25",
+          "selected_last_frame": null,
+          "final_video": "vv_fff51dbf",
+          "opening_source": "independent",
+          "source_shot_id": "s01_c01",
+          "source_version": null,
+          "video_end_frame": {
+            "local": "projects\\Crane_Lake_P40A\\output\\frames\\s01_c02_video_end.jpg",
+            "url": "https://Q-1844.github.io/agnes-frame-host/objects/92f1d4f193273e07.jpg",
+            "status": "done",
+            "error": null,
+            "updated_at": 0.0
+          },
+          "video_end_source_version": "vv_fff51dbf",
+          "status": "pending",
+          "locked": false,
+          "note": "承接 s01_c01 云端视角：以云层光影变化为过渡，吸收上一镜的方位偏差，让大鹤从云层边缘自然进入光束区域。",
+          "split_next": null
+        }
+      ]
+    },
+    {
+      "scene_id": "s02",
+      "title": "",
+      "location": "森林上空/湖泊发现",
+      "time_of_day": "",
+      "summary": "【森林上空·湖泊发现】2镜，时长16s\n\n镜1（s02_c01）8s：\n- description：高空俯拍，大鹤飞越森林边缘，树冠如绿色海洋绵延。远方地平线处出现一片银色反光——湖泊。画面展现优美自然风光，构图舒展\n- motion：大鹤滑翔前进，镜头保持高空俯瞰，远方湖泊反光在画面中逐渐清晰\n- expected_tail：大鹤朝向湖泊方向，身体开始微转向\n- opening intent：从高空俯瞰自然延续，朝向可吸收端点偏差，为转向做铺垫\n- negative constraints：空无一人, 禁动物, 禁现代物, 禁建筑, 禁道路, 禁人物\n\n镜2（s02_c02）8s：\n- description：大鹤确认湖泊位置，双翼调整姿态，向湖泊方向俯冲。镜头跟随下降，湖面积逐渐扩大，水面细节清晰可见\n- motion：大鹤俯冲下降，双翼扇动调整姿态，高度快速降低，朝向湖泊\n- expected_tail：大鹤开始减速，双翼微收，接近水面\n- opening intent：从俯冲减速过渡到水面降落，姿态自然衔接\n- negative constraints：空无一人, 禁动物, 禁现代物, 禁建筑, 禁道路, 禁人物",
+      "characters": [
+        "大鹤"
+      ],
+      "shots": [
+        {
+          "shot_id": "s02_c01",
+          "scene_id": "s02",
+          "index": 1,
+          "description": "高空俯拍，大鹤飞越森林边缘，树冠如绿色海洋绵延。远方地平线处出现一片银色反光——湖泊。画面展现优美自然风光，构图舒展，从森林到湖泊的空间过渡。",
+          "prompt_en": "",
+          "negative_prompt": "空无一人, 禁现代建筑, 禁道路, 禁车辆, 禁动物(除大鹤)",
+          "shot_size": "extreme wide shot",
+          "camera": "",
+          "lighting": "日光穿透云层，森林呈深绿色，湖面反光呈银色。",
+          "motion": "大鹤滑翔前进，镜头保持高空俯瞰，远方湖泊反光在画面中逐渐清晰，大鹤身体开始微转向湖泊方向。",
+          "characters": [
+            "大鹤"
+          ],
+          "dialogue": "",
+          "opening_state": "大鹤在森林上方滑翔，湖泊反光在远方地平线处隐约可见。",
+          "camera_angle": "high angle",
+          "composition": "森林占据画面下方三分之二，湖泊反光在远方地平线处，大鹤位于画面中上部。",
+          "important_details": "森林纹理，湖面反光，大鹤与湖泊的空间关系。",
+          "required_elements": [],
+          "last_frame_description": "大鹤身体微转向湖泊方向，森林在画面下方退后，湖泊反光在远方清晰可见，为俯冲姿态预留转场空间。",
+          "end_state": "",
+          "frame_change": "",
+          "preserve_elements": [],
+          "add_elements": "",
+          "remove_elements": "",
+          "end_composition": "",
+          "preserve_custom": "",
+          "camera_movement": "pan left follow",
+          "motion_pace": "",
+          "environment_motion": "",
+          "action_sequence": "",
+          "performance_intent": null,
+          "camera_movement_detail": "",
+          "transition_description": "",
+          "video_preserve_elements": [],
+          "video_preserve_custom": "",
+          "target_duration_s": 8.0,
+          "last_frame_prompt_en": "",
+          "video_prompt_en": "A high-altitude aerial shot follows a red-crowned crane gliding gracefully over the dense green canopy of a forest. The camera maintains a steady, sweeping overhead perspective, slowly drifting forward to reveal a distant horizon where a lake glimmers with silver light. The crane's wings remain outstretched in a smooth, constant glide, navigating the vast natural landscape as the scenery expands from forest to the distant water.",
+          "first_frame_prompt_override": "",
+          "last_frame_prompt_override": "",
+          "video_prompt_override": "",
+          "first_frame_prompt_sig": "",
+          "last_frame_prompt_sig": "",
+          "video_prompt_sig": "a03db159b39d928b",
+          "link_mode": "multi",
+          "video_reference_asset_id": "prev_tail",
+          "seed": null,
+          "first_frame": {
+            "candidates": [
+              {
+                "local": "projects\\Crane_Lake_P40A\\output\\frames\\s01_c02_video_end.jpg",
+                "url": "https://Q-1844.github.io/agnes-frame-host/objects/92f1d4f193273e07.jpg",
+                "status": "done",
+                "error": null,
+                "updated_at": 0.0
+              }
+            ],
+            "selected_index": 0,
+            "status": "done",
+            "error": null,
+            "updated_at": 1790447308.2259815
+          },
+          "last_frame": {
+            "candidates": [],
+            "selected_index": 0,
+            "status": "pending",
+            "error": null,
+            "updated_at": 0.0
+          },
+          "audio": {
+            "local": null,
+            "url": null,
+            "status": "pending",
+            "error": null,
+            "updated_at": 0.0,
+            "duration_ms": 0,
+            "words": [],
+            "voice": "zh-CN-XiaoxiaoNeural",
+            "rate": "+0%"
+          },
+          "subtitle_srt": null,
+          "video": {
+            "local": "projects\\Crane_Lake_P40A\\output\\videos\\s02_c01.mp4",
+            "url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-v2.0/video_c21a2dca3bf74361b13280e1f3285750.mp4",
+            "status": "done",
+            "error": null,
+            "updated_at": 1790447308.174789,
+            "video_id": "video_bGl0ZWxsbTpjdXN0b21fbGxtX3Byb3ZpZGVyOm9wZW5haTttb2RlbF9pZDphZ25lcy12aWRlby12Mi4wO3ZpZGVvX2lkOnZpZGVvX2MyMWEyZGNhM2JmNzQzNjFiMTMyODBlMWYzMjg1NzUw",
+            "task_id": "task_pcc2Wg1DeXvZZi6alkq2oixral3lVHFm",
+            "num_frames": 193,
+            "frame_rate": 24,
+            "seconds_returned": 8.0,
+            "size_returned": "1280x704",
+            "model": null,
+            "attempts": 1
+          },
+          "first_frame_batches": [
+            {
+              "batch_id": "ff_8cff36d8",
+              "kind": "first_frame",
+              "created_at": 1790447073.2165453,
+              "status": "pending",
+              "prompt_snapshot": "[SHOT SIZE: extreme wide shot, high angle. 森林占据画面下方三分之二，湖泊反光在远方地平线处，大鹤位于画面中上部。], Grus japonensis, an elegant Asian red-crowned crane with slender graceful body, long neck and long legs. Pure white body plumage with black secondary and tertiary flight feathers on the wings. Distinctive bright red bare skin patch on the crown of the head. Black neck feathers extending down the throat. Overall elegant, elongated proportions characteristic of the species., 高空俯拍，大鹤飞越森林边缘，树冠如绿色海洋绵延。远方地平线处出现一片银色反光——湖泊。画面展现优美自然风光，构图舒展，从森林到湖泊的空间过渡。, 大鹤在森林上方滑翔，湖泊反光在远方地平线处隐约可见。, 日光穿透云层，森林呈深绿色，湖面反光呈银色。, 森林纹理，湖面反光，大鹤与湖泊的空间关系。, Scene: 森林边缘 (上午, 晴朗, 柔和的自然光从侧上方洒落, 能见度良好，气流平稳). 大鹤 wearing default crane look — An elegant Asian red-crowned crane (Grus japonensis) in a graceful standing pose, viewed in 2D animation style with soft natural lighting and refined color palette. Pure white body plumage with black secondary and tertiary flight feathers. Distinctive bright red crown patch. Long neck curved elegantly, long slender legs. Refined 2D animation aesthetic with clean lines and gentle shading.. Visual production style: 2D animated image. Do not render as live-action photography or 3D rendered CGI. Art direction: 优美自然风光：大鹤与森林湖泊，光影柔和，色彩清雅，构图舒展.",
+              "char_ref_snapshot": {
+                "大鹤": {
+                  "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_809jeUDmlfZXsgl8svM0sKngnDWeGzQ6/output_b3bcca95debf4f3e8d43c7e073c0a741.png"
+                }
+              },
+              "based_on_first_frame": null,
+              "candidates": [
+                {
+                  "candidate_id": "ff_8cff36d8_1",
+                  "local": "projects\\Crane_Lake_P40A\\output\\frames\\s02_c01_first_v1.png",
+                  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_PtiOpWxKSvMVD5ZIJzEhQVkOEmqZNZxg/output.png",
+                  "status": "done",
+                  "error": null,
+                  "created_at": 1790447073.2165453
+                }
+              ],
+              "origin_run_id": "dgv_0ac76ba5",
+              "generation_basis": {
+                "binding_revision": "3cbad0ef",
+                "binding_document_revision": "6a4d3fd7",
+                "binding_readiness": "READY",
+                "dependency_fingerprints": {
+                  "visual_profile": "060b75f3",
+                  "characters": {
+                    "大鹤": "eae5546f"
+                  },
+                  "looks": {
+                    "look_aa18634a3553": "cad1e42c"
+                  },
+                  "props": {},
+                  "compositions": {},
+                  "scene_instance": "e5a8ef41",
+                  "scene_instance_view": null
+                },
+                "resolved_scene_instance_view_id": "sciv_8218d26d3299",
+                "visual_profile_fingerprint": "060b75f3",
+                "image_provider": "agnes",
+                "size_tier": "1K",
+                "ratio": "16:9",
+                "scene_reference_mode": "full",
+                "human_reference_mode": "keep",
+                "ref_layout": "pack_only",
+                "population_constraint": false,
+                "sent_ref_sequence": [
+                  "scene_instance_view",
+                  "character_look"
+                ],
+                "used_reference_ids": [
+                  "ref_cd859377bdc8",
+                  "ref_310e243e4f14"
+                ],
+                "semantic_roles": [
+                  {
+                    "reference_asset_id": "ref_cd859377bdc8",
+                    "source_type": "scene_instance_view",
+                    "purpose": "scene_context",
+                    "priority": "primary",
+                    "temporal_scope": "throughout",
+                    "subject_character": null,
+                    "prop_id": null,
+                    "checksum": "9571a905e99be6da9bacc800c6e5c3cd8109265a21168af21af46f1d3c02d83d",
+                    "derivation": null
+                  },
+                  {
+                    "reference_asset_id": "ref_310e243e4f14",
+                    "source_type": "character_look",
+                    "purpose": "character_appearance",
+                    "priority": "primary",
+                    "temporal_scope": "static",
+                    "subject_character": "大鹤",
+                    "prop_id": null,
+                    "checksum": "65f8bfec1fad9b794af64183bcdefc8b084b7237c7226ef95532d71d6b61a3ac",
+                    "derivation": null
+                  }
+                ],
+                "dropped_optional": [
+                  {
+                    "source_id": "legacy:大鹤:front",
+                    "reference_asset_id": "legacy:大鹤:front",
+                    "reason": "human_reference_budget",
+                    "detail": {
+                      "subject_character": "大鹤",
+                      "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+                    }
+                  },
+                  {
+                    "source_id": "legacy:大鹤:side",
+                    "reference_asset_id": "legacy:大鹤:side",
+                    "reason": "human_reference_budget",
+                    "detail": {
+                      "subject_character": "大鹤",
+                      "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+                    }
+                  },
+                  {
+                    "source_id": "legacy:大鹤:back",
+                    "reference_asset_id": "legacy:大鹤:back",
+                    "reason": "human_reference_budget",
+                    "detail": {
+                      "subject_character": "大鹤",
+                      "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "batch_id": "batch_ffsync_8ea86c",
+              "kind": "first_frame",
+              "created_at": 1790447308.22279,
+              "status": "ready",
+              "prompt_snapshot": "[接力边界] 实际首帧 = 上镜真实尾帧（版本 vv_97699959）",
+              "char_ref_snapshot": {},
+              "based_on_first_frame": null,
+              "candidates": [
+                {
+                  "candidate_id": "cand_ffsync_444bf7",
+                  "local": "projects\\Crane_Lake_P40A\\output\\frames\\s01_c02_video_end.jpg",
+                  "url": "https://Q-1844.github.io/agnes-frame-host/objects/92f1d4f193273e07.jpg",
+                  "status": "done",
+                  "error": null,
+                  "created_at": 1790447308.22279
+                }
+              ],
+              "origin_run_id": null,
+              "generation_basis": {}
+            }
+          ],
+          "last_frame_batches": [],
+          "video_versions": [
+            {
+              "version_id": "vv_97699959",
+              "created_at": 1790447308.1716797,
+              "status": "done",
+              "prompt_snapshot": "A high-altitude aerial shot follows a red-crowned crane gliding gracefully over the dense green canopy of a forest. The camera maintains a steady, sweeping overhead perspective, slowly drifting forward to reveal a distant horizon where a lake glimmers with silver light. The crane's wings remain outstretched in a smooth, constant glide, navigating the vast natural landscape as the scenery expands from forest to the distant water., Scene: 森林边缘 (上午, 晴朗, 柔和的自然光从侧上方洒落, 能见度良好，气流平稳). 大鹤 wearing default crane look — An elegant Asian red-crowned crane (Grus japonensis) in a graceful standing pose, viewed in 2D animation style with soft natural lighting and refined color palette. Pure white body plumage with black secondary and tertiary flight feathers. Distinctive bright red crown patch. Long neck curved elegantly, long slender legs. Refined 2D animation aesthetic with clean lines and gentle shading.. Visual production style: 2D animated image. Do not render as live-action photography or 3D rendered CGI. Art direction: 优美自然风光：大鹤与森林湖泊，光影柔和，色彩清雅，构图舒展.",
+              "char_ref_snapshot": {
+                "大鹤": {
+                  "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_809jeUDmlfZXsgl8svM0sKngnDWeGzQ6/output_b3bcca95debf4f3e8d43c7e073c0a741.png"
+                }
+              },
+              "first_frame_candidate_id": "ff_8cff36d8_1",
+              "last_frame_candidate_id": null,
+              "video_id": "video_bGl0ZWxsbTpjdXN0b21fbGxtX3Byb3ZpZGVyOm9wZW5haTttb2RlbF9pZDphZ25lcy12aWRlby12Mi4wO3ZpZGVvX2lkOnZpZGVvX2MyMWEyZGNhM2JmNzQzNjFiMTMyODBlMWYzMjg1NzUw",
+              "task_id": "task_pcc2Wg1DeXvZZi6alkq2oixral3lVHFm",
+              "local": "projects\\Crane_Lake_P40A\\output\\videos\\s02_c01.mp4",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-v2.0/video_c21a2dca3bf74361b13280e1f3285750.mp4",
+              "seconds_returned": 8.0,
+              "size_returned": "1280x704",
+              "num_frames": 193,
+              "frame_rate": 24,
+              "origin_run_id": "dgv_04c8407a",
+              "model": null,
+              "generation_basis": {
+                "schema": "native_av_generation_basis_v1",
+                "shot_id": "s02_c01",
+                "visual_basis_fingerprint": "49b6b150",
+                "dialogue_fingerprint": null,
+                "speaker_map_fingerprint": null,
+                "spoken_language": null,
+                "prompt_compiler_schema": "native_av_prompt_v3",
+                "performance_intent_fingerprint": null,
+                "video_prompt_creative_fingerprint": "e6600e34",
+                "provider": "agnes",
+                "model": null,
+                "provider_mode": "multi",
+                "provider_options_fingerprint": "d18797bb"
+              },
+              "input_visuals": [
+                {
+                  "slot": "first",
+                  "semantic_role": "relay_start_boundary",
+                  "url": "https://Q-1844.github.io/agnes-frame-host/objects/92f1d4f193273e07.jpg",
+                  "source_type": "prev_tail_relay",
+                  "source_shot_id": "s01_c02",
+                  "end_source_version": "vv_fff51dbf",
+                  "reference_asset_id": null
+                }
+              ]
+            }
+          ],
+          "selected_first_frame": "cand_ffsync_444bf7",
+          "selected_last_frame": null,
+          "final_video": "vv_97699959",
+          "opening_source": "independent",
+          "source_shot_id": null,
+          "source_version": null,
+          "video_end_frame": {
+            "local": "projects\\Crane_Lake_P40A\\output\\frames\\s02_c01_video_end.jpg",
+            "url": "https://Q-1844.github.io/agnes-frame-host/objects/bd5c0f8a7247dbd2.jpg",
+            "status": "done",
+            "error": null,
+            "updated_at": 0.0
+          },
+          "video_end_source_version": "vv_97699959",
+          "status": "pending",
+          "locked": false,
+          "note": "承接 s01_c02 开阔视野：以森林边缘为视觉锚点，吸收上一镜的方向偏差，让湖泊反光从远方逐渐清晰。",
+          "split_next": null
+        },
+        {
+          "shot_id": "s02_c02",
+          "scene_id": "s02",
+          "index": 2,
+          "description": "大鹤确认湖泊位置，双翼调整姿态，向湖泊方向俯冲。镜头跟随下降，湖面积逐渐扩大，水面细节清晰可见，优美自然风光。",
+          "prompt_en": "",
+          "negative_prompt": "空无一人, 禁现代建筑, 禁道路, 禁车辆, 禁动物(除大鹤)",
+          "shot_size": "medium shot",
+          "camera": "",
+          "lighting": "日光直射湖面，波光粼粼，大鹤身体有高光轮廓。",
+          "motion": "大鹤俯冲下降，双翼扇动调整姿态，高度快速降低，朝向湖泊，水面逐渐扩大至充满画面。",
+          "characters": [
+            "大鹤"
+          ],
+          "dialogue": "",
+          "opening_state": "大鹤在森林上空俯冲，湖泊在画面中心逐渐扩大。",
+          "camera_angle": "high angle",
+          "composition": "大鹤居中偏上，湖泊占据画面下方，水面反射天空，空间纵深强烈。",
+          "important_details": "水面反光，大鹤俯冲轨迹，森林与湖泊的过渡。",
+          "required_elements": [],
+          "last_frame_description": "大鹤在高空调整姿态，湖面已占据画面大部分，水面细节清晰可见，双翼准备减速，为降落动作预留空间。",
+          "end_state": "",
+          "frame_change": "",
+          "preserve_elements": [],
+          "add_elements": "",
+          "remove_elements": "",
+          "end_composition": "",
+          "preserve_custom": "",
+          "camera_movement": "fast tilt down",
+          "motion_pace": "",
+          "environment_motion": "",
+          "action_sequence": "",
+          "performance_intent": null,
+          "camera_movement_detail": "",
+          "transition_description": "",
+          "video_preserve_elements": [],
+          "video_preserve_custom": "",
+          "target_duration_s": 8.0,
+          "last_frame_prompt_en": "",
+          "video_prompt_en": "The crane angles its body downward, tucking its head slightly as it begins a steep dive toward the lake. Its broad wings shift rhythmically, flapping with controlled power to gain speed while adjusting its flight path. The camera tracks closely from above and behind, descending rapidly with the bird. As altitude drops, the shimmering surface of the lake expands to fill the frame, revealing intricate ripples and reflections on the water. The surrounding forest canopy blurs past in the periphery, emphasizing the swift vertical motion.",
+          "first_frame_prompt_override": "",
+          "last_frame_prompt_override": "",
+          "video_prompt_override": "",
+          "first_frame_prompt_sig": "",
+          "last_frame_prompt_sig": "",
+          "video_prompt_sig": "85320f1058aef882",
+          "link_mode": "multi",
+          "video_reference_asset_id": "prev_tail",
+          "seed": null,
+          "first_frame": {
+            "candidates": [
+              {
+                "local": "projects\\Crane_Lake_P40A\\output\\frames\\s02_c01_video_end.jpg",
+                "url": "https://Q-1844.github.io/agnes-frame-host/objects/bd5c0f8a7247dbd2.jpg",
+                "status": "done",
+                "error": null,
+                "updated_at": 0.0
+              }
+            ],
+            "selected_index": 0,
+            "status": "done",
+            "error": null,
+            "updated_at": 1790447523.3887236
+          },
+          "last_frame": {
+            "candidates": [],
+            "selected_index": 0,
+            "status": "pending",
+            "error": null,
+            "updated_at": 0.0
+          },
+          "audio": {
+            "local": null,
+            "url": null,
+            "status": "pending",
+            "error": null,
+            "updated_at": 0.0,
+            "duration_ms": 0,
+            "words": [],
+            "voice": "zh-CN-XiaoxiaoNeural",
+            "rate": "+0%"
+          },
+          "subtitle_srt": null,
+          "video": {
+            "local": "projects\\Crane_Lake_P40A\\output\\videos\\s02_c02.mp4",
+            "url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-v2.0/video_caf27568ccf2429a98b13b8dbccd7348.mp4",
+            "status": "done",
+            "error": null,
+            "updated_at": 1790447523.3147185,
+            "video_id": "video_bGl0ZWxsbTpjdXN0b21fbGxtX3Byb3ZpZGVyOm9wZW5haTttb2RlbF9pZDphZ25lcy12aWRlby12Mi4wO3ZpZGVvX2lkOnZpZGVvX2NhZjI3NTY4Y2NmMjQyOWE5OGIxM2I4ZGJjY2Q3MzQ4",
+            "task_id": "task_6byahweGbx9XnUB68942QTZXnTDoNsJq",
+            "num_frames": 193,
+            "frame_rate": 24,
+            "seconds_returned": 8.0,
+            "size_returned": "1280x704",
+            "model": null,
+            "attempts": 1
+          },
+          "first_frame_batches": [
+            {
+              "batch_id": "ff_8b6d376d",
+              "kind": "first_frame",
+              "created_at": 1790447075.0208838,
+              "status": "pending",
+              "prompt_snapshot": "[SHOT SIZE: medium shot, high angle. 大鹤居中偏上，湖泊占据画面下方，水面反射天空，空间纵深强烈。], Grus japonensis, an elegant Asian red-crowned crane with slender graceful body, long neck and long legs. Pure white body plumage with black secondary and tertiary flight feathers on the wings. Distinctive bright red bare skin patch on the crown of the head. Black neck feathers extending down the throat. Overall elegant, elongated proportions characteristic of the species., 大鹤确认湖泊位置，双翼调整姿态，向湖泊方向俯冲。镜头跟随下降，湖面积逐渐扩大，水面细节清晰可见，优美自然风光。, 大鹤在森林上空俯冲，湖泊在画面中心逐渐扩大。, 日光直射湖面，波光粼粼，大鹤身体有高光轮廓。, 水面反光，大鹤俯冲轨迹，森林与湖泊的过渡。, Scene: 森林边缘 (上午, 晴朗, 柔和的自然光从侧上方洒落, 能见度良好，气流平稳). 大鹤 wearing default crane look — An elegant Asian red-crowned crane (Grus japonensis) in a graceful standing pose, viewed in 2D animation style with soft natural lighting and refined color palette. Pure white body plumage with black secondary and tertiary flight feathers. Distinctive bright red crown patch. Long neck curved elegantly, long slender legs. Refined 2D animation aesthetic with clean lines and gentle shading.. Visual production style: 2D animated image. Do not render as live-action photography or 3D rendered CGI. Art direction: 优美自然风光：大鹤与森林湖泊，光影柔和，色彩清雅，构图舒展.",
+              "char_ref_snapshot": {
+                "大鹤": {
+                  "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_809jeUDmlfZXsgl8svM0sKngnDWeGzQ6/output_b3bcca95debf4f3e8d43c7e073c0a741.png"
+                }
+              },
+              "based_on_first_frame": null,
+              "candidates": [
+                {
+                  "candidate_id": "ff_8b6d376d_1",
+                  "local": "projects\\Crane_Lake_P40A\\output\\frames\\s02_c02_first_v1.png",
+                  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_xn6sLP4VFtziBZUMjBa2gn0bT1U19QcU/output.png",
+                  "status": "done",
+                  "error": null,
+                  "created_at": 1790447075.0208838
+                }
+              ],
+              "origin_run_id": "dgv_0515f401",
+              "generation_basis": {
+                "binding_revision": "f28fc0dc",
+                "binding_document_revision": "6a4d3fd7",
+                "binding_readiness": "READY",
+                "dependency_fingerprints": {
+                  "visual_profile": "060b75f3",
+                  "characters": {
+                    "大鹤": "eae5546f"
+                  },
+                  "looks": {
+                    "look_aa18634a3553": "cad1e42c"
+                  },
+                  "props": {},
+                  "compositions": {},
+                  "scene_instance": "e5a8ef41",
+                  "scene_instance_view": null
+                },
+                "resolved_scene_instance_view_id": "sciv_8218d26d3299",
+                "visual_profile_fingerprint": "060b75f3",
+                "image_provider": "agnes",
+                "size_tier": "1K",
+                "ratio": "16:9",
+                "scene_reference_mode": "full",
+                "human_reference_mode": "keep",
+                "ref_layout": "pack_only",
+                "population_constraint": false,
+                "sent_ref_sequence": [
+                  "scene_instance_view",
+                  "character_look"
+                ],
+                "used_reference_ids": [
+                  "ref_cd859377bdc8",
+                  "ref_310e243e4f14"
+                ],
+                "semantic_roles": [
+                  {
+                    "reference_asset_id": "ref_cd859377bdc8",
+                    "source_type": "scene_instance_view",
+                    "purpose": "scene_context",
+                    "priority": "primary",
+                    "temporal_scope": "throughout",
+                    "subject_character": null,
+                    "prop_id": null,
+                    "checksum": "9571a905e99be6da9bacc800c6e5c3cd8109265a21168af21af46f1d3c02d83d",
+                    "derivation": null
+                  },
+                  {
+                    "reference_asset_id": "ref_310e243e4f14",
+                    "source_type": "character_look",
+                    "purpose": "character_appearance",
+                    "priority": "primary",
+                    "temporal_scope": "static",
+                    "subject_character": "大鹤",
+                    "prop_id": null,
+                    "checksum": "65f8bfec1fad9b794af64183bcdefc8b084b7237c7226ef95532d71d6b61a3ac",
+                    "derivation": null
+                  }
+                ],
+                "dropped_optional": [
+                  {
+                    "source_id": "legacy:大鹤:front",
+                    "reference_asset_id": "legacy:大鹤:front",
+                    "reason": "human_reference_budget",
+                    "detail": {
+                      "subject_character": "大鹤",
+                      "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+                    }
+                  },
+                  {
+                    "source_id": "legacy:大鹤:side",
+                    "reference_asset_id": "legacy:大鹤:side",
+                    "reason": "human_reference_budget",
+                    "detail": {
+                      "subject_character": "大鹤",
+                      "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+                    }
+                  },
+                  {
+                    "source_id": "legacy:大鹤:back",
+                    "reference_asset_id": "legacy:大鹤:back",
+                    "reason": "human_reference_budget",
+                    "detail": {
+                      "subject_character": "大鹤",
+                      "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "batch_id": "batch_ffsync_db88e0",
+              "kind": "first_frame",
+              "created_at": 1790447523.382171,
+              "status": "ready",
+              "prompt_snapshot": "[接力边界] 实际首帧 = 上镜真实尾帧（版本 vv_e716ddfe）",
+              "char_ref_snapshot": {},
+              "based_on_first_frame": null,
+              "candidates": [
+                {
+                  "candidate_id": "cand_ffsync_a2ff33",
+                  "local": "projects\\Crane_Lake_P40A\\output\\frames\\s02_c01_video_end.jpg",
+                  "url": "https://Q-1844.github.io/agnes-frame-host/objects/bd5c0f8a7247dbd2.jpg",
+                  "status": "done",
+                  "error": null,
+                  "created_at": 1790447523.382171
+                }
+              ],
+              "origin_run_id": null,
+              "generation_basis": {}
+            }
+          ],
+          "last_frame_batches": [],
+          "video_versions": [
+            {
+              "version_id": "vv_e716ddfe",
+              "created_at": 1790447523.3117259,
+              "status": "done",
+              "prompt_snapshot": "The crane angles its body downward, tucking its head slightly as it begins a steep dive toward the lake. Its broad wings shift rhythmically, flapping with controlled power to gain speed while adjusting its flight path. The camera tracks closely from above and behind, descending rapidly with the bird. As altitude drops, the shimmering surface of the lake expands to fill the frame, revealing intricate ripples and reflections on the water. The surrounding forest canopy blurs past in the periphery, emphasizing the swift vertical motion., Scene: 森林边缘 (上午, 晴朗, 柔和的自然光从侧上方洒落, 能见度良好，气流平稳). 大鹤 wearing default crane look — An elegant Asian red-crowned crane (Grus japonensis) in a graceful standing pose, viewed in 2D animation style with soft natural lighting and refined color palette. Pure white body plumage with black secondary and tertiary flight feathers. Distinctive bright red crown patch. Long neck curved elegantly, long slender legs. Refined 2D animation aesthetic with clean lines and gentle shading.. Visual production style: 2D animated image. Do not render as live-action photography or 3D rendered CGI. Art direction: 优美自然风光：大鹤与森林湖泊，光影柔和，色彩清雅，构图舒展.",
+              "char_ref_snapshot": {
+                "大鹤": {
+                  "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_809jeUDmlfZXsgl8svM0sKngnDWeGzQ6/output_b3bcca95debf4f3e8d43c7e073c0a741.png"
+                }
+              },
+              "first_frame_candidate_id": "ff_8b6d376d_1",
+              "last_frame_candidate_id": null,
+              "video_id": "video_bGl0ZWxsbTpjdXN0b21fbGxtX3Byb3ZpZGVyOm9wZW5haTttb2RlbF9pZDphZ25lcy12aWRlby12Mi4wO3ZpZGVvX2lkOnZpZGVvX2NhZjI3NTY4Y2NmMjQyOWE5OGIxM2I4ZGJjY2Q3MzQ4",
+              "task_id": "task_6byahweGbx9XnUB68942QTZXnTDoNsJq",
+              "local": "projects\\Crane_Lake_P40A\\output\\videos\\s02_c02.mp4",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-v2.0/video_caf27568ccf2429a98b13b8dbccd7348.mp4",
+              "seconds_returned": 8.0,
+              "size_returned": "1280x704",
+              "num_frames": 193,
+              "frame_rate": 24,
+              "origin_run_id": "dgv_d0fdc7b5",
+              "model": null,
+              "generation_basis": {
+                "schema": "native_av_generation_basis_v1",
+                "shot_id": "s02_c02",
+                "visual_basis_fingerprint": "5cc8d668",
+                "dialogue_fingerprint": null,
+                "speaker_map_fingerprint": null,
+                "spoken_language": null,
+                "prompt_compiler_schema": "native_av_prompt_v3",
+                "performance_intent_fingerprint": null,
+                "video_prompt_creative_fingerprint": "63257b6c",
+                "provider": "agnes",
+                "model": null,
+                "provider_mode": "multi",
+                "provider_options_fingerprint": "d18797bb"
+              },
+              "input_visuals": [
+                {
+                  "slot": "first",
+                  "semantic_role": "relay_start_boundary",
+                  "url": "https://Q-1844.github.io/agnes-frame-host/objects/bd5c0f8a7247dbd2.jpg",
+                  "source_type": "prev_tail_relay",
+                  "source_shot_id": "s02_c01",
+                  "end_source_version": "vv_97699959",
+                  "reference_asset_id": null
+                }
+              ]
+            }
+          ],
+          "selected_first_frame": "cand_ffsync_a2ff33",
+          "selected_last_frame": null,
+          "final_video": "vv_e716ddfe",
+          "opening_source": "independent",
+          "source_shot_id": "s02_c01",
+          "source_version": null,
+          "video_end_frame": {
+            "local": "projects\\Crane_Lake_P40A\\output\\frames\\s02_c02_video_end.jpg",
+            "url": "https://Q-1844.github.io/agnes-frame-host/objects/f568d9120cf68b40.jpg",
+            "status": "done",
+            "error": null,
+            "updated_at": 0.0
+          },
+          "video_end_source_version": "vv_e716ddfe",
+          "status": "pending",
+          "locked": false,
+          "note": "承接 s02_c01 湖泊发现：以俯冲动作为核心，吸收上一镜的方位偏差，让湖泊从远景逐渐扩大至画面主体。",
+          "split_next": null
+        }
+      ]
+    },
+    {
+      "scene_id": "s03",
+      "title": "",
+      "location": "湖泊",
+      "time_of_day": "",
+      "summary": "【湖泊·降落】2镜，时长13s\n\n镜1（s03_c01）8s：\n- description：近景，大鹤接近湖面，展开双翼减速，羽翼扇动激起微弱气流。水面如镜，倒映着鹤影与天空，优美自然风光\n- motion：大鹤减速下降，双翼充分展开利用空气阻力，双脚准备伸出\n- expected_tail：大鹤双脚伸出，即将接触水面\n- opening intent：从空中减速自然过渡到接触水面，姿态连续\n- negative constraints：空无一人, 禁动物, 禁现代物, 禁建筑, 禁道路, 禁人物\n\n镜2（s03_c02）5s：\n- description：特写，大鹤稳稳降落于湖中心，双翼缓缓收回，身体静浮水面。涟漪向四周扩散，周围波光粼粼\n- motion：大鹤接触水面后双脚收拢，身体静浮，双翼收回贴身\n- expected_tail：大鹤静浮湖心，涟漪渐缓，宁静收尾\n- opening intent：本镜为全片收尾，无需承接下一镜\n- negative constraints：空无一人, 禁动物, 禁现代物, 禁建筑, 禁道路, 禁人物, 禁风浪",
+      "characters": [
+        "大鹤"
+      ],
+      "shots": [
+        {
+          "shot_id": "s03_c01",
+          "scene_id": "s03",
+          "index": 1,
+          "description": "近景，大鹤接近湖面，展开双翼减速，羽翼扇动激起微弱气流。水面如镜，倒映着鹤影与天空，优美自然风光。",
+          "prompt_en": "",
+          "negative_prompt": "空无一人, 禁现代建筑, 禁道路, 禁车辆, 禁动物(除大鹤)",
+          "shot_size": "medium close-up",
+          "camera": "",
+          "lighting": "柔和日光，水面反光柔和，大鹤身体有轮廓光。",
+          "motion": "大鹤减速下降，双翼充分展开利用空气阻力，双脚准备伸出，水面倒影清晰可见。",
+          "characters": [
+            "大鹤"
+          ],
+          "dialogue": "",
+          "opening_state": "大鹤在空中接近湖面，双翼半展开，目光注视水面。",
+          "camera_angle": "eye level",
+          "composition": "大鹤居中，水面占据画面下方，倒影清晰，天空与水面对称构图。",
+          "important_details": "水面倒影，大鹤羽毛细节，羽翼扇动的气流扰动。",
+          "required_elements": [],
+          "last_frame_description": "大鹤接近水面，双脚伸出准备接触，水面倒影清晰，涟漪即将产生，为落地瞬间预留承接空间。",
+          "end_state": "",
+          "frame_change": "",
+          "preserve_elements": [],
+          "add_elements": "",
+          "remove_elements": "",
+          "end_composition": "",
+          "preserve_custom": "",
+          "camera_movement": "slow push in",
+          "motion_pace": "",
+          "environment_motion": "",
+          "action_sequence": "",
+          "performance_intent": null,
+          "camera_movement_detail": "",
+          "transition_description": "",
+          "video_preserve_elements": [],
+          "video_preserve_custom": "",
+          "target_duration_s": 8.0,
+          "last_frame_prompt_en": "",
+          "video_prompt_en": "The camera remains in a static close-up, tracking the red-crowned crane as it descends toward the glassy lake surface. The crane extends its broad white wings with black flight feathers fully spread to maximize air resistance, slowing its fall. Its long legs and webbed feet extend forward beneath its body, poised for landing. Gentle flapping motions create subtle ripples and disturb the air around the legs, while the still water perfectly reflects the crane’s silhouette and the sky above.",
+          "first_frame_prompt_override": "",
+          "last_frame_prompt_override": "",
+          "video_prompt_override": "",
+          "first_frame_prompt_sig": "",
+          "last_frame_prompt_sig": "",
+          "video_prompt_sig": "d0f970a34597a4e9",
+          "link_mode": "multi",
+          "video_reference_asset_id": "prev_tail",
+          "seed": null,
+          "first_frame": {
+            "candidates": [
+              {
+                "local": "projects\\Crane_Lake_P40A\\output\\frames\\s02_c02_video_end.jpg",
+                "url": "https://Q-1844.github.io/agnes-frame-host/objects/f568d9120cf68b40.jpg",
+                "status": "done",
+                "error": null,
+                "updated_at": 0.0
+              }
+            ],
+            "selected_index": 0,
+            "status": "done",
+            "error": null,
+            "updated_at": 1790447726.091927
+          },
+          "last_frame": {
+            "candidates": [],
+            "selected_index": 0,
+            "status": "pending",
+            "error": null,
+            "updated_at": 0.0
+          },
+          "audio": {
+            "local": null,
+            "url": null,
+            "status": "pending",
+            "error": null,
+            "updated_at": 0.0,
+            "duration_ms": 0,
+            "words": [],
+            "voice": "zh-CN-XiaoxiaoNeural",
+            "rate": "+0%"
+          },
+          "subtitle_srt": null,
+          "video": {
+            "local": "projects\\Crane_Lake_P40A\\output\\videos\\s03_c01.mp4",
+            "url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-v2.0/video_e6e884e225d1441280e719edf9598cd9.mp4",
+            "status": "done",
+            "error": null,
+            "updated_at": 1790447726.032637,
+            "video_id": "video_bGl0ZWxsbTpjdXN0b21fbGxtX3Byb3ZpZGVyOm9wZW5haTttb2RlbF9pZDphZ25lcy12aWRlby12Mi4wO3ZpZGVvX2lkOnZpZGVvX2U2ZTg4NGUyMjVkMTQ0MTI4MGU3MTllZGY5NTk4Y2Q5",
+            "task_id": "task_KwSJUlGKMXpgab2kzg63zkds86yKv5eZ",
+            "num_frames": 193,
+            "frame_rate": 24,
+            "seconds_returned": 8.0,
+            "size_returned": "1280x704",
+            "model": null,
+            "attempts": 1
+          },
+          "first_frame_batches": [
+            {
+              "batch_id": "ff_7bbf9e12",
+              "kind": "first_frame",
+              "created_at": 1790447113.665447,
+              "status": "pending",
+              "prompt_snapshot": "[SHOT SIZE: medium close-up, eye level angle. 大鹤居中，水面占据画面下方，倒影清晰，天空与水面对称构图。. The frame is tightly cropped on the subject; show only a minimal sliver of the environment, NOT the full location], Grus japonensis, an elegant Asian red-crowned crane with slender graceful body, long neck and long legs. Pure white body plumage with black secondary and tertiary flight feathers on the wings. Distinctive bright red bare skin patch on the crown of the head. Black neck feathers extending down the throat. Overall elegant, elongated proportions characteristic of the species., 近景，大鹤接近湖面，展开双翼减速，羽翼扇动激起微弱气流。水面如镜，倒映着鹤影与天空，优美自然风光。, 大鹤在空中接近湖面，双翼半展开，目光注视水面。, 柔和日光，水面反光柔和，大鹤身体有轮廓光。, 水面倒影，大鹤羽毛细节，羽翼扇动的气流扰动。, Scene: 湖泊 (上午, 晴朗, 柔和的自然光，水面波光粼粼, 微风轻拂，湖面泛起细微涟漪). 大鹤 wearing default crane look — An elegant Asian red-crowned crane (Grus japonensis) in a graceful standing pose, viewed in 2D animation style with soft natural lighting and refined color palette. Pure white body plumage with black secondary and tertiary flight feathers. Distinctive bright red crown patch. Long neck curved elegantly, long slender legs. Refined 2D animation aesthetic with clean lines and gentle shading.. Visual production style: 2D animated image. Do not render as live-action photography or 3D rendered CGI. Art direction: 优美自然风光：大鹤与森林湖泊，光影柔和，色彩清雅，构图舒展.",
+              "char_ref_snapshot": {
+                "大鹤": {
+                  "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_809jeUDmlfZXsgl8svM0sKngnDWeGzQ6/output_b3bcca95debf4f3e8d43c7e073c0a741.png"
+                }
+              },
+              "based_on_first_frame": null,
+              "candidates": [
+                {
+                  "candidate_id": "ff_7bbf9e12_1",
+                  "local": "projects\\Crane_Lake_P40A\\output\\frames\\s03_c01_first_v1.png",
+                  "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_D4NOXaOyb65jQ7k0n7mwqcvfAcgogjtE/output_0fa1d27264e44167a859b911caadd8cb.png",
+                  "status": "done",
+                  "error": null,
+                  "created_at": 1790447113.665447
+                }
+              ],
+              "origin_run_id": "dgv_d6d60250",
+              "generation_basis": {
+                "binding_revision": "8962ce09",
+                "binding_document_revision": "6a4d3fd7",
+                "binding_readiness": "READY",
+                "dependency_fingerprints": {
+                  "visual_profile": "060b75f3",
+                  "characters": {
+                    "大鹤": "eae5546f"
+                  },
+                  "looks": {
+                    "look_aa18634a3553": "cad1e42c"
+                  },
+                  "props": {},
+                  "compositions": {},
+                  "scene_instance": "b6c312b4",
+                  "scene_instance_view": null
+                },
+                "resolved_scene_instance_view_id": "sciv_96882e7dc2f4",
+                "visual_profile_fingerprint": "060b75f3",
+                "image_provider": "agnes",
+                "size_tier": "1K",
+                "ratio": "16:9",
+                "scene_reference_mode": "context_only",
+                "human_reference_mode": "drop",
+                "ref_layout": "pack_only",
+                "population_constraint": false,
+                "sent_ref_sequence": [],
+                "used_reference_ids": [],
+                "semantic_roles": [],
+                "dropped_optional": [
+                  {
+                    "source_id": "sciv_96882e7dc2f4",
+                    "reference_asset_id": "ref_e9732a7fe99d",
+                    "reason": "scene_reference_context_only",
+                    "detail": {
+                      "scene_reference_mode": "context_only"
+                    }
+                  },
+                  {
+                    "source_id": "legacy:大鹤:front",
+                    "reference_asset_id": "legacy:大鹤:front",
+                    "reason": "human_reference_budget",
+                    "detail": {
+                      "subject_character": "大鹤",
+                      "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+                    }
+                  },
+                  {
+                    "source_id": "legacy:大鹤:side",
+                    "reference_asset_id": "legacy:大鹤:side",
+                    "reason": "human_reference_budget",
+                    "detail": {
+                      "subject_character": "大鹤",
+                      "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+                    }
+                  },
+                  {
+                    "source_id": "legacy:大鹤:back",
+                    "reference_asset_id": "legacy:大鹤:back",
+                    "reason": "human_reference_budget",
+                    "detail": {
+                      "subject_character": "大鹤",
+                      "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+                    }
+                  },
+                  {
+                    "source_id": "look_aa18634a3553",
+                    "reference_asset_id": "ref_310e243e4f14",
+                    "reason": "human_reference_drop",
+                    "detail": {
+                      "subject_character": "大鹤",
+                      "hint": "紧景别无参考模式：identity 由 prompt 文本承载（D2 §5.2 实验证据）"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "batch_id": "batch_ffsync_d98c89",
+              "kind": "first_frame",
+              "created_at": 1790447726.0885806,
+              "status": "ready",
+              "prompt_snapshot": "[接力边界] 实际首帧 = 上镜真实尾帧（版本 vv_f4112813）",
+              "char_ref_snapshot": {},
+              "based_on_first_frame": null,
+              "candidates": [
+                {
+                  "candidate_id": "cand_ffsync_8786e8",
+                  "local": "projects\\Crane_Lake_P40A\\output\\frames\\s02_c02_video_end.jpg",
+                  "url": "https://Q-1844.github.io/agnes-frame-host/objects/f568d9120cf68b40.jpg",
+                  "status": "done",
+                  "error": null,
+                  "created_at": 1790447726.0885806
+                }
+              ],
+              "origin_run_id": null,
+              "generation_basis": {}
+            }
+          ],
+          "last_frame_batches": [],
+          "video_versions": [
+            {
+              "version_id": "vv_f4112813",
+              "created_at": 1790447726.0287282,
+              "status": "done",
+              "prompt_snapshot": "The camera remains in a static close-up, tracking the red-crowned crane as it descends toward the glassy lake surface. The crane extends its broad white wings with black flight feathers fully spread to maximize air resistance, slowing its fall. Its long legs and webbed feet extend forward beneath its body, poised for landing. Gentle flapping motions create subtle ripples and disturb the air around the legs, while the still water perfectly reflects the crane’s silhouette and the sky above., Scene: 湖泊 (上午, 晴朗, 柔和的自然光，水面波光粼粼, 微风轻拂，湖面泛起细微涟漪). 大鹤 wearing default crane look — An elegant Asian red-crowned crane (Grus japonensis) in a graceful standing pose, viewed in 2D animation style with soft natural lighting and refined color palette. Pure white body plumage with black secondary and tertiary flight feathers. Distinctive bright red crown patch. Long neck curved elegantly, long slender legs. Refined 2D animation aesthetic with clean lines and gentle shading.. Visual production style: 2D animated image. Do not render as live-action photography or 3D rendered CGI. Art direction: 优美自然风光：大鹤与森林湖泊，光影柔和，色彩清雅，构图舒展.",
+              "char_ref_snapshot": {
+                "大鹤": {
+                  "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_809jeUDmlfZXsgl8svM0sKngnDWeGzQ6/output_b3bcca95debf4f3e8d43c7e073c0a741.png"
+                }
+              },
+              "first_frame_candidate_id": "ff_7bbf9e12_1",
+              "last_frame_candidate_id": null,
+              "video_id": "video_bGl0ZWxsbTpjdXN0b21fbGxtX3Byb3ZpZGVyOm9wZW5haTttb2RlbF9pZDphZ25lcy12aWRlby12Mi4wO3ZpZGVvX2lkOnZpZGVvX2U2ZTg4NGUyMjVkMTQ0MTI4MGU3MTllZGY5NTk4Y2Q5",
+              "task_id": "task_KwSJUlGKMXpgab2kzg63zkds86yKv5eZ",
+              "local": "projects\\Crane_Lake_P40A\\output\\videos\\s03_c01.mp4",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-v2.0/video_e6e884e225d1441280e719edf9598cd9.mp4",
+              "seconds_returned": 8.0,
+              "size_returned": "1280x704",
+              "num_frames": 193,
+              "frame_rate": 24,
+              "origin_run_id": "dgv_f1bdb266",
+              "model": null,
+              "generation_basis": {
+                "schema": "native_av_generation_basis_v1",
+                "shot_id": "s03_c01",
+                "visual_basis_fingerprint": "8ff6023d",
+                "dialogue_fingerprint": null,
+                "speaker_map_fingerprint": null,
+                "spoken_language": null,
+                "prompt_compiler_schema": "native_av_prompt_v3",
+                "performance_intent_fingerprint": null,
+                "video_prompt_creative_fingerprint": "3ac11190",
+                "provider": "agnes",
+                "model": null,
+                "provider_mode": "multi",
+                "provider_options_fingerprint": "d18797bb"
+              },
+              "input_visuals": [
+                {
+                  "slot": "first",
+                  "semantic_role": "relay_start_boundary",
+                  "url": "https://Q-1844.github.io/agnes-frame-host/objects/f568d9120cf68b40.jpg",
+                  "source_type": "prev_tail_relay",
+                  "source_shot_id": "s02_c02",
+                  "end_source_version": "vv_e716ddfe",
+                  "reference_asset_id": null
+                }
+              ]
+            }
+          ],
+          "selected_first_frame": "cand_ffsync_8786e8",
+          "selected_last_frame": null,
+          "final_video": "vv_f4112813",
+          "opening_source": "independent",
+          "source_shot_id": null,
+          "source_version": null,
+          "video_end_frame": {
+            "local": "projects\\Crane_Lake_P40A\\output\\frames\\s03_c01_video_end.jpg",
+            "url": "https://Q-1844.github.io/agnes-frame-host/objects/b66229a841bfdd9e.jpg",
+            "status": "done",
+            "error": null,
+            "updated_at": 0.0
+          },
+          "video_end_source_version": "vv_f4112813",
+          "status": "pending",
+          "locked": false,
+          "note": "承接 s02_c02 俯冲结束：以水面倒影为视觉锚点，吸收上一镜的高度偏差，让大鹤从空中平滑过渡至水面接近。",
+          "split_next": null
+        },
+        {
+          "shot_id": "s03_c02",
+          "scene_id": "s03",
+          "index": 2,
+          "description": "特写，大鹤稳稳降落于湖中心，双翼缓缓收回，身体静浮水面。涟漪向四周扩散，周围波光粼粼，宁静优美的自然画面。",
+          "prompt_en": "",
+          "negative_prompt": "空无一人, 禁现代建筑, 禁道路, 禁车辆, 禁动物(除大鹤)",
+          "shot_size": "close-up",
+          "camera": "",
+          "lighting": "柔和漫射光，水面反光细腻，整体色调清雅宁静。",
+          "motion": "大鹤接触水面后双脚收拢，身体静浮，双翼收回贴身，涟漪向外扩散渐缓。",
+          "characters": [
+            "大鹤"
+          ],
+          "dialogue": "",
+          "opening_state": "大鹤双脚接触水面，身体开始下沉，双翼半展开保持平衡。",
+          "camera_angle": "eye level",
+          "composition": "大鹤居中静浮，水面占据画面大部分，涟漪从大鹤身体向外扩散，构图平衡。",
+          "important_details": "水面涟漪，大鹤静浮姿态，羽毛与水面的接触细节。",
+          "required_elements": [],
+          "last_frame_description": "大鹤稳稳静浮湖心，双翼收回贴身，涟漪向外扩散渐缓，画面宁静平衡，全片节奏收束。",
+          "end_state": "",
+          "frame_change": "",
+          "preserve_elements": [],
+          "add_elements": "",
+          "remove_elements": "",
+          "end_composition": "",
+          "preserve_custom": "",
+          "camera_movement": "static",
+          "motion_pace": "",
+          "environment_motion": "",
+          "action_sequence": "",
+          "performance_intent": null,
+          "camera_movement_detail": "",
+          "transition_description": "",
+          "video_preserve_elements": [],
+          "video_preserve_custom": "",
+          "target_duration_s": 5.0,
+          "last_frame_prompt_en": "",
+          "video_prompt_en": "A close-up shot captures a red-crowned crane gently settling onto the mirror-like surface of a lake. Its long legs retract gracefully as its white body comes to rest, buoyant and still. The large wings fold slowly and smoothly against its sides, tucking in tight. Gentle ripples spread outward from the landing point in concentric circles, distorting the reflection slightly. The water shimmers with soft light, surrounding the stationary crane in a serene, tranquil atmosphere.",
+          "first_frame_prompt_override": "",
+          "last_frame_prompt_override": "",
+          "video_prompt_override": "",
+          "first_frame_prompt_sig": "",
+          "last_frame_prompt_sig": "",
+          "video_prompt_sig": "02dd8fa0973997c9",
+          "link_mode": "multi",
+          "video_reference_asset_id": "prev_tail",
+          "seed": null,
+          "first_frame": {
+            "candidates": [
+              {
+                "local": "projects\\Crane_Lake_P40A\\output\\frames\\s03_c01_video_end.jpg",
+                "url": "https://Q-1844.github.io/agnes-frame-host/objects/b66229a841bfdd9e.jpg",
+                "status": "done",
+                "error": null,
+                "updated_at": 0.0
+              }
+            ],
+            "selected_index": 0,
+            "status": "done",
+            "error": null,
+            "updated_at": 1790447876.7149897
+          },
+          "last_frame": {
+            "candidates": [],
+            "selected_index": 0,
+            "status": "pending",
+            "error": null,
+            "updated_at": 0.0
+          },
+          "audio": {
+            "local": null,
+            "url": null,
+            "status": "pending",
+            "error": null,
+            "updated_at": 0.0,
+            "duration_ms": 0,
+            "words": [],
+            "voice": "zh-CN-XiaoxiaoNeural",
+            "rate": "+0%"
+          },
+          "subtitle_srt": null,
+          "video": {
+            "local": "projects\\Crane_Lake_P40A\\output\\videos\\s03_c02.mp4",
+            "url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-v2.0/video_11135ec2469d4d5db0948a5467597842.mp4",
+            "status": "done",
+            "error": null,
+            "updated_at": 1790447876.655679,
+            "video_id": "video_bGl0ZWxsbTpjdXN0b21fbGxtX3Byb3ZpZGVyOm9wZW5haTttb2RlbF9pZDphZ25lcy12aWRlby12Mi4wO3ZpZGVvX2lkOnZpZGVvXzExMTM1ZWMyNDY5ZDRkNWRiMDk0OGE1NDY3NTk3ODQy",
+            "task_id": "task_3hpKaGGPOSysXDSC1Xj4QkAlloUJOQF1",
+            "num_frames": 121,
+            "frame_rate": 24,
+            "seconds_returned": 5.0,
+            "size_returned": "1280x704",
+            "model": null,
+            "attempts": 1
+          },
+          "first_frame_batches": [
+            {
+              "batch_id": "ff_a35b335f",
+              "kind": "first_frame",
+              "created_at": 1790447113.9689791,
+              "status": "pending",
+              "prompt_snapshot": "[SHOT SIZE: close-up, eye level angle. 大鹤居中静浮，水面占据画面大部分，涟漪从大鹤身体向外扩散，构图平衡。. The frame is tightly cropped on the subject; show only a minimal sliver of the environment, NOT the full location], Grus japonensis, an elegant Asian red-crowned crane with slender graceful body, long neck and long legs. Pure white body plumage with black secondary and tertiary flight feathers on the wings. Distinctive bright red bare skin patch on the crown of the head. Black neck feathers extending down the throat. Overall elegant, elongated proportions characteristic of the species., 特写，大鹤稳稳降落于湖中心，双翼缓缓收回，身体静浮水面。涟漪向四周扩散，周围波光粼粼，宁静优美的自然画面。, 大鹤双脚接触水面，身体开始下沉，双翼半展开保持平衡。, 柔和漫射光，水面反光细腻，整体色调清雅宁静。, 水面涟漪，大鹤静浮姿态，羽毛与水面的接触细节。, Scene: 湖泊 (上午, 晴朗, 柔和的自然光，水面波光粼粼, 微风轻拂，湖面泛起细微涟漪). 大鹤 wearing default crane look — An elegant Asian red-crowned crane (Grus japonensis) in a graceful standing pose, viewed in 2D animation style with soft natural lighting and refined color palette. Pure white body plumage with black secondary and tertiary flight feathers. Distinctive bright red crown patch. Long neck curved elegantly, long slender legs. Refined 2D animation aesthetic with clean lines and gentle shading.. Visual production style: 2D animated image. Do not render as live-action photography or 3D rendered CGI. Art direction: 优美自然风光：大鹤与森林湖泊，光影柔和，色彩清雅，构图舒展.",
+              "char_ref_snapshot": {
+                "大鹤": {
+                  "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_809jeUDmlfZXsgl8svM0sKngnDWeGzQ6/output_b3bcca95debf4f3e8d43c7e073c0a741.png"
+                }
+              },
+              "based_on_first_frame": null,
+              "candidates": [
+                {
+                  "candidate_id": "ff_a35b335f_1",
+                  "local": "projects\\Crane_Lake_P40A\\output\\frames\\s03_c02_first_v1.png",
+                  "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_XOXkOt75Yi9lm286TM132zlGtiC1CQs9/output_ca71bbe81dbb49cbbaa58cf8dd9b6bdb.png",
+                  "status": "done",
+                  "error": null,
+                  "created_at": 1790447113.9689791
+                }
+              ],
+              "origin_run_id": "dgv_92ff9be3",
+              "generation_basis": {
+                "binding_revision": "eda56eb8",
+                "binding_document_revision": "6a4d3fd7",
+                "binding_readiness": "READY",
+                "dependency_fingerprints": {
+                  "visual_profile": "060b75f3",
+                  "characters": {
+                    "大鹤": "eae5546f"
+                  },
+                  "looks": {
+                    "look_aa18634a3553": "cad1e42c"
+                  },
+                  "props": {},
+                  "compositions": {},
+                  "scene_instance": "b6c312b4",
+                  "scene_instance_view": null
+                },
+                "resolved_scene_instance_view_id": "sciv_96882e7dc2f4",
+                "visual_profile_fingerprint": "060b75f3",
+                "image_provider": "agnes",
+                "size_tier": "1K",
+                "ratio": "16:9",
+                "scene_reference_mode": "context_only",
+                "human_reference_mode": "drop",
+                "ref_layout": "pack_only",
+                "population_constraint": false,
+                "sent_ref_sequence": [],
+                "used_reference_ids": [],
+                "semantic_roles": [],
+                "dropped_optional": [
+                  {
+                    "source_id": "sciv_96882e7dc2f4",
+                    "reference_asset_id": "ref_e9732a7fe99d",
+                    "reason": "scene_reference_context_only",
+                    "detail": {
+                      "scene_reference_mode": "context_only"
+                    }
+                  },
+                  {
+                    "source_id": "legacy:大鹤:front",
+                    "reference_asset_id": "legacy:大鹤:front",
+                    "reason": "human_reference_budget",
+                    "detail": {
+                      "subject_character": "大鹤",
+                      "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+                    }
+                  },
+                  {
+                    "source_id": "legacy:大鹤:side",
+                    "reference_asset_id": "legacy:大鹤:side",
+                    "reason": "human_reference_budget",
+                    "detail": {
+                      "subject_character": "大鹤",
+                      "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+                    }
+                  },
+                  {
+                    "source_id": "legacy:大鹤:back",
+                    "reference_asset_id": "legacy:大鹤:back",
+                    "reason": "human_reference_budget",
+                    "detail": {
+                      "subject_character": "大鹤",
+                      "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+                    }
+                  },
+                  {
+                    "source_id": "look_aa18634a3553",
+                    "reference_asset_id": "ref_310e243e4f14",
+                    "reason": "human_reference_drop",
+                    "detail": {
+                      "subject_character": "大鹤",
+                      "hint": "紧景别无参考模式：identity 由 prompt 文本承载（D2 §5.2 实验证据）"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "batch_id": "batch_ffsync_d18a9c",
+              "kind": "first_frame",
+              "created_at": 1790447876.7105484,
+              "status": "ready",
+              "prompt_snapshot": "[接力边界] 实际首帧 = 上镜真实尾帧（版本 vv_c0430d33）",
+              "char_ref_snapshot": {},
+              "based_on_first_frame": null,
+              "candidates": [
+                {
+                  "candidate_id": "cand_ffsync_a9313f",
+                  "local": "projects\\Crane_Lake_P40A\\output\\frames\\s03_c01_video_end.jpg",
+                  "url": "https://Q-1844.github.io/agnes-frame-host/objects/b66229a841bfdd9e.jpg",
+                  "status": "done",
+                  "error": null,
+                  "created_at": 1790447876.7105484
+                }
+              ],
+              "origin_run_id": null,
+              "generation_basis": {}
+            }
+          ],
+          "last_frame_batches": [],
+          "video_versions": [
+            {
+              "version_id": "vv_c0430d33",
+              "created_at": 1790447876.6523504,
+              "status": "done",
+              "prompt_snapshot": "A close-up shot captures a red-crowned crane gently settling onto the mirror-like surface of a lake. Its long legs retract gracefully as its white body comes to rest, buoyant and still. The large wings fold slowly and smoothly against its sides, tucking in tight. Gentle ripples spread outward from the landing point in concentric circles, distorting the reflection slightly. The water shimmers with soft light, surrounding the stationary crane in a serene, tranquil atmosphere., Scene: 湖泊 (上午, 晴朗, 柔和的自然光，水面波光粼粼, 微风轻拂，湖面泛起细微涟漪). 大鹤 wearing default crane look — An elegant Asian red-crowned crane (Grus japonensis) in a graceful standing pose, viewed in 2D animation style with soft natural lighting and refined color palette. Pure white body plumage with black secondary and tertiary flight feathers. Distinctive bright red crown patch. Long neck curved elegantly, long slender legs. Refined 2D animation aesthetic with clean lines and gentle shading.. Visual production style: 2D animated image. Do not render as live-action photography or 3D rendered CGI. Art direction: 优美自然风光：大鹤与森林湖泊，光影柔和，色彩清雅，构图舒展.",
+              "char_ref_snapshot": {
+                "大鹤": {
+                  "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_809jeUDmlfZXsgl8svM0sKngnDWeGzQ6/output_b3bcca95debf4f3e8d43c7e073c0a741.png"
+                }
+              },
+              "first_frame_candidate_id": "ff_a35b335f_1",
+              "last_frame_candidate_id": null,
+              "video_id": "video_bGl0ZWxsbTpjdXN0b21fbGxtX3Byb3ZpZGVyOm9wZW5haTttb2RlbF9pZDphZ25lcy12aWRlby12Mi4wO3ZpZGVvX2lkOnZpZGVvXzExMTM1ZWMyNDY5ZDRkNWRiMDk0OGE1NDY3NTk3ODQy",
+              "task_id": "task_3hpKaGGPOSysXDSC1Xj4QkAlloUJOQF1",
+              "local": "projects\\Crane_Lake_P40A\\output\\videos\\s03_c02.mp4",
+              "url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-v2.0/video_11135ec2469d4d5db0948a5467597842.mp4",
+              "seconds_returned": 5.0,
+              "size_returned": "1280x704",
+              "num_frames": 121,
+              "frame_rate": 24,
+              "origin_run_id": "dgv_d3affc08",
+              "model": null,
+              "generation_basis": {
+                "schema": "native_av_generation_basis_v1",
+                "shot_id": "s03_c02",
+                "visual_basis_fingerprint": "bb9a5fb2",
+                "dialogue_fingerprint": null,
+                "speaker_map_fingerprint": null,
+                "spoken_language": null,
+                "prompt_compiler_schema": "native_av_prompt_v3",
+                "performance_intent_fingerprint": null,
+                "video_prompt_creative_fingerprint": "e7f7b7fe",
+                "provider": "agnes",
+                "model": null,
+                "provider_mode": "multi",
+                "provider_options_fingerprint": "e0bb95ce"
+              },
+              "input_visuals": [
+                {
+                  "slot": "first",
+                  "semantic_role": "relay_start_boundary",
+                  "url": "https://Q-1844.github.io/agnes-frame-host/objects/b66229a841bfdd9e.jpg",
+                  "source_type": "prev_tail_relay",
+                  "source_shot_id": "s03_c01",
+                  "end_source_version": "vv_f4112813",
+                  "reference_asset_id": null
+                }
+              ]
+            }
+          ],
+          "selected_first_frame": "cand_ffsync_a9313f",
+          "selected_last_frame": null,
+          "final_video": "vv_c0430d33",
+          "opening_source": "independent",
+          "source_shot_id": "s03_c01",
+          "source_version": null,
+          "video_end_frame": {
+            "local": "projects\\Crane_Lake_P40A\\output\\frames\\s03_c02_video_end.jpg",
+            "url": "https://Q-1844.github.io/agnes-frame-host/objects/a0e4b26b8a5a97fa.jpg",
+            "status": "done",
+            "error": null,
+            "updated_at": 0.0
+          },
+          "video_end_source_version": "vv_c0430d33",
+          "status": "pending",
+          "locked": false,
+          "note": "承接 s03_c01 接近水面：以静浮姿态为核心，吸收上一镜的接触偏差，让大鹤从水中下沉自然过渡至稳定漂浮。",
+          "split_next": null
+        }
+      ]
+    }
+  ],
+  "next_scene_seq": 4
+}

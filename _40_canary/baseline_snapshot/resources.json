@@ -1,0 +1,151 @@
+{
+  "schema_version": 2,
+  "looks": {
+    "look_aa18634a3553": {
+      "look_id": "look_aa18634a3553",
+      "character_name": "大鹤",
+      "scope": "project",
+      "label": "default crane look",
+      "clothing_id": null,
+      "appearance_description": "An elegant Asian red-crowned crane (Grus japonensis) in a graceful standing pose, viewed in 2D animation style with soft natural lighting and refined color palette. Pure white body plumage with black secondary and tertiary flight feathers. Distinctive bright red crown patch. Long neck curved elegantly, long slender legs. Refined 2D animation aesthetic with clean lines and gentle shading.",
+      "appearance_delta": "",
+      "reference_asset_ids": [
+        "ref_310e243e4f14"
+      ],
+      "approved_reference_asset_ids": [
+        "ref_310e243e4f14"
+      ],
+      "cover_asset_id": "ref_310e243e4f14",
+      "generation_status": "ready",
+      "approval_status": "approved",
+      "origin": null,
+      "created_at": 1790418572.7415876,
+      "updated_at": 1790418617.1283982
+    }
+  },
+  "clothings": {},
+  "props": {},
+  "compositions": {},
+  "reference_assets": {
+    "ref_310e243e4f14": {
+      "asset_id": "ref_310e243e4f14",
+      "scope": "project",
+      "media_type": "image",
+      "local": "output/resources/looks/look_aa18634a3553/generations/gen_323389ef7067/candidate_01.png",
+      "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_Zty6DCfHdYjEBXeqxPPQCXpZmda734UP/output.png",
+      "checksum": "65f8bfec1fad9b794af64183bcdefc8b084b7237c7226ef95532d71d6b61a3ac",
+      "view": "",
+      "purpose": "look",
+      "background_type": "",
+      "source": "generated",
+      "origin": null,
+      "created_at": 1790418598.7047336,
+      "updated_at": 1790418598.7047343
+    },
+    "ref_208435b12102": {
+      "asset_id": "ref_208435b12102",
+      "scope": "project",
+      "media_type": "image",
+      "local": "output/scene_system/locations/loc_db2b48908019/views/view_2644fc4fb8d7/generations/gen_84b2cfa02a2e/candidate_01.png",
+      "url": null,
+      "checksum": "d007ec39a580d1f801a7600e9242b08092edc0d01e266bfeed04769f728325b6",
+      "view": "",
+      "purpose": "location_view",
+      "background_type": "",
+      "source": "scene_system",
+      "origin": null,
+      "created_at": 1790418902.7092552,
+      "updated_at": 1790418902.7092557
+    },
+    "ref_0fbb4afdec35": {
+      "asset_id": "ref_0fbb4afdec35",
+      "scope": "project",
+      "media_type": "image",
+      "local": "output/scene_system/scene_instances/scin_d6ad097c1db9/views/sciv_34e5d133ada1/generations/gen_d01018d4ce0f/candidate_01.png",
+      "url": null,
+      "checksum": "44f0ab5b2b602102cb70f0e226a93caa79ac2f8a444d7452a7da370d24f93ace",
+      "view": "",
+      "purpose": "scene_instance_view",
+      "background_type": "",
+      "source": "scene_system",
+      "origin": null,
+      "created_at": 1790419318.3936117,
+      "updated_at": 1790419318.3936124
+    },
+    "ref_4e208e1528b7": {
+      "asset_id": "ref_4e208e1528b7",
+      "scope": "project",
+      "media_type": "image",
+      "local": "output/scene_system/locations/loc_33bd14817564/views/view_a26ffa058119/generations/gen_36b05b8f5684/candidate_01.png",
+      "url": null,
+      "checksum": "a6b3ec63e55dfc8d2fc78ac20208313586ad8f2770f5b8f9a7f2bbf58cbd13b5",
+      "view": "",
+      "purpose": "location_view",
+      "background_type": "",
+      "source": "scene_system",
+      "origin": null,
+      "created_at": 1790419344.78096,
+      "updated_at": 1790419344.7809606
+    },
+    "ref_bc3f774906b2": {
+      "asset_id": "ref_bc3f774906b2",
+      "scope": "project",
+      "media_type": "image",
+      "local": "output/scene_system/locations/loc_92e17556bf7c/views/view_ee7d280f0e1e/generations/gen_e66e47d332f3/candidate_01.png",
+      "url": null,
+      "checksum": "5a2bc8efad6f4ec0af9da67bf0f3a95f2091655fe3111af9af9a69bfb0222ba1",
+      "view": "",
+      "purpose": "location_view",
+      "background_type": "",
+      "source": "scene_system",
+      "origin": null,
+      "created_at": 1790419443.8760715,
+      "updated_at": 1790419443.8760717
+    },
+    "ref_7090635b70f0": {
+      "asset_id": "ref_7090635b70f0",
+      "scope": "project",
+      "media_type": "image",
+      "local": "output/scene_system/scene_instances/scin_c3032a178fa6/views/sciv_96882e7dc2f4/generations/gen_1cad2ac970a2/candidate_01.png",
+      "url": null,
+      "checksum": "735b2a1146fc39478c33e477b98b186a215d755b19548b3e74a9007402982186",
+      "view": "",
+      "purpose": "scene_instance_view",
+      "background_type": "",
+      "source": "scene_system",
+      "origin": null,
+      "created_at": 1790419526.2750964,
+      "updated_at": 1790419526.2750967
+    },
+    "ref_cd859377bdc8": {
+      "asset_id": "ref_cd859377bdc8",
+      "scope": "project",
+      "media_type": "image",
+      "local": "output/scene_system/scene_instances/scin_64690c4eaad3/views/sciv_8218d26d3299/generations/gen_ed1afc3d881d/candidate_01.png",
+      "url": null,
+      "checksum": "9571a905e99be6da9bacc800c6e5c3cd8109265a21168af21af46f1d3c02d83d",
+      "view": "",
+      "purpose": "scene_instance_view",
+      "background_type": "",
+      "source": "scene_system",
+      "origin": null,
+      "created_at": 1790419684.79216,
+      "updated_at": 1790419684.7921605
+    },
+    "ref_e9732a7fe99d": {
+      "asset_id": "ref_e9732a7fe99d",
+      "scope": "project",
+      "media_type": "image",
+      "local": "output/scene_system/scene_instances/scin_c3032a178fa6/views/sciv_96882e7dc2f4/generations/gen_2e592259eea3/candidate_01.png",
+      "url": null,
+      "checksum": "e615e497976d7f4da8b9019509c4cea2ad8d034ec5e7f357ed391a5964c79a9c",
+      "view": "",
+      "purpose": "scene_instance_view",
+      "background_type": "",
+      "source": "scene_system",
+      "origin": null,
+      "created_at": 1790439527.4363234,
+      "updated_at": 1790439527.436324
+    }
+  }
+}

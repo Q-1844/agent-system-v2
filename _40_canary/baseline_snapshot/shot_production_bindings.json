@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "bindings": {
+    "s01_c01": {
+      "shot_id": "s01_c01",
+      "scene_id": "s01",
+      "scene_binding": {
+        "scene_instance_id": "scin_d6ad097c1db9",
+        "location_view_id": "view_2644fc4fb8d7",
+        "pinned_scene_instance_view_id": null
+      },
+      "character_bindings": [
+        {
+          "character_name": "大鹤",
+          "look_id": "look_aa18634a3553",
+          "composition_id": null
+        }
+      ],
+      "prop_bindings": [],
+      "action": null,
+      "dialogue_speaker_binding": null,
+      "production_notes": "",
+      "dependency_fingerprints": {
+        "visual_profile": "060b75f3",
+        "characters": {
+          "大鹤": "eae5546f"
+        },
+        "looks": {
+          "look_aa18634a3553": "cad1e42c"
+        },
+        "props": {},
+        "compositions": {},
+        "scene_instance": "6958366d",
+        "scene_instance_view": null
+      },
+      "created_at": 1790420329.9487255,
+      "updated_at": 1790420329.9487255
+    },
+    "s01_c02": {
+      "shot_id": "s01_c02",
+      "scene_id": "s01",
+      "scene_binding": {
+        "scene_instance_id": "scin_d6ad097c1db9",
+        "location_view_id": "view_2644fc4fb8d7",
+        "pinned_scene_instance_view_id": null
+      },
+      "character_bindings": [
+        {
+          "character_name": "大鹤",
+          "look_id": "look_aa18634a3553",
+          "composition_id": null
+        }
+      ],
+      "prop_bindings": [],
+      "action": null,
+      "dialogue_speaker_binding": null,
+      "production_notes": "",
+      "dependency_fingerprints": {
+        "visual_profile": "060b75f3",
+        "characters": {
+          "大鹤": "eae5546f"
+        },
+        "looks": {
+          "look_aa18634a3553": "cad1e42c"
+        },
+        "props": {},
+        "compositions": {},
+        "scene_instance": "6958366d",
+        "scene_instance_view": null
+      },
+      "created_at": 1790420363.7524314,
+      "updated_at": 1790420363.7524314
+    }
+  }
+}
