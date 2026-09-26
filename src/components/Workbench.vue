@@ -425,6 +425,7 @@
               <span v-else class="canvas-empty">{{ stage === 'last' && !ffUrlReady ? '未选择首帧' : '尚未生成' }}</span>
               <div v-if="mainCanvasOverlay" class="canvas-overlay">{{ mainCanvasOverlay }}</div>
               <span v-if="!mainCanvasEmpty" class="canvas-label">{{ mainCanvasLabel }}</span>
+              <span v-if="ffSlotRole" class="ff-role-badge" :class="ffSlotRole.key">{{ ffSlotRole.label }}</span>
             </div>
             <div v-if="thumbStrip.length" class="thumb-strip">
               <button v-for="(t, i) in thumbStrip" :key="t.cid || (t.label + i)" class="thumb" :class="{ sel: t.sel, ref: t.ref, cont: t.cont }" @click="chooseThumb(t)">
@@ -437,6 +438,7 @@
               <div v-for="(v, i) in videoVersionsReversed" :key="v.version_id" class="video-version" :class="{ final: v.version_id === shot.final_video }">
                 <video :src="v.local ? vidUrl(v.local) + '#t=0.1' : ''" preload="metadata" class="vv-thumb" :class="{ previewing: previewVersionId === v.version_id }" @click="previewVersion(v.version_id)" title="点击预览"></video>
                 <div v-if="v.input_visuals && v.input_visuals.length" class="vv-inputs">
+                  <span class="vv-inputs-head" title="这是 provenance（该版本实际消费的全部输入事实），不是首帧槽">实际输入</span>
                   <div v-for="(iv, ii) in v.input_visuals" :key="ii" class="vv-input" :class="ivClass(iv)" :title="ivTitle(iv)">
                     <img v-if="iv.url" :src="ivSrc(iv.url)" />
                     <span class="iv-tag">{{ ivLabel(iv) }}</span>
@@ -1428,6 +1430,32 @@ const mainCanvasLabel = computed(() => {
   if (stage.value === 'last') return lfUrl.value ? '尾帧' : '参考首帧';
   return '视频';
 });
+
+// Phase 39F（41.md §4）：首帧大图本体的最小语义角标——只看大槽位也不会把
+// reference_only 误解成 frame 0。只依据事实表达：inherit=接力；最终版本
+// input_visuals 与当前选中首帧候选（公网 URL/local）匹配 → 该条目角色；
+// 无事实不显示（不发明状态）。
+const ffSlotRole = computed(() => {
+  if (stage.value !== 'first') return null;
+  if (props.shot.opening_source === 'inherit_previous') return { key: 'relay', label: '接力' };
+  const cid = props.shot.selected_first_frame;
+  let cand: any = null;
+  for (const b of props.shot.first_frame_batches || []) {
+    const c = (b.candidates || []).find((x: any) => x.candidate_id === cid);
+    if (c) { cand = c; break; }
+  }
+  const urls = new Set<string>();
+  if (cand?.url) { urls.add(cand.url); urls.add(ivSrc(cand.url)); }
+  if (cand?.local) { urls.add(cand.local); urls.add(imgUrl(cand.local)); }
+  if (!urls.size) return null;
+  const finalVv = (props.shot.video_versions || []).find((v: any) => v.version_id === props.shot.final_video);
+  const iv = (finalVv?.input_visuals || []).find((e: any) => e.url && (urls.has(e.url) || urls.has(ivSrc(e.url))));
+  if (!iv) return null;
+  if (iv.semantic_role === 'reference_only') return { key: 'reference', label: '参考' };
+  if (iv.semantic_role === 'relay_start_boundary') return { key: 'relay', label: '接力' };
+  if (iv.semantic_role === 'hard_start_boundary') return { key: 'hard', label: '首帧' };
+  return null;
+});
 const thumbStrip = computed(() => {
   if (stage.value === 'first') {
     // inherit_previous：开场=来源末帧（主画布显示），本镜候选不参与，放入历史区，缩略条留空
@@ -1506,20 +1534,26 @@ function vidUrl(p: string) { return getVideoUrl(p); }
 
 // Phase 39D：每个视频版本的"生成输入"显示——首尾帧（可以是参考）。
 // 参考图（reference_only）用琥珀色框标记，与硬边界（绿）和接力边界（蓝）区分。
+// Phase 39F：strip 头标注 provenance 语义；character_look 用「人物参考」标签，
+// 避免误读为占据首帧槽（41.md §4）。
 function ivSrc(u: string) { return u && u.startsWith('http') ? u : imgUrl(u); }
 function ivClass(iv: any) {
   return { refmark: iv.semantic_role === 'reference_only',
            relay: iv.semantic_role === 'relay_start_boundary' };
 }
 function ivLabel(iv: any) {
-  if (iv.semantic_role === 'reference_only') return '参考';
+  if (iv.semantic_role === 'reference_only') {
+    return iv.source_type === 'character_look' ? '人物参考' : '参考';
+  }
   if (iv.semantic_role === 'relay_start_boundary') return '首·接力';
   if (iv.semantic_role === 'hard_end_boundary') return '尾帧';
   return '首帧';
 }
 function ivTitle(iv: any) {
   const role = iv.semantic_role === 'reference_only'
-    ? '参考（不钉死画面）'
+    ? (iv.source_type === 'character_look'
+        ? '人物参考（provenance——非首帧槽）'
+        : '参考（不钉死画面）')
     : iv.semantic_role === 'relay_start_boundary'
       ? '接力边界（上一镜真实尾帧）'
       : iv.semantic_role === 'hard_end_boundary' ? '硬尾帧边界' : '硬首帧边界';
@@ -1660,12 +1694,17 @@ function ivTitle(iv: any) {
 .video-version { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; &.final { border-color: #4ade80; } }
 .vv-thumb { width: 72px; aspect-ratio: 16/9; border-radius: 4px; object-fit: cover; background: var(--bg-root); flex-shrink: 0; cursor: pointer; &.previewing { outline: 2px solid var(--accent); outline-offset: 1px; } }
 .vv-info { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex: 1; }
-.vv-inputs { display: flex; gap: 5px; flex-shrink: 0; }
+.vv-inputs { display: flex; gap: 5px; flex-shrink: 0; align-items: center; }
+.vv-inputs-head { font-size: 9px; color: var(--text-muted); white-space: nowrap; cursor: help; }
 .vv-input { position: relative; width: 52px; aspect-ratio: 16/9; border-radius: 4px; overflow: hidden; border: 2px solid #4ade80; flex-shrink: 0;
   img { width: 100%; height: 100%; object-fit: cover; display: block; }
   &.refmark { border-color: #fbbf24; }   // 参考图标记（琥珀）
   &.relay { border-color: #60a5fa; }      // 接力边界（蓝）
   .iv-tag { position: absolute; bottom: 0; left: 0; right: 0; font-size: 8px; color: #fff; background: rgba(0,0,0,0.55); text-align: center; padding: 0 1px; } }
+.ff-role-badge { position: absolute; top: 6px; right: 8px; font-size: 10px; padding: 1px 7px; border-radius: 9px; border: 1px solid; background: rgba(0,0,0,0.55); pointer-events: none;
+  &.reference { color: #fbbf24; border-color: #fbbf24; }   // 参考（琥珀）
+  &.relay { color: #60a5fa; border-color: #60a5fa; }       // 接力（蓝）
+  &.hard { color: #34d399; border-color: #34d399; } }      // 硬边界（绿）
 .vv-no { font-size: 11px; font-weight: 600; color: var(--text-secondary); font-family: monospace; }
 .vv-ret { color: var(--text-muted); }
 .vv-final { color: #4ade80; font-weight: 600; }
