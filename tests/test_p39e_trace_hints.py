@@ -186,12 +186,13 @@ def test_skill_anchor_relay_first_frame_rules():
     assert "组首镜默认参考直生" in t
 
 
-def test_relay_sync_helper_exists_and_writes_slot(tmp_path):
-    """_sync_relay_first_frame：接力完成后首帧槽 = 上镜尾帧（追加批次+选中+mark_done）。"""
+def test_first_frame_slot_sync_by_role(tmp_path):
+    """泛化首帧槽同步：接力边界→[接力边界]；尾帧作参考→[参考]；人物图/硬首帧→不同步。"""
     import asyncio
-    from src.core.models import Project, Scene, Shot, StyleAnchor, Asset, ShotStatus
+    from src.core.models import (Project, Scene, Shot, StyleAnchor, Asset,
+                                 ShotStatus, VideoVersion)
     from src.core.store import ProjectStore
-    from routers.shots import _sync_relay_first_frame
+    from routers.shots import _sync_first_frame_slot
     pdir = tmp_path / "proj"
     pdir.mkdir()
     c01 = Shot(shot_id="s01_c01", scene_id="s01", index=1, description="A",
@@ -203,14 +204,42 @@ def test_relay_sync_helper_exists_and_writes_slot(tmp_path):
     ProjectStore(pdir).save(Project(name="p", style=StyleAnchor(),
                                     scenes=[Scene(scene_id="s01", shots=[c01, c02])]))
     store = ProjectStore(pdir)
-    relay_iv = {"slot": "first", "semantic_role": "relay_start_boundary",
-                "url": "https://h/tail.jpg", "source_shot_id": "s01_c01"}
-    asyncio.run(_sync_relay_first_frame(store, "s01_c02", relay_iv, "vv_b", None))
-    proj = store.load()
-    sh = proj.get_shot("s01_c02")
-    assert sh.selected_first_frame == sh.first_frame_batches[-1].candidates[0].candidate_id
+
+    def mk_version(ivs):
+        return VideoVersion(version_id="vv_x", local="v.mp4", status="done",
+                            input_visuals=list(ivs))
+
+    # 1) 接力边界 → 同步 + [接力边界] 标记 + 解析上镜尾帧 local
+    vv = mk_version([{"slot": "first", "semantic_role": "relay_start_boundary",
+                      "url": "https://h/tail.jpg", "source_shot_id": "s01_c01"}])
+    asyncio.run(_sync_first_frame_slot(store, "s01_c02", vv, "vv_x", None))
+    sh = store.load().get_shot("s01_c02")
     assert sh.first_frame.status == "done"
     assert sh.first_frame.selected.url == "https://h/tail.jpg"
-    assert "接力边界" in sh.first_frame_batches[-1].prompt_snapshot
+    assert sh.first_frame.selected.local == "e.jpg"   # 解析了上镜尾帧本地路径
+    assert "[接力边界]" in sh.first_frame_batches[-1].prompt_snapshot
     # 分镜历史保留（追加不是覆盖）
     assert len(sh.first_frame_batches) >= 1
+
+    # 2) 尾帧作参考（reference_only + prev_tail source）→ 同步 + [参考] 标记
+    vv.input_visuals = [{"slot": "reference", "semantic_role": "reference_only",
+                         "url": "https://h/tail2.jpg",
+                         "source_type": "prev_tail_reference",
+                         "source_shot_id": "s01_c01"}]
+    asyncio.run(_sync_first_frame_slot(store, "s01_c02", vv, "vv_y", None))
+    sh = store.load().get_shot("s01_c02")
+    assert "[参考]" in sh.first_frame_batches[-1].prompt_snapshot
+    assert sh.first_frame.selected.url == "https://h/tail2.jpg"
+
+    # 3) 人物图参考 → 不同步（槽内不变；人物图由 Binding 携带）
+    before = sh.selected_first_frame
+    vv.input_visuals = [{"slot": "reference", "semantic_role": "reference_only",
+                         "url": "https://h/hero.jpg", "source_type": "character_look"}]
+    asyncio.run(_sync_first_frame_slot(store, "s01_c02", vv, "vv_z", None))
+    assert store.load().get_shot("s01_c02").selected_first_frame == before
+
+    # 4) 硬首帧 → 不同步（槽内已是实际输入）
+    vv.input_visuals = [{"slot": "first", "semantic_role": "hard_start_boundary",
+                         "url": "https://h/own.jpg"}]
+    asyncio.run(_sync_first_frame_slot(store, "s01_c02", vv, "vv_w", None))
+    assert store.load().get_shot("s01_c02").selected_first_frame == before

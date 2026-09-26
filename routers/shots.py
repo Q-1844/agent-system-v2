@@ -530,38 +530,68 @@ async def _extract_video_end_frame(project_dir, shot_id, video_local, version_id
                      error=f"末帧托管失败: {e}"), False
 
 
-async def _sync_relay_first_frame(store, shot_id: str, relay_iv: dict,
-                                  version_id: str, emit=None) -> None:
-    """接力视频完成后，把首帧槽同步为真实首帧（上镜尾帧，39E 用户定版：
-    接力镜的首帧槽填上一镜尾帧，分镜图若与实际首帧不符以实际为准）。
-    追加候选（保留分镜图历史）+ 选中尾帧 + first_frame.mark_done。"""
+async def _sync_first_frame_slot(store, shot_id: str, version, version_id: str,
+                                 emit=None) -> None:
+    """39E（用户定版）：视频完成后，首帧槽如实同步为【生成该视频实际用的开场图】。
+    按 input_visuals（adapter 权威语义）分角色处理：
+      - relay_start_boundary（组内接续：上镜尾帧进首帧槽）→ 同步，标记[接力边界]；
+      - reference_only 且 source=上镜尾帧 → 同步，标记[参考]（尾帧作参考不钉死）；
+      - reference_only 且 source=人物图（character_look）→ 不同步（人物图不进槽）；
+      - reference_only 且 URL 已是当前首帧槽内容 → 幂等跳过；
+      - hard_start_boundary → 槽内已是实际输入，无需同步。
+    追加批次（保留历史）+ 选中 + mark_done；任何异常不阻断视频成功。"""
     from src.core.models import Candidate, ImageBatch, ShotStatus
     import time as _time
-    tail_url = relay_iv.get("url") or ""
-    tail_local = None
-    # 上镜尾帧本地文件（video_end_frame.local）优先，取不到则仅 URL
-    src_shot_id = relay_iv.get("source_shot_id")
-    if src_shot_id:
-        prev = store.load().get_shot(src_shot_id)
+    ivs = list(getattr(version, "input_visuals", None) or [])
+    start = None
+    role_label = None
+    for iv in ivs:
+        sr = str(iv.get("semantic_role") or "")
+        st = str(iv.get("source_type") or "")
+        if sr == "relay_start_boundary":
+            start, role_label = iv, "[接力边界] 实际首帧 = 上镜真实尾帧"
+            break
+        if sr == "reference_only":
+            if st == "character_look":
+                return   # 人物图不进首帧槽（身份由 Binding 携带）
+            start, role_label = iv, "[参考] 实际开场参考图（不钉死首帧）"
+            break
+        if sr == "hard_start_boundary":
+            return   # 槽内已是实际输入
+    if start is None:
+        return
+    url = start.get("url") or ""
+    local = start.get("local") or None
+    # 接力边界：解析上镜尾帧本地文件（显示与后续 i2v 复用都需要 local）
+    if start.get("semantic_role") == "relay_start_boundary" and start.get("source_shot_id"):
+        prev = store.load().get_shot(start["source_shot_id"])
         if prev is not None and prev.video_end_frame.local:
-            tail_local = prev.video_end_frame.local
+            local = prev.video_end_frame.local
+    if not url and not local:
+        return
+    # 幂等：当前选中首帧已是该图 → 跳过
+    proj = store.load()
+    sh = proj.get_shot(shot_id)
+    if sh is not None:
+        cur = sh.first_frame.selected
+        if cur is not None and (cur.url or "") == url and cur.status == ShotStatus.DONE.value:
+            return
     now = _time.time()
-    batch_id = f"batch_relayff_{uuid.uuid4().hex[:6]}"
-    cand_id = f"cand_relayff_{uuid.uuid4().hex[:6]}"
+    batch_id = f"batch_ffsync_{uuid.uuid4().hex[:6]}"
+    cand_id = f"cand_ffsync_{uuid.uuid4().hex[:6]}"
     batch = ImageBatch(
         batch_id=batch_id, kind="first_frame", created_at=now, status="ready",
-        prompt_snapshot=f"[relay sync] 实际首帧 = 上镜 {src_shot_id} 尾帧（接力边界，版本 {version_id}）",
-        candidates=[Candidate(candidate_id=cand_id, local=tail_local,
-                              url=tail_url, status=ShotStatus.DONE.value,
-                              created_at=now)])
+        prompt_snapshot=f"{role_label}（版本 {version_id}）",
+        candidates=[Candidate(candidate_id=cand_id, local=local, url=url,
+                              status=ShotStatus.DONE.value, created_at=now)])
     def _mut(s):
         s.first_frame_batches.append(batch)
         s.selected_first_frame = cand_id
-        s.first_frame.mark_done(local=tail_local or "", url=tail_url)
+        s.first_frame.mark_done(local=local or "", url=url)
         s.first_frame.status = ShotStatus.DONE.value
     store.update_shot(shot_id, _mut)
     if emit:
-        await emit("relay_sync", f"{shot_id} 首帧槽已同步为上镜尾帧（接力边界）", None)
+        await emit("first_frame_sync", f"{shot_id} 首帧槽已同步为实际开场输入（{role_label}）", None)
 
 
 async def _await_first_frame_url(store, shot_id, emit, timeout=180, interval=5):
@@ -1689,18 +1719,13 @@ async def _handler_video(job, emit):
     store.update_shot(job.shot_id, mut)
     await emit("done", f"{shot.shot_id} 完成（版本 {vvid}），实际 {res['seconds']}s / {res['size']}", 100)
 
-    # Phase 39E（用户定版）：接力视频的首帧槽 = 实际首帧（上镜真实尾帧）。
-    # input_visuals 记录 relay_start_boundary 时，把上镜尾帧作为首帧槽的选中候选
-    # 同步进 canonical——分镜工作台显示的"首帧"必须是生成该视频真实使用的首帧，
-    # 而不是一张从未进入生成的分镜图（39E 用户反馈实证）。
+    # Phase 39E（用户定版）：首帧槽如实同步为生成该视频实际用的开场输入——
+    # 接续=上镜尾帧（接力边界标记）；上镜尾帧作参考=同步并带参考标记；
+    # 人物图不进槽；硬首帧槽内已对齐。系统只如实记录显示，不限制用法。
     try:
-        _ivs = new_vv.input_visuals or []
-        _relay = next((iv for iv in _ivs
-                       if iv.get("semantic_role") == "relay_start_boundary"), None)
-        if _relay and _relay.get("url"):
-            await _sync_relay_first_frame(store, job.shot_id, _relay, vvid, emit)
+        await _sync_first_frame_slot(store, job.shot_id, new_vv, vvid, emit)
     except Exception as e:
-        logger.warning(f"{shot.shot_id} 接力首帧槽同步异常（不影响视频完成）: {e}")
+        logger.warning(f"{shot.shot_id} 首帧槽同步异常（不影响视频完成）: {e}")
 
     # Phase 6A：提取实际视频末帧（供下游镜头接力）。失败不影响视频成功状态，独立 error + 可 retry。
     try:
