@@ -49,7 +49,8 @@ Scene Agent 按【场景依赖条件】参与，不是每轮必跑：
    5. Vision 证据（尾帧 11 维评估 / visual.review_shot）——证据不是裁定
    6. 综合判断（叙事/情绪/状态/机位/负面约束 + MAE 经验区间）
    7. 三档裁定 → none / minor / major
-   8. trace 落档 calibration.trace_upsert（裁定枚举字段非空——裁定是验收对象）
+   8. trace 落档 calibration.trace_upsert（裁定枚举字段非空——裁定是验收对象）；
+      落档后 calibration.trace_read 复读本镜 link，确认裁定字段确实存在
         ↓
    none  → 按预编剧继续（自动推进）
    minor → accept+adapt：预编剧首句自然吸收，零文字修改零重试，自动继续
@@ -72,6 +73,12 @@ Scene Agent 按【场景依赖条件】参与，不是每轮必跑：
 - **expected_tail**：预编剧冻结的"本镜结束时画面应收在什么状态"（校准元数据）。
 - **tail_to_first_mae**：上镜实际尾帧→本镜实际首帧的接缝测量值（128 灰度
   BICUBIC 逐像素绝对差均值，版本 `gray128_bicubic_v1_phase38`）——**接续性指标**。
+  🔴 **唯一权威口径（39F 定版）**：生产流程的 seam 数值（Skill 判断 / Producer
+  汇报 / trace / 最终报告）一律读 `calibration.seam_measure`（测量本体
+  `src/storyboard/continuity_service.py`，确定性零 LLM）。禁止自己另写 ffmpeg
+  抽帧参数、重新实现 resize/灰度/MAE、或用另一套脚本算一个数再来裁定；人工
+  可做独立研究复测，但复测值不得写成 production trace 的 authoritative seam
+  value。seam MAE 是证据，不直接决定 minor/major——叙事状态仍由视觉/故事判断。
 - **end_to_end_mae**：本镜端点构图漂移——**另一个量，禁止与 tail_to_first_mae
   混写**（38 §17.3 教训：旧 mae_prev 量的是构图漂移不是接续性）。
 - **MAE 经验区间（参照不是分类器）**：同场景正常接力 ≈2（近零带 1.7-2.4）；
@@ -89,14 +96,19 @@ Scene Agent 按【场景依赖条件】参与，不是每轮必跑：
 - **relay 适用性（先判 continuity intent）**：intentional cinematic cut
   （构图切换/insert/POV/reaction/跨场景切换）不强制 prev_tail——该镜用自身
   参考直生（REFERENCE_ONLY），trace 记 continuity_type=intentional_cut。
-- **组（group，约定）**：段即组，系统不强制。组内非首镜默认尾帧接力
-  （上一镜真实尾帧进本镜首帧槽）；组首镜的图作参考优先（带标记）或作首帧；
-  跨组首镜用新参考图/新首帧图，不用上组尾帧作边界（上组尾帧需运镜衔接时
-  作参考，带标记）。
+- **组（group，约定）**：Story segment / Scene 只可作为默认分组提示；组的
+  真实连续性语义由镜头间是否承接上一条真实 `video_end_frame` 决定（系统不存
+  group canonical、不强制）。因此：同段 + 接力 → 同组；同段 + intentional_cut
+  → 可开新组；跨段 + 显式接力 → 技术上仍是连续组；跨段 + 新参考/新首帧 →
+  新组。组内非首镜默认尾帧接力（上一镜真实尾帧进本镜首帧槽）；组首镜的图
+  作参考优先（带标记）或作首帧；新组首镜用新参考图/新首帧图，不用上组尾帧
+  作边界（上组尾帧需运镜衔接时作参考，带标记）。
 - **插曲（interlude）**：尾态大偏离时插入的正式过渡镜（一或多镜、时长可比
   常规更长），从偏离尾帧接力、逐镜把故事拉回剧本轨道。剧本与故事段不变；
   插曲有完整六要素小冻结、正常接力与 trace，purpose=interlude，自主推进。
-- **检查点节奏**：长故事按段落向用户汇报 none/minor/major 计数 + 当前接缝值。
+- **检查点节奏**：长故事按段落向用户汇报 none/minor/major 计数 + 当前接缝值
+  ——汇报的计数与接缝值必须读取 calibration.trace_read 的 trace 事实，
+  不转述 Director 的口头总结（39F 定版）。
 
 ## 决策模型（三档裁定）
 
@@ -134,7 +146,12 @@ Producer 按档执行编排策略：
   加载了方法 ≠ 执行完方法，zero-write 纠偏话语不是交付物）；
 - 重试/重生成的旧 attempt 用 archive_existing=true 归档（历史不覆盖）；
 - 下游接缝全部复查（级联无遗漏）；
-- 检查点统计已按段落向用户汇报。
+- 检查点统计已按段落向用户汇报；
+- **收尾自检（Skill-local，39F 定版——系统无任何 hook 兜底，这是唯一发现点）**：
+  本镜即将交棒/收尾前，calibration.trace_read 复读本镜 link：裁定枚举字段
+  缺失 → 立即补做裁定并 trace_upsert；视频已生成完成但本镜 trace 完全不存在
+  → 同样立即补做 review/adjudication/trace，再交 Producer。未使用本 Skill 的
+  普通 Director 操作不适用本条（零干扰）。
 
 ## 失败模型与事故教训（Failure Model）
 

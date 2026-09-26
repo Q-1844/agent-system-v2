@@ -30,6 +30,13 @@
 明确的电影式 hard cut 不是 continuity failure：在 trace 记
 continuity_type=intentional_cut，不强求近零 MAE。
 
+🔴 **Bridge 前提（39F 定版）**：插桥的前提不是「画面差得大」，而是
+【A 端点必须保留 + B 端点必须保留 + 两者业务上必须连续过渡】三者同时成立。
+因此 intentional cut / new group / deliberate location jump / montage cut
+默认**不是** bridge repair——「跨 Location」本身不构成插桥理由（跨 Location
+【且】业务要求连续过渡才在列）。保留既有纪律：双端证据、桥时长 ≥10s、
+≥3 段中间节拍、seed 后禁止 refresh binding。
+
 ## 参与者与角色
 
 | Agent | 角色 | 职责 |

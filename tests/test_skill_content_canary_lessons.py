@@ -78,10 +78,13 @@ def test_interlude_doctrine():
 
 
 def test_group_convention_light():
-    k = _t(_RELAY_SKILL)
+    """组约定轻量锚点（39F 软语义定版：组真实性由是否承接上一条真实尾帧决定）。"""
+    k = " ".join(_t(_RELAY_SKILL).split())   # 归一化换行（文本锚点跨行友好）
     assert "组（group，约定）" in k
-    assert "系统不强制" in k
-    assert "跨组首镜用新参考图/新首帧图" in k
+    assert "不存 group canonical、不强制" in k          # 系统不做强制（语义保留）
+    assert "由镜头间是否承接上一条真实 `video_end_frame` 决定" in k
+    assert "跨段 + 显式接力" in k
+    assert "新组首镜用新参考图/新首帧图" in k
 
 
 def test_slot_semantics_every_video():
