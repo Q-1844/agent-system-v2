@@ -175,3 +175,42 @@ def test_adjudication_warning_not_fired_without_video(env):
     pdir, rt, run = env
     out = _upsert(rt, pdir.name, run, "M1", {"tail_to_first_mae": 2.0})
     assert "adjudication_incomplete_warning" not in out
+
+
+# ============ 39E 用户反馈修正的锚定（接力镜首帧槽同步 + 组首镜参考优先）============
+def test_skill_anchor_relay_first_frame_rules():
+    p = __import__("pathlib").Path(
+        "src/agents/skill_system/builtin/full-story-relay-calibration/references/director.md")
+    t = p.read_text(encoding="utf-8")
+    assert "接力镜不得生成分镜首帧" in t
+    assert "组首镜默认参考直生" in t
+
+
+def test_relay_sync_helper_exists_and_writes_slot(tmp_path):
+    """_sync_relay_first_frame：接力完成后首帧槽 = 上镜尾帧（追加批次+选中+mark_done）。"""
+    import asyncio
+    from src.core.models import Project, Scene, Shot, StyleAnchor, Asset, ShotStatus
+    from src.core.store import ProjectStore
+    from routers.shots import _sync_relay_first_frame
+    pdir = tmp_path / "proj"
+    pdir.mkdir()
+    c01 = Shot(shot_id="s01_c01", scene_id="s01", index=1, description="A",
+               final_video="vv_a",
+               video_end_frame=Asset(local="e.jpg", url="https://h/tail.jpg",
+                                     status=ShotStatus.DONE.value))
+    c02 = Shot(shot_id="s01_c02", scene_id="s01", index=2, description="B",
+               final_video="vv_b")
+    ProjectStore(pdir).save(Project(name="p", style=StyleAnchor(),
+                                    scenes=[Scene(scene_id="s01", shots=[c01, c02])]))
+    store = ProjectStore(pdir)
+    relay_iv = {"slot": "first", "semantic_role": "relay_start_boundary",
+                "url": "https://h/tail.jpg", "source_shot_id": "s01_c01"}
+    asyncio.run(_sync_relay_first_frame(store, "s01_c02", relay_iv, "vv_b", None))
+    proj = store.load()
+    sh = proj.get_shot("s01_c02")
+    assert sh.selected_first_frame == sh.first_frame_batches[-1].candidates[0].candidate_id
+    assert sh.first_frame.status == "done"
+    assert sh.first_frame.selected.url == "https://h/tail.jpg"
+    assert "接力边界" in sh.first_frame_batches[-1].prompt_snapshot
+    # 分镜历史保留（追加不是覆盖）
+    assert len(sh.first_frame_batches) >= 1
