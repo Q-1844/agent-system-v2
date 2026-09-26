@@ -444,6 +444,13 @@ _SHOT_FIELDS_PROPS = {
                       "description": "主体起始状态（姿态/朝向/表情）。"},
     "important_details": {"type": "string",
                           "description": "重要细节/情绪氛围/质感。"},
+    "negative_prompt": {"type": "string",
+                        "description": ("负面约束短语串（逗号分隔，如「空无一人, 禁动物, "
+                                        "禁现代建筑」）——视频生成的正式负面约束 API 参数"
+                                        "（native AV 请求独立携带）。预编剧冻结的负面约束"
+                                        "必须在提交生成前落进本字段；只写进 note/trace "
+                                        "生成端拿不到（39C 实证）。"),
+                        },
 }
 
 _SHOT_CREATE_ITEMS_SCHEMA = {
