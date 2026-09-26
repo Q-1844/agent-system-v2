@@ -155,10 +155,26 @@ def _precheck_targets(proj, targets: list, *, kind: str, force: bool) -> tuple[l
                 blocked.append({**t, "status": "locked", "ok": False, "verified": False,
                                 "error": "镜头已锁定"})
                 continue
+            if str(getattr(shot, "link_mode", "") or "") == "multi":
+                # multi 不消费 boundary frames（video_adapter：参考即视觉输入，
+                # 非 first-frame conditioning）——首帧不是前置（39D 用户定版：
+                # 首镜无分镜直生，角色+大致场景到位即可，严格限制伤首镜效果）。
+                # relay 媒体就绪在此把关（缺失 fail closed 与 adapter 同口径）。
+                if str(getattr(shot, "video_reference_asset_id", "") or "") == "prev_tail":
+                    from src.generation.video_adapter import resolve_multi_relay_source
+                    if resolve_multi_relay_source(proj, shot) is None:
+                        blocked.append({**t, "status": "blocked", "ok": False,
+                                        "verified": False,
+                                        "error": ("relay 未就绪：vref=prev_tail 需要"
+                                                  "上一镜实际视频末帧（先完成上一镜"
+                                                  "生成与末帧提取）")})
+                        continue
+                submittable.append(t)
+                continue
             if not _effective_first_frame_url(proj, shot):
                 blocked.append({**t, "status": "blocked", "ok": False, "verified": False,
-                                "error": ("开场画面未就绪：视频需要先生成并选择首帧"
-                                          "（inherit 接力镜头需来源镜头末帧就绪）")})
+                                "error": ("开场画面未就绪：i2v/keyframes 模式需要先生成"
+                                          "并选择首帧（inherit 接力镜头需来源镜头末帧就绪）")})
                 continue
         submittable.append(t)
     return submittable, blocked
@@ -303,38 +319,43 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
         submittable = allowed
         blocked = blocked + policy_blocked
 
-    # ---- Phase 39D（HANDOFF §3.3）：prompt-reference 姿态冲突预检 ----
-    # night_cloak / P39C s01 实证：静态站姿身份参考 × 飞行/奔跑类镜头文本 →
-    # 模型把主体拽回参考姿态（镜内硬切）。bound_required 图片生成下阻断提交；
-    # 其余路径附结构化 warning 进回执（skill §0：收到预警停下处置，不带冲突
-    # 生成）。预检只读，自身失败绝不阻断。
-    from src.agents.pregen_checks import shot_pose_reference_conflict
-    pose_warnings: list = []
+    # ---- Phase 39D 修正（用户定版）：输入语义分类 + 分角色检查口径 ----
+    # reference_only（multi 参考槽 / 分镜图 refs）：姿态命中只记 soft 诊断
+    # （pose_reference_mismatch_soft）——绝不阻断/不要求补参考/不升级 major/
+    # 不请用户改故事；relay 边界不做姿态预判（生成后接缝校验）；仅硬首帧槽
+    # 的确定性边界冲突阻断。预检只读，自身失败绝不阻断生成。
+    from src.agents.pregen_checks import shot_input_semantics
+    reference_roles: list = []
+    pose_soft: list = []
     still_ok: list = []
     for t in submittable:
-        conflict = None
+        sem = None
         try:
             _shot_obj = proj.get_shot(t["shot_id"])
             if _shot_obj is not None:
-                conflict = shot_pose_reference_conflict(pdir, pdir.name, _shot_obj)
+                sem = shot_input_semantics(pdir, pdir.name, proj, _shot_obj)
         except Exception:
-            conflict = None
-        if conflict is None:
+            sem = None
+        if sem is None:
             still_ok.append(t)
             continue
-        if is_image and reference_policy == "bound_required":
+        reference_roles.append(sem)
+        if sem.get("boundary_conflict") is not None:
             blocked.append({
-                **t, "status": "pose_reference_conflict", "ok": False,
-                "verified": False, "error": "pose_reference_conflict",
-                "pose_conflict": conflict,
-                "fix_hint": ("参考姿态与镜头动作冲突（静态姿态参考 × 位移动作）。"
-                             "先补动作匹配参考（多姿态 Look）并用 shot.update 把 "
-                             "video_reference_asset_id 指向它，或换参考；确属误报时"
-                             "改用 reference_policy=legacy_allowed 并在 trace 记录"
-                             "原因。不要原样重试。")})
-        else:
-            pose_warnings.append({**t, **conflict})
-            still_ok.append(t)
+                **t, "status": "hard_start_boundary_conflict", "ok": False,
+                "verified": False, "error": "hard_start_boundary_conflict",
+                "boundary_conflict": sem["boundary_conflict"],
+                "pose_gate": sem.get("pose_gate"),
+                "fix_hint": ("硬首帧边界与 opening 状态冲突（静态姿态参考资产被"
+                             "选作首帧 × 位移动作开场）。重新选择/生成符合 opening "
+                             "的首帧，或改用不需要硬首帧的 mode（multi 直生），"
+                             "或如实报告 provider 限制。不得因此改写故事。")})
+            continue
+        if sem.get("soft_conflict") is not None:
+            pose_soft.append({"shot_id": t["shot_id"],
+                              "diagnostic": "pose_reference_mismatch_soft",
+                              **sem["soft_conflict"]})
+        still_ok.append(t)
     submittable = still_ok
 
     # 提交：origin_run_id = 每目标唯一 marker（ImageBatch/VideoVersion 记录同值，
@@ -492,14 +513,12 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
                  "可稍后用 shot.list 查看最新状态。")
     if is_image and done_items:
         note += " 首帧候选已自动选中第一张（可在分镜页更换）；图片请用户在 UI 中查看验收。"
-    if pose_warnings:
-        note += (" ⚠️ 姿态冲突预警：" + "；".join(
-            f"{w['shot_id']} 静态姿态参考×位移动作"
-            f"（{'/'.join(w['matched_motion_keywords'][:3])}）"
-            for w in pose_warnings)
-            + "——identity 可能被参考姿态拽回（P39C s01/night_cloak 实证）；"
-              "按 skill §0 处置（补动作匹配参考并 video_reference_asset_id 指向它，"
-              "或换参考）后再继续链路。")
+    if pose_soft:
+        note += (" 提示：" + "；".join(
+            f"{w['shot_id']} 参考姿态 soft 风险（pose_reference_mismatch_soft，"
+            f"{'/'.join(w['matched_motion_keywords'][:2])}）" for w in pose_soft)
+            + "——参考为身份语义不约束首帧姿态，由 prompt+negative_prompt "
+              "steering，生成后按 actual tail 裁定。")
 
     return _base_receipt(
         op, ok=ok, target=",".join(t["shot_id"] for t in targets),
@@ -509,7 +528,8 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
         cancelled=cancelled, timed_out=timed_out,
         reference_policy=reference_policy if is_image else None,
         **({"variants": variants} if is_image else {}),
-        pose_reference_warnings=pose_warnings,
+        reference_roles=reference_roles,
+        pose_soft_diagnostics=pose_soft,
         elapsed_s=elapsed, note=note)
 
 

@@ -35,9 +35,12 @@ Scene Agent 按【场景依赖条件】参与，不是每轮必跑：
                 duration_s/opening intent/negative constraints）
         ↓
 [Director] 逐镜循环（禁止跳步）：
-   1. 提交前双预检：参考姿态↔镜头动作匹配 + 场景参考↔冻结 description
-      逐项对照（冲突停下报告，不带冲突生成）；负面约束经 shot.update
-      写进 negative_prompt 字段
+   1. 输入角色分类：REFERENCE_ONLY（multi 参考槽/Look 场景参考）/
+      HARD_START_BOUNDARY（i2v 首帧）/ HARD_END_BOUNDARY（keyframes 尾帧）/
+      RELAY_START_BOUNDARY（上一镜真实末帧）——按角色套口径：
+      reference-only 姿态命中只记 pose_reference_mismatch_soft 诊断（不阻断
+      不要求补参考不改故事）；硬首帧姿态冲突才阻断处置；relay 由生成后接缝
+      校验；负面约束写进 negative_prompt 字段
    2. 提交生成 shot.generate_videos（multi 显式 link_mode=multi，
       尾帧接力=video_reference_asset_id=="prev_tail"）
    3. 等末帧就绪（extract 自动托管）
@@ -80,6 +83,9 @@ Scene Agent 按【场景依赖条件】参与，不是每轮必跑：
 - **cascade（级联）**：relay 在生成时刻快照上镜尾帧，上游重生成不自动传播；
   重生成链中任何已有下游镜头的镜，必须先声明 cascade risk，新尾帧就绪后
   必须检查下游接缝。
+- **relay 适用性（先判 continuity intent）**：intentional cinematic cut
+  （构图切换/insert/POV/reaction/跨场景切换）不强制 prev_tail——该镜用自身
+  参考直生（REFERENCE_ONLY），trace 记 continuity_type=intentional_cut。
 - **检查点节奏**：长故事按段落向用户汇报 none/minor/major 计数 + 当前接缝值。
 
 ## 决策模型（三档裁定）
@@ -134,12 +140,16 @@ Producer 按档执行编排策略：
 5. **Shadow Replay 纪律**：Agent 批量评测必须沙盒隔离、每决策点独立全新
    会话；委派 envelope 必须携带明确 shot_id 映射；纯审查意图走 Clean Review，
    有显式 mutation 意图（校准/落档/修复/重试/插桥）走正常 tool-loop。
-6. **P39C Canary 实证（2026-09-25，亲眼看图归档 manual_review_20260925）**：
-   a) **prompt-reference 姿态冲突**——静态站姿身份参考 × 飞行类镜头文本，
-   模型把主体拽回参考姿态，镜内飞行→站姿硬切（night_cloak 同类两次实证）
-   ——提交前参考姿态匹配核对是硬步骤（§0 预检）；
+6. **P39C Canary 实证（2026-09-25，亲眼看图归档 manual_review_20260925）+ P39D
+   语义修正**：
+   a) **输入角色误判是 39C/39D 两轮的核心教训**——39C s01 的真实缺陷是
+   steering 缺位（负面约束没进 negative_prompt 字段）与冻结↔SIV 无人核对，
+   不是"站姿参考必须先补"。把 REFERENCE_ONLY 的 Look 参考当硬首帧边界，
+   会导致生成前错误阻断/错误要求补飞行参考/错误请用户改故事（39D 已纠正：
+   参考姿态命中只记 pose_reference_mismatch_soft，生成后按 actual tail 裁定；
+   仅反复实证 pose dominance 后才把补动作参考作为可选建议）；
    b) **冻结↔场景参考冲突无人核对**——SIV 含森林湖泊 vs 冻结"纯天空"，
-   生成前无任何一道检查比对两者——bind 前逐项对照（§0 预检）；
+   生成前无任何一道检查比对两者——bind 前逐项对照（语义真值轴，照常执行）；
    c) **像素接缝≠内容接缝**——接力镜钉在漂移尾帧上，MAE 照样低位，但语义链
    已断——接缝测量之外必须核对 expected_tail↔实际尾帧的语义一致性；
    d) **结构纪律**——段=地点/叙事单元、段内多镜（建立-发展-收束），禁止

@@ -4,35 +4,53 @@
 生成完成后，依次完成以下链路，**禁止跳步**：
 
 ```
-提交前双预检 → 提交生成 → 等末帧就绪 → 接缝测量 → Vision 评估（证据）
+输入角色分类 → 提交生成 → 等末帧就绪 → 接缝测量 → Vision 评估（证据）
 → 综合判断 → 三档裁定 → trace 记录 → 交 Producer 决定下一状态
 ```
 
-## 0) 提交前双预检（P39C Canary 实证——不带冲突生成）
+## 0) 输入角色分类（提交前必做——先分清图片是什么角色，再做对应检查）
 
-生成提交前完成两项逐字核对 + 一项字段落库，任一冲突都【停下报告 Producer】，
-不带冲突提交：
+视觉输入有四种完全不同的角色，检查口径互不通用。先按真实 dispatch 语义分类
+（依据 video_adapter/agnes_client 的真实路径，不是猜）：
 
-1. **参考姿态 ↔ 镜头动作匹配**：approved Look 参考的姿态描述（如"站姿正面"）
-   与本镜 description/motion 的动作语义对照。静态站姿/坐姿类参考 × 飞行/奔跑/
-   跳跃类位移动作 = prompt-reference 姿态冲突（P39C s01、night_cloak 两次实证：
-   模型把主体拽回参考姿态，镜内飞行→站姿硬切，major）。处理：补与首镜动作
-   匹配的姿态参考（多姿态 Look：站姿+动作侧视，38 walk_side 先例），用
-   shot.update 把 video_reference_asset_id 指向动作匹配参考，或换参考——
-   不硬冲。shot.generate_* 回执里的 pose_reference_conflict 结构化预警必读
-   必处置（bound_required 图片生成下该冲突直接阻断提交）。
+| 角色 | 识别 | 姿态/状态检查口径 |
+|---|---|---|
+| **REFERENCE_ONLY** | multi 直生镜参考槽（vref 未设 → approved Look hero）；分镜图生成的 Look/场景 refs | **软风险**：命中姿态词表只记 `pose_reference_mismatch_soft` 诊断。🔴 不得阻断、不得要求补参考、不得升级 major、不得请用户改故事、不得改写 Shot 开场 |
+| **HARD_START_BOUNDARY** | i2v 首帧槽（selected first frame）；keyframes first slot | **真边界**：必须满足 opening state。站姿硬首帧 ×「已在云端飞行」开场 = boundary conflict → 换边界帧 / 换 mode / 如实报告 provider 限制 |
+| **HARD_END_BOUNDARY** | keyframes last slot | 尾边界：必须满足 end state |
+| **RELAY_START_BOUNDARY** | multi vref=prev_tail / inherit_previous：上一镜**真实** video_end_frame | **连续性边界**：开场衔接由生成后接缝测量校验，不做姿态关键词预判；Look 等参考不得覆盖 relay 边界 |
 
-2. **场景参考 ↔ 冻结 description 一致性**：bind/生成前用 production.inspect
-   的 SIV 摘要与冻结 description 的地点/构图要素逐项对照（P39C s01 实证：
-   SIV 含森林湖泊 vs 冻结"纯天空"，冲突无人核对直接生成）。冲突二选一修掉：
-   场景侧错 → scene_production_prerequisite 上报（Scene Agent 修场景真相）；
-   冻结侧错 → 报 Producer 让 Script Writer 重新冻结。不带冲突生成。
+关键不变量（P39D 修正，39C 误判教训）：
 
-3. **负面约束进生成字段**：冻结的负面约束（空无一人/禁动物/禁现代物…）必须
-   在提交前经 shot.update 写进 shot.negative_prompt 字段——那是视频生成的
-   唯一正式负面约束通路（独立 API 参数，native AV 请求携带）。只写进 trace
-   或策划文本 = 生成端拿不到 = 没写（P39C 实证）。工具回执 changed 列表里
-   出现 negative_prompt 才算落库成功。
+1. **REFERENCE_ONLY 图告诉模型"是谁/长什么样/在哪里"，不意味着 frame 0 必须
+   复制该图姿态。** 站姿 Look × 飞行镜头 = soft 风险（pose dominance 只是模型
+   倾向假设，不是 production prerequisite）。steering 手段 = prompt + 
+   negative_prompt 字段（首镜飞行 → 「禁站立姿态, 禁地面背景」）。
+2. **negative constraints 约束的是【生成结果】，不是参考资产本身**——不得因
+   参考图里存在站姿而判负面约束冲突；除非该图被选为 HARD_START_BOUNDARY。
+3. **补动作匹配参考只是可选质量策略建议**：只有真实生成反复证明 provider 对
+   站姿 reference 有明显 pose dominance（actual tail 反复被拽回参考姿态），
+   才向用户提出该建议（用户批准的可选项）。不得在生成前提出，更不得把
+   CharacterLook 膨胀成姿态库（站/飞/落/转/走…每个动作一张图 = 生产退化）。
+4. **NONE/MINOR/MAJOR 只对【实际生成的尾帧】裁定**：reference pose mismatch
+   不是裁定对象，actual tail + next-shot enterability 才是。没有 actual 视频
+   之前不存在任何档位。
+5. **intentional cinematic cut 不强制 relay**：构图切换/insert/POV/reaction/
+   跨场景切换的镜，冻结时不做 prev_tail——用自身参考直生（REFERENCE_ONLY），
+   生成后记 continuity_type=intentional_cut。先判 continuity intent，再决定
+   是否 relay。
+
+## 0.5) bind 前场景 ↔ 冻结一致性核对（F1 教训，语义真值轴）
+
+bind/生成前用 production.inspect 的 SIV 摘要与冻结 description 的地点/构图
+要素逐项对照（39C s01 实证：SIV 含森林湖泊 vs 冻结"纯天空"，无人核对直接
+生成）。冲突二选一修掉：场景侧错 → scene_production_prerequisite 上报
+（Scene Agent 修场景真相）；冻结侧错 → 报 Producer 让 Script Writer 重新
+冻结。这是场景语义真值检查，与姿态无关，照常执行。
+
+**负面约束进生成字段**：冻结的负面约束必须在提交前经 shot.update 写进
+shot.negative_prompt 字段——那是视频生成的唯一正式负面约束通路（独立 API
+参数）。只写进 trace 或策划文本 = 生成端拿不到 = 没写（39C 实证）。
 
 ## 1) 接缝测量
 

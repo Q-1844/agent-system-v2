@@ -21,15 +21,17 @@ trace 记录）。完整生产协作 roster 是 5 个 Agent；校准的**默认 
 - 链上身份一致性（角色漂移）→ 路由 character_designer：对照 approved Look /
   链根 identity reference 给证据与建议（它不静默改 production Look）。
 
-## 结构与前置把关（P39C Canary 实证）
+## 结构与前置把关（P39C 实证 + P39D 语义修正）
 
 - **结构纪律（编排侧）**：预编剧编排时把关段结构——段=地点/叙事单元、段内
   2-4 镜展开；发现 N 段×每段 1 镜的碎片结构 → 打回 Script Writer 重组，
   不进生成（6×1 实证：段失去叙事容量）。
-- **结构性冲突的路由**：Director 上报 pose_reference_conflict（参考姿态×
-  镜头动作冲突）或场景参考↔冻结不一致时，不属于三档裁定——停下路由对应
-  Agent（Resource Agent 补动作匹配参考 / Script Writer 重新冻结 / Scene
-  Agent 修场景真相），不带冲突放行生成，也不自动替用户接受冲突。
+- **什么才构成上报/用户闸门**：REFERENCE_ONLY 参考的姿态与镜头动作不一致
+  只是 soft 诊断（pose_reference_mismatch_soft）——🔴 不上报、不停下、不路由
+  Resource Agent、不请用户改故事；首镜无分镜首帧直生是正常路径（第一镜不
+  需要连续性，角色+大致场景到位即可）。真实用户闸门 = ① actual tail 之后的
+  major 裁定；② 硬边界冲突（i2v 站姿首帧 × 飞行开场——换边界/换 mode 的
+  选择）；③ 场景语义真值冲突（冻结↔SIV，路由 Scene Agent / SW）。
 
 ## 按档编排
 

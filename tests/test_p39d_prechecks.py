@@ -1,11 +1,14 @@
-"""Phase 39D 确定性预检（HANDOFF §3.3——prose 不够的地方给牙齿）。
+"""Phase 39D 输入语义预检（用户 2026-09-26 定版：reference ≠ first frame）。
 
-3.3.1 prompt-reference 姿态冲突预检（night_cloak / P39C s01 两次实证）：
-  - 纯检测器 detect_pose_reference_conflict（词表判定）
-  - 解析器 shot_pose_reference_conflict（binding/resources 只读解析）
-  - _execute_generation 接线：bound_required 图片阻断 / legacy 结构化 warning
-3.3.2 negative_prompt 写通路：两层白名单（structure_service + agent 工具层）
-  + update_shot_fields 落库 + 不触发正向 prompt 失效（独立 API 参数）。
+四类视觉输入角色互不共用姿态 gate：
+  A. REFERENCE_ONLY（multi 参考槽/Look 场景参考）：姿态命中只记
+     pose_reference_mismatch_soft——不阻断/不要求补参考/不请用户改故事；
+  B. HARD_START_BOUNDARY（i2v 首帧）：静态参考资产被选作首帧 × 位移动作开场
+     = boundary conflict（阻断级，换边界/换 mode/如实报告）；
+  C. RELAY_START_BOUNDARY（vref=prev_tail）：开场=上一镜真实 video_end_frame，
+     Look 不得覆盖，不做姿态预判；
+  D/E/F（MINOR/MAJOR/Intentional Cut）为 skill 文本锚定，见
+     test_skill_content_canary_lessons.py。
 
 全部 deterministic，0 网络；跨域夹具复用 S3B 系列（make_pdir/_build_scene）。
 """
@@ -17,8 +20,10 @@ from pathlib import Path
 import pytest
 
 from src.agents.director import SHOT_UPDATABLE_FIELDS, _clean_shot_fields
-from src.agents.pregen_checks import (detect_pose_reference_conflict,
-                                      shot_pose_reference_conflict)
+from src.agents.pregen_checks import (classify_video_input_role,
+                                      detect_pose_reference_conflict,
+                                      shot_input_semantics)
+from src.core.models import Asset, ShotStatus
 from src.core.store import ProjectStore
 from src.core.write_lock import _clear_for_test
 from src.resources.models import ReferenceAsset
@@ -40,7 +45,7 @@ def _isolated():
     _clear_for_test()
 
 
-# ============ 3.3.1 纯检测器 ============
+# ============ 纯检测器（角色无关） ============
 def test_detector_static_ref_vs_locomotion_motion():
     c = detect_pose_reference_conflict(
         ["丹顶鹤在晨光中的天空飞行，飞过森林"], [("ref_a", "站姿正面")])
@@ -48,7 +53,6 @@ def test_detector_static_ref_vs_locomotion_motion():
     assert "飞行" in c["matched_motion_keywords"]
     assert c["static_reference_ids"] == ["ref_a"]
     assert c["motion_matched_reference_ids"] == []
-    assert "why" in c
 
 
 def test_detector_static_motion_no_conflict():
@@ -74,26 +78,43 @@ def test_detector_chinese_gliding_word():
     assert "滑翔" in c["matched_motion_keywords"]
 
 
-def test_detector_multi_pose_look_advisory():
-    """38 walk_side 先例：Look 已含动作匹配参考 → 冲突 + 修复通道提示。"""
-    c = detect_pose_reference_conflict(
-        ["丹顶鹤掠过湖面"], [("ref_hero", "站姿正面"), ("ref_side", "walk_side")])
-    assert c is not None
-    assert c["static_reference_ids"] == ["ref_hero"]
-    assert c["motion_matched_reference_ids"] == ["ref_side"]
+# ============ 角色分类（真实 dispatch 语义） ============
+def test_classify_multi_no_relay_is_reference_only():
+    class _S:   # multi + vref=None + 无 relay
+        shot_id = "s01_c01"
+        link_mode = "multi"
+        video_reference_asset_id = ""
+        opening_source = ""
+    role = classify_video_input_role(_S(), None)
+    assert role["generation_mode"] == "multi"
+    assert role["semantic_role"] == "reference_only"
 
 
-def test_detector_empty_inputs_none():
-    assert detect_pose_reference_conflict([""], [("ref_a", "站姿正面")]) is None
-    assert detect_pose_reference_conflict(["飞行"], []) is None
-    assert detect_pose_reference_conflict(None, [("ref_a", "站姿正面")]) is None
+def test_classify_multi_relay_is_relay_boundary():
+    class _S:
+        shot_id = "s01_c02"
+        link_mode = "multi"
+        video_reference_asset_id = "prev_tail"
+        opening_source = ""
+    relay = {"source_shot_id": "s01_c01", "end_source_version": "vv_1", "url": "http://x"}
+    role = classify_video_input_role(_S(), relay)
+    assert role["semantic_role"] == "relay_start_boundary"
+    assert role["relay_source_shot"] == "s01_c01"
 
 
-# ============ 3.3.1 解析器（真实跨域夹具） ============
-def _env_with_standing_ref(tmp_path, extra_motion_ref: bool = False):
-    """make_pdir + 真实场景链 + binding；Alice Look 的 approved 参考标记为
-    静态站姿（P39C s01 同型）。extra_motion_ref=True 时再加一张 walk_side 参考
-    （多姿态 Look）。返回 (pdir, ids)。"""
+def test_classify_i2v_is_hard_start_boundary():
+    class _S:
+        shot_id = "s01_c01"
+        link_mode = "i2v"
+        video_reference_asset_id = ""
+        opening_source = ""
+    assert classify_video_input_role(_S(), None)["semantic_role"] \
+        == "hard_start_boundary"
+
+
+# ============ Case A：multi 直生 + 站姿 Look × 飞行开场 ============
+def _env_bound(tmp_path, extra_motion_ref: bool = False):
+    """make_pdir + 场景链 + binding；Alice Look approved 参考标记站姿。"""
     pdir = make_pdir(tmp_path)
     (pdir / "output" / "scene_system.json").unlink()
     ids = run(_build_scene(pdir))
@@ -111,15 +132,6 @@ def _env_with_standing_ref(tmp_path, extra_motion_ref: bool = False):
         lk = rdoc.looks[LOOK]
         lk.approved_reference_asset_ids.append("ref_side0000001")
         ResourceStore(pdir).put_look(lk)
-    _ensure_bound(pdir, ids)
-    # 镜头动作 = 飞行（P39C s01 同型：站姿参考 × 飞行文本）
-    ProjectStore(pdir).update_shot(
-        "s01_c01",
-        lambda s: setattr(s, "description", "丹顶鹤在晨光中的天空飞行"))
-    return pdir, ids
-
-
-def _ensure_bound(pdir, ids):
     r = run(ShotBindingService(pdir).create_binding_async({
         "shot_id": "s01_c01", "scene_id": "s01",
         "character_bindings": [{"character_name": "Alice", "look_id": LOOK}],
@@ -128,47 +140,26 @@ def _ensure_bound(pdir, ids):
                           "pinned_scene_instance_view_id": ids["sciv_a"]},
         "prop_bindings": []}))
     assert r["ok"]
-    return r
+    ProjectStore(pdir).update_shot(
+        "s01_c01",
+        lambda s: (setattr(s, "link_mode", "multi"),
+                   setattr(s, "description", "丹顶鹤在晨光中的天空滑翔")))
+    return pdir, ids
 
 
-def test_resolver_bound_shot_conflict(tmp_path):
-    pdir, _ids = _env_with_standing_ref(tmp_path)
+def test_caseA_reference_only_soft_not_block(tmp_path):
+    """multi 直生 + 站姿 Look × 飞行开场：soft 诊断，绝不阻断。"""
+    pdir, _ids = _env_bound(tmp_path)
     proj = ProjectStore(pdir).load()
-    shot = proj.get_shot("s01_c01")
-    c = shot_pose_reference_conflict(pdir, pdir.name, shot)
-    assert c is not None
-    assert c["shot_id"] == "s01_c01"
-    assert c["characters"] == ["Alice"]
-    assert "ref_alice000001" in c["static_reference_ids"]
+    sem = shot_input_semantics(pdir, pdir.name, proj, proj.get_shot("s01_c01"))
+    assert sem is not None
+    assert sem["semantic_role"] == "reference_only"
+    assert sem["pose_gate"]["outcome"] == "soft_diagnostic"
+    assert sem["pose_gate"]["applied"] is True
+    assert {i["semantic_role"] for i in sem["input_images"]} == {"reference_only"}
+    assert "boundary_conflict" not in sem, "reference-only 不得产生边界冲突"
 
 
-def test_resolver_unbound_shot_none(tmp_path):
-    pdir, _ids = _env_with_standing_ref(tmp_path)
-    proj = ProjectStore(pdir).load()
-    shot = proj.get_shot("s01_c02")   # 未 binding
-    assert shot_pose_reference_conflict(pdir, pdir.name, shot) is None
-
-
-def test_resolver_motion_matched_ref_advisory(tmp_path):
-    pdir, _ids = _env_with_standing_ref(tmp_path, extra_motion_ref=True)
-    proj = ProjectStore(pdir).load()
-    shot = proj.get_shot("s01_c01")
-    c = shot_pose_reference_conflict(pdir, pdir.name, shot)
-    assert c is not None
-    assert "ref_side0000001" in c["motion_matched_reference_ids"], \
-        "多姿态 Look：walk_side 参考列入修复通道"
-
-
-def test_resolver_never_raises_on_missing_binding(tmp_path):
-    pdir, _ids = _env_with_standing_ref(tmp_path)
-    class _Ghost:
-        shot_id = "nope_c99"
-        description = "飞行"
-        motion = ""
-    assert shot_pose_reference_conflict(pdir, pdir.name, _Ghost()) is None
-
-
-# ============ 3.3.1 _execute_generation 接线 ============
 class _FakeJob:
     def __init__(self, job_id, shot_id):
         self.job_id, self.shot_id = job_id, shot_id
@@ -196,39 +187,137 @@ def _rt(pdir, q):
                         client=None, job_queue_getter=lambda: q)
 
 
+def _gen_videos(rt, pdir, args):
+    from src.agents.director_visual import _execute_shot_generate_videos
+    return run(_execute_shot_generate_videos(rt, pdir.name, json.dumps(args),
+                                             "生成", None))
+
+
 def _gen_images(rt, pdir, args):
     from src.agents.director_visual import _execute_shot_generate_images
     return run(_execute_shot_generate_images(rt, pdir.name, json.dumps(args),
                                              "生成", None))
 
 
-def test_bound_required_blocks_pose_conflict_before_job(tmp_path):
-    pdir, _ids = _env_with_standing_ref(tmp_path)
-    q, rt = _FakeQueue(), None
-    rt = _rt(pdir, q)
-    out = _gen_images(rt, pdir, {
-        "targets": [{"shot_id": "s01_c01", "frame": "first"}],
-        "reference_policy": "bound_required"})
-    assert len(q.submitted) == 0, "姿态冲突：bound_required 提交前拦截，零额度消耗"
-    item = out["results"][0]
-    assert item["error"] == "pose_reference_conflict"
-    assert item["pose_conflict"]["static_reference_ids"]
-    assert "video_reference_asset_id" in item["fix_hint"]
+def test_caseA_wiring_video_proceeds_with_soft_diagnostic(tmp_path):
+    pdir, _ids = _env_bound(tmp_path)
+    q = _FakeQueue()
+    out = _gen_videos(_rt(pdir, q), pdir, {
+        "shot_ids": ["s01_c01"]})
+    assert len(q.submitted) == 1, "reference-only soft 风险不得阻断提交"
+    roles = out.get("reference_roles") or []
+    assert roles and roles[0]["semantic_role"] == "reference_only"
+    assert roles[0]["pose_gate"]["outcome"] == "soft_diagnostic"
+    soft = out.get("pose_soft_diagnostics") or []
+    assert soft and soft[0]["diagnostic"] == "pose_reference_mismatch_soft"
+    assert "pose_reference_mismatch_soft" in (out.get("note") or "")
+    assert "⚠️" not in (out.get("note") or ""), "soft 诊断不得升级为告警口吻"
 
 
-def test_legacy_image_path_carries_structured_warning(tmp_path):
-    pdir, _ids = _env_with_standing_ref(tmp_path)
+def test_caseA_wiring_bound_required_images_not_blocked(tmp_path):
+    """分镜图（bound_required）× 站姿 Look × 飞行描述：不得阻断（39D 修正
+    ——image refs 也是 reference_only，39C 时期的 pose 阻断已废除）。"""
+    pdir, _ids = _env_bound(tmp_path)
     q = _FakeQueue()
     out = _gen_images(_rt(pdir, q), pdir, {
-        "targets": [{"shot_id": "s01_c01", "frame": "first"}]})
-    assert len(q.submitted) == 1, "legacy 默认行为：不阻断照常提交"
-    assert out["pose_reference_warnings"], "回执必须携带结构化姿态冲突预警"
-    w = out["pose_reference_warnings"][0]
-    assert w["shot_id"] == "s01_c01"
-    assert "姿态冲突预警" in out["note"]
+        "targets": [{"shot_id": "s01_c01", "frame": "first"}],
+        "reference_policy": "bound_required"})
+    assert len(q.submitted) == 1, "bound_required 图片生成不得被姿态软风险阻断"
+    assert not any(r.get("error") == "pose_reference_conflict"
+                   for r in out.get("results") or [])
 
 
-# ============ 3.3.2 negative_prompt 写通路 ============
+# ============ Case B：硬首帧边界冲突 ============
+def test_caseB_i2v_standing_ref_as_first_frame_blocks(tmp_path):
+    """i2v + 静态站姿参考资产被直接选作硬首帧 × 飞行开场 = boundary conflict。"""
+    pdir, _ids = _env_bound(tmp_path)
+    ProjectStore(pdir).update_shot(
+        "s01_c01",
+        lambda s: (setattr(s, "link_mode", "i2v"),
+                   setattr(s, "description", "丹顶鹤已在云端滑翔")))
+    ref = ResourceStore(pdir).load().reference_assets["ref_alice000001"]
+    ProjectStore(pdir).update_shot(
+        "s01_c01",
+        lambda s: s.first_frame.selected.__setattr__(
+            "url", ref.url) if s.first_frame.selected else None)
+    # 若无 selected 候选，直接构造一个（url 指向站姿参考资产）
+    ProjectStore(pdir).update_shot(
+        "s01_c01",
+        lambda s: (s.first_frame.candidates.append(
+            Asset(local="ff.png", url=ref.url, status=ShotStatus.DONE.value)),
+            setattr(s.first_frame, "selected_index",
+                    len(s.first_frame.candidates) - 1),
+            setattr(s.first_frame, "status", ShotStatus.DONE.value)))
+    proj = ProjectStore(pdir).load()
+    sem = shot_input_semantics(pdir, pdir.name, proj, proj.get_shot("s01_c01"))
+    assert sem["semantic_role"] == "hard_start_boundary"
+    assert sem["pose_gate"]["outcome"] == "boundary_conflict"
+    assert sem.get("boundary_conflict")
+
+    q = _FakeQueue()
+    out = _gen_videos(_rt(pdir, q), pdir, {
+        "shot_ids": ["s01_c01"]})
+    assert len(q.submitted) == 0, "硬首帧边界冲突必须提交前拦截"
+    item = out["results"][0]
+    assert item["error"] == "hard_start_boundary_conflict"
+    assert "不得因此改写故事" in item["fix_hint"]
+
+
+# ============ Case C：relay 边界 ============
+def test_caseC_relay_boundary_no_pose_gate(tmp_path):
+    pdir, _ids = _env_bound(tmp_path)
+    ProjectStore(pdir).update_shot(
+        "s01_c02",
+        lambda s: (setattr(s, "link_mode", "multi"),
+                   setattr(s, "video_reference_asset_id", "prev_tail"),
+                   setattr(s, "description", "丹顶鹤俯瞰森林，继续滑翔")))
+    ProjectStore(pdir).update_shot(
+        "s01_c01",
+        lambda s: s.video_end_frame.mark_done("end.jpg", "http://example/end.jpg"))
+    proj = ProjectStore(pdir).load()
+    sem = shot_input_semantics(pdir, pdir.name, proj, proj.get_shot("s01_c02"))
+    assert sem["semantic_role"] == "relay_start_boundary"
+    assert sem["relay_source_shot"] == "s01_c01"
+    assert sem["pose_gate"]["applied"] is False
+    assert sem["pose_gate"]["outcome"] == "relay_no_pose_gate"
+    assert {i["semantic_role"] for i in sem["input_images"]} \
+        == {"relay_start_boundary"}, "Look 不得出现在 relay 边位"
+
+    q = _FakeQueue()
+    out = _gen_videos(_rt(pdir, q), pdir, {
+        "shot_ids": ["s01_c02"]})
+    assert len(q.submitted) == 1, "relay 就绪即提交（multi 无首帧前置）"
+    roles = out.get("reference_roles") or []
+    assert roles and roles[0]["semantic_role"] == "relay_start_boundary"
+
+
+def test_caseC_relay_not_ready_blocked_at_precheck(tmp_path):
+    """vref=prev_tail 但上一镜末帧未就绪：工具层拦截（省配额，同 adapter fail-closed）。"""
+    pdir, _ids = _env_bound(tmp_path)
+    ProjectStore(pdir).update_shot(
+        "s01_c02",
+        lambda s: (setattr(s, "link_mode", "multi"),
+                   setattr(s, "video_reference_asset_id", "prev_tail")))
+    q = _FakeQueue()
+    out = _gen_videos(_rt(pdir, q), pdir, {
+        "shot_ids": ["s01_c02"]})
+    assert len(q.submitted) == 0
+    assert "relay 未就绪" in (out["results"][0].get("error") or "")
+
+
+def test_caseA_multi_first_shot_needs_no_first_frame(tmp_path):
+    """multi 直生镜无分镜首帧 = 正常路径（用户定版：首镜不生成首帧）。"""
+    pdir, _ids = _env_bound(tmp_path)
+    q = _FakeQueue()
+    out = _gen_videos(_rt(pdir, q), pdir, {
+        "shot_ids": ["s01_c01"]})
+    blocked_errors = [r.get("error") for r in out.get("results") or []
+                      if r.get("status") == "blocked"]
+    assert not any("开场画面未就绪" in str(e) for e in blocked_errors), \
+        "multi 不得要求首帧前置"
+
+
+# ============ negative_prompt 写通路（39D §3.3 既有锚定，保持） ============
 def test_negative_prompt_in_both_whitelists():
     assert "negative_prompt" in SHOT_UPDATABLE_FIELDS
     from src.storyboard.structure_service import _SHOT_WRITABLE_FIELDS
