@@ -14,6 +14,7 @@
 #     canonical 变更）。读工具回执不设 verified=True（读不是写执行）。
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Dict, List, Optional
 
 from .runtime import AgentError, AgentRuntime
@@ -210,6 +211,85 @@ def _archive_adjudicated_link(pdir, run_id: str, trace_key: str) -> Optional[str
     return archive_key
 
 
+# ============ trace 落档时的两条软提示（用户定版：与校准 skill 绑定）============
+# trace_upsert 是校准 skill 工作流的专属收尾动作——不跑这个 skill 就不会有 trace，
+# 因此提示天然与 skill 绑定：不用这个 skill 做的 reference_only 镜不会收到任何警告。
+# 两条都是尽力而为的软提示（绝不阻断落档、绝不改写 Agent 的 record）。
+
+# semantic roles（VideoVersion.input_visuals，adapter 权威）→ 实际生成模式
+_MODE_FROM_ROLES = [
+    ("relay_start_boundary", "multi_relay"),
+    ("hard_end_boundary", "keyframes_bridge"),   # 与 hard_start 同现才判桥（下方组合判断）
+    ("hard_start_boundary", "i2v"),
+    ("reference_only", "multi_reference"),
+]
+
+
+def _derive_mode_from_input_visuals(ivs: list) -> Optional[str]:
+    """从视频实际消费的输入图清单推导实际生成模式（input_visuals 为权威记录）。"""
+    roles = {str(iv.get("semantic_role") or "") for iv in (ivs or [])}
+    if "relay_start_boundary" in roles:
+        return "multi_relay"
+    if "hard_start_boundary" in roles and "hard_end_boundary" in roles:
+        return "keyframes_bridge"
+    if "hard_start_boundary" in roles:
+        return "i2v"
+    if "reference_only" in roles:
+        return "multi_reference"
+    return None
+
+
+def _trace_input_hints(pdir, trace_key: str, record: dict) -> dict:
+    """两条软提示（trace_upsert 专属，best-effort）：
+    1. mode 对账：record 声称的 generation_mode vs input_visuals 权威推导——
+       39D t3 实证（汇报 multi 实际 i2v）。
+    2. 组内 reference-only 意图提醒：段内非首镜、上镜已有视频、本镜最新视频
+       以 reference_only 开场且 record 无正当理由（continuity_type=intentional_cut
+       或 reference_only_note）→ 提醒确认是有意的独立镜而非漏配接力。
+       记录正当理由后不再提醒（不拖慢有意的特殊处理）。"""
+    out: dict = {}
+    proj = ProjectStore(pdir).load()
+    shot = proj.get_shot(trace_key)
+    if shot is None:
+        return out
+    vv = next((v for v in (shot.video_versions or [])
+               if v.version_id == shot.final_video), None)
+    ivs = list(getattr(vv, "input_visuals", None) or []) if vv is not None else []
+
+    # 1) mode 对账
+    claimed = str(record.get("generation_mode") or "").strip()
+    actual = _derive_mode_from_input_visuals(ivs)
+    if claimed and actual and claimed != actual:
+        out["mode_mismatch_warning"] = (
+            f"record 声称 generation_mode={claimed}，但本镜最终视频实际消费的输入是 "
+            f"{actual}（input_visuals 权威记录）。请核对后用正确 mode 重新 upsert——"
+            "trace 是验收对象，不得保留与 dispatch 事实不符的声明。")
+
+    # 2) 组内 reference-only 意图提醒
+    if ivs:
+        start_roles = {str(iv.get("semantic_role") or "") for iv in ivs}
+        start_is_reference = ("reference_only" in start_roles
+                              and "relay_start_boundary" not in start_roles)
+        scene = next((s for s in proj.scenes
+                      if any(x.shot_id == shot.shot_id for x in s.shots)), None)
+        if scene is not None and start_is_reference:
+            ids = [x.shot_id for x in scene.shots]
+            idx = ids.index(shot.shot_id) if shot.shot_id in ids else -1
+            prev_ready = idx > 0 and bool(scene.shots[idx - 1].final_video)
+            justified = (str(record.get("continuity_type") or "").strip().lower()
+                         == "intentional_cut"
+                         or bool(str(record.get("reference_only_note") or "").strip()))
+            if idx > 0 and prev_ready and not justified:
+                prev_id = scene.shots[idx - 1].shot_id
+                out["relay_intent_hint"] = (
+                    f"本镜（{shot.shot_id}）为段内非首镜且上镜 {prev_id} 已有视频，"
+                    f"但本镜最新视频以 reference_only 开场（未接力）。若这是有意的"
+                    f"独立镜/hard cut，请在 trace 记 continuity_type=intentional_cut"
+                    f"（或 reference_only_note 说明理由），本提醒即不再出现；"
+                    f"若叙述意图实为接续，请先补 relay（vref=prev_tail）再生成。")
+    return out
+
+
 async def _execute_trace_upsert(rt: AgentRuntime, project: str, arguments: str,
                                 instruction, message_id) -> dict:
     args = _parse_args(arguments)
@@ -231,16 +311,24 @@ async def _execute_trace_upsert(rt: AgentRuntime, project: str, arguments: str,
         merged = upsert_link(pdir, run_id, trace_key, record)
     except CalibrationTraceError as e:
         raise AgentError(e.code, str(e))
+    # 软提示（skill 绑定：trace_upsert 是校准 skill 专属收尾；尽力而为，不阻断）
+    hints: dict = {}
+    try:
+        hints = await asyncio.to_thread(_trace_input_hints, pdir, trace_key, record)
+    except Exception:   # noqa: BLE001
+        hints = {}
     return _base_receipt(
         "calibration.trace_upsert", ok=True,
         target=f"{run_id}/{trace_key}", verified=True, unchanged=False,
         run_id=run_id, trace_key=trace_key,
         archived_to=archived_to, updated_at=merged.get("updated_at"),
         fields_written=sorted(record.keys()),
+        **hints,
         note=("trace 已记录（合并语义）"
               + (f"；旧 attempt 已归档为 {archived_to}（历史不覆盖）" if archived_to
                  else "；无历史归档（archive_existing=true 且存在已裁定旧记录时才归档）")
-              + "。trace 是校准验收对象：确认记录里包含裁定理由与 repair 决策链全文。"))
+              + "。trace 是校准验收对象：确认记录里包含裁定理由与 repair 决策链全文。"
+              + ("；⚠️ 见回执中的警告/提醒字段。" if hints else "")))
 
 
 TOOL_EXECUTORS = {

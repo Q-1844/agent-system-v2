@@ -30,7 +30,11 @@
    这是边界不是参考。组首镜的图（分镜图/角色参考）作参考优先，也可作首帧。
 3. **组约定（轻量）**：段=组。新组首镜的槽填**新参考图或新首帧图**，不用
    上一组的尾帧作边界；上组尾帧若为运镜衔接需要，作参考（带标记）。
-   组只是约定，系统不做强制。
+   组只是约定，系统不做强制。**组内 reference-only 的意图提醒（skill 绑定）**：
+   段内非首镜、上镜已有视频而本镜以 reference_only 开场时，trace_upsert 回执
+   会带 relay_intent_hint 软提醒——有意的独立镜/hard cut 在 trace 记
+   continuity_type=intentional_cut（或 reference_only_note）即不再提醒；
+   若叙述意图实为接续，先补 relay（vref=prev_tail）再生成。
 4. **negative constraints 约束的是【生成结果】，不是参考资产本身**——不得因
    参考图里存在站姿而判负面约束冲突；除非该图被选为 HARD_START_BOUNDARY。
 5. **补动作匹配参考只是可选质量策略建议**：只有真实生成反复证明 provider
@@ -96,7 +100,9 @@ MAE 不是 none/minor/major 分类器，也不是桥的唯一触发器：必须�
   （重掷骰子），走**插曲方案**：设计一或多个插曲镜（时长可比常规更长，
   给回正留空间），从偏离尾帧接力、逐镜把故事拉回剧本轨道；插曲是正式镜
   （insert 进段、正常接力与 trace，purpose 标注 interlude），由 Producer
-  编排自主推进，检查点汇报时说明。
+  编排自主推进，检查点汇报时说明。**插曲逐镜落档后同样执行接缝复查与
+  trace 完整复查**；插曲尾帧与其后（已生成的）下游镜断裂时，按 §6 级联
+  纪律处置（顺延重生成或插桥——插桥见关联技能 keyframes-bridge-repair）。
   升级用户只剩真实 blocker：重试仍失败、插曲也无法回正（链已坏）、
   配额不足、证据管线异常。
 
@@ -130,6 +136,12 @@ retry_or_adapt / negative_constraint_check / cascade_check 与 repair 决策链
 全文；重试/重生成的旧 attempt 用 archive_existing=true 归档（历史不覆盖）。
 枚举字段传 null 可省略，绝不能传空字符串。判镜前先读同 run 的相邻 link
 （裁定量最大化复用历史纪律）。**trace 是校准的验收对象，不是附属日志。**
+
+**mode 对账（trace_upsert 内置软提示）**：record 声称的 generation_mode 会与
+本镜最终视频实际消费的输入（input_visuals 权威记录）交叉核对，不一致时回执
+带 mode_mismatch_warning——39D t3 实证（汇报 multi 实际 i2v）。**trace 是
+验收对象，不得保留与 dispatch 事实不符的声明**：收到警告必须核对后用正确
+mode 重新 upsert。
 
 **方法完成度收口（Phase D replay 实证：加载了方法 ≠ 执行完方法）**：本轮
 交付物 = trace_upsert（裁定枚举字段非空）+ 最终回复里一句话裁定总结（档位
