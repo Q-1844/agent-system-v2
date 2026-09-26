@@ -35,11 +35,12 @@ Scene Agent 按【场景依赖条件】参与，不是每轮必跑：
                 duration_s/opening intent/negative constraints）
         ↓
 [Director] 逐镜循环（禁止跳步）：
-   1. 输入角色分类：REFERENCE_ONLY（multi 参考槽/Look 场景参考）/
-      HARD_START_BOUNDARY（i2v 首帧）/ HARD_END_BOUNDARY（keyframes 尾帧）/
-      RELAY_START_BOUNDARY（上一镜真实末帧）——按角色套口径：
+   1. 输入角色分类：每个视频的关键图作参考或作首尾帧皆可（系统都允许，
+      作参考优先——不钉死画面，效果更好）。REFERENCE_ONLY（参考，带标记）/
+      HARD_START_BOUNDARY（首帧槽）/ HARD_END_BOUNDARY（尾帧槽）/
+      RELAY_START_BOUNDARY（接续：上镜真实尾帧进首帧槽）——按角色套口径：
       reference-only 姿态命中只记 pose_reference_mismatch_soft 诊断（不阻断
-      不要求补参考不改故事）；硬首帧姿态冲突才阻断处置；relay 由生成后接缝
+      不要求补参考不改故事）；硬首帧姿态冲突才阻断处置；接力由生成后接缝
       校验；负面约束写进 negative_prompt 字段
    2. 提交生成 shot.generate_videos（multi 显式 link_mode=multi，
       尾帧接力=video_reference_asset_id=="prev_tail"）
@@ -52,9 +53,11 @@ Scene Agent 按【场景依赖条件】参与，不是每轮必跑：
         ↓
    none  → 按预编剧继续（自动推进）
    minor → accept+adapt：预编剧首句自然吸收，零文字修改零重试，自动继续
-   major → 🔴 立即停下：Producer 向用户完整报告并等待；用户批准 retry_generation
-           后 → Script Writer 设计 anchor patch → Director 执行【单次】锚定重试
-           → 完整复查；仍 major → 再次升级用户，不得第二次自行重试。
+   major（大偏离）→ 按根因回正（剧本与故事段不变）：
+           镜内失败=单次锚定重试（SW patch → Director 落库 → 完整复查）；
+           尾态偏离=插曲方案（一或多镜、时长可长，从偏离尾帧接力逐步回正，
+           自主推进）。仅真实 blocker（重试仍败/插曲无法回正/配额不足）
+           停下等用户。
    级联 → 重生成链中任一镜必须声明 cascade risk 并检查下游接缝；
           下游断缝按语义选择顺延重生成（配额允许）或插桥
           （→ 关联技能 keyframes-bridge-repair）。
@@ -86,6 +89,13 @@ Scene Agent 按【场景依赖条件】参与，不是每轮必跑：
 - **relay 适用性（先判 continuity intent）**：intentional cinematic cut
   （构图切换/insert/POV/reaction/跨场景切换）不强制 prev_tail——该镜用自身
   参考直生（REFERENCE_ONLY），trace 记 continuity_type=intentional_cut。
+- **组（group，约定）**：段即组，系统不强制。组内非首镜默认尾帧接力
+  （上一镜真实尾帧进本镜首帧槽）；组首镜的图作参考优先（带标记）或作首帧；
+  跨组首镜用新参考图/新首帧图，不用上组尾帧作边界（上组尾帧需运镜衔接时
+  作参考，带标记）。
+- **插曲（interlude）**：尾态大偏离时插入的正式过渡镜（一或多镜、时长可比
+  常规更长），从偏离尾帧接力、逐镜把故事拉回剧本轨道。剧本与故事段不变；
+  插曲有完整六要素小冻结、正常接力与 trace，purpose=interlude，自主推进。
 - **检查点节奏**：长故事按段落向用户汇报 none/minor/major 计数 + 当前接缝值。
 
 ## 决策模型（三档裁定）
@@ -103,11 +113,14 @@ Producer 按档执行编排策略：
   出现、且叙事/动作端点/地理/负面约束全部成立时 = minor accept+adapt——不得
   仅凭表情偏差升级为 retry；升级 major 必须有叙事/可见性/地理/负面约束级的
   独立依据。
-- **major**：叙事/情绪与剧本相反、地理丢失、主体不可见或严重遮挡、关键状态
-  无法自然进入下一镜、严重 unexpected element → **立即停下等用户**。
-  Producer 输出完整报告（发生了什么/为什么 major/Vision 与 Director 观察及
-  冲突/当前 seam/建议修复 retry 或 bridge/预计 cascade 风险/预计新增视频消耗/
-  配额实时读数）——**绝不代替用户批准重试**。
+- **major（大偏离）**：actual tail 与剧本预期偏离大、关键状态无法自然进入
+  下一镜 → 按根因两路回正（剧本与故事段不变）：
+  a) 镜内失败（没演成自己的任务）→ 单次锚定重试（SW patch → Director 落库
+  重试 → 完整复查）；仍失败升级用户。
+  b) 尾态偏离（镜合格但收在偏离位置）→ **插曲方案**：插入一或多个插曲镜
+  （时长可更长）从偏离尾帧接力逐步回正——不重试、不硬切；插曲自主推进，
+  检查点向用户汇报。真实 blocker（重试仍失败/插曲无法回正/配额不足）才
+  停下等用户。
 
 ## 完成标准（Completion Criteria）
 

@@ -1331,6 +1331,53 @@ async def _ensure_multi_video_prompt(project_name: str, shot_id: str, emit) -> d
     return {"rebuilt": True, "freshness_before": fr["state"], "prompt_hash": ph}
 
 
+def _build_input_visuals(*, mode: str, first_url: str, last_url,
+                         bound_video=None) -> list:
+    """Phase 39D（用户定版）：本视频实际消费的输入图清单（随 VideoVersion 持久化，
+    供系统显示"这个视频用什么生成"）。首尾帧可以是参考——
+    semantic_role 区分：hard_start_boundary / hard_end_boundary（硬边界）、
+    relay_start_boundary（组内接续：上镜真实尾帧进首帧槽）、reference_only
+    （作参考而非首尾帧——系统显示时带标记）。BOUND 路径以 adapter 的
+    semantic_roles 为权威槽位语义合并实际 URL；legacy/recover 尽力标注。"""
+    out: list = []
+    roles = getattr(bound_video, "semantic_roles", None) if bound_video else None
+    if roles:
+        for r in roles:
+            slot = r.get("slot")
+            if slot == "multi_reference":
+                is_relay = r.get("source_type") == "prev_tail_relay"
+                out.append({
+                    "slot": "first" if is_relay else "reference",
+                    "semantic_role": ("relay_start_boundary" if is_relay
+                                      else "reference_only"),
+                    "url": first_url or getattr(bound_video, "video_reference", "") or "",
+                    "source_type": r.get("source_type"),
+                    "source_shot_id": r.get("source_shot_id"),
+                    "end_source_version": r.get("end_source_version"),
+                    "reference_asset_id": r.get("reference_asset_id"),
+                })
+            elif slot in ("first", "last"):
+                out.append({
+                    "slot": slot,
+                    "semantic_role": ("hard_start_boundary" if slot == "first"
+                                      else "hard_end_boundary"),
+                    "url": first_url if slot == "first" else last_url or "",
+                    "candidate_id": r.get("candidate_id"),
+                    "batch_id": r.get("batch_id"),
+                })
+        return [e for e in out if e.get("url")]
+    if mode == "multi" and first_url:
+        out.append({"slot": "reference", "semantic_role": "reference_only",
+                    "url": first_url, "source_type": "legacy_multi"})
+    elif first_url:
+        out.append({"slot": "first", "semantic_role": "hard_start_boundary",
+                    "url": first_url})
+    if mode == "keyframes" and last_url:
+        out.append({"slot": "last", "semantic_role": "hard_end_boundary",
+                    "url": last_url})
+    return out
+
+
 async def _handler_video(job, emit):
     """镜头视频生成（PHASE_3 §3.4）。
     preflight -> keyframes 等尾帧 -> 提交立刻落库 video_id -> 轮询 -> 下载 -> 回读秒数/尺寸。
@@ -1442,6 +1489,7 @@ async def _handler_video(job, emit):
     # C1 §22/§25：recover 路径不带 Native AV generation basis（原始提交的编译输入
     # 已不可考——诚实记 {}，freshness 判 untracked_legacy，不冒充 fresh）。
     native_generation_basis: dict = {}
+    bound_video = None   # BOUND fresh-submit 时为 Adapter 产物（39D input_visuals 来源）
     if shot.video.video_id and shot.video.status not in (
             ShotStatus.DONE.value, ShotStatus.FAILED.value):
         vid = shot.video.video_id
@@ -1459,7 +1507,6 @@ async def _handler_video(job, emit):
         # race guard；NOT_READY→BLOCK，绝不 fallback legacy）；UNBOUND 保持 legacy 行为
         # 逐字节不变。恢复/续轮询路径不做 Binding gate（无新生成输入，不阻断在途
         # 视频的结果回收——轮询不是 generation dispatch）。
-        bound_video = None
         if shot_has_visual_production_binding(project_dir, shot.shot_id):
             bound_video = build_bound_video_input(project_dir, project, shot,
                                                   native_dialogue_control=ndc,
@@ -1595,7 +1642,10 @@ async def _handler_video(job, emit):
                           num_frames=shot.video.num_frames, frame_rate=shot.video.frame_rate,
                           origin_run_id=job.params.get("origin_run_id"),
                           model=poll_model or getattr(shot.video, "model", None),
-                          generation_basis=dict(native_generation_basis))
+                          generation_basis=dict(native_generation_basis),
+                          input_visuals=_build_input_visuals(
+                              mode=mode, first_url=first_url, last_url=last_url,
+                              bound_video=bound_video))
     def mut(s, vv=new_vv, d=str(dest), r=res):
         s.video_versions.append(vv)
         s.final_video = vv.version_id

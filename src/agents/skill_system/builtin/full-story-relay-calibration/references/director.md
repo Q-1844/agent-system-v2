@@ -15,42 +15,41 @@
 
 | 角色 | 识别 | 姿态/状态检查口径 |
 |---|---|---|
-| **REFERENCE_ONLY** | multi 直生镜参考槽（vref 未设 → approved Look hero）；分镜图生成的 Look/场景 refs | **软风险**：命中姿态词表只记 `pose_reference_mismatch_soft` 诊断。🔴 不得阻断、不得要求补参考、不得升级 major、不得请用户改故事、不得改写 Shot 开场 |
-| **HARD_START_BOUNDARY** | i2v 首帧槽（selected first frame）；keyframes first slot | **真边界**：必须满足 opening state。站姿硬首帧 ×「已在云端飞行」开场 = boundary conflict → 换边界帧 / 换 mode / 如实报告 provider 限制 |
+| **REFERENCE_ONLY** | 视频参考槽里的关键图（multi 直生的参考：组首镜的分镜图/角色参考）；分镜图生成的 Look/场景 refs | **软风险**：命中姿态词表只记 `pose_reference_mismatch_soft` 诊断。🔴 不得阻断、不得要求补参考、不得升级 major、不得请用户改故事、不得改写 Shot 开场 |
+| **HARD_START_BOUNDARY** | i2v 首帧槽（selected first frame）；keyframes first slot；组首镜的图【选择】作首帧时 | **真边界**：必须满足 opening state。冲突 → 换边界帧 / 换 mode / 如实报告 provider 限制 |
 | **HARD_END_BOUNDARY** | keyframes last slot | 尾边界：必须满足 end state |
-| **RELAY_START_BOUNDARY** | multi vref=prev_tail / inherit_previous：上一镜**真实** video_end_frame | **连续性边界**：开场衔接由生成后接缝测量校验，不做姿态关键词预判；Look 等参考不得覆盖 relay 边界 |
+| **RELAY_START_BOUNDARY** | 组内接续：上一镜**真实** video_end_frame 进本镜**首帧槽** | **连续性边界**：开场衔接由生成后接缝测量校验，不做姿态关键词预判；Look 等参考不得覆盖 relay 边界 |
 
-关键不变量（P39D 修正，39C 误判教训）：
+**槽位语义（用户定版，指导层——系统对任何视频都允许两种用法）**：
 
-1. **REFERENCE_ONLY 图告诉模型"是谁/长什么样/在哪里"，不意味着 frame 0 必须
-   复制该图姿态。** 站姿 Look × 飞行镜头 = soft 风险（pose dominance 只是模型
-   倾向假设，不是 production prerequisite）。steering 手段 = prompt + 
-   negative_prompt 字段（首镜飞行 → 「禁站立姿态, 禁地面背景」）。
-2. **negative constraints 约束的是【生成结果】，不是参考资产本身**——不得因
+1. **每个视频的关键图，作参考或作首尾帧都可以，系统都允许**；skill 建议
+   **作参考优先**——不钉死画面，给 provider 发挥空间，效果通常更好。
+   作参考时系统以 semantic_role=reference_only 记录并在 UI 以标记区分
+   （如琥珀框），硬边界（绿框）、接力边界（蓝框）同样有标记。
+2. **组内接续**：上一镜真实尾帧进本镜**首帧槽**（relay_start_boundary）——
+   这是边界不是参考。组首镜的图（分镜图/角色参考）作参考优先，也可作首帧。
+3. **组约定（轻量）**：段=组。新组首镜的槽填**新参考图或新首帧图**，不用
+   上一组的尾帧作边界；上组尾帧若为运镜衔接需要，作参考（带标记）。
+   组只是约定，系统不做强制。
+4. **negative constraints 约束的是【生成结果】，不是参考资产本身**——不得因
    参考图里存在站姿而判负面约束冲突；除非该图被选为 HARD_START_BOUNDARY。
-3. **补动作匹配参考只是可选质量策略建议**：只有真实生成反复证明 provider 对
-   站姿 reference 有明显 pose dominance（actual tail 反复被拽回参考姿态），
-   才向用户提出该建议（用户批准的可选项）。不得在生成前提出，更不得把
-   CharacterLook 膨胀成姿态库（站/飞/落/转/走…每个动作一张图 = 生产退化）。
-4. **NONE/MINOR/MAJOR 只对【实际生成的尾帧】裁定**：reference pose mismatch
-   不是裁定对象，actual tail + next-shot enterability 才是。没有 actual 视频
-   之前不存在任何档位。
-5. **intentional cinematic cut 不强制 relay**：构图切换/insert/POV/reaction/
-   跨场景切换的镜，冻结时不做 prev_tail——用自身参考直生（REFERENCE_ONLY），
-   生成后记 continuity_type=intentional_cut。先判 continuity intent，再决定
-   是否 relay。
+5. **补动作匹配参考只是可选质量策略建议**：只有真实生成反复证明 provider
+   对某参考有明显 pose dominance，才向用户提出该建议。不得把 CharacterLook
+   膨胀成姿态库。
+6. **NONE/MINOR/MAJOR 只对【实际生成的尾帧】裁定**：reference pose mismatch
+   不是裁定对象。没有 actual 视频之前不存在任何档位。
+7. **intentional cinematic cut 不强制接续**：构图切换/insert/POV/reaction/
+   跨组切换的镜不设 prev_tail，按组首镜处理（自己的参考直生），trace 记
+   continuity_type=intentional_cut。先判 continuity intent，再决定是否接续。
 
-## 0.5) bind 前场景 ↔ 冻结一致性核对（F1 教训，语义真值轴）
+**提交前字段落库**：负面约束必须经 shot.update 写进 shot.negative_prompt
+字段（视频生成的唯一正式负面约束通路，独立 API 参数）。只写进 trace 或
+策划文本 = 生成端拿不到 = 没写。
 
-bind/生成前用 production.inspect 的 SIV 摘要与冻结 description 的地点/构图
-要素逐项对照（39C s01 实证：SIV 含森林湖泊 vs 冻结"纯天空"，无人核对直接
-生成）。冲突二选一修掉：场景侧错 → scene_production_prerequisite 上报
-（Scene Agent 修场景真相）；冻结侧错 → 报 Producer 让 Script Writer 重新
-冻结。这是场景语义真值检查，与姿态无关，照常执行。
-
-**负面约束进生成字段**：冻结的负面约束必须在提交前经 shot.update 写进
-shot.negative_prompt 字段——那是视频生成的唯一正式负面约束通路（独立 API
-参数）。只写进 trace 或策划文本 = 生成端拿不到 = 没写（39C 实证）。
+**bind 前场景 ↔ 冻结一致性**：production.inspect 的 SIV 摘要与冻结
+description 的地点/构图要素逐项对照（39C s01 实证）。冲突二选一修掉：
+场景侧错 → scene_production_prerequisite 上报；冻结侧错 → 报 Producer 让
+Script Writer 重新冻结。
 
 ## 1) 接缝测量
 
@@ -84,14 +83,22 @@ MAE 不是 none/minor/major 分类器，也不是桥的唯一触发器：必须�
   【单独】出现、且叙事/动作端点/地理/负面约束全部成立时＝minor accept+adapt——
   不得仅凭表情偏差把裁定升级为 retry；升级 major 必须有叙事/可见性/地理/
   负面约束级的独立依据。
-- **major**＝叙事/情绪与剧本相反、地理丢失、主体不可见或严重遮挡、关键状态
-  无法自然进入下一镜、严重 unexpected element。🔴 你【不得】自行重试：完成
-  视觉证据与 repair plan（根因→考虑过的选项→选择→为什么→预计 cascade 风险
-  →预计新增视频消耗），交给 Producer 升级给用户并 STOP 等待。用户批准
-  retry_generation 后才执行【单次】锚定重试——锚定杠杆：description 首句做
-  环境/远景/地理锚定 + 收束句写明尾态（如「全身端立在土路中央」，破解特写
-  吸引子连击的实证手段），必要时加日光/环境锚定；anchor patch 由 Script Writer
-  设计，你用 shot.update 正式落库（先 shot.read 拿最新指纹）。
+- **major（大偏离）**＝尾态与 expected_tail 偏离大、关键状态无法自然进入
+  下一镜。🔴 处理按根因分两路——**目的都是把故事拉回剧本，剧本与故事段
+  本身不变**：
+  a) **镜内失败**（没演成自己 description 的任务，如触水拍成沉水）→
+  【单次】锚定重试：Script Writer 设计 anchor patch（首句环境/地理锚定 +
+  收束句尾态，必要时风格/尺度锚定——P39D s02_c02 实证：剧本字面写了
+  「落入水中只留气泡」模型就忠实沉水，措辞 bug 要在剧本层修），你用
+  shot.update 落库（先 shot.read 拿最新指纹）后重试并完整复查；仍失败
+  → 升级用户。
+  b) **尾态偏离**（镜本身演了自己的任务，但收在了偏离位置）→ **不重试**
+  （重掷骰子），走**插曲方案**：设计一或多个插曲镜（时长可比常规更长，
+  给回正留空间），从偏离尾帧接力、逐镜把故事拉回剧本轨道；插曲是正式镜
+  （insert 进段、正常接力与 trace，purpose 标注 interlude），由 Producer
+  编排自主推进，检查点汇报时说明。
+  升级用户只剩真实 blocker：重试仍失败、插曲也无法回正（链已坏）、
+  配额不足、证据管线异常。
 
 ## 5) 重试后必须完整复查
 

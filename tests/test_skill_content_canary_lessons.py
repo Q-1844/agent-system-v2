@@ -38,7 +38,8 @@ def test_reference_role_decision_table_in_director():
     assert "不得升级 major" in d or "升级 major" in d
     assert "不得请用户改故事" in d or "改写 Shot 开场" in d or "不得改写故事" in d
     # 硬边界口径
-    assert "boundary conflict" in d
+    assert "必须满足 opening state" in d
+    assert "换边界帧 / 换 mode" in d
     # relay 口径
     assert "不做姿态关键词预判" in d or "不做姿态预判" in d
     # 可选建议语义（不预先要求）
@@ -60,7 +61,35 @@ def test_first_shot_action_by_narrative_in_script_writer():
 def test_producer_no_user_gate_for_soft_reference_risk():
     p = _t(_RELAY_PROD)
     assert "不上报" in p
-    assert "第一镜不需要连续性" in p or "首镜无分镜首帧直生是正常路径" in p
+    assert "组首镜的图作参考" in p or "带标记" in p
+
+
+# ---- 插曲制度与组约定（P39D 用户定版）----
+def test_interlude_doctrine():
+    d = _t(_RELAY_DIR)
+    assert "插曲方案" in d
+    assert "不重试" in d
+    assert "剧本与故事段" in d
+    s = _t(_RELAY_SW)
+    assert "插曲设计" in s
+    assert "实际尾帧" in s
+    k = _t(_RELAY_SKILL)
+    assert "插曲（interlude）" in k
+
+
+def test_group_convention_light():
+    k = _t(_RELAY_SKILL)
+    assert "组（group，约定）" in k
+    assert "系统不强制" in k
+    assert "跨组首镜用新参考图/新首帧图" in k
+
+
+def test_slot_semantics_every_video():
+    """槽位语义适用每个视频：参考或首尾帧皆可、参考优先、参考必标记。"""
+    d = _t(_RELAY_DIR)
+    assert "作参考或作首尾帧都可以，系统都允许" in d
+    assert "作参考优先" in d
+    assert "semantic_role=reference_only" in d
 
 
 # ---- 2. 场景参考 ↔ 冻结 description 一致性（F1，保留）----
@@ -119,7 +148,7 @@ def test_verdict_only_on_actual_tail():
 
 def test_intentional_cut_no_forced_relay():
     d = _t(_RELAY_DIR)
-    assert "intentional cinematic cut 不强制 relay" in d
+    assert "intentional cinematic cut 不强制接续" in d
     k = _t(_RELAY_SKILL)
     assert "先判 continuity intent" in k
 

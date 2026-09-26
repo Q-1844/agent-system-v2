@@ -218,6 +218,12 @@ class VideoVersion:
     # language/audio intent/visual/provider/compiler 指纹）。{} = legacy/旧数据或
     # 未走 Native AV 编译（消费方按 UNTRACKED_LEGACY 诚实处理，不当作 fresh）。
     generation_basis: Dict[str, Any] = field(default_factory=dict)
+    # Phase 39D（用户定版）：本版本实际消费的输入图清单——首尾帧可以是参考。
+    # 每项 {slot: first|last|reference, semantic_role: hard_start_boundary|
+    # hard_end_boundary|relay_start_boundary|reference_only, url, ...来源字段}。
+    # reference_only 即"作参考而非首尾帧"（系统显示时以标记区分，如框色）。
+    # [] = 旧数据/未记录（诚实缺省）。
+    input_visuals: List[Dict[str, Any]] = field(default_factory=list)
 
 
 # ---- 批次解析/迁移 helper（Step 2 向后兼容：旧 first_frame/last_frame/video -> 批次）----

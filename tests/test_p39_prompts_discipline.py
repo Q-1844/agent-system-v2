@@ -66,12 +66,13 @@ def test_director_calibration_knowledge_in_skill_not_prompt():
 
 
 def test_director_major_user_gate_in_skill():
-    """major 用户闸门（39.md §11）：Director 不得自行重试，升级 Producer/用户。"""
+    """major 回正制度（P39D 用户定版）：镜内失败=单次锚定重试；尾态偏离=插曲；
+    真实 blocker 才升级用户。旧"一律停下等用户批准重试"已被插曲制替代。"""
     cal = _calibration_all()
-    assert "你【不得】自行重试" in cal
-    assert "单次" in cal                                  # 单次锚定重试
-    assert "全身端立在土路中央" in cal                      # 锚定杠杆实证例句
-    assert "重试方差" in cal and "儿童" in cal              # 重试后重查负面约束实证
+    assert "镜内失败" in cal and "单次】锚定重试" in cal      # 镜内失败 → 单次重试
+    assert "尾态偏离" in cal and "插曲方案" in cal            # 尾态偏离 → 插曲（不重试）
+    assert "剧本与故事段" in cal                              # 剧本/段不变
+    assert "重试方差" in cal and "儿童" in cal                # 重试后重查负面约束实证
     assert "不得第二次自行重试" in cal
     # 减法验证：workflow 闸门教学不在 prompt（major 行为由 skill 承载）
     assert "全身端立在土路中央" not in _norm(DIRECTOR_SYSTEM)
@@ -112,11 +113,10 @@ def test_producer_orchestration_in_skill_not_prompt():
         "默认 active set 是 4",                            # 条件参与：4-Agent 默认集
         "按【场景依赖条件】参与",                           # Scene Agent 条件参与
         "none/minor",                                     # 自动推进档位（校准专属词）
-        "立即停下等用户",                                  # major STOP/WAIT USER
-        "为什么判 major", "当前 seam 数据",                  # 报告要素
+        "插曲编排",                                        # 尾态大偏离 → 插曲（P39D）
+        "插曲无法回正",                                    # 升级用户的边界（P39D）
+        "最终统计必须读 trace 实况",                        # 汇报一致性（P39D t7 实证）
         "cascade",                                        # cascade 风险报告
-        "预计新增视频消耗",                                # 配额代价
-        "代替用户批准",                                    # 不得代批
         "project.quota", "写死",                          # 配额实时读数，不硬编码
     )
     for kw in kws:

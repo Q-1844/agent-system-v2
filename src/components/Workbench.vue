@@ -436,6 +436,12 @@
             <div v-if="stage === 'video' && videoVersionsReversed.length" class="video-versions">
               <div v-for="(v, i) in videoVersionsReversed" :key="v.version_id" class="video-version" :class="{ final: v.version_id === shot.final_video }">
                 <video :src="v.local ? vidUrl(v.local) + '#t=0.1' : ''" preload="metadata" class="vv-thumb" :class="{ previewing: previewVersionId === v.version_id }" @click="previewVersion(v.version_id)" title="点击预览"></video>
+                <div v-if="v.input_visuals && v.input_visuals.length" class="vv-inputs">
+                  <div v-for="(iv, ii) in v.input_visuals" :key="ii" class="vv-input" :class="ivClass(iv)" :title="ivTitle(iv)">
+                    <img v-if="iv.url" :src="ivSrc(iv.url)" />
+                    <span class="iv-tag">{{ ivLabel(iv) }}</span>
+                  </div>
+                </div>
                 <div class="vv-info">
                   <span class="vv-no">v{{ videoVersionsReversed.length - i }}</span>
                   <span class="vv-ret" v-if="v.seconds_returned">{{ v.seconds_returned }}s / {{ v.size_returned }}</span>
@@ -1497,6 +1503,29 @@ onUnmounted(() => { window.removeEventListener('resize', updateNarrow); });
 
 function imgUrl(p: string) { return getImageUrl(p); }
 function vidUrl(p: string) { return getVideoUrl(p); }
+
+// Phase 39D：每个视频版本的"生成输入"显示——首尾帧（可以是参考）。
+// 参考图（reference_only）用琥珀色框标记，与硬边界（绿）和接力边界（蓝）区分。
+function ivSrc(u: string) { return u && u.startsWith('http') ? u : imgUrl(u); }
+function ivClass(iv: any) {
+  return { refmark: iv.semantic_role === 'reference_only',
+           relay: iv.semantic_role === 'relay_start_boundary' };
+}
+function ivLabel(iv: any) {
+  if (iv.semantic_role === 'reference_only') return '参考';
+  if (iv.semantic_role === 'relay_start_boundary') return '首·接力';
+  if (iv.semantic_role === 'hard_end_boundary') return '尾帧';
+  return '首帧';
+}
+function ivTitle(iv: any) {
+  const role = iv.semantic_role === 'reference_only'
+    ? '参考（不钉死画面）'
+    : iv.semantic_role === 'relay_start_boundary'
+      ? '接力边界（上一镜真实尾帧）'
+      : iv.semantic_role === 'hard_end_boundary' ? '硬尾帧边界' : '硬首帧边界';
+  const src = iv.source_shot_id ? `，来源 ${iv.source_shot_id}` : '';
+  return `${role}${src}`;
+}
 </script>
 
 <style lang="scss" scoped>
@@ -1631,6 +1660,12 @@ function vidUrl(p: string) { return getVideoUrl(p); }
 .video-version { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; &.final { border-color: #4ade80; } }
 .vv-thumb { width: 72px; aspect-ratio: 16/9; border-radius: 4px; object-fit: cover; background: var(--bg-root); flex-shrink: 0; cursor: pointer; &.previewing { outline: 2px solid var(--accent); outline-offset: 1px; } }
 .vv-info { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex: 1; }
+.vv-inputs { display: flex; gap: 5px; flex-shrink: 0; }
+.vv-input { position: relative; width: 52px; aspect-ratio: 16/9; border-radius: 4px; overflow: hidden; border: 2px solid #4ade80; flex-shrink: 0;
+  img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  &.refmark { border-color: #fbbf24; }   // 参考图标记（琥珀）
+  &.relay { border-color: #60a5fa; }      // 接力边界（蓝）
+  .iv-tag { position: absolute; bottom: 0; left: 0; right: 0; font-size: 8px; color: #fff; background: rgba(0,0,0,0.55); text-align: center; padding: 0 1px; } }
 .vv-no { font-size: 11px; font-weight: 600; color: var(--text-secondary); font-family: monospace; }
 .vv-ret { color: var(--text-muted); }
 .vv-final { color: #4ade80; font-weight: 600; }

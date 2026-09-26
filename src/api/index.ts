@@ -153,6 +153,17 @@ export interface ImageBatchData {
   based_on_first_frame: string | null;   // 尾帧批次：基于的首帧 candidate_id
   candidates: CandidateData[];
 }
+export interface VideoInputVisualData {
+  slot: string;            // first | last | reference
+  semantic_role: string;   // hard_start_boundary | hard_end_boundary | relay_start_boundary | reference_only
+  url: string;
+  source_type?: string;
+  source_shot_id?: string;
+  end_source_version?: string;
+  reference_asset_id?: string;
+  candidate_id?: string;
+  batch_id?: string;
+}
 export interface VideoVersionData {
   version_id: string;
   created_at: number;
@@ -169,6 +180,7 @@ export interface VideoVersionData {
   size_returned: string | null;
   num_frames: number;
   frame_rate: number;
+  input_visuals?: VideoInputVisualData[];
 }
 export interface ShotData {
   shot_id: string;
