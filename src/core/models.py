@@ -409,14 +409,24 @@ class Shot:
         d["first_frame_batches"] = [_parse_image_batch(b, "first_frame") for b in ff_raw] if ff_raw else _legacy_image_batch(d["first_frame"], "first_frame")
         lf_raw = d.get("last_frame_batches") or []
         d["last_frame_batches"] = [_parse_image_batch(b, "last_frame") for b in lf_raw] if lf_raw else _legacy_image_batch(d["last_frame"], "last_frame")
-        vv_raw = d.get("video_versions") or []
-        d["video_versions"] = [_parse_video_version(v) for v in vv_raw] if vv_raw else _legacy_video_version(d["video"])
+        # 39F（41.md §2/P3）：legacy 迁移只对「真 legacy 文档」（无 video_versions 键，
+        # v1→v2 迁移器产出的形状）。键存在但为空 = 新代码的诚实空——绝不再从 video
+        # 字段伪造 legacy_video 版本：视频在途保存（submit 落 video_id，versions 尚空）
+        # 后的任何 reload 都会把在途 video 伪造成 status=generating 的幽灵版本坐进
+        # 版本史 index 0（P40A/P39C/P39D 等生产项目实证，input_visuals=[] 且永不更新）。
+        if "video_versions" in d:
+            d["video_versions"] = [_parse_video_version(v) for v in (d.get("video_versions") or [])]
+        else:
+            d["video_versions"] = _legacy_video_version(d["video"])
         # 选择指针：无则从旧字段推断
         if d.get("selected_first_frame") is None and d["first_frame_batches"]:
             d["selected_first_frame"] = _legacy_selected(d["first_frame"], d["first_frame_batches"][0])
         if d.get("selected_last_frame") is None and d["last_frame_batches"]:
             d["selected_last_frame"] = _legacy_selected(d["last_frame"], d["last_frame_batches"][0])
-        if d.get("final_video") is None and d["video_versions"] and d["video"].status == ShotStatus.DONE.value:
+        # 39F（同 video_versions 修复）：legacy 推断只对「真 legacy 文档」（无
+        # final_video 键）。显式 None = 用户/系统清除了指针，不得被推断复活——
+        # 否则 freshness 读模型对「无 final」镜谎报 current（39F 回归实证）。
+        if "final_video" not in d and d["video_versions"] and d["video"].status == ShotStatus.DONE.value:
             d["final_video"] = d["video_versions"][0].version_id
         # 表演意图（C2 §13）：dict → 数据类；缺省/空 → None（全空 = 未表达）
         pi = d.get("performance_intent")

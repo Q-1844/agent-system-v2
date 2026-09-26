@@ -328,6 +328,10 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
     reference_roles: list = []
     pose_soft: list = []
     still_ok: list = []
+    # 39F（41.md §10）：fail-open 保持——预检自身异常不阻断生成，但绝不静默
+    # 冒充「无冲突」。pregen_check_unavailable 只表示「本轮未完成确定性预检」，
+    # 绝不表示「已证明没有冲突」。
+    pregen_unavailable: list = []
     for t in submittable:
         sem = None
         try:
@@ -338,6 +342,11 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
             sem = None
         if sem is None:
             still_ok.append(t)
+            pregen_unavailable.append({
+                "shot_id": t["shot_id"], "frame": t.get("frame"),
+                "diagnostic": "pregen_check_unavailable",
+                "hint": "本轮未完成确定性输入预检（fail-open 放行，不阻断生成）"
+                        "——这不表示已证明无冲突"})
             continue
         reference_roles.append(sem)
         if sem.get("boundary_conflict") is not None:
@@ -388,6 +397,7 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
             cancelled=False, timed_out=False,
             reference_policy=reference_policy if is_image else None,
             **({"variants": variants} if is_image else {}),
+            pregen_unavailable_diagnostics=pregen_unavailable,
             note=f"没有可提交的生成目标（{total} 项全部被预检拦截），未消耗生成额度。"
                  "请根据各项 error/fix_hint 先补齐前置条件（如先生成首帧、补生产绑定）"
                  + policy_hint + "。")
@@ -476,6 +486,11 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
                 r["seconds"] = v.get("seconds")
 
     done_items = [r for r in results if r.get("ok") and r.get("verified")]
+    # 39F：预检不可用的目标，逐项如实带标记（非阻断、纯信息）
+    _pregen_unavail_ids = {(u["shot_id"], u.get("frame")) for u in pregen_unavailable}
+    for r in results:
+        if (r.get("shot_id"), r.get("frame")) in _pregen_unavail_ids:
+            r["pregen_check"] = "unavailable"
     elapsed = round(time.time() - started, 1)
     ok = bool(done_items)
     # verified 语义：所有【报告完成】的分项都经 canonical+文件验证（无假 done）。
@@ -519,6 +534,10 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
             f"{'/'.join(w['matched_motion_keywords'][:2])}）" for w in pose_soft)
             + "——参考为身份语义不约束首帧姿态，由 prompt+negative_prompt "
               "steering，生成后按 actual tail 裁定。")
+    if pregen_unavailable:
+        note += (" 提示：" + "、".join(u["shot_id"] for u in pregen_unavailable)
+                 + f" 共 {len(pregen_unavailable)} 项本轮未完成确定性输入预检"
+                   "（pregen_check_unavailable，fail-open 放行）——这不表示已证明无冲突。")
 
     return _base_receipt(
         op, ok=ok, target=",".join(t["shot_id"] for t in targets),
@@ -530,6 +549,7 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
         **({"variants": variants} if is_image else {}),
         reference_roles=reference_roles,
         pose_soft_diagnostics=pose_soft,
+        pregen_unavailable_diagnostics=pregen_unavailable,
         elapsed_s=elapsed, note=note)
 
 
