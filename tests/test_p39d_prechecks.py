@@ -326,7 +326,9 @@ def test_negative_prompt_in_both_whitelists():
 
 def test_negative_prompt_in_tool_schemas():
     """工具 schema（LLM 接口面）必须与执行白名单一致——39D t2 实证：只改白名单
-    不改 schema，Agent 按 schema 拒写 negative_prompt（落到 note 字段）。"""
+    不改 schema，Agent 按 schema 拒写 negative_prompt（落到 note 字段）。t3 又
+    实证同类缺口：link_mode/video_reference_asset_id 不在 schema → Agent 无法
+    设置 multi relay 链。"""
     from src.agents.director import DIRECTOR_TOOLS
     for name, get_props in (
             ("shot.update", lambda t: t["function"]["parameters"]["properties"]),
@@ -334,7 +336,11 @@ def test_negative_prompt_in_tool_schemas():
             ("shot.update_many",
              lambda t: t["function"]["parameters"]["properties"]["updates"]["items"]["properties"])):
         tool = next(t for t in DIRECTOR_TOOLS if t["function"]["name"] == name)
-        assert "negative_prompt" in get_props(tool), f"{name} schema 缺 negative_prompt"
+        props = get_props(tool)
+        assert "negative_prompt" in props, f"{name} schema 缺 negative_prompt"
+        assert "link_mode" in props, f"{name} schema 缺 link_mode"
+        assert "video_reference_asset_id" in props, \
+            f"{name} schema 缺 video_reference_asset_id"
 
 
 def test_clean_shot_fields_passes_negative_prompt():

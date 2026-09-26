@@ -451,6 +451,21 @@ _SHOT_FIELDS_PROPS = {
                                         "必须在提交生成前落进本字段；只写进 note/trace "
                                         "生成端拿不到（39C 实证）。"),
                         },
+    "link_mode": {"type": "string",
+                  "enum": ["i2v", "keyframes", "multi"],
+                  "description": ("视频生成模式（39D relay 链必用）：i2v=首帧硬边界；"
+                                  "keyframes=首尾双硬边界；multi=单参考直生（连续镜接力"
+                                  "用 multi + video_reference_asset_id=prev_tail——开场="
+                                  "上一镜实际末帧）。i2v/keyframes 需要已选首帧。"),
+                  },
+    "video_reference_asset_id": {"type": "string",
+                                 "description": ("multi 按镜参考选择：填「prev_tail」= 尾帧"
+                                                 "接力（参考=上一镜实际视频末帧，39D relay "
+                                                 "链标准用法）；填 look 的 approved 参考 "
+                                                 "asset_id = 用该身份参考直生（链首镜/独立镜，"
+                                                 "REFERENCE_ONLY）；省略 = 确定性规则（cast "
+                                                 "look hero）。"),
+                                 },
 }
 
 _SHOT_CREATE_ITEMS_SCHEMA = {
