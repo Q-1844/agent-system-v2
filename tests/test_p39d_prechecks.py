@@ -66,6 +66,14 @@ def test_detector_english_wordlist():
     assert "standing" in c["static_pose_keywords"]["ref_a"]
 
 
+def test_detector_chinese_gliding_word():
+    """P39D 首镜语义（云端滑翔）必须命中——词表回归锚定。"""
+    c = detect_pose_reference_conflict(
+        ["大鹤以从容的姿态滑翔于云端之上"], [("ref_a", "站立正面")])
+    assert c is not None
+    assert "滑翔" in c["matched_motion_keywords"]
+
+
 def test_detector_multi_pose_look_advisory():
     """38 walk_side 先例：Look 已含动作匹配参考 → 冲突 + 修复通道提示。"""
     c = detect_pose_reference_conflict(

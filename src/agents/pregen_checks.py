@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional, Tuple
 # 位移动作关键词（镜头动作侧）——保守词表：两字起步，避免"飞快""站起"误伤
 _MOTION_LOCOMOTION_KEYWORDS = (
     "飞行", "飞翔", "翱翔", "飞离", "飞过", "飞向", "飞起", "腾空", "俯冲", "盘旋",
+    "滑翔", "振翅", "展翅", "掠水",
     "奔跑", "飞奔", "疾驰", "跳跃", "跃过", "跃起", "腾跃",
     "游动", "游泳", "游过", "潜游", "窜过", "掠过",
     "flying", "soaring", "gliding", "flapping", "hovering",
