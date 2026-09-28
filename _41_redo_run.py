@@ -107,7 +107,37 @@ async def run(task: str, session_id: str | None = None) -> int:
             except Exception:
                 pass
 
-        result = await director_turn(rt, PROJECT, sid, task, event_cb=cb)
+        # 09-28 实测：Agnes 上游瞬时 500 有两种形态终结 turn——①异常抛出；
+        # ②director_turn 捕获后返回 [执行失败: …] 结果（实证：18 工具调用全
+        # ok 后，合成回复的 LLM 调用 500，result 落盘 failed）。外层重试：
+        # 同 session 重发同任务（resume 语义与 --continue 一致，agent 带部分
+        # 历史重新锚定，恢复分支幂等）。非瞬态失败原样落盘不丢证据。
+        TRANSIENT_SIGNS = ("500", "502", "503", "504", "do_request_failed",
+                           "timeout", "connection", "stream 错误")
+        result = None
+        for attempt in range(1, 6):
+            failure = None
+            try:
+                result = await director_turn(rt, PROJECT, sid, task, event_cb=cb)
+                raw = str(result.get("assistant_message") or "")
+                if raw.startswith("[执行失败"):
+                    failure = raw
+            except Exception as e:  # noqa: BLE001 —— 顶层兜底
+                result = None
+                failure = f"{type(e).__name__}: {e}"
+            if failure is None:
+                break
+            transient = any(s in failure for s in TRANSIENT_SIGNS)
+            if attempt >= 5 or not transient:
+                if result is None:
+                    raise  # 异常路径原样上抛
+                break  # 失败 result 保留落盘（证据不丢）
+            wait_s = min(30 * attempt, 120)
+            print(f"\n[retry {attempt}/5] turn failed（{failure[:160]}）"
+                  f"→ {wait_s}s 后重发同任务（session={sid}）", flush=True)
+            await asyncio.sleep(wait_s)
+            result = None
+        assert result is not None
         dur = time.time() - t0
         (EVROOT / f"result_{n}.json").write_text(
             json.dumps(result, ensure_ascii=False, indent=1, default=str),
