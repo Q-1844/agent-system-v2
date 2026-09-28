@@ -104,6 +104,11 @@ class BoundImageRequest:
     # pack_only=逐项对应；continuity_tail=末尾多一条 reference_previous 末帧（creative
     # relay，无 pack role）；first_frame_head=头部多一条尾帧构图基础（已选首帧，无 pack role）。
     ref_layout: str = "pack_only"
+    # Phase 3 provenance 补全：continuity_tail 布局下，实际发送的尾帧身份
+    # （来源镜头/来源视频版本/不可变 URL）。此前只记 ref_layout 标志，持久
+    # receipt（used_reference_ids/sent_ref_sequence）不含这条临时尾帧——审计问
+    # "图片请求里到底发了哪张尾帧"时无法回答。
+    continuity_ref: Optional[Dict[str, Any]] = None
     # 31.md C5：本请求是否启用人数排除子句（provenance 可追溯；默认关）
     population_constraint: bool = False
 
@@ -120,6 +125,7 @@ class BoundImageRequest:
             "scene_reference_mode": self.scene_reference_mode,
             "human_reference_mode": self.human_reference_mode,
             "ref_layout": self.ref_layout,
+            "continuity_ref": dict(self.continuity_ref) if self.continuity_ref else None,
             "population_constraint": self.population_constraint,
         }
 
@@ -180,6 +186,8 @@ class BoundImageRequest:
                 "scene_reference_mode": self.scene_reference_mode,
                 "human_reference_mode": self.human_reference_mode,
                 "ref_layout": self.ref_layout,
+                **({"continuity_tail": dict(self.continuity_ref)}
+                   if self.continuity_ref else {}),
             })
 
 
@@ -812,6 +820,7 @@ def build_bound_first_frame_input(project_dir, project: Any, shot: Any, *,
     # ---- continuity（Shot creative relay，Phase 6A 既有机制；append 尾部）----
     continuity_clause = ""
     continuity_media_used = False
+    continuity_ref: Optional[Dict[str, Any]] = None
     from src.core.models import OpeningSource
     if shot.opening_source == OpeningSource.REFERENCE_PREVIOUS.value and shot.source_shot_id:
         prev = project.get_shot(shot.source_shot_id)
@@ -823,6 +832,14 @@ def build_bound_first_frame_input(project_dir, project: Any, shot: Any, *,
         if media:
             image_refs.append(media)
             continuity_media_used = True
+            # Phase 3：持久 provenance——这条尾帧不在 pack roles 里，此前只留
+            # ref_layout 标志；现在把来源镜头/来源视频版本/不可变 URL 记全。
+            continuity_ref = {
+                "source_shot_id": shot.source_shot_id,
+                "end_source_version": getattr(prev, "video_end_source_version", None)
+                if prev is not None else None,
+                "url": (getattr(end, "url", None) or None) if end is not None else None,
+                "media_is_data_uri": bool(str(media).startswith("data:"))}
             continuity_clause = (
                 ". Maintain continuity with the previous shot's ending frame: keep "
                 "character identity, environment, outfit and lighting direction; "
@@ -851,6 +868,7 @@ def build_bound_first_frame_input(project_dir, project: Any, shot: Any, *,
         scene_reference_mode=resolved_scene_mode,
         human_reference_mode=resolved_human_mode,
         ref_layout="continuity_tail" if continuity_media_used else "pack_only",
+        continuity_ref=continuity_ref,
         population_constraint=bool(population_constraint))
 
 

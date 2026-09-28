@@ -1,16 +1,37 @@
 {
   "skill_id": "full-story-relay-calibration",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "name": "全片尾帧接力连续性校准",
-  "description": "整条故事镜头链的尾帧接力连续性生产协作：预编剧冻结→逐镜生成→接缝测量→Vision 证据→三档裁定（none/minor/major）→trace 落档→按档继续/修复/升级。",
+  "description": "整条故事镜头链的尾帧接力连续性生产协作：预编剧冻结→逐镜生成→接缝测量→Vision 证据→三档裁定（none/minor/major）→trace 落档→按档继续/修复/升级。 起步/再锚定决策入口（路径 a-f）统一在此 Skill。",
   "category": "workflow",
   "source": "builtin_core",
   "status": "active",
   "applicability": "整条故事镜头链按尾帧接力（multi relay / inherit_previous）逐镜生成视频、需要保持跨镜头连续性时；或用户要求进行全片连续性校准/检查。",
   "triggers": [
-    "校准", "连续性", "接缝", "尾帧接力", "接力", "calibration",
-    "continuity", "seam", "relay", "三档", "裁定", "major", "minor",
-    "预编剧", "逐镜生成", "整条故事", "全片生成", "整条链"
+    "校准",
+    "连续性",
+    "接缝",
+    "尾帧接力",
+    "接力",
+    "calibration",
+    "continuity",
+    "seam",
+    "relay",
+    "三档",
+    "裁定",
+    "major",
+    "minor",
+    "预编剧",
+    "逐镜生成",
+    "整条故事",
+    "全片生成",
+    "整条链",
+    "身份漂移",
+    "再锚定",
+    "组首",
+    "尾帧接续",
+    "融合首帧",
+    "起步决策"
   ],
   "required_capabilities": {
     "producer": [
@@ -33,7 +54,11 @@
       "shot.production.refresh",
       "shot.update"
     ],
-    "script_writer": ["story.list", "story.read", "story.update"],
+    "script_writer": [
+      "story.list",
+      "story.read",
+      "story.update"
+    ],
     "character_designer": [
       "character.list",
       "character.read",

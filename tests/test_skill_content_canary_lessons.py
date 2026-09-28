@@ -84,7 +84,8 @@ def test_group_convention_light():
     assert "不存 group canonical、不强制" in k          # 系统不做强制（语义保留）
     assert "由镜头间是否承接上一条真实 `video_end_frame` 决定" in k
     assert "跨段 + 显式接力" in k
-    assert "新组首镜用新参考图/新首帧图" in k
+    # Phase 3：组首起步改为显式决策（端点质量选路），原句退役
+    assert "新组首镜显式决定是否跨组延续" in k
 
 
 def test_slot_semantics_every_video():

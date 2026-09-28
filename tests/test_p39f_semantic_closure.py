@@ -218,7 +218,12 @@ def test_case_c_synced_reference_never_becomes_hard_frame_on_mode_switch(venv):
     n_before = len(fake.video_calls)
     with pytest.raises(BoundGenerationError) as ei:
         _run_video_handler(pdir)
-    assert ei.value.code == "reference_media_unresolvable" or \
+    # Phase 3：fail closed 从「意外的 artifact_basis_missing」升级为设计的
+    # first_frame_slot_not_hard_boundary（ffsync 批次现带 slot_semantics 标记，
+    # video_adapter 编译层 truth gate 拦截）；历史批次（无 marker）仍走
+    # artifact_basis_missing / reference_media_unresolvable 路径。
+    assert ei.value.code in ("first_frame_slot_not_hard_boundary",
+                             "reference_media_unresolvable") or \
         "artifact_basis_missing" in json.dumps(ei.value.detail, default=str)
     assert len(fake.video_calls) == n_before, \
         "同步进槽的参考图被当成 hard first frame 发给了 provider"

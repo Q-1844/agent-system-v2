@@ -149,8 +149,11 @@ def resolve_multi_relay_source(project: Any, shot: Any) -> Optional[Dict[str, An
     if str(getattr(shot, "video_reference_asset_id", "") or "") != VIDEO_REFERENCE_RELAY:
         return None
     flat: List[Any] = []
+    scene_of: Dict[str, Any] = {}
     for sc in (getattr(project, "scenes", None) or []):
-        flat.extend(getattr(sc, "shots", None) or [])
+        for s in (getattr(sc, "shots", None) or []):
+            flat.append(s)
+            scene_of[getattr(s, "shot_id", None)] = getattr(sc, "scene_id", None)
     prev = None
     for idx, s in enumerate(flat):
         if s.shot_id == shot.shot_id:
@@ -163,9 +166,16 @@ def resolve_multi_relay_source(project: Any, shot: Any) -> Optional[Dict[str, An
     url = (getattr(ef, "url", None) or "") if ef is not None else ""
     if not url:
         return None
+    prev_scene = scene_of.get(getattr(prev, "shot_id", None))
+    shot_scene = scene_of.get(getattr(shot, "shot_id", None))
     return {"source_shot_id": prev.shot_id,
             "end_source_version": getattr(prev, "video_end_source_version", None),
-            "url": url}
+            "url": url,
+            # Phase 3 守卫：跨段接力（组首接上一组末镜）是显式决策——标记进
+            # diagnostic + visual basis 指纹，绝不静默（组首 prev_tail 残留会
+            # 按全片顺序自动接上一组；是否合法由 Skill 决策链裁定）。
+            "cross_segment": bool(prev_scene and shot_scene
+                                  and prev_scene != shot_scene)}
 
 
 def _resolve_boundary_frame(shot: Any, pack_basis: dict, slot: str,
@@ -180,6 +190,20 @@ def _resolve_boundary_frame(shot: Any, pack_basis: dict, slot: str,
             "reference_media_unresolvable",
             {"boundary_slot": slot,
              "hint": f"selected_{slot}_frame 无法解析到批次候选（§16 selection truth）"})
+    # Phase 3 守卫（truth gate，先于 freshness）：multi 接力同步进槽的图
+    # （slot_semantics=multi_reference_only，见 routers/shots _sync_first_frame_slot）
+    # 是语义参考记录，不是硬边界帧——i2v/keyframes 把它当第 0 帧消费 = 把
+    # reference_only 冒充 hard_start_boundary，结构化拒绝。
+    slot_semantics = str((getattr(batch, "generation_basis", None) or {})
+                         .get("slot_semantics") or "")
+    if slot_semantics == "multi_reference_only":
+        raise BoundGenerationError(
+            "first_frame_slot_not_hard_boundary",
+            {"slot": slot, "batch_id": batch.batch_id,
+             "hint": "选中首帧槽是 multi 语义参考的同步记录（非硬边界帧）——i2v/"
+                     "keyframes 不得消费。硬首帧两条正路：opening_source="
+                     "inherit_previous 消费来源镜头真实末帧；或重新生成/选择本镜"
+                     "分镜首帧（如融合首帧起步）"})
     detail = boundary_stale_detail(batch, pack_basis)
     if detail:
         raise BoundGenerationError("boundary_frame_stale", {**detail, "slot": slot})
@@ -305,9 +329,19 @@ def build_bound_video_input(project_dir, project: Any, shot: Any, *,
             "reason": "multi_relay_reference",
             "detail": {"source_shot_id": _relay_item["source_shot_id"],
                        "end_source_version": _relay_item.get("end_source_version"),
+                       "cross_segment": bool(_relay_item.get("cross_segment")),
                        "hint": "尾帧接力（用户方向）：参考=上一镜实际视频末帧——开场"
                                "位置状态衔接上一镜结尾，动作由 prompt 驱动；不追求"
                                "逐像素一致（那会锁死模型发挥）"}})
+        if _relay_item.get("cross_segment"):
+            # Phase 3 守卫（可见性，不阻断——跨段显式接力合法，见 Skill 决策链）：
+            # 组首镜的 prev_tail 残留会按全片顺序接上一组末镜，绝不静默。
+            diagnostics.append({
+                "reason": "prev_tail_cross_segment_relay",
+                "detail": {"source_shot_id": _relay_item["source_shot_id"],
+                           "hint": "跨段/组首接力：参考源属上一故事段——跨组延续须与"
+                                   "本镜叙事意图一致；若本镜应独立起步，先清理"
+                                   " video_reference_asset_id=prev_tail 再生成"}})
     elif mode == "multi":
         from src.resources.store import ResourceStore as _RS
         _multi_ref_item = _select_video_reference(pack, shot, diagnostics)
@@ -409,10 +443,12 @@ def build_bound_video_input(project_dir, project: Any, shot: Any, *,
         _vb = bound_visual_basis(basis)
         if _relay_item is not None:
             # V1C 尾帧接力是实际生成依赖——进 visual basis 指纹（freshness 对称：
-            # compute_current_dependency_keys 同规则重算）
+            # compute_current_dependency_keys 同规则重算）；cross_segment 参与指纹
+            # （接力源跨段与否变化 = 依赖变化）。
             _vb = dict(_vb)
             _vb["relay"] = {"source_shot_id": _relay_item["source_shot_id"],
-                            "end_source_version": _relay_item.get("end_source_version")}
+                            "end_source_version": _relay_item.get("end_source_version"),
+                            "cross_segment": bool(_relay_item.get("cross_segment"))}
         nav_pack = build_native_av_pack(
             project_dir, project, shot,
             visual_route="bound", visual_basis=_vb,

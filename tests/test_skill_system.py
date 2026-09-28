@@ -43,7 +43,7 @@ def _write_pkg(root: Path, dir_name: str, manifest: dict,
 
 def _manifest(**over) -> dict:
     base = {
-        "skill_id": "test-skill", "version": "1.0.0", "name": "测试技能",
+        "skill_id": "test-skill", "version": "1.1.0", "name": "测试技能",
         "description": "测试用技能", "category": "workflow",
         "source": "builtin_core", "status": "active",
         "triggers": ["测试"], "applicability": "测试情境",
@@ -64,7 +64,7 @@ def test_builtin_registry_loads_two_golden_skills():
     assert set(skills) == {"full-story-relay-calibration", "keyframes-bridge-repair"}
     assert r.registry_errors() == {}
     pkg = skills["full-story-relay-calibration"]
-    assert pkg.version == "1.0.0" and pkg.category == "workflow"
+    assert pkg.version == "1.1.0" and pkg.category == "workflow"
     assert pkg.source == "builtin_core"
 
 
@@ -282,7 +282,7 @@ def test_structured_trace_jsonl(tmp_path):
     assert kinds == ["hint", "load", "resource", "load_fail"]
     load_ev = events[1]
     assert load_ev["skill_id"] == "full-story-relay-calibration"
-    assert load_ev["version"] == "1.0.0"
+    assert load_ev["version"] == "1.1.0"
     assert load_ev["agent_id"] == "director"
     assert load_ev["detail"]["role"] == "primary_executor"
     assert load_ev["detail"]["capability"]["status"] == "unknown"

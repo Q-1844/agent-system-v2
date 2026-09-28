@@ -177,13 +177,26 @@ def test_adjudication_warning_not_fired_without_video(env):
     assert "adjudication_incomplete_warning" not in out
 
 
-# ============ 39E 用户反馈修正的锚定（接力镜首帧槽同步 + 组首镜参考优先）============
+# ============ 39E 锚定（Phase 3 修订：槽位语义区分 + 融合首帧路径）============
 def test_skill_anchor_relay_first_frame_rules():
+    """Phase 3 修订原锚点更新：39E 的「接力镜不得生成分镜首帧/组首镜默认参考
+    直生」被 SKILL.md「起步/再锚定决策入口」的端点质量选路取代——裸 multi
+    接力镜的槽由系统同步（multi_reference_only 标记），融合首帧路径（c）允许
+    且要求为接续镜生成合成首帧；改 i2v 由 first_frame_slot_not_hard_boundary
+    拦截（编译层 truth gate）。"""
     p = __import__("pathlib").Path(
         "src/agents/skill_system/builtin/full-story-relay-calibration/references/director.md")
     t = p.read_text(encoding="utf-8")
-    assert "接力镜不得生成分镜首帧" in t
-    assert "组首镜默认参考直生" in t
+    assert "slot_semantics=multi_reference_only" in t
+    assert "first_frame_slot_not_hard_boundary" in t
+    assert "融合首帧起步" in t
+    assert "不得在 trace/汇报中称硬接" in t
+    sk = __import__("pathlib").Path(
+        "src/agents/skill_system/builtin/full-story-relay-calibration/SKILL.md")
+    s = sk.read_text(encoding="utf-8")
+    assert "起步/再锚定决策入口" in s
+    assert "融合首帧起步" in s
+    assert "capability-facts.md" in s
 
 
 def test_first_frame_slot_sync_by_role(tmp_path):
