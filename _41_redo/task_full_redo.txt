@@ -1,0 +1,20 @@
+项目：雨灯归航（3 段 13 镜：s01_c01..c06 / s02_c01..c03 / s03_c01..c04）。
+
+生产任务（用户指令 2026-09-28）：全部分镜的画面与视频重新生成测试——每镜的
+分镜图（first_frame）与视频都重做。人物/场景参考资源不动（characters / scenes /
+resources 只读，不重建不改），story 原文不改。
+
+背景事实：视频模型已于 2026-09-28 统一为 agnes-video-2.5-flash（v2.0 已删除，
+系统对 v2.0 显式拒绝；config 默认即 2.5-flash，无需显式选模型）。13 镜现有视频
+全部是 v2.0 存量。本任务 = 用 2.5-flash 把 13 镜分镜图+视频全部重做一遍，作为
+新模型下的全量重测；旧版本历史保留（VideoVersion immutable）。
+
+要求：
+1. 先 skill.load（full-story-relay-calibration）并读 references/capability-facts.md；
+2. 每镜按 skill 的起步/再锚定决策入口选路径（分镜图生成 → 视频生成），逐镜
+   走正常生产流（binding、生成、生成后视觉门槛）；
+3. 生成后按 skill 完成接缝测量（calibration.seam_measure）与 trace_upsert 闭环；
+4. major / 级联 / 插桥决策停在用户闸门，不自动插桥、不改 story；
+5. 重试预算按 skill 纪律：单次锚定重试，仍失败 stop_retries_and_report；
+6. 视频时长按 skill 时长配方（静态 5s / 动态 8s / 复杂 10s）；配额充足
+   （Token Plan 500s/天，当前限时免费）。

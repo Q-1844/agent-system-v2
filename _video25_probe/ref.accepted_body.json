@@ -1,0 +1,11 @@
+{
+ "model": "agnes-video-2.5-flash",
+ "prompt": "Use <Picture 1> as the character appearance reference and <Picture 2> as the scene continuation reference. The character walks slowly along a lantern-lit rainy street at dusk, smooth camera tracking, flat 2D storybook style, keep appearance consistent with <Picture 1>.",
+ "mode": "reference",
+ "seconds": "5",
+ "images": [
+  "https://i.ibb.co/fGH0wF93/8f6ccfdbfd0e.png",
+  "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_uytmu7w5At5j49l2X4wzn0xoEMUaaOg8/output.png"
+ ],
+ "seed": 42
+}
