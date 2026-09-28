@@ -111,7 +111,8 @@ def test_stream_retry_on_429_agnes(client, monkeypatch):
 
 
 def test_stream_429_exhaustion_raises(client, monkeypatch):
-    """持续 429 → 3 次尝试后抛 AgnesError（保留 status=429）。"""
+    """持续 429 → 5 次尝试后抛 AgnesError（保留 status=429）。
+    42.md 缺陷③：stream_attempts 3→5 对齐非流式 _request 耐心。"""
     import pytest
     from src.api.agnes_client import AgnesError
     import src.api.agnes_client as ac
@@ -129,7 +130,53 @@ def test_stream_429_exhaustion_raises(client, monkeypatch):
     with pytest.raises(AgnesError) as ei:
         asyncio.run(run())
     assert ei.value.status == 429
-    assert len(mock.find("POST", "/v1/chat/completions")) == 3
+    assert len(mock.find("POST", "/v1/chat/completions")) == 5
+
+
+def test_stream_pre_event_network_error_retried(client, monkeypatch):
+    """42.md 缺陷③：零事件中途断流（ReadTimeout）→ 客户端层安全重试 → 成功出事件。
+    （此前中途网络异常直接抛出终结 turn——Phase 41 单次 500 终结 88 分钟 turn 的
+    客户端层缺口。）"""
+    import src.api.agnes_client as ac
+
+    async def _no_sleep(s):
+        pass
+    monkeypatch.setattr(ac.asyncio, "sleep", _no_sleep)
+    mock = MockAgnes(stream_fail_mode="pre", stream_fail_times=1)
+    agnes = make_agnes(mock)
+
+    async def run():
+        evs = []
+        async for ev in agnes.chat_completion_stream([{"role": "user", "content": "hi"}]):
+            evs.append(ev)
+        return evs
+
+    evs = asyncio.run(run())
+    assert any(e["kind"] == "finish" for e in evs)
+    assert len(mock.find("POST", "/v1/chat/completions")) == 2   # 1 次断流 + 1 次成功
+
+
+def test_stream_post_event_network_error_not_retried(client, monkeypatch):
+    """42.md 缺陷③：已产出事件后断流 → 客户端层【不】重试（重发会重复
+    delta/tool_call），原样抛给 turn 层处理。"""
+    import pytest
+    import httpx
+    import src.api.agnes_client as ac
+
+    async def _no_sleep(s):
+        pass
+    monkeypatch.setattr(ac.asyncio, "sleep", _no_sleep)
+    mock = MockAgnes(stream_fail_mode="mid", stream_fail_times=1)
+    agnes = make_agnes(mock)
+
+    async def run():
+        got = []
+        async for ev in agnes.chat_completion_stream([{"role": "user", "content": "hi"}]):
+            got.append(ev)
+
+    with pytest.raises(httpx.ReadTimeout):
+        asyncio.run(run())
+    assert len(mock.find("POST", "/v1/chat/completions")) == 1, "已推送事件后不得重发"
 
 
 # ---------- 2026-09-06：视频模型双契约（v2.0 legacy / 2.5-flash 新契约） ----------

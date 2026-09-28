@@ -143,6 +143,10 @@ refresh → 重生成 → 校准继续；场景参考有效且 fresh 时直接�
 
 ## 7) trace 落档
 
+`calibration.run_create`（42.md 起）：校准 run 由你自主创建（story_id 必填，
+title 写清本次校准目的）——**不得以「无 run 可写」为由跳过 trace 落档**；
+run_id 缺失时先 run_create 再 trace_upsert。
+
 `calibration.trace_read` / `calibration.trace_upsert`：每次裁定至少保存
 expected_tail / actual_tail / tail_to_first_mae / end_to_end_mae /
 vision_assessment / director_visual_observation / vision_vs_director_diff /

@@ -53,7 +53,9 @@ class MockAgnes:
                  video_id="task_mock123",
                  poll_in_progress=2,
                  i2i_extra_400=False,
-                 stream_429_times=0):
+                 stream_429_times=0,
+                 stream_fail_mode=None,
+                 stream_fail_times=0):
         self.image_url = image_url
         self.video_url = video_url
         self.video_id = video_id
@@ -62,6 +64,11 @@ class MockAgnes:
         self.i2i_extra_400 = i2i_extra_400
         # 前 N 次 /v1/chat/completions 返 429（流式重试路径测试）
         self.stream_429_times = stream_429_times
+        # 42.md 缺陷③：流式中途断流——"pre"=未产出任何事件即断（零事件，可安全
+        # 重试）；"mid"=产出 1 个事件后断（已推送，客户端层不得重试）。前
+        # stream_fail_times 次 chat 请求断流。
+        self.stream_fail_mode = stream_fail_mode
+        self.stream_fail_times = stream_fail_times
         self.requests: list[httpx.Request] = []
         self._poll_count = 0
         self._chat_count = 0
@@ -88,6 +95,14 @@ class MockAgnes:
         self._chat_count += 1
         if self._chat_count <= self.stream_429_times:
             return httpx.Response(429, text='{"error":{"message":"rate limited"}}')
+        if self.stream_fail_mode and self._chat_count <= self.stream_fail_times:
+            async def _broken_stream():
+                if self.stream_fail_mode == "mid":
+                    part = ('data: {"choices":[{"delta":{"role":"assistant",'
+                            '"content":"部分"}}]}\n\n').encode("utf-8")
+                    yield part
+                raise httpx.ReadTimeout("mid-stream cut")
+            return httpx.Response(200, content=_broken_stream())
         sse = ('data: {"choices":[{"delta":{"role":"assistant","content":"你好"}}]}\n\n'
                'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n'
                "data: [DONE]\n\n")

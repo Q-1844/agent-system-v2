@@ -411,7 +411,10 @@ def compute_current_dependency_keys(project_dir, project: Any, shot: Any, *,
                 visual = dict(visual)
                 visual["relay"] = {"source_shot_id": relay["source_shot_id"],
                                    "end_source_version": relay.get("end_source_version"),
-                                   "cross_segment": bool(relay.get("cross_segment"))}
+                                   "cross_segment": bool(relay.get("cross_segment")),
+                                   # 42.md 缺陷⑤：Look+尾帧双参考开关（canonical
+                                   # 哨兵 prev_tail_look）——build 侧同键对称
+                                   "identity": bool(relay.get("identity"))}
     else:
         mode = ("keyframes" if shot.link_mode == "keyframes"
                 else "multi" if shot.link_mode == "multi" else "i2v")

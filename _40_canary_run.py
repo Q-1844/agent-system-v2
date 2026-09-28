@@ -75,6 +75,9 @@ async def run(tag: str, task: str, out: Path, session_id: str | None = None,
         _pc.shot_input_semantics = _boom
         print("[inject] pregen_checks.shot_input_semantics -> raise")
     await q.start()
+    # 42.md §二缺陷②：驱动器恢复钩子（与 _41_redo_run 同理由）。
+    from services.lifecycle import recover_pending_videos
+    await recover_pending_videos(queue=q)
     try:
         from src.agents.runtime import get_agent_runtime
         from src.agents.director import director_turn

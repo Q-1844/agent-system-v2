@@ -448,29 +448,48 @@ class AgnesClient:
         # SenseNova text_endpoint 时为 3，Agnes 主路径流式 429/500/520 直接抛（真机：
         # producer turn 以 [执行失败] 收尾）。重试只发生在状态码检查点（尚未产出任何
         # 事件），无重复推送风险；auth/参数类（非 RETRYABLE）仍然立即失败。
-        stream_attempts = 3
+        # 42.md §二缺陷③（Phase 41 实证：单次瞬时 500 终结 88 分钟 turn）加固两点：
+        # a) stream_attempts 3→5 对齐非流式 _request 的耐心；退避对齐其量级
+        #    （6/12/24/48，cap 45s）——上游 5xx 风暴窗口实测可持续 60-190s。
+        # b) 中途网络异常（ReadTimeout/TransportError）在【零事件已产出】时同样
+        #    重试（此前直接抛出终结 turn）；已产出事件后不重试——重发会造成
+        #    重复 delta/tool_call，交由 turn 层（driver 双形态重试/用户重发）处理。
+        stream_attempts = 5
         for attempt in range(stream_attempts):
-            async with httpx.AsyncClient(
-                    base_url=base_url, headers=headers,
-                    timeout=httpx.Timeout(connect=30, read=360, write=30, pool=30),
-                    proxy=self.proxy, follow_redirects=True,
-                    transport=self.transport) as c:
-                async with c.stream("POST", "/v1/chat/completions", json=body) as r:
-                    if r.status_code != 200:
-                        body_txt = (await r.aread()).decode("utf-8", "replace")[:400]
-                        if (attempt + 1 < stream_attempts
-                                and r.status_code in RETRYABLE):
-                            log.warning("[%s] stream 可重试错误 %d（第 %d/%d 次）",
-                                        "text", r.status_code, attempt + 1,
-                                        stream_attempts)
-                            backoff = min(20, (2 ** attempt) * 3) + random.uniform(0, 2)
-                            await asyncio.sleep(backoff)
-                            continue
-                        raise AgnesError(f"{label} stream 错误 {r.status_code}: {body_txt}",
-                                         r.status_code, body_txt)
-                    async for ev in _parse_sse_events(_watched_lines(r.aiter_lines())):
-                        yield ev
-                    break   # 流正常走完（或已在产出事件后结束），不再重试
+            emitted = False
+            try:
+                async with httpx.AsyncClient(
+                        base_url=base_url, headers=headers,
+                        timeout=httpx.Timeout(connect=30, read=360, write=30, pool=30),
+                        proxy=self.proxy, follow_redirects=True,
+                        transport=self.transport) as c:
+                    async with c.stream("POST", "/v1/chat/completions", json=body) as r:
+                        if r.status_code != 200:
+                            body_txt = (await r.aread()).decode("utf-8", "replace")[:400]
+                            if (attempt + 1 < stream_attempts
+                                    and r.status_code in RETRYABLE):
+                                log.warning("[%s] stream 可重试错误 %d（第 %d/%d 次）",
+                                            "text", r.status_code, attempt + 1,
+                                            stream_attempts)
+                                backoff = min(45, (2 ** attempt) * 6) + random.uniform(0, 2)
+                                await asyncio.sleep(backoff)
+                                continue
+                            raise AgnesError(f"{label} stream 错误 {r.status_code}: {body_txt}",
+                                             r.status_code, body_txt)
+                        async for ev in _parse_sse_events(_watched_lines(r.aiter_lines())):
+                            emitted = True
+                            yield ev
+                        break   # 流正常走完（或已在产出事件后结束），不再重试
+            except (httpx.TimeoutException, httpx.TransportError) as e:
+                # 零事件 → 安全重试（与状态码检查点同一纪律）；已产出事件 →
+                # 消费方已收到部分流，客户端层重发必重复，原样抛给 turn 层。
+                if emitted or attempt + 1 >= stream_attempts:
+                    raise
+                log.warning("[text] stream 中途网络异常（零事件，重试 %d/%d）: %s",
+                            attempt + 1, stream_attempts, str(e)[:120])
+                backoff = min(45, (2 ** attempt) * 6) + random.uniform(0, 2)
+                await asyncio.sleep(backoff)
+                continue
         if self.quota: self.quota.consume("text_calls", 1)
 
     # ---------- 图片 ----------

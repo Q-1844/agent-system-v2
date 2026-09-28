@@ -1,0 +1,3156 @@
+{
+ "s02_c01": {
+  "prompt_en": "",
+  "video_prompt_en": "Camera remains static in a medium shot. The otter carefully lifts a new clear glass shade and aligns it onto the copper lamp body, pressing it gently into place with both paws to secure it.",
+  "seed": null,
+  "first_frame_batches": [
+   {
+    "batch_id": "ff_b1492520",
+    "created_at": 1790514447.8161917,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "binding_revision": "d0f8ec51",
+     "binding_document_revision": "a1863564",
+     "binding_readiness": "READY",
+     "dependency_fingerprints": {
+      "visual_profile": "21bbaa92",
+      "characters": {
+       "阿獭": "1ade8d78"
+      },
+      "looks": {
+       "look_295fc0cd2345": "11bb2ad2"
+      },
+      "props": {},
+      "compositions": {
+       "comp_1894770b967f": "aa945c9e"
+      },
+      "scene_instance": "da744390",
+      "scene_instance_view": null
+     },
+     "resolved_scene_instance_view_id": "sciv_8c9742b8016b",
+     "visual_profile_fingerprint": "21bbaa92",
+     "image_provider": "agnes",
+     "size_tier": "1K",
+     "ratio": "16:9",
+     "scene_reference_mode": "full",
+     "human_reference_mode": "keep",
+     "ref_layout": "pack_only",
+     "population_constraint": false,
+     "sent_ref_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "composition"
+     ],
+     "used_reference_ids": [
+      "ref_f0a099a2e973",
+      "ref_92ad3512a47f",
+      "ref_3d372c85a955"
+     ],
+     "semantic_roles": [
+      {
+       "reference_asset_id": "ref_f0a099a2e973",
+       "source_type": "scene_instance_view",
+       "purpose": "scene_context",
+       "priority": "primary",
+       "temporal_scope": "throughout",
+       "subject_character": null,
+       "prop_id": null,
+       "checksum": "5629ac7df26b86ab7962191ddb07a5f3b960ff2599ef44838a8e8893b559a94b",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_92ad3512a47f",
+       "source_type": "character_look",
+       "purpose": "character_appearance",
+       "priority": "supporting",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "133df74d6ce9f6aaf26c3bd56831017dd129f10551540c9a6ef62cee7600b734",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_3d372c85a955",
+       "source_type": "composition",
+       "purpose": "spatial_relation",
+       "priority": "primary",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "ece649d867a8bd58d535b8baea8f70d44e867e0ad0e2fc9d7dfe4177f3324da4",
+       "derivation": null
+      }
+     ],
+     "dropped_optional": [
+      {
+       "source_id": "legacy:阿獭:front",
+       "reference_asset_id": "legacy:阿獭:front",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:side",
+       "reference_asset_id": "legacy:阿獭:side",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:back",
+       "reference_asset_id": "legacy:阿獭:back",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      }
+     ]
+    },
+    "versions": [
+     {
+      "id": "ff_b1492520_1",
+      "input_visuals": null,
+      "prompt_head": ""
+     },
+     {
+      "id": "ff_b1492520_2",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   },
+   {
+    "batch_id": "ff_e4a11a69",
+    "created_at": 1790515295.608318,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "binding_revision": "62cb9670",
+     "binding_document_revision": "790f409f",
+     "binding_readiness": "READY",
+     "dependency_fingerprints": {
+      "visual_profile": "21bbaa92",
+      "characters": {
+       "阿獭": "1ade8d78"
+      },
+      "looks": {
+       "look_295fc0cd2345": "11bb2ad2"
+      },
+      "props": {},
+      "compositions": {
+       "comp_fb128c718c86": "a1f3581a"
+      },
+      "scene_instance": "da744390",
+      "scene_instance_view": null
+     },
+     "resolved_scene_instance_view_id": "sciv_8c9742b8016b",
+     "visual_profile_fingerprint": "21bbaa92",
+     "image_provider": "agnes",
+     "size_tier": "1K",
+     "ratio": "16:9",
+     "scene_reference_mode": "full",
+     "human_reference_mode": "keep",
+     "ref_layout": "pack_only",
+     "population_constraint": false,
+     "sent_ref_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "composition"
+     ],
+     "used_reference_ids": [
+      "ref_f0a099a2e973",
+      "ref_92ad3512a47f",
+      "ref_e4e31677e7ab"
+     ],
+     "semantic_roles": [
+      {
+       "reference_asset_id": "ref_f0a099a2e973",
+       "source_type": "scene_instance_view",
+       "purpose": "scene_context",
+       "priority": "primary",
+       "temporal_scope": "throughout",
+       "subject_character": null,
+       "prop_id": null,
+       "checksum": "5629ac7df26b86ab7962191ddb07a5f3b960ff2599ef44838a8e8893b559a94b",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_92ad3512a47f",
+       "source_type": "character_look",
+       "purpose": "character_appearance",
+       "priority": "supporting",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "133df74d6ce9f6aaf26c3bd56831017dd129f10551540c9a6ef62cee7600b734",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_e4e31677e7ab",
+       "source_type": "composition",
+       "purpose": "spatial_relation",
+       "priority": "primary",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "4c2be476c1f8abc1f7ed91cea5c0c719c9f585e8ff2d7497468f3d4f6fdfec2f",
+       "derivation": null
+      }
+     ],
+     "dropped_optional": [
+      {
+       "source_id": "legacy:阿獭:front",
+       "reference_asset_id": "legacy:阿獭:front",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:side",
+       "reference_asset_id": "legacy:阿獭:side",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:back",
+       "reference_asset_id": "legacy:阿獭:back",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      }
+     ]
+    },
+    "versions": [
+     {
+      "id": "ff_e4a11a69_1",
+      "input_visuals": null,
+      "prompt_head": ""
+     },
+     {
+      "id": "ff_e4a11a69_2",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   },
+   {
+    "batch_id": "ff_0115e26a",
+    "created_at": 1790568162.6920755,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "binding_revision": "62cb9670",
+     "binding_document_revision": "f89d0a2c",
+     "binding_readiness": "READY",
+     "dependency_fingerprints": {
+      "visual_profile": "21bbaa92",
+      "characters": {
+       "阿獭": "1ade8d78"
+      },
+      "looks": {
+       "look_295fc0cd2345": "11bb2ad2"
+      },
+      "props": {},
+      "compositions": {
+       "comp_fb128c718c86": "a1f3581a"
+      },
+      "scene_instance": "da744390",
+      "scene_instance_view": null
+     },
+     "resolved_scene_instance_view_id": "sciv_8c9742b8016b",
+     "visual_profile_fingerprint": "21bbaa92",
+     "image_provider": "agnes",
+     "size_tier": "1K",
+     "ratio": "16:9",
+     "scene_reference_mode": "full",
+     "human_reference_mode": "keep",
+     "ref_layout": "pack_only",
+     "population_constraint": false,
+     "sent_ref_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "composition"
+     ],
+     "used_reference_ids": [
+      "ref_f0a099a2e973",
+      "ref_92ad3512a47f",
+      "ref_e4e31677e7ab"
+     ],
+     "semantic_roles": [
+      {
+       "reference_asset_id": "ref_f0a099a2e973",
+       "source_type": "scene_instance_view",
+       "purpose": "scene_context",
+       "priority": "primary",
+       "temporal_scope": "throughout",
+       "subject_character": null,
+       "prop_id": null,
+       "checksum": "5629ac7df26b86ab7962191ddb07a5f3b960ff2599ef44838a8e8893b559a94b",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_92ad3512a47f",
+       "source_type": "character_look",
+       "purpose": "character_appearance",
+       "priority": "supporting",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "133df74d6ce9f6aaf26c3bd56831017dd129f10551540c9a6ef62cee7600b734",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_e4e31677e7ab",
+       "source_type": "composition",
+       "purpose": "spatial_relation",
+       "priority": "primary",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "4c2be476c1f8abc1f7ed91cea5c0c719c9f585e8ff2d7497468f3d4f6fdfec2f",
+       "derivation": null
+      }
+     ],
+     "dropped_optional": [
+      {
+       "source_id": "legacy:阿獭:front",
+       "reference_asset_id": "legacy:阿獭:front",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:side",
+       "reference_asset_id": "legacy:阿獭:side",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:back",
+       "reference_asset_id": "legacy:阿獭:back",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      }
+     ]
+    },
+    "versions": [
+     {
+      "id": "ff_0115e26a_1",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   },
+   {
+    "batch_id": "ff_e13c3415",
+    "created_at": 1790589426.0357192,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "binding_revision": "62cb9670",
+     "binding_document_revision": "f89d0a2c",
+     "binding_readiness": "READY",
+     "dependency_fingerprints": {
+      "visual_profile": "21bbaa92",
+      "characters": {
+       "阿獭": "1ade8d78"
+      },
+      "looks": {
+       "look_295fc0cd2345": "11bb2ad2"
+      },
+      "props": {},
+      "compositions": {
+       "comp_fb128c718c86": "a1f3581a"
+      },
+      "scene_instance": "da744390",
+      "scene_instance_view": null
+     },
+     "resolved_scene_instance_view_id": "sciv_8c9742b8016b",
+     "visual_profile_fingerprint": "21bbaa92",
+     "image_provider": "agnes",
+     "size_tier": "1K",
+     "ratio": "16:9",
+     "scene_reference_mode": "full",
+     "human_reference_mode": "keep",
+     "ref_layout": "pack_only",
+     "population_constraint": false,
+     "sent_ref_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "composition"
+     ],
+     "used_reference_ids": [
+      "ref_f0a099a2e973",
+      "ref_92ad3512a47f",
+      "ref_e4e31677e7ab"
+     ],
+     "semantic_roles": [
+      {
+       "reference_asset_id": "ref_f0a099a2e973",
+       "source_type": "scene_instance_view",
+       "purpose": "scene_context",
+       "priority": "primary",
+       "temporal_scope": "throughout",
+       "subject_character": null,
+       "prop_id": null,
+       "checksum": "5629ac7df26b86ab7962191ddb07a5f3b960ff2599ef44838a8e8893b559a94b",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_92ad3512a47f",
+       "source_type": "character_look",
+       "purpose": "character_appearance",
+       "priority": "supporting",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "133df74d6ce9f6aaf26c3bd56831017dd129f10551540c9a6ef62cee7600b734",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_e4e31677e7ab",
+       "source_type": "composition",
+       "purpose": "spatial_relation",
+       "priority": "primary",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "4c2be476c1f8abc1f7ed91cea5c0c719c9f585e8ff2d7497468f3d4f6fdfec2f",
+       "derivation": null
+      }
+     ],
+     "dropped_optional": [
+      {
+       "source_id": "legacy:阿獭:front",
+       "reference_asset_id": "legacy:阿獭:front",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:side",
+       "reference_asset_id": "legacy:阿獭:side",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:back",
+       "reference_asset_id": "legacy:阿獭:back",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      }
+     ]
+    },
+    "versions": [
+     {
+      "id": "ff_e13c3415_1",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   }
+  ]
+ },
+ "s02_c02": {
+  "prompt_en": "",
+  "video_prompt_en": "",
+  "seed": null,
+  "first_frame_batches": [
+   {
+    "batch_id": "ff_e7d77a45",
+    "created_at": 1790514615.416214,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "binding_revision": "1e53556f",
+     "binding_document_revision": "a1863564",
+     "binding_readiness": "READY",
+     "dependency_fingerprints": {
+      "visual_profile": "21bbaa92",
+      "characters": {
+       "阿獭": "1ade8d78"
+      },
+      "looks": {
+       "look_295fc0cd2345": "11bb2ad2"
+      },
+      "props": {},
+      "compositions": {
+       "comp_1894770b967f": "aa945c9e"
+      },
+      "scene_instance": "da744390",
+      "scene_instance_view": null
+     },
+     "resolved_scene_instance_view_id": "sciv_8c9742b8016b",
+     "visual_profile_fingerprint": "21bbaa92",
+     "image_provider": "agnes",
+     "size_tier": "1K",
+     "ratio": "16:9",
+     "scene_reference_mode": "full",
+     "human_reference_mode": "keep",
+     "ref_layout": "pack_only",
+     "population_constraint": false,
+     "sent_ref_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "composition"
+     ],
+     "used_reference_ids": [
+      "ref_f0a099a2e973",
+      "ref_92ad3512a47f",
+      "ref_3d372c85a955"
+     ],
+     "semantic_roles": [
+      {
+       "reference_asset_id": "ref_f0a099a2e973",
+       "source_type": "scene_instance_view",
+       "purpose": "scene_context",
+       "priority": "primary",
+       "temporal_scope": "throughout",
+       "subject_character": null,
+       "prop_id": null,
+       "checksum": "5629ac7df26b86ab7962191ddb07a5f3b960ff2599ef44838a8e8893b559a94b",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_92ad3512a47f",
+       "source_type": "character_look",
+       "purpose": "character_appearance",
+       "priority": "supporting",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "133df74d6ce9f6aaf26c3bd56831017dd129f10551540c9a6ef62cee7600b734",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_3d372c85a955",
+       "source_type": "composition",
+       "purpose": "spatial_relation",
+       "priority": "primary",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "ece649d867a8bd58d535b8baea8f70d44e867e0ad0e2fc9d7dfe4177f3324da4",
+       "derivation": null
+      }
+     ],
+     "dropped_optional": [
+      {
+       "source_id": "legacy:阿獭:front",
+       "reference_asset_id": "legacy:阿獭:front",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:side",
+       "reference_asset_id": "legacy:阿獭:side",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:back",
+       "reference_asset_id": "legacy:阿獭:back",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      }
+     ]
+    },
+    "versions": [
+     {
+      "id": "ff_e7d77a45_1",
+      "input_visuals": null,
+      "prompt_head": ""
+     },
+     {
+      "id": "ff_e7d77a45_2",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   },
+   {
+    "batch_id": "ff_1d1968ca",
+    "created_at": 1790515303.790651,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "binding_revision": "47bfa94b",
+     "binding_document_revision": "790f409f",
+     "binding_readiness": "READY",
+     "dependency_fingerprints": {
+      "visual_profile": "21bbaa92",
+      "characters": {
+       "阿獭": "1ade8d78"
+      },
+      "looks": {
+       "look_295fc0cd2345": "11bb2ad2"
+      },
+      "props": {},
+      "compositions": {
+       "comp_fb128c718c86": "a1f3581a"
+      },
+      "scene_instance": "da744390",
+      "scene_instance_view": null
+     },
+     "resolved_scene_instance_view_id": "sciv_8c9742b8016b",
+     "visual_profile_fingerprint": "21bbaa92",
+     "image_provider": "agnes",
+     "size_tier": "1K",
+     "ratio": "16:9",
+     "scene_reference_mode": "full",
+     "human_reference_mode": "keep",
+     "ref_layout": "pack_only",
+     "population_constraint": false,
+     "sent_ref_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "composition"
+     ],
+     "used_reference_ids": [
+      "ref_f0a099a2e973",
+      "ref_92ad3512a47f",
+      "ref_e4e31677e7ab"
+     ],
+     "semantic_roles": [
+      {
+       "reference_asset_id": "ref_f0a099a2e973",
+       "source_type": "scene_instance_view",
+       "purpose": "scene_context",
+       "priority": "primary",
+       "temporal_scope": "throughout",
+       "subject_character": null,
+       "prop_id": null,
+       "checksum": "5629ac7df26b86ab7962191ddb07a5f3b960ff2599ef44838a8e8893b559a94b",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_92ad3512a47f",
+       "source_type": "character_look",
+       "purpose": "character_appearance",
+       "priority": "supporting",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "133df74d6ce9f6aaf26c3bd56831017dd129f10551540c9a6ef62cee7600b734",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_e4e31677e7ab",
+       "source_type": "composition",
+       "purpose": "spatial_relation",
+       "priority": "primary",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "4c2be476c1f8abc1f7ed91cea5c0c719c9f585e8ff2d7497468f3d4f6fdfec2f",
+       "derivation": null
+      }
+     ],
+     "dropped_optional": [
+      {
+       "source_id": "legacy:阿獭:front",
+       "reference_asset_id": "legacy:阿獭:front",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:side",
+       "reference_asset_id": "legacy:阿獭:side",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:back",
+       "reference_asset_id": "legacy:阿獭:back",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      }
+     ]
+    },
+    "versions": [
+     {
+      "id": "ff_1d1968ca_1",
+      "input_visuals": null,
+      "prompt_head": ""
+     },
+     {
+      "id": "ff_1d1968ca_2",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   },
+   {
+    "batch_id": "ff_567a2c58",
+    "created_at": 1790515743.4283538,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "binding_revision": "8da2af3a",
+     "binding_document_revision": "a0998e67",
+     "binding_readiness": "READY",
+     "dependency_fingerprints": {
+      "visual_profile": "21bbaa92",
+      "characters": {
+       "阿獭": "1ade8d78"
+      },
+      "looks": {
+       "look_295fc0cd2345": "11bb2ad2"
+      },
+      "props": {
+       "prop_fb1bd0b18fb1": "822aab6d"
+      },
+      "compositions": {},
+      "scene_instance": "da744390",
+      "scene_instance_view": null
+     },
+     "resolved_scene_instance_view_id": "sciv_8c9742b8016b",
+     "visual_profile_fingerprint": "21bbaa92",
+     "image_provider": "agnes",
+     "size_tier": "1K",
+     "ratio": "16:9",
+     "scene_reference_mode": "full",
+     "human_reference_mode": "keep",
+     "ref_layout": "pack_only",
+     "population_constraint": false,
+     "sent_ref_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "prop"
+     ],
+     "used_reference_ids": [
+      "ref_f0a099a2e973",
+      "ref_92ad3512a47f",
+      "ref_074ed60714d0"
+     ],
+     "semantic_roles": [
+      {
+       "reference_asset_id": "ref_f0a099a2e973",
+       "source_type": "scene_instance_view",
+       "purpose": "scene_context",
+       "priority": "primary",
+       "temporal_scope": "throughout",
+       "subject_character": null,
+       "prop_id": null,
+       "checksum": "5629ac7df26b86ab7962191ddb07a5f3b960ff2599ef44838a8e8893b559a94b",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_92ad3512a47f",
+       "source_type": "character_look",
+       "purpose": "character_appearance",
+       "priority": "primary",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "133df74d6ce9f6aaf26c3bd56831017dd129f10551540c9a6ef62cee7600b734",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_074ed60714d0",
+       "source_type": "prop",
+       "purpose": "prop_identity",
+       "priority": "primary",
+       "temporal_scope": "throughout",
+       "subject_character": "阿獭",
+       "prop_id": "prop_fb1bd0b18fb1",
+       "checksum": "f0008d8fe6fb6daebe35d5ef0fc86367c262068022ecc9c85afc63b59e39ede6",
+       "derivation": null
+      }
+     ],
+     "dropped_optional": [
+      {
+       "source_id": "legacy:阿獭:front",
+       "reference_asset_id": "legacy:阿獭:front",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:side",
+       "reference_asset_id": "legacy:阿獭:side",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:back",
+       "reference_asset_id": "legacy:阿獭:back",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      }
+     ]
+    },
+    "versions": [
+     {
+      "id": "ff_567a2c58_1",
+      "input_visuals": null,
+      "prompt_head": ""
+     },
+     {
+      "id": "ff_567a2c58_2",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   },
+   {
+    "batch_id": "ff_cb6f94a5",
+    "created_at": 1790568162.9626043,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "binding_revision": "8da2af3a",
+     "binding_document_revision": "f89d0a2c",
+     "binding_readiness": "READY",
+     "dependency_fingerprints": {
+      "visual_profile": "21bbaa92",
+      "characters": {
+       "阿獭": "1ade8d78"
+      },
+      "looks": {
+       "look_295fc0cd2345": "11bb2ad2"
+      },
+      "props": {
+       "prop_fb1bd0b18fb1": "822aab6d"
+      },
+      "compositions": {},
+      "scene_instance": "da744390",
+      "scene_instance_view": null
+     },
+     "resolved_scene_instance_view_id": "sciv_8c9742b8016b",
+     "visual_profile_fingerprint": "21bbaa92",
+     "image_provider": "agnes",
+     "size_tier": "1K",
+     "ratio": "16:9",
+     "scene_reference_mode": "context_only",
+     "human_reference_mode": "drop",
+     "ref_layout": "pack_only",
+     "population_constraint": false,
+     "sent_ref_sequence": [
+      "prop"
+     ],
+     "used_reference_ids": [
+      "ref_074ed60714d0"
+     ],
+     "semantic_roles": [
+      {
+       "reference_asset_id": "ref_074ed60714d0",
+       "source_type": "prop",
+       "purpose": "prop_identity",
+       "priority": "primary",
+       "temporal_scope": "throughout",
+       "subject_character": "阿獭",
+       "prop_id": "prop_fb1bd0b18fb1",
+       "checksum": "f0008d8fe6fb6daebe35d5ef0fc86367c262068022ecc9c85afc63b59e39ede6",
+       "derivation": null
+      }
+     ],
+     "dropped_optional": [
+      {
+       "source_id": "sciv_8c9742b8016b",
+       "reference_asset_id": "ref_f0a099a2e973",
+       "reason": "scene_reference_context_only",
+       "detail": {
+        "scene_reference_mode": "context_only"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:front",
+       "reference_asset_id": "legacy:阿獭:front",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:side",
+       "reference_asset_id": "legacy:阿獭:side",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:back",
+       "reference_asset_id": "legacy:阿獭:back",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "look_295fc0cd2345",
+       "reference_asset_id": "ref_92ad3512a47f",
+       "reason": "human_reference_drop",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "紧景别无参考模式：identity 由 prompt 文本承载（D2 §5.2 实验证据）"
+       }
+      }
+     ]
+    },
+    "versions": [
+     {
+      "id": "ff_cb6f94a5_1",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   },
+   {
+    "batch_id": "ff_d2d9d70f",
+    "created_at": 1790589426.3704035,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "binding_revision": "8da2af3a",
+     "binding_document_revision": "f89d0a2c",
+     "binding_readiness": "READY",
+     "dependency_fingerprints": {
+      "visual_profile": "21bbaa92",
+      "characters": {
+       "阿獭": "1ade8d78"
+      },
+      "looks": {
+       "look_295fc0cd2345": "11bb2ad2"
+      },
+      "props": {
+       "prop_fb1bd0b18fb1": "822aab6d"
+      },
+      "compositions": {},
+      "scene_instance": "da744390",
+      "scene_instance_view": null
+     },
+     "resolved_scene_instance_view_id": "sciv_8c9742b8016b",
+     "visual_profile_fingerprint": "21bbaa92",
+     "image_provider": "agnes",
+     "size_tier": "1K",
+     "ratio": "16:9",
+     "scene_reference_mode": "context_only",
+     "human_reference_mode": "drop",
+     "ref_layout": "pack_only",
+     "population_constraint": false,
+     "sent_ref_sequence": [
+      "prop"
+     ],
+     "used_reference_ids": [
+      "ref_074ed60714d0"
+     ],
+     "semantic_roles": [
+      {
+       "reference_asset_id": "ref_074ed60714d0",
+       "source_type": "prop",
+       "purpose": "prop_identity",
+       "priority": "primary",
+       "temporal_scope": "throughout",
+       "subject_character": "阿獭",
+       "prop_id": "prop_fb1bd0b18fb1",
+       "checksum": "f0008d8fe6fb6daebe35d5ef0fc86367c262068022ecc9c85afc63b59e39ede6",
+       "derivation": null
+      }
+     ],
+     "dropped_optional": [
+      {
+       "source_id": "sciv_8c9742b8016b",
+       "reference_asset_id": "ref_f0a099a2e973",
+       "reason": "scene_reference_context_only",
+       "detail": {
+        "scene_reference_mode": "context_only"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:front",
+       "reference_asset_id": "legacy:阿獭:front",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:side",
+       "reference_asset_id": "legacy:阿獭:side",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:back",
+       "reference_asset_id": "legacy:阿獭:back",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "look_295fc0cd2345",
+       "reference_asset_id": "ref_92ad3512a47f",
+       "reason": "human_reference_drop",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "紧景别无参考模式：identity 由 prompt 文本承载（D2 §5.2 实验证据）"
+       }
+      }
+     ]
+    },
+    "versions": [
+     {
+      "id": "ff_d2d9d70f_1",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   }
+  ]
+ },
+ "s02_c03": {
+  "prompt_en": "",
+  "video_prompt_en": "A small otter in an orange-yellow raincoat and dark blue scarf rises, holding a glowing copper lamp with warm yellow light emanating from it. The otter walks toward a heavy wooden door, grabs the handle, and pulls it open. As the door swings outward, the bright interior light contrasts with the deep blue night outside. A faint night breeze subtly ruffles the otter's fur and scarf. Through the open",
+  "seed": null,
+  "first_frame_batches": [
+   {
+    "batch_id": "ff_f7492063",
+    "created_at": 1790514486.3894675,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "binding_revision": "93bf5c85",
+     "binding_document_revision": "a1863564",
+     "binding_readiness": "READY",
+     "dependency_fingerprints": {
+      "visual_profile": "21bbaa92",
+      "characters": {
+       "阿獭": "1ade8d78"
+      },
+      "looks": {
+       "look_295fc0cd2345": "11bb2ad2"
+      },
+      "props": {},
+      "compositions": {
+       "comp_1894770b967f": "aa945c9e"
+      },
+      "scene_instance": "da744390",
+      "scene_instance_view": null
+     },
+     "resolved_scene_instance_view_id": "sciv_8c9742b8016b",
+     "visual_profile_fingerprint": "21bbaa92",
+     "image_provider": "agnes",
+     "size_tier": "1K",
+     "ratio": "16:9",
+     "scene_reference_mode": "full",
+     "human_reference_mode": "keep",
+     "ref_layout": "pack_only",
+     "population_constraint": false,
+     "sent_ref_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "composition"
+     ],
+     "used_reference_ids": [
+      "ref_f0a099a2e973",
+      "ref_92ad3512a47f",
+      "ref_3d372c85a955"
+     ],
+     "semantic_roles": [
+      {
+       "reference_asset_id": "ref_f0a099a2e973",
+       "source_type": "scene_instance_view",
+       "purpose": "scene_context",
+       "priority": "primary",
+       "temporal_scope": "throughout",
+       "subject_character": null,
+       "prop_id": null,
+       "checksum": "5629ac7df26b86ab7962191ddb07a5f3b960ff2599ef44838a8e8893b559a94b",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_92ad3512a47f",
+       "source_type": "character_look",
+       "purpose": "character_appearance",
+       "priority": "supporting",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "133df74d6ce9f6aaf26c3bd56831017dd129f10551540c9a6ef62cee7600b734",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_3d372c85a955",
+       "source_type": "composition",
+       "purpose": "spatial_relation",
+       "priority": "primary",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "ece649d867a8bd58d535b8baea8f70d44e867e0ad0e2fc9d7dfe4177f3324da4",
+       "derivation": null
+      }
+     ],
+     "dropped_optional": [
+      {
+       "source_id": "legacy:阿獭:front",
+       "reference_asset_id": "legacy:阿獭:front",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:side",
+       "reference_asset_id": "legacy:阿獭:side",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:back",
+       "reference_asset_id": "legacy:阿獭:back",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      }
+     ]
+    },
+    "versions": [
+     {
+      "id": "ff_f7492063_1",
+      "input_visuals": null,
+      "prompt_head": ""
+     },
+     {
+      "id": "ff_f7492063_2",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   },
+   {
+    "batch_id": "batch_ffsync_370eb1",
+    "created_at": 1790520966.2438538,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {},
+    "versions": [
+     {
+      "id": "cand_ffsync_717b9b",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   },
+   {
+    "batch_id": "ff_0ed798da",
+    "created_at": 1790568163.2185826,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "binding_revision": "93bf5c85",
+     "binding_document_revision": "f89d0a2c",
+     "binding_readiness": "READY",
+     "dependency_fingerprints": {
+      "visual_profile": "21bbaa92",
+      "characters": {
+       "阿獭": "1ade8d78"
+      },
+      "looks": {
+       "look_295fc0cd2345": "11bb2ad2"
+      },
+      "props": {},
+      "compositions": {
+       "comp_1894770b967f": "aa945c9e"
+      },
+      "scene_instance": "da744390",
+      "scene_instance_view": null
+     },
+     "resolved_scene_instance_view_id": "sciv_8c9742b8016b",
+     "visual_profile_fingerprint": "21bbaa92",
+     "image_provider": "agnes",
+     "size_tier": "1K",
+     "ratio": "16:9",
+     "scene_reference_mode": "full",
+     "human_reference_mode": "keep",
+     "ref_layout": "pack_only",
+     "population_constraint": false,
+     "sent_ref_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "composition"
+     ],
+     "used_reference_ids": [
+      "ref_f0a099a2e973",
+      "ref_92ad3512a47f",
+      "ref_3d372c85a955"
+     ],
+     "semantic_roles": [
+      {
+       "reference_asset_id": "ref_f0a099a2e973",
+       "source_type": "scene_instance_view",
+       "purpose": "scene_context",
+       "priority": "primary",
+       "temporal_scope": "throughout",
+       "subject_character": null,
+       "prop_id": null,
+       "checksum": "5629ac7df26b86ab7962191ddb07a5f3b960ff2599ef44838a8e8893b559a94b",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_92ad3512a47f",
+       "source_type": "character_look",
+       "purpose": "character_appearance",
+       "priority": "supporting",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "133df74d6ce9f6aaf26c3bd56831017dd129f10551540c9a6ef62cee7600b734",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_3d372c85a955",
+       "source_type": "composition",
+       "purpose": "spatial_relation",
+       "priority": "primary",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "ece649d867a8bd58d535b8baea8f70d44e867e0ad0e2fc9d7dfe4177f3324da4",
+       "derivation": null
+      }
+     ],
+     "dropped_optional": [
+      {
+       "source_id": "legacy:阿獭:front",
+       "reference_asset_id": "legacy:阿獭:front",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:side",
+       "reference_asset_id": "legacy:阿獭:side",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:back",
+       "reference_asset_id": "legacy:阿獭:back",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      }
+     ]
+    },
+    "versions": [
+     {
+      "id": "ff_0ed798da_1",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   },
+   {
+    "batch_id": "ff_c85665da",
+    "created_at": 1790589426.5875366,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "binding_revision": "93bf5c85",
+     "binding_document_revision": "f89d0a2c",
+     "binding_readiness": "READY",
+     "dependency_fingerprints": {
+      "visual_profile": "21bbaa92",
+      "characters": {
+       "阿獭": "1ade8d78"
+      },
+      "looks": {
+       "look_295fc0cd2345": "11bb2ad2"
+      },
+      "props": {},
+      "compositions": {
+       "comp_1894770b967f": "aa945c9e"
+      },
+      "scene_instance": "da744390",
+      "scene_instance_view": null
+     },
+     "resolved_scene_instance_view_id": "sciv_8c9742b8016b",
+     "visual_profile_fingerprint": "21bbaa92",
+     "image_provider": "agnes",
+     "size_tier": "1K",
+     "ratio": "16:9",
+     "scene_reference_mode": "full",
+     "human_reference_mode": "keep",
+     "ref_layout": "pack_only",
+     "population_constraint": false,
+     "sent_ref_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "composition"
+     ],
+     "used_reference_ids": [
+      "ref_f0a099a2e973",
+      "ref_92ad3512a47f",
+      "ref_3d372c85a955"
+     ],
+     "semantic_roles": [
+      {
+       "reference_asset_id": "ref_f0a099a2e973",
+       "source_type": "scene_instance_view",
+       "purpose": "scene_context",
+       "priority": "primary",
+       "temporal_scope": "throughout",
+       "subject_character": null,
+       "prop_id": null,
+       "checksum": "5629ac7df26b86ab7962191ddb07a5f3b960ff2599ef44838a8e8893b559a94b",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_92ad3512a47f",
+       "source_type": "character_look",
+       "purpose": "character_appearance",
+       "priority": "supporting",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "133df74d6ce9f6aaf26c3bd56831017dd129f10551540c9a6ef62cee7600b734",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_3d372c85a955",
+       "source_type": "composition",
+       "purpose": "spatial_relation",
+       "priority": "primary",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "ece649d867a8bd58d535b8baea8f70d44e867e0ad0e2fc9d7dfe4177f3324da4",
+       "derivation": null
+      }
+     ],
+     "dropped_optional": [
+      {
+       "source_id": "legacy:阿獭:front",
+       "reference_asset_id": "legacy:阿獭:front",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:side",
+       "reference_asset_id": "legacy:阿獭:side",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:back",
+       "reference_asset_id": "legacy:阿獭:back",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      }
+     ]
+    },
+    "versions": [
+     {
+      "id": "ff_c85665da_1",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   },
+   {
+    "batch_id": "batch_ffsync_9e82ef",
+    "created_at": 1790589870.7500875,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "slot_semantics": "multi_reference_only",
+     "source_video_version": "vv_fdee5e7d",
+     "source_shot_id": "s02_c02",
+     "end_source_version": "vv_19d81de3"
+    },
+    "versions": [
+     {
+      "id": "cand_ffsync_198c38",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   }
+  ]
+ },
+ "s03_c01": {
+  "prompt_en": "",
+  "video_prompt_en": "Wide shot at eye level. 阿獭, clutching the glowing brass lamp with both paws, steps over a high stone threshold into the dark foyer. He pauses, turns his body back toward the entrance, and gently pushes the heavy wooden door shut with one paw; the lamp's warm light flickers across his orange-yellow raincoat. Once the door clicks shut, he pivots away from the entrance and begins walking briskly towa",
+  "seed": null,
+  "first_frame_batches": [
+   {
+    "batch_id": "ff_1752d564",
+    "created_at": 1790514492.316391,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "binding_revision": "31a56d8f",
+     "binding_document_revision": "a1863564",
+     "binding_readiness": "READY",
+     "dependency_fingerprints": {
+      "visual_profile": "21bbaa92",
+      "characters": {
+       "阿獭": "1ade8d78"
+      },
+      "looks": {
+       "look_295fc0cd2345": "11bb2ad2"
+      },
+      "props": {},
+      "compositions": {
+       "comp_1894770b967f": "aa945c9e"
+      },
+      "scene_instance": "b0522189",
+      "scene_instance_view": null
+     },
+     "resolved_scene_instance_view_id": "sciv_2a95c7419f28",
+     "visual_profile_fingerprint": "21bbaa92",
+     "image_provider": "agnes",
+     "size_tier": "1K",
+     "ratio": "16:9",
+     "scene_reference_mode": "full",
+     "human_reference_mode": "keep",
+     "ref_layout": "pack_only",
+     "population_constraint": false,
+     "sent_ref_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "composition"
+     ],
+     "used_reference_ids": [
+      "ref_826b39576f62",
+      "ref_92ad3512a47f",
+      "ref_3d372c85a955"
+     ],
+     "semantic_roles": [
+      {
+       "reference_asset_id": "ref_826b39576f62",
+       "source_type": "scene_instance_view",
+       "purpose": "scene_context",
+       "priority": "primary",
+       "temporal_scope": "throughout",
+       "subject_character": null,
+       "prop_id": null,
+       "checksum": "a7eadcb8d6c9f4dbeb4c43ab71be5cdbc5e3312db0c9ca5dd8668d8d5d53b034",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_92ad3512a47f",
+       "source_type": "character_look",
+       "purpose": "character_appearance",
+       "priority": "supporting",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "133df74d6ce9f6aaf26c3bd56831017dd129f10551540c9a6ef62cee7600b734",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_3d372c85a955",
+       "source_type": "composition",
+       "purpose": "spatial_relation",
+       "priority": "primary",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "ece649d867a8bd58d535b8baea8f70d44e867e0ad0e2fc9d7dfe4177f3324da4",
+       "derivation": null
+      }
+     ],
+     "dropped_optional": [
+      {
+       "source_id": "legacy:阿獭:front",
+       "reference_asset_id": "legacy:阿獭:front",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:side",
+       "reference_asset_id": "legacy:阿獭:side",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:back",
+       "reference_asset_id": "legacy:阿獭:back",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      }
+     ]
+    },
+    "versions": [
+     {
+      "id": "ff_1752d564_1",
+      "input_visuals": null,
+      "prompt_head": ""
+     },
+     {
+      "id": "ff_1752d564_2",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   },
+   {
+    "batch_id": "ff_aec46858",
+    "created_at": 1790516202.7901003,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "binding_revision": "31a56d8f",
+     "binding_document_revision": "a0998e67",
+     "binding_readiness": "READY",
+     "dependency_fingerprints": {
+      "visual_profile": "21bbaa92",
+      "characters": {
+       "阿獭": "1ade8d78"
+      },
+      "looks": {
+       "look_295fc0cd2345": "11bb2ad2"
+      },
+      "props": {},
+      "compositions": {
+       "comp_1894770b967f": "aa945c9e"
+      },
+      "scene_instance": "b0522189",
+      "scene_instance_view": null
+     },
+     "resolved_scene_instance_view_id": "sciv_2a95c7419f28",
+     "visual_profile_fingerprint": "21bbaa92",
+     "image_provider": "agnes",
+     "size_tier": "1K",
+     "ratio": "16:9",
+     "scene_reference_mode": "context_only",
+     "human_reference_mode": "keep",
+     "ref_layout": "pack_only",
+     "population_constraint": false,
+     "sent_ref_sequence": [
+      "character_look",
+      "composition"
+     ],
+     "used_reference_ids": [
+      "ref_92ad3512a47f",
+      "ref_3d372c85a955"
+     ],
+     "semantic_roles": [
+      {
+       "reference_asset_id": "ref_92ad3512a47f",
+       "source_type": "character_look",
+       "purpose": "character_appearance",
+       "priority": "supporting",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "133df74d6ce9f6aaf26c3bd56831017dd129f10551540c9a6ef62cee7600b734",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_3d372c85a955",
+       "source_type": "composition",
+       "purpose": "spatial_relation",
+       "priority": "primary",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "ece649d867a8bd58d535b8baea8f70d44e867e0ad0e2fc9d7dfe4177f3324da4",
+       "derivation": null
+      }
+     ],
+     "dropped_optional": [
+      {
+       "source_id": "sciv_2a95c7419f28",
+       "reference_asset_id": "ref_826b39576f62",
+       "reason": "scene_reference_context_only",
+       "detail": {
+        "scene_reference_mode": "context_only"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:front",
+       "reference_asset_id": "legacy:阿獭:front",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:side",
+       "reference_asset_id": "legacy:阿獭:side",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:back",
+       "reference_asset_id": "legacy:阿獭:back",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      }
+     ]
+    },
+    "versions": [
+     {
+      "id": "ff_aec46858_1",
+      "input_visuals": null,
+      "prompt_head": ""
+     },
+     {
+      "id": "ff_aec46858_2",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   },
+   {
+    "batch_id": "batch_ffsync_f6486f",
+    "created_at": 1790521179.4236617,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {},
+    "versions": [
+     {
+      "id": "cand_ffsync_f34b89",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   },
+   {
+    "batch_id": "ff_18c56979",
+    "created_at": 1790568210.350248,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "binding_revision": "31a56d8f",
+     "binding_document_revision": "f89d0a2c",
+     "binding_readiness": "READY",
+     "dependency_fingerprints": {
+      "visual_profile": "21bbaa92",
+      "characters": {
+       "阿獭": "1ade8d78"
+      },
+      "looks": {
+       "look_295fc0cd2345": "11bb2ad2"
+      },
+      "props": {},
+      "compositions": {
+       "comp_1894770b967f": "aa945c9e"
+      },
+      "scene_instance": "b0522189",
+      "scene_instance_view": null
+     },
+     "resolved_scene_instance_view_id": "sciv_2a95c7419f28",
+     "visual_profile_fingerprint": "21bbaa92",
+     "image_provider": "agnes",
+     "size_tier": "1K",
+     "ratio": "16:9",
+     "scene_reference_mode": "full",
+     "human_reference_mode": "keep",
+     "ref_layout": "pack_only",
+     "population_constraint": false,
+     "sent_ref_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "composition"
+     ],
+     "used_reference_ids": [
+      "ref_826b39576f62",
+      "ref_92ad3512a47f",
+      "ref_3d372c85a955"
+     ],
+     "semantic_roles": [
+      {
+       "reference_asset_id": "ref_826b39576f62",
+       "source_type": "scene_instance_view",
+       "purpose": "scene_context",
+       "priority": "primary",
+       "temporal_scope": "throughout",
+       "subject_character": null,
+       "prop_id": null,
+       "checksum": "a7eadcb8d6c9f4dbeb4c43ab71be5cdbc5e3312db0c9ca5dd8668d8d5d53b034",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_92ad3512a47f",
+       "source_type": "character_look",
+       "purpose": "character_appearance",
+       "priority": "supporting",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "133df74d6ce9f6aaf26c3bd56831017dd129f10551540c9a6ef62cee7600b734",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_3d372c85a955",
+       "source_type": "composition",
+       "purpose": "spatial_relation",
+       "priority": "primary",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "ece649d867a8bd58d535b8baea8f70d44e867e0ad0e2fc9d7dfe4177f3324da4",
+       "derivation": null
+      }
+     ],
+     "dropped_optional": [
+      {
+       "source_id": "legacy:阿獭:front",
+       "reference_asset_id": "legacy:阿獭:front",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:side",
+       "reference_asset_id": "legacy:阿獭:side",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:back",
+       "reference_asset_id": "legacy:阿獭:back",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      }
+     ]
+    },
+    "versions": [
+     {
+      "id": "ff_18c56979_1",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   },
+   {
+    "batch_id": "ff_fed7cd5c",
+    "created_at": 1790589441.6584413,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "binding_revision": "31a56d8f",
+     "binding_document_revision": "f89d0a2c",
+     "binding_readiness": "READY",
+     "dependency_fingerprints": {
+      "visual_profile": "21bbaa92",
+      "characters": {
+       "阿獭": "1ade8d78"
+      },
+      "looks": {
+       "look_295fc0cd2345": "11bb2ad2"
+      },
+      "props": {},
+      "compositions": {
+       "comp_1894770b967f": "aa945c9e"
+      },
+      "scene_instance": "b0522189",
+      "scene_instance_view": null
+     },
+     "resolved_scene_instance_view_id": "sciv_2a95c7419f28",
+     "visual_profile_fingerprint": "21bbaa92",
+     "image_provider": "agnes",
+     "size_tier": "1K",
+     "ratio": "16:9",
+     "scene_reference_mode": "full",
+     "human_reference_mode": "keep",
+     "ref_layout": "pack_only",
+     "population_constraint": false,
+     "sent_ref_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "composition"
+     ],
+     "used_reference_ids": [
+      "ref_826b39576f62",
+      "ref_92ad3512a47f",
+      "ref_3d372c85a955"
+     ],
+     "semantic_roles": [
+      {
+       "reference_asset_id": "ref_826b39576f62",
+       "source_type": "scene_instance_view",
+       "purpose": "scene_context",
+       "priority": "primary",
+       "temporal_scope": "throughout",
+       "subject_character": null,
+       "prop_id": null,
+       "checksum": "a7eadcb8d6c9f4dbeb4c43ab71be5cdbc5e3312db0c9ca5dd8668d8d5d53b034",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_92ad3512a47f",
+       "source_type": "character_look",
+       "purpose": "character_appearance",
+       "priority": "supporting",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "133df74d6ce9f6aaf26c3bd56831017dd129f10551540c9a6ef62cee7600b734",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_3d372c85a955",
+       "source_type": "composition",
+       "purpose": "spatial_relation",
+       "priority": "primary",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "ece649d867a8bd58d535b8baea8f70d44e867e0ad0e2fc9d7dfe4177f3324da4",
+       "derivation": null
+      }
+     ],
+     "dropped_optional": [
+      {
+       "source_id": "legacy:阿獭:front",
+       "reference_asset_id": "legacy:阿獭:front",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:side",
+       "reference_asset_id": "legacy:阿獭:side",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:back",
+       "reference_asset_id": "legacy:阿獭:back",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      }
+     ]
+    },
+    "versions": [
+     {
+      "id": "ff_fed7cd5c_1",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   },
+   {
+    "batch_id": "batch_ffsync_34ab14",
+    "created_at": 1790590213.286635,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "slot_semantics": "multi_reference_only",
+     "source_video_version": "vv_af37a055",
+     "source_shot_id": "s02_c03",
+     "end_source_version": "vv_fdee5e7d"
+    },
+    "versions": [
+     {
+      "id": "cand_ffsync_8dbfeb",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   }
+  ]
+ },
+ "s03_c02": {
+  "prompt_en": "",
+  "video_prompt_en": "Low-angle shot: camera tilted upward following the spiral stone staircase as it rises into shadow. A small otter in an orange-yellow raincoat and dark blue scarf climbs upward,抱着 a brass lantern. Warm yellow light from the lantern casts rotating shadows on the stone walls, spiraling upward layer by layer. Camera slowly tilts up and tracks the ascending motion, maintaining the low perspective throu",
+  "seed": null,
+  "first_frame_batches": [
+   {
+    "batch_id": "ff_d4aaca0d",
+    "created_at": 1790514504.9523146,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "binding_revision": "61279f5d",
+     "binding_document_revision": "a1863564",
+     "binding_readiness": "READY",
+     "dependency_fingerprints": {
+      "visual_profile": "21bbaa92",
+      "characters": {
+       "阿獭": "1ade8d78"
+      },
+      "looks": {
+       "look_295fc0cd2345": "11bb2ad2"
+      },
+      "props": {},
+      "compositions": {
+       "comp_1894770b967f": "aa945c9e"
+      },
+      "scene_instance": "b0522189",
+      "scene_instance_view": null
+     },
+     "resolved_scene_instance_view_id": "sciv_2a95c7419f28",
+     "visual_profile_fingerprint": "21bbaa92",
+     "image_provider": "agnes",
+     "size_tier": "1K",
+     "ratio": "16:9",
+     "scene_reference_mode": "full",
+     "human_reference_mode": "keep",
+     "ref_layout": "pack_only",
+     "population_constraint": false,
+     "sent_ref_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "composition"
+     ],
+     "used_reference_ids": [
+      "ref_826b39576f62",
+      "ref_92ad3512a47f",
+      "ref_3d372c85a955"
+     ],
+     "semantic_roles": [
+      {
+       "reference_asset_id": "ref_826b39576f62",
+       "source_type": "scene_instance_view",
+       "purpose": "scene_context",
+       "priority": "primary",
+       "temporal_scope": "throughout",
+       "subject_character": null,
+       "prop_id": null,
+       "checksum": "a7eadcb8d6c9f4dbeb4c43ab71be5cdbc5e3312db0c9ca5dd8668d8d5d53b034",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_92ad3512a47f",
+       "source_type": "character_look",
+       "purpose": "character_appearance",
+       "priority": "supporting",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "133df74d6ce9f6aaf26c3bd56831017dd129f10551540c9a6ef62cee7600b734",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_3d372c85a955",
+       "source_type": "composition",
+       "purpose": "spatial_relation",
+       "priority": "primary",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "ece649d867a8bd58d535b8baea8f70d44e867e0ad0e2fc9d7dfe4177f3324da4",
+       "derivation": null
+      }
+     ],
+     "dropped_optional": [
+      {
+       "source_id": "legacy:阿獭:front",
+       "reference_asset_id": "legacy:阿獭:front",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:side",
+       "reference_asset_id": "legacy:阿獭:side",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:back",
+       "reference_asset_id": "legacy:阿獭:back",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      }
+     ]
+    },
+    "versions": [
+     {
+      "id": "ff_d4aaca0d_1",
+      "input_visuals": null,
+      "prompt_head": ""
+     },
+     {
+      "id": "ff_d4aaca0d_2",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   },
+   {
+    "batch_id": "ff_344b069d",
+    "created_at": 1790516240.3103783,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "binding_revision": "61279f5d",
+     "binding_document_revision": "a0998e67",
+     "binding_readiness": "READY",
+     "dependency_fingerprints": {
+      "visual_profile": "21bbaa92",
+      "characters": {
+       "阿獭": "1ade8d78"
+      },
+      "looks": {
+       "look_295fc0cd2345": "11bb2ad2"
+      },
+      "props": {},
+      "compositions": {
+       "comp_1894770b967f": "aa945c9e"
+      },
+      "scene_instance": "b0522189",
+      "scene_instance_view": null
+     },
+     "resolved_scene_instance_view_id": "sciv_2a95c7419f28",
+     "visual_profile_fingerprint": "21bbaa92",
+     "image_provider": "agnes",
+     "size_tier": "1K",
+     "ratio": "16:9",
+     "scene_reference_mode": "context_only",
+     "human_reference_mode": "keep",
+     "ref_layout": "pack_only",
+     "population_constraint": false,
+     "sent_ref_sequence": [
+      "character_look",
+      "composition"
+     ],
+     "used_reference_ids": [
+      "ref_92ad3512a47f",
+      "ref_3d372c85a955"
+     ],
+     "semantic_roles": [
+      {
+       "reference_asset_id": "ref_92ad3512a47f",
+       "source_type": "character_look",
+       "purpose": "character_appearance",
+       "priority": "supporting",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "133df74d6ce9f6aaf26c3bd56831017dd129f10551540c9a6ef62cee7600b734",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_3d372c85a955",
+       "source_type": "composition",
+       "purpose": "spatial_relation",
+       "priority": "primary",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "ece649d867a8bd58d535b8baea8f70d44e867e0ad0e2fc9d7dfe4177f3324da4",
+       "derivation": null
+      }
+     ],
+     "dropped_optional": [
+      {
+       "source_id": "sciv_2a95c7419f28",
+       "reference_asset_id": "ref_826b39576f62",
+       "reason": "scene_reference_context_only",
+       "detail": {
+        "scene_reference_mode": "context_only"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:front",
+       "reference_asset_id": "legacy:阿獭:front",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:side",
+       "reference_asset_id": "legacy:阿獭:side",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:back",
+       "reference_asset_id": "legacy:阿獭:back",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      }
+     ]
+    },
+    "versions": [
+     {
+      "id": "ff_344b069d_1",
+      "input_visuals": null,
+      "prompt_head": ""
+     },
+     {
+      "id": "ff_344b069d_2",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   },
+   {
+    "batch_id": "batch_ffsync_1be269",
+    "created_at": 1790521425.6194115,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {},
+    "versions": [
+     {
+      "id": "cand_ffsync_93b07e",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   },
+   {
+    "batch_id": "ff_08f67b96",
+    "created_at": 1790568210.6453822,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "binding_revision": "61279f5d",
+     "binding_document_revision": "f89d0a2c",
+     "binding_readiness": "READY",
+     "dependency_fingerprints": {
+      "visual_profile": "21bbaa92",
+      "characters": {
+       "阿獭": "1ade8d78"
+      },
+      "looks": {
+       "look_295fc0cd2345": "11bb2ad2"
+      },
+      "props": {},
+      "compositions": {
+       "comp_1894770b967f": "aa945c9e"
+      },
+      "scene_instance": "b0522189",
+      "scene_instance_view": null
+     },
+     "resolved_scene_instance_view_id": "sciv_2a95c7419f28",
+     "visual_profile_fingerprint": "21bbaa92",
+     "image_provider": "agnes",
+     "size_tier": "1K",
+     "ratio": "16:9",
+     "scene_reference_mode": "full",
+     "human_reference_mode": "keep",
+     "ref_layout": "pack_only",
+     "population_constraint": false,
+     "sent_ref_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "composition"
+     ],
+     "used_reference_ids": [
+      "ref_826b39576f62",
+      "ref_92ad3512a47f",
+      "ref_3d372c85a955"
+     ],
+     "semantic_roles": [
+      {
+       "reference_asset_id": "ref_826b39576f62",
+       "source_type": "scene_instance_view",
+       "purpose": "scene_context",
+       "priority": "primary",
+       "temporal_scope": "throughout",
+       "subject_character": null,
+       "prop_id": null,
+       "checksum": "a7eadcb8d6c9f4dbeb4c43ab71be5cdbc5e3312db0c9ca5dd8668d8d5d53b034",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_92ad3512a47f",
+       "source_type": "character_look",
+       "purpose": "character_appearance",
+       "priority": "supporting",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "133df74d6ce9f6aaf26c3bd56831017dd129f10551540c9a6ef62cee7600b734",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_3d372c85a955",
+       "source_type": "composition",
+       "purpose": "spatial_relation",
+       "priority": "primary",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "ece649d867a8bd58d535b8baea8f70d44e867e0ad0e2fc9d7dfe4177f3324da4",
+       "derivation": null
+      }
+     ],
+     "dropped_optional": [
+      {
+       "source_id": "legacy:阿獭:front",
+       "reference_asset_id": "legacy:阿獭:front",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:side",
+       "reference_asset_id": "legacy:阿獭:side",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:back",
+       "reference_asset_id": "legacy:阿獭:back",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      }
+     ]
+    },
+    "versions": [
+     {
+      "id": "ff_08f67b96_1",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   },
+   {
+    "batch_id": "ff_33c6a952",
+    "created_at": 1790589447.7943318,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "binding_revision": "61279f5d",
+     "binding_document_revision": "f89d0a2c",
+     "binding_readiness": "READY",
+     "dependency_fingerprints": {
+      "visual_profile": "21bbaa92",
+      "characters": {
+       "阿獭": "1ade8d78"
+      },
+      "looks": {
+       "look_295fc0cd2345": "11bb2ad2"
+      },
+      "props": {},
+      "compositions": {
+       "comp_1894770b967f": "aa945c9e"
+      },
+      "scene_instance": "b0522189",
+      "scene_instance_view": null
+     },
+     "resolved_scene_instance_view_id": "sciv_2a95c7419f28",
+     "visual_profile_fingerprint": "21bbaa92",
+     "image_provider": "agnes",
+     "size_tier": "1K",
+     "ratio": "16:9",
+     "scene_reference_mode": "full",
+     "human_reference_mode": "keep",
+     "ref_layout": "pack_only",
+     "population_constraint": false,
+     "sent_ref_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "composition"
+     ],
+     "used_reference_ids": [
+      "ref_826b39576f62",
+      "ref_92ad3512a47f",
+      "ref_3d372c85a955"
+     ],
+     "semantic_roles": [
+      {
+       "reference_asset_id": "ref_826b39576f62",
+       "source_type": "scene_instance_view",
+       "purpose": "scene_context",
+       "priority": "primary",
+       "temporal_scope": "throughout",
+       "subject_character": null,
+       "prop_id": null,
+       "checksum": "a7eadcb8d6c9f4dbeb4c43ab71be5cdbc5e3312db0c9ca5dd8668d8d5d53b034",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_92ad3512a47f",
+       "source_type": "character_look",
+       "purpose": "character_appearance",
+       "priority": "supporting",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "133df74d6ce9f6aaf26c3bd56831017dd129f10551540c9a6ef62cee7600b734",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_3d372c85a955",
+       "source_type": "composition",
+       "purpose": "spatial_relation",
+       "priority": "primary",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "ece649d867a8bd58d535b8baea8f70d44e867e0ad0e2fc9d7dfe4177f3324da4",
+       "derivation": null
+      }
+     ],
+     "dropped_optional": [
+      {
+       "source_id": "legacy:阿獭:front",
+       "reference_asset_id": "legacy:阿獭:front",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:side",
+       "reference_asset_id": "legacy:阿獭:side",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:back",
+       "reference_asset_id": "legacy:阿獭:back",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      }
+     ]
+    },
+    "versions": [
+     {
+      "id": "ff_33c6a952_1",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   },
+   {
+    "batch_id": "batch_ffsync_405a90",
+    "created_at": 1790590415.3552327,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "slot_semantics": "multi_reference_only",
+     "source_video_version": "vv_a9ab4df5",
+     "source_shot_id": "s03_c01",
+     "end_source_version": "vv_af37a055"
+    },
+    "versions": [
+     {
+      "id": "cand_ffsync_ff3c0d",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   }
+  ]
+ },
+ "s03_c03": {
+  "prompt_en": "",
+  "video_prompt_en": "Inside the circular lamp room, Otter stands on a small wooden stool, pressing and twisting the glowing copper lamp into the socket above. A bright warm light ignites, flooding the room as the beam shoots through the upper right window toward the river.",
+  "seed": null,
+  "first_frame_batches": [
+   {
+    "batch_id": "ff_0fe04343",
+    "created_at": 1790514543.2302341,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "binding_revision": "df486a91",
+     "binding_document_revision": "a1863564",
+     "binding_readiness": "READY",
+     "dependency_fingerprints": {
+      "visual_profile": "21bbaa92",
+      "characters": {
+       "阿獭": "1ade8d78"
+      },
+      "looks": {
+       "look_295fc0cd2345": "11bb2ad2"
+      },
+      "props": {},
+      "compositions": {
+       "comp_1894770b967f": "aa945c9e"
+      },
+      "scene_instance": "b0522189",
+      "scene_instance_view": null
+     },
+     "resolved_scene_instance_view_id": "sciv_2a95c7419f28",
+     "visual_profile_fingerprint": "21bbaa92",
+     "image_provider": "agnes",
+     "size_tier": "1K",
+     "ratio": "16:9",
+     "scene_reference_mode": "full",
+     "human_reference_mode": "keep",
+     "ref_layout": "pack_only",
+     "population_constraint": false,
+     "sent_ref_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "composition"
+     ],
+     "used_reference_ids": [
+      "ref_826b39576f62",
+      "ref_92ad3512a47f",
+      "ref_3d372c85a955"
+     ],
+     "semantic_roles": [
+      {
+       "reference_asset_id": "ref_826b39576f62",
+       "source_type": "scene_instance_view",
+       "purpose": "scene_context",
+       "priority": "primary",
+       "temporal_scope": "throughout",
+       "subject_character": null,
+       "prop_id": null,
+       "checksum": "a7eadcb8d6c9f4dbeb4c43ab71be5cdbc5e3312db0c9ca5dd8668d8d5d53b034",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_92ad3512a47f",
+       "source_type": "character_look",
+       "purpose": "character_appearance",
+       "priority": "supporting",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "133df74d6ce9f6aaf26c3bd56831017dd129f10551540c9a6ef62cee7600b734",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_3d372c85a955",
+       "source_type": "composition",
+       "purpose": "spatial_relation",
+       "priority": "primary",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "ece649d867a8bd58d535b8baea8f70d44e867e0ad0e2fc9d7dfe4177f3324da4",
+       "derivation": null
+      }
+     ],
+     "dropped_optional": [
+      {
+       "source_id": "legacy:阿獭:front",
+       "reference_asset_id": "legacy:阿獭:front",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:side",
+       "reference_asset_id": "legacy:阿獭:side",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:back",
+       "reference_asset_id": "legacy:阿獭:back",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      }
+     ]
+    },
+    "versions": [
+     {
+      "id": "ff_0fe04343_1",
+      "input_visuals": null,
+      "prompt_head": ""
+     },
+     {
+      "id": "ff_0fe04343_2",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   },
+   {
+    "batch_id": "ff_1fcd0597",
+    "created_at": 1790516285.0528467,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "binding_revision": "df486a91",
+     "binding_document_revision": "a0998e67",
+     "binding_readiness": "READY",
+     "dependency_fingerprints": {
+      "visual_profile": "21bbaa92",
+      "characters": {
+       "阿獭": "1ade8d78"
+      },
+      "looks": {
+       "look_295fc0cd2345": "11bb2ad2"
+      },
+      "props": {},
+      "compositions": {
+       "comp_1894770b967f": "aa945c9e"
+      },
+      "scene_instance": "b0522189",
+      "scene_instance_view": null
+     },
+     "resolved_scene_instance_view_id": "sciv_2a95c7419f28",
+     "visual_profile_fingerprint": "21bbaa92",
+     "image_provider": "agnes",
+     "size_tier": "1K",
+     "ratio": "16:9",
+     "scene_reference_mode": "context_only",
+     "human_reference_mode": "keep",
+     "ref_layout": "pack_only",
+     "population_constraint": false,
+     "sent_ref_sequence": [
+      "character_look",
+      "composition"
+     ],
+     "used_reference_ids": [
+      "ref_92ad3512a47f",
+      "ref_3d372c85a955"
+     ],
+     "semantic_roles": [
+      {
+       "reference_asset_id": "ref_92ad3512a47f",
+       "source_type": "character_look",
+       "purpose": "character_appearance",
+       "priority": "supporting",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "133df74d6ce9f6aaf26c3bd56831017dd129f10551540c9a6ef62cee7600b734",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_3d372c85a955",
+       "source_type": "composition",
+       "purpose": "spatial_relation",
+       "priority": "primary",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "ece649d867a8bd58d535b8baea8f70d44e867e0ad0e2fc9d7dfe4177f3324da4",
+       "derivation": null
+      }
+     ],
+     "dropped_optional": [
+      {
+       "source_id": "sciv_2a95c7419f28",
+       "reference_asset_id": "ref_826b39576f62",
+       "reason": "scene_reference_context_only",
+       "detail": {
+        "scene_reference_mode": "context_only"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:front",
+       "reference_asset_id": "legacy:阿獭:front",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:side",
+       "reference_asset_id": "legacy:阿獭:side",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:back",
+       "reference_asset_id": "legacy:阿獭:back",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      }
+     ]
+    },
+    "versions": [
+     {
+      "id": "ff_1fcd0597_1",
+      "input_visuals": null,
+      "prompt_head": ""
+     },
+     {
+      "id": "ff_1fcd0597_2",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   },
+   {
+    "batch_id": "batch_ffsync_0d96ea",
+    "created_at": 1790521653.5130517,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {},
+    "versions": [
+     {
+      "id": "cand_ffsync_1f4c8d",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   },
+   {
+    "batch_id": "ff_ae46aec8",
+    "created_at": 1790568210.8752475,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "binding_revision": "df486a91",
+     "binding_document_revision": "f89d0a2c",
+     "binding_readiness": "READY",
+     "dependency_fingerprints": {
+      "visual_profile": "21bbaa92",
+      "characters": {
+       "阿獭": "1ade8d78"
+      },
+      "looks": {
+       "look_295fc0cd2345": "11bb2ad2"
+      },
+      "props": {},
+      "compositions": {
+       "comp_1894770b967f": "aa945c9e"
+      },
+      "scene_instance": "b0522189",
+      "scene_instance_view": null
+     },
+     "resolved_scene_instance_view_id": "sciv_2a95c7419f28",
+     "visual_profile_fingerprint": "21bbaa92",
+     "image_provider": "agnes",
+     "size_tier": "1K",
+     "ratio": "16:9",
+     "scene_reference_mode": "full",
+     "human_reference_mode": "keep",
+     "ref_layout": "pack_only",
+     "population_constraint": false,
+     "sent_ref_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "composition"
+     ],
+     "used_reference_ids": [
+      "ref_826b39576f62",
+      "ref_92ad3512a47f",
+      "ref_3d372c85a955"
+     ],
+     "semantic_roles": [
+      {
+       "reference_asset_id": "ref_826b39576f62",
+       "source_type": "scene_instance_view",
+       "purpose": "scene_context",
+       "priority": "primary",
+       "temporal_scope": "throughout",
+       "subject_character": null,
+       "prop_id": null,
+       "checksum": "a7eadcb8d6c9f4dbeb4c43ab71be5cdbc5e3312db0c9ca5dd8668d8d5d53b034",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_92ad3512a47f",
+       "source_type": "character_look",
+       "purpose": "character_appearance",
+       "priority": "supporting",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "133df74d6ce9f6aaf26c3bd56831017dd129f10551540c9a6ef62cee7600b734",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_3d372c85a955",
+       "source_type": "composition",
+       "purpose": "spatial_relation",
+       "priority": "primary",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "ece649d867a8bd58d535b8baea8f70d44e867e0ad0e2fc9d7dfe4177f3324da4",
+       "derivation": null
+      }
+     ],
+     "dropped_optional": [
+      {
+       "source_id": "legacy:阿獭:front",
+       "reference_asset_id": "legacy:阿獭:front",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:side",
+       "reference_asset_id": "legacy:阿獭:side",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:back",
+       "reference_asset_id": "legacy:阿獭:back",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      }
+     ]
+    },
+    "versions": [
+     {
+      "id": "ff_ae46aec8_1",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   },
+   {
+    "batch_id": "ff_1c10323f",
+    "created_at": 1790589468.800379,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "binding_revision": "df486a91",
+     "binding_document_revision": "f89d0a2c",
+     "binding_readiness": "READY",
+     "dependency_fingerprints": {
+      "visual_profile": "21bbaa92",
+      "characters": {
+       "阿獭": "1ade8d78"
+      },
+      "looks": {
+       "look_295fc0cd2345": "11bb2ad2"
+      },
+      "props": {},
+      "compositions": {
+       "comp_1894770b967f": "aa945c9e"
+      },
+      "scene_instance": "b0522189",
+      "scene_instance_view": null
+     },
+     "resolved_scene_instance_view_id": "sciv_2a95c7419f28",
+     "visual_profile_fingerprint": "21bbaa92",
+     "image_provider": "agnes",
+     "size_tier": "1K",
+     "ratio": "16:9",
+     "scene_reference_mode": "full",
+     "human_reference_mode": "keep",
+     "ref_layout": "pack_only",
+     "population_constraint": false,
+     "sent_ref_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "composition"
+     ],
+     "used_reference_ids": [
+      "ref_826b39576f62",
+      "ref_92ad3512a47f",
+      "ref_3d372c85a955"
+     ],
+     "semantic_roles": [
+      {
+       "reference_asset_id": "ref_826b39576f62",
+       "source_type": "scene_instance_view",
+       "purpose": "scene_context",
+       "priority": "primary",
+       "temporal_scope": "throughout",
+       "subject_character": null,
+       "prop_id": null,
+       "checksum": "a7eadcb8d6c9f4dbeb4c43ab71be5cdbc5e3312db0c9ca5dd8668d8d5d53b034",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_92ad3512a47f",
+       "source_type": "character_look",
+       "purpose": "character_appearance",
+       "priority": "supporting",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "133df74d6ce9f6aaf26c3bd56831017dd129f10551540c9a6ef62cee7600b734",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_3d372c85a955",
+       "source_type": "composition",
+       "purpose": "spatial_relation",
+       "priority": "primary",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "ece649d867a8bd58d535b8baea8f70d44e867e0ad0e2fc9d7dfe4177f3324da4",
+       "derivation": null
+      }
+     ],
+     "dropped_optional": [
+      {
+       "source_id": "legacy:阿獭:front",
+       "reference_asset_id": "legacy:阿獭:front",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:side",
+       "reference_asset_id": "legacy:阿獭:side",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:back",
+       "reference_asset_id": "legacy:阿獭:back",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      }
+     ]
+    },
+    "versions": [
+     {
+      "id": "ff_1c10323f_1",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   },
+   {
+    "batch_id": "batch_ffsync_f8bcd2",
+    "created_at": 1790590790.1765475,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "slot_semantics": "multi_reference_only",
+     "source_video_version": "vv_6f49db86",
+     "source_shot_id": "s03_c02",
+     "end_source_version": "vv_a9ab4df5"
+    },
+    "versions": [
+     {
+      "id": "cand_ffsync_4dbd40",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   },
+   {
+    "batch_id": "ff_c1905be6",
+    "created_at": 1790599295.928597,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "binding_revision": "df486a91",
+     "binding_document_revision": "f89d0a2c",
+     "binding_readiness": "READY",
+     "dependency_fingerprints": {
+      "visual_profile": "21bbaa92",
+      "characters": {
+       "阿獭": "1ade8d78"
+      },
+      "looks": {
+       "look_295fc0cd2345": "11bb2ad2"
+      },
+      "props": {},
+      "compositions": {
+       "comp_1894770b967f": "aa945c9e"
+      },
+      "scene_instance": "b0522189",
+      "scene_instance_view": null
+     },
+     "resolved_scene_instance_view_id": "sciv_2a95c7419f28",
+     "visual_profile_fingerprint": "21bbaa92",
+     "image_provider": "agnes",
+     "size_tier": "1K",
+     "ratio": "16:9",
+     "scene_reference_mode": "full",
+     "human_reference_mode": "keep",
+     "ref_layout": "pack_only",
+     "population_constraint": false,
+     "sent_ref_sequence": [
+      "scene_instance_view",
+      "character_look",
+      "composition"
+     ],
+     "used_reference_ids": [
+      "ref_826b39576f62",
+      "ref_92ad3512a47f",
+      "ref_3d372c85a955"
+     ],
+     "semantic_roles": [
+      {
+       "reference_asset_id": "ref_826b39576f62",
+       "source_type": "scene_instance_view",
+       "purpose": "scene_context",
+       "priority": "primary",
+       "temporal_scope": "throughout",
+       "subject_character": null,
+       "prop_id": null,
+       "checksum": "a7eadcb8d6c9f4dbeb4c43ab71be5cdbc5e3312db0c9ca5dd8668d8d5d53b034",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_92ad3512a47f",
+       "source_type": "character_look",
+       "purpose": "character_appearance",
+       "priority": "supporting",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "133df74d6ce9f6aaf26c3bd56831017dd129f10551540c9a6ef62cee7600b734",
+       "derivation": null
+      },
+      {
+       "reference_asset_id": "ref_3d372c85a955",
+       "source_type": "composition",
+       "purpose": "spatial_relation",
+       "priority": "primary",
+       "temporal_scope": "static",
+       "subject_character": "阿獭",
+       "prop_id": null,
+       "checksum": "ece649d867a8bd58d535b8baea8f70d44e867e0ad0e2fc9d7dfe4177f3324da4",
+       "derivation": null
+      }
+     ],
+     "dropped_optional": [
+      {
+       "source_id": "legacy:阿獭:front",
+       "reference_asset_id": "legacy:阿獭:front",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:side",
+       "reference_asset_id": "legacy:阿獭:side",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      },
+      {
+       "source_id": "legacy:阿獭:back",
+       "reference_asset_id": "legacy:阿獭:back",
+       "reason": "human_reference_budget",
+       "detail": {
+        "subject_character": "阿獭",
+        "hint": "legacy 身份视图不进 provider（每角色 1 张 approved look 主参考）"
+       }
+      }
+     ]
+    },
+    "versions": [
+     {
+      "id": "ff_c1905be6_1",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   },
+   {
+    "batch_id": "batch_ffsync_111202",
+    "created_at": 1790599475.6964307,
+    "kind": "first_frame",
+    "mode": null,
+    "selected_version": null,
+    "generation_basis": {
+     "slot_semantics": "multi_reference_only",
+     "source_video_version": "vv_7339c1d5",
+     "source_shot_id": "s03_c02",
+     "end_source_version": "vv_a9ab4df5"
+    },
+    "versions": [
+     {
+      "id": "cand_ffsync_628855",
+      "input_visuals": null,
+      "prompt_head": ""
+     }
+    ]
+   }
+  ]
+ }
+}

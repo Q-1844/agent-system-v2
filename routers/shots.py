@@ -1428,15 +1428,28 @@ def _build_input_visuals(*, mode: str, first_url: str, last_url,
             slot = r.get("slot")
             if slot == "multi_reference":
                 is_relay = r.get("source_type") == "prev_tail_relay"
+                if is_relay:
+                    # 接力尾帧 = multi 单参考 URL（bound_video.video_reference）
+                    _url = first_url or getattr(bound_video, "video_reference", "") or ""
+                elif (r.get("source_type") == "character_look"
+                      and getattr(bound_video, "identity_reference", None)):
+                    # 42.md 缺陷⑤：双参考第二槽（Look）——URL 取 identity_reference。
+                    # 直生 multi 的单 Look 参考（无 identity_reference）仍走
+                    # video_reference（其参考本身就是直生单参考）。
+                    _url = (bound_video.identity_reference or {}).get("url") or ""
+                else:
+                    _url = getattr(bound_video, "video_reference", "") or ""
                 out.append({
                     "slot": "first" if is_relay else "reference",
                     "semantic_role": ("relay_start_boundary" if is_relay
                                       else "reference_only"),
-                    "url": first_url or getattr(bound_video, "video_reference", "") or "",
+                    "url": _url,
                     "source_type": r.get("source_type"),
                     "source_shot_id": r.get("source_shot_id"),
                     "end_source_version": r.get("end_source_version"),
                     "reference_asset_id": r.get("reference_asset_id"),
+                    **({"subject_character": r.get("subject_character")}
+                       if r.get("subject_character") else {}),
                 })
             elif slot in ("first", "last"):
                 out.append({
@@ -1574,11 +1587,31 @@ async def _handler_video(job, emit):
     # 已不可考——诚实记 {}，freshness 判 untracked_legacy，不冒充 fresh）。
     native_generation_basis: dict = {}
     bound_video = None   # BOUND fresh-submit 时为 Adapter 产物（39D input_visuals 来源）
+    # 42.md §二缺陷④：fresh-submit 前发现「上次提交结果不明」时置 True，
+    # 如实随 VideoVersion 落库（续轮询路径恒 False）。
+    previous_submit_uncertain = False
     if shot.video.video_id and shot.video.status not in (
             ShotStatus.DONE.value, ShotStatus.FAILED.value):
         vid = shot.video.video_id
         await emit("recover", f"{shot.shot_id} 续轮询 video_id={vid}（不重提交）", 10)
     else:
+        # 42.md §二缺陷④：提交结果不明可见化——generating 且无 video_id = 早前
+        # 一次提交的响应未及落库（进程被杀/断连），provider 侧任务可能已存在。
+        # 无 provider 幂等键无法查询 → 允许重提交，但必须如实标注重复风险
+        # （emit + VideoVersion.previous_submit_uncertain），不得当作全新提交
+        # 声称「不会重复生成」。recover 对此状态只告警不处置（lifecycle）。
+        _prev_submit_uncertain = (
+            shot.video.status == ShotStatus.GENERATING.value
+            and not shot.video.video_id)
+        if _prev_submit_uncertain:
+            previous_submit_uncertain = True
+            await emit(
+                "warn",
+                f"{shot.shot_id} 早前一次提交结果不明（无 video_id）——重提交存在"
+                "重复生成可能，已标注 previous_submit_uncertain", 5)
+            logger.warning(
+                "%s 重新提交时发现上次提交结果不明（generating 无 video_id）——"
+                "已标注 previous_submit_uncertain", job.shot_id)
         # 37.md §1.1：multi 生成前自动重建过期 video prompt（36.md §1.2.3 缺口闭环）。
         # 仅 fresh-submit 且 BOUND（multi 生成走 BOUND path；unbound multi 本就
         # fail closed，不白烧 LLM）。恢复/续轮询不重建（无新生成输入）。
@@ -1729,7 +1762,8 @@ async def _handler_video(job, emit):
                           generation_basis=dict(native_generation_basis),
                           input_visuals=_build_input_visuals(
                               mode=mode, first_url=first_url, last_url=last_url,
-                              bound_video=bound_video))
+                              bound_video=bound_video),
+                          previous_submit_uncertain=previous_submit_uncertain)
     def mut(s, vv=new_vv, d=str(dest), r=res):
         s.video_versions.append(vv)
         s.final_video = vv.version_id

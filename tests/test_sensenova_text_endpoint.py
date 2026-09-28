@@ -373,7 +373,7 @@ def test_agnes_stream_retryable_retries_then_raises():
             assert False, "should raise"
         except Exception as e:
             assert "500" in str(e)
-        assert len(calls) == 3        # 流式 3 次尝试（RETRYABLE 耗尽）
+        assert len(calls) == 5        # 42.md 缺陷③：流式 5 次尝试（对齐非流式 _request 耐心）
     finally:
         ac.asyncio.sleep = orig_sleep
 

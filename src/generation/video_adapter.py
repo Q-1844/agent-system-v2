@@ -58,6 +58,10 @@ class BoundVideoRequest:
     first_frame: str = ""                   # 公网 URL（i2v/keyframes first slot）
     last_frame: Optional[str] = None        # 公网 URL（仅 keyframes last slot）
     video_reference: str = ""               # 公网 URL（仅 multi：单语义参考）
+    # 42.md 缺陷⑤：Look+尾帧双参考（哨兵 prev_tail_look 时非 None）——
+    # {url, reference_asset_id, subject_character}。随 used_ids/semantic_roles/
+    # input_visuals 落 provenance；进 relay 指纹（identity 键）。
+    identity_reference: Optional[Dict[str, Any]] = None
     used_reference_ids: List[str] = field(default_factory=list)   # 消费的 boundary candidate ids
     dropped_optional: List[Dict[str, Any]] = field(default_factory=list)
     diagnostics: List[Dict[str, Any]] = field(default_factory=list)
@@ -73,6 +77,8 @@ class BoundVideoRequest:
             "first_frame": self.first_frame,
             "last_frame": self.last_frame,
             "video_reference": self.video_reference,
+            "identity_reference": dict(self.identity_reference)
+            if self.identity_reference else None,
             "used_reference_ids": list(self.used_reference_ids),
             "dropped_optional": list(self.dropped_optional),
             "diagnostics": list(self.diagnostics),
@@ -103,6 +109,14 @@ class BoundVideoRequest:
             inputs.append(ReferenceInput(
                 source_type="video_reference", semantic_role="multi_reference",
                 temporal_scope="throughout", media=self.video_reference))
+        if self.identity_reference:
+            # 42.md 缺陷⑤：Look 双参考第二槽（source_type=character_look——
+            # compile 侧 multi 收集 video_reference+character_look 两种来源，
+            # 顺序 = reference_inputs 顺序：尾帧在前=Picture 1，Look=Picture 2）
+            inputs.append(ReferenceInput(
+                source_type="character_look", semantic_role="multi_reference",
+                temporal_scope="throughout",
+                media=str(self.identity_reference.get("url") or "")))
         return GenerationRequest(
             generation_type="video", shot_id=self.shot_id,
             prompt=self.prompt, reference_inputs=inputs,
@@ -116,6 +130,8 @@ class BoundVideoRequest:
                 "provider_mode": self.provider_mode,
                 "used_reference_ids": list(self.used_reference_ids),
                 "dropped_optional": list(self.dropped_optional),
+                **({"identity_reference": dict(self.identity_reference)}
+                   if self.identity_reference else {}),
             })
 
 
@@ -139,14 +155,24 @@ def _effective_relay_first_frame(project: Any, shot: Any) -> str:
 # 生成依赖——build 与 freshness（compute_current_dependency_keys）两路对称纳入。
 VIDEO_REFERENCE_RELAY = "prev_tail"
 
+# 42.md §二缺陷⑤/§三：Look+尾帧双参考哨兵（opt-in，canonical 镜头事实——
+# 不是请求级 flag：freshness 读模型无请求上下文，canonical 才能两侧对称重算）。
+# relay 链画风漂移根因（42.md §3：特写丢 Look 重造 → relay 逐镜传播）的传播层
+# 修复——每镜除尾帧外同发本镜 hero Look，身份/画风每镜重建锚。是否设为默认
+# 由 §四 对照实验（P1）与用户验收裁定，Skill 决策入口引用。
+VIDEO_REFERENCE_RELAY_IDENTITY = "prev_tail_look"
+
 
 def resolve_multi_relay_source(project: Any, shot: Any) -> Optional[Dict[str, Any]]:
     """解析 multi 尾帧接力来源：影片顺序（scenes→shots 展平顺序）的上一镜 +
     其 video_end_frame（url/来源版本）。⚠️ 跨场景衔接是常态（本 Pilot 每段
     1 镜）——上一镜 = 展平序列的前一项，绝不仅在同场景内找（V1C 首跑实证
     的 bug：idx>0 同场景找 prev → 每段 1 镜时永远 None → 静默回落 hero）。
-    非 relay / 无上一镜 / 末帧未就绪 → None。"""
-    if str(getattr(shot, "video_reference_asset_id", "") or "") != VIDEO_REFERENCE_RELAY:
+    非 relay / 无上一镜 / 末帧未就绪 → None。
+    identity：哨兵=prev_tail_look 时 True（Look+尾帧双参考，42.md §二缺陷⑤）——
+    进 relay 指纹（build 与 freshness 两侧同键对称）。"""
+    _vref = str(getattr(shot, "video_reference_asset_id", "") or "")
+    if _vref not in (VIDEO_REFERENCE_RELAY, VIDEO_REFERENCE_RELAY_IDENTITY):
         return None
     flat: List[Any] = []
     scene_of: Dict[str, Any] = {}
@@ -171,6 +197,8 @@ def resolve_multi_relay_source(project: Any, shot: Any) -> Optional[Dict[str, An
     return {"source_shot_id": prev.shot_id,
             "end_source_version": getattr(prev, "video_end_source_version", None),
             "url": url,
+            # 42.md 缺陷⑤：Look+尾帧双参考模式（canonical 哨兵 prev_tail_look）
+            "identity": _vref == VIDEO_REFERENCE_RELAY_IDENTITY,
             # Phase 3 守卫：跨段接力（组首接上一组末镜）是显式决策——标记进
             # diagnostic + visual basis 指纹，绝不静默（组首 prev_tail 残留会
             # 按全片顺序自动接上一组；是否合法由 Skill 决策链裁定）。
@@ -284,6 +312,42 @@ def _select_video_reference(pack: dict, shot: Any = None,
          "hint": "pack 无任何可解析参考（Binding READY 但 references 空）——上游错误"})
 
 
+def _resolve_relay_identity_reference(pack: dict, rdoc: Any,
+                                      diagnostics: List[Dict[str, Any]]
+                                      ) -> Dict[str, Any]:
+    """42.md 缺陷⑤：relay 镜身份再锚定参考的确定性解析——本镜 Binding 的
+    hero Look（priority=primary 的 character_look，与 _select_video_reference
+    同规则）。解析不到公网 media = 结构化失败（opt-in 语义下静默跳过 =
+    谎报已锚定，绝不允许）。"""
+    refs = [r for r in (pack.get("references") or []) if r.get("reference_asset_id")]
+    char = [r for r in refs if r.get("source_type") == "character_look"]
+    look = next((r for r in char if r.get("priority") == "primary"), None)
+    if look is None and char:
+        look = char[0]
+    if look is None:
+        raise BoundGenerationError(
+            "relay_identity_reference_unresolvable",
+            {"hint": "哨兵 prev_tail_look 已设但本镜 Binding 无 character_look 参考"
+                     "——先补角色 Look 再生成（不静默跳过身份锚定）"})
+    url = _resolve_video_reference_media(
+        rdoc, str(look.get("reference_asset_id") or ""))
+    if not url or str(url).startswith("data:"):
+        raise BoundGenerationError(
+            "relay_identity_reference_unresolvable",
+            {"reference_asset_id": look.get("reference_asset_id"),
+             "hint": "Look 媒体不可解析或非公网 URL——视频接口仅公网 URL"})
+    diagnostics.append({
+        "reason": "relay_identity_reference_applied",
+        "detail": {"reference_asset_id": look.get("reference_asset_id"),
+                   "subject_character": look.get("subject_character"),
+                   "hint": "Look+尾帧双参考：尾帧=衔接语义，Look=身份/画风再锚定"
+                           "——每镜重建身份锚，阻断 relay 链画风漂移传播（42.md §三）"}})
+    return {"url": url,
+            "reference_asset_id": look.get("reference_asset_id"),
+            "subject_character": look.get("subject_character"),
+            "priority": look.get("priority")}
+
+
 def build_bound_video_input(project_dir, project: Any, shot: Any, *,
                             native_dialogue_control: bool = True,
                             native_dialogue_language: Optional[str] = None,
@@ -393,6 +457,11 @@ def build_bound_video_input(project_dir, project: Any, shot: Any, *,
     from src.core.prompt_builder import build_video_prompt, video_prompt_freshness
     from src.resources.store import ResourceStore
     rdoc = ResourceStore(project_dir, project_dir.name).load()
+    # ---- 42.md 缺陷⑤：Look+尾帧双参考（哨兵 prev_tail_look；canonical 决策，
+    #      freshness 两侧经 relay 指纹 identity 键对称）----
+    identity_reference: Optional[Dict[str, Any]] = None
+    if mode == "multi" and _relay_item is not None and _relay_item.get("identity"):
+        identity_reference = _resolve_relay_identity_reference(pack, rdoc, diagnostics)
     # 37.md §1.1 freshness gate（消费端兜底，multi 专属）：
     #   - stale/untracked：旧 *_prompt_en 不再 shadow 新字段——按「无 en」重编译
     #     （deterministic rebuild 消费端语义；legacy i2v/keyframes 不走此 gate）；
@@ -444,11 +513,13 @@ def build_bound_video_input(project_dir, project: Any, shot: Any, *,
         if _relay_item is not None:
             # V1C 尾帧接力是实际生成依赖——进 visual basis 指纹（freshness 对称：
             # compute_current_dependency_keys 同规则重算）；cross_segment 参与指纹
-            # （接力源跨段与否变化 = 依赖变化）。
+            # （接力源跨段与否变化 = 依赖变化）；identity 同理（42.md 缺陷⑤：
+            # Look+尾帧双参考开关是 canonical 事实，build/重算两侧同键）。
             _vb = dict(_vb)
             _vb["relay"] = {"source_shot_id": _relay_item["source_shot_id"],
                             "end_source_version": _relay_item.get("end_source_version"),
-                            "cross_segment": bool(_relay_item.get("cross_segment"))}
+                            "cross_segment": bool(_relay_item.get("cross_segment")),
+                            "identity": bool(_relay_item.get("identity"))}
         nav_pack = build_native_av_pack(
             project_dir, project, shot,
             visual_route="bound", visual_basis=_vb,
@@ -463,6 +534,14 @@ def build_bound_video_input(project_dir, project: Any, shot: Any, *,
                         "line_count": len(dlg["lines"]),
                         "silent_characters": list(dlg["silent_characters"])}
                        if dlg else {"resolution": "no_dialogue"})})
+
+    # ---- 42.md 缺陷⑤：双参考的 <Picture N> 指称（探针实证 provider 语义采用
+    #      占位符；只在双参考情形追加，不触碰既有单参考/硬边界路径与指纹）----
+    if identity_reference is not None:
+        prompt = (prompt or "").rstrip() + (
+            "。参考图说明：<Picture 1> 是上一镜头的结尾画面（开场位置与状态须与它"
+            "衔接）；<Picture 2> 是该角色的设定参考图（角色的画风、五官、毛色与"
+            "服装必须与它保持一致）。")
 
     # ---- provider capability 诚实诊断（§8/§22）----
     if mode == "i2v":
@@ -489,6 +568,14 @@ def build_bound_video_input(project_dir, project: Any, shot: Any, *,
                       "source_shot_id": _relay_item["source_shot_id"],
                       "end_source_version": _relay_item.get("end_source_version"),
                       "batch_id": None})
+        if identity_reference is not None:
+            used_ids.append(str(identity_reference["reference_asset_id"]))
+            roles.append({"slot": "multi_reference", "temporal_semantics": "throughout",
+                          "candidate_id": None,
+                          "reference_asset_id": identity_reference["reference_asset_id"],
+                          "source_type": "character_look",
+                          "subject_character": identity_reference.get("subject_character"),
+                          "batch_id": None})
     elif mode == "multi":
         used_ids.append(str(_multi_ref_item.get("reference_asset_id") or ""))
         roles.append({"slot": "multi_reference", "temporal_semantics": "throughout",
@@ -517,5 +604,6 @@ def build_bound_video_input(project_dir, project: Any, shot: Any, *,
         shot_id=sid, prompt=prompt, provider_mode=mode,
         first_frame=first_url, last_frame=last_url,
         video_reference=video_ref_url,
+        identity_reference=identity_reference,
         used_reference_ids=used_ids, diagnostics=diagnostics,
         semantic_roles=roles, basis=basis, generation_basis=generation_basis)

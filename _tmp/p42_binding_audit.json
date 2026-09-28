@@ -1,0 +1,761 @@
+{
+ "s02_c01": {
+  "shot_id": "s02_c01",
+  "opening_source": "independent",
+  "source_shot_id": null,
+  "link_mode": "multi",
+  "video_reference_asset_id": null,
+  "video_end_source_version": "vv_ebbc77f8",
+  "final_video": "vv_ebbc77f8",
+  "first_frame": {
+   "candidates": [
+    {
+     "local": "projects\\雨灯归航\\output\\frames\\s02_c01_first_v1.png",
+     "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_oOerkq5KgWbzDKn171QdBuLj946QOGpa/output.png",
+     "status": "done",
+     "error": null,
+     "updated_at": 0.0
+    }
+   ],
+   "selected_index": 0,
+   "status": "pending",
+   "error": null,
+   "updated_at": 1790589426.0357192
+  },
+  "video_model": null,
+  "description": "夜间，修理间里暖黄台灯亮着。阿獭站在木工作台前修铜灯：备好的新玻璃罩、小剪刀和细布摊在台上。阿獭小心地把新玻璃罩装上灯身。",
+  "negative_prompt": "",
+  "scene_binding_version": null,
+  "scene_bindings": null,
+  "video_versions": [
+   {
+    "version_id": "vv_b92bec31",
+    "created_at": 1790520522.8105996,
+    "model": null,
+    "status": "done",
+    "selected": null,
+    "input_visuals": [
+     {
+      "slot": "reference",
+      "semantic_role": "reference_only",
+      "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_kRdI2rkUUrTWOXSGRZqTjneUVWAqKSVd/output.png",
+      "source_type": "character_look",
+      "source_shot_id": null,
+      "end_source_version": null,
+      "reference_asset_id": "ref_92ad3512a47f"
+     }
+    ],
+    "mode": null,
+    "prompt_head": "",
+    "seed": null,
+    "seconds": null,
+    "generation_basis": {
+     "schema": "native_av_generation_basis_v1",
+     "shot_id": "s02_c01",
+     "visual_basis_fingerprint": "3801915e",
+     "dialogue_fingerprint": null,
+     "speaker_map_fingerprint": null,
+     "spoken_language": null,
+     "prompt_compiler_schema": "native_av_prompt_v3",
+     "performance_intent_fingerprint": null,
+     "video_prompt_creative_fingerprint": "cd36cdcd",
+     "provider": "agnes",
+     "model": null,
+     "provider_mode": "multi",
+     "provider_options_fingerprint": "fd42a43b"
+    }
+   },
+   {
+    "version_id": "vv_ebbc77f8",
+    "created_at": 1790588889.0679212,
+    "model": "agnes-video-2.5-flash",
+    "status": "done",
+    "selected": null,
+    "input_visuals": [
+     {
+      "slot": "reference",
+      "semantic_role": "reference_only",
+      "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_kRdI2rkUUrTWOXSGRZqTjneUVWAqKSVd/output.png",
+      "source_type": "character_look",
+      "source_shot_id": null,
+      "end_source_version": null,
+      "reference_asset_id": "ref_92ad3512a47f"
+     }
+    ],
+    "mode": null,
+    "prompt_head": "",
+    "seed": null,
+    "seconds": null,
+    "generation_basis": {
+     "schema": "native_av_generation_basis_v1",
+     "shot_id": "s02_c01",
+     "visual_basis_fingerprint": "3801915e",
+     "dialogue_fingerprint": null,
+     "speaker_map_fingerprint": null,
+     "spoken_language": null,
+     "prompt_compiler_schema": "native_av_prompt_v3",
+     "performance_intent_fingerprint": null,
+     "video_prompt_creative_fingerprint": "cd36cdcd",
+     "provider": "agnes",
+     "model": "agnes-video-2.5-flash",
+     "provider_mode": "multi",
+     "provider_options_fingerprint": "f7321e8c"
+    }
+   }
+  ],
+  "image_batches_summary": []
+ },
+ "s02_c02": {
+  "shot_id": "s02_c02",
+  "opening_source": "independent",
+  "source_shot_id": null,
+  "link_mode": "i2v",
+  "video_reference_asset_id": null,
+  "video_end_source_version": "vv_19d81de3",
+  "final_video": "vv_19d81de3",
+  "first_frame": {
+   "candidates": [
+    {
+     "local": "projects\\雨灯归航\\output\\frames\\s02_c02_first_v1.png",
+     "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_mSOyMWVII4f4j2kdUeBc4Lctc3BLPnBF/output.png",
+     "status": "done",
+     "error": null,
+     "updated_at": 0.0
+    }
+   ],
+   "selected_index": 0,
+   "status": "pending",
+   "error": null,
+   "updated_at": 1790589426.3704035
+  },
+  "video_model": null,
+  "description": "阿獭剪好灯芯、装回灯座，深吸一口气拧亮灯芯——铜灯重新亮起温暖的黄光，光透过新玻璃罩洒在阿獭脸上，左脸颊的白色三角毛纹被暖光照亮。",
+  "negative_prompt": "",
+  "scene_binding_version": null,
+  "scene_bindings": null,
+  "video_versions": [
+   {
+    "version_id": "vv_3420c4b9",
+    "created_at": 1790520722.705,
+    "model": null,
+    "status": "done",
+    "selected": null,
+    "input_visuals": [
+     {
+      "slot": "first",
+      "semantic_role": "hard_start_boundary",
+      "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_tvYQCW47gg8ZGtAGcpayG0ctXbu7HBCx/output.png",
+      "candidate_id": "ff_567a2c58_2",
+      "batch_id": "ff_567a2c58"
+     }
+    ],
+    "mode": null,
+    "prompt_head": "",
+    "seed": null,
+    "seconds": null,
+    "generation_basis": {
+     "schema": "native_av_generation_basis_v1",
+     "shot_id": "s02_c02",
+     "visual_basis_fingerprint": "4600ca47",
+     "dialogue_fingerprint": null,
+     "speaker_map_fingerprint": null,
+     "spoken_language": null,
+     "prompt_compiler_schema": "native_av_prompt_v3",
+     "performance_intent_fingerprint": null,
+     "video_prompt_creative_fingerprint": "1043c9cc",
+     "provider": "agnes",
+     "model": null,
+     "provider_mode": "i2v",
+     "provider_options_fingerprint": "94a7b98f"
+    }
+   },
+   {
+    "version_id": "vv_b6a090d7",
+    "created_at": 1790527406.4059813,
+    "model": "agnes-video-2.5-flash",
+    "status": "done",
+    "selected": null,
+    "input_visuals": [
+     {
+      "slot": "first",
+      "semantic_role": "hard_start_boundary",
+      "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_tvYQCW47gg8ZGtAGcpayG0ctXbu7HBCx/output.png",
+      "candidate_id": "ff_567a2c58_2",
+      "batch_id": "ff_567a2c58"
+     }
+    ],
+    "mode": null,
+    "prompt_head": "",
+    "seed": null,
+    "seconds": null,
+    "generation_basis": {
+     "schema": "native_av_generation_basis_v1",
+     "shot_id": "s02_c02",
+     "visual_basis_fingerprint": "4600ca47",
+     "dialogue_fingerprint": null,
+     "speaker_map_fingerprint": null,
+     "spoken_language": null,
+     "prompt_compiler_schema": "native_av_prompt_v3",
+     "performance_intent_fingerprint": null,
+     "video_prompt_creative_fingerprint": "1043c9cc",
+     "provider": "agnes",
+     "model": "agnes-video-2.5-flash",
+     "provider_mode": "i2v",
+     "provider_options_fingerprint": "0e55b10b"
+    }
+   },
+   {
+    "version_id": "vv_19d81de3",
+    "created_at": 1790589246.7867062,
+    "model": "agnes-video-2.5-flash",
+    "status": "done",
+    "selected": null,
+    "input_visuals": [
+     {
+      "slot": "first",
+      "semantic_role": "hard_start_boundary",
+      "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_VJk6dyuHVsznsDNhi5sKB4Sc0uya2fYk/output.png",
+      "candidate_id": "ff_cb6f94a5_1",
+      "batch_id": "ff_cb6f94a5"
+     }
+    ],
+    "mode": null,
+    "prompt_head": "",
+    "seed": null,
+    "seconds": null,
+    "generation_basis": {
+     "schema": "native_av_generation_basis_v1",
+     "shot_id": "s02_c02",
+     "visual_basis_fingerprint": "4600ca47",
+     "dialogue_fingerprint": null,
+     "speaker_map_fingerprint": null,
+     "spoken_language": null,
+     "prompt_compiler_schema": "native_av_prompt_v3",
+     "performance_intent_fingerprint": null,
+     "video_prompt_creative_fingerprint": "1043c9cc",
+     "provider": "agnes",
+     "model": "agnes-video-2.5-flash",
+     "provider_mode": "i2v",
+     "provider_options_fingerprint": "97bed617"
+    }
+   }
+  ],
+  "image_batches_summary": []
+ },
+ "s02_c03": {
+  "shot_id": "s02_c03",
+  "opening_source": "independent",
+  "source_shot_id": "s02_c02",
+  "link_mode": "multi",
+  "video_reference_asset_id": "prev_tail",
+  "video_end_source_version": "vv_fdee5e7d",
+  "final_video": "vv_fdee5e7d",
+  "first_frame": {
+   "candidates": [
+    {
+     "local": "projects\\雨灯归航\\output\\frames\\s02_c02_video_end_vv_19d81de3.jpg",
+     "url": "https://Q-1844.github.io/agnes-frame-host/objects/cfbb88d3e12a5233.jpg",
+     "status": "done",
+     "error": null,
+     "updated_at": 0.0
+    }
+   ],
+   "selected_index": 0,
+   "status": "done",
+   "error": null,
+   "updated_at": 1790589870.7592118
+  },
+  "video_model": null,
+  "description": "阿獭抱着亮着的铜灯起身走向修理间厚重的木门，拉开门——门外是深蓝夜色，远处山坡上灯塔的黑色轮廓。夜风拂进屋内。",
+  "negative_prompt": "",
+  "scene_binding_version": null,
+  "scene_bindings": null,
+  "video_versions": [
+   {
+    "version_id": "vv_1ed04cad",
+    "created_at": 1790520965.3506868,
+    "model": null,
+    "status": "done",
+    "selected": null,
+    "input_visuals": [
+     {
+      "slot": "first",
+      "semantic_role": "relay_start_boundary",
+      "url": "https://Q-1844.github.io/agnes-frame-host/objects/625ac612557b0c25.jpg",
+      "source_type": "prev_tail_relay",
+      "source_shot_id": "s02_c02",
+      "end_source_version": "vv_3420c4b9",
+      "reference_asset_id": null
+     }
+    ],
+    "mode": null,
+    "prompt_head": "",
+    "seed": null,
+    "seconds": null,
+    "generation_basis": {
+     "schema": "native_av_generation_basis_v1",
+     "shot_id": "s02_c03",
+     "visual_basis_fingerprint": "32471a5f",
+     "dialogue_fingerprint": null,
+     "speaker_map_fingerprint": null,
+     "spoken_language": null,
+     "prompt_compiler_schema": "native_av_prompt_v3",
+     "performance_intent_fingerprint": null,
+     "video_prompt_creative_fingerprint": "347be24a",
+     "provider": "agnes",
+     "model": null,
+     "provider_mode": "multi",
+     "provider_options_fingerprint": "fd42a43b"
+    }
+   },
+   {
+    "version_id": "vv_fdee5e7d",
+    "created_at": 1790589870.6565397,
+    "model": "agnes-video-2.5-flash",
+    "status": "done",
+    "selected": null,
+    "input_visuals": [
+     {
+      "slot": "first",
+      "semantic_role": "relay_start_boundary",
+      "url": "https://Q-1844.github.io/agnes-frame-host/objects/cfbb88d3e12a5233.jpg",
+      "source_type": "prev_tail_relay",
+      "source_shot_id": "s02_c02",
+      "end_source_version": "vv_19d81de3",
+      "reference_asset_id": null
+     }
+    ],
+    "mode": null,
+    "prompt_head": "",
+    "seed": null,
+    "seconds": null,
+    "generation_basis": {
+     "schema": "native_av_generation_basis_v1",
+     "shot_id": "s02_c03",
+     "visual_basis_fingerprint": "87d27623",
+     "dialogue_fingerprint": null,
+     "speaker_map_fingerprint": null,
+     "spoken_language": null,
+     "prompt_compiler_schema": "native_av_prompt_v3",
+     "performance_intent_fingerprint": null,
+     "video_prompt_creative_fingerprint": "347be24a",
+     "provider": "agnes",
+     "model": "agnes-video-2.5-flash",
+     "provider_mode": "multi",
+     "provider_options_fingerprint": "f7321e8c"
+    }
+   }
+  ],
+  "image_batches_summary": []
+ },
+ "s03_c01": {
+  "shot_id": "s03_c01",
+  "opening_source": "independent",
+  "source_shot_id": "s02_c03",
+  "link_mode": "multi",
+  "video_reference_asset_id": "prev_tail",
+  "video_end_source_version": "vv_af37a055",
+  "final_video": "vv_af37a055",
+  "first_frame": {
+   "candidates": [
+    {
+     "local": "projects\\雨灯归航\\output\\frames\\s02_c03_video_end_vv_fdee5e7d.jpg",
+     "url": "https://Q-1844.github.io/agnes-frame-host/objects/470e69a81e1a836d.jpg",
+     "status": "done",
+     "error": null,
+     "updated_at": 0.0
+    }
+   ],
+   "selected_index": 0,
+   "status": "done",
+   "error": null,
+   "updated_at": 1790590213.2985039
+  },
+  "video_model": null,
+  "description": "阿獭抱着铜灯跨过门槛走进灯塔门厅，回身把厚重的门轻轻带上；门厅中央一座螺旋石梯盘旋向上，没入阴影。",
+  "negative_prompt": "",
+  "scene_binding_version": null,
+  "scene_bindings": null,
+  "video_versions": [
+   {
+    "version_id": "vv_f3344d02",
+    "created_at": 1790521178.5368657,
+    "model": null,
+    "status": "done",
+    "selected": null,
+    "input_visuals": [
+     {
+      "slot": "first",
+      "semantic_role": "relay_start_boundary",
+      "url": "https://Q-1844.github.io/agnes-frame-host/objects/8de870b4d1512278.jpg",
+      "source_type": "prev_tail_relay",
+      "source_shot_id": "s02_c03",
+      "end_source_version": "vv_1ed04cad",
+      "reference_asset_id": null
+     }
+    ],
+    "mode": null,
+    "prompt_head": "",
+    "seed": null,
+    "seconds": null,
+    "generation_basis": {
+     "schema": "native_av_generation_basis_v1",
+     "shot_id": "s03_c01",
+     "visual_basis_fingerprint": "e0ecb8bc",
+     "dialogue_fingerprint": null,
+     "speaker_map_fingerprint": null,
+     "spoken_language": null,
+     "prompt_compiler_schema": "native_av_prompt_v3",
+     "performance_intent_fingerprint": null,
+     "video_prompt_creative_fingerprint": "3062fd65",
+     "provider": "agnes",
+     "model": null,
+     "provider_mode": "multi",
+     "provider_options_fingerprint": "fd42a43b"
+    }
+   },
+   {
+    "version_id": "vv_af37a055",
+    "created_at": 1790590213.191321,
+    "model": "agnes-video-2.5-flash",
+    "status": "done",
+    "selected": null,
+    "input_visuals": [
+     {
+      "slot": "first",
+      "semantic_role": "relay_start_boundary",
+      "url": "https://Q-1844.github.io/agnes-frame-host/objects/470e69a81e1a836d.jpg",
+      "source_type": "prev_tail_relay",
+      "source_shot_id": "s02_c03",
+      "end_source_version": "vv_fdee5e7d",
+      "reference_asset_id": null
+     }
+    ],
+    "mode": null,
+    "prompt_head": "",
+    "seed": null,
+    "seconds": null,
+    "generation_basis": {
+     "schema": "native_av_generation_basis_v1",
+     "shot_id": "s03_c01",
+     "visual_basis_fingerprint": "1141e1cc",
+     "dialogue_fingerprint": null,
+     "speaker_map_fingerprint": null,
+     "spoken_language": null,
+     "prompt_compiler_schema": "native_av_prompt_v3",
+     "performance_intent_fingerprint": null,
+     "video_prompt_creative_fingerprint": "3062fd65",
+     "provider": "agnes",
+     "model": "agnes-video-2.5-flash",
+     "provider_mode": "multi",
+     "provider_options_fingerprint": "f7321e8c"
+    }
+   }
+  ],
+  "image_batches_summary": []
+ },
+ "s03_c02": {
+  "shot_id": "s03_c02",
+  "opening_source": "independent",
+  "source_shot_id": "s03_c01",
+  "link_mode": "multi",
+  "video_reference_asset_id": "prev_tail",
+  "video_end_source_version": "vv_a9ab4df5",
+  "final_video": "vv_a9ab4df5",
+  "first_frame": {
+   "candidates": [
+    {
+     "local": "projects\\雨灯归航\\output\\frames\\s03_c01_video_end_vv_af37a055.jpg",
+     "url": "https://Q-1844.github.io/agnes-frame-host/objects/c054022aafe917f1.jpg",
+     "status": "done",
+     "error": null,
+     "updated_at": 0.0
+    }
+   ],
+   "selected_index": 0,
+   "status": "done",
+   "error": null,
+   "updated_at": 1790590415.3625956
+  },
+  "video_model": null,
+  "description": "低机位仰拍：阿獭抱着铜灯沿螺旋石梯盘旋而上，暖黄灯光在石墙上投下旋转的影子，一层层升高。",
+  "negative_prompt": "",
+  "scene_binding_version": null,
+  "scene_bindings": null,
+  "video_versions": [
+   {
+    "version_id": "vv_50fad729",
+    "created_at": 1790521424.7805822,
+    "model": null,
+    "status": "done",
+    "selected": null,
+    "input_visuals": [
+     {
+      "slot": "first",
+      "semantic_role": "relay_start_boundary",
+      "url": "https://Q-1844.github.io/agnes-frame-host/objects/df8f80246c5c19ba.jpg",
+      "source_type": "prev_tail_relay",
+      "source_shot_id": "s03_c01",
+      "end_source_version": "vv_f3344d02",
+      "reference_asset_id": null
+     }
+    ],
+    "mode": null,
+    "prompt_head": "",
+    "seed": null,
+    "seconds": null,
+    "generation_basis": {
+     "schema": "native_av_generation_basis_v1",
+     "shot_id": "s03_c02",
+     "visual_basis_fingerprint": "30591ace",
+     "dialogue_fingerprint": null,
+     "speaker_map_fingerprint": null,
+     "spoken_language": null,
+     "prompt_compiler_schema": "native_av_prompt_v3",
+     "performance_intent_fingerprint": null,
+     "video_prompt_creative_fingerprint": "882fdf4a",
+     "provider": "agnes",
+     "model": null,
+     "provider_mode": "multi",
+     "provider_options_fingerprint": "fd42a43b"
+    }
+   },
+   {
+    "version_id": "vv_a9ab4df5",
+    "created_at": 1790590415.2659066,
+    "model": "agnes-video-2.5-flash",
+    "status": "done",
+    "selected": null,
+    "input_visuals": [
+     {
+      "slot": "first",
+      "semantic_role": "relay_start_boundary",
+      "url": "https://Q-1844.github.io/agnes-frame-host/objects/c054022aafe917f1.jpg",
+      "source_type": "prev_tail_relay",
+      "source_shot_id": "s03_c01",
+      "end_source_version": "vv_af37a055",
+      "reference_asset_id": null
+     }
+    ],
+    "mode": null,
+    "prompt_head": "",
+    "seed": null,
+    "seconds": null,
+    "generation_basis": {
+     "schema": "native_av_generation_basis_v1",
+     "shot_id": "s03_c02",
+     "visual_basis_fingerprint": "26330374",
+     "dialogue_fingerprint": null,
+     "speaker_map_fingerprint": null,
+     "spoken_language": null,
+     "prompt_compiler_schema": "native_av_prompt_v3",
+     "performance_intent_fingerprint": null,
+     "video_prompt_creative_fingerprint": "882fdf4a",
+     "provider": "agnes",
+     "model": "agnes-video-2.5-flash",
+     "provider_mode": "multi",
+     "provider_options_fingerprint": "f7321e8c"
+    }
+   }
+  ],
+  "image_batches_summary": []
+ },
+ "s03_c03": {
+  "shot_id": "s03_c03",
+  "opening_source": "independent",
+  "source_shot_id": null,
+  "link_mode": "multi",
+  "video_reference_asset_id": "prev_tail",
+  "video_end_source_version": "vv_7339c1d5",
+  "final_video": "vv_7339c1d5",
+  "first_frame": {
+   "candidates": [
+    {
+     "local": "projects\\雨灯归航\\output\\frames\\s03_c02_video_end_vv_a9ab4df5.jpg",
+     "url": "https://Q-1844.github.io/agnes-frame-host/objects/6c20a6e67a773f8c.jpg",
+     "status": "done",
+     "error": null,
+     "updated_at": 0.0
+    }
+   ],
+   "selected_index": 0,
+   "status": "done",
+   "error": null,
+   "updated_at": 1790599475.7090392
+  },
+  "video_model": null,
+  "description": "灯室平台内部：巨大的主灯座占据画面中央，底座卡口朝上，周围无楼梯无石墙盘旋结构，仅有金属灯架与窗洞。阿獭站在木质小凳上，双手把亮着的铜灯对准卡口按下，拧紧固定——灯室大灯瞬间被点燃般亮起，温暖光束穿过右上窗洞射向河面。画面干净，灯室是封闭圆形房间，顶部有圆窗，墙面为深色木质或金属。",
+  "negative_prompt": "",
+  "scene_binding_version": null,
+  "scene_bindings": null,
+  "video_versions": [
+   {
+    "version_id": "vv_7c0bca11",
+    "created_at": 1790521652.7995565,
+    "model": null,
+    "status": "done",
+    "selected": null,
+    "input_visuals": [
+     {
+      "slot": "first",
+      "semantic_role": "relay_start_boundary",
+      "url": "https://Q-1844.github.io/agnes-frame-host/objects/6cfc00ca70377352.jpg",
+      "source_type": "prev_tail_relay",
+      "source_shot_id": "s03_c02",
+      "end_source_version": "vv_50fad729",
+      "reference_asset_id": null
+     }
+    ],
+    "mode": null,
+    "prompt_head": "",
+    "seed": null,
+    "seconds": null,
+    "generation_basis": {
+     "schema": "native_av_generation_basis_v1",
+     "shot_id": "s03_c03",
+     "visual_basis_fingerprint": "8220f154",
+     "dialogue_fingerprint": null,
+     "speaker_map_fingerprint": null,
+     "spoken_language": null,
+     "prompt_compiler_schema": "native_av_prompt_v3",
+     "performance_intent_fingerprint": null,
+     "video_prompt_creative_fingerprint": "7f2b326f",
+     "provider": "agnes",
+     "model": null,
+     "provider_mode": "multi",
+     "provider_options_fingerprint": "fd42a43b"
+    }
+   },
+   {
+    "version_id": "vv_6f49db86",
+    "created_at": 1790590790.0923123,
+    "model": "agnes-video-2.5-flash",
+    "status": "done",
+    "selected": null,
+    "input_visuals": [
+     {
+      "slot": "first",
+      "semantic_role": "relay_start_boundary",
+      "url": "https://Q-1844.github.io/agnes-frame-host/objects/6c20a6e67a773f8c.jpg",
+      "source_type": "prev_tail_relay",
+      "source_shot_id": "s03_c02",
+      "end_source_version": "vv_a9ab4df5",
+      "reference_asset_id": null
+     }
+    ],
+    "mode": null,
+    "prompt_head": "",
+    "seed": null,
+    "seconds": null,
+    "generation_basis": {
+     "schema": "native_av_generation_basis_v1",
+     "shot_id": "s03_c03",
+     "visual_basis_fingerprint": "a73d4f8d",
+     "dialogue_fingerprint": null,
+     "speaker_map_fingerprint": null,
+     "spoken_language": null,
+     "prompt_compiler_schema": "native_av_prompt_v3",
+     "performance_intent_fingerprint": null,
+     "video_prompt_creative_fingerprint": "7f2b326f",
+     "provider": "agnes",
+     "model": "agnes-video-2.5-flash",
+     "provider_mode": "multi",
+     "provider_options_fingerprint": "f7321e8c"
+    }
+   },
+   {
+    "version_id": "vv_400bc423",
+    "created_at": 1790599175.1080377,
+    "model": "agnes-video-2.5-flash",
+    "status": "done",
+    "selected": null,
+    "input_visuals": [
+     {
+      "slot": "first",
+      "semantic_role": "relay_start_boundary",
+      "url": "https://Q-1844.github.io/agnes-frame-host/objects/6c20a6e67a773f8c.jpg",
+      "source_type": "prev_tail_relay",
+      "source_shot_id": "s03_c02",
+      "end_source_version": "vv_a9ab4df5",
+      "reference_asset_id": null
+     }
+    ],
+    "mode": null,
+    "prompt_head": "",
+    "seed": null,
+    "seconds": null,
+    "generation_basis": {
+     "schema": "native_av_generation_basis_v1",
+     "shot_id": "s03_c03",
+     "visual_basis_fingerprint": "a73d4f8d",
+     "dialogue_fingerprint": null,
+     "speaker_map_fingerprint": null,
+     "spoken_language": null,
+     "prompt_compiler_schema": "native_av_prompt_v3",
+     "performance_intent_fingerprint": null,
+     "video_prompt_creative_fingerprint": "5bd86bee",
+     "provider": "agnes",
+     "model": "agnes-video-2.5-flash",
+     "provider_mode": "multi",
+     "provider_options_fingerprint": "f7321e8c"
+    }
+   },
+   {
+    "version_id": "vv_7339c1d5",
+    "created_at": 1790599475.0113356,
+    "model": "agnes-video-2.5-flash",
+    "status": "done",
+    "selected": null,
+    "input_visuals": [
+     {
+      "slot": "first",
+      "semantic_role": "relay_start_boundary",
+      "url": "https://Q-1844.github.io/agnes-frame-host/objects/6c20a6e67a773f8c.jpg",
+      "source_type": "prev_tail_relay",
+      "source_shot_id": "s03_c02",
+      "end_source_version": "vv_a9ab4df5",
+      "reference_asset_id": null
+     }
+    ],
+    "mode": null,
+    "prompt_head": "",
+    "seed": null,
+    "seconds": null,
+    "generation_basis": {
+     "schema": "native_av_generation_basis_v1",
+     "shot_id": "s03_c03",
+     "visual_basis_fingerprint": "a73d4f8d",
+     "dialogue_fingerprint": null,
+     "speaker_map_fingerprint": null,
+     "spoken_language": null,
+     "prompt_compiler_schema": "native_av_prompt_v3",
+     "performance_intent_fingerprint": null,
+     "video_prompt_creative_fingerprint": "2d6a2522",
+     "provider": "agnes",
+     "model": "agnes-video-2.5-flash",
+     "provider_mode": "multi",
+     "provider_options_fingerprint": "f7321e8c"
+    }
+   }
+  ],
+  "image_batches_summary": []
+ },
+ "_scenes": [
+  {
+   "scene_id": "s01"
+  },
+  {
+   "scene_id": "s02"
+  },
+  {
+   "scene_id": "s03"
+  }
+ ],
+ "_characters": [
+  {
+   "character_id": null,
+   "name": "阿獭",
+   "looks": []
+  }
+ ]
+}

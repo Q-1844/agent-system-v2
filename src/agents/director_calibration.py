@@ -22,8 +22,8 @@ from .script_writer import _base_receipt, _parse_args
 
 from src.core.store import ProjectStore
 from src.experiments.calibration_trace import (
-    CalibrationTraceError, get_link, get_run, list_links, list_runs,
-    upsert_link,
+    CalibrationTraceError, create_run, get_link, get_run, list_links,
+    list_runs, upsert_link,
 )
 from src.storyboard import continuity_service
 
@@ -83,6 +83,60 @@ async def _execute_seam_measure(rt: AgentRuntime, project: str, arguments: str,
               f"tail_to_first_mae={r['tail_to_first_mae']}"
               f"（{r['preprocessing_version']}）。"
               "这是测量值不是裁定——结合叙事/情绪/状态判断 none/minor/major。"))
+
+
+# ============ calibration.run_create（42.md §二缺陷①）============
+# Phase 41 缺陷清单①：agent 无 run 创建工具 → trace_upsert 全部 not_found，
+# 13 镜重测 trace 落档失败，只能靠执行侧脚本预建 run（外部脚手架=测试污染）。
+# 本工具把 run 创建纳入正式工具面（与 REST routers/experiments.py:50 同源服务层
+# calibration_trace.create_run），agent 可自主完成「建 run→写 trace→读 trace」闭环。
+CALIBRATION_RUN_CREATE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "calibration.run_create",
+        "description": (
+            "创建一次校准实验 run（trace 落档的前置：trace_upsert/trace_read 都"
+            "需要已存在的 run_id）。story_id 填项目故事标识；title 简述本次校准"
+            "目的；chain_root_reference_id 可选（链根参考资产）。run 创建后用"
+            "trace_upsert 写各镜 link（同键新 attempt 用 archive_existing=true）。"
+            "写工具（占一个写槽，非 canonical）。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "story_id": {"type": "string",
+                             "description": "故事标识（如 yudeng_guihang）。"},
+                "title": {"type": "string",
+                          "description": "run 标题（本次校准目的，简短）。缺省空。"},
+                "chain_root_reference_id": {"type": "string",
+                                            "description": "链根参考资产 id。缺省空。"},
+                "notes": {"type": "string",
+                          "description": "备注（冻结声明/任务书要点）。缺省空。"},
+            },
+            "required": ["story_id"],
+        },
+    },
+}
+
+
+async def _execute_run_create(rt: AgentRuntime, project: str, arguments: str,
+                              instruction, message_id) -> dict:
+    args = _parse_args(arguments)
+    story_id = (args.get("story_id") or "").strip()
+    if not story_id:
+        raise AgentError("bad_arguments", "缺少 story_id")
+    title = str(args.get("title") or "").strip()
+    chain_root = str(args.get("chain_root_reference_id") or "").strip()
+    notes = str(args.get("notes") or "").strip()
+    pdir = rt._resolve_project_dir(project)
+    run = create_run(pdir, story_id=story_id, title=title,
+                     chain_root_reference_id=chain_root, notes=notes)
+    return _base_receipt(
+        "calibration.run_create", ok=True, target=run["run_id"],
+        shot_id=None,   # 实验层创建，不进 shot 变更派生（同 trace_upsert 口径）
+        run_id=run["run_id"], story_id=run["story_id"],
+        created_at=run["created_at"],
+        note=(f"校准 run 已创建：{run['run_id']}。后续 trace_upsert/trace_read "
+              f"用此 run_id；裁定量字段要求见 trace_upsert 工具说明。"))
 
 
 # ============ calibration.trace_read ============
@@ -342,6 +396,7 @@ async def _execute_trace_upsert(rt: AgentRuntime, project: str, arguments: str,
 
 TOOL_EXECUTORS = {
     "calibration.seam_measure": _execute_seam_measure,
+    "calibration.run_create": _execute_run_create,
     "calibration.trace_read": _execute_trace_read,
     "calibration.trace_upsert": _execute_trace_upsert,
 }

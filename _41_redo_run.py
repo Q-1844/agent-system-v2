@@ -69,6 +69,10 @@ async def run(task: str, session_id: str | None = None) -> int:
     import deps
     deps, q = _bootstrap_deps()
     await q.start()
+    # 42.md §二缺陷②：驱动器同样挂恢复钩子（参数化 recover——隔离队列传自身
+    # queue）。Phase 41 实证：进程被杀后在途视频无人收货，只能手动补偿。
+    from services.lifecycle import recover_pending_videos
+    await recover_pending_videos(queue=q)
     try:
         from src.agents.runtime import get_agent_runtime
         from src.agents.director import director_turn

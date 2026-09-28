@@ -883,6 +883,94 @@ def test_C_recovery_no_resubmit_no_create_video(tmp_path, real_deps):
     assert sh.video.status == ShotStatus.DONE.value
 
 
+# ============ 42.md §二缺陷②④：恢复钩子参数化 + 提交结果不明可见化 ============
+def test_C42_recover_parameterized_queue_isolated_driver(tmp_path, real_deps):
+    """42.md 缺陷②：进程内驱动器（隔离队列文件）传自身 queue 给 recover——
+    poll 未完成的 generating 任务重排队进【驱动器自己的队列】，而不是 deps 全局；
+    驱动器进程重启后可获得与后端 startup 同等的恢复钩子。"""
+    import services.lifecycle as lifecycle
+    agnes = real_deps
+    pdir = tmp_path / PROJECT
+    _save_proj(pdir, [_shot("s01_c01", link_mode="i2v")])
+    _seed_approved_plan(pdir, "s01", [("s01_c01", "independent", "i2v")])
+    from src.core.models import ShotStatus
+    ProjectStore(pdir).update_shot(
+        "s01_c01", lambda s: (
+            setattr(s.video, "video_id", "V42"),
+            setattr(s.video, "status", ShotStatus.GENERATING.value),
+            setattr(s.video, "model", "agnes-video-2.5-flash")))
+    saved_pd = lifecycle.projects_dir
+    lifecycle.projects_dir = tmp_path
+    agnes._poll_error = True   # poll 异常 → recover 走「未完成 → 重新入队」分支
+    try:
+        driver_q = _new_queue(tmp_path)          # 驱动器隔离队列（未 start，仅收 job）
+        asyncio.run(lifecycle.recover_pending_videos(queue=driver_q, client=agnes))
+    finally:
+        lifecycle.projects_dir = saved_pd
+    assert agnes.create_video_count() == 0, "recover 不重提交 create_video"
+    sh = ProjectStore(pdir).load().get_shot("s01_c01")
+    assert sh.video.status == "queued", "poll 未完成 → 标 queued 续轮询"
+    assert len(driver_q.jobs) == 1, "重排队必须进【传入的驱动器队列】（不是 deps 全局）"
+    _j = next(iter(driver_q.jobs.values()))
+    assert _j.kind == "video"
+
+
+def test_C42_recover_submit_uncertain_left_untouched(tmp_path, real_deps):
+    """42.md 缺陷④：generating 且无 video_id（提交结果不明）——recover 不自动
+    处置（不重提交、不改状态），显式告警；处置留给显式重提交（带标注）。"""
+    import services.lifecycle as lifecycle
+    agnes = real_deps
+    pdir = tmp_path / PROJECT
+    _save_proj(pdir, [_shot("s01_c01", link_mode="i2v")])
+    _seed_approved_plan(pdir, "s01", [("s01_c01", "independent", "i2v")])
+    from src.core.models import ShotStatus
+    ProjectStore(pdir).update_shot(
+        "s01_c01", lambda s: setattr(s.video, "status", ShotStatus.GENERATING.value))
+    saved_pd = lifecycle.projects_dir
+    lifecycle.projects_dir = tmp_path
+    try:
+        driver_q = _new_queue(tmp_path)
+        asyncio.run(lifecycle.recover_pending_videos(queue=driver_q, client=agnes))
+    finally:
+        lifecycle.projects_dir = saved_pd
+    sh = ProjectStore(pdir).load().get_shot("s01_c01")
+    assert sh.video.status == ShotStatus.GENERATING.value, "结果不明状态不得被自动改写"
+    assert len(driver_q.jobs) == 0, "结果不明任务不得自动入队重提交"
+    assert agnes.create_video_count() == 0 and not any(
+        c == "poll" for c in agnes.calls), "无 video_id 不可轮询"
+
+
+def test_C42_video_handler_marks_previous_submit_uncertain(tmp_path, real_deps):
+    """42.md 缺陷④：上次提交结果不明（generating 无 video_id）→ 重提交成功后
+    VideoVersion.previous_submit_uncertain=True（重复生成风险如实落库）。"""
+    agnes = real_deps
+    _seed_video_ready(tmp_path)
+    from src.core.models import ShotStatus
+    ProjectStore(tmp_path).update_shot(
+        "s01_c01", lambda s: setattr(s.video, "status", ShotStatus.GENERATING.value))
+
+    async def scenario():
+        q = _new_queue(tmp_path); await q.start()
+        rt = _runtime(tmp_path, q)
+        task = await rt.delegate(PROJECT, "producer", "shot_producer", "shot",
+                                 "s01_c01", "x", "shot.video", "execute")
+        await _wait_job_terminal(q, task["execution_ref"]["job_id"])
+        return task["task_id"]
+
+    tid = asyncio.run(scenario())
+    sh = ProjectStore(tmp_path).load().get_shot("s01_c01")
+    own = [v for v in sh.video_versions if v.origin_run_id == tid]
+    assert own and own[0].previous_submit_uncertain is True
+    # 对照：正常 fresh 提交（无历史不明）应为 False
+    _seed_video_ready(tmp_path)
+    ProjectStore(tmp_path).update_shot(
+        "s01_c01", lambda s: (setattr(s.video, "status", ShotStatus.PENDING.value),
+                              setattr(s.video, "video_id", None)))
+    # 已 DONE 的旧字段不重置（本对照只验字段缺省）：直接构造版本级默认断言
+    from src.core.models import VideoVersion
+    assert VideoVersion(version_id="vv_x").previous_submit_uncertain is False
+
+
 def test_C_no_false_complete_on_video_id_mismatch(tmp_path, real_deps):
     """§24/用户决策2: expected_video_id ≠ shot.video.video_id → 不 falsely complete。
     （另一来源的视频不应被错 settle 给本 AgentTask；fallback 必须 exact 匹配。）"""

@@ -224,6 +224,10 @@ class VideoVersion:
     # reference_only 即"作参考而非首尾帧"（系统显示时以标记区分，如框色）。
     # [] = 旧数据/未记录（诚实缺省）。
     input_visuals: List[Dict[str, Any]] = field(default_factory=list)
+    # 42.md §二缺陷④：本版本提交时，上一次提交处于「结果不明」状态（generating
+    # 且无 video_id——响应未及落库进程即中断）。True = 存在重复生成的可能性，
+    # 消费方/验收方必须如实知晓（不得当作全新提交宣称无重复）。False = 无此历史。
+    previous_submit_uncertain: bool = False
 
 
 # ---- 批次解析/迁移 helper（Step 2 向后兼容：旧 first_frame/last_frame/video -> 批次）----

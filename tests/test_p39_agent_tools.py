@@ -44,14 +44,18 @@ def test_new_tools_registered():
     assert {"calibration.seam_measure", "calibration.trace_read",
             "calibration.trace_upsert", "video.extract_frame",
             "visual.sample_frames", "shot.bridge_create"} <= names
+    # 42.md 缺陷①：run 创建进工具面（trace 闭环自主完成）
+    assert "calibration.run_create" in names
     for n in ("calibration.seam_measure", "calibration.trace_read",
               "calibration.trace_upsert", "video.extract_frame",
               "visual.sample_frames", "shot.bridge_create"):
         assert n in TOOL_EXECUTORS
+    assert "calibration.run_create" in TOOL_EXECUTORS
 
 
 def test_write_read_classification():
     assert "calibration.trace_upsert" in DIRECTOR_WRITE_OPERATIONS
+    assert "calibration.run_create" in DIRECTOR_WRITE_OPERATIONS
     assert "shot.bridge_create" in DIRECTOR_WRITE_OPERATIONS
     assert "shot.bridge_create" in DIRECTOR_LONG_TASK_TOOLS
     for n in ("calibration.seam_measure", "calibration.trace_read",
@@ -192,6 +196,31 @@ def test_trace_upsert_enum_empty_string_rejected(tmp_path):
     # trace 回执不含 shot_id → 不污染 Producer changed_refs
     refs = _derive_changed_refs("director", [out])
     assert refs["shots"] == [] and refs["scenes"] == []
+
+
+# ============ run 创建工具（42.md §二缺陷①：trace 闭环自主完成）============
+def test_run_create_tool_closes_trace_loop(tmp_path):
+    from src.agents.director_calibration import _execute_run_create
+    rt = _runtime(tmp_path)
+    out = _call(_execute_run_create, rt, tmp_path.name,
+                {"story_id": "story42", "title": "封板验收校准",
+                 "notes": "agent 自主建 run"})
+    assert out["ok"] and out["operation"] == "calibration.run_create"
+    assert out["run_id"].startswith("cal_")
+    assert out.get("shot_id") is None and not out.get("verified")
+    # 落盘可读（服务层同源）
+    run = ct.get_run(tmp_path, out["run_id"])
+    assert run["story_id"] == "story42" and run["status"] == "active"
+    # 建完即可 trace_upsert（不再 not_found）——Phase 41 缺陷的闭环验证
+    rec = _call(_tr_upsert, rt, tmp_path.name,
+                {"run_id": out["run_id"], "trace_key": "s01_c01",
+                 "record": {"human_deviation_level": "minor",
+                            "human_action": "continue", "why": "闭环验证"}})
+    assert rec["ok"] and rec["run_id"] == out["run_id"]
+    # 缺 story_id 结构化拒绝
+    with pytest.raises(AgentError) as ei:
+        _call(_execute_run_create, rt, tmp_path.name, {})
+    assert ei.value.code == "bad_arguments"
 
 
 def test_trace_upsert_archive_history_not_overwritten(tmp_path):

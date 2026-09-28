@@ -100,6 +100,7 @@ from .shot_review import (
 # —— Phase 39（39.md §6）：连续性校准 / 帧级只读 / keyframes 桥工具（接线）——
 from .director_calibration import (
     CALIBRATION_SEAM_TOOL,
+    CALIBRATION_RUN_CREATE_TOOL,
     CALIBRATION_TRACE_READ_TOOL,
     CALIBRATION_TRACE_UPSERT_TOOL,
     TOOL_EXECUTORS as _CALIBRATION_EXECUTORS,
@@ -178,7 +179,10 @@ DIRECTOR_WRITE_OPERATIONS = {"shot.create", "shot.create_many", "shot.update",
                              # Phase 39（39.md §6.2/§6.4）：keyframes 桥构造（canonical
                              # 变更：插镜/relay/binding/seed）；校准 trace 写（非 canonical
                              # 但属状态 mutation，占写槽；回执用 trace_key 不进 changed_refs）
-                             "shot.bridge_create", "calibration.trace_upsert"}
+                             "shot.bridge_create", "calibration.trace_upsert",
+                             # 42.md 缺陷①：run 创建同 trace_upsert（非 canonical
+                             # 状态 mutation，占写槽；回执 run_id 不进 changed_refs）
+                             "calibration.run_create"}
 # 长任务视觉工具（loop 侧额外传 event_cb/cancel_event；对生成类工具豁免「写后重读」
 # 收尾判定——executor 内部已做「重读 canonical + 文件存在」验证，强于 shot.list）。
 DIRECTOR_LONG_TASK_TOOLS = {"shot.generate_images", "shot.generate_videos",
@@ -909,9 +913,9 @@ DIRECTOR_TOOLS = [
     WEB_SEARCH_TOOL,
     VISION_REVIEW_TOOL,
     REVIEW_SHOT_TOOL,
-    # Phase 39：连续性校准 / 帧级只读 / keyframes 桥
-    CALIBRATION_SEAM_TOOL, CALIBRATION_TRACE_READ_TOOL,
-    CALIBRATION_TRACE_UPSERT_TOOL,
+    # Phase 39：连续性校准 / 帧级只读 / keyframes 桥；42.md：run 创建进工具面
+    CALIBRATION_SEAM_TOOL, CALIBRATION_RUN_CREATE_TOOL,
+    CALIBRATION_TRACE_READ_TOOL, CALIBRATION_TRACE_UPSERT_TOOL,
     VIDEO_EXTRACT_FRAME_TOOL, VISUAL_SAMPLE_FRAMES_TOOL,
     SHOT_BRIDGE_CREATE_TOOL,
     # Skill System V1（40.md）：生产技能发现/加载（只读）
@@ -1707,6 +1711,7 @@ _TOOL_LABELS = {
     "shot.generate_images": "生成分镜图", "shot.generate_videos": "生成镜头视频",
     "visual.review_image": "视觉审查",
     "calibration.seam_measure": "测量接缝 MAE",
+    "calibration.run_create": "创建校准 run",
     "calibration.trace_read": "读取校准 trace",
     "calibration.trace_upsert": "记录校准 trace",
     "video.extract_frame": "提取视频帧",

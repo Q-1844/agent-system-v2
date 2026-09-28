@@ -31,6 +31,7 @@
 | v2.0 双参考（Look+尾帧同发） | — | 否（ti2vid 1 图上限） | 否 | 否（400，32.md X005） | — | — |
 | 2.5 keyframe（顶层 `image`+seconds，首帧硬边界） | 是 | 是 | 是（config 默认模型） | 是（2026-09-06 探针；2026-09-27 s02_c02 生产；2026-09-28 A/B 对照） | **是（2026-09-28 A/B：硬首帧在 2.5 上锁身份/画风，中末段稳）** | s02_c02 已选 2.5 版（P4 雨灯归航） |
 | 2.5 reference 多图（multi→`images` 数组，双图+seed 实测） | 是 | 是（≤5 图，不锁首帧） | **是（2026-09-28 实现）** | **是（2026-09-28 探针 `ref.*`：双图+seed=42，5s 720P，回执 task_xWtO1hyIkkazisEVEs60iBqTrjYcmlAt；提交即受理由 flash 校验前置保证）** | 是（帧目检：`<Picture 1>` 身份跨帧保持、`<Picture 2>` 场景/光感语义被采用；画面风格随参考图） | — |
+| 2.5 reference relay+Look 双参考（哨兵 `prev_tail_look`：尾帧+hero Look 同发，`<Picture 1/2>` 指称自动附加） | 是（2026-09-29 接线） | 是（≤5 图） | **是（2026-09-29 实现，opt-in 非 default）** | 未验证（待 42.md §四 P1 对照） | 未验证 | — |
 | keyframes 桥（`shot.bridge_create`） | 是 | v2.0 曾是 | **否（2.5 无 keyframes 双帧；桥需求改 i2v 或重生成后继首帧）** | 是（38 桥实证，历史） | 部分（历史） | 端点须逐案批 |
 | 融合首帧起步（Look+尾帧经图片 i2i 合成新首帧→i2v） | 是 | 是（图片接口） | 是（BOUND reference_previous 链路） | 是（2026-09-27） | **是（正例：身份/景别/动作显著优于裸尾帧接力；已知瑕疵=结尾提前触水、末帧颈前偏粉）** | 实验候选（expB），**未正式选片** |
 | inherit_previous（来源真实末帧直接作视频首帧） | 是 | 是 | 是 | 是（历史项目） | 部分 | 逐案 |
@@ -42,6 +43,8 @@
 - `agnes_adapter.compile_agnes_video_call`：multi 参考 1-5 个（缺/超结构化拒绝）。
 - `routers/shots.py`：video_model 一律解析为具体 id（job.params > config 默认 > 硬编码 2.5-flash）并落库——恢复/续轮询用同一 model_name。
 - `_resolve_boundary_frame`：首帧槽批次带 `slot_semantics=multi_reference_only`（multi 接力同步产物）→ i2v/keyframes 消费被 `first_frame_slot_not_hard_boundary` 结构化拒绝（routers/shots 写标记，video_adapter 拦截）。
-- `resolve_multi_relay_source`：跨段接力返回 `cross_segment=true` → 诊断 `prev_tail_cross_segment_relay` + 进 visual basis 指纹（组首 prev_tail 残留不再静默）。
+- `resolve_multi_relay_source`：跨段接力返回 `cross_segment=true` → 诊断 `prev_tail_cross_segment_relay` + 进 visual basis 指纹（组首 prev_tail 残留不再静默）；哨兵 `prev_tail_look` 返回 `identity=true`（同进指纹）。
+- `calibration.run_create`（2026-09-29 进工具面）：校准 run 由 agent 自主创建（此前唯一入口是 REST，trace_upsert 对不存在 run 报 not_found——Phase 41 重测 13/13 trace 落档失败的根因）。
+- 视频提交即落库 task id（routers/shots.py：video_id/task_id/model 提交成功立刻 update_shot）；崩溃恢复 lifecycle.recover_pending_videos（生产 startup + 参数化供进程内驱动器）只续轮询不重提交；「generating 且无 video_id」（提交结果不明）不自动处置，重提交时如实标注 previous_submit_uncertain。
 - `_extract_video_end_frame`：末帧文件名带来源版本 id（`{shot_id}_video_end_{version_id}.jpg`），重提取不再覆盖旧字节。
 - BOUND 首帧批次 `generation_basis.continuity_tail` 记录实际发送的尾帧身份（source_shot_id/end_source_version/url）。

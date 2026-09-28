@@ -96,9 +96,11 @@ def test_C4_legacy_director_tests_not_regressed():
     #   shot.bridge_create（连续性校准与桥的正式工具面）→ 28
     # 40（40.md Skill System V1）：+skill.list / skill.load / skill.read_resource
     #   （生产技能发现/加载，只读不占写槽）→ 31
-    assert len(DIRECTOR_TOOLS) == 31, (
-        "Director 工具面 = 28（Phase 39 锚定值）+ 3 新增（40.md Skill System V1："
-        "skill.list/load/read_resource）")
+    # 42（42.md §二缺陷①）：+calibration.run_create（run 创建进工具面，
+    #   trace 闭环不再依赖执行侧脚手架）→ 32
+    assert len(DIRECTOR_TOOLS) == 32, (
+        "Director 工具面 = 31（Phase 40 锚定值）+ 1 新增（42.md："
+        "calibration.run_create）")
 
 
 # ============ Production inspect（C5-C14）============

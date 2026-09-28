@@ -29,6 +29,7 @@
     ],
     "director": [
       "shot.bridge_create",
+      "calibration.run_create",
       "calibration.seam_measure",
       "calibration.trace_upsert",
       "visual.sample_frames",

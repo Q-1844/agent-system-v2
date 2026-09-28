@@ -42,6 +42,7 @@
       "character_designer.delegate"
     ],
     "director": [
+      "calibration.run_create",
       "calibration.seam_measure",
       "calibration.trace_read",
       "calibration.trace_upsert",

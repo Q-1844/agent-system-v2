@@ -1,0 +1,183 @@
+[
+ {
+  "shot": "s01_c01",
+  "final": "vv_55accb16",
+  "video_inputs": [
+   [
+    "reference_only",
+    "character_look",
+    ""
+   ]
+  ],
+  "model": "agnes-video-2.5-flash",
+  "pmode": "multi"
+ },
+ {
+  "shot": "s01_c02",
+  "final": "vv_9cda3271",
+  "video_inputs": [
+   [
+    "relay_start_boundary",
+    "prev_tail_relay",
+    "s01_c01"
+   ]
+  ],
+  "model": "agnes-video-2.5-flash",
+  "pmode": "multi"
+ },
+ {
+  "shot": "s01_c03",
+  "final": "vv_703eb03f",
+  "video_inputs": [
+   [
+    "relay_start_boundary",
+    "prev_tail_relay",
+    "s01_c02"
+   ]
+  ],
+  "model": "agnes-video-2.5-flash",
+  "pmode": "multi"
+ },
+ {
+  "shot": "s01_c04",
+  "final": "vv_74d248e6",
+  "video_inputs": [
+   [
+    "hard_start_boundary",
+    "ff_77ffc303_1",
+    ""
+   ]
+  ],
+  "model": "agnes-video-2.5-flash",
+  "pmode": "i2v",
+  "ff_batch": "ff_77ffc303",
+  "ff_scene_mode": "context_only",
+  "ff_human_mode": "drop",
+  "ff_sent": [
+   "composition"
+  ]
+ },
+ {
+  "shot": "s01_c05",
+  "final": "vv_eb4a6f6d",
+  "video_inputs": [
+   [
+    "relay_start_boundary",
+    "prev_tail_relay",
+    "s01_c04"
+   ]
+  ],
+  "model": "agnes-video-2.5-flash",
+  "pmode": "multi"
+ },
+ {
+  "shot": "s01_c06",
+  "final": "vv_41e435bc",
+  "video_inputs": [
+   [
+    "relay_start_boundary",
+    "prev_tail_relay",
+    "s01_c05"
+   ]
+  ],
+  "model": "agnes-video-2.5-flash",
+  "pmode": "multi"
+ },
+ {
+  "shot": "s02_c01",
+  "final": "vv_ebbc77f8",
+  "video_inputs": [
+   [
+    "reference_only",
+    "character_look",
+    ""
+   ]
+  ],
+  "model": "agnes-video-2.5-flash",
+  "pmode": "multi"
+ },
+ {
+  "shot": "s02_c02",
+  "final": "vv_19d81de3",
+  "video_inputs": [
+   [
+    "hard_start_boundary",
+    "ff_cb6f94a5_1",
+    ""
+   ]
+  ],
+  "model": "agnes-video-2.5-flash",
+  "pmode": "i2v",
+  "ff_batch": "ff_cb6f94a5",
+  "ff_scene_mode": "context_only",
+  "ff_human_mode": "drop",
+  "ff_sent": [
+   "prop"
+  ]
+ },
+ {
+  "shot": "s02_c03",
+  "final": "vv_fdee5e7d",
+  "video_inputs": [
+   [
+    "relay_start_boundary",
+    "prev_tail_relay",
+    "s02_c02"
+   ]
+  ],
+  "model": "agnes-video-2.5-flash",
+  "pmode": "multi"
+ },
+ {
+  "shot": "s03_c01",
+  "final": "vv_af37a055",
+  "video_inputs": [
+   [
+    "relay_start_boundary",
+    "prev_tail_relay",
+    "s02_c03"
+   ]
+  ],
+  "model": "agnes-video-2.5-flash",
+  "pmode": "multi"
+ },
+ {
+  "shot": "s03_c02",
+  "final": "vv_a9ab4df5",
+  "video_inputs": [
+   [
+    "relay_start_boundary",
+    "prev_tail_relay",
+    "s03_c01"
+   ]
+  ],
+  "model": "agnes-video-2.5-flash",
+  "pmode": "multi"
+ },
+ {
+  "shot": "s03_c03",
+  "final": "vv_7339c1d5",
+  "video_inputs": [
+   [
+    "relay_start_boundary",
+    "prev_tail_relay",
+    "s03_c02"
+   ]
+  ],
+  "model": "agnes-video-2.5-flash",
+  "pmode": "multi"
+ },
+ {
+  "shot": "s03_c04",
+  "final": "vv_6684f5dd",
+  "video_inputs": [
+   [
+    "reference_only",
+    "scene_instance_view",
+    ""
+   ]
+  ],
+  "model": "agnes-video-2.5-flash",
+  "pmode": "multi"
+ }
+]

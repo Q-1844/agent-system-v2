@@ -26,7 +26,12 @@ from src.audio.av_sync.models import (
     resolve_speaker_target,
 )
 
-REAL_MP4 = Path(__file__).resolve().parent.parent / "projects" / "AGNES_GoldenPath_H" / "output" / "videos" / "s01_c01.mp4"
+# 42.md §4.6：权威视频夹具改为仓库内常驻合成 mp4（ffmpeg testsrc 2s，真实可解码）。
+# 原值指向 projects/AGNES_GoldenPath_H 的真实成片——该项目 09-24 清理删除后 39 项
+# AV-sync/lipsync 测试 FileNotFoundError 挂账（41.md 「零净增」掩盖的环境性失败）。
+# A2 路径（外挂 lip-sync，已搁置留档为 fallback）测试只需要一个可解码真实 mp4，
+# 内容无关——合成夹具恢复环境条件且不再依赖运行时项目数据。
+REAL_MP4 = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "a2_authoritative_video.mp4"
 
 
 def wav_bytes(seconds=1.0, rate=48000):
