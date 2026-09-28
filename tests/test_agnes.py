@@ -50,20 +50,20 @@ def test_i2i_image_position_fallback(client):
     assert agnes._img_pos == "top"                         # 位置缓存
 
 
-# ---------- 坑3：num_frames 8n+1 进请求体 ----------
-def test_create_video_num_frames_8n1(client):
-    """create_video 把 num_frames 夹成 8n+1 再发：120->121（8*15+1），500->441（720p 档上限）"""
+# ---------- 坑3（历史）：num_frames 8n+1 只属 v2.0 legacy——v2.0 删除后 2.5 契约不带帧参数 ----------
+def test_create_video_default_25_contract(client):
+    """不传 model：config 默认（TEST_CONFIG=agnes-video-2.5-flash）→ 2.5 契约 body
+    （mode/seconds 字符串）；num_frames/width/height 不再进入请求体
+    （snap_num_frames 纯函数覆盖见 test_core）。"""
     mock = MockAgnes()
     agnes = make_agnes(mock)
     asyncio.run(agnes.create_video("prompt", mode="t2v", num_frames=120,
                                    frame_rate=24, width=1280, height=704))
-    assert mock.bodies("POST", "/v1/videos")[-1]["num_frames"] == 121
-
-    mock2 = MockAgnes()
-    a2 = make_agnes(mock2)
-    asyncio.run(a2.create_video("prompt", mode="t2v", num_frames=500,
-                                frame_rate=24, width=1280, height=704))
-    assert mock2.bodies("POST", "/v1/videos")[-1]["num_frames"] == 441   # 720p=441
+    body = mock.bodies("POST", "/v1/videos")[-1]
+    assert body["model"] == "agnes-video-2.5-flash"
+    assert body["mode"] == "text" and body["seconds"] == "5"
+    for forbidden in ("num_frames", "width", "height", "frame_rate"):
+        assert forbidden not in body, forbidden
 
 
 # ---------- 坑1：remixed_from_video_id null -> url fallback ----------
@@ -177,16 +177,65 @@ def test_create_video_25_keyframes_rejected(client):
     assert mock.find("POST", "/v1/videos") == []
 
 
-def test_legacy_video_default_unchanged(client):
-    """不传 model：legacy v2.0 body 原样（num_frames/frame_rate/width/height）。"""
+def test_video_v20_model_rejected(client):
+    """2026-09-28：v2.0 已删除（官方 2026-09-25 下线 + 用户指令）——显式指定即拒绝，
+    绝不发请求。"""
+    import pytest
+    from src.api.agnes_client import AgnesError
     mock = MockAgnes()
     agnes = make_agnes(mock)
-    asyncio.run(agnes.create_video("prompt", mode="i2v", image_url="https://x/f.png",
-                                   num_frames=121, frame_rate=24, width=1280, height=704))
+    with pytest.raises(AgnesError) as ei:
+        asyncio.run(agnes.create_video("prompt", mode="i2v",
+                                       image_url="https://x/f.png",
+                                       model="agnes-video-v2.0"))
+    assert "已删除" in str(ei.value)
+    assert mock.find("POST", "/v1/videos") == []
+
+
+def test_create_video_25_multi_reference_images(client):
+    """2.5 multi → mode=reference + 顶层 images 数组（官方字段，2026-09-28 文档核读；
+    flash 上限 5）。"""
+    mock = MockAgnes()
+    agnes = make_agnes(mock)
+    urls = ["https://x/look.png", "https://x/prev_tail.png"]
+    asyncio.run(agnes.create_video("prompt", mode="multi", image_urls=urls,
+                                   model="agnes-video-2.5-flash", duration_s=5))
     body = mock.bodies("POST", "/v1/videos")[-1]
-    assert body["model"] == "mock-video"
-    assert body["num_frames"] == 121 and body["width"] == 1280
-    assert "mode" not in body and "seconds" not in body
+    assert body["mode"] == "reference"
+    assert body["images"] == urls
+    assert body["seconds"] == "5"
+    assert "image" not in body
+
+
+def test_create_video_25_multi_ref_count_bounds(client):
+    """reference 参考图 0 张或 >5 张 → 拒绝（flash images 上限 5），不发请求。"""
+    import pytest
+    from src.api.agnes_client import AgnesError
+    mock = MockAgnes()
+    agnes = make_agnes(mock)
+    with pytest.raises(AgnesError):
+        asyncio.run(agnes.create_video("prompt", mode="multi", image_urls=[],
+                                       model="agnes-video-2.5-flash"))
+    with pytest.raises(AgnesError):
+        asyncio.run(agnes.create_video(
+            "prompt", mode="multi",
+            image_urls=[f"https://x/{i}.png" for i in range(6)],
+            model="agnes-video-2.5-flash"))
+    assert mock.find("POST", "/v1/videos") == []
+
+
+def test_create_video_25_negative_prompt_rejected(client):
+    """2.5 契约无 negative_prompt 字段（官方参数表 2026-09-28 核读）——非空显式拒绝
+    （绝不静默丢参）。"""
+    import pytest
+    from src.api.agnes_client import AgnesError
+    mock = MockAgnes()
+    agnes = make_agnes(mock)
+    with pytest.raises(AgnesError) as ei:
+        asyncio.run(agnes.create_video("prompt", mode="t2v", negative_prompt="blurry",
+                                       model="agnes-video-2.5-flash"))
+    assert "negative_prompt" in str(ei.value)
+    assert mock.find("POST", "/v1/videos") == []
 
 
 def test_poll_video_carries_model_name(client):

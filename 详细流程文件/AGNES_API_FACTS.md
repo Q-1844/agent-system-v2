@@ -150,14 +150,37 @@ OpenAI 兼容。
   model_name 必须与提交一致）；终态 URL 仍在 `url` 字段
   （`https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_....mp4`），
   `seconds` 回读为字符串（"5"）。
-- 未验证（勿发）：双帧 keyframes（首+尾）与多图 reference 的具体图片字段形状；
-  `seed`/`negative_prompt` 在新契约下的支持情况。项目代码对这两种模式明确拒绝
-  （AgnesClient.create_video → AgnesError"暂不支持"），默认模型仍为 v2.0。
+- 未验证（勿发）：双帧 keyframes（首+尾）。项目代码对这种模式明确拒绝
+  （AgnesClient.create_video → AgnesError"暂不支持"）。
 - 真机证据：`_video25_probe/v25c.*`（text 5s 成功）、`v25d.*`（keyframe 5s 成功）、
-  `v20.*`（legacy 回归成功）、REST 全链 smoke（`gp_video25_smoke.py` → SMOKE PASS，
+  `v20.*`（legacy 回归成功，历史）、REST 全链 smoke（`gp_video25_smoke.py` → SMOKE PASS，
   VideoVersion.model 落库）。
 
-### 3.1 创建任务 `POST /v1/videos`（legacy：agnes-video-v2.0 默认链路，不变）
+### 3.0.1 🔴 2026-09-28 更新：v2.0 删除，2.5-flash 为唯一视频模型（官方文档核读）
+
+依据：v2.0 官方下线公告（2026-09-25 23:59 UTC+8 生效）+ 用户指令（2026-09-28）+
+官方 2.5/2.5-flash 文档核读（wiki.agnes-ai.com/en/docs/agnes-video-25 与
+…/agnes-video-25-flash）。系统侧：config 默认、director 枚举、client 全部收敛
+`agnes-video-2.5-flash`；`create_video` 对非 2.5 模型 id 显式拒绝。
+
+| 事实 | 值（2026-09-28 核读） |
+|---|---|
+| Token Plan | `agnes-video-2.5-flash` 覆盖：500 秒/天 + RPM 5（有效值）；当前限时免费 $0/秒（720P 列牌 $0.025） |
+| reference 模式图片字段 | **`images`：公网 URL 数组**；flash 上限 **5** 张（基础版 2.5 为 8）；与 first_frame/last_frame 互斥；参考不锁首帧（may recompose） |
+| keyframe 模式图片字段 | 官方 `first_frame`/`last_frame`（至少其一）；本仓库沿用顶层 `image`（2026-09-06 实测兼容形态，s02_c02 生产复证） |
+| 其它官方参数 | seconds 字符串 "4"-"12"（默认 "5"）；size 仅 "720P"（flash）；aspect_ratio 默认 16:9（16:9=1280x704）；seed integer；n=1 |
+| 明确 400 | duration/resolution/num_frames/width/height/fps/quality/num_inference_steps；mode 与 media 字段冲突 |
+| negative_prompt | 官方参数表无此字段——本仓库非空即拒绝（绝不静默丢参，需并入 prompt） |
+| prompt 占位符 | reference 模式可用 `<Picture N>`/`<Audio N>` 指名用途（官方推荐显式指名） |
+| 计费口径 | 输出秒 × 档位价 + 输入视频秒 × 档位价 + max(0, 图数−5) × $0.005；本仓库请求只带图（≤5 张全免费） |
+| 轮询 | 不变：`GET /agnesapi?video_id=&model_name=agnes-video-2.5-flash`（text 模式才可省 model_name） |
+
+multi→reference 本地映射（2026-09-28）：`_video25_mode("multi")→"reference"`、
+`_video25_image("multi")→{"images": urls}`（1-5 张校验）；编译层
+`compile_agnes_video_call` multi 参考 1-5 结构化校验。Binding 层仍单参考
+（prev_tail）——Look+尾帧双参考需 Binding 扩展（未接通）。
+
+### 3.1 创建任务 `POST /v1/videos`（🔴 历史存档：legacy v2.0 契约——2026-09-25 官方下线、2026-09-28 从本系统删除，仅留档）
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|

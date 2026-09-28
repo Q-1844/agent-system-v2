@@ -324,7 +324,7 @@ def _default_provider_options(project: Any, shot: Any) -> Dict[str, Any]:
     投影：与 _handler_video 既有默认路径逐字段同构（video_model 不传 → None、
     不加 duration_s；16:9 走服务端实测 1280x704，与 handler 同一口径）。
     当前 UI 不传 video_model——默认投影即生产现实（21.md §14）。"""
-    from src.api.agnes_client import resolve_size
+    from src.api.agnes_client import resolve_size, DEFAULT_VIDEO_MODEL
 
     style = getattr(project, "style", None)
     ratio = getattr(style, "aspect_ratio", None) or "16:9"
@@ -337,12 +337,16 @@ def _default_provider_options(project: Any, shot: Any) -> Dict[str, Any]:
     return {"mode": ("keyframes" if getattr(shot, "link_mode", "") == "keyframes"
                      else "multi" if getattr(shot, "link_mode", "") == "multi"
                      else "i2v"),
-            "model": None,
+            "model": DEFAULT_VIDEO_MODEL,   # 2026-09-28：唯一视频模型（与 dispatch 解析同源）
             "num_frames": getattr(video, "num_frames", None),
             "frame_rate": getattr(video, "frame_rate", None),
             "width": w, "height": h,
             "seed": getattr(shot, "seed", None),
-            "negative_prompt": getattr(shot, "negative_prompt", None)}
+            "negative_prompt": getattr(shot, "negative_prompt", None),
+            # 2026-09-28：dispatch 必带 duration_s（2.5 契约秒数）——投影同构，指纹一致
+            "duration_s": (max(4, min(12, round(getattr(video, "num_frames", 121) /
+                                max(getattr(video, "frame_rate", 24), 1))))
+                           if getattr(video, "num_frames", None) else 5)}
 
 
 def compute_current_dependency_keys(project_dir, project: Any, shot: Any, *,
@@ -398,14 +402,16 @@ def compute_current_dependency_keys(project_dir, project: Any, shot: Any, *,
                     "scene_instance_view_id"),
         }
         # 34.md V1C：multi 尾帧接力是实际生成依赖——与 video_adapter build 侧
-        # 同规则重算（resolve_multi_relay_source），relay 信息进 visual 指纹。
+        # 同规则重算（resolve_multi_relay_source），relay 信息进 visual 指纹
+        # （Phase 3：cross_segment 一并参与，两侧对称）。
         if str(getattr(shot, "link_mode", "") or "") == "multi":
             from src.generation.video_adapter import resolve_multi_relay_source
             relay = resolve_multi_relay_source(project, shot)
             if relay is not None:
                 visual = dict(visual)
                 visual["relay"] = {"source_shot_id": relay["source_shot_id"],
-                                   "end_source_version": relay.get("end_source_version")}
+                                   "end_source_version": relay.get("end_source_version"),
+                                   "cross_segment": bool(relay.get("cross_segment"))}
     else:
         mode = ("keyframes" if shot.link_mode == "keyframes"
                 else "multi" if shot.link_mode == "multi" else "i2v")

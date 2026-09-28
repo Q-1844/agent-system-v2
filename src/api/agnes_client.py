@@ -25,6 +25,10 @@ log = setup_logger("agnes_client")
 
 RETRYABLE = {408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524}
 
+# 唯一视频模型（2026-09-28：v2.0 官方下线+用户指令删除；config 缺失/测试 fake
+# 无 models 时的确定兜底——dispatch 与 freshness 重算投影必须同源）。
+DEFAULT_VIDEO_MODEL = "agnes-video-2.5-flash"
+
 # AGNES_API_FACTS §2.3
 # 2K 扩展（Phase D §2 最小接线，2026-09-19 真机探针 _phase_d_2k_probe）：
 # 1:1/16:9/9:16 为既有档；3:4/4:3/21:9 来自 AGNES_API_FACTS 官方 2K 表；
@@ -525,15 +529,19 @@ class AgnesClient:
         raise last_err or AgnesError("图片生成失败")
 
     # ---------- 视频 ----------
-    # 视频模型双契约（2026-09-06 实测，_video25_probe/）：
-    #   v2.0 家族（legacy）：model/prompt/num_frames(8n+1≤441)/frame_rate/width/height
-    #     + i2v 顶层 image 字符串 / keyframes extra_body.image
-    #   2.5 家族（agnes-video-2.5 / agnes-video-2.5-flash）：mode 必填（text/keyframe/reference）
-    #     + seconds 字符串（4-12s，720P）；【不接受】duration/resolution/num_frames
-    #     （400 报错原文：duration/resolution is not an allowed request field，
-    #      num_frames is a forbidden field，seconds 必须为 string——Go taskSubmitReqAlias）。
+    # 视频模型唯一契约（2026-09-28：v2.0 官方 2026-09-25 23:59 UTC+8 下线 +
+    # 用户指令从系统删除；agnes-video-2.5-flash 为唯一视频模型）：
+    #   2.5 契约（2026-09-06 实测 _video25_probe/ + 2026-09-28 官方文档核读）：
+    #     mode 必填（text/keyframe/reference）+ seconds 字符串（"4"-"12"，默认 "5"）
+    #     + 可选 size（720P/1080P/1K/2K，默认 720P）/ aspect_ratio（默认 16:9）/
+    #     seed（integer，可复现）。
+    #     【不接受】duration/resolution/num_frames/width/height/fps/quality（400）。
+    #     mode=keyframe：首帧图（顶层 `image` 公网 URL，2026-09-06 实测出片；
+    #     官方文档记 `first_frame` 字段——顶层 image 为已验证兼容形态）。
+    #     mode=reference：`images` 公网 URL 数组（flash 上限 5 张，单图<15MB；参考
+    #     不锁首帧 may recompose）；prompt 可用 <Picture N> 指名用途。
     #     轮询 endpoint/参数不变（/agnesapi?video_id=&model_name=），URL 仍在 url 字段。
-    # model 参数 None = config 默认（agnes.models.video），存量调用行为逐字节不变。
+    # model 参数 None = config 默认（agnes.models.video = agnes-video-2.5-flash）。
     def _video_model_id(self, model: Optional[str]) -> str:
         return model or self.models["video"]
 
@@ -544,16 +552,18 @@ class AgnesClient:
     @staticmethod
     def _video25_mode(legacy_mode: str) -> str:
         """legacy 模式 → 2.5 契约 mode。已实测：t2v→text、i2v→keyframe（顶层 image
-        公网 URL，2026-09-06 各生成成功）。keyframes（首+尾双帧过渡）与 multi 在 2.5
-        契约上未验证——明确拒绝而不是发未验证的请求形状（默认模型仍是 v2.0，
-        keyframes 镜头走默认模型不受影响）。"""
+        公网 URL，2026-09-06 各生成成功）。multi→reference（2026-09-28 官方文档核读
+        + 真机探针回执：images 数组，参考不锁首帧）。keyframes（首+尾双帧过渡）无
+        2.5 对应——明确拒绝，绝不发送未验证的请求形状。"""
         if legacy_mode == "t2v":
             return "text"
         if legacy_mode == "i2v":
             return "keyframe"
+        if legacy_mode == "multi":
+            return "reference"
         raise AgnesError(
-            f"agnes-video-2.5 系列暂不支持 {legacy_mode} 模式（双帧/多图契约未验证）；"
-            "请使用默认模型 agnes-video-v2.0，或将镜头切换为单首帧模式")
+            "2.5 契约暂不支持 keyframes 双帧（首+尾）模式（未验证，勿发）；"
+            "v2.0 已删除——双帧/桥接需求请改单首帧 i2v 或重生成后继镜首帧")
 
     @staticmethod
     def _video25_image(legacy_mode: str,
@@ -564,7 +574,14 @@ class AgnesClient:
         if legacy_mode == "i2v":
             if not image_url:
                 raise AgnesError("2.5 契约 keyframe 模式必须提供公网 image URL")
-            return {"image": image_url}          # 顶层字符串（实测）
+            return {"image": image_url}          # 顶层字符串（2026-09-06 实测）
+        if legacy_mode == "multi":
+            urls = [u for u in (image_urls or []) if u]
+            if not (1 <= len(urls) <= 5):
+                raise AgnesError(
+                    f"2.5-flash reference 模式需要 1-5 张公网参考图（flash 上限 5），"
+                    f"得到 {len(urls)}")
+            return {"images": urls}              # 官方 reference 字段（2026-09-28 文档核读）
         raise AgnesError(f"2.5 契约暂不支持 {legacy_mode} 模式的图片参数")
 
     async def create_video(self, prompt: str, *,
@@ -578,78 +595,41 @@ class AgnesClient:
                            model: Optional[str] = None,
                            duration_s: Optional[int] = None) -> dict:
         """提交视频任务。mode: 't2v' | 'i2v' | 'keyframes' | 'multi'
-        model: 覆盖 config 默认视频模型（agnes-video-2.5-flash 走新契约）。
-        duration_s: 新契约的时长（秒，4-12，str 传输）；legacy 忽略（用 num_frames）。
+        2026-09-28 起唯一支持 agnes-video-2.5 系列（v2.0 官方 2026-09-25 23:59 下线
+        + 用户指令从系统删除——非 2.5 模型 id 显式拒绝）。契约映射：
+        t2v→text / i2v→keyframe（顶层 image）/ multi→reference（images 数组 1-5，
+        flash 上限）；keyframes 双帧无对应，显式拒绝。
+        duration_s: 时长（秒，4-12，str 传输，默认 5）。num_frames/frame_rate/width/
+        height 仅签名兼容，不再进入请求体；seed 按官方文档发送（integer）；
+        negative_prompt 非空显式拒绝（2.5 契约无此字段，绝不静默丢参）。
         返回创建响应（含 video_id / task_id / seconds / size）。"""
         model_id = self._video_model_id(model)
-        if self._is_video_25(model_id):
-            seconds_25 = max(4, min(12, int(duration_s or 5)))
-            body: Dict[str, Any] = {"model": model_id, "prompt": prompt,
-                                    "mode": self._video25_mode(mode),
-                                    "seconds": str(seconds_25)}
-            img = self._video25_image(mode, image_url, image_urls)
-            if img:
-                body.update(img)
-            if self.quota:
-                ok, why = self.quota.can("video_seconds", seconds_25)
-                if not ok: raise AgnesError(why)
-            r = await self._request("POST", "/v1/videos", "video", json=body)
-            if self.quota: self.quota.consume("video_seconds", seconds_25)
-            data = r.json()
-            log.info("视频任务已提交（2.5 契约）model=%s mode=%s seconds=%s id=%s",
-                     model_id, body.get("mode"), seconds_25,
-                     data.get("video_id") or data.get("task_id"))
-            return data
-
-        num_frames = snap_num_frames(num_frames, width, height)
-        seconds = num_frames / max(frame_rate, 1)
+        if not self._is_video_25(model_id):
+            raise AgnesError(
+                f"视频模型 {model_id} 已删除：仅支持 agnes-video-2.5 系列"
+                "（v2.0 已于 2026-09-25 官方下线，2026-09-28 按用户指令从系统移除）")
+        if negative_prompt:
+            raise AgnesError(
+                "2.5 契约无 negative_prompt 字段（官方参数表 2026-09-28 核读）——"
+                "绝不静默丢参：请把负面约束并入 prompt 文本后重试")
+        seconds_25 = max(4, min(12, int(duration_s or 5)))
+        body: Dict[str, Any] = {"model": model_id, "prompt": prompt,
+                                "mode": self._video25_mode(mode),
+                                "seconds": str(seconds_25)}
+        img = self._video25_image(mode, image_url, image_urls)
+        if img:
+            body.update(img)
+        if seed is not None:
+            body["seed"] = int(seed)     # 官方参数（2026-09-28 文档核读）：seed integer
         if self.quota:
-            ok, why = self.quota.can("video_seconds", seconds)
+            ok, why = self.quota.can("video_seconds", seconds_25)
             if not ok: raise AgnesError(why)
-
-        body = {"model": model_id, "prompt": prompt,
-                "num_frames": num_frames, "frame_rate": frame_rate,
-                "width": width, "height": height}
-        if seed is not None: body["seed"] = seed
-        if negative_prompt:  body["negative_prompt"] = negative_prompt
-
-        if mode == "i2v":
-            if not image_url: raise AgnesError("i2v 模式必须提供 image_url（公网 URL）")
-            body["image"] = image_url                      # 顶层字符串
-        elif mode == "keyframes":
-            if not image_urls or len(image_urls) < 2:
-                raise AgnesError("keyframes 模式需要至少 2 张图（首帧+尾帧）")
-            body["extra_body"] = {"image": image_urls, "mode": "keyframes"}
-        elif mode == "multi":
-            body["extra_body"] = {"image": image_urls or []}
-        # t2v 不传图
-
-        # 提交：400 且报错含 num_frames 时自动降帧重试（分辨率越高允许帧数越少，
-        # max_frames_for 的分档值待实测回填，故用 400 兜底发现真实上限）。
-        frame_reductions_left = 3
-        data = None
-        while True:
-            try:
-                r = await self._request("POST", "/v1/videos", "video", json=body)
-            except AgnesError as e:
-                if (e.status == 400 and frame_reductions_left > 0
-                        and "num_frame" in (e.body or "").lower()):
-                    old_nf = body["num_frames"]
-                    new_nf = snap_num_frames(int(old_nf * 0.7), width, height)
-                    if new_nf >= old_nf:        # 已无法再降，直接抛
-                        raise
-                    body["num_frames"] = new_nf
-                    seconds = new_nf / max(frame_rate, 1)
-                    frame_reductions_left -= 1
-                    log.warning("400 num_frames 超限（%d -> %d），降帧重试（剩 %d 次）",
-                                old_nf, new_nf, frame_reductions_left)
-                    continue
-                raise
-            data = r.json()
-            break
-        if self.quota: self.quota.consume("video_seconds", seconds)
-        log.info("视频任务已提交 video_id=%s num_frames=%d seconds=%s size=%s",
-                 data.get("video_id"), body["num_frames"], data.get("seconds"), data.get("size"))
+        r = await self._request("POST", "/v1/videos", "video", json=body)
+        if self.quota: self.quota.consume("video_seconds", seconds_25)
+        data = r.json()
+        log.info("视频任务已提交（2.5 契约）model=%s mode=%s seconds=%s id=%s",
+                 model_id, body.get("mode"), seconds_25,
+                 data.get("video_id") or data.get("task_id"))
         return data
 
     async def poll_video(self, video_id: str, *,

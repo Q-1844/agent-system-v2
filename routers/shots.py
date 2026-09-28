@@ -488,14 +488,17 @@ def continuity_status(project, shot):
 
 
 async def _extract_video_end_frame(project_dir, shot_id, video_local, version_id, emit=None):
-    """从最终视频文件提取实际末帧 -> output/frames/{shot_id}_video_end.png，
-    上传 imgbb 取公网 URL（视频接力进 Agnes 视频接口必需；保真不用 agnes_rehost）。
-    提取/托管失败不抛（视频本身仍成功），返回带 error 的 Asset；允许 retry。"""
+    """从最终视频文件提取实际末帧 -> output/frames/{shot_id}_video_end_{version_id}.jpg，
+    上传图床取公网 URL（视频接力进 Agnes 视频接口必需；保真不用 agnes_rehost）。
+    提取/托管失败不抛（视频本身仍成功），返回带 error 的 Asset；允许 retry。
+    🔴 Phase 3 守卫：文件名带来源版本 id——同一镜头重提取不再覆盖旧版本字节
+    （旧 ffsync/接力候选的 local 记录因此保持与其登记 URL 对应，不产生
+    「local 路径相同、字节已换」的幽灵记录）。"""
     import subprocess
     from src.core.models import Asset, ShotStatus
     frames_dir = project_dir / "output" / "frames"
     frames_dir.mkdir(parents=True, exist_ok=True)
-    end_path = frames_dir / f"{shot_id}_video_end.png"
+    end_path = frames_dir / f"{shot_id}_video_end_{version_id}.png"
     # ffmpeg -sseof 从文件末尾 seek，取 1 帧（短末尾偏移避免空帧）
     cmd = ["ffmpeg", "-y", "-sseof", "-0.2", "-i", str(video_local),
            "-frames:v", "1", "-q:v", "2", str(end_path)]
@@ -582,6 +585,16 @@ async def _sync_first_frame_slot(store, shot_id: str, version, version_id: str,
     batch = ImageBatch(
         batch_id=batch_id, kind="first_frame", created_at=now, status="ready",
         prompt_snapshot=f"{role_label}（版本 {version_id}）",
+        # Phase 3 守卫：ffsync 同步进槽的图是 multi 语义参考（非硬边界帧）——
+        # 标记槽位语义，i2v/keyframes 消费时在编译层被
+        # first_frame_slot_not_hard_boundary 拦下（见 image_adapter
+        # _resolve_boundary_frame）。generation_basis 非空同时使 freshness gate
+        # 不再误报 artifact_basis_missing。
+        generation_basis={
+            "slot_semantics": "multi_reference_only",
+            "source_video_version": version_id,
+            "source_shot_id": start.get("source_shot_id") or None,
+            "end_source_version": start.get("end_source_version") or None},
         candidates=[Candidate(candidate_id=cand_id, local=local, url=url,
                               status=ShotStatus.DONE.value, created_at=now)])
     def _mut(s):
@@ -728,7 +741,12 @@ async def _handler_first_frame(job, emit):
                                                                        for r in bound.semantic_roles],
                                                  "used_reference_ids": list(bound.used_reference_ids),
                                                  "semantic_roles": [dict(r) for r in bound.semantic_roles],
-                                                 "dropped_optional": [dict(d) for d in bound.dropped_optional]}
+                                                 "dropped_optional": [dict(d) for d in bound.dropped_optional],
+                                                 # Phase 3：continuity_tail 实际发送的尾帧身份
+                                                 # （来源镜头/来源视频版本/URL）——补全
+                                                 # used_reference_ids 不含临时尾帧的 receipt 缺口
+                                                 **({"continuity_tail": dict(bound.continuity_ref)}
+                                                    if bound.continuity_ref else {})}
                                                 if bound else {})})
 
     def mut(s):
@@ -1521,11 +1539,13 @@ async def _handler_video(job, emit):
     first_url = eff_ff_url
     last_url = None
 
-    # 视频模型（2026-09-06 新契约接入）：job.params.video_model 显式选择时传给
-    # create_video（agnes-video-2.5-flash 走 mode/seconds 新契约）；None=config
-    # 默认 v2.0，存量行为逐字节不变。模型随 shot.video.model 落库——恢复/续轮询
-    # 必须用同一 model_name 轮询，否则 2.5 任务查不到。
-    video_model = (job.params or {}).get("video_model") or None
+    # 视频模型（2026-09-28：v2.0 已删除，agnes-video-2.5-flash 为唯一视频模型）：
+    # job.params.video_model 显式选择 > config 默认。一律解析为具体模型 id——
+    # 模型随 shot.video.model 落库，恢复/续轮询必须用同一 model_name 轮询，
+    # 否则 2.5 任务查不到。
+    video_model = (((job.params or {}).get("video_model") or None)
+                   or (getattr(get_agnes_client(), "models", None) or {}).get("video")
+                   or "agnes-video-2.5-flash")
 
     # C1 §11（21.md）：provider 事实——两条路径共用的 options 集合，指纹进
     # NativeAVGenerationPack.generation_basis（21.md §14：参与 freshness 对比，
@@ -1776,8 +1796,8 @@ async def shot_video(project_name: str, shot_id: str,
                      native_dialogue_control: Optional[bool] = None,
                      native_dialogue_language: Optional[str] = None):
     """生成单镜头视频（入队 video 任务，串行 worker，1 RPM）。
-    video_model 可选：显式指定视频模型（如 agnes-video-2.5-flash，走新契约 mode/seconds）；
-    缺省 = config 默认（agnes-video-v2.0），行为不变。
+    video_model 可选：显式指定视频模型；缺省 = config 默认
+    （agnes-video-2.5-flash，2026-09-28 起 v2.0 已删除——唯一模型）。
     native_dialogue_control（Native AV C1，18.md §4）：默认 None=自动——
     Shot.dialogue 非空即启用 Controlled Dialogue（正式生产行为，无需每次手工开）；
     显式 False = debug/compat override（退回 visual-only）；True = 显式开启。

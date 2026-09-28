@@ -37,7 +37,8 @@ class _NoQuota:
 TEST_CONFIG = {
     "base_url": "https://mock.agnes",
     "api_key": "test-key",
-    "models": {"text": "mock-text", "image": "mock-image", "video": "mock-video"},
+    "models": {"text": "mock-text", "image": "mock-image",
+               "video": "agnes-video-2.5-flash"},   # 2026-09-28：唯一视频模型（v2.0 已删除）
     "proxy": None,
     "rpm": None,
 }

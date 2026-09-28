@@ -319,8 +319,9 @@ def test_generate_videos_with_25_model_threads_model_through_chain(visual_env):
     assert len(mine) == 1 and mine[0].model == "agnes-video-2.5-flash"
 
 
-def test_generate_videos_without_model_keeps_legacy_behavior(visual_env):
-    """不传 video_model：create_video model=None（config 默认 v2.0），存量行为不变。"""
+def test_generate_videos_default_model_resolved_to_25_flash(visual_env):
+    """不传 video_model：解析为唯一视频模型 agnes-video-2.5-flash（2026-09-28 v2.0
+    已删除）——create/poll/落库全链同一 model_name（恢复续轮询正确性）。"""
     rt, q, agnes, tmp_path = visual_env
     _save_proj(tmp_path, [_shot("s01_c01")])
     _mark_first_frame_ready(tmp_path, "s01_c01")
@@ -332,10 +333,10 @@ def test_generate_videos_without_model_keeps_legacy_behavior(visual_env):
 
     obs = asyncio.run(scenario())
     assert obs["ok"] and obs["verified"]
-    assert agnes.last_create_kwargs["model"] is None
-    assert agnes.last_poll_model is None
+    assert agnes.last_create_kwargs["model"] == "agnes-video-2.5-flash"
+    assert agnes.last_poll_model == "agnes-video-2.5-flash"
     proj = ProjectStore(tmp_path).load()
-    assert proj.get_shot("s01_c01").video.model is None
+    assert proj.get_shot("s01_c01").video.model == "agnes-video-2.5-flash"
 
 
 def test_generate_videos_unknown_model_rejected(visual_env):

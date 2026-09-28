@@ -246,9 +246,9 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
         targets = _parse_video_targets(args)
         total_timeout = VIDEOS_TOTAL_TIMEOUT_S
         asset_noun = "视频"
-        # 视频模型（2026-09-06 新契约接入）：可选 agnes-video-2.5-flash（mode/seconds
-        # 新契约）；缺省 = config 默认 v2.0，行为不变。对 config 实际配置校验
-        # （client 不可用时退回已知默认集合，保证拒绝语义确定）。
+        # 视频模型（2026-09-28：v2.0 已删除，agnes-video-2.5-flash 为唯一模型——
+        # config 默认，无需显式选择。对 config 实际配置校验（client 不可用时退回
+        # 已知默认集合，保证拒绝语义确定）。
         raw_model = str(args.get("video_model") or "").strip()
         if raw_model:
             allowed: set = set()
@@ -260,7 +260,7 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
             except Exception:
                 allowed = set()
             if not allowed:
-                allowed = {"agnes-video-v2.0", "agnes-video-2.5-flash"}
+                allowed = {"agnes-video-2.5-flash"}
             if raw_model not in allowed:
                 raise AgentError("bad_arguments",
                                  f"未知视频模型 {raw_model}；可选：{sorted(allowed)}")
@@ -658,11 +658,11 @@ SHOT_GENERATE_VIDEOS_TOOL = {
                 },
                 "video_model": {
                     "type": "string",
-                    "enum": ["agnes-video-v2.0", "agnes-video-2.5-flash"],
+                    "enum": ["agnes-video-2.5-flash"],
                     "description": (
-                        "视频模型（可选，缺省 = 项目默认 agnes-video-v2.0）。"
-                        "agnes-video-2.5-flash 为新一代模型（4-12 秒 720P，出片更快）；"
-                        "不确定时不要传，使用默认即可。"),
+                        "视频模型（可选，缺省 = 项目默认 agnes-video-2.5-flash——"
+                        "2026-09-28 起 v2.0 已删除，本参数通常无需传）。"
+                        "4-12 秒 720P，Token Plan 500 秒/天。"),
                 },
             },
             "required": ["shot_ids"],

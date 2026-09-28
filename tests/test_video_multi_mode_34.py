@@ -99,7 +99,9 @@ def test_multi_projection_video_reference_not_first_frame():
     assert call.slots() == {"image_urls": [URL]}
 
 
-def test_multi_compile_requires_exactly_one_reference():
+def test_multi_compile_reference_bounds_1_to_5():
+    """2026-09-28：multi 参考 1-5 个（2.5-flash reference images 上限 5，官方文档
+    核读）——0 或 >5 结构化拒绝；单图（prev_tail）与多图（Look+尾帧）均合法。"""
     def _req(refs):
         from src.generation.request import GenerationRequest, ReferenceInput
         return GenerationRequest(
@@ -112,8 +114,15 @@ def test_multi_compile_requires_exactly_one_reference():
         compile_agnes_video_call(_req([]))
     assert ei.value.code == "multi_reference_slot_invalid"
 
+    call1 = compile_agnes_video_call(_req([URL]))
+    assert call1.slots() == {"image_urls": [URL]}
+    five = [f"http://example/{i}.png" for i in range(5)]
+    call5 = compile_agnes_video_call(_req(five))
+    assert call5.slots() == {"image_urls": five}
+
     with pytest.raises(AgnesRequestCompileError) as ei:
-        compile_agnes_video_call(_req([URL, "http://example/b.png"]))
+        compile_agnes_video_call(_req([f"http://example/{i}.png"
+                                       for i in range(6)]))
     assert ei.value.code == "multi_reference_slot_invalid"
 
     with pytest.raises(AgnesRequestCompileError) as ei:

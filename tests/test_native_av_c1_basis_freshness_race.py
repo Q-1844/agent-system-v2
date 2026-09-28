@@ -101,7 +101,9 @@ def test_video_version_records_generation_basis(venv):
     assert b["spoken_language"] == LANG
     assert "music_policy" not in b, "撤回键不得残留（21.md §20/§21）"
     assert b["provider_mode"] == "i2v"
-    assert b["model"] is None, "UI 默认 dispatch 不传 video_model → model=None"
+    from src.api.agnes_client import DEFAULT_VIDEO_MODEL
+    assert b["model"] == DEFAULT_VIDEO_MODEL, (
+        "2026-09-28：不传 video_model → 解析为唯一视频模型（2.5-flash）并落库")
     assert b["prompt_compiler_schema"] == "native_av_prompt_v3"
 
 
@@ -199,7 +201,8 @@ def test_freshness_stale_on_model_change(venv):
     旧 final 不再对应当前生成事实，必须诚实暴露）。"""
     pdir, fake = venv
     shot, version = _generate(pdir, fake)
-    assert version.generation_basis["model"] is None
+    from src.api.agnes_client import DEFAULT_VIDEO_MODEL
+    assert version.generation_basis["model"] == DEFAULT_VIDEO_MODEL
     PS(pdir).update_shot(
         "s01_c01",
         lambda s: s.video_versions[-1].generation_basis.update({"model": "m2"}))

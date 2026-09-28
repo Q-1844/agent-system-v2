@@ -135,17 +135,18 @@ def test_video_request_no_negative_when_empty(client, proj, mock_agnes):
         assert "negative_prompt" not in b, f"视频请求含空 negative_prompt: {b}"
 
 
-def test_video_target_duration_8n1_and_capped(client, proj, mock_agnes):
-    """用户目标时长 -> num_frames 满足 8n+1 且 <= 分辨率上限（测试16/17）。"""
+def test_video_target_duration_maps_to_seconds(client, proj, mock_agnes):
+    """用户目标时长 -> 2.5 契约 seconds（2026-09-28：v2.0 num_frames 8n+1 契约
+    随 v2.0 删除——时长经规划帧数反推为 4-12 秒字符串）。"""
     assert client.put(f"/api/project/{proj}/shot/s02_c01", json={"target_duration_s": 5.0}).status_code == 200
     r = client.post(f"/api/project/{proj}/shot/s02_c01/video")
     assert r.status_code == 200
     assert _wait_job(client, proj, r.json()["job_id"])["state"] == "done"
     bodies = mock_agnes.bodies("POST", "/v1/videos")
     assert bodies
-    nf = bodies[-1]["num_frames"]
-    assert (nf - 1) % 8 == 0, f"num_frames 非 8n+1: {nf}"
-    assert nf <= max_frames_for(1280, 704), f"num_frames 超上限: {nf}"
+    b = bodies[-1]
+    assert "num_frames" not in b, f"2.5 契约不带 num_frames: {b}"
+    assert b.get("seconds") == "5", f"目标 5.0s 应映射 seconds='5': {b}"
 
 
 def test_last_frame_refs_first_frame_first_with_char(client, proj, mock_agnes):

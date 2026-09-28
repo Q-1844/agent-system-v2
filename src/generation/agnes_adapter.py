@@ -89,9 +89,9 @@ def compile_agnes_video_call(req: GenerationRequest) -> AgnesVideoCall:
     """video 请求 → Agnes 视频槽位形态。i2v 只认 first 槽（end_state 仅语义目标，
     video_adapter §8 不伪造 last-frame conditioning）；keyframes 需 first+last 齐
     （缺 last = 结构化拒绝，不降级成 i2v——mode 是 creative 策略字段，编译层绝不
-    重解释）；multi（34.md §13）需恰好 1 个 video_reference（v2.0 ti2vid 单图上限，
-    32.md 7×400 实证——多参考结构化拒绝，绝不静默裁剪）。data URI 进槽 = 拒绝
-    （视频接口仅公网 URL）。"""
+    重解释）；multi（34.md §13）需 1-5 个 video_reference（2026-09-28 起 2.5-flash
+    reference 为唯一多图路径，官方 images 上限 5——缺失或超限结构化拒绝，绝不静默
+    裁剪）。data URI 进槽 = 拒绝（视频接口仅公网 URL）。"""
     if req.generation_type != "video":
         raise AgnesRequestCompileError(
             "generation_type_not_video", {"generation_type": req.generation_type})
@@ -115,18 +115,20 @@ def compile_agnes_video_call(req: GenerationRequest) -> AgnesVideoCall:
                  "hint": "multi 模式不消费 boundary frames——视觉输入只有单语义参考"})
         multi_refs = [ri.media for ri in req.reference_inputs
                       if ri.source_type == "video_reference" and ri.media]
-        if len(multi_refs) != 1:
+        if not (1 <= len(multi_refs) <= 5):
             raise AgnesRequestCompileError(
                 "multi_reference_slot_invalid",
                 {"reference_count": len(multi_refs),
-                 "hint": "multi 需要恰好 1 个公网参考（v2.0 ti2vid 单图上限）——"
-                         "缺失或多于 1 个都属上游结构化失败，编译层不裁剪不降级"})
-        if str(multi_refs[0]).startswith("data:"):
-            raise AgnesRequestCompileError(
-                "data_uri_not_supported_video_provider",
-                {"slot": "multi_reference",
-                 "hint": "视频接口图片必须公网 URL（AGNES_API_FACTS §3.3）"})
-        return AgnesVideoCall(prompt=prompt, image_urls=[multi_refs[0]])
+                 "hint": "multi 需 1-5 个公网参考（2.5-flash reference images 上限 5，"
+                         "2026-09-28 官方文档核读）——缺失或超限都属上游结构化失败，"
+                         "编译层不裁剪不降级"})
+        for _i, _u in enumerate(multi_refs):
+            if str(_u).startswith("data:"):
+                raise AgnesRequestCompileError(
+                    "data_uri_not_supported_video_provider",
+                    {"slot": f"multi_reference[{_i}]",
+                     "hint": "视频接口图片必须公网 URL（AGNES_API_FACTS §3.3）"})
+        return AgnesVideoCall(prompt=prompt, image_urls=list(multi_refs))
     if is_keyframes:
         if not first or not last:
             raise AgnesRequestCompileError(
