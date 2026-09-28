@@ -1,0 +1,17 @@
+{
+ "completed_at": 1790614918,
+ "created_at": 1790614802,
+ "error": null,
+ "expires_at": null,
+ "id": "task_LvQi2oZj03FBN9a5SF5yG0SelvMbtPBR",
+ "internal_status": "pending",
+ "object": "video",
+ "progress": 100,
+ "quality": "standard",
+ "remixed_from_video_id": "",
+ "seconds": "5",
+ "size": "720P",
+ "started_at": 1790614803,
+ "status": "completed",
+ "url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_LvQi2oZj03FBN9a5SF5yG0SelvMbtPBR.mp4"
+}

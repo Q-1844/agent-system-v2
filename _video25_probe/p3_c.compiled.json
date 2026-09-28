@@ -1,0 +1,29 @@
+{
+ "human_mode_requested": "keep",
+ "human_mode_resolved": "keep",
+ "scene_mode_resolved": "context_only",
+ "ref_layout": "pack_only",
+ "used_reference_ids": [
+  "ref_92ad3512a47f",
+  "ref_074ed60714d0"
+ ],
+ "dropped_optional": [
+  {
+   "source_id": "sciv_8c9742b8016b",
+   "reason": "scene_reference_context_only"
+  },
+  {
+   "source_id": "legacy:阿獭:front",
+   "reason": "human_reference_budget"
+  },
+  {
+   "source_id": "legacy:阿獭:side",
+   "reason": "human_reference_budget"
+  },
+  {
+   "source_id": "legacy:阿獭:back",
+   "reason": "human_reference_budget"
+  }
+ ],
+ "n_refs": 2
+}

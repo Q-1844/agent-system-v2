@@ -1,0 +1,13 @@
+{
+ "id": "task_LvQi2oZj03FBN9a5SF5yG0SelvMbtPBR",
+ "video_id": "task_LvQi2oZj03FBN9a5SF5yG0SelvMbtPBR",
+ "task_id": "task_LvQi2oZj03FBN9a5SF5yG0SelvMbtPBR",
+ "object": "video",
+ "model": "agnes-video-2.5-flash",
+ "status": "queued",
+ "progress": 0,
+ "created_at": 1790614802,
+ "seconds": "5",
+ "size": "720P",
+ "quality": "standard"
+}

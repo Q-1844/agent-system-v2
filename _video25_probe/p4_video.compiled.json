@@ -1,0 +1,6 @@
+{
+ "mode": "i2v",
+ "first_frame": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_C0KUpAQxmuKBqogp9xX2d4wwl4QRe75D/output.png",
+ "prompt_head": "Inside the circular lamp room, Otter stands on a small wooden stool, pressing and twisting the glowing copper lamp into the socket above. A bright warm light ignites, flooding the room as the beam sho",
+ "note": "真解除 relay：无尾帧参考；首帧=独立生成（强化 description+完整锚定）"
+}

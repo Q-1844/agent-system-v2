@@ -1,0 +1,12 @@
+{
+ "opening_source": "independent",
+ "vref": null,
+ "human_mode": "keep",
+ "scene_mode": "full",
+ "n_refs": 3,
+ "used_reference_ids": [
+  "ref_826b39576f62",
+  "ref_92ad3512a47f",
+  "ref_3d372c85a955"
+ ]
+}
