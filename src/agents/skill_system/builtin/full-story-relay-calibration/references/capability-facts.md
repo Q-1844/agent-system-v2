@@ -19,7 +19,7 @@
 | 2.5-flash reference 模式：`images` 数组 **≤5 图**（flash 专属上限，基础版 2.5 为 ≤8）、audios ≤3、videos 不支持；与 first_frame/last_frame 互斥；**参考不锁首帧**（may recompose）；prompt 可用 `<Picture N>` 指名用途 | 已证实（官方文档） | 2026-09-28 核读 | wiki.agnes-ai.com/en/docs/agnes-video-25(-flash) |
 | 2.5-flash reference 本地编译 | **已实现**（multi→reference，images 数组 1-5，2026-09-28） | 2026-09-28 | src/api/agnes_client.py `_video25_mode/_video25_image` + agnes_adapter multi 1-5 |
 | 2.5 keyframe：官方字段 `first_frame`/`last_frame`；本仓库发顶层 `image`（2026-09-06 实测出片的兼容形态，生产 s02_c02 复证） | 已证实 | 2026-09-28 核读 | 官方文档 + `_video25_probe/v25d.*` |
-| 2.5 双帧 keyframes（首+尾）契约 | 未验证（勿发）；v2.0 删除后**无 fallback** | 2026-09-28 | FACTS §3.0；本地 `_video25_mode` 显式拒绝 |
+| 2.5 双帧 keyframes（首+尾）契约 | **已验证（2026-09-29 真机探针 `_probe_video25_keyframes.py`：官方 `first_frame`/`last_frame` 双帧 200 受理→69s 出片；帧目检：首帧逐像素级对齐输入、尾帧构图钉住、中间平滑过渡——桥路径解锁）**；client 已放行（`_video25_mode/_video25_image`） | 2026-09-29 | `_video25_probe/kf.*`；42.md §四 P2 |
 | 2.5 契约无 negative_prompt 字段——非空显式拒绝（绝不静默丢参，需并入 prompt 文本） | 已证实（官方参数表无此字段） | 2026-09-28 | 官方文档 + client 守卫 |
 | 图片 i2i：`extra_body.image` 数组，本仓库 cap=6 张（URL 或 data URI） | 已证实 | 长期 | AGNES_API_FACTS §2；image_adapter MAX_PROVIDER_INPUT_IMAGES |
 
@@ -32,7 +32,7 @@
 | 2.5 keyframe（顶层 `image`+seconds，首帧硬边界） | 是 | 是 | 是（config 默认模型） | 是（2026-09-06 探针；2026-09-27 s02_c02 生产；2026-09-28 A/B 对照） | **是（2026-09-28 A/B：硬首帧在 2.5 上锁身份/画风，中末段稳）** | s02_c02 已选 2.5 版（P4 雨灯归航） |
 | 2.5 reference 多图（multi→`images` 数组，双图+seed 实测） | 是 | 是（≤5 图，不锁首帧） | **是（2026-09-28 实现）** | **是（2026-09-28 探针 `ref.*`：双图+seed=42，5s 720P，回执 task_xWtO1hyIkkazisEVEs60iBqTrjYcmlAt；提交即受理由 flash 校验前置保证）** | 是（帧目检：`<Picture 1>` 身份跨帧保持、`<Picture 2>` 场景/光感语义被采用；画面风格随参考图） | — |
 | 2.5 reference relay+Look 双参考（哨兵 `prev_tail_look`：尾帧+hero Look 同发，`<Picture 1/2>` 指称自动附加） | 是（2026-09-29 接线） | 是（≤5 图） | **是（2026-09-29 实现，opt-in 非 default）** | 未验证（待 42.md §四 P1 对照） | 未验证 | — |
-| keyframes 桥（`shot.bridge_create`） | 是 | v2.0 曾是 | **否（2.5 无 keyframes 双帧；桥需求改 i2v 或重生成后继首帧）** | 是（38 桥实证，历史） | 部分（历史） | 端点须逐案批 |
+| keyframes 桥（`shot.bridge_create`） | 是 | **是（2.5 双帧 2026-09-29 探针实证）** | **是（client 已放行双帧）** | 是（2026-09-29 探针 kf.*；38 桥实证历史） | 是（探针帧目检：双端钉住+过渡平滑；真镜样本待 42.md §四/盲测） | 端点须逐案批 |
 | 融合首帧起步（Look+尾帧经图片 i2i 合成新首帧→i2v） | 是 | 是（图片接口） | 是（BOUND reference_previous 链路） | 是（2026-09-27） | **是（正例：身份/景别/动作显著优于裸尾帧接力；已知瑕疵=结尾提前触水、末帧颈前偏粉）** | 实验候选（expB），**未正式选片** |
 | inherit_previous（来源真实末帧直接作视频首帧） | 是 | 是 | 是 | 是（历史项目） | 部分 | 逐案 |
 

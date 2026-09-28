@@ -1,0 +1,4 @@
+{
+ "status": 429,
+ "body": "{\"error\":{\"message\":\"You’ve reached the API rate limit for free users. Upgrade to a Token Plan to unlock higher limits and continue using the API without interruption. (request id: 20260906062957105876814FTMXAUeE)\",\"type\":\"AgnesAI_error\",\"param\":\"\",\"code\":\"rate_limit_exceeded\"}}"
+}

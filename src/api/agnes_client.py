@@ -572,17 +572,18 @@ class AgnesClient:
     def _video25_mode(legacy_mode: str) -> str:
         """legacy 模式 → 2.5 契约 mode。已实测：t2v→text、i2v→keyframe（顶层 image
         公网 URL，2026-09-06 各生成成功）。multi→reference（2026-09-28 官方文档核读
-        + 真机探针回执：images 数组，参考不锁首帧）。keyframes（首+尾双帧过渡）无
-        2.5 对应——明确拒绝，绝不发送未验证的请求形状。"""
+        + 真机探针回执：images 数组，参考不锁首帧）。keyframes→keyframe 双帧：
+        官方 first_frame/last_frame 字段（2026-09-29 真机探针 _probe_video25_keyframes.py
+        一次命中：双帧 200 受理→出片，首尾帧均被钉住——桥路径解锁，42.md §四 P2）。"""
         if legacy_mode == "t2v":
             return "text"
         if legacy_mode == "i2v":
             return "keyframe"
         if legacy_mode == "multi":
             return "reference"
-        raise AgnesError(
-            "2.5 契约暂不支持 keyframes 双帧（首+尾）模式（未验证，勿发）；"
-            "v2.0 已删除——双帧/桥接需求请改单首帧 i2v 或重生成后继镜首帧")
+        if legacy_mode == "keyframes":
+            return "keyframe"
+        raise AgnesError(f"2.5 契约不支持 {legacy_mode} 模式")
 
     @staticmethod
     def _video25_image(legacy_mode: str,
@@ -594,6 +595,17 @@ class AgnesClient:
             if not image_url:
                 raise AgnesError("2.5 契约 keyframe 模式必须提供公网 image URL")
             return {"image": image_url}          # 顶层字符串（2026-09-06 实测）
+        if legacy_mode == "keyframes":
+            # 42.md §四 P2 探针实证（2026-09-29）：官方 first_frame/last_frame
+            # 双帧字段受理且两端均被钉住（首帧逐像素级对齐、尾帧构图一致）。
+            urls = [u for u in (image_urls or []) if u]
+            if len(urls) != 2:
+                raise AgnesError(
+                    "2.5 契约 keyframes 双帧需要恰好 first+last 两个公网 URL")
+            for u in urls:
+                if str(u).startswith("data:"):
+                    raise AgnesError("视频接口图片必须公网 URL")
+            return {"first_frame": urls[0], "last_frame": urls[1]}
         if legacy_mode == "multi":
             urls = [u for u in (image_urls or []) if u]
             if not (1 <= len(urls) <= 5):
@@ -617,7 +629,8 @@ class AgnesClient:
         2026-09-28 起唯一支持 agnes-video-2.5 系列（v2.0 官方 2026-09-25 23:59 下线
         + 用户指令从系统删除——非 2.5 模型 id 显式拒绝）。契约映射：
         t2v→text / i2v→keyframe（顶层 image）/ multi→reference（images 数组 1-5，
-        flash 上限）；keyframes 双帧无对应，显式拒绝。
+        flash 上限）/ keyframes→keyframe 双帧（官方 first_frame/last_frame 字段，
+        2026-09-29 P2 探针实证两端钉住——桥路径解锁）。
         duration_s: 时长（秒，4-12，str 传输，默认 5）。num_frames/frame_rate/width/
         height 仅签名兼容，不再进入请求体；seed 按官方文档发送（integer）；
         negative_prompt 非空显式拒绝（2.5 契约无此字段，绝不静默丢参）。

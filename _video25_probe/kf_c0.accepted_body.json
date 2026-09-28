@@ -1,0 +1,9 @@
+{
+ "model": "agnes-video-2.5-flash",
+ "prompt": "Smooth continuous single-shot transition: the otter opens the heavy wooden door and steps out of the workshop into the deep blue night, the camera follows her; the shot ends exactly at the final frame composition. Flat 2D storybook watercolor style, keep the character appearance consistent throughout.",
+ "mode": "keyframe",
+ "seconds": "5",
+ "first_frame": "https://Q-1844.github.io/agnes-frame-host/objects/cfbb88d3e12a5233.jpg",
+ "last_frame": "https://Q-1844.github.io/agnes-frame-host/objects/470e69a81e1a836d.jpg",
+ "seed": 42
+}

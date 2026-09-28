@@ -210,18 +210,32 @@ def test_create_video_25_i2v_keyframe_image_top_level(client):
     assert body["seconds"] == "6"
 
 
-def test_create_video_25_keyframes_rejected(client):
-    """2.5 + keyframes（双帧）契约未验证 → 明确拒绝（不发送未验证请求形状）。"""
-    import pytest
-    from src.api.agnes_client import AgnesError
+def test_create_video_25_keyframes_dual_frame_accepted(client):
+    """42.md §四 P2（2026-09-29 真机探针 _probe_video25_keyframes.py 一次命中）：
+    2.5 keyframe 模式官方 first_frame/last_frame 双帧字段受理且两端均被钉住——
+    client 放行 keyframes 双帧，映射为官方字段（桥路径解锁）。
+    历史锚点（2.5 上线时「双帧未验证勿发」拒绝）由探针证据退役。"""
     mock = MockAgnes()
     agnes = make_agnes(mock)
-    with pytest.raises(AgnesError) as ei:
+    asyncio.run(agnes.create_video("prompt", mode="keyframes",
+                                   image_urls=["https://x/a.png", "https://x/b.png"],
+                                   model="agnes-video-2.5-flash"))
+    body = mock.bodies("POST", "/v1/videos")[-1]
+    assert body["mode"] == "keyframe"
+    assert body["first_frame"] == "https://x/a.png"
+    assert body["last_frame"] == "https://x/b.png"
+    # 数量守卫：缺 last / 多帧 → 结构化拒绝（不静默裁剪）
+    import pytest
+    from src.api.agnes_client import AgnesError
+    with pytest.raises(AgnesError):
         asyncio.run(agnes.create_video("prompt", mode="keyframes",
-                                       image_urls=["https://x/a.png", "https://x/b.png"],
+                                       image_urls=["https://x/a.png"],
                                        model="agnes-video-2.5-flash"))
-    assert "暂不支持" in str(ei.value)
-    assert mock.find("POST", "/v1/videos") == []
+    with pytest.raises(AgnesError):
+        asyncio.run(agnes.create_video("prompt", mode="keyframes",
+                                       image_urls=["https://x/a.png", "https://x/b.png",
+                                                   "https://x/c.png"],
+                                       model="agnes-video-2.5-flash"))
 
 
 def test_video_v20_model_rejected(client):

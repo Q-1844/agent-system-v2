@@ -1,0 +1,4 @@
+{
+ "status": 400,
+ "body": "{\"code\":\"invalid_request\",\"message\":\"duration is not an allowed request field\",\"data\":{\"param\":\"duration\"}}"
+}

@@ -1,0 +1,7 @@
+{
+ "model": "agnes-video-2.5-flash",
+ "prompt": "Rainy cafe window at night, the woman in the image sits by the glass, raindrops slide down, slow cinematic push-in, keep her appearance consistent.",
+ "mode": "keyframe",
+ "seconds": "5",
+ "image": "https://i.ibb.co/fGH0wF93/8f6ccfdbfd0e.png"
+}

@@ -1,0 +1,23 @@
+{
+ "shot_id": "s02_c03",
+ "sentinel": "prev_tail_look",
+ "video_reference": "https://Q-1844.github.io/agnes-frame-host/objects/cfbb88d3e12a5233.jpg",
+ "identity_reference": {
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_kRdI2rkUUrTWOXSGRZqTjneUVWAqKSVd/output.png",
+  "reference_asset_id": "ref_92ad3512a47f",
+  "subject_character": "阿獭",
+  "priority": "supporting"
+ },
+ "used_reference_ids": [
+  "relay:s02_c02:vv_19d81de3",
+  "ref_92ad3512a47f"
+ ],
+ "slots": {
+  "image_urls": [
+   "https://Q-1844.github.io/agnes-frame-host/objects/cfbb88d3e12a5233.jpg",
+   "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_kRdI2rkUUrTWOXSGRZqTjneUVWAqKSVd/output.png"
+  ]
+ },
+ "prompt": "A small otter in an orange-yellow raincoat and dark blue scarf rises, holding a glowing copper lamp with warm yellow light emanating from it. The otter walks toward a heavy wooden door, grabs the handle, and pulls it open. As the door swings outward, the bright interior light contrasts with the deep blue night outside. A faint night breeze subtly ruffles the otter's fur and scarf. Through the open doorway, the silhouette of a lighthouse is visible on a distant hill against the dark sky. The camera follows the otter’s movement smoothly toward the door and holds as the door opens, revealing the outdoor night scene., Scene: 夜间修理间. 阿獭 wearing default — A small otter with rounded brown fur, wearing an orange-yellow raincoat with hood and a dark blue scarf; a small white triangular fur patch on its left cheek. Cute storybook proportions, 2D hand-drawn style, clean lines, soft watercolor-like shading.. 阿獭 carried 旧铜灯 (left_hand). Keep this consistent throughout the shot: held with both paws in front of the chest. Visual production style: 2D animated image. Do not render as live-action photography or 3D rendered CGI. Art direction: 二维手绘童话绘本风，笔触温软，雨夜暖光对比冷蓝夜色.。参考图说明：<Picture 1> 是上一镜头的结尾画面（开场位置与状态须与它衔接）；<Picture 2> 是该角色的设定参考图（角色的画风、五官、毛色与服装必须与它保持一致）。",
+ "note": "探针：canonical 未改（哨兵仅内存）；请求经生产编译器"
+}
