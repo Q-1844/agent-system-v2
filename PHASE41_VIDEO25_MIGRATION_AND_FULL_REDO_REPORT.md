@@ -51,9 +51,27 @@
   保留；Look+尾帧**双参考同发**在 client/编译层已通，Binding 层仍单参考
   （扩展=后续阶段）。
 
-## 4. 回归
+## 4. 回归（两轮全量，零净增）
 
-（待回填：全量 pytest 结果）
+- 首轮：50 failed / 2448 passed —— 39 个 AV-sync/lipsync 失败与 1 个
+  `test_ai_7ch_cancel_race` 为 **39F 基线预存**（`_p39f_final_regression.log`
+  逐文件同数复现）；净增 9 个（4 个文件）全部为本次语义有意变更的断言更新，
+  已修。
+- 净增 9 个的处置：
+  `test_multi_compile_requires_exactly_one_reference` → 1-5 边界测试
+  （重写）；`test_video_target_duration_8n1_and_capped` → seconds 映射测试
+  （重写）；`test_capability_facts_file_exists_with_decommission_fact` →
+  断言改「已实现」（重写）；`test_p39f_semantic_closure` +
+  `test_native_av_c1_basis_freshness_race` ×6 → **真回归修复**：
+  `native_av_pack._default_provider_options`（freshness 无请求上下文重算投影）
+  与 dispatch 不同构（model=None vs 解析值、缺 duration_s）→ 引入
+  `agnes_client.DEFAULT_VIDEO_MODEL` 常量，投影 model+duration_s 与 dispatch
+  同源，6+1 测试转绿。
+- 二轮全量：**40 failed / 2458 passed** —— 与基线逐项 diff = **零净增**
+  （39 AV-sync 环境性 + 1 预存 flake；`test_skill_content_canary_lessons`
+  反而转绿）。
+- 提交：`ece2d91`（生产+测试，16 files）、`909a1ce`（证据+报告）。分支
+  feat/agent-v2-phase-d-golden-run。
 
 ## 5. 全量重测执行（系统 agent）
 
