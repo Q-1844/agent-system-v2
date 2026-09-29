@@ -141,8 +141,10 @@ function card(src, name, shot){
     const cur = JSON.parse(localStorage.getItem("p42exp2_sel_"+shot) || "[]");
     const next = on ? [...new Set([...cur, name])] : cur.filter(x=>x!==name);
     localStorage.setItem("p42exp2_sel_"+shot, JSON.stringify(next));
+    if(ON_SERVER){ fetch("/api/feedback", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({fb:{["sel_"+shot]: next}})}).catch(()=>{}); }
   };
-  ta.addEventListener("input", ()=> localStorage.setItem("p42exp2_"+key, ta.value));
+  ta.addEventListener("input", ()=>{ localStorage.setItem("p42exp2_"+key, ta.value);
+    if(ON_SERVER){ clearTimeout(ta._t); ta._t = setTimeout(()=>{ fetch("/api/feedback", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({fb:{["img_"+name]: ta.value.trim()}})}).catch(()=>{}); }, 800); } });
   return d;
 }
 function renderChains(){
@@ -177,8 +179,50 @@ function refreshMarks(){ KEYS.forEach(k=>{
   const s=JSON.parse(localStorage.getItem("p42exp2_"+k)||"null");
   if(m) m.textContent = (s&&(s.choice||s.note)) ? "✓ 已保存" : "";
 });}
-document.addEventListener("change", e=>{ KEYS.forEach(k=>{ if(e.target.closest('#'+k)) save(k); }); });
-document.addEventListener("input", e=>{ KEYS.forEach(k=>{ if(e.target.id===k+"_note") save(k); }); });
+document.addEventListener("change", e=>{ KEYS.forEach(k=>{ if(e.target.closest('#'+k)) save(k); }); queuePush(); });
+document.addEventListener("input", e=>{ KEYS.forEach(k=>{ if(e.target.id===k+"_note") save(k); }); queuePush(); });
+// ===== 服务器同步（走 _42_review_server 时逐笔落盘 FEEDBACK.json） =====
+const ON_SERVER = location.protocol === "http:" || location.protocol === "https:";
+function serverPush(){
+  if(!ON_SERVER) return;
+  const fb = {};
+  KEYS.forEach(k=>{ fb[k] = collect(k); });
+  SHOTS.forEach(shot=>{
+    fb["sel_"+shot] = JSON.parse(localStorage.getItem("p42exp2_sel_"+shot) || "[]");
+    (ALLNAMES[shot]||[]).forEach(name=>{
+      const c = localStorage.getItem("p42exp2_img_"+slug(name));
+      if(c && c.trim()) fb["img_"+name] = c.trim();
+    });
+  });
+  try {
+    fetch("/api/feedback", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({fb})}).catch(()=>{});
+  } catch(e){}
+}
+function serverPull(){
+  if(!ON_SERVER) return;
+  fetch("/api/feedback").then(r=>r.json()).then(fb=>{
+    let touched = false;
+    Object.keys(fb).forEach(k=>{
+      if(k.startsWith("img_") && !localStorage.getItem("p42exp2_img_"+slug(k.slice(4)))){
+        localStorage.setItem("p42exp2_img_"+slug(k.slice(4)), fb[k]); touched = true;
+      }
+      if(k.startsWith("sel_")){
+        const shot = k.slice(4);
+        if(!localStorage.getItem("p42exp2_sel_"+shot)){
+          localStorage.setItem("p42exp2_sel_"+shot, JSON.stringify(fb[k])); touched = true;
+        }
+      }
+      if((k==="qa3"||k==="qa4") && !localStorage.getItem("p42exp2_"+k)){
+        localStorage.setItem("p42exp2_"+k, JSON.stringify(fb[k])); touched = true;
+      }
+    });
+    if(touched) location.reload();
+  }).catch(()=>{});
+}
+let _pushTimer = null;
+function queuePush(){ clearTimeout(_pushTimer); _pushTimer = setTimeout(serverPush, 800); }
+
 function genFeedback(){
   let txt = "【Phase 42 EXP2 反馈（逐图评审）】\n";
   SHOTS.forEach(shot=>{
