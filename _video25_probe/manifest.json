@@ -1,91 +1,90 @@
 {
- "round": "exp5",
- "round_title": "EXP5 · 完美视频验证轮（2026-09-30）",
+ "round": "exp6",
+ "round_title": "EXP6 · 动作延伸修甲板 + 修灯视频多候选（2026-09-30）",
  "round_date": "2026-09-30",
- "intro": "<b>本轮直答你的问题</b>：「究竟能否做出人物、道具、场景都完全没问题的视频？」——同一配方（链 4 根帧尾帧+Look 双参考）只换种子，s02_c03 出 4 个候选（含上轮已达标的 seed42）；以及凭空甲板修复验证：s01_c06 动作不变、时长 5s→4s（动作-时长-场景匹配判据的修复测试）。判据：人物（眼型/五官/比例）+ 道具（灯样式与状态）+ 场景（空间不凭空延伸）三零瑕疵。",
+ "intro": "<b>两个针对性测试</b>：① s01_c06 凭空甲板修复 v2——按你的解法「增加人物后续动作」：时长不动（5s），动作文本加「到码头尽头停步转身面向灯塔举灯」+ 负向锚定（no new ground appears），两种子。② s02_c02 修灯视频多候选：定版根帧 crop_s42，种子 7/11/23——接续「人物无瑕疵与道具完美不同镜达成」的问题。",
  "image_groups": [],
  "video_groups": [
   {
-   "id": "candidates",
-   "title": "A · s02_c03 四候选（同配方，只换种子）",
-   "note": "seed42=上轮你判「达标」的那条，作对照基线。逐个看：人物（眼睛/嘴角/比例）、灯（样式/亮灭状态）、场景（码头/门/灯塔）三零瑕疵的有几条？",
+   "id": "c06fix",
+   "title": "A · s01_c06 动作延伸版（5s，凭空甲板修复 v2）",
+   "note": "对比上轮：4s 版仍有甲板。这版动作填满时长+负向锚定。看点：甲板是否不再凭空出现、停步转身的后续动作是否自然。",
    "videos": [
     {
-     "name": "候选 seed 42",
+     "name": "动作延伸 seed 42",
      "video_srcs": [
       {
-       "label": "s02_c03（即上轮链 4 成片，同配方同种子）",
-       "src": "exp3/chain4_crop_s42_s02c03.mp4"
+       "label": "s01_c06（动作延伸 5s）",
+       "src": "exp6/s01c06_ext_seed42.mp4"
       }
      ],
      "thumbs": [
-      "exp3/chain4_crop_s42_s02c03_fb.jpg",
-      "exp3/chain4_crop_s42_s02c03_fm.jpg",
-      "exp3/chain4_crop_s42_s02c03_fe.jpg"
-     ],
-     "desc": "文件在上轮链 4 目录（同配方同种子，直接引用）"
-    },
-    {
-     "name": "候选 seed 7",
-     "video_srcs": [
-      {
-       "label": "s02_c03",
-       "src": "exp5/s02c03_seed7.mp4"
-      }
-     ],
-     "thumbs": [
-      "exp5/s02c03_seed7_fb.jpg",
-      "exp5/s02c03_seed7_fm2.jpg",
-      "exp5/s02c03_seed7_fe.jpg"
+      "exp6/s01c06_ext_seed42_fb.jpg",
+      "exp6/s01c06_ext_seed42_fm2.jpg",
+      "exp6/s01c06_ext_seed42_fe.jpg"
      ]
     },
     {
-     "name": "候选 seed 11",
+     "name": "动作延伸 seed 7",
      "video_srcs": [
       {
-       "label": "s02_c03",
-       "src": "exp5/s02c03_seed11.mp4"
+       "label": "s01_c06（动作延伸 5s）",
+       "src": "exp6/s01c06_ext_seed7.mp4"
       }
      ],
      "thumbs": [
-      "exp5/s02c03_seed11_fb.jpg",
-      "exp5/s02c03_seed11_fm2.jpg",
-      "exp5/s02c03_seed11_fe.jpg"
-     ]
-    },
-    {
-     "name": "候选 seed 23",
-     "video_srcs": [
-      {
-       "label": "s02_c03",
-       "src": "exp5/s02c03_seed23.mp4"
-      }
-     ],
-     "thumbs": [
-      "exp5/s02c03_seed23_fb.jpg",
-      "exp5/s02c03_seed23_fm2.jpg",
-      "exp5/s02c03_seed23_fe.jpg"
+      "exp6/s01c06_ext_seed7_fb.jpg",
+      "exp6/s01c06_ext_seed7_fm2.jpg",
+      "exp6/s01c06_ext_seed7_fe.jpg"
      ]
     }
    ]
   },
   {
-   "id": "c06fix",
-   "title": "B · s01_c06 凭空甲板修复验证（时长 5s→4s）",
-   "note": "动作不变、时长缩短——看凭空出现的甲板是否消失、人物移速是否自然（上轮种子 42 的 5s 版凭空甲板、种子 7 的移速降低，这是第三种解法）。",
+   "id": "lampfix",
+   "title": "B · s02_c02 修灯视频三候选（定版根帧 crop_s42，只换种子）",
+   "note": "接续 EXP4 遗留：人物无瑕疵（s1 根）与灯完美（s5 根）不同镜。本轮同根帧多候选——人物不变，看灯是否能挑出完美一条。",
    "videos": [
     {
-     "name": "s01_c06 · 4s 版（种子 42）",
+     "name": "修灯候选 seed 7",
      "video_srcs": [
       {
-       "label": "s01_c06（4s）",
-       "src": "exp5/s01c06_4s_seed42.mp4"
+       "label": "s02_c02（修灯）",
+       "src": "exp6/s02c02_seed7.mp4"
       }
      ],
      "thumbs": [
-      "exp5/s01c06_4s_seed42_fb.jpg",
-      "exp5/s01c06_4s_seed42_fm2.jpg",
-      "exp5/s01c06_4s_seed42_fe.jpg"
+      "exp6/s02c02_seed7_fb.jpg",
+      "exp6/s02c02_seed7_fm2.jpg",
+      "exp6/s02c02_seed7_fe.jpg"
+     ]
+    },
+    {
+     "name": "修灯候选 seed 11",
+     "video_srcs": [
+      {
+       "label": "s02_c02（修灯）",
+       "src": "exp6/s02c02_seed11.mp4"
+      }
+     ],
+     "thumbs": [
+      "exp6/s02c02_seed11_fb.jpg",
+      "exp6/s02c02_seed11_fm2.jpg",
+      "exp6/s02c02_seed11_fe.jpg"
+     ]
+    },
+    {
+     "name": "修灯候选 seed 23",
+     "video_srcs": [
+      {
+       "label": "s02_c02（修灯）",
+       "src": "exp6/s02c02_seed23.mp4"
+      }
+     ],
+     "thumbs": [
+      "exp6/s02c02_seed23_fb.jpg",
+      "exp6/s02c02_seed23_fm2.jpg",
+      "exp6/s02c02_seed23_fe.jpg"
      ]
     }
    ]
@@ -94,31 +93,31 @@
  "questions": [
   {
    "id": "q1",
-   "title": "问题 1：四个 s02_c03 候选里，有没有「人物+道具+场景」三零瑕疵的？",
-   "why": "直答「完美视频是否可能」：若有，完美视频的产出方式=足量候选挑零瑕疵（配方即定版）；若都没有，写明各自缺陷（我们将针对性再攻）。",
+   "title": "问题 1：动作延伸版凭空甲板消失了吗？停步转身的后续动作自然吗？",
+   "why": "验证你的解法（增加人物后续动作）——成立的话写进 Skill：场景空间小的镜头用后续动作填满时长，而不是缩时长。",
    "options": [
-    "有（写明是哪条）",
-    "接近但都有小瑕疵（逐条写）",
-    "都没有"
+    "甲板消失+后续动作自然（解法成立）",
+    "甲板消失但动作不自然",
+    "仍有甲板",
+    "其他（写明）"
    ],
-   "placeholder": "逐条评语：seed42=…；seed7=…；seed11=…；seed23=…"
+   "placeholder": "逐条评语：seed42=…；seed7=…"
   },
   {
    "id": "q2",
-   "title": "问题 2：s01_c06 的 4s 版凭空甲板消失了吗？移速自然吗？",
-   "why": "验证「动作-时长-场景匹配」判据的修复手法（缩时长）是否成立——成立的话写进 Skill：场景空间小的镜头配短时长。",
+   "title": "问题 2：修灯三候选里有没有「人物+灯」双优的？",
+   "why": "同根帧人物一致性应很高——看灯（样式/亮灭/裂纹状态）是否能挑出完美一条。若有，s02_c02 正式修复候选即定。",
    "options": [
-    "甲板消失+移速自然（修复成立）",
-    "甲板消失但移速不自然",
-    "仍有甲板问题",
-    "其他（写明）"
+    "有（写明 seed）",
+    "接近但都有小瑕疵（逐条写）",
+    "都没有"
    ],
-   "placeholder": "补充（可空）"
+   "placeholder": "逐条评语：seed7=…；seed11=…；seed23=…"
   },
   {
    "id": "q3",
-   "title": "问题 3：其他意见 / 下一轮方向",
-   "why": "自由填写。若本轮验证通过，下一阶段=正式修复轮（系统 Agent 按定版配方重做《雨灯归航》偏差镜+灯室内部场景图）与 Skill 沉淀。",
+   "title": "问题 3：其他意见 / 是否进入正式修复轮",
+   "why": "自由填写。若配方验证齐了，下一阶段=正式修复轮（系统 Agent 按定版配方重做《雨灯归航》偏差镜+灯室内部场景图）→ Skill 沉淀 → 冻结盲测。",
    "options": [],
    "placeholder": "自由填写（可空）"
   }
