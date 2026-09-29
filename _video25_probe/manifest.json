@@ -1,109 +1,149 @@
 {
-  "round": "exp3",
-  "round_title": "EXP3 · crop 主配方深测 + 道具锚定修复（2026-09-29）",
-  "round_date": "2026-09-29",
-  "intro": "<b>本轮内容</b>（响应你的 EXP2 评审）：① crop（头肩裁剪 Look）胜出 → 两镜各加 5 个新种子深测；② 你发现的「灯不一致」查证属实——s01_c04 的 Binding 没绑铜灯道具 → 已补绑，并重测对照图（灯是否一致直接看）；③ 链 4 = crop 根帧的端到端视频链；④ 链 6 = 链 2 根帧换种子重生成（回答「人物还会不会再变」）。判定判据沿用：水彩画风 / 白斑左颊 / 兜帽向下 / 人物小巧可爱 / 灯样式一致。",
-  "image_groups": [
+ "round": "exp4",
+ "round_title": "EXP4 · 定版配方批量试产（2026-09-29）",
+ "round_date": "2026-09-29",
+ "intro": "<b>定版配方</b>：crop 根帧（头肩裁剪 Look）→ i2v 硬首帧 → 新尾帧 → 【新尾帧+Look 双参考】接力下一镜；s01_c04 已补铜灯道具绑定。本轮把配方铺满 s01 偏差链（c04→c05→c06，两种子）+ s02 链补量（定版候选根 s1/s5 各一条链）。判据沿用：水彩 / 白斑左颊 / 兜帽向下 / 小巧可爱 / 灯样式一致 / 动作密度（跑步镜头少加多余动作）。",
+ "image_groups": [],
+ "video_groups": [
+  {
+   "id": "chainA",
+   "title": "A · 链 A：s01 偏差链全量试产（c04→c05→c06 每步双参考接力）",
+   "note": "每条链 3 条视频：c04（crop_prop_s7 根 i2v）→ c05（接力）→ c06（接力）。两种子并排。",
+   "videos": [
     {
-      "id": "s02_c02_crop",
-      "title": "A · s02_c02 crop 臂（头肩裁剪 Look）——7 个种子",
-      "note": "你 EXP2 已选 42/7（评「很好」），本轮加 1/2/3/5/11。挑出你最满意的 1-2 张作为该镜根帧定版。",
-      "images": [
-        {"name": "s02_c02_crop_s42", "src": "exp2/s02_c02_crop_s42.png", "note": "上轮你的评语：人物大小合理，变宽了一点点基本看不出来，很好"},
-        {"name": "s02_c02_crop_s7", "src": "exp2/s02_c02_crop_s7.png", "note": "上轮你的评语：很好，白斑位置不好"},
-        {"name": "s02_c02_crop_s1", "src": "exp3/s02_c02_crop_s1.png"},
-        {"name": "s02_c02_crop_s2", "src": "exp3/s02_c02_crop_s2.png"},
-        {"name": "s02_c02_crop_s3", "src": "exp3/s02_c02_crop_s3.png"},
-        {"name": "s02_c02_crop_s5", "src": "exp3/s02_c02_crop_s5.png"},
-        {"name": "s02_c02_crop_s11", "src": "exp3/s02_c02_crop_s11.png"}
-      ]
+     "name": "链 A 种子 42",
+     "video_srcs": [
+      {
+       "label": "s01_c04（prop 根 i2v）",
+       "src": "exp4/chainA_s42_s01_c04.mp4"
+      },
+      {
+       "label": "s01_c05（双参考接力）",
+       "src": "exp4/chainA_s42_s01_c05.mp4"
+      },
+      {
+       "label": "s01_c06（双参考接力）",
+       "src": "exp4/chainA_s42_s01_c06.mp4"
+      }
+     ],
+     "thumbs": [
+      "exp4/chainA_s42_s01_c05_fb.jpg",
+      "exp4/chainA_s42_s01_c05_fe.jpg",
+      "exp4/chainA_s42_s01_c06_fb.jpg",
+      "exp4/chainA_s42_s01_c06_fe.jpg"
+     ]
     },
     {
-      "id": "s01_c04_crop",
-      "title": "B · s01_c04 crop 臂——7 个种子（无道具参考，与上轮同条件）",
-      "note": "上轮你选了 42/7（评「很好」）。注意看灯的样式是否仍然不一致——这组是「无灯参考」的基线。",
-      "images": [
-        {"name": "s01_c04_crop_s42", "src": "exp2/s01_c04_crop_s42.png", "note": "上轮你的评语：很好"},
-        {"name": "s01_c04_crop_s7", "src": "exp2/s01_c04_crop_s7.png", "note": "上轮你的评语：很好"},
-        {"name": "s01_c04_crop_s1", "src": "exp3/s01_c04_crop_s1.png"},
-        {"name": "s01_c04_crop_s2", "src": "exp3/s01_c04_crop_s2.png"},
-        {"name": "s01_c04_crop_s3", "src": "exp3/s01_c04_crop_s3.png"},
-        {"name": "s01_c04_crop_s5", "src": "exp3/s01_c04_crop_s5.png"},
-        {"name": "s01_c04_crop_s11", "src": "exp3/s01_c04_crop_s11.png"}
-      ]
-    },
-    {
-      "id": "s01_c04_crop_prop",
-      "title": "C · s01_c04 crop + 铜灯道具参考（已补绑定）——直答「灯不一致」",
-      "note": "补绑铜灯道具图（带裂纹玻璃罩/泥水/未点亮状态注记）后生成。与 B 区同镜对比：灯的样式是否稳定下来了？",
-      "images": [
-        {"name": "s01_c04_crop_prop_s42", "src": "exp3/s01_c04_crop_prop_s42.png"},
-        {"name": "s01_c04_crop_prop_s7", "src": "exp3/s01_c04_crop_prop_s7.png"}
-      ]
+     "name": "链 A 种子 7",
+     "video_srcs": [
+      {
+       "label": "s01_c04（prop 根 i2v）",
+       "src": "exp4/chainA_s7_s01_c04.mp4"
+      },
+      {
+       "label": "s01_c05（双参考接力）",
+       "src": "exp4/chainA_s7_s01_c05.mp4"
+      },
+      {
+       "label": "s01_c06（双参考接力）",
+       "src": "exp4/chainA_s7_s01_c06.mp4"
+      }
+     ],
+     "thumbs": [
+      "exp4/chainA_s7_s01_c05_fb.jpg",
+      "exp4/chainA_s7_s01_c05_fe.jpg",
+      "exp4/chainA_s7_s01_c06_fb.jpg",
+      "exp4/chainA_s7_s01_c06_fe.jpg"
+     ]
     }
-  ],
-  "video_groups": [
+   ]
+  },
+  {
+   "id": "chainB",
+   "title": "B · 链 B：s02 链补量（定版候选根 s1 / s5 → s02_c03）",
+   "note": "与链 4（s42 根，上一轮）并排——三选一终选 s02_c02 根帧。",
+   "videos": [
     {
-      "id": "chains",
-      "title": "D · 两条新链（与上轮链 1/2/3 同判据）",
-      "note": "链 4 = crop 根帧（s02_c02_crop_s42）端到端；链 6 = 链 2 根帧（keep_fullscene_s42）换种子 7 重生成——对比上轮链 2 看人物还会不会再变。均以【新尾帧+Look 双参考】接力 s02_c03。",
-      "videos": [
-        {
-          "name": "链 4 · 根帧=crop_s42",
-          "desc": "crop 根帧的端到端效果——重点看视频里人物灵活性、画风是否保持水彩",
-          "video_srcs": [
-            {"label": "s02_c02（修好的根）", "src": "exp3/chain4_crop_s42_s02c02.mp4"},
-            {"label": "s02_c03（新尾帧+Look 双参考）", "src": "exp3/chain4_crop_s42_s02c03.mp4"}
-          ],
-          "thumbs": ["exp3/chain4_crop_s42_s02c03_fb.jpg", "exp3/chain4_crop_s42_s02c03_fm.jpg", "exp3/chain4_crop_s42_s02c03_fe.jpg"]
-        },
-        {
-          "name": "链 6 · 根帧=fullscene_s42 换种子 7",
-          "desc": "链 2 的变化测试——与上轮链 2（chain_fullscene_s42，在上一页仍可看）对比人物是否还在变",
-          "video_srcs": [
-            {"label": "s02_c02（修好的根）", "src": "exp3/chain6_fullscene_s42_s7_s02c02.mp4"},
-            {"label": "s02_c03（新尾帧+Look 双参考）", "src": "exp3/chain6_fullscene_s42_s7_s02c03.mp4"}
-          ],
-          "thumbs": ["exp3/chain6_fullscene_s42_s7_s02c03_fb.jpg", "exp3/chain6_fullscene_s42_s7_s02c03_fm.jpg", "exp3/chain6_fullscene_s42_s7_s02c03_fe.jpg"]
-        }
-      ]
+     "name": "链 B · 根帧=s02_c02_crop_s1",
+     "desc": "对照链 4（s42 根）",
+     "video_srcs": [
+      {
+       "label": "s02_c02（根 i2v）",
+       "src": "exp4/chainB_s1_s02_c02.mp4"
+      },
+      {
+       "label": "s02_c03（双参考接力）",
+       "src": "exp4/chainB_s1_s02_c03.mp4"
+      }
+     ],
+     "thumbs": [
+      "exp4/chainB_s1_s02_c03_fb.jpg",
+      "exp4/chainB_s1_s02_c03_fe.jpg"
+     ]
+    },
+    {
+     "name": "链 B · 根帧=s02_c02_crop_s5",
+     "desc": "对照链 4（s42 根）",
+     "video_srcs": [
+      {
+       "label": "s02_c02（根 i2v）",
+       "src": "exp4/chainB_s5_s02_c02.mp4"
+      },
+      {
+       "label": "s02_c03（双参考接力）",
+       "src": "exp4/chainB_s5_s02_c03.mp4"
+      }
+     ],
+     "thumbs": [
+      "exp4/chainB_s5_s02_c03_fb.jpg",
+      "exp4/chainB_s5_s02_c03_fe.jpg"
+     ]
     }
-  ],
-  "questions": [
-    {
-      "id": "q1",
-      "title": "问题 1：s02_c02 的根帧定版选哪张（可多选）？",
-      "why": "7 个种子里挑最满意的；选中结果将作为该镜正式重生成的根帧候选。",
-      "options": ["按点选图片", "都不满意（写原因）"],
-      "placeholder": "补充（可空）"
-    },
-    {
-      "id": "q2",
-      "title": "问题 2：s01_c04 的根帧定版选哪张（可多选）？",
-      "why": "B 区（无道具参考）与 C 区（已补铜灯参考）一起看。",
-      "options": ["按点选图片（含 C 区）", "都不满意（写原因）"],
-      "placeholder": "补充（可空）"
-    },
-    {
-      "id": "q3",
-      "title": "问题 3：补绑铜灯后，灯的样式是否稳定了？",
-      "why": "直答你上轮发现的「每个人物提的灯都不一样」。如果稳定=道具锚定层生效（会写进 Skill：所有道具入画必须绑 prop）。",
-      "options": ["稳定了，灯基本一致", "有改善但仍不稳", "没改善"],
-      "placeholder": "补充（可空）"
-    },
-    {
-      "id": "q4",
-      "title": "问题 4：链 4（crop 根）与链 6（链 2 换种子）的端到端评价？",
-      "why": "链 4 回答「crop 根帧的视频灵活性/画风保持」；链 6 对比上轮链 2 回答「人物还会不会再变」。",
-      "options": ["链 4 可用", "链 6 可用", "两条都可用", "都还不够（写原因）"],
-      "placeholder": "逐链评语：链4=…；链6=…"
-    },
-    {
-      "id": "q5",
-      "title": "问题 5：其他意见",
-      "why": "自由填写。",
-      "options": [],
-      "placeholder": "自由填写（可空）"
-    }
-  ]
+   ]
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "title": "问题 1：s01 链试产（A 区两条链）的端到端评价？",
+   "why": "定版配方铺满 s01 偏差链——重点：c04→c05→c06 三镜之间人物/画风/灯是否稳定，动作是否自然（动作密度判据）。",
+   "options": [
+    "种子 42 好",
+    "种子 7 好",
+    "两条都可用",
+    "还不够（写原因）"
+   ],
+   "placeholder": "逐镜评语：c04=…；c05=…；c06=…"
+  },
+  {
+   "id": "q2",
+   "title": "问题 2：s02_c02 根帧终选（s1 / s5 / s42 三选一或组合）？",
+   "why": "链 4（s42）、链 B（s1/s5）并排。终选后该镜正式修复走此根帧。",
+   "options": [
+    "s1",
+    "s5",
+    "s42（链 4）",
+    "另选/组合（写明）"
+   ],
+   "placeholder": "补充（可空）"
+  },
+  {
+   "id": "q3",
+   "title": "问题 3：s02_c03 接力样本的画风/身份回正是否达标？",
+   "why": "所有新链的 s02_c03 都是双参考接力——评估偏差风格是否回正到位，能否正式替换现役偏差版。",
+   "options": [
+    "达标，可正式替换",
+    "接近但还差一点（写差异）",
+    "不达标"
+   ],
+   "placeholder": "补充（可空）"
+  },
+  {
+   "id": "q4",
+   "title": "问题 4：其他意见 / 下一轮想测什么",
+   "why": "自由填写。",
+   "options": [],
+   "placeholder": "自由填写（可空）"
+  }
+ ]
 }
