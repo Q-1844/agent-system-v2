@@ -2,13 +2,12 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>Phase 42 探针预览 · 视频Skill底层封板验收</title>
+<title>Phase 42 探针预览 · 视频Skill底层封板验收（含反馈输入）</title>
 <style>
   body { font-family: "Microsoft YaHei", sans-serif; background:#14161a; color:#e8e6e3; margin:0; padding:24px; }
   h1 { font-size:22px; color:#ffd166; margin:0 0 4px; }
-  .sub { color:#9a9a9a; font-size:13px; margin-bottom:28px; }
+  .sub { color:#9a9a9a; font-size:13px; margin-bottom:20px; }
   h2 { font-size:18px; color:#8ecae6; border-left:4px solid #8ecae6; padding-left:10px; margin:36px 0 12px; }
-  h3 { font-size:15px; color:#e8e6e3; margin:18px 0 8px; }
   .grid { display:flex; flex-wrap:wrap; gap:18px; }
   .card { background:#1d2025; border-radius:10px; padding:12px; width:460px; max-width:100%; }
   .card video, .card img { width:100%; border-radius:6px; background:#000; }
@@ -21,21 +20,38 @@
   .row3 { display:flex; flex-wrap:wrap; gap:14px; }
   .row3 .card { width:400px; }
   .note { font-size:13px; color:#b9b6b1; background:#1d2025; border-radius:8px; padding:12px 16px; line-height:1.8; margin:12px 0; }
-  table { border-collapse:collapse; font-size:13px; margin:10px 0; }
-  td, th { border:1px solid #3a3d42; padding:6px 12px; }
-  th { color:#8ecae6; }
+  /* ===== 问题框 ===== */
+  .qbox { background:#20242b; border:1px solid #3a4150; border-radius:10px; padding:16px 18px; margin:14px 0 6px; }
+  .qbox .qtitle { font-size:15px; color:#ffd166; font-weight:bold; margin-bottom:6px; }
+  .qbox .qwhy { font-size:12px; color:#9a9a9a; margin-bottom:10px; line-height:1.7; }
+  .qbox label.opt { display:block; font-size:14px; margin:7px 0; cursor:pointer; color:#e8e6e3; }
+  .qbox label.opt input { margin-right:8px; transform:scale(1.15); }
+  .qbox textarea, .qbox input[type=text] { width:100%; box-sizing:border-box; background:#16181d; color:#e8e6e3;
+    border:1px solid #3a4150; border-radius:6px; padding:8px 10px; font-size:13px; font-family:inherit; margin-top:8px; }
+  .qbox textarea { min-height:56px; resize:vertical; }
+  .saved { font-size:11px; color:#7fd47f; margin-top:6px; }
+  #floating { position:fixed; right:18px; bottom:18px; background:#2b3038; border:1px solid #50585f;
+    border-radius:10px; padding:12px 16px; box-shadow:0 4px 18px rgba(0,0,0,.5); z-index:9; }
+  #floating button { background:#ffd166; color:#20242b; border:none; border-radius:6px; padding:9px 16px;
+    font-size:14px; font-weight:bold; cursor:pointer; font-family:inherit; }
+  #floating .hint { font-size:11px; color:#9a9a9a; margin-top:6px; max-width:230px; line-height:1.5; }
+  #out { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); width:min(720px,90vw); height:60vh;
+    background:#16181d; border:2px solid #ffd166; border-radius:10px; padding:14px; color:#e8e6e3; font-size:13px;
+    display:none; z-index:10; font-family:Consolas,monospace; }
+  #out .bar { text-align:right; margin-bottom:8px; }
+  #out button { background:#8ecae6; border:none; border-radius:6px; padding:6px 14px; font-weight:bold; cursor:pointer; font-family:inherit; }
 </style>
 </head>
 <body>
 <h1>Phase 42 探针预览（2026-09-29）</h1>
-<div class="sub">42.md 视频Skill底层封板验收 · 全部素材同目录相对路径 · 《雨灯归航》</div>
+<div class="sub">42.md 视频Skill底层封板验收 · 每个问题下方直接填写（自动保存）· 全部填完点右下角「生成反馈」复制回帖 · 《雨灯归航》</div>
 
 <div class="note">
 <b>背景一句话</b>：画风漂移根因 = 特写镜自动丢角色设定图（Look）→ 模型纯文本重造角色 → 尾帧接力链逐镜传播偏差风格。<br>
-下面对照里：<span class="badge good">水彩/贴Look</span>=批准设定风格，<span class="badge bad">厚涂卡通/偏差</span>=偏差组风格。
+对照标记：<span class="badge good">水彩/贴Look</span>=批准设定风格，<span class="badge bad">厚涂卡通/偏差</span>=偏差组风格。
 </div>
 
-<h2>① 根因对照（静态图）</h2>
+<h2 id="s1">① 根因对照（静态图）</h2>
 <div class="row3">
   <div class="card"><div class="cap">批准的 Look（角色设定图，唯一身份权威）</div><img src="look_approved.png"></div>
   <div class="card"><div class="cap"><span class="badge good">贴定义组</span>s02_c01 首帧（发过 Look，水彩延续）</div><img src="s02_c01_first.png"></div>
@@ -43,51 +59,102 @@
   <div class="card"><div class="cap">s02_c02 尾帧（偏差风格从这里沿接力链传播到 s02_c03→s03 全部）</div><img src="s02_c02_tail.png"></div>
 </div>
 
-<h2>② P1 · Look+尾帧双参考 relay 探针（核心对照）</h2>
+<h2 id="s2">② P1 · Look+尾帧双参考 relay 探针（核心对照）</h2>
 <div class="note">
-问题：偏差已经传到 s02_c03，还能拉回来吗？做法：s02_c03 视频生成时同时发【上一镜尾帧（衔接）+ 角色 Look（身份/画风再锚定）】两张参考图。<b>左边是现役版本（只发尾帧），右边是双参考探针</b>——注意右版中后段画风明显向水彩/Look 回正，空间叙事（修理间→开门→望塔）保持正确。
+问题：偏差已经传到 s02_c03，还能拉回来吗？做法：s02_c03 视频生成时同时发【上一镜尾帧（衔接）+ 角色 Look（身份/画风再锚定）】两张参考图。<b>左边=现役版本（只发尾帧），右边=双参考探针</b>——右版中后段画风向水彩/Look 回正，空间叙事（修理间→开门→望塔）保持正确。
 </div>
 <div class="grid">
   <div class="card"><div class="cap">现役 s02_c03（只发尾帧 → 偏差风格）</div>
     <video controls src="current_s02c03.mp4"></video>
-    <div class="desc">首中尾帧：</div><img src="current_s02c03_beginning.jpg"><img src="current_s02c03_ending.jpg"></div>
+    <div class="desc">首/尾帧：</div><img src="current_s02c03_beginning.jpg"><img src="current_s02c03_ending.jpg"></div>
   <div class="card"><div class="cap">P1 探针版（尾帧+Look 双参考）</div>
     <video controls src="p1.mp4"></video>
-    <div class="desc">首中尾帧：</div><img src="p1_frame_first.jpg"><img src="p1_frame_mid.jpg"><img src="p1_frame_last.jpg"></div>
+    <div class="desc">首/中/尾帧：</div><img src="p1_frame_first.jpg"><img src="p1_frame_mid.jpg"><img src="p1_frame_last.jpg"></div>
+</div>
+<div class="qbox" id="q1">
+  <div class="qtitle">问题 1（对应本区）：relay 链是否默认升级为「尾帧+Look 双参考」？</div>
+  <div class="qwhy">现状=relay 镜只发上一镜尾帧（偏差风格会沿链传播）。双参考=每镜同时发角色 Look，把身份/画风锚拉回来。探针显示回正有效，但首段仍受尾帧拖拽（偏差已冻结在尾帧里）。选定后我写进 Skill 决策入口并改默认行为。</div>
+  <label class="opt"><input type="radio" name="q1" value="默认开启：relay 镜全部自动升级为双参考">默认开启——relay 镜全部自动升级为双参考</label>
+  <label class="opt"><input type="radio" name="q1" value="仅高险场景：画风漂移高险时由 Agent 按镜开启">仅高险场景——画风漂移高险时由 Agent 按镜开启</label>
+  <label class="opt"><input type="radio" name="q1" value="不采纳：维持只发尾帧">不采纳——维持只发尾帧（请在下方写原因）</label>
+  <textarea id="q1_note" placeholder="补充意见（可空）：比如对探针画风的满意度、担心的副作用"></textarea>
+  <div class="saved" data-savedfor="q1"></div>
 </div>
 
-<h2>③ P2 · keyframes 桥解锁探针（首尾双帧钉死）</h2>
-<div class="note">桥 = 两端都钉死（首帧=尾帧图 A，尾帧=尾帧图 B），中间由模型过渡。实测 2.5 接受双帧且<b>两端逐像素级对齐</b>——桥路径恢复可用（此前被 client 拒绝）。</div>
+<h2 id="s3">③ P2 · keyframes 桥解锁探针（首尾双帧钉死）</h2>
+<div class="note">桥 = 两端都钉死（首帧=A 镜尾帧图，尾帧=B 镜尾帧图），中间由模型过渡。实测 2.5 接受双帧且<b>两端逐像素级对齐</b>——桥路径恢复可用（此前被 client 拒绝，Phase 41 时插桥被正确排除是因为当时根本发不出去）。纪律不变：只有两端合格且值得保留时才插桥。</div>
 <div class="grid">
   <div class="card"><div class="cap">桥探针（首=修理间正脸，尾=开门望塔）</div>
     <video controls src="kf.mp4"></video>
     <div class="desc">首/中/尾：</div><img src="kf_frame_0.2.jpg"><img src="kf_frame_2.5.jpg"><img src="kf_frame_4.8.jpg"></div>
 </div>
-
-<h2>④ P3 · 特写镜三臂对照（静态图，偏差根的修复方向）</h2>
-<div class="note">s02_c02 是偏差根（特写镜丢 Look）。三臂同镜同 prompt，只变「发不发参考、发哪种参考」：<b>A 现状丢</b>（=上面①里的偏差根图）/ <b>B 头肩裁剪 Look</b> / <b>C 全幅 Look</b>。</div>
-<div class="row3">
-  <div class="card"><div class="cap"><span class="badge bad">A 丢（现状）</span>构图✓ 身份完全重造</div><img src="s02_c02_first.png"></div>
-  <div class="card"><div class="cap"><span class="badge mid">B 头肩裁剪</span>构图✓ 身份部分回正</div><img src="p3_b.png"></div>
-  <div class="card"><div class="cap"><span class="badge good">C 全幅</span>身份最准（白斑侧✓兜帽✓水彩✓）构图被拉宽</div><img src="p3_c.png"></div>
+<div class="qbox" id="q2">
+  <div class="qtitle">问题 2（对应本区）：盲测任务里是否包含一次真实桥镜？</div>
+  <div class="qwhy">桥刚解锁，还没有「系统 Agent 在真实任务里自主选择并用对」的样本。盲测可以设计一个接缝确实影响叙事、双端合格的场景让 Agent 自主决策是否插桥。</div>
+  <label class="opt"><input type="radio" name="q2" value="包含：盲测设计一个该插桥的场景">包含——盲测设计一个该插桥的场景，验证 Agent 会自主选对</label>
+  <label class="opt"><input type="radio" name="q2" value="不包含：桥保持能力在档，盲测不强制">不包含——桥保持能力在档即可，盲测不强制</label>
+  <textarea id="q2_note" placeholder="补充意见（可空）"></textarea>
+  <div class="saved" data-savedfor="q2"></div>
 </div>
 
-<h2>⑤ P4 · 真解除接力+独立重生探针</h2>
-<div class="note">完全不带上一镜尾帧、独立生成首帧（完整锚定）再生成视频：<b>画风/身份三探针最优</b>（水彩/白斑正确侧/兜帽向下），<b>但空间错</b>——跑到了室外平台（缺「灯室内部」场景图，模型自由度过大）。</div>
+<h2 id="s4">④ P3 · 特写镜三臂对照（静态图，偏差根的修复方向）</h2>
+<div class="note">s02_c02 是偏差根（特写镜丢 Look）。三臂同镜同 prompt，只变「发不发参考、发哪种」：<b>A 现状丢</b>（=①区偏差根图）/ <b>B 头肩裁剪 Look</b> / <b>C 全幅 Look</b>。注：B 的白斑侧别也错了（与 A 同侧）——模型对侧别的自由度在 B/A 都存在；C 唯独构图被拉宽。</div>
+<div class="row3">
+  <div class="card"><div class="cap"><span class="badge bad">A 丢（现状）</span>构图✓ 身份完全重造</div><img src="s02_c02_first.png"></div>
+  <div class="card"><div class="cap"><span class="badge mid">B 头肩裁剪</span>构图✓ 身份部分回正（白斑仍错侧）</div><img src="p3_b.png"></div>
+  <div class="card"><div class="cap"><span class="badge good">C 全幅</span>身份最准（白斑侧✓兜帽✓水彩✓）构图被拉宽</div><img src="p3_c.png"></div>
+</div>
+<div class="qbox" id="q3">
+  <div class="qtitle">问题 3（对应本区）：特写镜的 auto 规则从「丢 Look」改成什么？</div>
+  <div class="qwhy">这是偏差组根因的根治点。B=构图与身份折中；C=身份最准但构图退回「被全身立绘拉宽」的老问题（D2 当初就是因为这个才丢参考的）。也可以组合：默认 B、重要特写允许 Agent 升级 C 或走融合首帧。</div>
+  <label class="opt"><input type="radio" name="q3" value="翻转为 B 头肩裁剪">翻转为 B——特写自动回头肩裁剪 Look（构图身份折中）</label>
+  <label class="opt"><input type="radio" name="q3" value="翻转为 C 全幅">翻转为 C——身份优先，接受构图被拉宽</label>
+  <label class="opt"><input type="radio" name="q3" value="默认 B + 允许升级">默认 B，Agent 判定身份关键时允许升级 C 或融合首帧</label>
+  <label class="opt"><input type="radio" name="q3" value="维持丢">维持丢（请在下方写原因）</label>
+  <textarea id="q3_note" placeholder="补充意见（可空）：比如对三张图的观感差异"></textarea>
+  <div class="saved" data-savedfor="q3"></div>
+</div>
+
+<h2 id="s5">⑤ P4 · 真解除接力+独立重生探针</h2>
+<div class="note">完全不带上一镜尾帧、独立生成首帧（完整锚定）再生成视频：<b>画风/身份三探针最优</b>（水彩/白斑正确侧/兜帽向下），<b>但空间错</b>——跑到了室外平台。原因：s03 的场景视图是「灯塔外观」，系统里<b>没有「灯室内部」场景图</b>，无尾帧钉住时模型自由度过大。</div>
 <div class="grid">
-  <div class="card"><div class="cap">P4 探针版（独立重生）</div>
+  <div class="card"><div class="cap">P4 探针版（独立重生——注意空间：室外平台≠灯室内部）</div>
     <video controls src="p4.mp4"></video>
     <div class="desc">首/中/尾：</div><img src="p4_frame_first.jpg"><img src="p4_frame_mid.jpg"><img src="p4_frame_last.jpg"></div>
   <div class="card"><div class="cap">参照：现役 s02_c01（贴定义组，水彩标杆）</div>
     <video controls src="current_s02c01.mp4"></video></div>
 </div>
+<div class="qbox" id="q4">
+  <div class="qtitle">问题 4（对应本区）：是否授权新增「灯室内部」场景图（走 Scene Agent 正式入口）？</div>
+  <div class="qwhy">授权后 Scene Agent 生成「灯室内部」Location View → 你人评审批 → s03_c03 类镜头的空间锚定不再依赖接力尾帧。生成 1-2 张场景图，不耗视频配额。</div>
+  <label class="opt"><input type="radio" name="q4" value="授权新增">授权新增（生成后给我人评）</label>
+  <label class="opt"><input type="radio" name="q4" value="暂不新增">暂不新增——空间锚定继续靠接力尾帧，缺口如实记入报告</label>
+  <textarea id="q4_note" placeholder="对灯室内部的画面要求（可空）：比如「封闭圆形房间、大主灯座居中、顶部圆窗、深色木质墙面」"></textarea>
+  <div class="saved" data-savedfor="q4"></div>
+</div>
 
-<h2>⑥ 附：现役 s02_c02（偏差根成片）</h2>
+<h2 id="s6">⑥ 附：现役 s02_c02（偏差根成片）+ §五推进方式</h2>
 <div class="grid">
   <div class="card"><div class="cap">现役 s02_c02</div><video controls src="current_s02c02.mp4"></video></div>
 </div>
+<div class="qbox" id="q5">
+  <div class="qtitle">问题 5（总）：§五（Skill 沉淀→冻结→全新会话盲测）怎么推进？</div>
+  <div class="qwhy">按 42.md，冻结后要开一个没有逐镜答案的全新系统 Agent 会话跑小型短片盲测（含角色再锚定/换场/接续/正常切镜/至少一次失败恢复），另加一个《雨灯归航》之外的迁移小任务。你在这里定顺序。</div>
+  <label class="opt"><input type="radio" name="q5" value="按前述裁决沉淀 Skill→冻结→盲测">按 1-4 题裁决沉淀 Skill → 冻结 → 直接盲测</label>
+  <label class="opt"><input type="radio" name="q5" value="先修偏差链再盲测">先把《雨灯归航》偏差组镜头用新方法修复并经你逐镜验收，再冻结盲测</label>
+  <label class="opt"><input type="radio" name="q5" value="先看 Skill 更新清单">先出 Skill 更新清单给你确认，再动</label>
+  <textarea id="q5_note" placeholder="补充意见（可空）：比如盲测故事的题材/规模要求"></textarea>
+  <div class="saved" data-savedfor="q5"></div>
+</div>
 
-<div class="note" style="margin-top:32px">
+<div class="qbox" id="q6">
+  <div class="qtitle">问题 6（总）：其他意见</div>
+  <div class="qwhy">任何对探针、修复方案、封板标准、报告内容的补充。</div>
+  <textarea id="q6_note" style="min-height:80px" placeholder="自由填写（可空）"></textarea>
+  <div class="saved" data-savedfor="q6"></div>
+</div>
+
+<div class="note" style="margin-top:24px">
 <b>端点三修法实证矩阵</b>（错误端点怎么修）：<br>
 ① 文本强化+保留接力：空间✓ 画风✗（Phase 41 已用）｜
 ② <b>双参考（接力+Look）：空间✓ 画风中气回正 ← 综合最优（P1）</b>｜
@@ -95,5 +162,79 @@
 ④ 桥（双端钉住）：本轮解锁（P2）
 </div>
 
+<div id="floating">
+  <button onclick="genFeedback()">生成反馈（复制）</button>
+  <div class="hint">填完 6 题点此：反馈文本自动复制 + 弹出预览，粘贴回对话即可。填写内容自动保存在浏览器。</div>
+</div>
+<div id="out"><div class="bar"><button onclick="copyOut()">复制全部</button> <button onclick="document.getElementById('out').style.display='none'">关闭</button></div><textarea id="outText" style="width:95%;height:85%"></textarea></div>
+
+<script>
+const KEYS = ["q1","q2","q3","q4","q5","q6"];
+function loadSaved(){
+  KEYS.forEach(k=>{
+    const saved = JSON.parse(localStorage.getItem("p42fb_"+k) || "null");
+    if(!saved) return;
+    document.querySelectorAll('#'+k+' input[type=radio]').forEach(r=>{
+      if(r.value===saved.choice) r.checked=true;
+    });
+    const n=document.getElementById(k+"_note"); if(n) n.value=saved.note||"";
+  });
+  refreshSavedMarks();
+}
+function collect(k){
+  const sel=document.querySelector('#'+k+' input[type=radio]:checked');
+  const n=document.getElementById(k+"_note");
+  return {choice: sel?sel.value:"", note: n?n.value.trim():""};
+}
+document.addEventListener("change", e=>{
+  KEYS.forEach(k=>{
+    if(e.target.closest('#'+k)){
+      localStorage.setItem("p42fb_"+k, JSON.stringify(collect(k)));
+      refreshSavedMarks();
+    }
+  });
+});
+document.addEventListener("input", e=>{
+  KEYS.forEach(k=>{
+    if(e.target.id===k+"_note"){
+      localStorage.setItem("p42fb_"+k, JSON.stringify(collect(k)));
+    }
+  });
+});
+function refreshSavedMarks(){
+  KEYS.forEach(k=>{
+    const m=document.querySelector('#'+k+' .saved');
+    const s=JSON.parse(localStorage.getItem("p42fb_"+k)||"null");
+    if(m) m.textContent = (s && (s.choice||s.note)) ? "✓ 已保存" : "";
+  });
+}
+function genFeedback(){
+  let txt = "【Phase 42 预览页反馈】\n";
+  KEYS.forEach((k,i)=>{
+    const s=JSON.parse(localStorage.getItem("p42fb_"+k)||"{}");
+    const q=document.querySelector('#'+k+' .qtitle').textContent.split("：")[0];
+    txt += "\n问题 "+(i+1)+"（"+q+"）\n";
+    txt += "选择: " + (s.choice||"(未选)") + "\n";
+    if(s.note) txt += "补充: " + s.note + "\n";
+  });
+  txt += "\n（自动生成于 "+new Date().toLocaleString()+"）";
+  const out=document.getElementById("out");
+  document.getElementById("outText").value=txt;
+  out.style.display="block";
+  copyText(txt);
+}
+function copyText(t){
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t).catch(()=>{fallbackCopy(t);});
+  } else fallbackCopy(t);
+}
+function fallbackCopy(t){
+  const ta=document.getElementById("outText");
+  ta.focus(); ta.select();
+  try{ document.execCommand("copy"); }catch(e){}
+}
+function copyOut(){ copyText(document.getElementById("outText").value); }
+loadSaved();
+</script>
 </body>
 </html>
