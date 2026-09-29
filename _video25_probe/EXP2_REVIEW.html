@@ -200,6 +200,12 @@ function genFeedback(){
   const w = window.open("", "_blank");
   w.document.write("<pre style='font-size:14px;white-space:pre-wrap'>"+txt+"</pre>");
   if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).catch(()=>{});
+  // 一键落盘（下载到「下载」文件夹）——不依赖剪贴板
+  const blob = new Blob([txt], {type: 'text/plain;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'P42_EXP2_feedback_' + new Date().toISOString().slice(0,16).replace(/[:T]/g,'') + '.txt';
+  a.click();
 }
 renderMatrix("s02_c02","m_s02_c02");
 renderMatrix("s01_c04","m_s01_c04");
