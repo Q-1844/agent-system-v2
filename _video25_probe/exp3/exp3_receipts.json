@@ -1,0 +1,141 @@
+[
+ {
+  "name": "s02_c02_crop_s1",
+  "shot": "s02_c02",
+  "arm": "crop",
+  "seed": 1,
+  "after_prop": false,
+  "used_reference_ids": [
+   "ref_92ad3512a47f",
+   "ref_074ed60714d0"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_n4G2PFG98oVo0lZqBC2l8K4xibDp3Vjm/output.png"
+ },
+ {
+  "name": "s01_c04_crop_s1",
+  "shot": "s01_c04",
+  "arm": "crop",
+  "seed": 1,
+  "after_prop": false,
+  "used_reference_ids": [
+   "ref_92ad3512a47f",
+   "ref_e4e31677e7ab"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_jsjVS0U6XoNP7Q2VZKbp0F96RnwNZqUm/output.png"
+ },
+ {
+  "name": "s02_c02_crop_s2",
+  "shot": "s02_c02",
+  "arm": "crop",
+  "seed": 2,
+  "after_prop": false,
+  "used_reference_ids": [
+   "ref_92ad3512a47f",
+   "ref_074ed60714d0"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_6hhQJT1LhWbZXPhI03FjtZG9YNcthcRz/output.png"
+ },
+ {
+  "name": "s01_c04_crop_s2",
+  "shot": "s01_c04",
+  "arm": "crop",
+  "seed": 2,
+  "after_prop": false,
+  "used_reference_ids": [
+   "ref_92ad3512a47f",
+   "ref_e4e31677e7ab"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_WA8cpOHmXivYmX2YSFiMABpUzHXeF1mj/output.png"
+ },
+ {
+  "name": "s02_c02_crop_s3",
+  "shot": "s02_c02",
+  "arm": "crop",
+  "seed": 3,
+  "after_prop": false,
+  "used_reference_ids": [
+   "ref_92ad3512a47f",
+   "ref_074ed60714d0"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_7hUG4XrIhMaFdIFS1rVzc7uUjWk9QwEQ/output.png"
+ },
+ {
+  "name": "s01_c04_crop_s3",
+  "shot": "s01_c04",
+  "arm": "crop",
+  "seed": 3,
+  "after_prop": false,
+  "used_reference_ids": [
+   "ref_92ad3512a47f",
+   "ref_e4e31677e7ab"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_I3RkeuCrvM8G5Dnmth0IM5r9L06UqFBu/output.png"
+ },
+ {
+  "name": "s02_c02_crop_s5",
+  "shot": "s02_c02",
+  "arm": "crop",
+  "seed": 5,
+  "after_prop": false,
+  "used_reference_ids": [
+   "ref_92ad3512a47f",
+   "ref_074ed60714d0"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_1hHb7KG09yB6E97bpl2Jrrm9mE4il4cT/output.png"
+ },
+ {
+  "name": "s01_c04_crop_s5",
+  "shot": "s01_c04",
+  "arm": "crop",
+  "seed": 5,
+  "after_prop": false,
+  "used_reference_ids": [
+   "ref_92ad3512a47f",
+   "ref_e4e31677e7ab"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_DVu7p5dJnzrEf4hCD4tpmAvDJudZFXvu/output.png"
+ },
+ {
+  "name": "s02_c02_crop_s11",
+  "shot": "s02_c02",
+  "arm": "crop",
+  "seed": 11,
+  "after_prop": false,
+  "used_reference_ids": [
+   "ref_92ad3512a47f",
+   "ref_074ed60714d0"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_lUnWtCvYTVflK8WZpzd5wzrPfdaiG4Th/output.png"
+ },
+ {
+  "name": "s01_c04_crop_prop_s42",
+  "shot": "s01_c04",
+  "arm": "crop",
+  "seed": 42,
+  "after_prop": true,
+  "used_reference_ids": [
+   "ref_92ad3512a47f",
+   "ref_e4e31677e7ab"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_fXhB6rfAJtEmxXNsvGnduowNkPfStHbW/output.png"
+ },
+ {
+  "name": "s01_c04_crop_prop_s7",
+  "shot": "s01_c04",
+  "arm": "crop",
+  "seed": 7,
+  "after_prop": true,
+  "used_reference_ids": [
+   "ref_92ad3512a47f",
+   "ref_e4e31677e7ab"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_YrU9cqEnO3Rz5Tx6fI26Dnbd2roygkK6/output.png"
+ },
+ {
+  "name": "s01_c04_crop_s11",
+  "shot": "s01_c04",
+  "arm": "crop",
+  "seed": 11,
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_BQVzIXGFHsj2u8hiacNntJPzCZ5JngXq/output.png"
+ }
+]
