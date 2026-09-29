@@ -1,102 +1,90 @@
 {
- "round": "exp4",
- "round_title": "EXP4 · 定版配方批量试产（2026-09-29）",
- "round_date": "2026-09-29",
- "intro": "<b>定版配方</b>：crop 根帧（头肩裁剪 Look）→ i2v 硬首帧 → 新尾帧 → 【新尾帧+Look 双参考】接力下一镜；s01_c04 已补铜灯道具绑定。本轮把配方铺满 s01 偏差链（c04→c05→c06，两种子）+ s02 链补量（定版候选根 s1/s5 各一条链）。判据沿用：水彩 / 白斑左颊 / 兜帽向下 / 小巧可爱 / 灯样式一致 / 动作密度（跑步镜头少加多余动作）。",
+ "round": "exp5",
+ "round_title": "EXP5 · 完美视频验证轮（2026-09-30）",
+ "round_date": "2026-09-30",
+ "intro": "<b>本轮直答你的问题</b>：「究竟能否做出人物、道具、场景都完全没问题的视频？」——同一配方（链 4 根帧尾帧+Look 双参考）只换种子，s02_c03 出 4 个候选（含上轮已达标的 seed42）；以及凭空甲板修复验证：s01_c06 动作不变、时长 5s→4s（动作-时长-场景匹配判据的修复测试）。判据：人物（眼型/五官/比例）+ 道具（灯样式与状态）+ 场景（空间不凭空延伸）三零瑕疵。",
  "image_groups": [],
  "video_groups": [
   {
-   "id": "chainA",
-   "title": "A · 链 A：s01 偏差链全量试产（c04→c05→c06 每步双参考接力）",
-   "note": "每条链 3 条视频：c04（crop_prop_s7 根 i2v）→ c05（接力）→ c06（接力）。两种子并排。",
+   "id": "candidates",
+   "title": "A · s02_c03 四候选（同配方，只换种子）",
+   "note": "seed42=上轮你判「达标」的那条，作对照基线。逐个看：人物（眼睛/嘴角/比例）、灯（样式/亮灭状态）、场景（码头/门/灯塔）三零瑕疵的有几条？",
    "videos": [
     {
-     "name": "链 A 种子 42",
+     "name": "候选 seed 42",
      "video_srcs": [
       {
-       "label": "s01_c04（prop 根 i2v）",
-       "src": "exp4/chainA_s42_s01_c04.mp4"
-      },
-      {
-       "label": "s01_c05（双参考接力）",
-       "src": "exp4/chainA_s42_s01_c05.mp4"
-      },
-      {
-       "label": "s01_c06（双参考接力）",
-       "src": "exp4/chainA_s42_s01_c06.mp4"
+       "label": "s02_c03",
+       "src": "exp5/s02c03_seed42.mp4"
       }
      ],
      "thumbs": [
-      "exp4/chainA_s42_s01_c05_fb.jpg",
-      "exp4/chainA_s42_s01_c05_fe.jpg",
-      "exp4/chainA_s42_s01_c06_fb.jpg",
-      "exp4/chainA_s42_s01_c06_fe.jpg"
+      "exp5/s02c03_seed42_fb.jpg",
+      "exp5/s02c03_seed42_fm.jpg",
+      "exp5/s02c03_seed42_fe.jpg"
      ]
     },
     {
-     "name": "链 A 种子 7",
+     "name": "候选 seed 7",
      "video_srcs": [
       {
-       "label": "s01_c04（prop 根 i2v）",
-       "src": "exp4/chainA_s7_s01_c04.mp4"
-      },
-      {
-       "label": "s01_c05（双参考接力）",
-       "src": "exp4/chainA_s7_s01_c05.mp4"
-      },
-      {
-       "label": "s01_c06（双参考接力）",
-       "src": "exp4/chainA_s7_s01_c06.mp4"
+       "label": "s02_c03",
+       "src": "exp5/s02c03_seed7.mp4"
       }
      ],
      "thumbs": [
-      "exp4/chainA_s7_s01_c05_fb.jpg",
-      "exp4/chainA_s7_s01_c05_fe.jpg",
-      "exp4/chainA_s7_s01_c06_fb.jpg",
-      "exp4/chainA_s7_s01_c06_fe.jpg"
+      "exp5/s02c03_seed7_fb.jpg",
+      "exp5/s02c03_seed7_fm.jpg",
+      "exp5/s02c03_seed7_fe.jpg"
+     ]
+    },
+    {
+     "name": "候选 seed 11",
+     "video_srcs": [
+      {
+       "label": "s02_c03",
+       "src": "exp5/s02c03_seed11.mp4"
+      }
+     ],
+     "thumbs": [
+      "exp5/s02c03_seed11_fb.jpg",
+      "exp5/s02c03_seed11_fm.jpg",
+      "exp5/s02c03_seed11_fe.jpg"
+     ]
+    },
+    {
+     "name": "候选 seed 23",
+     "video_srcs": [
+      {
+       "label": "s02_c03",
+       "src": "exp5/s02c03_seed23.mp4"
+      }
+     ],
+     "thumbs": [
+      "exp5/s02c03_seed23_fb.jpg",
+      "exp5/s02c03_seed23_fm.jpg",
+      "exp5/s02c03_seed23_fe.jpg"
      ]
     }
    ]
   },
   {
-   "id": "chainB",
-   "title": "B · 链 B：s02 链补量（定版候选根 s1 / s5 → s02_c03）",
-   "note": "与链 4（s42 根，上一轮）并排——三选一终选 s02_c02 根帧。",
+   "id": "c06fix",
+   "title": "B · s01_c06 凭空甲板修复验证（时长 5s→4s）",
+   "note": "动作不变、时长缩短——看凭空出现的甲板是否消失、人物移速是否自然（上轮种子 42 的 5s 版凭空甲板、种子 7 的移速降低，这是第三种解法）。",
    "videos": [
     {
-     "name": "链 B · 根帧=s02_c02_crop_s1",
-     "desc": "对照链 4（s42 根）",
+     "name": "s01_c06 · 4s 版（种子 42）",
      "video_srcs": [
       {
-       "label": "s02_c02（根 i2v）",
-       "src": "exp4/chainB_s1_s02_c02.mp4"
-      },
-      {
-       "label": "s02_c03（双参考接力）",
-       "src": "exp4/chainB_s1_s02_c03.mp4"
+       "label": "s01_c06（4s）",
+       "src": "exp5/s01c06_4s_seed42.mp4"
       }
      ],
      "thumbs": [
-      "exp4/chainB_s1_s02_c03_fb.jpg",
-      "exp4/chainB_s1_s02_c03_fe.jpg"
-     ]
-    },
-    {
-     "name": "链 B · 根帧=s02_c02_crop_s5",
-     "desc": "对照链 4（s42 根）",
-     "video_srcs": [
-      {
-       "label": "s02_c02（根 i2v）",
-       "src": "exp4/chainB_s5_s02_c02.mp4"
-      },
-      {
-       "label": "s02_c03（双参考接力）",
-       "src": "exp4/chainB_s5_s02_c03.mp4"
-      }
-     ],
-     "thumbs": [
-      "exp4/chainB_s5_s02_c03_fb.jpg",
-      "exp4/chainB_s5_s02_c03_fe.jpg"
+      "exp5/s01c06_4s_seed42_fb.jpg",
+      "exp5/s01c06_4s_seed42_fm.jpg",
+      "exp5/s01c06_4s_seed42_fe.jpg"
      ]
     }
    ]
@@ -105,43 +93,31 @@
  "questions": [
   {
    "id": "q1",
-   "title": "问题 1：s01 链试产（A 区两条链）的端到端评价？",
-   "why": "定版配方铺满 s01 偏差链——重点：c04→c05→c06 三镜之间人物/画风/灯是否稳定，动作是否自然（动作密度判据）。",
+   "title": "问题 1：四个 s02_c03 候选里，有没有「人物+道具+场景」三零瑕疵的？",
+   "why": "直答「完美视频是否可能」：若有，完美视频的产出方式=足量候选挑零瑕疵（配方即定版）；若都没有，写明各自缺陷（我们将针对性再攻）。",
    "options": [
-    "种子 42 好",
-    "种子 7 好",
-    "两条都可用",
-    "还不够（写原因）"
+    "有（写明是哪条）",
+    "接近但都有小瑕疵（逐条写）",
+    "都没有"
    ],
-   "placeholder": "逐镜评语：c04=…；c05=…；c06=…"
+   "placeholder": "逐条评语：seed42=…；seed7=…；seed11=…；seed23=…"
   },
   {
    "id": "q2",
-   "title": "问题 2：s02_c02 根帧终选（s1 / s5 / s42 三选一或组合）？",
-   "why": "链 4（s42）、链 B（s1/s5）并排。终选后该镜正式修复走此根帧。",
+   "title": "问题 2：s01_c06 的 4s 版凭空甲板消失了吗？移速自然吗？",
+   "why": "验证「动作-时长-场景匹配」判据的修复手法（缩时长）是否成立——成立的话写进 Skill：场景空间小的镜头配短时长。",
    "options": [
-    "s1",
-    "s5",
-    "s42（链 4）",
-    "另选/组合（写明）"
+    "甲板消失+移速自然（修复成立）",
+    "甲板消失但移速不自然",
+    "仍有甲板问题",
+    "其他（写明）"
    ],
    "placeholder": "补充（可空）"
   },
   {
    "id": "q3",
-   "title": "问题 3：s02_c03 接力样本的画风/身份回正是否达标？",
-   "why": "所有新链的 s02_c03 都是双参考接力——评估偏差风格是否回正到位，能否正式替换现役偏差版。",
-   "options": [
-    "达标，可正式替换",
-    "接近但还差一点（写差异）",
-    "不达标"
-   ],
-   "placeholder": "补充（可空）"
-  },
-  {
-   "id": "q4",
-   "title": "问题 4：其他意见 / 下一轮想测什么",
-   "why": "自由填写。",
+   "title": "问题 3：其他意见 / 下一轮方向",
+   "why": "自由填写。若本轮验证通过，下一阶段=正式修复轮（系统 Agent 按定版配方重做《雨灯归航》偏差镜+灯室内部场景图）与 Skill 沉淀。",
    "options": [],
    "placeholder": "自由填写（可空）"
   }

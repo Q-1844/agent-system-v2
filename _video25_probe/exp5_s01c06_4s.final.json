@@ -1,0 +1,18 @@
+{
+ "completed_at": 1790699511,
+ "created_at": 1790699219,
+ "error": null,
+ "expires_at": null,
+ "id": "task_w1mAunXFEMZo4gJGfpcOs5AxHijeHl1s",
+ "internal_progress": 0,
+ "internal_status": "pending",
+ "object": "video",
+ "progress": 100,
+ "quality": "standard",
+ "remixed_from_video_id": null,
+ "seconds": "4",
+ "size": "720P",
+ "started_at": 1790699221,
+ "status": "completed",
+ "url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_w1mAunXFEMZo4gJGfpcOs5AxHijeHl1s.mp4"
+}
