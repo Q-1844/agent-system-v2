@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Phase 42 探针预览 · 视频Skill底层封板验收</title>
+<style>
+  body { font-family: "Microsoft YaHei", sans-serif; background:#14161a; color:#e8e6e3; margin:0; padding:24px; }
+  h1 { font-size:22px; color:#ffd166; margin:0 0 4px; }
+  .sub { color:#9a9a9a; font-size:13px; margin-bottom:28px; }
+  h2 { font-size:18px; color:#8ecae6; border-left:4px solid #8ecae6; padding-left:10px; margin:36px 0 12px; }
+  h3 { font-size:15px; color:#e8e6e3; margin:18px 0 8px; }
+  .grid { display:flex; flex-wrap:wrap; gap:18px; }
+  .card { background:#1d2025; border-radius:10px; padding:12px; width:460px; max-width:100%; }
+  .card video, .card img { width:100%; border-radius:6px; background:#000; }
+  .card .cap { font-size:13px; margin:8px 0 4px; color:#ffd166; }
+  .card .desc { font-size:12px; color:#b9b6b1; line-height:1.6; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:12px; margin-right:6px; }
+  .good { background:#2a3f2a; color:#9fe29f; }
+  .bad { background:#4a2a2a; color:#ff9f9f; }
+  .mid { background:#4a402a; color:#ffe29f; }
+  .row3 { display:flex; flex-wrap:wrap; gap:14px; }
+  .row3 .card { width:400px; }
+  .note { font-size:13px; color:#b9b6b1; background:#1d2025; border-radius:8px; padding:12px 16px; line-height:1.8; margin:12px 0; }
+  table { border-collapse:collapse; font-size:13px; margin:10px 0; }
+  td, th { border:1px solid #3a3d42; padding:6px 12px; }
+  th { color:#8ecae6; }
+</style>
+</head>
+<body>
+<h1>Phase 42 探针预览（2026-09-29）</h1>
+<div class="sub">42.md 视频Skill底层封板验收 · 全部素材同目录相对路径 · 《雨灯归航》</div>
+
+<div class="note">
+<b>背景一句话</b>：画风漂移根因 = 特写镜自动丢角色设定图（Look）→ 模型纯文本重造角色 → 尾帧接力链逐镜传播偏差风格。<br>
+下面对照里：<span class="badge good">水彩/贴Look</span>=批准设定风格，<span class="badge bad">厚涂卡通/偏差</span>=偏差组风格。
+</div>
+
+<h2>① 根因对照（静态图）</h2>
+<div class="row3">
+  <div class="card"><div class="cap">批准的 Look（角色设定图，唯一身份权威）</div><img src="look_approved.png"></div>
+  <div class="card"><div class="cap"><span class="badge good">贴定义组</span>s02_c01 首帧（发过 Look，水彩延续）</div><img src="s02_c01_first.png"></div>
+  <div class="card"><div class="cap"><span class="badge bad">偏差组根</span>s02_c02 首帧（Look 被丢，纯文本重造：厚涂/兜帽向上/白斑错侧）</div><img src="s02_c02_first.png"></div>
+  <div class="card"><div class="cap">s02_c02 尾帧（偏差风格从这里沿接力链传播到 s02_c03→s03 全部）</div><img src="s02_c02_tail.png"></div>
+</div>
+
+<h2>② P1 · Look+尾帧双参考 relay 探针（核心对照）</h2>
+<div class="note">
+问题：偏差已经传到 s02_c03，还能拉回来吗？做法：s02_c03 视频生成时同时发【上一镜尾帧（衔接）+ 角色 Look（身份/画风再锚定）】两张参考图。<b>左边是现役版本（只发尾帧），右边是双参考探针</b>——注意右版中后段画风明显向水彩/Look 回正，空间叙事（修理间→开门→望塔）保持正确。
+</div>
+<div class="grid">
+  <div class="card"><div class="cap">现役 s02_c03（只发尾帧 → 偏差风格）</div>
+    <video controls src="current_s02c03.mp4"></video>
+    <div class="desc">首中尾帧：</div><img src="current_s02c03_beginning.jpg"><img src="current_s02c03_ending.jpg"></div>
+  <div class="card"><div class="cap">P1 探针版（尾帧+Look 双参考）</div>
+    <video controls src="p1.mp4"></video>
+    <div class="desc">首中尾帧：</div><img src="p1_frame_first.jpg"><img src="p1_frame_mid.jpg"><img src="p1_frame_last.jpg"></div>
+</div>
+
+<h2>③ P2 · keyframes 桥解锁探针（首尾双帧钉死）</h2>
+<div class="note">桥 = 两端都钉死（首帧=尾帧图 A，尾帧=尾帧图 B），中间由模型过渡。实测 2.5 接受双帧且<b>两端逐像素级对齐</b>——桥路径恢复可用（此前被 client 拒绝）。</div>
+<div class="grid">
+  <div class="card"><div class="cap">桥探针（首=修理间正脸，尾=开门望塔）</div>
+    <video controls src="kf.mp4"></video>
+    <div class="desc">首/中/尾：</div><img src="kf_frame_0.2.jpg"><img src="kf_frame_2.5.jpg"><img src="kf_frame_4.8.jpg"></div>
+</div>
+
+<h2>④ P3 · 特写镜三臂对照（静态图，偏差根的修复方向）</h2>
+<div class="note">s02_c02 是偏差根（特写镜丢 Look）。三臂同镜同 prompt，只变「发不发参考、发哪种参考」：<b>A 现状丢</b>（=上面①里的偏差根图）/ <b>B 头肩裁剪 Look</b> / <b>C 全幅 Look</b>。</div>
+<div class="row3">
+  <div class="card"><div class="cap"><span class="badge bad">A 丢（现状）</span>构图✓ 身份完全重造</div><img src="s02_c02_first.png"></div>
+  <div class="card"><div class="cap"><span class="badge mid">B 头肩裁剪</span>构图✓ 身份部分回正</div><img src="p3_b.png"></div>
+  <div class="card"><div class="cap"><span class="badge good">C 全幅</span>身份最准（白斑侧✓兜帽✓水彩✓）构图被拉宽</div><img src="p3_c.png"></div>
+</div>
+
+<h2>⑤ P4 · 真解除接力+独立重生探针</h2>
+<div class="note">完全不带上一镜尾帧、独立生成首帧（完整锚定）再生成视频：<b>画风/身份三探针最优</b>（水彩/白斑正确侧/兜帽向下），<b>但空间错</b>——跑到了室外平台（缺「灯室内部」场景图，模型自由度过大）。</div>
+<div class="grid">
+  <div class="card"><div class="cap">P4 探针版（独立重生）</div>
+    <video controls src="p4.mp4"></video>
+    <div class="desc">首/中/尾：</div><img src="p4_frame_first.jpg"><img src="p4_frame_mid.jpg"><img src="p4_frame_last.jpg"></div>
+  <div class="card"><div class="cap">参照：现役 s02_c01（贴定义组，水彩标杆）</div>
+    <video controls src="current_s02c01.mp4"></video></div>
+</div>
+
+<h2>⑥ 附：现役 s02_c02（偏差根成片）</h2>
+<div class="grid">
+  <div class="card"><div class="cap">现役 s02_c02</div><video controls src="current_s02c02.mp4"></video></div>
+</div>
+
+<div class="note" style="margin-top:32px">
+<b>端点三修法实证矩阵</b>（错误端点怎么修）：<br>
+① 文本强化+保留接力：空间✓ 画风✗（Phase 41 已用）｜
+② <b>双参考（接力+Look）：空间✓ 画风中气回正 ← 综合最优（P1）</b>｜
+③ 真解除+独立重生：画风✓ 空间✗（P4，需先补灯室内部场景图）｜
+④ 桥（双端钉住）：本轮解锁（P2）
+</div>
+
+</body>
+</html>
