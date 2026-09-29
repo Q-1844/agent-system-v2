@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Phase 42 EXP2 · 特写锚定大样本对照（含反馈输入）</title>
+<style>
+  body { font-family: "Microsoft YaHei", sans-serif; background:#14161a; color:#e8e6e3; margin:0; padding:24px; }
+  h1 { font-size:22px; color:#ffd166; margin:0 0 4px; }
+  .sub { color:#9a9a9a; font-size:13px; margin-bottom:20px; }
+  h2 { font-size:18px; color:#8ecae6; border-left:4px solid #8ecae6; padding-left:10px; margin:36px 0 12px; }
+  h3 { font-size:15px; color:#ffd166; margin:22px 0 10px; }
+  .note { font-size:13px; color:#b9b6b1; background:#1d2025; border-radius:8px; padding:12px 16px; line-height:1.8; margin:12px 0; }
+  .arm { margin:10px 0 6px; font-size:14px; color:#e8e6e3; }
+  .arm .tag { display:inline-block; padding:2px 10px; border-radius:4px; font-size:12px; margin-right:8px; background:#2b3038; color:#8ecae6; }
+  .imgs { display:flex; flex-wrap:wrap; gap:12px; }
+  .pick { background:#1d2025; border:2px solid transparent; border-radius:10px; padding:8px; width:340px; max-width:100%; cursor:pointer; }
+  .pick img { width:100%; border-radius:6px; background:#000; display:block; }
+  .pick.sel { border-color:#ffd166; background:#2a2620; }
+  .pick .lbl { font-size:12px; color:#9a9a9a; margin-top:6px; text-align:center; }
+  .grid2 { display:flex; flex-wrap:wrap; gap:16px; }
+  .card { background:#1d2025; border-radius:10px; padding:12px; width:430px; max-width:100%; }
+  .card video, .card img { width:100%; border-radius:6px; background:#000; }
+  .card .cap { font-size:13px; margin:6px 0 4px; color:#ffd166; }
+  .card .desc { font-size:12px; color:#b9b6b1; line-height:1.6; }
+  .card .thumbrow { display:flex; gap:6px; margin-top:6px; }
+  .card .thumbrow img { width:32%; }
+  .qbox { background:#20242b; border:1px solid #3a4150; border-radius:10px; padding:16px 18px; margin:14px 0 6px; }
+  .qbox .qtitle { font-size:15px; color:#ffd166; font-weight:bold; margin-bottom:6px; }
+  .qbox .qwhy { font-size:12px; color:#9a9a9a; margin-bottom:10px; line-height:1.7; }
+  .qbox label.opt { display:block; font-size:14px; margin:7px 0; cursor:pointer; color:#e8e6e3; }
+  .qbox label.opt input { margin-right:8px; transform:scale(1.15); }
+  .qbox textarea { width:100%; box-sizing:border-box; background:#16181d; color:#e8e6e3;
+    border:1px solid #3a4150; border-radius:6px; padding:8px 10px; font-size:13px; font-family:inherit; margin-top:8px; min-height:52px; resize:vertical; }
+  .saved { font-size:11px; color:#7fd47f; margin-top:6px; }
+  #floating { position:fixed; right:18px; bottom:18px; background:#2b3038; border:1px solid #50585f;
+    border-radius:10px; padding:12px 16px; box-shadow:0 4px 18px rgba(0,0,0,.5); z-index:9; }
+  #floating button { background:#ffd166; color:#20242b; border:none; border-radius:6px; padding:9px 16px;
+    font-size:14px; font-weight:bold; cursor:pointer; font-family:inherit; }
+  #floating .hint { font-size:11px; color:#9a9a9a; margin-top:6px; max-width:230px; line-height:1.5; }
+</style>
+</head>
+<body>
+<h1>Phase 42 EXP2 · 特写锚定大样本对照（2026-09-29）</h1>
+<div class="sub">响应你的反馈：数据加量（两镜 × 多臂 × 双种子 22 张图）+ 从根重建视频链（首帧人物即正确）· 每题下方直接填写，自动保存</div>
+
+<div class="note">
+<b>本轮新发现（执行侧初筛，供参考）</b>：keep_fullscene 臂（角色 Look + <b>场景图同发</b>）在两镜上均把画风拉回水彩、白斑回正确侧、兜帽回向下——<b>场景实例视图本身是风格锚</b>（此前特写镜把它和 Look 一起丢了）。代价：构图偏宽。「构图被拉宽」的机制：参考同时含全身立绘+场景图 → 模型锚到「全身+环境」尺度。
+</div>
+
+<h2 id="s1">A · s02_c02 图像矩阵（偏差根 1：修理间拧灯，medium close-up）</h2>
+<div id="m_s02_c02"></div>
+<div class="qbox" id="qa1">
+  <div class="qtitle">问题 A1：s02_c02 的根帧修复方向选哪张？</div>
+  <div class="qwhy">点击图片即选中（黄框）。判据：画风=水彩、白斑在左颊（Look 同侧）、兜帽向下、人物小巧可爱、构图符合「拧灯特写」叙事。都不满意也请选最后一项并写原因。</div>
+  <label class="opt"><input type="radio" name="qa1" value="按点选图片">按我点选的图片</label>
+  <label class="opt"><input type="radio" name="qa1" value="都不满意">都不满意（写原因）</label>
+  <textarea id="qa1_note" placeholder="补充：比如某一臂再多种子、或想要的新组合"></textarea>
+  <div class="saved" data-savedfor="qa1"></div>
+</div>
+
+<h2 id="s2">B · s01_c04 图像矩阵（偏差根 2：换一镜，河面灯影特写）</h2>
+<div id="m_s01_c04"></div>
+<div class="qbox" id="qa2">
+  <div class="qtitle">问题 A2：s01_c04 的根帧修复方向选哪张？（同样点选）</div>
+  <div class="qwhy">本镜叙事=铜灯与双手占画面中心、背景河面虚化。注意 keep_fullscene 臂画风最正但构图偏全景——看你对「叙事景别 vs 画风身份」的取舍。</div>
+  <label class="opt"><input type="radio" name="qa2" value="按点选图片">按我点选的图片</label>
+  <label class="opt"><input type="radio" name="qa2" value="都不满意">都不满意（写原因）</label>
+  <textarea id="qa2_note" placeholder="补充（可空）"></textarea>
+  <div class="saved" data-savedfor="qa2"></div>
+</div>
+
+<h2 id="s3">C · 从根重建的视频链（首帧人物即正确 → 新尾帧 → 双参考接力下一镜）</h2>
+<div class="note">上轮你说「首帧的人物都不对」——本轮从根修起：先换掉 s02_c02 的根帧（用 A 区图片），重生成 s02_c02 视频，提新尾帧，再以【新尾帧+Look 双参考】重生成 s02_c03。三条链=三种根帧选择的端到端效果。对照=现役偏差链（最右）。</div>
+<div class="grid2" id="chains"></div>
+<div class="qbox" id="qa3">
+  <div class="qtitle">问题 A3：链对照看完后，端到端效果是否达到可接受？选哪条链？</div>
+  <div class="qwhy">判据同上+两镜之间的衔接（人物/场景/光向连续）。这条答案决定 relay 链的默认配方（根帧臂+是否双参考）。</div>
+  <label class="opt"><input type="radio" name="qa3" value="chain_fullscene_s7">链 1（根帧=fullscene 种子7）</label>
+  <label class="opt"><input type="radio" name="qa3" value="chain_fullscene_s42">链 2（根帧=fullscene 种子42）</label>
+  <label class="opt"><input type="radio" name="qa3" value="chain_keep_comp_s42">链 3（根帧=构图条款臂）</label>
+  <label class="opt"><input type="radio" name="qa3" value="还不够">还不够——仍需更多数据（写明缺什么）</label>
+  <textarea id="qa3_note" placeholder="补充（可空）"></textarea>
+  <div class="saved" data-savedfor="qa3"></div>
+</div>
+
+<div class="qbox" id="qa4">
+  <div class="qtitle">问题 A4：其他意见</div>
+  <textarea id="qa4_note" style="min-height:80px" placeholder="自由填写（可空）"></textarea>
+  <div class="saved" data-savedfor="qa4"></div>
+</div>
+
+<div id="floating">
+  <button onclick="genFeedback()">生成反馈（复制）</button>
+  <div class="hint">填完点此：反馈文本自动复制+弹出预览，粘贴回对话即可。内容自动保存在浏览器。</div>
+</div>
+
+<script>
+// ===== 数据 =====
+const ARMS = [
+  {key:"drop",          label:"drop（现状：只发道具图，无 Look 无场景）"},
+  {key:"crop",          label:"crop（头肩裁剪 Look）"},
+  {key:"keep",          label:"keep（全幅 Look）"},
+  {key:"keep_comp",     label:"keep+构图条款（小巧可爱）"},
+  {key:"crop_comp",     label:"crop+构图条款"},
+  {key:"keep_fullscene",label:"keep+场景图同发（keep_fullscene）★画风最正"},
+];
+const SHOTS = ["s02_c02","s01_c04"];
+const SEEDS = [42,7];
+const DROP_EXIST = {"s02_c02":"../s02_c02_first.png","s01_c04":"exp2/s01_c04_drop_current.png"};
+// s01_c04 的 drop 现状图：偏差根帧（12:02 批次）
+const chains = [
+  {tag:"chain_fullscene_s7",  label:"链 1 · 根帧=fullscene 种子7"},
+  {tag:"chain_fullscene_s42", label:"链 2 · 根帧=fullscene 种子42"},
+  {tag:"chain_keep_comp_s42", label:"链 3 · 根帧=构图条款臂"},
+];
+
+// ===== 渲染 =====
+function renderMatrix(shot, mountId){
+  const mount = document.getElementById(mountId);
+  ARMS.forEach(a=>{
+    const div = document.createElement("div");
+    div.className = "arm";
+    div.innerHTML = `<span class="tag">${a.key}</span>${a.label}`;
+    mount.appendChild(div);
+    const row = document.createElement("div");
+    row.className = "imgs";
+    SEEDS.forEach(seed=>{
+      const src = a.key==="drop" ? DROP_EXIST[shot] : `exp2/${shot}_${a.key}_s${seed}.png`;
+      const name = a.key==="drop" ? `${shot}_drop（现状 12:02 批次）` : `${shot}_${a.key}_s${seed}`;
+      row.appendChild(pickCard(src, name, shot));
+    });
+    mount.appendChild(row);
+  });
+}
+let picks = {};
+function pickCard(src, name, shot){
+  const d = document.createElement("div");
+  d.className = "pick";
+  d.innerHTML = `<img loading="lazy" src="${src}"><div class="lbl">${name}<br>点击选中</div>`;
+  d.onclick = ()=>{
+    document.querySelectorAll(`#m_${shot} .pick`).forEach(x=>x.classList.remove("sel"));
+    d.classList.add("sel");
+    picks[shot]=name;
+    const q = shot==="s02_c02"?"qa1":"qa2";
+    const r = document.querySelector(`#`+q+` input[value="按点选图片"]`);
+    if(r){ r.checked=true; }
+    save(q);
+  };
+  return d;
+}
+function renderChains(){
+  const m = document.getElementById("chains");
+  chains.forEach(c=>{
+    const d = document.createElement("div");
+    d.className = "card";
+    d.innerHTML = `<div class="cap">${c.label}</div>
+      <div class="desc">s02_c02（修好的根）：</div>
+      <video controls src="exp2/${c.tag}_s02c02.mp4"></video>
+      <div class="desc">s02_c03（新尾帧+Look 双参考）：</div>
+      <video controls src="exp2/${c.tag}_s02c03.mp4"></video>
+      <div class="thumbrow"><img src="exp2/${c.tag}_s02c03_fb.jpg"><img src="exp2/${c.tag}_s02c03_fm.jpg"><img src="exp2/${c.tag}_s02c03_fe.jpg"></div>`;
+    m.appendChild(d);
+  });
+  const cur = document.createElement("div");
+  cur.className = "card";
+  cur.innerHTML = `<div class="cap">对照：现役偏差链</div>
+    <div class="desc">s02_c02（现状）：</div><video controls src="../current_s02c02.mp4"></video>
+    <div class="desc">s02_c03（现状）：</div><video controls src="../current_s02c03.mp4"></video>`;
+  m.appendChild(cur);
+}
+// ===== 反馈 =====
+const KEYS = ["qa1","qa2","qa3","qa4"];
+function collect(k){
+  const sel=document.querySelector('#'+k+' input[type=radio]:checked');
+  const n=document.getElementById(k+"_note");
+  const pick = picks[k==="qa1"?"s02_c02": k==="qa2"?"s01_c04":""] || "";
+  return {choice: sel?sel.value:"", note:(n?n.value.trim():""), pick};
+}
+function save(k){ localStorage.setItem("p42exp2_"+k, JSON.stringify(collect(k))); refreshMarks(); }
+function loadSaved(){
+  KEYS.forEach(k=>{
+    const s=JSON.parse(localStorage.getItem("p42exp2_"+k)||"null");
+    if(!s) return;
+    document.querySelectorAll('#'+k+' input[type=radio]').forEach(r=>{ if(r.value===s.choice) r.checked=true; });
+    const n=document.getElementById(k+"_note"); if(n) n.value=s.note||"";
+    if(s.pick && (k==="qa1"||k==="qa2")){
+      const shot = k==="qa1"?"s02_c02":"s01_c04";
+      picks[shot]=s.pick;
+      document.querySelectorAll(`#m_${shot} .pick .lbl`).forEach(l=>{
+        if(l.innerHTML.startsWith(s.pick)) l.parentElement.classList.add("sel");
+      });
+    }
+  });
+  refreshMarks();
+}
+function refreshMarks(){ KEYS.forEach(k=>{
+  const m=document.querySelector('#'+k+' .saved');
+  const s=JSON.parse(localStorage.getItem("p42exp2_"+k)||"null");
+  if(m) m.textContent = (s&&(s.choice||s.note||s.pick)) ? "✓ 已保存" : "";
+});}
+document.addEventListener("change", e=>{ KEYS.forEach(k=>{ if(e.target.closest('#'+k)) save(k); }); });
+document.addEventListener("input", e=>{ KEYS.forEach(k=>{ if(e.target.id===k+"_note") save(k); }); });
+function genFeedback(){
+  let txt = "【Phase 42 EXP2 反馈】\n";
+  const titles = {qa1:"A1 s02_c02 根帧选择", qa2:"A2 s01_c04 根帧选择", qa3:"A3 链端到端裁决", qa4:"A4 其他意见"};
+  KEYS.forEach(k=>{
+    const s=JSON.parse(localStorage.getItem("p42exp2_"+k)||"{}");
+    txt += "\n问题 "+titles[k]+"\n";
+    if(s.pick) txt += "点选图片: " + s.pick + "\n";
+    txt += "选择: " + (s.choice||"(未选)") + "\n";
+    if(s.note) txt += "补充: " + s.note + "\n";
+  });
+  txt += "\n（自动生成于 "+new Date().toLocaleString()+"）";
+  const w = window.open("", "_blank");
+  w.document.write("<pre style='font-size:14px;white-space:pre-wrap'>"+txt+"</pre>");
+  navigator.clipboard && navigator.clipboard.writeText(txt).catch(()=>{});
+  try{ document.execCommand; }catch(e){}
+  window.__fbtxt = txt;
+}
+renderMatrix("s02_c02","m_s02_c02");
+renderMatrix("s01_c04","m_s01_c04");
+renderChains();
+loadSaved();
+</script>
+</body>
+</html>

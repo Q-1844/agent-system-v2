@@ -1,0 +1,326 @@
+[
+ {
+  "name": "s02_c02_crop_s42",
+  "shot": "s02_c02",
+  "arm": "crop",
+  "seed": 42,
+  "scene": "context_only",
+  "human": "crop",
+  "clause": false,
+  "human_resolved": "crop",
+  "n_refs": 2,
+  "used_reference_ids": [
+   "ref_92ad3512a47f",
+   "ref_074ed60714d0"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_x8sZmjvVHjUZ7klCVdjuALEi5z23EYaG/output.png"
+ },
+ {
+  "name": "s02_c02_crop_s7",
+  "shot": "s02_c02",
+  "arm": "crop",
+  "seed": 7,
+  "scene": "context_only",
+  "human": "crop",
+  "clause": false,
+  "human_resolved": "crop",
+  "n_refs": 2,
+  "used_reference_ids": [
+   "ref_92ad3512a47f",
+   "ref_074ed60714d0"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_poS6EDxyyDwyzNS3xOB7EzhGRFhpYNxM/output.png"
+ },
+ {
+  "name": "s02_c02_keep_s42",
+  "shot": "s02_c02",
+  "arm": "keep",
+  "seed": 42,
+  "scene": "context_only",
+  "human": "keep",
+  "clause": false,
+  "human_resolved": "keep",
+  "n_refs": 2,
+  "used_reference_ids": [
+   "ref_92ad3512a47f",
+   "ref_074ed60714d0"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_ZE8oYrSkesU6oRLH9aMHYanLb4OE8a3j/output.png"
+ },
+ {
+  "name": "s02_c02_keep_s7",
+  "shot": "s02_c02",
+  "arm": "keep",
+  "seed": 7,
+  "scene": "context_only",
+  "human": "keep",
+  "clause": false,
+  "human_resolved": "keep",
+  "n_refs": 2,
+  "used_reference_ids": [
+   "ref_92ad3512a47f",
+   "ref_074ed60714d0"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_LoLnO9asEiWOQa37yVVXCScjLYI7A4td/output.png"
+ },
+ {
+  "name": "s02_c02_keep_comp_s42",
+  "shot": "s02_c02",
+  "arm": "keep_comp",
+  "seed": 42,
+  "scene": "context_only",
+  "human": "keep",
+  "clause": true,
+  "human_resolved": "keep",
+  "n_refs": 2,
+  "used_reference_ids": [
+   "ref_92ad3512a47f",
+   "ref_074ed60714d0"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_EgkcZluYnBst1qpcUyN5VGhvwzVZSO74/output.png"
+ },
+ {
+  "name": "s02_c02_keep_comp_s7",
+  "shot": "s02_c02",
+  "arm": "keep_comp",
+  "seed": 7,
+  "scene": "context_only",
+  "human": "keep",
+  "clause": true,
+  "human_resolved": "keep",
+  "n_refs": 2,
+  "used_reference_ids": [
+   "ref_92ad3512a47f",
+   "ref_074ed60714d0"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_u4E1lcszHWsT2BKaWhL9TgMs5SvFxdqy/output.png"
+ },
+ {
+  "name": "s02_c02_crop_comp_s42",
+  "shot": "s02_c02",
+  "arm": "crop_comp",
+  "seed": 42,
+  "scene": "context_only",
+  "human": "crop",
+  "clause": true,
+  "human_resolved": "crop",
+  "n_refs": 2,
+  "used_reference_ids": [
+   "ref_92ad3512a47f",
+   "ref_074ed60714d0"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_tDzCNe8RFEsegdl4DEVH0EIe76pfBDLc/output.png"
+ },
+ {
+  "name": "s02_c02_crop_comp_s7",
+  "shot": "s02_c02",
+  "arm": "crop_comp",
+  "seed": 7,
+  "scene": "context_only",
+  "human": "crop",
+  "clause": true,
+  "human_resolved": "crop",
+  "n_refs": 2,
+  "used_reference_ids": [
+   "ref_92ad3512a47f",
+   "ref_074ed60714d0"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_pIJwZb0PgzeMi5qH25VSpT0bSL1z3Zys/output.png"
+ },
+ {
+  "name": "s02_c02_keep_fullscene_s42",
+  "shot": "s02_c02",
+  "arm": "keep_fullscene",
+  "seed": 42,
+  "scene": "full",
+  "human": "keep",
+  "clause": false,
+  "human_resolved": "keep",
+  "n_refs": 3,
+  "used_reference_ids": [
+   "ref_f0a099a2e973",
+   "ref_92ad3512a47f",
+   "ref_074ed60714d0"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_RjG5P1oFNizFKXr4dSG86ecq2bQ6wnt3/output.png"
+ },
+ {
+  "name": "s02_c02_keep_fullscene_s7",
+  "shot": "s02_c02",
+  "arm": "keep_fullscene",
+  "seed": 7,
+  "scene": "full",
+  "human": "keep",
+  "clause": false,
+  "human_resolved": "keep",
+  "n_refs": 3,
+  "used_reference_ids": [
+   "ref_f0a099a2e973",
+   "ref_92ad3512a47f",
+   "ref_074ed60714d0"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_iDZvdXeUWjlXzktKgdeDMz6BVcM2pdlI/output.png"
+ },
+ {
+  "name": "s01_c04_crop_s42",
+  "shot": "s01_c04",
+  "arm": "crop",
+  "seed": 42,
+  "scene": "context_only",
+  "human": "crop",
+  "clause": false,
+  "human_resolved": "crop",
+  "n_refs": 3,
+  "used_reference_ids": [
+   "ref_92ad3512a47f",
+   "ref_e4e31677e7ab"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_JWxbUB769Xeey52zykZDBGbQLkSSjxrL/output.png"
+ },
+ {
+  "name": "s01_c04_crop_s7",
+  "shot": "s01_c04",
+  "arm": "crop",
+  "seed": 7,
+  "scene": "context_only",
+  "human": "crop",
+  "clause": false,
+  "human_resolved": "crop",
+  "n_refs": 3,
+  "used_reference_ids": [
+   "ref_92ad3512a47f",
+   "ref_e4e31677e7ab"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_5NZKH4lGwHxllO9opL7CQwELJ2Ht8Gfs/output.png"
+ },
+ {
+  "name": "s01_c04_keep_s42",
+  "shot": "s01_c04",
+  "arm": "keep",
+  "seed": 42,
+  "scene": "context_only",
+  "human": "keep",
+  "clause": false,
+  "human_resolved": "keep",
+  "n_refs": 3,
+  "used_reference_ids": [
+   "ref_92ad3512a47f",
+   "ref_e4e31677e7ab"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_Dap0ibJXHsZO1Gopzbvn1Nx9vBiyVHUi/output.png"
+ },
+ {
+  "name": "s01_c04_keep_s7",
+  "shot": "s01_c04",
+  "arm": "keep",
+  "seed": 7,
+  "scene": "context_only",
+  "human": "keep",
+  "clause": false,
+  "human_resolved": "keep",
+  "n_refs": 3,
+  "used_reference_ids": [
+   "ref_92ad3512a47f",
+   "ref_e4e31677e7ab"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_WiN5SrWhNYvyxLPDuXT1MWPQl2LKg3Al/output.png"
+ },
+ {
+  "name": "s01_c04_keep_comp_s42",
+  "shot": "s01_c04",
+  "arm": "keep_comp",
+  "seed": 42,
+  "scene": "context_only",
+  "human": "keep",
+  "clause": true,
+  "human_resolved": "keep",
+  "n_refs": 3,
+  "used_reference_ids": [
+   "ref_92ad3512a47f",
+   "ref_e4e31677e7ab"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_EK8iGx1nPB6xLwsJCEWjmntR9VSIr1jA/output.png"
+ },
+ {
+  "name": "s01_c04_keep_comp_s7",
+  "shot": "s01_c04",
+  "arm": "keep_comp",
+  "seed": 7,
+  "scene": "context_only",
+  "human": "keep",
+  "clause": true,
+  "human_resolved": "keep",
+  "n_refs": 3,
+  "used_reference_ids": [
+   "ref_92ad3512a47f",
+   "ref_e4e31677e7ab"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_3F7W2KmPakbowJgvY4AgjD17Xx2wWTXr/output.png"
+ },
+ {
+  "name": "s01_c04_crop_comp_s42",
+  "shot": "s01_c04",
+  "arm": "crop_comp",
+  "seed": 42,
+  "scene": "context_only",
+  "human": "crop",
+  "clause": true,
+  "human_resolved": "crop",
+  "n_refs": 3,
+  "used_reference_ids": [
+   "ref_92ad3512a47f",
+   "ref_e4e31677e7ab"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_om0sFCtb8Gu1cf80vYmRJOCIIlWwkJAC/output.png"
+ },
+ {
+  "name": "s01_c04_crop_comp_s7",
+  "shot": "s01_c04",
+  "arm": "crop_comp",
+  "seed": 7,
+  "scene": "context_only",
+  "human": "crop",
+  "clause": true,
+  "human_resolved": "crop",
+  "n_refs": 3,
+  "used_reference_ids": [
+   "ref_92ad3512a47f",
+   "ref_e4e31677e7ab"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_8wB0ml7pDJtNwTZ1n0QW8Gat2YpGjT4k/output.png"
+ },
+ {
+  "name": "s01_c04_keep_fullscene_s42",
+  "shot": "s01_c04",
+  "arm": "keep_fullscene",
+  "seed": 42,
+  "scene": "full",
+  "human": "keep",
+  "clause": false,
+  "human_resolved": "keep",
+  "n_refs": 4,
+  "used_reference_ids": [
+   "ref_d5881214348a",
+   "ref_92ad3512a47f",
+   "ref_e4e31677e7ab"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_DTJbGJFEHJuiiIfEQwT2FaHRS0TWNgNg/output.png"
+ },
+ {
+  "name": "s01_c04_keep_fullscene_s7",
+  "shot": "s01_c04",
+  "arm": "keep_fullscene",
+  "seed": 7,
+  "scene": "full",
+  "human": "keep",
+  "clause": false,
+  "human_resolved": "keep",
+  "n_refs": 4,
+  "used_reference_ids": [
+   "ref_d5881214348a",
+   "ref_92ad3512a47f",
+   "ref_e4e31677e7ab"
+  ],
+  "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_JRsg19OLUT2hNToySghbBueQT3b1UbSP/output.png"
+ }
+]

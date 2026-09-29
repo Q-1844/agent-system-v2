@@ -1,0 +1,9 @@
+{
+ "tag": "chain_fullscene_s42",
+ "root_image": "s02_c02_keep_fullscene_s42",
+ "root_url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_RjG5P1oFNizFKXr4dSG86ecq2bQ6wnt3/output.png",
+ "s02c02_video": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_FwixGV4eEr6e7MOvUlmJzCQWy1wVEuhV.mp4",
+ "tail_url": "https://Q-1844.github.io/agnes-frame-host/objects/30fb55deaab11bdc.jpg",
+ "s02c03_video": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_gAG3SKYBoldBQ1cLBWpYW0mwqssUBj1p.mp4",
+ "note": "探针链：canonical 未动；根帧修复+双参考接力"
+}
