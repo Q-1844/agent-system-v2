@@ -14,15 +14,16 @@
      "name": "候选 seed 42",
      "video_srcs": [
       {
-       "label": "s02_c03",
-       "src": "exp5/s02c03_seed42.mp4"
+       "label": "s02_c03（即上轮链 4 成片，同配方同种子）",
+       "src": "exp3/chain4_crop_s42_s02c03.mp4"
       }
      ],
      "thumbs": [
-      "exp5/s02c03_seed42_fb.jpg",
-      "exp5/s02c03_seed42_fm.jpg",
-      "exp5/s02c03_seed42_fe.jpg"
-     ]
+      "exp3/chain4_crop_s42_s02c03_fb.jpg",
+      "exp3/chain4_crop_s42_s02c03_fm.jpg",
+      "exp3/chain4_crop_s42_s02c03_fe.jpg"
+     ],
+     "desc": "文件在上轮链 4 目录（同配方同种子，直接引用）"
     },
     {
      "name": "候选 seed 7",
@@ -34,7 +35,7 @@
      ],
      "thumbs": [
       "exp5/s02c03_seed7_fb.jpg",
-      "exp5/s02c03_seed7_fm.jpg",
+      "exp5/s02c03_seed7_fm2.jpg",
       "exp5/s02c03_seed7_fe.jpg"
      ]
     },
@@ -48,7 +49,7 @@
      ],
      "thumbs": [
       "exp5/s02c03_seed11_fb.jpg",
-      "exp5/s02c03_seed11_fm.jpg",
+      "exp5/s02c03_seed11_fm2.jpg",
       "exp5/s02c03_seed11_fe.jpg"
      ]
     },
@@ -62,7 +63,7 @@
      ],
      "thumbs": [
       "exp5/s02c03_seed23_fb.jpg",
-      "exp5/s02c03_seed23_fm.jpg",
+      "exp5/s02c03_seed23_fm2.jpg",
       "exp5/s02c03_seed23_fe.jpg"
      ]
     }
@@ -83,7 +84,7 @@
      ],
      "thumbs": [
       "exp5/s01c06_4s_seed42_fb.jpg",
-      "exp5/s01c06_4s_seed42_fm.jpg",
+      "exp5/s01c06_4s_seed42_fm2.jpg",
       "exp5/s01c06_4s_seed42_fe.jpg"
      ]
     }
