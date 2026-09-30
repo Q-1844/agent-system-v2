@@ -81,6 +81,7 @@ def vid_item(v, label):
 
 
 groups = []
+sel_qs = []
 for sid in REPAIR_SHOTS:
     sh = find_shot(sid)
     if not sh:
@@ -104,12 +105,26 @@ for sid in REPAIR_SHOTS:
             items.append(it)
     if not items:
         continue
+    n_r1 = len([v for v in vvs if CUTOFF1 < (v.get("created_at") or 0) <= CUTOFF2])
+    n_r2 = len([v for v in vvs if (v.get("created_at") or 0) > CUTOFF2])
+    opts = ["保持对照（回滚）"]
+    if n_r1:
+        opts.append("一轮候选" + ("（多选一备注）" if n_r1 > 1 else ""))
+    if n_r2:
+        opts.append("二轮候选" + ("（多选一备注）" if n_r2 > 1 else ""))
+    opts.append("都不用（重做）")
     groups.append({
         "id": sid,
         "title": f"{sid}（{sh.get('shot_size','')}，{sh.get('target_duration_s')}s）",
         "note": "先看对照，再按序看候选。判定：人物（白斑侧别/兜帽/黑豆眼/小巧）、画风（水彩）、"
                 "道具（铜灯样式状态）、场景（空间/无凭空延伸）、动作与时长匹配、整体观感。",
         "videos": items,
+    })
+    sel_qs.append({
+        "id": f"sel_{sid}", "group": sid,
+        "title": f"{sid} 正式选片",
+        "why": "选择后我执行 set-final+下游校验；选「多选一」时在备注写版本序号（如「二轮候选 2」）",
+        "options": opts,
     })
 
 # ---- 侧别图组（s02_c02 根帧二轮修复对照）----
@@ -146,21 +161,25 @@ manifest = {
     ],
     "video_groups": groups,
     "questions": [
-        {"id": "q_overall", "title": "总判：哪些镜的哪个候选可以正式替换？（逐组 ✅/⭐/❌ + 备注，⭐=首选）",
-         "why": "正式选片依据；可跨轮混选（如 s02_c02 选二轮、其余选一轮）"},
-        {"id": "q_c06", "title": "s01_c06：凭空甲板是否消失？收束动作自然吗？",
+        {"id": "q_c06", "group": "s01_c06",
+         "title": "s01_c06：凭空甲板是否消失？收束动作自然吗？",
          "why": "动作延伸+场景边界约束首轮正式验证"},
-        {"id": "q_gran", "title": "c06 对照：1s 分拍（一轮）vs 0.5s 分拍（二轮）哪个更稳/更自然？",
+        {"id": "q_gran", "group": "s01_c06",
+         "title": "c06 对照：1s 分拍（一轮）vs 0.5s 分拍（二轮）哪个更稳/更自然？",
          "why": "你提出的「描述与秒数对应关系」对照实测"},
-        {"id": "q_rain", "title": "新根帧的雨丝（s01_c04/c06、s02 窗外有雨）可接受吗？",
-         "why": "模型自发加雨——需要你定验收口径"},
-        {"id": "q_lamp", "title": "铜灯亮态口径：候选多为亮灯（好评基线 EXP4 同样亮灯）；要不要强制 s01=未点亮？",
-         "why": "剧情状态 vs 好评基线"},
-        {"id": "q_s03", "title": "s03 链回正效果与空间达标吗？c03 灯室结构（新 SIV）准确吗？",
-         "why": "灯室内部 SIV 首次实战"},
-        {"id": "q_patch", "title": "s02_c02 二轮根帧：侧别✓，但白斑位置略高（耳侧）——可接受吗？",
+        {"id": "q_patch", "group": "s02_c02",
+         "title": "s02_c02 二轮根帧：侧别✓，但白斑位置略高（耳侧）——可接受吗？",
          "why": "侧别是硬判据，位置微差属方差；用户终审"},
-    ],
+        {"id": "q_s03", "group": "s03_c03",
+         "title": "s03 链（c01/c02/c03）：回正效果与空间达标吗？c03 灯室结构（新 SIV）准确吗？",
+         "why": "灯室内部 SIV 首次实战"},
+        {"id": "q_rain",
+         "title": "新根帧的雨丝（s01_c04/c06、s02 窗外有雨）可接受吗？",
+         "why": "模型自发加雨——需要你定验收口径"},
+        {"id": "q_lamp",
+         "title": "铜灯亮态口径：候选多为亮灯（好评基线 EXP4 同样亮灯）；要不要强制 s01=未点亮？",
+         "why": "剧情状态 vs 好评基线"},
+    ] + sel_qs,
 }
 
 (OUT / "manifest.json").write_text(

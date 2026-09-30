@@ -76,6 +76,18 @@ async function init(){
 
   const C = document.getElementById("content");
   if(M.intro) C.innerHTML = "<div class='note'>"+M.intro+"</div>";
+  const renderQ = (q, mount) => {
+    const d = document.createElement("div"); d.className = "qbox"; d.id = "q_"+q.id;
+    const saved = FB["q_"+q.id] || {};
+    d.innerHTML = `<div class="qtitle">${q.title}</div><div class="qwhy">${q.why||""}</div>`
+      + (q.options||[]).map(o=>`<label class="opt"><input type="radio" name="${q.id}" value="${o}" ${saved.choice===o?"checked":""}>${o}</label>`).join("")
+      + `<textarea placeholder="${q.placeholder||"补充（可空）"}">${saved.note||""}</textarea><div class="saved"></div>`;
+    mount.appendChild(d);
+    d.querySelectorAll("input[type=radio]").forEach(r=>r.addEventListener("change", ()=>{ saveQ(q.id); }));
+    d.querySelector("textarea").addEventListener("input", ()=>{ saveQ(q.id); });
+  };
+  const qsWithGroup = id => (M.questions||[]).filter(q => q.group === id);
+
   (M.image_groups||[]).forEach(g=>{
     C.insertAdjacentHTML("beforeend", `<h2>${g.title}</h2>`);
     if(g.note) C.insertAdjacentHTML("beforeend", `<div class='note'>${g.note}</div>`);
@@ -102,6 +114,7 @@ async function init(){
       row.appendChild(d);
     });
     C.appendChild(row);
+    qsWithGroup(g.id).forEach(q => renderQ(q, C));   // 问题框跟在分组下面
   });
   (M.video_groups||[]).forEach(g=>{
     C.insertAdjacentHTML("beforeend", `<h2>${g.title}</h2>`);
@@ -115,19 +128,11 @@ async function init(){
       row.appendChild(d);
     });
     C.appendChild(row);
+    qsWithGroup(g.id).forEach(q => renderQ(q, C));   // 问题框跟在分组下面
   });
 
   const Q = document.getElementById("qmount");
-  (M.questions||[]).forEach(q=>{
-    const d = document.createElement("div"); d.className = "qbox"; d.id = "q_"+q.id;
-    const saved = FB["q_"+q.id] || {};
-    d.innerHTML = `<div class="qtitle">${q.title}</div><div class="qwhy">${q.why||""}</div>`
-      + (q.options||[]).map(o=>`<label class="opt"><input type="radio" name="${q.id}" value="${o}" ${saved.choice===o?"checked":""}>${o}</label>`).join("")
-      + `<textarea placeholder="${q.placeholder||"补充（可空）"}">${saved.note||""}</textarea><div class="saved"></div>`;
-    Q.appendChild(d);
-    d.querySelectorAll("input[type=radio]").forEach(r=>r.addEventListener("change", ()=>{ saveQ(q.id); }));
-    d.querySelector("textarea").addEventListener("input", ()=>{ saveQ(q.id); });
-  });
+  (M.questions||[]).filter(q => !q.group).forEach(q => renderQ(q, Q));
   refreshMarks();
 }
 function collectQ(id){
