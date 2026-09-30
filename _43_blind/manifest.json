@@ -1,0 +1,74 @@
+{
+ "round": "fixture43",
+ "round_title": "Phase 43 盲测夹具 · 《晨露快递》资产批准（2026-09-30）",
+ "round_date": "2026-09-30",
+ "intro": "<b>盲测夹具资产批准</b>：这些是给盲测 Agent 的项目状态（批准后才冻结进入盲测）。Look 审查连续 4 轮 needs_fix（背包形态问题）——候选 4 的邮差包形态最贴描述；你也可以选「去掉背包重新生成」。点卡片循环 未评→✅批准→❌不可用，备注逐条落盘。",
+ "image_groups": [
+  {
+   "id": "look",
+   "title": "角色 榛果 hero Look（4 候选，vision 审查未过=背包被画成蓬松背包）",
+   "images": [
+    {
+     "name": "榛果 Look 候选 1",
+     "src": "review_media/look_候选 1.png",
+     "note": "vision 审查意见：背包形态需人工裁定"
+    },
+    {
+     "name": "榛果 Look 候选 2",
+     "src": "review_media/look_候选 2.png",
+     "note": "vision 审查意见：背包形态需人工裁定"
+    },
+    {
+     "name": "榛果 Look 候选 3",
+     "src": "review_media/look_候选 3.png",
+     "note": "vision 审查意见：背包形态需人工裁定"
+    },
+    {
+     "name": "榛果 Look 候选 4",
+     "src": "review_media/look_候选 4.png",
+     "note": "vision 审查意见：背包形态需人工裁定"
+    }
+   ]
+  },
+  {
+   "id": "scenes",
+   "title": "场景 hero 视图（2 个 location，正式 vision 审查已过）",
+   "images": [
+    {
+     "name": "晨雾草原 hero 视图",
+     "src": "review_media/scene_0.png",
+     "note": "正式 vision 审查已过，复核美术方向"
+    },
+    {
+     "name": "老橡树 hero 视图（含树洞小木门）",
+     "src": "review_media/scene_1.png",
+     "note": "正式 vision 审查已过，复核美术方向"
+    }
+   ]
+  },
+  {
+   "id": "prop",
+   "title": "道具参考",
+   "images": [
+    {
+     "name": "露珠信（道具参考）",
+     "src": "review_media/prop_dew.png",
+     "note": "已登记批准（prop_c52862d43233）"
+    }
+   ]
+  }
+ ],
+ "video_groups": [],
+ "questions": [
+  {
+   "id": "q_look",
+   "title": "选哪张作为榛果的 hero Look？（⭐ 标注）或选「去掉背包重新生成」",
+   "why": "Look 是盲测的身份锚资产，必须用户批准后冻结"
+  },
+  {
+   "id": "q_scene",
+   "title": "两张场景视图可接受吗？（正式审查已过，复核美术方向）",
+   "why": "盲测的场景基线"
+  }
+ ]
+}

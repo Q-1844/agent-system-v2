@@ -5,7 +5,7 @@
 - 13 镜已全量 2.5-flash 重测。画风偏差根因已定论：s01_c04/s02_c02（中近景）当年生成时 Look 被 auto 规则丢弃→模型按文本重造角色→i2v 冻结进尾帧→裸尾帧 relay 沿链传播（s01_c05/c06、s02_c03、s03_c01/c02/c03 均受染）。
 - 系统默认已修正（2026-09-30）：紧景别 auto→crop（头肩派生 Look 进请求）。你生成根帧时核对 receipt 确认。
 - 双参考接力已接线：shot.update 把 video_reference_asset_id 设为 "prev_tail_look"（尾帧=Picture 1 + hero Look=Picture 2）。
-- Scene Agent 已在本轮先行建立「灯室内部」LocationView + SceneInstanceView（用户授权的正式新增）——你生成 s03 前先 production.inspect 确认其就位并按需 pinned 到 s03_c03 的 binding。
+- Scene Agent 已在本轮先行建立「灯室内部」场景素材（已核验 approved）：LocationView **view_95e565c848aa**（label "lamp room interior"）+ SceneInstanceView **sciv_3f130c7b6259**（instance scin_f3effc02c359）。注意：scene_system 里另有一个 unreviewed 的孤儿视图 view_a6dd535fc5c（首次尝试遗留，无 SIV 引用）——不要使用它。你生成 s03 前仍应 production.inspect 确认，并按需把 sciv_3f130c7b6259 pinned 到 s03_c03 的 binding。
 
 ## 用户好评候选索引（Phase 42 五轮评审定案，重放对照用）
 

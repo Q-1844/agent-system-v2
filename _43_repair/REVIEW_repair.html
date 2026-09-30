@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Phase 42 评审页（定版模板 · 数据驱动）</title>
+<style>
+  body { font-family: "Microsoft YaHei", sans-serif; background:#14161a; color:#e8e6e3; margin:0; padding:24px; }
+  h1 { font-size:22px; color:#ffd166; margin:0 0 4px; }
+  .sub { color:#9a9a9a; font-size:13px; margin-bottom:20px; }
+  h2 { font-size:18px; color:#8ecae6; border-left:4px solid #8ecae6; padding-left:10px; margin:36px 0 12px; }
+  .note { font-size:13px; color:#b9b6b1; background:#1d2025; border-radius:8px; padding:12px 16px; line-height:1.8; margin:12px 0; }
+  .imgs { display:flex; flex-wrap:wrap; gap:14px; }
+  .pick { background:#1d2025; border:2px solid transparent; border-radius:10px; padding:8px; width:360px; max-width:100%; }
+  .pick img { width:100%; border-radius:6px; background:#000; display:block; cursor:pointer; }
+  .pick.sel { border-color:#ffd166; background:#2a2620; }
+  .pick .lbl { font-size:12px; color:#9a9a9a; margin:6px 0 2px; text-align:center; }
+  .pick .inote { font-size:12px; color:#8ecae6; margin:0 0 4px; text-align:center; }
+  .pick .selmark { font-size:11px; color:#ffd166; text-align:center; min-height:14px; }
+  .pick textarea { width:100%; box-sizing:border-box; background:#16181d; color:#e8e6e3;
+    border:1px solid #3a4150; border-radius:6px; padding:6px 8px; font-size:12px; font-family:inherit;
+    min-height:40px; resize:vertical; }
+  .grid2 { display:flex; flex-wrap:wrap; gap:16px; }
+  .card { background:#1d2025; border-radius:10px; padding:12px; width:430px; max-width:100%; }
+  .card video, .card img { width:100%; border-radius:6px; background:#000; }
+  .card .cap { font-size:13px; margin:6px 0 4px; color:#ffd166; }
+  .card .desc { font-size:12px; color:#b9b6b1; line-height:1.6; }
+  .card .thumbrow { display:flex; gap:6px; margin-top:6px; }
+  .card .thumbrow img { width:32%; }
+  .qbox { background:#20242b; border:1px solid #3a4150; border-radius:10px; padding:16px 18px; margin:14px 0 6px; }
+  .qbox .qtitle { font-size:15px; color:#ffd166; font-weight:bold; margin-bottom:6px; }
+  .qbox .qwhy { font-size:12px; color:#9a9a9a; margin-bottom:10px; line-height:1.7; }
+  .qbox label.opt { display:block; font-size:14px; margin:7px 0; cursor:pointer; color:#e8e6e3; }
+  .qbox label.opt input { margin-right:8px; transform:scale(1.15); }
+  .qbox textarea { width:100%; box-sizing:border-box; background:#16181d; color:#e8e6e3;
+    border:1px solid #3a4150; border-radius:6px; padding:8px 10px; font-size:13px; font-family:inherit; margin-top:8px; min-height:52px; resize:vertical; }
+  .saved { font-size:11px; color:#7fd47f; margin-top:6px; }
+  #floating { position:fixed; right:18px; bottom:18px; background:#2b3038; border:1px solid #50585f;
+    border-radius:10px; padding:12px 16px; box-shadow:0 4px 18px rgba(0,0,0,.5); z-index:9; }
+  #floating button { background:#ffd166; color:#20242b; border:none; border-radius:6px; padding:9px 16px;
+    font-size:14px; font-weight:bold; cursor:pointer; font-family:inherit; }
+  #floating .hint { font-size:11px; color:#9a9a9a; margin-top:6px; max-width:230px; line-height:1.5; }
+  .warn { background:#4a2a2a; color:#ffb0b0; padding:16px; border-radius:8px; font-size:14px; }
+</style>
+</head>
+<body>
+<h1 id="title">评审页加载中…</h1>
+<div class="sub" id="subtitle"></div>
+<div id="content"></div>
+<div id="qmount"></div>
+<div id="floating">
+  <button onclick="genFeedback()">生成反馈（落盘+下载）</button>
+  <div class="hint">本页由 _42_review_server 托管：所有点选/评语/答案约 1 秒内自动写入服务器端 FEEDBACK.json，无需复制。此按钮额外下载一份文本。</div>
+</div>
+<script>
+const ON_SERVER = location.protocol === "http:" || location.protocol === "https:";
+if(!ON_SERVER){
+  document.getElementById("content").innerHTML =
+    "<div class='warn'>本页需通过评审服务器打开：http://127.0.0.1:8780/REVIEW.html<br>（file:// 下浏览器禁止读取数据文件）</div>";
+  throw new Error("need server");
+}
+const POST = (obj) => fetch("/api/feedback", {method:"POST",
+  headers:{"Content-Type":"application/json"}, body: JSON.stringify(obj)}).catch(()=>{});
+
+let M = null, FB = null;   // manifest / 本轮反馈对象（客户端持有全量，POST 全量合并）
+const slug = s => s.replace(/[^a-zA-Z0-9_]/g, "_");
+
+async function init(){
+  M = await (await fetch("manifest.json?r=" + Date.now())).json();
+  document.getElementById("title").textContent = M.round_title || M.round;
+  document.getElementById("subtitle").innerHTML = (M.round_date||"") + " · 数据驱动定版页 · 全部自动落盘";
+  // 拉取既有反馈（本轮对象）
+  try {
+    const all = await (await fetch("/api/feedback")).json();
+    FB = all[M.round] || {};
+  } catch(e){ FB = {}; }
+
+  const C = document.getElementById("content");
+  if(M.intro) C.innerHTML = "<div class='note'>"+M.intro+"</div>";
+  (M.image_groups||[]).forEach(g=>{
+    C.insertAdjacentHTML("beforeend", `<h2>${g.title}</h2>`);
+    if(g.note) C.insertAdjacentHTML("beforeend", `<div class='note'>${g.note}</div>`);
+    const row = document.createElement("div"); row.className = "imgs";
+    (g.images||[]).forEach(im=>{
+      const name = im.name;
+      const d = document.createElement("div"); d.className = "pick";
+      d.innerHTML = `<img loading="lazy" src="${im.src}"><div class="lbl">${name}</div>`
+        + (im.note ? `<div class="inote">💭 ${im.note}</div>` : "")
+        + `<div class="selmark"></div><textarea placeholder="这张图的评语（可空）"></textarea>`;
+      const selmark = d.querySelector(".selmark"), ta = d.querySelector("textarea");
+      if((FB["sel"]||[]).includes(name)){ d.classList.add("sel"); selmark.textContent="✓ 已选中"; }
+      ta.value = FB["img_"+slug(name)] || "";
+      d.querySelector("img").onclick = ()=>{
+        d.classList.toggle("sel");
+        const on = d.classList.contains("sel");
+        selmark.textContent = on ? "✓ 已选中" : "";
+        const cur = new Set(FB["sel"]||[]);
+        on ? cur.add(name) : cur.delete(name);
+        FB["sel"] = [...cur];
+        push();
+      };
+      ta.addEventListener("input", ()=>{ FB["img_"+slug(name)] = ta.value; push(); });
+      row.appendChild(d);
+    });
+    C.appendChild(row);
+  });
+  (M.video_groups||[]).forEach(g=>{
+    C.insertAdjacentHTML("beforeend", `<h2>${g.title}</h2>`);
+    if(g.note) C.insertAdjacentHTML("beforeend", `<div class='note'>${g.note}</div>`);
+    const row = document.createElement("div"); row.className = "grid2";
+    (g.videos||[]).forEach(v=>{
+      const d = document.createElement("div"); d.className = "card";
+      d.innerHTML = `<div class="cap">${v.name}</div>` + (v.desc?`<div class="desc">${v.desc}</div>`:"")
+        + (v.video_srcs||[]).map(s=>`<div class="desc">${s.label}</div><video controls src="${s.src}"></video>`).join("")
+        + ((v.thumbs||[]).length?`<div class="thumbrow">${v.thumbs.map(t=>`<img src="${t}">`).join("")}</div>`:"");
+      row.appendChild(d);
+    });
+    C.appendChild(row);
+  });
+
+  const Q = document.getElementById("qmount");
+  (M.questions||[]).forEach(q=>{
+    const d = document.createElement("div"); d.className = "qbox"; d.id = "q_"+q.id;
+    const saved = FB["q_"+q.id] || {};
+    d.innerHTML = `<div class="qtitle">${q.title}</div><div class="qwhy">${q.why||""}</div>`
+      + (q.options||[]).map(o=>`<label class="opt"><input type="radio" name="${q.id}" value="${o}" ${saved.choice===o?"checked":""}>${o}</label>`).join("")
+      + `<textarea placeholder="${q.placeholder||"补充（可空）"}">${saved.note||""}</textarea><div class="saved"></div>`;
+    Q.appendChild(d);
+    d.querySelectorAll("input[type=radio]").forEach(r=>r.addEventListener("change", ()=>{ saveQ(q.id); }));
+    d.querySelector("textarea").addEventListener("input", ()=>{ saveQ(q.id); });
+  });
+  refreshMarks();
+}
+function collectQ(id){
+  const box = document.getElementById("q_"+id);
+  const r = box.querySelector("input[type=radio]:checked");
+  return {choice: r?r.value:"", note: box.querySelector("textarea").value.trim()};
+}
+function saveQ(id){
+  FB["q_"+id] = collectQ(id);
+  const box = document.getElementById("q_"+id);
+  const s = FB["q_"+id];
+  box.querySelector(".saved").textContent = (s.choice||s.note) ? "✓ 已保存" : "";
+  push();
+}
+function refreshMarks(){
+  (M.questions||[]).forEach(q=>{
+    const s = FB["q_"+q.id];
+    const box = document.getElementById("q_"+q.id);
+    if(box && s) box.querySelector(".saved").textContent = (s.choice||s.note) ? "✓ 已保存" : "";
+  });
+}
+let _t = null;
+function push(){ clearTimeout(_t); _t = setTimeout(()=>POST({fb: {[M.round]: FB}}), 700); }
+function genFeedback(){
+  let txt = `【${M.round_title} 反馈】\n`;
+  (M.image_groups||[]).forEach(g=>{
+    txt += "\n==== " + g.title + " ====\n";
+    txt += "选中(" + (FB["sel"]||[]).length + ")\n";
+    (g.images||[]).forEach(im=>{
+      const c = FB["img_"+slug(im.name)];
+      if(c && c.trim()) txt += "  [" + im.name + "] " + c.trim() + "\n";
+    });
+  });
+  (M.questions||[]).forEach(q=>{
+    const s = FB["q_"+q.id] || {};
+    txt += "\n==== " + q.title + " ====\n选择: " + (s.choice||"(未选)") + "\n";
+    if(s.note) txt += "补充: " + s.note + "\n";
+  });
+  txt += "\n（自动生成于 " + new Date().toLocaleString() + "）";
+  POST({fb: {[M.round]: FB}, _text: txt});
+  const blob = new Blob([txt], {type:"text/plain;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "P42_" + M.round + "_feedback.txt";
+  a.click();
+  alert("已落盘到服务器 FEEDBACK.json，并下载了一份文本备份。");
+}
+init();
+</script>
+</body>
+</html>
