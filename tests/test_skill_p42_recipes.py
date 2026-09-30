@@ -38,7 +38,7 @@ def test_p42_criteria_section_in_skill_md():
     assert "道具入画绑定检查" in s and "状态注记" in s
     # 判据 3：根帧先修再接力 + 同链配方一致
     assert "根帧先修，再接力" in s
-    assert "逐镜传播" in s
+    assert "沿链传播" in s
     assert "两个" in s and "形象" in s
     # 判据 4：修法按空间/身份选择（不是万能修法）
     assert "修法按问题类型选择" in s
@@ -59,6 +59,25 @@ def test_path_e_dual_reference_wired():
     assert "结构化拒绝" in s and "fail closed" in s
     assert "根帧有错先修根帧" in s
     assert "未接通" not in s.split("e. Look＋尾帧双参考接力")[1].split("**f.")[0] if "e. Look＋尾帧双参考接力" in s else True
+
+
+def test_p43_findings_anchored():
+    """43.md 修复轮实证沉淀（v1.3.0）：尾帧层偏差传播 / 凭空元素+约束-动作平衡 /
+    状态注记边界 / 人评通道知识。"""
+    s = _t(f"{_RELAY}/SKILL.md")
+    assert "尾帧偏差同样沿链传播且换种子无效" in s
+    assert "约束要留动作空间" in s
+    assert "0.5s 细分拍无可感知" in s
+    r = _t(f"{_RELAY}/references/production-recipes.md")
+    assert "端点=根帧与尾帧两层" in r
+    assert "prev_tail_look_scene" in r
+    assert "状态注记边界" in r
+    c = _t(f"{_RELAY}/references/capability-facts.md")
+    assert "视觉状态注记边界" in c
+    from textwrap import dedent
+    cd = (Path(__file__).resolve().parents[1] / "src" / "agents"
+          / "character_designer.py").read_text(encoding="utf-8")
+    assert "review/human" in cd and "最高审查层级" in cd
 
 
 def test_duration_capacity_coupled():
@@ -121,5 +140,5 @@ def test_registry_loads_v120():
     assert not errs, f"注册错误: {errs}"
     relay = reg.skills().get(_RELAY)
     bridge = reg.skills().get(_BRIDGE)
-    assert relay is not None and relay.version == "1.2.0"
-    assert bridge is not None and bridge.version == "1.2.0"
+    assert relay is not None and relay.version == "1.3.0"
+    assert bridge is not None and bridge.version == "1.3.0"

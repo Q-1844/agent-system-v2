@@ -551,7 +551,9 @@ LOOK_PREPARE_TOOL = {
                         "真实原因，由你决定调整后重试或报告 blocker——工具不会偷偷重试。"
                         "生成很慢（约 1 分钟），调用后等真实返回。新建需 appearance_description；"
                         "更新传 look_id + 要改的字段（expected_resources_revision 传该 look 的 "
-                        "revision；纯再生成可不传字段）。"),
+                        "revision；纯再生成可不传字段）。审查连续 needs_fix 且候选实际可用时："
+                        "请用户人评（POST /looks/{id}/review/human——用户人评=最高审查层级，"
+                        "pass 证据可解锁 resource.look.approve 的批准门槛），不要闷头重试。"),
         "parameters": {
             "type": "object",
             "properties": {
