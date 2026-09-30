@@ -1,6 +1,6 @@
 {
- "round": "repair43_v2",
- "round_title": "Phase 43 修复轮 · 两轮候选总评审（2026-09-30）",
+ "round": "repair43_v3",
+ "round_title": "Phase 43 修复轮 · 三轮候选总评审（2026-09-30）",
  "round_date": "2026-09-30",
  "intro": "<b>修复轮候选评审 v2</b>：一轮（上午）后按你的指示「继续慢慢生成」补了二轮——①s02_c02 补种子修白斑侧别（新根帧 vision pass，视频+下游 c03 已重做）②s01_c06 补 0.5s 分拍对照（与 1s 分拍版并存）。每个分组：对照（修复前）→ 一轮候选 → 二轮候选。你的 ✅/⭐/❌ = 正式选片依据。",
  "image_groups": [
@@ -53,6 +53,20 @@
       "review_media/一轮候选_dc90a5_f.jpg",
       "review_media/一轮候选_dc90a5_m.jpg",
       "review_media/一轮候选_dc90a5_e.jpg"
+     ]
+    },
+    {
+     "name": "三轮候选（d90ff290）",
+     "video_srcs": [
+      {
+       "label": "三轮候选",
+       "src": "review_media/三轮候选_0ff290.mp4"
+      }
+     ],
+     "thumbs": [
+      "review_media/三轮候选_0ff290_f.jpg",
+      "review_media/三轮候选_0ff290_m.jpg",
+      "review_media/三轮候选_0ff290_e.jpg"
      ]
     }
    ]
@@ -187,6 +201,34 @@
       "review_media/二轮候选_4b7001_m.jpg",
       "review_media/二轮候选_4b7001_e.jpg"
      ]
+    },
+    {
+     "name": "三轮候选（1a18d954）",
+     "video_srcs": [
+      {
+       "label": "三轮候选",
+       "src": "review_media/三轮候选_18d954.mp4"
+      }
+     ],
+     "thumbs": [
+      "review_media/三轮候选_18d954_f.jpg",
+      "review_media/三轮候选_18d954_m.jpg",
+      "review_media/三轮候选_18d954_e.jpg"
+     ]
+    },
+    {
+     "name": "三轮候选（0e7fe39f）",
+     "video_srcs": [
+      {
+       "label": "三轮候选",
+       "src": "review_media/三轮候选_7fe39f.mp4"
+      }
+     ],
+     "thumbs": [
+      "review_media/三轮候选_7fe39f_f.jpg",
+      "review_media/三轮候选_7fe39f_m.jpg",
+      "review_media/三轮候选_7fe39f_e.jpg"
+     ]
     }
    ]
   },
@@ -235,6 +277,20 @@
       "review_media/二轮候选_41caf8_f.jpg",
       "review_media/二轮候选_41caf8_m.jpg",
       "review_media/二轮候选_41caf8_e.jpg"
+     ]
+    },
+    {
+     "name": "三轮候选（d310d34b）",
+     "video_srcs": [
+      {
+       "label": "三轮候选",
+       "src": "review_media/三轮候选_10d34b.mp4"
+      }
+     ],
+     "thumbs": [
+      "review_media/三轮候选_10d34b_f.jpg",
+      "review_media/三轮候选_10d34b_m.jpg",
+      "review_media/三轮候选_10d34b_e.jpg"
      ]
     }
    ]
@@ -341,6 +397,20 @@
       "review_media/一轮候选_0329c4_m.jpg",
       "review_media/一轮候选_0329c4_e.jpg"
      ]
+    },
+    {
+     "name": "三轮候选（aad500ba）",
+     "video_srcs": [
+      {
+       "label": "三轮候选",
+       "src": "review_media/三轮候选_d500ba.mp4"
+      }
+     ],
+     "thumbs": [
+      "review_media/三轮候选_d500ba_f.jpg",
+      "review_media/三轮候选_d500ba_m.jpg",
+      "review_media/三轮候选_d500ba_e.jpg"
+     ]
     }
    ]
   }
@@ -357,6 +427,18 @@
    "group": "s01_c06",
    "title": "c06 对照：1s 分拍（一轮）vs 0.5s 分拍（二轮）哪个更稳/更自然？",
    "why": "你提出的「描述与秒数对应关系」对照实测"
+  },
+  {
+   "id": "q_unlit",
+   "group": "s01_c04",
+   "title": "铜灯未点亮对照（三轮）：状态注记未生效（灯仍在发光）——怎么处理？",
+   "why": "你要求的状态测试；失败数据点：i2v 根帧上「未点亮」注记被模型忽略，可选加强 prompt 权重/换措辞/接受亮灯口径"
+  },
+  {
+   "id": "q_s03c03",
+   "group": "s03_c03",
+   "title": "s03_c03 重做（独立重生+灯室 SIV）：空间接近 SIV 但「巨大主灯座」画成了天花板小灯具——可接受吗？",
+   "why": "灯室结构 vs SIV 先验的一致性终审"
   },
   {
    "id": "q_patch",
@@ -388,6 +470,7 @@
    "options": [
     "保持对照（回滚）",
     "一轮候选",
+    "二轮候选",
     "都不用（重做）"
    ]
   },
@@ -422,7 +505,7 @@
    "options": [
     "保持对照（回滚）",
     "一轮候选",
-    "二轮候选",
+    "二轮候选（多选一备注）",
     "都不用（重做）"
    ]
   },
@@ -434,7 +517,7 @@
    "options": [
     "保持对照（回滚）",
     "一轮候选",
-    "二轮候选",
+    "二轮候选（多选一备注）",
     "都不用（重做）"
    ]
   },
@@ -468,6 +551,7 @@
    "options": [
     "保持对照（回滚）",
     "一轮候选",
+    "二轮候选",
     "都不用（重做）"
    ]
   }

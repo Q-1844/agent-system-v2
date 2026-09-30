@@ -23,6 +23,7 @@ P = json.load(open(PROJ / "output" / "project.json", encoding="utf-8"))
 
 CUTOFF1 = 1790731000.0     # 一轮开始（09-30 ~09:56）
 CUTOFF2 = 1790740000.0     # 二轮开始（09-30 ~12:26；实际 13:12）
+CUTOFF3 = 1790755000.0     # 三轮开始（09-30 ~16:30）
 
 REPAIR_SHOTS = ["s01_c04", "s01_c05", "s01_c06", "s02_c02", "s02_c03",
                 "s03_c01", "s03_c02", "s03_c03"]
@@ -89,7 +90,8 @@ for sid in REPAIR_SHOTS:
     vvs = [v for v in (sh.get("video_versions") or []) if v.get("status") == "done"]
     pre = [v for v in vvs if (v.get("created_at") or 0) <= CUTOFF1]
     r1 = [v for v in vvs if CUTOFF1 < (v.get("created_at") or 0) <= CUTOFF2]
-    r2 = [v for v in vvs if (v.get("created_at") or 0) > CUTOFF2]
+    r2 = [v for v in vvs if CUTOFF2 < (v.get("created_at") or 0) <= CUTOFF3]
+    r3 = [v for v in vvs if (v.get("created_at") or 0) > CUTOFF3]
     items = []
     if pre:
         it = vid_item(pre[-1], "对照：修复前现役版")
@@ -101,6 +103,10 @@ for sid in REPAIR_SHOTS:
             items.append(it)
     for v in r2:
         it = vid_item(v, "二轮候选")
+        if it:
+            items.append(it)
+    for v in r3:
+        it = vid_item(v, "三轮候选")
         if it:
             items.append(it)
     if not items:
@@ -149,8 +155,8 @@ if r2_root.exists():
                    "note": "当前选定根帧；白斑位置略高于 Look（耳侧），侧别正确"})
 
 manifest = {
-    "round": "repair43_v2",
-    "round_title": "Phase 43 修复轮 · 两轮候选总评审（2026-09-30）",
+    "round": "repair43_v3",
+    "round_title": "Phase 43 修复轮 · 三轮候选总评审（2026-09-30）",
     "round_date": "2026-09-30",
     "intro": "<b>修复轮候选评审 v2</b>：一轮（上午）后按你的指示「继续慢慢生成」补了二轮——"
              "①s02_c02 补种子修白斑侧别（新根帧 vision pass，视频+下游 c03 已重做）"
@@ -167,6 +173,12 @@ manifest = {
         {"id": "q_gran", "group": "s01_c06",
          "title": "c06 对照：1s 分拍（一轮）vs 0.5s 分拍（二轮）哪个更稳/更自然？",
          "why": "你提出的「描述与秒数对应关系」对照实测"},
+        {"id": "q_unlit", "group": "s01_c04",
+         "title": "铜灯未点亮对照（三轮）：状态注记未生效（灯仍在发光）——怎么处理？",
+         "why": "你要求的状态测试；失败数据点：i2v 根帧上「未点亮」注记被模型忽略，可选加强 prompt 权重/换措辞/接受亮灯口径"},
+        {"id": "q_s03c03", "group": "s03_c03",
+         "title": "s03_c03 重做（独立重生+灯室 SIV）：空间接近 SIV 但「巨大主灯座」画成了天花板小灯具——可接受吗？",
+         "why": "灯室结构 vs SIV 先验的一致性终审"},
         {"id": "q_patch", "group": "s02_c02",
          "title": "s02_c02 二轮根帧：侧别✓，但白斑位置略高（耳侧）——可接受吗？",
          "why": "侧别是硬判据，位置微差属方差；用户终审"},
