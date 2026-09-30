@@ -1,0 +1,32 @@
+{
+ "s01_c04": {
+  "version": "vv_80dc90a5",
+  "managed_copy": "projects\\雨灯归航\\output\\videos\\s01_c04__vv_80dc90a5.mp4",
+  "sha256": "c78778c5c353c35c5f12a8fbec804ce9cde1e2fec5594d16317b818ba41710cd",
+  "probe": {
+   "duration": 5.175,
+   "video_codec": "h264",
+   "size": 1280,
+   "height": 704,
+   "fps": "24/1",
+   "has_audio": true,
+   "audio_codec": "aac"
+  },
+  "source_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_eWkL3QnWkeGnM8hKDtXNftYn7ZdDIMvo.mp4"
+ },
+ "s02_c02": {
+  "version": "vv_4bdf6b08",
+  "managed_copy": "projects\\雨灯归航\\output\\videos\\s02_c02__vv_4bdf6b08.mp4",
+  "sha256": "5f836b5ee7dbfbbe3b40e60799dd3a0f6d61f68ef93b5205af59ddb098fe3040",
+  "probe": {
+   "duration": 5.175,
+   "video_codec": "h264",
+   "size": 1280,
+   "height": 704,
+   "fps": "24/1",
+   "has_audio": true,
+   "audio_codec": "aac"
+  },
+  "source_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_SypOdeCYVBGdKpYpikZNSKdXjq4ILAJB.mp4"
+ }
+}

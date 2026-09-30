@@ -16,7 +16,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 E43 = ROOT / (sys.argv[2] if len(sys.argv) > 2 else "_43_repair")
-FEEDBACK = E43 / ("FEEDBACK_fixture.json" if "blind" in str(E43) else "FEEDBACK_repair.json")
+FEEDBACK = E43 / ("FEEDBACK_fixture.json" if "blind" in str(E43)
+                  else "FEEDBACK_44a.json" if "_44a" in str(E43)
+                  else "FEEDBACK_repair.json")
 
 
 def _load():

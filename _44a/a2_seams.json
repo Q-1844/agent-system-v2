@@ -1,0 +1,98 @@
+[
+ {
+  "from": "s01_c01",
+  "to": "s01_c02",
+  "seam_mae": 61.4,
+  "end_to_end_mae": 16.5,
+  "left_src_ver": "vv_55accb16",
+  "right_src_ver": "vv_9cda3271"
+ },
+ {
+  "from": "s01_c02",
+  "to": "s01_c03",
+  "seam_mae": 17.0,
+  "end_to_end_mae": 59.8,
+  "left_src_ver": "vv_9cda3271",
+  "right_src_ver": "vv_703eb03f"
+ },
+ {
+  "from": "s01_c03",
+  "to": "s01_c04",
+  "seam_mae": 51.1,
+  "end_to_end_mae": 54.7,
+  "left_src_ver": "vv_703eb03f",
+  "right_src_ver": "vv_80dc90a5"
+ },
+ {
+  "from": "s01_c04",
+  "to": "s01_c05",
+  "seam_mae": 10.8,
+  "end_to_end_mae": 46.7,
+  "left_src_ver": "vv_80dc90a5",
+  "right_src_ver": "vv_70728b9b"
+ },
+ {
+  "from": "s01_c05",
+  "to": "s01_c06",
+  "seam_mae": 9.8,
+  "end_to_end_mae": 53.8,
+  "left_src_ver": "vv_70728b9b",
+  "right_src_ver": "vv_5ad9192d"
+ },
+ {
+  "from": "s01_c06",
+  "to": "s02_c01",
+  "seam_mae": 45.2,
+  "end_to_end_mae": 48.8,
+  "left_src_ver": "vv_5ad9192d",
+  "right_src_ver": "vv_ebbc77f8"
+ },
+ {
+  "from": "s02_c01",
+  "to": "s02_c02",
+  "seam_mae": 38.1,
+  "end_to_end_mae": 48.9,
+  "left_src_ver": "vv_ebbc77f8",
+  "right_src_ver": "vv_4bdf6b08"
+ },
+ {
+  "from": "s02_c02",
+  "to": "s02_c03",
+  "seam_mae": 50.8,
+  "end_to_end_mae": 49.3,
+  "left_src_ver": "vv_4bdf6b08",
+  "right_src_ver": "vv_e4441f21"
+ },
+ {
+  "from": "s02_c03",
+  "to": "s03_c01",
+  "seam_mae": 52.4,
+  "end_to_end_mae": 67.5,
+  "left_src_ver": "vv_e4441f21",
+  "right_src_ver": "vv_f741a354"
+ },
+ {
+  "from": "s03_c01",
+  "to": "s03_c02",
+  "seam_mae": 28.7,
+  "end_to_end_mae": 29.6,
+  "left_src_ver": "vv_f741a354",
+  "right_src_ver": "vv_03ff6e45"
+ },
+ {
+  "from": "s03_c02",
+  "to": "s03_c03",
+  "seam_mae": 31.8,
+  "end_to_end_mae": 86.5,
+  "left_src_ver": "vv_03ff6e45",
+  "right_src_ver": "vv_49b85cd1"
+ },
+ {
+  "from": "s03_c03",
+  "to": "s03_c04",
+  "seam_mae": 86.6,
+  "end_to_end_mae": 92.3,
+  "left_src_ver": "vv_49b85cd1",
+  "right_src_ver": "vv_6684f5dd"
+ }
+]

@@ -1,0 +1,145 @@
+{
+ "tail_forensics": {
+  "object": "75056b51d6c77c0676674f440b3820bb2eb0fcba57e29ba8d4056ae6fba29e5c",
+  "vv_1c4b7001": {
+   "tail_sha256": "38dbee76e7758b8117e295b6c5127c90b8e09a364141b14bc8f0ff41adfd3de4",
+   "matches_object": false
+  },
+  "vv_0e7fe39f": {
+   "tail_sha256": "75056b51d6c77c0676674f440b3820bb2eb0fcba57e29ba8d4056ae6fba29e5c",
+   "matches_object": true
+  }
+ },
+ "finals_media": {
+  "s01_c06": {
+   "version": "vv_5ad9192d",
+   "source_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_TSKsV4Q5Fb7na9uBoFo8L3yRCexP4loG.mp4",
+   "local": "projects\\雨灯归航\\output\\videos\\s01_c06__vv_5ad9192d.mp4",
+   "url_fetch_ok": true,
+   "sha256": "a0d5654e808914137f10d7fb32246f4fe58f339d74061940a6dda436333fefcb",
+   "local_exists": true,
+   "local_sha256": "a0d5654e808914137f10d7fb32246f4fe58f339d74061940a6dda436333fefcb",
+   "local_is_same_bytes": true
+  },
+  "s01_c01": {
+   "version": "vv_55accb16",
+   "source_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_TEMvZuJZgFkrxAEFDSHNURQG11SRX8hs.mp4",
+   "local": "projects\\雨灯归航\\output\\videos\\s01_c01.mp4",
+   "url_fetch_ok": true,
+   "sha256": "707e262a631f82c3393a35e24b97d72d0c6e356f0ca327d95e2a6c485d2fbcff",
+   "local_exists": true,
+   "local_sha256": "707e262a631f82c3393a35e24b97d72d0c6e356f0ca327d95e2a6c485d2fbcff",
+   "local_is_same_bytes": true
+  },
+  "s01_c02": {
+   "version": "vv_9cda3271",
+   "source_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_A6Ptk1ptKdKmBUndHckxpWQtE2S7AqzW.mp4",
+   "local": "projects\\雨灯归航\\output\\videos\\s01_c02.mp4",
+   "url_fetch_ok": true,
+   "sha256": "f6ddaec5a85fa27c00e993ccaa655f8d464b14f339c4d7187c26c9705b92238a",
+   "local_exists": true,
+   "local_sha256": "f6ddaec5a85fa27c00e993ccaa655f8d464b14f339c4d7187c26c9705b92238a",
+   "local_is_same_bytes": true
+  },
+  "s01_c03": {
+   "version": "vv_703eb03f",
+   "source_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_KGYubTSPSilu1Bg96GEpWW4aNhRLESyW.mp4",
+   "local": "projects\\雨灯归航\\output\\videos\\s01_c03.mp4",
+   "url_fetch_ok": true,
+   "sha256": "84bb5e7ca36d4de633e2c0709c030f3105a8b66e363b5abb270b726634a8573b",
+   "local_exists": true,
+   "local_sha256": "84bb5e7ca36d4de633e2c0709c030f3105a8b66e363b5abb270b726634a8573b",
+   "local_is_same_bytes": true
+  },
+  "s01_c04": {
+   "version": "vv_80dc90a5",
+   "source_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_eWkL3QnWkeGnM8hKDtXNftYn7ZdDIMvo.mp4",
+   "local": "projects\\雨灯归航\\output\\videos\\s01_c04__vv_80dc90a5.mp4",
+   "url_fetch_ok": true,
+   "sha256": "c78778c5c353c35c5f12a8fbec804ce9cde1e2fec5594d16317b818ba41710cd",
+   "local_exists": true,
+   "local_sha256": "c78778c5c353c35c5f12a8fbec804ce9cde1e2fec5594d16317b818ba41710cd",
+   "local_is_same_bytes": true
+  },
+  "s01_c05": {
+   "version": "vv_70728b9b",
+   "source_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_AnmFk0O7fZy1Ke21o5GaabdfgF5oLBl0.mp4",
+   "local": "projects\\雨灯归航\\output\\videos\\s01_c05.mp4",
+   "url_fetch_ok": true,
+   "sha256": "301bb574a96ed1e7f24c0c0a6f30e16a85369ffd291abfd66ad3acdd07251caf",
+   "local_exists": true,
+   "local_sha256": "301bb574a96ed1e7f24c0c0a6f30e16a85369ffd291abfd66ad3acdd07251caf",
+   "local_is_same_bytes": true
+  },
+  "s02_c01": {
+   "version": "vv_ebbc77f8",
+   "source_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_dKX1QoKCOZ2lNLKwXtSbhg1ICxXHC2Oh.mp4",
+   "local": "projects\\雨灯归航\\output\\videos\\s02_c01.mp4",
+   "url_fetch_ok": true,
+   "sha256": "d7e356d2c68b9fc800273738e15b80f174ce20bd576eca6662d6091a9c21711c",
+   "local_exists": true,
+   "local_sha256": "d7e356d2c68b9fc800273738e15b80f174ce20bd576eca6662d6091a9c21711c",
+   "local_is_same_bytes": true
+  },
+  "s02_c02": {
+   "version": "vv_4bdf6b08",
+   "source_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_SypOdeCYVBGdKpYpikZNSKdXjq4ILAJB.mp4",
+   "local": "projects\\雨灯归航\\output\\videos\\s02_c02__vv_4bdf6b08.mp4",
+   "url_fetch_ok": true,
+   "sha256": "5f836b5ee7dbfbbe3b40e60799dd3a0f6d61f68ef93b5205af59ddb098fe3040",
+   "local_exists": true,
+   "local_sha256": "5f836b5ee7dbfbbe3b40e60799dd3a0f6d61f68ef93b5205af59ddb098fe3040",
+   "local_is_same_bytes": true
+  },
+  "s02_c03": {
+   "version": "vv_e4441f21",
+   "source_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_WAuvsINzxbKFfYVvbKnhxWcRxQYwnxZ9.mp4",
+   "local": "projects\\雨灯归航\\output\\videos\\s02_c03.mp4",
+   "url_fetch_ok": true,
+   "sha256": "b8c1bdb3f00b6aac72cbc5cc7fc9cbdc288261d3b9bfffb8bb2b900ffd05b728",
+   "local_exists": true,
+   "local_sha256": "b8c1bdb3f00b6aac72cbc5cc7fc9cbdc288261d3b9bfffb8bb2b900ffd05b728",
+   "local_is_same_bytes": true
+  },
+  "s03_c01": {
+   "version": "vv_f741a354",
+   "source_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_RAEKfK8S6qaGmbOqGRPqVVt32txeUkrY.mp4",
+   "local": "projects\\雨灯归航\\output\\videos\\s03_c01.mp4",
+   "url_fetch_ok": true,
+   "sha256": "2426b69b65263125c22d7c76f2cb2115923f784407407b0c386c39910f68aaee",
+   "local_exists": true,
+   "local_sha256": "2426b69b65263125c22d7c76f2cb2115923f784407407b0c386c39910f68aaee",
+   "local_is_same_bytes": true
+  },
+  "s03_c02": {
+   "version": "vv_03ff6e45",
+   "source_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_yiTs9Y9n4QG9sbWqUlKIo3rYjBEu7A58.mp4",
+   "local": "projects\\雨灯归航\\output\\videos\\s03_c02.mp4",
+   "url_fetch_ok": true,
+   "sha256": "13de86189313680d916469134230a7ca53f633b63f629156726d2d659e3bb38d",
+   "local_exists": true,
+   "local_sha256": "13de86189313680d916469134230a7ca53f633b63f629156726d2d659e3bb38d",
+   "local_is_same_bytes": true
+  },
+  "s03_c03": {
+   "version": "vv_49b85cd1",
+   "source_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_8GrpOVsRT7fzeuG06Bjm6zmLOW1VzrlR.mp4",
+   "local": "projects\\雨灯归航\\output\\videos\\s03_c03.mp4",
+   "url_fetch_ok": true,
+   "sha256": "659838cd30670b05f576aff1ce52c02a42b0553c55f9e035103bfbc13d937e25",
+   "local_exists": true,
+   "local_sha256": "659838cd30670b05f576aff1ce52c02a42b0553c55f9e035103bfbc13d937e25",
+   "local_is_same_bytes": true
+  },
+  "s03_c04": {
+   "version": "vv_6684f5dd",
+   "source_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_FIXYnwV8fl8r2rnZ4KkrdVlu8F9Ho0au.mp4",
+   "local": "projects\\雨灯归航\\output\\videos\\s03_c04.mp4",
+   "url_fetch_ok": true,
+   "sha256": "adc309beed58239398ae8370257cc0cbb63a188d44c9ceb49c7316f2a2fff5f1",
+   "local_exists": true,
+   "local_sha256": "adc309beed58239398ae8370257cc0cbb63a188d44c9ceb49c7316f2a2fff5f1",
+   "local_is_same_bytes": true
+  }
+ }
+}
