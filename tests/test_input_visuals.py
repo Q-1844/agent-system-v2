@@ -24,9 +24,12 @@ from src.core.models import VideoVersion  # noqa: E402
 
 class _BV:
     """最小 BoundVideoRequest 替身（只用 semantic_roles / video_reference）。"""
-    def __init__(self, semantic_roles, video_reference=""):
+    def __init__(self, semantic_roles, video_reference="",
+                 identity_reference=None, scene_reference=None):
         self.semantic_roles = semantic_roles
         self.video_reference = video_reference
+        self.identity_reference = identity_reference
+        self.scene_reference = scene_reference
 
 
 def test_multi_relay_tail_is_start_boundary():
@@ -59,6 +62,35 @@ def test_multi_reference_only_is_marked():
     assert e["slot"] == "reference"
     assert e["semantic_role"] == "reference_only"
     assert e["reference_asset_id"] == "ref_look0001"
+
+
+def test_multi_scene_reference_takes_scene_url_not_tail():
+    """44A 取证修复：三参考哨兵第三槽（scene_instance_view）的记录 URL 必须取
+    scene_reference，不得回落 video_reference（=上镜尾帧，记录会张冠李戴）。"""
+    bv = _BV(
+        [{"slot": "multi_reference", "source_type": "prev_tail_relay",
+          "source_shot_id": "s02_c02", "end_source_version": "vv_a",
+          "reference_asset_id": None, "candidate_id": None, "batch_id": None},
+         {"slot": "multi_reference", "source_type": "character_look",
+          "reference_asset_id": "ref_look0001", "candidate_id": None,
+          "batch_id": None},
+         {"slot": "multi_reference", "source_type": "scene_instance_view",
+          "reference_asset_id": "ref_siv0001", "candidate_id": None,
+          "batch_id": None}],
+        video_reference="http://x/tail.jpg",
+        identity_reference={"url": "http://x/look.png",
+                            "reference_asset_id": "ref_look0001"},
+        scene_reference={"url": "http://x/siv.png",
+                         "reference_asset_id": "ref_siv0001"})
+    out = _build_input_visuals(mode="multi", first_url="http://x/tail.jpg",
+                               last_url=None, bound_video=bv)
+    assert [e["source_type"] for e in out] == \
+        ["prev_tail_relay", "character_look", "scene_instance_view"]
+    assert out[0]["url"] == "http://x/tail.jpg"
+    assert out[1]["url"] == "http://x/look.png"
+    assert out[2]["url"] == "http://x/siv.png", \
+        "场景第三槽记录成尾帧 URL = provenance 张冠李戴（44A 实证缺陷）"
+    assert out[2]["reference_asset_id"] == "ref_siv0001"
 
 
 def test_i2v_hard_start_boundary():

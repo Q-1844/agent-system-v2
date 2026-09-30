@@ -1442,6 +1442,11 @@ def _build_input_visuals(*, mode: str, first_url: str, last_url,
                     # 直生 multi 的单 Look 参考（无 identity_reference）仍走
                     # video_reference（其参考本身就是直生单参考）。
                     _url = (bound_video.identity_reference or {}).get("url") or ""
+                elif (r.get("source_type") == "scene_instance_view"
+                      and getattr(bound_video, "scene_reference", None)):
+                    # 43.md §二：场景实例视图第三槽——URL 取 scene_reference，
+                    # 不得回落 video_reference（否则记录成上镜尾帧，44A 取证实证）。
+                    _url = (bound_video.scene_reference or {}).get("url") or ""
                 else:
                     _url = getattr(bound_video, "video_reference", "") or ""
                 out.append({
