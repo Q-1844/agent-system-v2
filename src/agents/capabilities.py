@@ -156,6 +156,17 @@ def build_default_capabilities() -> List[CapabilityDefinition]:
              CC.COMPOSITION.value, "editor", ["editor"], [I], LO, True),
         _cap("composition.compose", "最终合成", "版本选择/排列/字幕/音轨/导出（包装现有能力）",
              CC.COMPOSITION.value, "editor", ["editor"], [E], HI, False),
+        # ---- sequence（Phase 44B：Assembly Agent 原生 tool-loop；能力只登记语义 id
+        #      供 registry 完整性校验与查询展示，同 scene.inspect/scene.prepare 先例——
+        #      真实执行走 assembly.py 工具面，不经 _ADAPTERS dispatch）----
+        _cap("assembly.inspect", "成片装配查看",
+             "读取冻结快照/SequenceBlock/渲染版本/freshness/媒体探测与时间线预演"
+             "（只读消费 Shot.final_video 源真相）",
+             CC.SEQUENCE.value, "assembly", ["assembly"], [I], LO, False),
+        _cap("assembly.assemble", "成片装配执行",
+             "SequenceBlock 创建/更新（OCC）/渲染提交（JobQueue）/AssemblyManifest 发布/"
+             "剪辑提案（包装 SequenceService 正式链路；不碰 Shot/生成/ffmpeg shell）",
+             CC.SEQUENCE.value, "assembly", ["assembly"], [E], ME, False),
     ]
 
 

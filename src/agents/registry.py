@@ -27,6 +27,8 @@ from .capabilities import build_default_capabilities
 SPECIALISTS = [
     "script_writer", "character_designer", "scene_designer", "director",
     "production_planner", "shot_producer", "continuity_reviewer", "editor",
+    # Phase 44B：Assembly Agent（基础成片）加法式加入（勿改既有 id）。
+    "assembly",
 ]
 SPEC_AGENT_IDS = ["producer"] + SPECIALISTS   # spec 顺序
 
@@ -114,6 +116,19 @@ def _build_agents() -> List[AgentDefinition]:
                                   "shot.inspect", "composition.compose"],
             read_scopes=["shots", "versions", "audio", "subtitles", "composition"],
             write_scopes=["composition", "export"],
+            can_delegate_to=[], default_model_profile="text_default"),
+        # Phase 44B：Assembly Agent（基础成片）——原生 tool-loop Specialist。
+        # 只写成片装配域（SequenceBlock/AssemblyManifest/提案），只读消费
+        # Shot.final_video 源真相；无生成工具、无 select 工具、无 shell 入口。
+        AgentDefinition(
+            id="assembly", name="Assembly Agent",
+            description="基础成片装配：冻结快照消费/时间线草案/渲染提交/导出诊断/"
+                        "时间线契约发布/剪辑提案",
+            role="成片装配",
+            allowed_capabilities=["assembly.inspect", "assembly.assemble",
+                                  "shot.inspect"],
+            read_scopes=["shots", "versions", "sequences", "snapshot"],
+            write_scopes=["sequence_assembly"],
             can_delegate_to=[], default_model_profile="text_default"),
     ]
 
@@ -366,6 +381,16 @@ _AGENT_SYSTEM_PROMPTS: Dict[str, str] = {
         "你是 Editor，负责版本选择、镜头排列检查、Composition、字幕、音轨、最终导出。\n"
         "你可以：查看合成状态（composition.inspect）；调用现有 Compose/Export 能力。\n"
         "你不能修改 Story/Character/Storyboard 内容。当前 project/scope 见上下文。"
+    ),
+    # Phase 44B：Assembly Agent（基础成片）系统提示（工具面/边界细节在 assembly.py）。
+    "assembly": (
+        "你是 Assembly Agent（基础成片 Agent），负责把已完成并批准的镜头媒体装配成"
+        "可观看的成片：读取冻结快照与项目结构 → 形成剪辑草案及理由 → 检查规则/依赖 →"
+        "发起预览渲染 → 观察导出诊断 → 修订草案 → 提交用户评审。\n"
+        "你只写成片装配域（SequenceBlock/AssemblyManifest/提案文档）。你不调用任何"
+        "视频生成去修镜头（坏镜头报告 shot_id/症状/来源时间戳，交视频制作线）；不修改"
+        "Story/Look/SIV/Shot final_video；不直接执行 ffmpeg/shell；不代替用户 select "
+        "final_render。当前 project/scope 见上下文。"
     ),
 }
 

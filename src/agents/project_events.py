@@ -30,6 +30,8 @@ RESOURCE_CHARACTER = "character"   # 角色域：project.json 的 characters（C
 RESOURCE_STORYBOARD = "storyboard"   # 分镜域：scenes[].shots[]（Director 写入域）
 RESOURCE_RESOURCES = "resources"   # 生产资源域：resources.json（Look/Clothing/Prop/Composition/
                                    # ReferenceAsset——Agent System V2 Phase B，Resource Agent 写入域）
+RESOURCE_SEQUENCE = "sequence"   # 成片装配域：sequences.json + output/assembly/（Phase 44B，
+                                         # Assembly Agent 写入域：SequenceBlock/manifest/提案）
 RESOURCE_SCENE_SYSTEM = "scene_system"   # 场景系统域：scene_system.json（Location/SpatialAnchor/
                                          # SetLayout/LocationView/SceneInstance/SceneState/
                                          # SceneInstanceView——Agent System V2 Phase C2，
@@ -132,7 +134,8 @@ def emit_changed(bus, project: str, resource: str, *, by: str = "",
                         RESOURCE_CHARACTER: "character.changed",
                         RESOURCE_STORYBOARD: "storyboard.changed",
                         RESOURCE_RESOURCES: "resources.changed",
-                        RESOURCE_SCENE_SYSTEM: "scene_system.changed"}
+                        RESOURCE_SCENE_SYSTEM: "scene_system.changed",
+                        RESOURCE_SEQUENCE: "sequence.changed"}
     bus.publish(project, {"type": type_by_resource.get(resource, "resource.changed"),
                           "resource": resource, "by": by,
                           "session_id": session_id, "operation": operation})

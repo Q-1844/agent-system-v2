@@ -1,0 +1,16 @@
+任务：为项目《雨灯归航》装配全片工程预览（Phase 44B 基础成片）。
+
+背景：冻结快照 snap_44a_formal_20261001_001753（_44a/assembly_input_manifest_formal.json）中 13 镜全部 user_locked（s03_c03 为 user_locked_with_caveat 口径），媒体哈希已核验。这是你的成片输入，不得使用快照之外的镜头或版本。
+
+要求：
+1. 先用 assembly.briefing 了解全局状态（快照/已有 sequence/推荐渲染 profile）。
+2. 剪辑草案：按 canonical 叙事顺序（快照 order 1→13）【全部保留、整镜使用、硬切】，不做任何 trim（这是第一版工程预览的默认纪律）。渲染 profile 用 briefing 给的 recommended_render_profile 原样传入 sequence_create。
+3. 用 assembly.timeline_preview 对你的 clips 草案做 dry-run 预演，确认无违规、总片长符合预期（约 89.9s）。
+4. 用 assembly.sequence_create 落 canonical（title=「雨灯归航_全片工程预览_44B_Agent」，expected_snapshot_id=snap_44a_formal_20261001_001753）。
+5. 用 assembly.render_submit 发起渲染。渲染由后台 JobQueue 异步执行——【不要等待渲染完成】，发起成功（拿到 job_id 与 render_version_id 回执）即结束本轮，汇报：sequence_id / revision / job_id / render_version_id / 计划时长。
+
+纪律：
+- 不调用任何视频生成；任何镜头问题只报告 shot_id/症状/来源时间戳。
+- 若快照对齐核验失败，如实报告失败镜头与原因，不得跳过核验。
+- 若 briefing 显示已存在同内容的全片 sequence，如实说明并复用（不要重复创建）。
+- 你的汇报只能引用工具回执的真实字段，不得声称渲染已完成。

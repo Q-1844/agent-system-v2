@@ -1,0 +1,502 @@
+{
+ "quota_file_sha_before": "d05dc6cac78acdef1688ce6dca3fe8206074e3a1a9cf78f469add5f6cb207680",
+ "part_a": {
+  "sequence_id": "seq_22ff8de0",
+  "revision": "738c0031",
+  "render_version_id": "srender_664a49b9",
+  "render_seconds": 8.1,
+  "output": "projects\\雨灯归航\\output\\sequences\\seq_22ff8de0\\srender_664a49b9.mp4",
+  "probe": {
+   "duration_ms": 18380,
+   "has_video": true,
+   "width": 1280,
+   "height": 720,
+   "fps": 24.0,
+   "vcodec": "h264",
+   "pix_fmt": "yuv420p",
+   "has_audio": true,
+   "acodec": "aac",
+   "sample_rate": 48000,
+   "channels": 2
+  },
+  "seam_times_ms": [
+   5175,
+   10359
+  ],
+  "seam_audit": {
+   "frames": {
+    "frame_count": 440,
+    "pts_monotonic": true,
+    "missing_frames": 0,
+    "duration_from_frames_ms": 10560000
+   },
+   "seams": [
+    {
+     "seam_ms": 5175,
+     "frames_in_window": 24,
+     "issues": []
+    },
+    {
+     "seam_ms": 10359,
+     "frames_in_window": 24,
+     "issues": []
+    }
+   ],
+   "seams_with_issues": 0,
+   "black_segments": [],
+   "silence_segments": []
+  },
+  "frame_audit_issues": [],
+  "previews": [
+   {
+    "t_ms": 0,
+    "file": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\_44b\\previews\\small_00_t0ms.png"
+   },
+   {
+    "t_ms": 9190,
+    "file": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\_44b\\previews\\small_01_t9190ms.png"
+   },
+   {
+    "t_ms": 4925,
+    "file": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\_44b\\previews\\small_02_t4925ms.png"
+   },
+   {
+    "t_ms": 5425,
+    "file": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\_44b\\previews\\small_03_t5425ms.png"
+   },
+   {
+    "t_ms": 10109,
+    "file": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\_44b\\previews\\small_04_t10109ms.png"
+   },
+   {
+    "t_ms": 10609,
+    "file": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\_44b\\previews\\small_05_t10609ms.png"
+   },
+   {
+    "t_ms": 18330,
+    "file": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\_44b\\previews\\small_06_t18330ms.png"
+   }
+  ],
+  "video_generation_cost": 0,
+  "elapsed_total_s": 16.4
+ },
+ "quota_file_sha_after": "f63ccd11433be3857682510897cee2eeaf6b973bfd1b2226c7246bfc7b68e004",
+ "part_b": {
+  "sequence_id": "seq_900fdf75",
+  "revision": "4df4d8cb",
+  "render_version_id": "srender_53486e6a",
+  "render_seconds": 28.2,
+  "output": "projects\\雨灯归航\\output\\sequences\\seq_900fdf75\\srender_53486e6a.mp4",
+  "output_sha256": "84095eddfddb1a08967c6830a44f3b596eebcdf8d387406a83e48d059a208621",
+  "probe": {
+   "duration_ms": 89923,
+   "has_video": true,
+   "width": 1280,
+   "height": 720,
+   "fps": 24.0,
+   "vcodec": "h264",
+   "pix_fmt": "yuv420p",
+   "has_audio": true,
+   "acodec": "aac",
+   "sample_rate": 48000,
+   "channels": 2
+  },
+  "manifest_revision": 1,
+  "manifest_file": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\雨灯归航\\output\\assembly\\manifest_v1.json",
+  "timeline_table": [
+   {
+    "index": 0,
+    "shot_id": "s01_c01",
+    "scene_id": "s01",
+    "scene_boundary": false,
+    "video_version_id": "vv_55accb16",
+    "source_in_out_ms": [
+     0,
+     8000
+    ],
+    "timeline_start_end_ms": [
+     0,
+     8000
+    ],
+    "approved_status": "user_locked"
+   },
+   {
+    "index": 1,
+    "shot_id": "s01_c02",
+    "scene_id": "s01",
+    "scene_boundary": false,
+    "video_version_id": "vv_9cda3271",
+    "source_in_out_ms": [
+     0,
+     8000
+    ],
+    "timeline_start_end_ms": [
+     8000,
+     16000
+    ],
+    "approved_status": "user_locked"
+   },
+   {
+    "index": 2,
+    "shot_id": "s01_c03",
+    "scene_id": "s01",
+    "scene_boundary": false,
+    "video_version_id": "vv_703eb03f",
+    "source_in_out_ms": [
+     0,
+     8000
+    ],
+    "timeline_start_end_ms": [
+     16000,
+     24000
+    ],
+    "approved_status": "user_locked"
+   },
+   {
+    "index": 3,
+    "shot_id": "s01_c04",
+    "scene_id": "s01",
+    "scene_boundary": false,
+    "video_version_id": "vv_80dc90a5",
+    "source_in_out_ms": [
+     0,
+     5175
+    ],
+    "timeline_start_end_ms": [
+     24000,
+     29175
+    ],
+    "approved_status": "user_locked"
+   },
+   {
+    "index": 4,
+    "shot_id": "s01_c05",
+    "scene_id": "s01",
+    "scene_boundary": false,
+    "video_version_id": "vv_70728b9b",
+    "source_in_out_ms": [
+     0,
+     5184
+    ],
+    "timeline_start_end_ms": [
+     29175,
+     34359
+    ],
+    "approved_status": "user_locked"
+   },
+   {
+    "index": 5,
+    "shot_id": "s01_c06",
+    "scene_id": "s01",
+    "scene_boundary": false,
+    "video_version_id": "vv_5ad9192d",
+    "source_in_out_ms": [
+     0,
+     5184
+    ],
+    "timeline_start_end_ms": [
+     34359,
+     39543
+    ],
+    "approved_status": "user_locked"
+   },
+   {
+    "index": 6,
+    "shot_id": "s02_c01",
+    "scene_id": "s02",
+    "scene_boundary": true,
+    "video_version_id": "vv_ebbc77f8",
+    "source_in_out_ms": [
+     0,
+     8000
+    ],
+    "timeline_start_end_ms": [
+     39543,
+     47543
+    ],
+    "approved_status": "user_locked"
+   },
+   {
+    "index": 7,
+    "shot_id": "s02_c02",
+    "scene_id": "s02",
+    "scene_boundary": false,
+    "video_version_id": "vv_4bdf6b08",
+    "source_in_out_ms": [
+     0,
+     5175
+    ],
+    "timeline_start_end_ms": [
+     47543,
+     52718
+    ],
+    "approved_status": "user_locked"
+   },
+   {
+    "index": 8,
+    "shot_id": "s02_c03",
+    "scene_id": "s02",
+    "scene_boundary": false,
+    "video_version_id": "vv_49e4bd19",
+    "source_in_out_ms": [
+     0,
+     5184
+    ],
+    "timeline_start_end_ms": [
+     52718,
+     57902
+    ],
+    "approved_status": "user_locked"
+   },
+   {
+    "index": 9,
+    "shot_id": "s03_c01",
+    "scene_id": "s03",
+    "scene_boundary": true,
+    "video_version_id": "vv_f741a354",
+    "source_in_out_ms": [
+     0,
+     8000
+    ],
+    "timeline_start_end_ms": [
+     57902,
+     65902
+    ],
+    "approved_status": "user_locked"
+   },
+   {
+    "index": 10,
+    "shot_id": "s03_c02",
+    "scene_id": "s03",
+    "scene_boundary": false,
+    "video_version_id": "vv_03ff6e45",
+    "source_in_out_ms": [
+     0,
+     8000
+    ],
+    "timeline_start_end_ms": [
+     65902,
+     73902
+    ],
+    "approved_status": "user_locked"
+   },
+   {
+    "index": 11,
+    "shot_id": "s03_c03",
+    "scene_id": "s03",
+    "scene_boundary": false,
+    "video_version_id": "vv_49b85cd1",
+    "source_in_out_ms": [
+     0,
+     8000
+    ],
+    "timeline_start_end_ms": [
+     73902,
+     81902
+    ],
+    "approved_status": "user_locked_with_caveat"
+   },
+   {
+    "index": 12,
+    "shot_id": "s03_c04",
+    "scene_id": "s03",
+    "scene_boundary": false,
+    "video_version_id": "vv_6684f5dd",
+    "source_in_out_ms": [
+     0,
+     8000
+    ],
+    "timeline_start_end_ms": [
+     81902,
+     89902
+    ],
+    "approved_status": "user_locked"
+   }
+  ],
+  "total_duration_ms": 89902,
+  "seam_count": 12,
+  "seam_audit": {
+   "frames": {
+    "frame_count": 2156,
+    "pts_monotonic": true,
+    "missing_frames": 1,
+    "duration_from_frames_ms": 51768000
+   },
+   "seams": [
+    {
+     "seam_ms": 8000,
+     "frames_in_window": 25,
+     "issues": []
+    },
+    {
+     "seam_ms": 16000,
+     "frames_in_window": 25,
+     "issues": []
+    },
+    {
+     "seam_ms": 24000,
+     "frames_in_window": 25,
+     "issues": []
+    },
+    {
+     "seam_ms": 29175,
+     "frames_in_window": 24,
+     "issues": []
+    },
+    {
+     "seam_ms": 34359,
+     "frames_in_window": 24,
+     "issues": []
+    },
+    {
+     "seam_ms": 39543,
+     "frames_in_window": 23,
+     "issues": [
+      "切点窗内帧空洞 83ms（pts 948→950）"
+     ]
+    },
+    {
+     "seam_ms": 47543,
+     "frames_in_window": 24,
+     "issues": []
+    },
+    {
+     "seam_ms": 52718,
+     "frames_in_window": 24,
+     "issues": []
+    },
+    {
+     "seam_ms": 57902,
+     "frames_in_window": 24,
+     "issues": []
+    },
+    {
+     "seam_ms": 65902,
+     "frames_in_window": 24,
+     "issues": []
+    },
+    {
+     "seam_ms": 73902,
+     "frames_in_window": 24,
+     "issues": []
+    },
+    {
+     "seam_ms": 81902,
+     "frames_in_window": 24,
+     "issues": []
+    }
+   ],
+   "seams_with_issues": 1,
+   "black_segments": [],
+   "silence_segments": []
+  },
+  "frame_audit_issues": [
+   "缺帧 1 帧（pts 空洞示例: [949]）"
+  ],
+  "seam_mae_at_snapshot": [],
+  "video_generation_cost": 0
+ },
+ "part_c_trim": {
+  "new_render_version_id": "srender_620ec518",
+  "new_render_seconds": 26.2,
+  "old_output_sha_unchanged": true,
+  "old_output": "projects\\雨灯归航\\output\\sequences\\seq_900fdf75\\srender_53486e6a.mp4",
+  "manifest_v1_sha_unchanged": true,
+  "freshness_v1_during_trim": {
+   "status": "stale",
+   "sequence_id": "seq_900fdf75",
+   "detail": {
+    "reason": "dependency_keys_mismatch",
+    "version_id": "srender_53486e6a",
+    "mismatched_keys": [
+     "sequence_revision",
+     "clips[3].trim_out_ms"
+    ],
+    "hint": "sequence should be explicitly re-rendered（24.md §21：不 auto render）"
+   }
+  },
+  "freshness_v2": {
+   "status": "current",
+   "sequence_id": "seq_900fdf75",
+   "detail": {
+    "version_id": "srender_620ec518"
+   }
+  },
+  "freshness_v1_after_revert": {
+   "status": "current",
+   "sequence_id": "seq_900fdf75",
+   "detail": {
+    "version_id": "srender_53486e6a"
+   }
+  },
+  "other_shots_not_regenerated": true,
+  "note": "trim 修订只追加 render version；v1 输出/manifest/哈希原样可找回；回退后 v1 freshness 恢复 CURRENT（basis 机制），无需重渲染"
+ },
+ "part_c_swap": {
+  "fixture_dir": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\_44b_swap_fixture",
+  "freshness_before_swap": "current",
+  "freshness_after_swap": "stale",
+  "new_render_version_id": "srender_23e1c57b",
+  "new_render_sources": [
+   {
+    "shot_id": "sA_c01",
+    "version_id": "vv_a2"
+   },
+   {
+    "shot_id": "sB_c01",
+    "version_id": "vv_b1"
+   }
+  ],
+  "old_output": "projects\\_44b_swap_fixture\\output\\sequences\\seq_de24285e\\srender_265f6b9a.mp4",
+  "old_output_sha_unchanged": true,
+  "freshness_v2": "current",
+  "note": "替换一镜已批准版本 → 只生成新 render version（sA_c01→vv_a2）；旧输出/哈希可找回；sB_c01 未重生成"
+ },
+ "quota_video_seconds_before": 37.0,
+ "quota_video_seconds_after": 45.0,
+ "batch_job_kinds": {
+  "sequence_render": 23
+ },
+ "quota_note": "video_seconds 全局账本与常驻后端共享（含用户并行活动），本批费用证明以 batch_job_kinds（仅 sequence_render）为准",
+ "part_d_interrupt": {
+  "job_id": "6687a02da7f9",
+  "render_version_id": "srender_2d46f206",
+  "job_state_before_recovery": null,
+  "render_row_state_before_recovery": "rendering",
+  "render_row_state_after_recovery": "done",
+  "duration_ms": 89923,
+  "output_exists": true,
+  "output_file": "projects\\雨灯归航\\output\\sequences\\seq_900fdf75\\srender_2d46f206.mp4",
+  "old_output_v1_untouched": true,
+  "note": "渲染进程崩溃后按 job receipt（jobs cache）恢复：running→queued 重推，同一 render version 完成回执；旧 done 输出各持独立文件未被覆盖"
+ },
+ "part_a2_silent": {
+  "render_version_id": "srender_4c781784",
+  "render_seconds": 6.1,
+  "output": "projects\\雨灯归航\\output\\sequences\\seq_22ff8de0\\srender_4c781784.mp4",
+  "probe": {
+   "duration_ms": 18355,
+   "has_video": true,
+   "width": 1280,
+   "height": 720,
+   "fps": 24.0,
+   "vcodec": "h264",
+   "pix_fmt": "yuv420p",
+   "has_audio": true,
+   "acodec": "aac",
+   "sample_rate": 48000,
+   "channels": 2
+  },
+  "silence_segments_gt_0.5s": 1,
+  "freshness_silent_after_revert": "stale",
+  "freshness_native_after_revert": "current",
+  "note": "audio=silent 为显式 profile 策略（进 basis 指纹）：输出含等长静音轨；回退 native 后 native 渲染恢复 CURRENT、silent 渲染诚实 STALE",
+  "silence_segments": [
+   {
+    "silence_start": 0.0,
+    "silence_end": 18.355,
+    "silence_duration": 18.355
+   }
+  ]
+ }
+}

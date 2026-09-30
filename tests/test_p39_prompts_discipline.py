@@ -209,9 +209,11 @@ def test_registry_roster_five_agent_conditional():
     test_p39_agent_tools.py::test_scene_designer_conditional_fifth_member）。
     registry 固定 8 身份不变（identity 勿改纪律）。Skill 名册（40.md）：
     calibration 绑 5 Agent、bridge 只绑 director/producer——与 roster 语义一致。"""
+    # Phase 44B：assembly 加法式加入（成片装配 Specialist，无任何 Skill 绑定）
     assert SPEC_AGENT_IDS == ["producer"] + [
         "script_writer", "character_designer", "scene_designer", "director",
-        "production_planner", "shot_producer", "continuity_reviewer", "editor"]
+        "production_planner", "shot_producer", "continuity_reviewer", "editor",
+        "assembly"]
     from src.agents.skill_system.registry import get_skill_registry
     r = get_skill_registry()
     cal = r.get("full-story-relay-calibration")
@@ -220,9 +222,9 @@ def test_registry_roster_five_agent_conditional():
         "scene_designer", "director"}
     bridge = r.get("keyframes-bridge-repair")
     assert {b.agent_id for b in bridge.bindings} == {"director", "producer"}
-    # 禁用身份纪律延续：四个非活跃身份无任何 skill 绑定
+    # 禁用身份纪律延续：四个非活跃身份无任何 skill 绑定；assembly（44B 新增）同样零绑定
     for disabled in ("production_planner", "shot_producer",
-                     "continuity_reviewer", "editor"):
+                     "continuity_reviewer", "editor", "assembly"):
         assert r.view_for(disabled) == []
 
 

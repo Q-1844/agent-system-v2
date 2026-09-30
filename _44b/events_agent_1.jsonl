@@ -1,0 +1,1400 @@
+{"type": "tool.pending", "step_id": 0, "name": "assembly.briefing", "label": "成片全局状态一览"}
+{"type": "tool.started", "step_id": 0, "call_id": "call_40b6dab987924f9c8ceef1e3", "name": "assembly.briefing", "label": "成片全局状态一览"}
+{"type": "tool.completed", "step_id": 0, "call_id": "call_40b6dab987924f9c8ceef1e3", "name": "assembly.briefing", "ok": true, "summary": "成片全局状态一览完成"}
+{"type": "tool.pending", "step_id": 1, "name": "assembly.timeline_preview", "label": "时间线 dry-run 预演"}
+{"type": "tool.started", "step_id": 1, "call_id": "call_663c81527f20428ea281a8fd", "name": "assembly.timeline_preview", "label": "时间线 dry-run 预演"}
+{"type": "tool.completed", "step_id": 1, "call_id": "call_663c81527f20428ea281a8fd", "name": "assembly.timeline_preview", "ok": true, "summary": "时间线 dry-run 预演完成"}
+{"type": "tool.pending", "step_id": 2, "name": "assembly.render_submit", "label": "发起成片渲染"}
+{"type": "tool.started", "step_id": 2, "call_id": "call_245f58b54c2744cb97837557", "name": "assembly.render_submit", "label": "发起成片渲染"}
+{"type": "tool.failed", "step_id": 2, "call_id": "call_245f58b54c2744cb97837557", "name": "assembly.render_submit", "error": "工具执行异常：'Job' object has no attribute 'status'"}
+{"type": "tool.pending", "step_id": 3, "name": "assembly.render_status", "label": "渲染状态与诊断"}
+{"type": "tool.pending", "step_id": 3, "name": "assembly.sequence_read", "label": "读取 Sequence canonical"}
+{"type": "tool.started", "step_id": 3, "call_id": "call_58159cc572e248f886d9d71c", "name": "assembly.render_status", "label": "渲染状态与诊断"}
+{"type": "tool.completed", "step_id": 3, "call_id": "call_58159cc572e248f886d9d71c", "name": "assembly.render_status", "ok": true, "summary": "渲染状态与诊断完成"}
+{"type": "tool.started", "step_id": 3, "call_id": "call_7c90b3555083408892e36cdc", "name": "assembly.sequence_read", "label": "读取 Sequence canonical"}
+{"type": "tool.completed", "step_id": 3, "call_id": "call_7c90b3555083408892e36cdc", "name": "assembly.sequence_read", "ok": true, "summary": "读取 Sequence canonical完成"}
+{"type": "tool.pending", "step_id": 4, "name": "assembly.sequence_create", "label": "创建成片 Sequence"}
+{"type": "tool.started", "step_id": 4, "call_id": "call_94017436686a48b9901cd43e", "name": "assembly.sequence_create", "label": "创建成片 Sequence"}
+{"type": "tool.completed", "step_id": 4, "call_id": "call_94017436686a48b9901cd43e", "name": "assembly.sequence_create", "ok": true, "summary": "创建 seq_a3d5b19b（13 clips，revision=4df4d8cb）"}
+{"type": "tool.pending", "step_id": 5, "name": "assembly.render_submit", "label": "发起成片渲染"}
+{"type": "tool.started", "step_id": 5, "call_id": "call_bf1ccbff564844ca823ee874", "name": "assembly.render_submit", "label": "发起成片渲染"}
+{"type": "tool.failed", "step_id": 5, "call_id": "call_bf1ccbff564844ca823ee874", "name": "assembly.render_submit", "error": "工具执行异常：'Job' object has no attribute 'status'"}
+{"type": "tool.pending", "step_id": 6, "name": "assembly.sequence_read", "label": "读取 Sequence canonical"}
+{"type": "tool.pending", "step_id": 6, "name": "assembly.render_status", "label": "渲染状态与诊断"}
+{"type": "tool.started", "step_id": 6, "call_id": "call_d21fbd0144bb4f6abcab4d8b", "name": "assembly.sequence_read", "label": "读取 Sequence canonical"}
+{"type": "tool.completed", "step_id": 6, "call_id": "call_d21fbd0144bb4f6abcab4d8b", "name": "assembly.sequence_read", "ok": true, "summary": "读取 Sequence canonical完成"}
+{"type": "tool.started", "step_id": 6, "call_id": "call_c9bac6b69a8047298ad93446", "name": "assembly.render_status", "label": "渲染状态与诊断"}
+{"type": "tool.completed", "step_id": 6, "call_id": "call_c9bac6b69a8047298ad93446", "name": "assembly.render_status", "ok": true, "summary": "渲染状态与诊断完成"}
+{"type": "tool.pending", "step_id": 7, "name": "assembly.proposal_write", "label": "写剪辑提案"}
+{"type": "tool.started", "step_id": 7, "call_id": "call_1f95e581c4c84d15a9658024", "name": "assembly.proposal_write", "label": "写剪辑提案"}
+{"type": "tool.completed", "step_id": 7, "call_id": "call_1f95e581c4c84d15a9658024", "name": "assembly.proposal_write", "ok": true, "summary": "提案 v1 已写入（雨灯归航_全片工程预览_44B_Agent_提案）——等待用户评审"}
+{"type": "assistant.delta", "delta": "提案"}
+{"type": "assistant.delta", "delta": "已"}
+{"type": "assistant.delta", "delta": "写入"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "assistant.delta", "delta": "现在"}
+{"type": "assistant.delta", "delta": "汇报"}
+{"type": "assistant.delta", "delta": "本轮"}
+{"type": "assistant.delta", "delta": "结果"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "---"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "##"}
+{"type": "assistant.delta", "delta": " Phase"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "B"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "基础"}
+{"type": "assistant.delta", "delta": "成片"}
+{"type": "assistant.delta", "delta": " —"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "执行"}
+{"type": "assistant.delta", "delta": "汇报"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "###"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "全局"}
+{"type": "assistant.delta", "delta": "状态"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "brief"}
+{"type": "assistant.delta", "delta": "ing"}
+{"type": "assistant.delta", "delta": "）"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "冻结"}
+{"type": "assistant.delta", "delta": "快照"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "snap"}
+{"type": "assistant.delta", "delta": "_"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "a"}
+{"type": "assistant.delta", "delta": "_form"}
+{"type": "assistant.delta", "delta": "al"}
+{"type": "assistant.delta", "delta": "_"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "_"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "7"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "："}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "镜"}
+{"type": "assistant.delta", "delta": "全部"}
+{"type": "assistant.delta", "delta": " user"}
+{"type": "assistant.delta", "delta": "_locked"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "s"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "_c"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "为"}
+{"type": "assistant.delta", "delta": " user"}
+{"type": "assistant.delta", "delta": "_locked"}
+{"type": "assistant.delta", "delta": "_with"}
+{"type": "assistant.delta", "delta": "_c"}
+{"type": "assistant.delta", "delta": "ave"}
+{"type": "assistant.delta", "delta": "at"}
+{"type": "assistant.delta", "delta": "），"}
+{"type": "assistant.delta", "delta": "mode"}
+{"type": "assistant.delta", "delta": "=form"}
+{"type": "assistant.delta", "delta": "al"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "已"}
+{"type": "assistant.delta", "delta": "就绪"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "推荐"}
+{"type": "assistant.delta", "delta": "渲染"}
+{"type": "assistant.delta", "delta": " profile"}
+{"type": "assistant.delta", "delta": "："}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "×"}
+{"type": "assistant.delta", "delta": "7"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": " /"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "fps"}
+{"type": "assistant.delta", "delta": " /"}
+{"type": "assistant.delta", "delta": " lib"}
+{"type": "assistant.delta", "delta": "x"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": " /"}
+{"type": "assistant.delta", "delta": " y"}
+{"type": "assistant.delta", "delta": "uv"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "p"}
+{"type": "assistant.delta", "delta": " /"}
+{"type": "assistant.delta", "delta": " a"}
+{"type": "assistant.delta", "delta": "ac"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "kHz"}
+{"type": "assistant.delta", "delta": " /"}
+{"type": "assistant.delta", "delta": " mp"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": " /"}
+{"type": "assistant.delta", "delta": " crop"}
+{"type": "assistant.delta", "delta": " fill"}
+{"type": "assistant.delta", "delta": " /"}
+{"type": "assistant.delta", "delta": " native"}
+{"type": "assistant.delta", "delta": " audio"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "已"}
+{"type": "assistant.delta", "delta": "存在"}
+{"type": "assistant.delta", "delta": "同"}
+{"type": "assistant.delta", "delta": "内容"}
+{"type": "assistant.delta", "delta": "全"}
+{"type": "assistant.delta", "delta": "片"}
+{"type": "assistant.delta", "delta": "序列"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "seq"}
+{"type": "assistant.delta", "delta": "_"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "fdf"}
+{"type": "assistant.delta", "delta": "7"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "title"}
+{"type": "assistant.delta", "delta": "「"}
+{"type": "assistant.delta", "delta": "雨"}
+{"type": "assistant.delta", "delta": "灯"}
+{"type": "assistant.delta", "delta": "归"}
+{"type": "assistant.delta", "delta": "航"}
+{"type": "assistant.delta", "delta": "_"}
+{"type": "assistant.delta", "delta": "全"}
+{"type": "assistant.delta", "delta": "片"}
+{"type": "assistant.delta", "delta": "工程"}
+{"type": "assistant.delta", "delta": "预览"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "B"}
+{"type": "assistant.delta", "delta": "）」"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "revision"}
+{"type": "assistant.delta", "delta": "=`"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "df"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "d"}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "cb"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "镜"}
+{"type": "assistant.delta", "delta": "无"}
+{"type": "assistant.delta", "delta": " trim"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "已有"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "个"}
+{"type": "assistant.delta", "delta": " done"}
+{"type": "assistant.delta", "delta": " render"}
+{"type": "assistant.delta", "delta": " version"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "但"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "final"}
+{"type": "assistant.delta", "delta": "_render"}
+{"type": "assistant.delta", "delta": "=null"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "、"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "final"}
+{"type": "assistant.delta", "delta": "_f"}
+{"type": "assistant.delta", "delta": "resh"}
+{"type": "assistant.delta", "delta": "ness"}
+{"type": "assistant.delta", "delta": "="}
+{"type": "assistant.delta", "delta": "missing"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "）。"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "###"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": " Timeline"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "预"}
+{"type": "assistant.delta", "delta": "演"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "assembly"}
+{"type": "assistant.delta", "delta": ".timeline"}
+{"type": "assistant.delta", "delta": "_preview"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "通过"}
+{"type": "assistant.delta", "delta": "："}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "镜"}
+{"type": "assistant.delta", "delta": "全部"}
+{"type": "assistant.delta", "delta": " pin"}
+{"type": "assistant.delta", "delta": "_match"}
+{"type": "assistant.delta", "delta": "=true"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "无"}
+{"type": "assistant.delta", "delta": " violations"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "总"}
+{"type": "assistant.delta", "delta": "时长"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": ","}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": " ms"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "≈"}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": " s"}
+{"type": "assistant.delta", "delta": "），"}
+{"type": "assistant.delta", "delta": "场景"}
+{"type": "assistant.delta", "delta": "边界"}
+{"type": "assistant.delta", "delta": "在"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": " ms"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "s"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "→"}
+{"type": "assistant.delta", "delta": "s"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "）"}
+{"type": "assistant.delta", "delta": "和"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "7"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": " ms"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "s"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "→"}
+{"type": "assistant.delta", "delta": "s"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "）。"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "###"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": " Sequence"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "创建"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "sequence"}
+{"type": "assistant.delta", "delta": "_id"}
+{"type": "assistant.delta", "delta": "**:"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "seq"}
+{"type": "assistant.delta", "delta": "_a"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "d"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "b"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "b"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "title"}
+{"type": "assistant.delta", "delta": "**:"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "雨"}
+{"type": "assistant.delta", "delta": "灯"}
+{"type": "assistant.delta", "delta": "归"}
+{"type": "assistant.delta", "delta": "航"}
+{"type": "assistant.delta", "delta": "_"}
+{"type": "assistant.delta", "delta": "全"}
+{"type": "assistant.delta", "delta": "片"}
+{"type": "assistant.delta", "delta": "工程"}
+{"type": "assistant.delta", "delta": "预览"}
+{"type": "assistant.delta", "delta": "_"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "B"}
+{"type": "assistant.delta", "delta": "_A"}
+{"type": "assistant.delta", "delta": "gent"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "revision"}
+{"type": "assistant.delta", "delta": "**:"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "df"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "d"}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "cb"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "cl"}
+{"type": "assistant.delta", "delta": "ips"}
+{"type": "assistant.delta", "delta": "**:"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "镜"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "全部"}
+{"type": "assistant.delta", "delta": " trim"}
+{"type": "assistant.delta", "delta": "_in"}
+{"type": "assistant.delta", "delta": "="}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": " /"}
+{"type": "assistant.delta", "delta": " trim"}
+{"type": "assistant.delta", "delta": "_out"}
+{"type": "assistant.delta", "delta": "="}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "整"}
+{"type": "assistant.delta", "delta": "镜"}
+{"type": "assistant.delta", "delta": "保留"}
+{"type": "assistant.delta", "delta": "）"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "snapshot"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "对齐"}
+{"type": "assistant.delta", "delta": "**:"}
+{"type": "assistant.delta", "delta": " verified"}
+{"type": "assistant.delta", "delta": "=true"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "snap"}
+{"type": "assistant.delta", "delta": "_"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "a"}
+{"type": "assistant.delta", "delta": "_form"}
+{"type": "assistant.delta", "delta": "al"}
+{"type": "assistant.delta", "delta": "_"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "_"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "7"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "）"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "render"}
+{"type": "assistant.delta", "delta": "_profile"}
+{"type": "assistant.delta", "delta": "**:"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "与"}
+{"type": "assistant.delta", "delta": " recommended"}
+{"type": "assistant.delta", "delta": "_render"}
+{"type": "assistant.delta", "delta": "_profile"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "一致"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "###"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "渲染"}
+{"type": "assistant.delta", "delta": "提交"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "assembly"}
+{"type": "assistant.delta", "delta": ".render"}
+{"type": "assistant.delta", "delta": "_submit"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "调用"}
+{"type": "assistant.delta", "delta": "返回"}
+{"type": "assistant.delta", "delta": "工具"}
+{"type": "assistant.delta", "delta": "内部"}
+{"type": "assistant.delta", "delta": "异常"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "'"}
+{"type": "assistant.delta", "delta": "Job"}
+{"type": "assistant.delta", "delta": "'"}
+{"type": "assistant.delta", "delta": " object"}
+{"type": "assistant.delta", "delta": " has"}
+{"type": "assistant.delta", "delta": " no"}
+{"type": "assistant.delta", "delta": " attribute"}
+{"type": "assistant.delta", "delta": " '"}
+{"type": "assistant.delta", "delta": "status"}
+{"type": "assistant.delta", "delta": "'"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "），"}
+{"type": "assistant.delta", "delta": "但"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "render"}
+{"type": "assistant.delta", "delta": " version"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "已"}
+{"type": "assistant.delta", "delta": "入"}
+{"type": "assistant.delta", "delta": "队"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": "："}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": " -"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "render"}
+{"type": "assistant.delta", "delta": "_version"}
+{"type": "assistant.delta", "delta": "_id"}
+{"type": "assistant.delta", "delta": "**:"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "s"}
+{"type": "assistant.delta", "delta": "render"}
+{"type": "assistant.delta", "delta": "_ac"}
+{"type": "assistant.delta", "delta": "a"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "c"}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": " -"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "status"}
+{"type": "assistant.delta", "delta": "**:"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "queued"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": " -"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "pl"}
+{"type": "assistant.delta", "delta": "anned"}
+{"type": "assistant.delta", "delta": "_duration"}
+{"type": "assistant.delta", "delta": "_ms"}
+{"type": "assistant.delta", "delta": "**:"}
+{"type": "assistant.delta", "delta": " null"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "入"}
+{"type": "assistant.delta", "delta": "队"}
+{"type": "assistant.delta", "delta": "初期"}
+{"type": "assistant.delta", "delta": "尚未"}
+{"type": "assistant.delta", "delta": "计算"}
+{"type": "assistant.delta", "delta": "）"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "按"}
+{"type": "assistant.delta", "delta": "纪律"}
+{"type": "assistant.delta", "delta": "不"}
+{"type": "assistant.delta", "delta": "声称"}
+{"type": "assistant.delta", "delta": "渲染"}
+{"type": "assistant.delta", "delta": "完成"}
+{"type": "assistant.delta", "delta": "——"}
+{"type": "assistant.delta", "delta": "当前"}
+{"type": "assistant.delta", "delta": "状态"}
+{"type": "assistant.delta", "delta": "为"}
+{"type": "assistant.delta", "delta": " queued"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "等待"}
+{"type": "assistant.delta", "delta": "后台"}
+{"type": "assistant.delta", "delta": " Job"}
+{"type": "assistant.delta", "delta": "Queue"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "异步"}
+{"type": "assistant.delta", "delta": "执行"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "###"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "提案"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "已"}
+{"type": "assistant.delta", "delta": "写入"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "projects"}
+{"type": "assistant.delta", "delta": "\\\\"}
+{"type": "assistant.delta", "delta": "雨"}
+{"type": "assistant.delta", "delta": "灯"}
+{"type": "assistant.delta", "delta": "归"}
+{"type": "assistant.delta", "delta": "航"}
+{"type": "assistant.delta", "delta": "\\\\"}
+{"type": "assistant.delta", "delta": "output"}
+{"type": "assistant.delta", "delta": "\\\\"}
+{"type": "assistant.delta", "delta": "assembly"}
+{"type": "assistant.delta", "delta": "\\\\"}
+{"type": "assistant.delta", "delta": "proposal"}
+{"type": "assistant.delta", "delta": "_v"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": ".md"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "提案"}
+{"type": "assistant.delta", "delta": " v"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "）"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "关键"}
+{"type": "assistant.delta", "delta": "待"}
+{"type": "assistant.delta", "delta": "审"}
+{"type": "assistant.delta", "delta": "事项"}
+{"type": "assistant.delta", "delta": "："}
+{"type": "assistant.delta", "delta": "硬"}
+{"type": "assistant.delta", "delta": "切"}
+{"type": "assistant.delta", "delta": "全"}
+{"type": "assistant.delta", "delta": "片"}
+{"type": "assistant.delta", "delta": " /"}
+{"type": "assistant.delta", "delta": " s"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "_c"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": " caveat"}
+{"type": "assistant.delta", "delta": " /"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "×"}
+{"type": "assistant.delta", "delta": "7"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "镜头"}
+{"type": "assistant.delta", "delta": " crop"}
+{"type": "assistant.delta", "delta": " fill"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "效果"}
+{"type": "assistant.delta", "delta": " /"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "最终"}
+{"type": "assistant.delta", "delta": "使用"}
+{"type": "assistant.delta", "delta": " seq"}
+{"type": "assistant.delta", "delta": "_a"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "d"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "b"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "b"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "还是"}
+{"type": "assistant.delta", "delta": "复用"}
+{"type": "assistant.delta", "delta": " seq"}
+{"type": "assistant.delta", "delta": "_"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "fdf"}
+{"type": "assistant.delta", "delta": "7"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "###"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "本轮"}
+{"type": "assistant.delta", "delta": "回执"}
+{"type": "assistant.delta", "delta": "汇总"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "字段"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "值"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": "------"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": "-----"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " sequence"}
+{"type": "assistant.delta", "delta": "_id"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "seq"}
+{"type": "assistant.delta", "delta": "_a"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "d"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "b"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "b"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " revision"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "df"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "d"}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "cb"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " job"}
+{"type": "assistant.delta", "delta": "_id"}
+{"type": "assistant.delta", "delta": " /"}
+{"type": "assistant.delta", "delta": " render"}
+{"type": "assistant.delta", "delta": "_version"}
+{"type": "assistant.delta", "delta": "_id"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "s"}
+{"type": "assistant.delta", "delta": "render"}
+{"type": "assistant.delta", "delta": "_ac"}
+{"type": "assistant.delta", "delta": "a"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "c"}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "render"}
+{"type": "assistant.delta", "delta": "_version"}
+{"type": "assistant.delta", "delta": "_id"}
+{"type": "assistant.delta", "delta": "；"}
+{"type": "assistant.delta", "delta": "job"}
+{"type": "assistant.delta", "delta": "_id"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "由"}
+{"type": "assistant.delta", "delta": "后台"}
+{"type": "assistant.delta", "delta": " Job"}
+{"type": "assistant.delta", "delta": "Queue"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "分配"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "回执"}
+{"type": "assistant.delta", "delta": "未"}
+{"type": "assistant.delta", "delta": "暴露"}
+{"type": "assistant.delta", "delta": "）"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "计划"}
+{"type": "assistant.delta", "delta": "时长"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " queued"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "阶段"}
+{"type": "assistant.delta", "delta": "为"}
+{"type": "assistant.delta", "delta": " null"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "预期"}
+{"type": "assistant.delta", "delta": " ≈"}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": " ms"}
+{"type": "assistant.delta", "delta": "）"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "当前"}
+{"type": "assistant.delta", "delta": "渲染"}
+{"type": "assistant.delta", "delta": "状态"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "queued"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": "下一步"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": "："}
+{"type": "assistant.delta", "delta": "用户"}
+{"type": "assistant.delta", "delta": "评审"}
+{"type": "assistant.delta", "delta": "提案"}
+{"type": "assistant.delta", "delta": "后"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "由"}
+{"type": "assistant.delta", "delta": "我"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "或"}
+{"type": "assistant.delta", "delta": "用户"}
+{"type": "assistant.delta", "delta": "）"}
+{"type": "assistant.delta", "delta": "在"}
+{"type": "assistant.delta", "delta": "渲染"}
+{"type": "assistant.delta", "delta": " done"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "后"}
+{"type": "assistant.delta", "delta": "调用"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "assembly"}
+{"type": "assistant.delta", "delta": ".man"}
+{"type": "assistant.delta", "delta": "ifest"}
+{"type": "assistant.delta", "delta": "_publish"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "发布"}
+{"type": "assistant.delta", "delta": "成片"}
+{"type": "assistant.delta", "delta": "契约"}
+{"type": "assistant.delta", "delta": "；"}
+{"type": "assistant.delta", "delta": "最终"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "select"}
+{"type": "assistant.delta", "delta": " final"}
+{"type": "assistant.delta", "delta": "_render"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "由"}
+{"type": "assistant.delta", "delta": "用户"}
+{"type": "assistant.delta", "delta": "显"}
+{"type": "assistant.delta", "delta": "式"}
+{"type": "assistant.delta", "delta": "裁定"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "tool.pending", "step_id": 9, "name": "assembly.sequence_read", "label": "读取 Sequence canonical"}
+{"type": "tool.pending", "step_id": 9, "name": "assembly.render_status", "label": "渲染状态与诊断"}
+{"type": "tool.pending", "step_id": 9, "name": "assembly.briefing", "label": "成片全局状态一览"}
+{"type": "tool.started", "step_id": 9, "call_id": "call_997880b543ef479abb8e6962", "name": "assembly.sequence_read", "label": "读取 Sequence canonical"}
+{"type": "tool.completed", "step_id": 9, "call_id": "call_997880b543ef479abb8e6962", "name": "assembly.sequence_read", "ok": true, "summary": "读取 Sequence canonical完成"}
+{"type": "tool.started", "step_id": 9, "call_id": "call_f9269915fe194eebadaf6374", "name": "assembly.render_status", "label": "渲染状态与诊断"}
+{"type": "tool.completed", "step_id": 9, "call_id": "call_f9269915fe194eebadaf6374", "name": "assembly.render_status", "ok": true, "summary": "渲染状态与诊断完成"}
+{"type": "tool.started", "step_id": 9, "call_id": "call_5ef502a9f67442568bb2b37d", "name": "assembly.briefing", "label": "成片全局状态一览"}
+{"type": "tool.completed", "step_id": 9, "call_id": "call_5ef502a9f67442568bb2b37d", "name": "assembly.briefing", "ok": true, "summary": "成片全局状态一览完成"}
+{"type": "tool.pending", "step_id": 10, "name": "assembly.manifest_publish", "label": "发布时间线契约 manifest"}
+{"type": "tool.started", "step_id": 10, "call_id": "call_0b7ff245067a458388b2ec9d", "name": "assembly.manifest_publish", "label": "发布时间线契约 manifest"}
+{"type": "tool.completed", "step_id": 10, "call_id": "call_0b7ff245067a458388b2ec9d", "name": "assembly.manifest_publish", "ok": true, "summary": "发布 manifest_v2（13 镜，片长 89902ms，音轨策略 native）"}
+{"type": "tool.pending", "step_id": 11, "name": "assembly.sequence_read", "label": "读取 Sequence canonical"}
+{"type": "tool.pending", "step_id": 11, "name": "assembly.manifest_read", "label": "assembly.manifest_read"}
+{"type": "tool.started", "step_id": 11, "call_id": "call_4d1f932f421241c28a495368", "name": "assembly.sequence_read", "label": "读取 Sequence canonical"}
+{"type": "tool.completed", "step_id": 11, "call_id": "call_4d1f932f421241c28a495368", "name": "assembly.sequence_read", "ok": true, "summary": "读取 Sequence canonical完成"}
+{"type": "tool.started", "step_id": 11, "call_id": "call_c1c68664d882404a84a4d631", "name": "assembly.manifest_read", "label": "assembly.manifest_read"}
+{"type": "tool.completed", "step_id": 11, "call_id": "call_c1c68664d882404a84a4d631", "name": "assembly.manifest_read", "ok": false, "summary": "assembly.manifest_read失败：未知工具：assembly.manifest_read"}
+{"type": "tool.pending", "step_id": 12, "name": "assembly.proposal_write", "label": "写剪辑提案"}
+{"type": "tool.started", "step_id": 12, "call_id": "call_9ae4c5047b59428ca59759ec", "name": "assembly.proposal_write", "label": "写剪辑提案"}
+{"type": "tool.completed", "step_id": 12, "call_id": "call_9ae4c5047b59428ca59759ec", "name": "assembly.proposal_write", "ok": true, "summary": "提案 v2 已写入（雨灯归航_全片工程预览_44B_Agent_提案（v2·渲染完成））——等待用户评审"}
+{"type": "assistant.delta", "delta": "---"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "##"}
+{"type": "assistant.delta", "delta": " Phase"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "B"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "基础"}
+{"type": "assistant.delta", "delta": "成片"}
+{"type": "assistant.delta", "delta": " —"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "最终"}
+{"type": "assistant.delta", "delta": "汇报"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "###"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "执行"}
+{"type": "assistant.delta", "delta": "摘要"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "字段"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "值"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": "------"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": "-----"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "sequence"}
+{"type": "assistant.delta", "delta": "_id"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "seq"}
+{"type": "assistant.delta", "delta": "_a"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "d"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "b"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "b"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "revision"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "df"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "d"}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "cb"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "render"}
+{"type": "assistant.delta", "delta": "_version"}
+{"type": "assistant.delta", "delta": "_id"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "s"}
+{"type": "assistant.delta", "delta": "render"}
+{"type": "assistant.delta", "delta": "_ac"}
+{"type": "assistant.delta", "delta": "a"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "c"}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "渲染"}
+{"type": "assistant.delta", "delta": "状态"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "done"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "输出"}
+{"type": "assistant.delta", "delta": "文件"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "projects"}
+{"type": "assistant.delta", "delta": "\\"}
+{"type": "assistant.delta", "delta": "雨"}
+{"type": "assistant.delta", "delta": "灯"}
+{"type": "assistant.delta", "delta": "归"}
+{"type": "assistant.delta", "delta": "航"}
+{"type": "assistant.delta", "delta": "\\"}
+{"type": "assistant.delta", "delta": "output"}
+{"type": "assistant.delta", "delta": "\\"}
+{"type": "assistant.delta", "delta": "sequences"}
+{"type": "assistant.delta", "delta": "\\"}
+{"type": "assistant.delta", "delta": "seq"}
+{"type": "assistant.delta", "delta": "_a"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "d"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "b"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "b"}
+{"type": "assistant.delta", "delta": "\\s"}
+{"type": "assistant.delta", "delta": "render"}
+{"type": "assistant.delta", "delta": "_ac"}
+{"type": "assistant.delta", "delta": "a"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "c"}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": ".mp"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "计划"}
+{"type": "assistant.delta", "delta": "时长"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": ","}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": " ms"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "实测"}
+{"type": "assistant.delta", "delta": "时长"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": ","}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": " ms"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "误差"}
+{"type": "assistant.delta", "delta": " +"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "ms"}
+{"type": "assistant.delta", "delta": "）"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "错误"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "无"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "error"}
+{"type": "assistant.delta", "delta": "=\"\""}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "audio"}
+{"type": "assistant.delta", "delta": "_peak"}
+{"type": "assistant.delta", "delta": "_warning"}
+{"type": "assistant.delta", "delta": "=null"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "）"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "###"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "关键"}
+{"type": "assistant.delta", "delta": "决策"}
+{"type": "assistant.delta", "delta": "记录"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "brief"}
+{"type": "assistant.delta", "delta": "ing"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "发现"}
+{"type": "assistant.delta", "delta": "已"}
+{"type": "assistant.delta", "delta": "存在"}
+{"type": "assistant.delta", "delta": "同"}
+{"type": "assistant.delta", "delta": "内容"}
+{"type": "assistant.delta", "delta": "序列"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "seq"}
+{"type": "assistant.delta", "delta": "_"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "fdf"}
+{"type": "assistant.delta", "delta": "7"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "镜"}
+{"type": "assistant.delta", "delta": "、"}
+{"type": "assistant.delta", "delta": "无"}
+{"type": "assistant.delta", "delta": " trim"}
+{"type": "assistant.delta", "delta": "、"}
+{"type": "assistant.delta", "delta": "相同"}
+{"type": "assistant.delta", "delta": " profile"}
+{"type": "assistant.delta", "delta": "），"}
+{"type": "assistant.delta", "delta": "但其"}
+{"type": "assistant.delta", "delta": " title"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "与"}
+{"type": "assistant.delta", "delta": "任务"}
+{"type": "assistant.delta", "delta": "要求的"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "「"}
+{"type": "assistant.delta", "delta": "雨"}
+{"type": "assistant.delta", "delta": "灯"}
+{"type": "assistant.delta", "delta": "归"}
+{"type": "assistant.delta", "delta": "航"}
+{"type": "assistant.delta", "delta": "_"}
+{"type": "assistant.delta", "delta": "全"}
+{"type": "assistant.delta", "delta": "片"}
+{"type": "assistant.delta", "delta": "工程"}
+{"type": "assistant.delta", "delta": "预览"}
+{"type": "assistant.delta", "delta": "_"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "B"}
+{"type": "assistant.delta", "delta": "_A"}
+{"type": "assistant.delta", "delta": "gent"}
+{"type": "assistant.delta", "delta": "」"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "不符"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "assistant.delta", "delta": "按"}
+{"type": "assistant.delta", "delta": "任务"}
+{"type": "assistant.delta", "delta": "要求"}
+{"type": "assistant.delta", "delta": "新建"}
+{"type": "assistant.delta", "delta": "等价"}
+{"type": "assistant.delta", "delta": "副本"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "seq"}
+{"type": "assistant.delta", "delta": "_a"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "d"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "b"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "b"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "snapshot"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "对齐"}
+{"type": "assistant.delta", "delta": " verified"}
+{"type": "assistant.delta", "delta": "=true"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "render"}
+{"type": "assistant.delta", "delta": "_submit"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "工具"}
+{"type": "assistant.delta", "delta": "报"}
+{"type": "assistant.delta", "delta": "内部"}
+{"type": "assistant.delta", "delta": "异常"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "'"}
+{"type": "assistant.delta", "delta": "Job"}
+{"type": "assistant.delta", "delta": "'"}
+{"type": "assistant.delta", "delta": " object"}
+{"type": "assistant.delta", "delta": " has"}
+{"type": "assistant.delta", "delta": " no"}
+{"type": "assistant.delta", "delta": " attribute"}
+{"type": "assistant.delta", "delta": " '"}
+{"type": "assistant.delta", "delta": "status"}
+{"type": "assistant.delta", "delta": "'"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "），"}
+{"type": "assistant.delta", "delta": "但"}
+{"type": "assistant.delta", "delta": "后台"}
+{"type": "assistant.delta", "delta": " Job"}
+{"type": "assistant.delta", "delta": "Queue"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "已"}
+{"type": "assistant.delta", "delta": "自动"}
+{"type": "assistant.delta", "delta": "创建"}
+{"type": "assistant.delta", "delta": " render"}
+{"type": "assistant.delta", "delta": " version"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "s"}
+{"type": "assistant.delta", "delta": "render"}
+{"type": "assistant.delta", "delta": "_ac"}
+{"type": "assistant.delta", "delta": "a"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "c"}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "并"}
+{"type": "assistant.delta", "delta": "进入"}
+{"type": "assistant.delta", "delta": "队列"}
+{"type": "assistant.delta", "delta": "；"}
+{"type": "assistant.delta", "delta": "异步"}
+{"type": "assistant.delta", "delta": "完成后"}
+{"type": "assistant.delta", "delta": "状态"}
+{"type": "assistant.delta", "delta": "变为"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "done"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "manifest"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "已"}
+{"type": "assistant.delta", "delta": "发布"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "manifest"}
+{"type": "assistant.delta", "delta": "_v"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": ".json"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "assembly"}
+{"type": "assistant.delta", "delta": "_revision"}
+{"type": "assistant.delta", "delta": "="}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "），"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "镜"}
+{"type": "assistant.delta", "delta": "时间"}
+{"type": "assistant.delta", "delta": "线"}
+{"type": "assistant.delta", "delta": "契约"}
+{"type": "assistant.delta", "delta": "固化"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "final"}
+{"type": "assistant.delta", "delta": "_render"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "仍"}
+{"type": "assistant.delta", "delta": "为"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "null"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": "——"}
+{"type": "assistant.delta", "delta": "按"}
+{"type": "assistant.delta", "delta": "纪律"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "select"}
+{"type": "assistant.delta", "delta": " final"}
+{"type": "assistant.delta", "delta": "_render"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "是"}
+{"type": "assistant.delta", "delta": "用户"}
+{"type": "assistant.delta", "delta": "显"}
+{"type": "assistant.delta", "delta": "式"}
+{"type": "assistant.delta", "delta": "动作"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "我"}
+{"type": "assistant.delta", "delta": "不得"}
+{"type": "assistant.delta", "delta": "代替"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "###"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "提案"}
+{"type": "assistant.delta", "delta": "文件"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "projects"}
+{"type": "assistant.delta", "delta": "\\"}
+{"type": "assistant.delta", "delta": "雨"}
+{"type": "assistant.delta", "delta": "灯"}
+{"type": "assistant.delta", "delta": "归"}
+{"type": "assistant.delta", "delta": "航"}
+{"type": "assistant.delta", "delta": "\\"}
+{"type": "assistant.delta", "delta": "output"}
+{"type": "assistant.delta", "delta": "\\"}
+{"type": "assistant.delta", "delta": "assembly"}
+{"type": "assistant.delta", "delta": "\\"}
+{"type": "assistant.delta", "delta": "proposal"}
+{"type": "assistant.delta", "delta": "_v"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": ".md"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "v"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "·"}
+{"type": "assistant.delta", "delta": "渲染"}
+{"type": "assistant.delta", "delta": "完成"}
+{"type": "assistant.delta", "delta": "版"}
+{"type": "assistant.delta", "delta": "）"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "###"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "待"}
+{"type": "assistant.delta", "delta": "用户"}
+{"type": "assistant.delta", "delta": "动作"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "评审"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "s"}
+{"type": "assistant.delta", "delta": "render"}
+{"type": "assistant.delta", "delta": "_ac"}
+{"type": "assistant.delta", "delta": "a"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "c"}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": ".mp"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "裁定"}
+{"type": "assistant.delta", "delta": "使用"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "seq"}
+{"type": "assistant.delta", "delta": "_a"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "d"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "b"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "b"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "还是"}
+{"type": "assistant.delta", "delta": "复用"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "seq"}
+{"type": "assistant.delta", "delta": "_"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "fdf"}
+{"type": "assistant.delta", "delta": "7"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "显"}
+{"type": "assistant.delta", "delta": "式"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "select"}
+{"type": "assistant.delta", "delta": " final"}
+{"type": "assistant.delta", "delta": "_render"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "使"}
+{"type": "assistant.delta", "delta": " freshness"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "变为"}
+{"type": "assistant.delta", "delta": " fresh"}

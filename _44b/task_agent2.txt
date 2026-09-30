@@ -1,0 +1,12 @@
+任务（续）：你在上一轮发起了全片渲染，后台 JobQueue 现已执行完毕（这是系统告知的真实状态）。
+
+要求：
+1. 用 assembly.render_status 查询你创建的 sequence 的渲染结果，deep_audit=true 做帧级审计（PTS 单调性/重复帧/缺帧/黑帧/切点检查/静音段）。
+2. 若状态为 done：如实汇报实测片长 vs 计划片长偏差、审计发现（若有）。然后用 assembly.manifest_publish 发布成片时间线契约（narration_cues 留空，B 批不接旁白）。
+3. 用 assembly.proposal_write 写一页可评审提案（Markdown），内容必须包含：
+   - 顺序依据：canonical 叙事顺序全保留、整镜硬切（第一版工程预览纪律）；
+   - 两处跨组切点标记：s01_c06→s02_c01（timeline 39543ms）、s02_c03→s03_c01（timeline 57902ms）；
+   - 引用快照 seam 实测数据中风险最高的两条接缝：s03_c03→s03_c04（MAE 86.6，从未经用户看片）与 s01_c01→s01_c02（MAE 61.4，暴雨→室内转场），列入"用户看片时需给口径"清单；
+   - 「工程预览」标注：本成片基于正式快照 snap_44a_formal_20261001_001753，但 final_render 的 select 与成片定版由用户完成；
+   - 音轨现状：保留原生环境声（audio=native），未加任何 BGM/旁白；s02_c03（甲-2）原生音轨近静音属用户已知选择。
+4. 汇报最终状态：render version_id / 实测片长 / manifest revision 与文件 / 提案文件路径。只能引用工具回执与状态查询的真实字段。

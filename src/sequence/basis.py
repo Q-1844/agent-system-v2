@@ -27,7 +27,7 @@ from .models import (
     SequenceClip,
     SequenceError,
     SequenceRenderVersion,
-    render_profile_fingerprint,
+    render_profile_fingerprint_for,
 )
 from .timeline import ResolvedClip
 
@@ -87,7 +87,7 @@ def build_render_basis(block: SequenceBlock, resolved: List[ResolvedClip]) -> Di
             }
             for rc in resolved
         ],
-        "render_profile_fingerprint": render_profile_fingerprint(),
+        "render_profile_fingerprint": render_profile_fingerprint_for(block.effective_render_profile()),
         "renderer_schema": SEQUENCE_RENDERER_SCHEMA,
         # 与 compute_current_basis 同构（race guard 整体相等比较的前提）；
         # build 路径已解析成功，恒 None。
@@ -126,7 +126,7 @@ def compute_current_basis(project: Project, block: SequenceBlock) -> Dict[str, A
         "sequence_id": block.sequence_id,
         "sequence_revision": block.revision,
         "clips": clips,
-        "render_profile_fingerprint": render_profile_fingerprint(),
+        "render_profile_fingerprint": render_profile_fingerprint_for(block.effective_render_profile()),
         "renderer_schema": SEQUENCE_RENDERER_SCHEMA,
         "resolution_error": error,
     }

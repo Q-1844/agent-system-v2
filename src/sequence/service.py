@@ -69,6 +69,7 @@ from .models import (
     SequenceEntry,
     SequenceError,
     SequenceRenderVersion,
+    validate_render_profile,
 )
 from .store import SequenceStore
 from .timeline import ResolvedClip, SequenceTimelinePlan, build_timeline_plan
@@ -132,13 +133,17 @@ class SequenceService:
         return self._require_entry(self.store.load(), sequence_id)
 
     def create_sequence(self, *, title: str = "", scene_id: Optional[str] = None,
-                        clips: List[Dict[str, Any]]) -> SequenceBlock:
-        """创建 SequenceBlock。clips 结构非法 → fail closed（不自动修正）。"""
+                        clips: List[Dict[str, Any]],
+                        render_profile: Optional[Dict[str, Any]] = None) -> SequenceBlock:
+        """创建 SequenceBlock。clips 结构非法 → fail closed（不自动修正）。
+        render_profile（Phase 44B）：完整规格 dict（validate_render_profile 校验）；
+        None = 用全局 SEQUENCE_RENDER_PROFILE。"""
         block = SequenceBlock(
             sequence_id=SequenceBlock.new_sequence_id(),
             clips=[SequenceClip.from_dict(c) for c in (clips or [])],
             title=str(title or ""),
-            scene_id=scene_id)
+            scene_id=scene_id,
+            render_profile=(dict(render_profile) if render_profile else None))
         with _store_lock(self.project_name):
             entries = self.store.load()
             entries[block.sequence_id] = SequenceEntry(block=block)
@@ -147,8 +152,11 @@ class SequenceService:
 
     def update_sequence(self, sequence_id: str, *, title: Optional[str] = None,
                         scene_id: Optional[str] = None, clips: Optional[List[Dict[str, Any]]] = None,
-                        expected_revision: Optional[str] = None) -> SequenceBlock:
+                        expected_revision: Optional[str] = None,
+                        render_profile: Optional[Dict[str, Any]] = None) -> SequenceBlock:
         """更新 canonical。clips 传 None = 不改；传 list = 整体替换（顺序即播放顺序）。
+        render_profile：None = 不改；完整规格 dict = 设置（校验 fail closed）；
+        空 dict = 清除覆盖（回到全局 profile）。
         expected_revision 提供 OCC 门：不符 → revision_conflict。"""
         with _store_lock(self.project_name):
             entries = self.store.load()
@@ -164,6 +172,11 @@ class SequenceService:
                 entry.block.title = str(title).strip()
             if scene_id is not None:
                 entry.block.scene_id = scene_id
+            if render_profile is not None:
+                if render_profile:
+                    entry.block.render_profile = validate_render_profile(render_profile)
+                else:
+                    entry.block.render_profile = None     # 空 dict = 清除覆盖
             entry.block.touch()
             self.store.save(entries)
             return entry.block
@@ -273,6 +286,15 @@ class SequenceService:
             timeline = build_timeline_plan(resolved)                  # §13 + §12 验证
             resolved_audio: List[ResolvedAudioSource] = []
             if has_layers:
+                # 混音输出规格硬编码 aac 48k stereo（audio_mix 方案 A）——profile
+                # 覆盖与之背离时 fail closed（防「规格声明≠实际输出」的第二真相）。
+                _eff = block.effective_render_profile()
+                if (_eff.get("sample_rate"), _eff.get("channels")) != (48000, 2):
+                    raise SequenceError(
+                        "profile_invalid",
+                        f"含 AudioPlan 的渲染要求 profile 采样率/声道 = 48000/2"
+                        f"（混音输出规格），收到 {_eff.get('sample_rate')}/"
+                        f"{_eff.get('channels')}")
                 for layer in plan.layers:
                     r = resolve_audio_source(self.project_dir, layer.layer_id, layer.source)
                     if layer.source_in_ms + layer.duration_ms > r.duration_ms:
@@ -333,6 +355,11 @@ class SequenceService:
         work_dir = version_dir / "_work" / version_id
         work_dir.mkdir(parents=True, exist_ok=True)
         plan_layers = prepared.audio_plan.layers if prepared.has_layers else []
+        # Phase 44B：渲染 profile 来自 block（显式覆盖或全局）；audio=silent 时
+        # 全部 clip 按无音轨处理（补等长 silence）——「关闭原音轨」显式策略，
+        # 进 basis 指纹（策略变化 = 诚实 STALE），杜绝逐镜原生声漏进静音成片。
+        profile = self.get_entry(sequence_id).block.effective_render_profile()
+        silent_native = profile.get("audio") == "silent"
         output_file = version_dir / f"{version_id}.mp4"
         base_rv: Optional[SequenceRenderVersion] = None
         try:
@@ -343,7 +370,8 @@ class SequenceService:
                     render_clip(tc.source_file, str(seg),
                                 trim_in_ms=tc.trim_in_ms, trim_out_ms=tc.trim_out_ms,
                                 source_duration_ms=tc.source_duration_ms,
-                                has_audio=bool(tc.has_audio))   # probe 实测随 plan 传递
+                                has_audio=bool(tc.has_audio) and not silent_native,
+                                profile=profile)   # probe 实测随 plan 传递
                     segments.append(str(seg))
                 return segments
 

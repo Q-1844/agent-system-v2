@@ -48,6 +48,7 @@ class CapabilityCategory(str, Enum):
     SHOT            = "shot"
     REVIEW          = "review"
     COMPOSITION     = "composition"
+    SEQUENCE        = "sequence"   # Phase 44B：成片装配域（SequenceBlock/manifest/proposal）
 
 
 class RiskLevel(str, Enum):

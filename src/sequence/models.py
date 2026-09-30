@@ -57,6 +57,90 @@ def render_profile_fingerprint() -> str:
     return fingerprint(SEQUENCE_RENDER_PROFILE)
 
 
+# ---- Phase 44B：per-sequence render profile（加法式扩展）----
+# 背景：SEQUENCE_RENDER_PROFILE 冻结自 Native AV 时代源现实（1280x704）。video 2.5
+# 迁移后生产现实以 1280x720 为主，且同一部片可能混代际素材（44A 雨灯归航：11 镜
+# 720 + 2 镜 704）。全局常量按 S1 冻结纪律不动；SequenceBlock 增可选 render_profile
+# 覆盖（None = 全局，S1 语义逐字节不变）。profile 是渲染依赖 → 进 basis 指纹，
+# 变化 = 诚实 STALE（同 §19）。
+RENDER_PROFILE_BASE_KEYS = ("width", "height", "fps", "vcodec", "pix_fmt",
+                            "acodec", "sample_rate", "channels", "container")
+RENDER_PROFILE_OPTIONAL_KEYS = ("fill", "audio")
+# 第一版能力白名单（与 media_ops._normalize_vf / render_clip 实际实现一致；fail closed）。
+_RENDER_PROFILE_VALUE_WHITELIST = {
+    "vcodec": {"libx264"},
+    "pix_fmt": {"yuv420p"},
+    "acodec": {"aac"},
+    "container": {"mp4"},
+    "fill": {"pad", "crop"},
+    "audio": {"native", "silent"},
+}
+
+
+def validate_render_profile(profile: Any) -> Dict[str, Any]:
+    """校验 per-sequence render profile（fail closed，不静默修正）。
+    必须是【完整】规格（与 SEQUENCE_RENDER_PROFILE 同键集 + 可选 fill/audio）；
+    未知键 / 缺基键 / 类型错 / 白名单外值 / 非偶数宽高 / 非正 fps/采样率 →
+    SequenceError.profile_invalid。返回规范化副本（int/str 归一）。"""
+    err = SequenceError("profile_invalid", "")
+    if not isinstance(profile, dict):
+        err.message = f"render_profile 必须是对象，收到: {type(profile).__name__}"
+        raise err
+    unknown = sorted(set(profile) - set(RENDER_PROFILE_BASE_KEYS)
+                     - set(RENDER_PROFILE_OPTIONAL_KEYS))
+    if unknown:
+        err.message = f"render_profile 未知键: {unknown}（fail closed）"
+        raise err
+    missing = [k for k in RENDER_PROFILE_BASE_KEYS if k not in profile]
+    if missing:
+        err.message = f"render_profile 缺少必填键: {missing}（必须是完整规格）"
+        raise err
+    out: Dict[str, Any] = {}
+    for k in RENDER_PROFILE_BASE_KEYS:
+        v = profile[k]
+        if k in ("width", "height", "sample_rate", "channels"):
+            if isinstance(v, bool) or not isinstance(v, int) or v <= 0:
+                err.message = f"render_profile.{k} 必须是正整数，收到: {v!r}"
+                raise err
+            out[k] = v
+        elif k == "fps":
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or v <= 0:
+                err.message = f"render_profile.fps 必须是正数，收到: {v!r}"
+                raise err
+            out[k] = v
+        else:
+            if not isinstance(v, str):
+                err.message = f"render_profile.{k} 必须是字符串，收到: {v!r}"
+                raise err
+            if v not in _RENDER_PROFILE_VALUE_WHITELIST[k]:
+                err.message = (f"render_profile.{k}={v!r} 不在第一版能力白名单 "
+                               f"{sorted(_RENDER_PROFILE_VALUE_WHITELIST[k])}")
+                raise err
+            out[k] = v
+    if out["width"] % 2 or out["height"] % 2:
+        err.message = ("render_profile 宽高必须为偶数（yuv420p 要求）: "
+                       f"{out['width']}x{out['height']}")
+        raise err
+    if out["channels"] not in (1, 2):
+        err.message = f"render_profile.channels 必须 1/2，收到: {out['channels']}"
+        raise err
+    for k in RENDER_PROFILE_OPTIONAL_KEYS:
+        if k in profile:
+            v = profile[k]
+            if not isinstance(v, str) or v not in _RENDER_PROFILE_VALUE_WHITELIST[k]:
+                err.message = (f"render_profile.{k}={v!r} 非法"
+                               f"（允许: {sorted(_RENDER_PROFILE_VALUE_WHITELIST[k])}）")
+                raise err
+            out[k] = v
+    return out
+
+
+def render_profile_fingerprint_for(profile: Dict[str, Any]) -> str:
+    """任意 profile 的指纹（与 render_profile_fingerprint 同族；effective profile 用）。
+    None/全局 profile 传 SEQUENCE_RENDER_PROFILE 本体 → 与旧指纹逐字节一致。"""
+    return fingerprint(profile)
+
+
 # ---- SequenceRenderVersion.status（24.md §9/§23）----
 RSTATUS_QUEUED = "queued"                    # 已受理，待 Phase 1 prepare
 RSTATUS_RENDERING = "rendering"              # Phase 2 ffmpeg 进行中
@@ -140,6 +224,10 @@ class SequenceBlock:
     clips: List[SequenceClip] = field(default_factory=list)
     title: str = ""                      # display only（不进 revision）
     scene_id: Optional[str] = None       # 可选归属场景（display/组织用，不进 revision）
+    # Phase 44B：per-sequence 渲染 profile（None = 全局 SEQUENCE_RENDER_PROFILE，
+    # S1 语义逐字节不变）。display/组织字段同样不进 revision——render 依赖走 basis
+    # 的 profile 指纹（变化 = STALE），不混入剪辑语义指纹。
+    render_profile: Optional[Dict[str, Any]] = None
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
 
@@ -154,6 +242,14 @@ class SequenceBlock:
             raise SequenceError(
                 "sequence_invalid",
                 "Sequence 至少需要 1 个 clip（空 Sequence 不构成「哪些 Shot 什么顺序」）")
+        if self.render_profile is not None:
+            self.render_profile = validate_render_profile(self.render_profile)
+
+    def effective_render_profile(self) -> Dict[str, Any]:
+        """渲染实际消费的 profile：显式覆盖（已校验）或全局 SEQUENCE_RENDER_PROFILE。
+        🔴 None 时返回全局常量【本体】，保证旧项目 basis 指纹逐字节不变。"""
+        return self.render_profile if self.render_profile is not None \
+            else SEQUENCE_RENDER_PROFILE
 
     @staticmethod
     def new_sequence_id() -> str:
@@ -178,6 +274,8 @@ class SequenceBlock:
             "title": self.title,
             "scene_id": self.scene_id,
             "clips": [c.to_dict() for c in self.clips],
+            "render_profile": (dict(self.render_profile)
+                               if self.render_profile is not None else None),
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
@@ -190,11 +288,13 @@ class SequenceBlock:
             if required not in d:
                 raise SequenceError("sequence_invalid",
                                     f"sequence block 缺少 {required}（fail closed）")
+        rp = d.get("render_profile")
         return cls(
             sequence_id=d.get("sequence_id"),
             clips=[SequenceClip.from_dict(c) for c in (d.get("clips") or [])],
             title=str(d.get("title") or ""),
             scene_id=d.get("scene_id"),
+            render_profile=(dict(rp) if isinstance(rp, dict) and rp else None),
             created_at=float(d.get("created_at") or 0.0) or time.time(),
             updated_at=float(d.get("updated_at") or 0.0) or time.time(),
         )

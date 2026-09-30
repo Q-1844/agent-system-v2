@@ -334,6 +334,13 @@ async def agent_turn_stream(project_name: str, sid: str, req: StreamTurnReq):
         _turn_fn, _writes, _resource, _emit = (
             director_turn, DIRECTOR_WRITE_OPERATIONS, RESOURCE_STORYBOARD, emit_changed)
         _write_domain_map = None
+    elif session.agent_id == "assembly":
+        # Phase 44B：Assembly Agent 单写域 sequence——锁按工具查 WRITE_TOOL_DOMAIN 挂。
+        from src.agents.assembly import assembly_turn, WRITE_TOOL_DOMAIN
+        from src.agents.project_events import emit_changed
+        _turn_fn, _writes, _resource, _emit = (
+            assembly_turn, frozenset(WRITE_TOOL_DOMAIN), None, emit_changed)
+        _write_domain_map = WRITE_TOOL_DOMAIN
     elif session.agent_id == "producer":
         # Producer V1 Phase 1：流式端点支持 Producer tool-loop。Producer 自身不锁任何资源
         # （_writes 空集）——锁由 Bridge 内 Specialist 接线（_cb 复制 §5.3-⑤b 语义）负责；
@@ -347,7 +354,7 @@ async def agent_turn_stream(project_name: str, sid: str, req: StreamTurnReq):
     else:
         _raise(AgentError("permission_denied",
                           "流式 turn 仅支持 Script Writer / Character Designer / Scene Agent / "
-                          "Director / Producer 会话"))
+                          "Director / Assembly Agent / Producer 会话"))
     from src.agents.models import ScopeType
     from src.agents.project_events import get_project_bus
     if session.scope_type != ScopeType.PROJECT.value:

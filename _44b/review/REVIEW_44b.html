@@ -1,0 +1,91 @@
+<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8">
+<title>Phase 44B 基础成片 · 工程预览评审</title><style>
+body{font-family:system-ui,"Segoe UI",sans-serif;max-width:1100px;margin:24px auto;padding:0 16px;background:#141414;color:#ddd}
+h1{font-size:20px} h2{font-size:16px;border-bottom:1px solid #333;padding-bottom:6px;margin-top:32px}
+h3{font-size:14px} video{width:100%;max-width:880px;background:#000;border-radius:6px}
+table{border-collapse:collapse;font-size:12px;width:100%} td,th{border:1px solid #333;padding:4px 8px;text-align:left}
+pre{background:#1d1d1d;padding:12px;border-radius:6px;font-size:12px;overflow:auto}
+.frames{display:flex;flex-wrap:wrap;gap:10px} figure{margin:0;width:200px} img{width:200px;border-radius:4px}
+figcaption{font-size:11px;color:#888} .note{color:#9ab;font-size:12px} .warn{color:#f80}
+section{margin-bottom:12px}
+</style></head><body>
+<h1>Phase 44B｜基础成片工程预览（雨灯归航 · snap_44a_formal_20261001_001753）</h1>
+<p class="note">状态：<b>工程预览</b>——成片基于正式快照装配；final_render 选择与成片定版由用户完成。
+音轨=原生环境声（audio=native），未加任何 BGM/旁白；s02_c03 原生近静音为用户已知选择（甲-2）。</p>
+<section><h2>1｜3 镜小样本（B4.1：同组接力 + 跨组切换）</h2><h3>小样本成片（native 原生环境声）</h3><video controls preload='metadata' src='../../projects/雨灯归航/output/sequences/seq_22ff8de0/srender_664a49b9.mp4'></video><p class='note'>sequence seq_22ff8de0 / render srender_664a49b9 / 渲染 8.1s / 实测 18380ms（计划 ）</p><p>切点机器检查：0 处异常（2 切点）；帧审计 issues：[]</p><div class='frames'><figure><img src='../../_44b/previews/small_00_t0ms.png' loading='lazy'><figcaption>t=0ms</figcaption></figure><figure><img src='../../_44b/previews/small_01_t9190ms.png' loading='lazy'><figcaption>t=9190ms</figcaption></figure><figure><img src='../../_44b/previews/small_02_t4925ms.png' loading='lazy'><figcaption>t=4925ms</figcaption></figure><figure><img src='../../_44b/previews/small_03_t5425ms.png' loading='lazy'><figcaption>t=5425ms</figcaption></figure><figure><img src='../../_44b/previews/small_04_t10109ms.png' loading='lazy'><figcaption>t=10109ms</figcaption></figure><figure><img src='../../_44b/previews/small_05_t10609ms.png' loading='lazy'><figcaption>t=10609ms</figcaption></figure><figure><img src='../../_44b/previews/small_06_t18330ms.png' loading='lazy'><figcaption>t=18330ms</figcaption></figure></div></section><section><h2>1b｜静音策略渲染（B3：audio=silent 双策略）</h2><h3>小样本成片（silent 整片静音轨）</h3><video controls preload='metadata' src='../../projects/雨灯归航/output/sequences/seq_22ff8de0/srender_4c781784.mp4'></video><p class='note'>render srender_4c781784 / 渲染 6.1s / 静音段（&gt;-60dB, &gt;0.5s）：1 —— 输出含等长静音轨，原生声已关闭</p><p>freshness：native=current、silent=stale（策略回退后的状态机）</p></section><section><h2>2｜全片 13 镜工程预览（B4.2）</h2><h3>全片成片（89.9s，native）</h3><video controls preload='metadata' src='../../projects/雨灯归航/output/sequences/seq_900fdf75/srender_53486e6a.mp4'></video><p class='note'>sequence seq_900fdf75 / render srender_53486e6a / 渲染 28.2s / 片长 89902ms / manifest_v1</p><table><tr><th>#</th><th>镜</th><th>场</th><th>来源版本</th><th>裁定</th><th>源区间 ms</th><th>时间线 ms</th></tr><tr><td>0</td><td>s01_c01</td><td>s01</td><td>vv_55accb16</td><td>user_locked</td><td>0–8000</td><td>0–8000</td></tr><tr><td>1</td><td>s01_c02</td><td>s01</td><td>vv_9cda3271</td><td>user_locked</td><td>0–8000</td><td>8000–16000</td></tr><tr><td>2</td><td>s01_c03</td><td>s01</td><td>vv_703eb03f</td><td>user_locked</td><td>0–8000</td><td>16000–24000</td></tr><tr><td>3</td><td>s01_c04</td><td>s01</td><td>vv_80dc90a5</td><td>user_locked</td><td>0–5175</td><td>24000–29175</td></tr><tr><td>4</td><td>s01_c05</td><td>s01</td><td>vv_70728b9b</td><td>user_locked</td><td>0–5184</td><td>29175–34359</td></tr><tr><td>5</td><td>s01_c06</td><td>s01</td><td>vv_5ad9192d</td><td>user_locked</td><td>0–5184</td><td>34359–39543</td></tr><tr><td>6</td><td>s02_c01</td><td>s02 ⚡跨组</td><td>vv_ebbc77f8</td><td>user_locked</td><td>0–8000</td><td>39543–47543</td></tr><tr><td>7</td><td>s02_c02</td><td>s02</td><td>vv_4bdf6b08</td><td>user_locked</td><td>0–5175</td><td>47543–52718</td></tr><tr><td>8</td><td>s02_c03</td><td>s02</td><td>vv_49e4bd19</td><td>user_locked</td><td>0–5184</td><td>52718–57902</td></tr><tr><td>9</td><td>s03_c01</td><td>s03 ⚡跨组</td><td>vv_f741a354</td><td>user_locked</td><td>0–8000</td><td>57902–65902</td></tr><tr><td>10</td><td>s03_c02</td><td>s03</td><td>vv_03ff6e45</td><td>user_locked</td><td>0–8000</td><td>65902–73902</td></tr><tr><td>11</td><td>s03_c03</td><td>s03</td><td>vv_49b85cd1</td><td>user_locked_with_caveat</td><td>0–8000</td><td>73902–81902</td></tr><tr><td>12</td><td>s03_c04</td><td>s03</td><td>vv_6684f5dd</td><td>user_locked</td><td>0–8000</td><td>81902–89902</td></tr></table><h3>接缝机器检查</h3><p>{&quot;seam@39543ms&quot;: [&quot;切点窗内帧空洞 83ms（pts 948→950）&quot;]}</p><p>12 切点中 11 处全净；帧级 issues：[&quot;缺帧 1 帧（pts 空洞示例: [949]）&quot;]</p><h3>快照期接缝 MAE（44A 实测，风险排序）</h3><p>[]</p></section><section><h2>3｜修改测试（B4.3）</h2><pre>{
+ &quot;new_render_version_id&quot;: &quot;srender_620ec518&quot;,
+ &quot;new_render_seconds&quot;: 26.2,
+ &quot;old_output_sha_unchanged&quot;: true,
+ &quot;old_output&quot;: &quot;projects\\雨灯归航\\output\\sequences\\seq_900fdf75\\srender_53486e6a.mp4&quot;,
+ &quot;manifest_v1_sha_unchanged&quot;: true,
+ &quot;freshness_v1_during_trim&quot;: {
+  &quot;status&quot;: &quot;stale&quot;,
+  &quot;sequence_id&quot;: &quot;seq_900fdf75&quot;,
+  &quot;detail&quot;: {
+   &quot;reason&quot;: &quot;dependency_keys_mismatch&quot;,
+   &quot;version_id&quot;: &quot;srender_53486e6a&quot;,
+   &quot;mismatched_keys&quot;: [
+    &quot;sequence_revision&quot;,
+    &quot;clips[3].trim_out_ms&quot;
+   ],
+   &quot;hint&quot;: &quot;sequence should be explicitly re-rendered（24.md §21：不 auto render）&quot;
+  }
+ },
+ &quot;freshness_v2&quot;: {
+  &quot;status&quot;: &quot;current&quot;,
+  &quot;sequence_id&quot;: &quot;seq_900fdf75&quot;,
+  &quot;detail&quot;: {
+   &quot;version_id&quot;: &quot;srender_620ec518&quot;
+  }
+ },
+ &quot;freshness_v1_after_revert&quot;: {
+  &quot;status&quot;: &quot;current&quot;,
+  &quot;sequence_id&quot;: &quot;seq_900fdf75&quot;,
+  &quot;detail&quot;: {
+   &quot;version_id&quot;: &quot;srender_53486e6a&quot;
+  }
+ },
+ &quot;other_shots_not_regenerated&quot;: true,
+ &quot;note&quot;: &quot;trim 修订只追加 render version；v1 输出/manifest/哈希原样可找回；回退后 v1 freshness 恢复 CURRENT（basis 机制），无需重渲染&quot;
+}</pre></section><section><h2>3b｜版本替换测试（B4.3：fixture）</h2><pre>{
+ &quot;fixture_dir&quot;: &quot;C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\_44b_swap_fixture&quot;,
+ &quot;freshness_before_swap&quot;: &quot;current&quot;,
+ &quot;freshness_after_swap&quot;: &quot;stale&quot;,
+ &quot;new_render_version_id&quot;: &quot;srender_23e1c57b&quot;,
+ &quot;new_render_sources&quot;: [
+  {
+   &quot;shot_id&quot;: &quot;sA_c01&quot;,
+   &quot;version_id&quot;: &quot;vv_a2&quot;
+  },
+  {
+   &quot;shot_id&quot;: &quot;sB_c01&quot;,
+   &quot;version_id&quot;: &quot;vv_b1&quot;
+  }
+ ],
+ &quot;old_output&quot;: &quot;projects\\_44b_swap_fixture\\output\\sequences\\seq_de24285e\\srender_265f6b9a.mp4&quot;,
+ &quot;old_output_sha_unchanged&quot;: true,
+ &quot;freshness_v2&quot;: &quot;current&quot;,
+ &quot;note&quot;: &quot;替换一镜已批准版本 → 只生成新 render version（sA_c01→vv_a2）；旧输出/哈希可找回；sB_c01 未重生成&quot;
+}</pre></section><section><h2>4｜中断恢复测试（B4.4）</h2><pre>{
+ &quot;job_id&quot;: &quot;6687a02da7f9&quot;,
+ &quot;render_version_id&quot;: &quot;srender_2d46f206&quot;,
+ &quot;job_state_before_recovery&quot;: null,
+ &quot;render_row_state_before_recovery&quot;: &quot;rendering&quot;,
+ &quot;render_row_state_after_recovery&quot;: &quot;done&quot;,
+ &quot;duration_ms&quot;: 89923,
+ &quot;output_exists&quot;: true,
+ &quot;output_file&quot;: &quot;projects\\雨灯归航\\output\\sequences\\seq_900fdf75\\srender_2d46f206.mp4&quot;,
+ &quot;old_output_v1_untouched&quot;: true,
+ &quot;note&quot;: &quot;渲染进程崩溃后按 job receipt（jobs cache）恢复：running→queued 重推，同一 render version 完成回执；旧 done 输出各持独立文件未被覆盖&quot;
+}</pre></section><section><h2>5｜Assembly Agent 真实会话（B4.5）</h2><h3>Agent 装配的全片成片（seq_a3d5b19b）</h3><video controls preload='metadata' src='../../projects/雨灯归航/output/sequences/seq_a3d5b19b/srender_aca99c81.mp4'></video><p class='note'>由 Assembly Agent 真实会话自主创建/渲染（工具轨迹见 _44b/events_agent_*.jsonl）</p><pre>{
+ &quot;session_id&quot;: &quot;sess_4f24b44e5672&quot;,
+ &quot;turn1_seconds&quot;: 133.8,
+ &quot;turn2_seconds&quot;: 124.8,
+ &quot;render&quot;: {
+  &quot;sequence_id&quot;: null,
+  &quot;render_version_id&quot;: null,
+  &quot;final_status&quot;: null,
+  &quot;wait_s&quot;: null
+ }
+}</pre><p>完整工具轨迹见 _44b/events_agent_1.jsonl / events_agent_2.jsonl、result_agent_1.json / result_agent_2.json、session_after_agent.json。</p></section>
+</body></html>
