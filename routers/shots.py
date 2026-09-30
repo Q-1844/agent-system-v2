@@ -742,6 +742,10 @@ async def _handler_first_frame(job, emit):
                                                  "used_reference_ids": list(bound.used_reference_ids),
                                                  "semantic_roles": [dict(r) for r in bound.semantic_roles],
                                                  "dropped_optional": [dict(d) for d in bound.dropped_optional],
+                                                 # 43.md §一步：diagnostics 落档——
+                                                 # identity_crop 派生失败等诚实降级
+                                                 # 诊断必须可追溯（绝不 silent）
+                                                 "diagnostics": [dict(d) for d in bound.diagnostics],
                                                  # Phase 3：continuity_tail 实际发送的尾帧身份
                                                  # （来源镜头/来源视频版本/URL）——补全
                                                  # used_reference_ids 不含临时尾帧的 receipt 缺口
@@ -853,7 +857,8 @@ async def _handler_last_frame(job, emit):
                                                                        for r in bound_last.semantic_roles],
                                                  "used_reference_ids": list(bound_last.used_reference_ids),
                                                  "semantic_roles": [dict(r) for r in bound_last.semantic_roles],
-                                                 "dropped_optional": [dict(d) for d in bound_last.dropped_optional]}
+                                                 "dropped_optional": [dict(d) for d in bound_last.dropped_optional],
+                                                 "diagnostics": [dict(d) for d in bound_last.diagnostics]}
                                                 if bound_last else {})})
     def mut(s, b=new_batch, cid=cand.candidate_id, d=str(dest), u=url):
         s.last_frame_batches.append(b)

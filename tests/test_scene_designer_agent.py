@@ -1561,34 +1561,60 @@ def test_D2_budget_full_keeps_scene():
 
 
 
-def test_D2_human_reference_mode_auto_drop_on_tight():
-    """D2 §5.2：auto 下 context_only（紧景别）→ drop 全部人形参考；
-    WS/MS（full）→ keep。显式 keep/drop 直通。"""
+def test_D2_human_reference_mode_auto_tight_crop_after_p42():
+    """D2 §5.2 起步=auto 紧景别 drop；Phase 42 定版翻转（43.md §一步，2026-09-30）：
+    景别驱动的紧景别（CU/ECU/MCU）auto→crop（P3 三臂+EXP2/3 用户评审——相对 drop
+    构图不变身份变好，相对 keep 无全身构图锚）；角度驱动的 context_only（OTS/
+    insert/detail，景别不紧）维持 drop（例外有档）。显式 keep/drop/crop 直通。"""
     from src.generation.image_adapter import (
         _apply_reference_budget, resolve_human_reference_mode)
-    # CU + auto scene → context_only → look 也 drop
+    # CU + auto scene → context_only → look 保留为 crop 档（头肩派生），场景仍裁
     dropped = []
     kept, mode = _apply_reference_budget(_d2_budget_items(), shot=_FakeShot("close-up"),
                                          scene_reference_mode="auto", dropped=dropped)
     assert mode == "context_only"
-    assert [x["source_id"] for x in kept] == ["prop_玉佩"], kept
+    assert [x["source_id"] for x in kept] == ["look_沈夜", "prop_玉佩"], kept
+    look_kept = [x for x in kept if x["source_id"] == "look_沈夜"][0]
+    assert look_kept.get("derived_crop") == "bust"
     reasons = {d["reason"] for d in dropped}
-    assert "human_reference_drop" in reasons
-    # MS + auto → full → look 保留
+    assert "human_reference_drop" not in reasons
+    assert "scene_reference_context_only" in reasons
+    assert "human_reference_budget" in reasons   # identity 双视角+look extra 照旧裁
+    # MS + auto → full → look 保留（无 crop 派生）
     kept2, mode2 = _apply_reference_budget(_d2_budget_items(), shot=_FakeShot("medium shot"),
                                            scene_reference_mode="auto", dropped=[])
     assert mode2 == "full"
-    assert "look_沈夜" in [x["source_id"] for x in kept2]
-    # 显式 keep 覆盖
+    look2 = [x for x in kept2 if x["source_id"] == "look_沈夜"][0]
+    assert "derived_crop" not in look2
+    # 显式 keep 覆盖（保留直通语义）
     kept3, _m = _apply_reference_budget(_d2_budget_items(), shot=_FakeShot("close-up"),
                                         scene_reference_mode="context_only",
                                         human_reference_mode="keep", dropped=[])
     assert "look_沈夜" in [x["source_id"] for x in kept3]
-    # resolver 直通
+    assert all("derived_crop" not in x for x in kept3)
+    # resolver：景别驱动紧景别 → crop；ECU → crop（方法映射 face 由
+    # resolve_identity_crop_method 负责）；角度驱动 context_only → drop（例外）
     from src.generation.image_adapter import resolve_human_reference_mode as r
     assert r(None, _FakeShot("medium shot"), "full") == "keep"
-    assert r(None, _FakeShot("close-up"), "context_only") == "drop"
+    assert r(None, _FakeShot("close-up"), "context_only") == "crop"
+    assert r(None, _FakeShot("medium close-up"), "context_only") == "crop"
+    assert r(None, _FakeShot("extreme close-up"), "context_only") == "crop"
+    assert r(None, _FakeShot("medium shot", camera_angle="OTS 过肩"),
+             "context_only") == "drop"
+    assert r(None, _FakeShot("medium shot", composition="insert of jade pendant"),
+             "context_only") == "drop"
+    # 显式直通不受翻转影响
     assert r("keep", _FakeShot("close-up"), "context_only") == "keep"
+    assert r("drop", _FakeShot("close-up"), "context_only") == "drop"
+    assert r("crop", _FakeShot("medium shot"), "full") == "crop"
     import pytest
     with pytest.raises(ValueError):
         r("bogus", _FakeShot(), "full")
+
+
+def test_p42_identity_crop_method_mapping_by_size():
+    """crop 档方法映射（确定性）：extreme close → face；其余紧景别 → bust。"""
+    from src.generation.image_adapter import resolve_identity_crop_method
+    assert resolve_identity_crop_method(_FakeShot("extreme close-up")) == "face"
+    assert resolve_identity_crop_method(_FakeShot("close-up")) == "bust"
+    assert resolve_identity_crop_method(_FakeShot("medium close-up")) == "bust"

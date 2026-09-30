@@ -105,25 +105,60 @@ def test_first_frame_unbound_legacy_basis_minimal(tmp_path, monkeypatch):
     _no_media_bytes(_last_basis_batch(pdir))
 
 
-def test_first_frame_budget_drops_recorded(tmp_path, monkeypatch):
-    """D2 预算裁剪进 provenance：human drop 时 look 参考 reason 可追溯。"""
+def _tight_closeup_env(tmp_path, monkeypatch):
+    """紧景别 crop 档公共环境：close-up + auto → context_only + human crop。"""
     from test_shot_binding_s3c1 import FakeImageClient as _F
     pdir, ids, svc = _mkenv(tmp_path, monkeypatch, _F())
     _bind_default(svc, ids)
-    # 紧景别 → auto 解析 context_only → human drop
-    shot = _load_shot(pdir)
     store = ProjectStore(pdir)
 
     def _tighten(s):
         s.shot_size = "close-up"
     store.update_shot("s01_c01", _tighten)
+    return pdir
+
+
+def test_first_frame_budget_crop_derivation_provenance(tmp_path, monkeypatch):
+    """Phase 42 定版（43.md §一步）：紧景别 auto→crop——look 以头肩派生进请求，
+    derivation provenance 进 semantic_roles；被裁项 reason 可追溯。"""
+    import src.generation.identity_crop as ic
+    monkeypatch.setattr(
+        ic, "resolve_identity_crop_media",
+        lambda *a, **k: {"media": "data:image/png;base64,QUJD",
+                         "derivation": {"version": "identity_crop_v1",
+                                        "method": "bust"}})
+    pdir = _tight_closeup_env(tmp_path, monkeypatch)
     _run_ff(pdir)
     gb = _last_basis_batch(pdir).generation_basis
     reasons = {d.get("reason") for d in gb["dropped_optional"]}
-    assert "human_reference_drop" in reasons or "human_reference_budget" in reasons, \
-        f"预算裁剪必须可追溯，实际 dropped reasons={reasons}"
+    assert "scene_reference_context_only" in reasons, \
+        f"场景图裁剪必须可追溯，实际 dropped reasons={reasons}"
+    assert "human_reference_drop" not in reasons, "crop 档 look 不再被 drop"
     assert gb["scene_reference_mode"] == "context_only"
-    assert gb["human_reference_mode"] == "drop"
+    assert gb["human_reference_mode"] == "crop"
+    roles = gb.get("semantic_roles") or []
+    look_roles = [r for r in roles if r.get("source_type") == "character_look"]
+    assert look_roles, f"look 必须仍在请求中（crop 档），实际 roles={roles}"
+    assert look_roles[0].get("derivation", {}).get("method") == "bust"
+    _no_media_bytes(_last_basis_batch(pdir))
+
+
+def test_first_frame_budget_crop_derivation_fails_honestly(tmp_path, monkeypatch):
+    """crop 派生失败 → 诚实降级：diagnostic 记录 + look 回落源参考媒体（不 silent，
+    不因派生失败把 look 整个丢掉）。"""
+    import src.generation.identity_crop as ic
+    monkeypatch.setattr(ic, "resolve_identity_crop_media",
+                        lambda *a, **k: None)
+    pdir = _tight_closeup_env(tmp_path, monkeypatch)
+    _run_ff(pdir)
+    gb = _last_basis_batch(pdir).generation_basis
+    diags = {d.get("reason") for d in (gb.get("diagnostics") or [])}
+    assert "identity_crop_derivation_failed" in diags, \
+        f"派生失败必须记 diagnostic，实际 diagnostics={diags}"
+    roles = gb.get("semantic_roles") or []
+    look_roles = [r for r in roles if r.get("source_type") == "character_look"]
+    assert look_roles, "回落源媒体后 look 仍应在请求中"
+    assert look_roles[0].get("derivation") is None
 
 
 # ============ Last frame ============

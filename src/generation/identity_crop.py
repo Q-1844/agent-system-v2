@@ -4,8 +4,10 @@
 # 背景（D2 §5.2 实证）：紧景别发全身白底立绘 → 构图被锚定在「全身+环境」（CU 渲染
 # WS/MS）；人形参考全退（drop）→ identity 只剩 prompt 文本。crop 档 = 第三条路：
 # 从 approved look hero 资产**确定性派生**头肩裁剪参考——identity 信号保留（脸部/
-# 发型/上装），全身构图锚解除。是否把 auto 默认从 drop 翻到 crop 由真机 A/B 证据
-# 决定（31.md §19：先 reference selection，证据门控）。
+# 发型/上装），全身构图锚解除。auto 默认已定版（Phase 42，2026-09-30）：景别驱动的
+# 紧景别（CU 家族）auto→crop——P3 三臂对照（相对 drop 构图不变身份变好）+ EXP2/3
+# 用户逐图评审（跨镜最稳配方）；角度驱动 context_only（OTS/insert/detail）维持
+# drop（无实证，例外有档）。见 image_adapter.resolve_human_reference_mode。
 #
 # 纪律：
 #   - adapter 级派生物：输入 = approved ReferenceAsset 字节；输出 = data URI +

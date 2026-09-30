@@ -55,6 +55,13 @@
 7. **intentional cinematic cut 不强制接续**：构图切换/insert/POV/reaction/
    跨组切换的镜不设 prev_tail，按组首镜处理（自己的参考直生），trace 记
    continuity_type=intentional_cut。先判 continuity intent，再决定是否接续。
+8. **双参考接力（Phase 42 定版）**：relay 镜需逐镜再锚定身份/画风时，经
+   shot.update 把 `video_reference_asset_id` 设为哨兵 `"prev_tail_look"`——
+   请求=上镜真实尾帧（Picture 1）+本镜 hero Look（Picture 2），prompt 自动附
+   `<Picture N>` 指称段。哨兵是 canonical 事实（进指纹、freshness 两侧对称），
+   不是请求级 flag；解析不到 hero Look 会结构化拒绝（fail closed），此时
+   先补 Look 资产再生成。纯 relay（`prev_tail`）行为不变；切换哨兵后下游
+   freshness 按新指纹复核。
 
 **提交前字段落库**：负面约束必须经 shot.update 写进 shot.negative_prompt
 字段（视频生成的唯一正式负面约束通路，独立 API 参数）。只写进 trace 或

@@ -561,16 +561,30 @@ _TIGHT_SIZE_KEYS = ("extreme close", "close-up", "closeup")
 
 def resolve_human_reference_mode(mode: Optional[str], shot: Any,
                                  resolved_scene_mode: str) -> str:
-    """auto：scene 解析为 context_only（紧景别/OTS/insert 家族）→ drop（identity 走
-    prompt 文本，D2 §5.2 实验证据）；否则 keep。显式 keep/drop/crop 直通；未知值
-    ValueError。（auto→crop 的默认翻转待真机 A/B 证据，31.md §19。）"""
+    """auto：scene 解析为 context_only 时按依据分两路——
+
+    - **景别驱动的紧景别（CU/ECU/MCU 家族，_AUTO_CONTEXT_ONLY_SIZE_KEYS）→
+      crop**（Phase 42 定版：同 binding 三臂对照 P3——相对 drop 构图不变、身份
+      显著变好；相对 keep 无全身立绘构图锚；EXP2 图像矩阵+EXP3 多种子用户逐图
+      评审确认 crop=跨镜最稳配方。identity_crop 派生失败诚实回落源媒体并记
+      diagnostic，绝不 silent）。31.md §19 悬案就此落定。
+    - **角度驱动的 context_only（OTS/insert/detail，景别本身不紧）→ drop**
+      （无 crop 实证；insert/detail 主体常为道具——人形参考反而引入人物风险。
+      例外情况，Skill 决策入口与 references 有档）。
+
+    scene 非 context_only → keep。显式 keep/drop/crop 直通；未知值 ValueError。"""
     m = (str(mode or "").strip().lower() or DEFAULT_HUMAN_REFERENCE_MODE)
     if m in ("keep", "drop", "crop"):
         return m
     if m != "auto":
         raise ValueError(f"human_reference_mode 非法: {mode!r}"
                          f"（允许 {'/'.join(HUMAN_REFERENCE_MODES)}）")
-    return "drop" if resolved_scene_mode == "context_only" else "keep"
+    if resolved_scene_mode != "context_only":
+        return "keep"
+    size = (getattr(shot, "shot_size", "") or "").lower()
+    if any(k in size for k in _AUTO_CONTEXT_ONLY_SIZE_KEYS):
+        return "crop"
+    return "drop"
 
 
 def resolve_identity_crop_method(shot: Any) -> str:
