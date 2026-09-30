@@ -109,6 +109,14 @@ for sid in REPAIR_SHOTS:
         it = vid_item(v, "三轮候选")
         if it:
             items.append(it)
+    # 评审页精简规则：每镜最多 3 视频（对照+最新候选）；更多版本留档可按 id 调阅
+    if len(items) > 3:
+        kept = items[:1] + items[-2:]
+        dropped = len(items) - 3
+        items = kept
+        groups_note_extra = f"（另有 {dropped} 条历史候选未上页，留档可调阅）"
+    else:
+        groups_note_extra = ""
     if not items:
         continue
     n_r1 = len([v for v in vvs if CUTOFF1 < (v.get("created_at") or 0) <= CUTOFF2])
@@ -123,7 +131,8 @@ for sid in REPAIR_SHOTS:
         "id": sid,
         "title": f"{sid}（{sh.get('shot_size','')}，{sh.get('target_duration_s')}s）",
         "note": "先看对照，再按序看候选。判定：人物（白斑侧别/兜帽/黑豆眼/小巧）、画风（水彩）、"
-                "道具（铜灯样式状态）、场景（空间/无凭空延伸）、动作与时长匹配、整体观感。",
+                "道具（铜灯样式状态）、场景（空间/无凭空延伸）、动作与时长匹配、整体观感。"
+                + groups_note_extra,
         "videos": items,
     })
     sel_qs.append({
@@ -136,23 +145,19 @@ for sid in REPAIR_SHOTS:
 # ---- 侧别图组（s02_c02 根帧二轮修复对照）----
 look_path = PROJ / "output/resources/looks/look_295fc0cd2345/generations/gen_84b377c581c9/candidate_02.png"
 images = []
-if look_path.exists():
-    dst = MEDIA / "patchside_look.png"
-    if not dst.exists():
-        shutil.copy2(look_path, dst)
-    images.append({"name": "hero Look（基准：白斑=观众左侧）", "src": f"review_media/{dst.name}",
-                   "note": "approved hero Look，白斑侧别的唯一基准"})
-for stem, fn, note in (
-        ("patchside_r1", "s02_c02_first_v1.png", "一轮根帧（侧别反——已否决，留作方差数据点）"),
-        ("patchside_r2", None, None)):
-    pass
-# 一轮侧别反的两张在覆盖写中已丢（s02_c02_first_v1/v2 被二轮覆盖）——只有 Look 与二轮现行图可展示
-r2_root = PROJ / "output/frames/s02_c02_first_v1.png"
-if r2_root.exists():
-    dst = MEDIA / "patchside_r2.png"
-    shutil.copy2(r2_root, dst)
-    images.append({"name": "二轮根帧（seed42，侧别✓，vision 审查 pass）", "src": f"review_media/{dst.name}",
-                   "note": "当前选定根帧；白斑位置略高于 Look（耳侧），侧别正确"})
+_chain = [
+    ("patchside_look", PROJ / "output/resources/looks/look_295fc0cd2345/generations/gen_84b377c581c9/candidate_02.png",
+     "hero Look（基准）", "白斑=观众左侧——唯一基准"),
+    ("patchside_c02root", PROJ / "output/frames/s02_c02_first_v1.png",
+     "s02_c02 根帧（二轮 seed42，起点✓）", "白斑观众左侧=侧别正确（vision pass）"),
+    ("patchside_c02tail", PROJ / "output/frames/s02_c02_video_end_vv_1c4b7001.jpg",
+     "s02_c02 尾帧（现选定视频的末帧）⚠", "白斑漂到观众右侧——i2v 过程中侧别漂移；此尾帧=Picture 1 把镜像传给全部 c03 候选（5/5 镜像）"),
+]
+for stem, f, name, note in _chain:
+    if f.exists():
+        dst = MEDIA / f"{stem}.png"
+        shutil.copy2(f, dst)
+        images.append({"name": name, "src": f"review_media/{dst.name}", "note": note})
 
 manifest = {
     "round": "repair43_v3",
@@ -180,8 +185,11 @@ manifest = {
          "title": "s03_c03 重做（独立重生+灯室 SIV）：空间接近 SIV 但「巨大主灯座」画成了天花板小灯具——可接受吗？",
          "why": "灯室结构 vs SIV 先验的一致性终审"},
         {"id": "q_patch", "group": "s02_c02",
-         "title": "s02_c02 二轮根帧：侧别✓，但白斑位置略高（耳侧）——可接受吗？",
-         "why": "侧别是硬判据，位置微差属方差；用户终审"},
+         "title": "s02_c02 二轮视频：根帧侧别✓但尾帧白斑漂到观众右侧（见侧别图组）——怎么处理？",
+         "why": "尾帧镜像=全部 c03 候选镜像的源头。选项：①接受口径（尾帧白斑属轻微特征，剧情无碍）②重跑 c02 视频换尾帧再接力 ③c03 改融合首帧路径（图像预筛侧别+i2v）"},
+        {"id": "q_c03side", "group": "s02_c03",
+         "title": "s02_c03 五条候选全部白斑镜像（源头=上者）：按哪个口径处理？",
+         "why": "门的先验已由三参考哨兵解决（拱形门✓）；白斑是唯一残留"},
         {"id": "q_s03", "group": "s03_c03",
          "title": "s03 链（c01/c02/c03）：回正效果与空间达标吗？c03 灯室结构（新 SIV）准确吗？",
          "why": "灯室内部 SIV 首次实战"},

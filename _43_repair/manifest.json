@@ -9,14 +9,19 @@
    "title": "白斑侧别对照（s02_c02 根帧修复）",
    "images": [
     {
-     "name": "hero Look（基准：白斑=观众左侧）",
+     "name": "hero Look（基准）",
      "src": "review_media/patchside_look.png",
-     "note": "approved hero Look，白斑侧别的唯一基准"
+     "note": "白斑=观众左侧——唯一基准"
     },
     {
-     "name": "二轮根帧（seed42，侧别✓，vision 审查 pass）",
-     "src": "review_media/patchside_r2.png",
-     "note": "当前选定根帧；白斑位置略高于 Look（耳侧），侧别正确"
+     "name": "s02_c02 根帧（二轮 seed42，起点✓）",
+     "src": "review_media/patchside_c02root.png",
+     "note": "白斑观众左侧=侧别正确（vision pass）"
+    },
+    {
+     "name": "s02_c02 尾帧（现选定视频的末帧）⚠",
+     "src": "review_media/patchside_c02tail.png",
+     "note": "白斑漂到观众右侧——i2v 过程中侧别漂移；此尾帧=Picture 1 把镜像传给全部 c03 候选（5/5 镜像）"
     }
    ]
   }
@@ -158,7 +163,7 @@
   {
    "id": "s02_c02",
    "title": "s02_c02（medium close-up，5.0s）",
-   "note": "先看对照，再按序看候选。判定：人物（白斑侧别/兜帽/黑豆眼/小巧）、画风（水彩）、道具（铜灯样式状态）、场景（空间/无凭空延伸）、动作与时长匹配、整体观感。",
+   "note": "先看对照，再按序看候选。判定：人物（白斑侧别/兜帽/黑豆眼/小巧）、画风（水彩）、道具（铜灯样式状态）、场景（空间/无凭空延伸）、动作与时长匹配、整体观感。（另有 2 条历史候选未上页，留档可调阅）",
    "videos": [
     {
      "name": "对照：修复前现役版（19d81de3）",
@@ -172,34 +177,6 @@
       "review_media/对照：修复前现役版_d81de3_f.jpg",
       "review_media/对照：修复前现役版_d81de3_m.jpg",
       "review_media/对照：修复前现役版_d81de3_e.jpg"
-     ]
-    },
-    {
-     "name": "一轮候选（4bdf6b08）",
-     "video_srcs": [
-      {
-       "label": "一轮候选",
-       "src": "review_media/一轮候选_df6b08.mp4"
-      }
-     ],
-     "thumbs": [
-      "review_media/一轮候选_df6b08_f.jpg",
-      "review_media/一轮候选_df6b08_m.jpg",
-      "review_media/一轮候选_df6b08_e.jpg"
-     ]
-    },
-    {
-     "name": "二轮候选（1c4b7001）",
-     "video_srcs": [
-      {
-       "label": "二轮候选",
-       "src": "review_media/二轮候选_4b7001.mp4"
-      }
-     ],
-     "thumbs": [
-      "review_media/二轮候选_4b7001_f.jpg",
-      "review_media/二轮候选_4b7001_m.jpg",
-      "review_media/二轮候选_4b7001_e.jpg"
      ]
     },
     {
@@ -235,7 +212,7 @@
   {
    "id": "s02_c03",
    "title": "s02_c03（medium shot to wide，5.0s）",
-   "note": "先看对照，再按序看候选。判定：人物（白斑侧别/兜帽/黑豆眼/小巧）、画风（水彩）、道具（铜灯样式状态）、场景（空间/无凭空延伸）、动作与时长匹配、整体观感。",
+   "note": "先看对照，再按序看候选。判定：人物（白斑侧别/兜帽/黑豆眼/小巧）、画风（水彩）、道具（铜灯样式状态）、场景（空间/无凭空延伸）、动作与时长匹配、整体观感。（另有 6 条历史候选未上页，留档可调阅）",
    "videos": [
     {
      "name": "对照：修复前现役版（fdee5e7d）",
@@ -252,45 +229,31 @@
      ]
     },
     {
-     "name": "一轮候选（42ba16c5）",
-     "video_srcs": [
-      {
-       "label": "一轮候选",
-       "src": "review_media/一轮候选_ba16c5.mp4"
-      }
-     ],
-     "thumbs": [
-      "review_media/一轮候选_ba16c5_f.jpg",
-      "review_media/一轮候选_ba16c5_m.jpg",
-      "review_media/一轮候选_ba16c5_e.jpg"
-     ]
-    },
-    {
-     "name": "二轮候选（8241caf8）",
-     "video_srcs": [
-      {
-       "label": "二轮候选",
-       "src": "review_media/二轮候选_41caf8.mp4"
-      }
-     ],
-     "thumbs": [
-      "review_media/二轮候选_41caf8_f.jpg",
-      "review_media/二轮候选_41caf8_m.jpg",
-      "review_media/二轮候选_41caf8_e.jpg"
-     ]
-    },
-    {
-     "name": "三轮候选（d310d34b）",
+     "name": "三轮候选（05d74c63）",
      "video_srcs": [
       {
        "label": "三轮候选",
-       "src": "review_media/三轮候选_10d34b.mp4"
+       "src": "review_media/三轮候选_d74c63.mp4"
       }
      ],
      "thumbs": [
-      "review_media/三轮候选_10d34b_f.jpg",
-      "review_media/三轮候选_10d34b_m.jpg",
-      "review_media/三轮候选_10d34b_e.jpg"
+      "review_media/三轮候选_d74c63_f.jpg",
+      "review_media/三轮候选_d74c63_m.jpg",
+      "review_media/三轮候选_d74c63_e.jpg"
+     ]
+    },
+    {
+     "name": "三轮候选（e4441f21）",
+     "video_srcs": [
+      {
+       "label": "三轮候选",
+       "src": "review_media/三轮候选_441f21.mp4"
+      }
+     ],
+     "thumbs": [
+      "review_media/三轮候选_441f21_f.jpg",
+      "review_media/三轮候选_441f21_m.jpg",
+      "review_media/三轮候选_441f21_e.jpg"
      ]
     }
    ]
@@ -368,7 +331,7 @@
   {
    "id": "s03_c03",
    "title": "s03_c03（medium shot，8.0s）",
-   "note": "先看对照，再按序看候选。判定：人物（白斑侧别/兜帽/黑豆眼/小巧）、画风（水彩）、道具（铜灯样式状态）、场景（空间/无凭空延伸）、动作与时长匹配、整体观感。",
+   "note": "先看对照，再按序看候选。判定：人物（白斑侧别/兜帽/黑豆眼/小巧）、画风（水彩）、道具（铜灯样式状态）、场景（空间/无凭空延伸）、动作与时长匹配、整体观感。（另有 1 条历史候选未上页，留档可调阅）",
    "videos": [
     {
      "name": "对照：修复前现役版（7339c1d5）",
@@ -385,20 +348,6 @@
      ]
     },
     {
-     "name": "一轮候选（070329c4）",
-     "video_srcs": [
-      {
-       "label": "一轮候选",
-       "src": "review_media/一轮候选_0329c4.mp4"
-      }
-     ],
-     "thumbs": [
-      "review_media/一轮候选_0329c4_f.jpg",
-      "review_media/一轮候选_0329c4_m.jpg",
-      "review_media/一轮候选_0329c4_e.jpg"
-     ]
-    },
-    {
      "name": "三轮候选（aad500ba）",
      "video_srcs": [
       {
@@ -410,6 +359,20 @@
       "review_media/三轮候选_d500ba_f.jpg",
       "review_media/三轮候选_d500ba_m.jpg",
       "review_media/三轮候选_d500ba_e.jpg"
+     ]
+    },
+    {
+     "name": "三轮候选（49b85cd1）",
+     "video_srcs": [
+      {
+       "label": "三轮候选",
+       "src": "review_media/三轮候选_b85cd1.mp4"
+      }
+     ],
+     "thumbs": [
+      "review_media/三轮候选_b85cd1_f.jpg",
+      "review_media/三轮候选_b85cd1_m.jpg",
+      "review_media/三轮候选_b85cd1_e.jpg"
      ]
     }
    ]
@@ -443,8 +406,14 @@
   {
    "id": "q_patch",
    "group": "s02_c02",
-   "title": "s02_c02 二轮根帧：侧别✓，但白斑位置略高（耳侧）——可接受吗？",
-   "why": "侧别是硬判据，位置微差属方差；用户终审"
+   "title": "s02_c02 二轮视频：根帧侧别✓但尾帧白斑漂到观众右侧（见侧别图组）——怎么处理？",
+   "why": "尾帧镜像=全部 c03 候选镜像的源头。选项：①接受口径（尾帧白斑属轻微特征，剧情无碍）②重跑 c02 视频换尾帧再接力 ③c03 改融合首帧路径（图像预筛侧别+i2v）"
+  },
+  {
+   "id": "q_c03side",
+   "group": "s02_c03",
+   "title": "s02_c03 五条候选全部白斑镜像（源头=上者）：按哪个口径处理？",
+   "why": "门的先验已由三参考哨兵解决（拱形门✓）；白斑是唯一残留"
   },
   {
    "id": "q_s03",
@@ -551,7 +520,7 @@
    "options": [
     "保持对照（回滚）",
     "一轮候选",
-    "二轮候选",
+    "二轮候选（多选一备注）",
     "都不用（重做）"
    ]
   }
