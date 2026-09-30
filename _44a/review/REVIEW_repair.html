@@ -2,116 +2,126 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8">
-<title>Phase 44A·s02_c03 第 6 轮（融合首帧）评审页 v2</title>
+<title>Phase 44A·s02_c03 全路线评审页 v3</title>
 <style>
   body { font-family: "Microsoft YaHei", sans-serif; background: #14171f; color: #dde3ee; margin: 0; padding: 24px; }
-  h1 { font-size: 20px; } h2 { font-size: 16px; margin-top: 28px; color: #ffd479; }
-  .ctx { display: flex; gap: 12px; flex-wrap: wrap; }
-  .ctx figure { margin: 0; text-align: center; }
-  .ctx img { height: 150px; border-radius: 6px; border: 1px solid #333; }
-  .ctx figcaption { font-size: 12px; color: #9aa3b5; margin-top: 4px; max-width: 260px; }
+  h1 { font-size: 20px; } h2 { font-size: 16px; margin-top: 30px; color: #ffd479; border-top: 1px solid #2c3345; padding-top: 14px; }
   .cand { border: 1px solid #2c3345; border-radius: 10px; padding: 16px; margin: 14px 0; background: #1a1f2b; }
-  .cand.rej { opacity: .62; }
+  .cand.ok { border-color: #2ea04366; }
   .cand h3 { margin: 0 0 8px; color: #8fd3ff; }
-  .cand h3 .tag { color: #56d364; font-size: 13px; }
+  .tag { font-size: 12px; padding: 2px 8px; border-radius: 10px; margin-left: 8px; }
+  .tag.g { background: #23863633; color: #56d364; } .tag.y { background: #bb800933; color: #e3b341; } .tag.n { background: #8b949e33; color: #9aa3b5; }
   .frames { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0; }
   .frames figure { margin: 0; text-align: center; }
-  .frames img { height: 130px; border-radius: 6px; border: 1px solid #333; }
-  .frames figcaption { font-size: 11px; color: #9aa3b5; }
-  video { width: 100%; max-width: 640px; border-radius: 8px; background: #000; }
+  .frames img { height: 132px; border-radius: 6px; border: 1px solid #333; }
+  .frames figcaption { font-size: 11px; color: #9aa3b5; max-width: 210px; }
+  video { width: 100%; max-width: 620px; border-radius: 8px; background: #000; }
   .note { font-size: 13px; color: #aab3c5; line-height: 1.7; }
   .q { margin: 10px 0 4px; font-size: 14px; }
   select, input[type=text] { font-size: 14px; padding: 4px 8px; border-radius: 6px; border: 1px solid #3a4256; background: #10141d; color: #dde3ee; }
   input[type=text] { width: 60%; }
   button { margin-top: 14px; font-size: 15px; padding: 8px 22px; border-radius: 8px; border: 0; background: #2f81f7; color: #fff; cursor: pointer; }
   .ok { color: #56d364; margin-left: 10px; }
-  table { border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+  table { border-collapse: collapse; font-size: 12px; margin-top: 10px; }
   td, th { border: 1px solid #2c3345; padding: 4px 8px; }
 </style>
 </head>
 <body>
-<h1>Phase 44A · s02_c03 第 6 轮评审（融合首帧路径）</h1>
-<p class="note">你的上一轮裁定（逐字）：「开门动作没问题，但是门还是在背后凭空出现，从墙上凭空出现一个门」。<br>
-<b>本轮方法</b>：不再让模型自己「走到门边时现编一扇门」——先用图像模型合成一帧
-<b>起始状态全景</b>（阿獭在工作台抱灯 + 左墙<b>关闭的</b>拱形门清晰在画），门从第 0 帧
-就成立，视频只发生「开门」。代价=开场是正常切换（景别跳变），这是消除凭空门的必要交换。</p>
+<h1>Phase 44A · s02_c03 全路线评审 v3（终选）</h1>
+<p class="note">你已验收：B（vv_e8d43507，融合·全景）与 C（vv_1b24ecac，直生·半全景）——门问题解决。<br>
+按你的指示继续测试了两条新路线：<b>路线甲＝镜头跟随·盲区揭露</b>（首帧保持 c02 尾帧接力、画面无门、场景零变动；人物走向右侧镜头盲区，镜头跟随平移，门在<b>新显露的墙面</b>出现——未知区域创建，合理）；
+<b>路线乙 v2＝融合首帧·门在人物身后</b>（你指出的基准构图：早期测试首帧后方有门）。</p>
 
-<h2>融合首帧（视频的第 0 帧，两支融合候选共用）</h2>
-<div class="ctx">
-  <figure><img src="fused_frame.png"><figcaption>合成的起始状态：台前抱灯 + 左墙关闭的拱形原木门（石砌门框+铁铰链）+ 房间与 SIV 一致</figcaption></figure>
-  <figure><img src="c02_tail_context.jpg"><figcaption>上镜尾帧参照（s02_c02 定版）</figcaption></figure>
+<h2>路线甲：镜头跟随 · 盲区揭露（新）</h2>
+<div class="cand ok">
+  <h3>甲-1 · vv_6bf66392 <span class="tag g">执行侧亲证通过·本轮综合最优</span></h3>
+  <div class="frames">
+    <figure><img src="fl1_reveal.png"><figcaption>1.2s：镜头右移，门在新显露墙面出现（关闭·铁铰链·与 SIV 同款）</figcaption></figure>
+    <figure><img src="fl1_tail.png"><figcaption>尾帧：门开、手扶门、灯塔在望</figcaption></figure>
+  </div>
+  <video src="vv_6bf66392.mp4" controls preload="metadata"></video>
+  <p class="note">入缝 19.1（接力带附近——首帧=尾帧接力，场景零跳变）/ 出缝 35.2（跨段带内）。全程石木房间风格一致，无凭空元素。</p>
+</div>
+<div class="cand">
+  <h3>甲-2 · vv_49e4bd19 <span class="tag y">通过·带风格漂移注记</span></h3>
+  <div class="frames">
+    <figure><img src="fl2_door.png"><figcaption>2.4s：门前握灯</figcaption></figure>
+    <figure><img src="fl2_tail.png"><figcaption>尾帧：门口望灯塔</figcaption></figure>
+  </div>
+  <video src="vv_49e4bd19.mp4" controls preload="metadata"></video>
+  <p class="note">入缝 19.0 / 出缝 39.4。揭露机制同样自然；⚠ 中段起右侧墙面呈原木小屋风格（与既定石木房间不一致）——是否可接受由你定。</p>
 </div>
 
-<div class="cand">
-  <h3>候选 A · vv_eacf0026（融合路径）<span class="tag">｜执行侧亲证通过</span></h3>
+<h2>路线乙 v2：融合首帧 · 门在人物身后（新）</h2>
+<div class="cand ok">
+  <h3>乙-1 · vv_47a58f5d <span class="tag g">执行侧亲证通过</span></h3>
   <div class="frames">
-    <figure><img src="fu1_first.png"><figcaption>第0帧=融合帧（门已成立·关闭）</figcaption></figure>
-    <figure><img src="fu1_mid.png"><figcaption>中段：走向门（房间几何稳定）</figcaption></figure>
-    <figure><img src="fu1_tail.png"><figcaption>尾帧：门开、跨出门外、灯塔剪影</figcaption></figure>
+    <figure><img src="fv1_first.png"><figcaption>第0帧=融合帧：门在身后左背景（关闭）</figcaption></figure>
+    <figure><img src="fv1_tail.png"><figcaption>尾帧：门开、立于门口、灯塔</figcaption></figure>
   </div>
-  <video src="fu1_vv_eacf0026.mp4" controls preload="metadata"></video>
-  <p class="note">入缝 43.0（正常切换）／出缝 39.2（跨段带内）。门从未「出现」——它一直在墙上。</p>
+  <video src="fv1_vv_47a58f5d.mp4" controls preload="metadata"></video>
+  <p class="note">融合帧（门在身后·与早期测试同构图）作硬首帧。入缝 43.9（全景切换）/ 出缝 54.0（切换带上缘）。</p>
+</div>
+<div class="cand">
+  <h3>乙-2 · vv_ca0c3fa8 <span class="tag g">执行侧亲证通过</span></h3>
+  <div class="frames">
+    <figure><img src="fv2_first.png"><figcaption>第0帧=融合帧</figcaption></figure>
+    <figure><img src="fv2_tail.png"><figcaption>尾帧：跨向门外</figcaption></figure>
+  </div>
+  <video src="fv2_vv_ca0c3fa8.mp4" controls preload="metadata"></video>
+  <p class="note">入缝 44.0 / 出缝 57.3。同起点，动作与门外景色略异。</p>
 </div>
 
-<div class="cand">
-  <h3>候选 B · vv_e8d43507（融合路径，当前自动指针所在＝临时）<span class="tag">｜执行侧亲证通过</span></h3>
-  <div class="frames">
-    <figure><img src="fu2_first.png"><figcaption>第0帧=融合帧</figcaption></figure>
-    <figure><img src="fu2_mid.png"><figcaption>中段</figcaption></figure>
-    <figure><img src="fu2_tail.png"><figcaption>尾帧：门外灯塔（红白条纹）</figcaption></figure>
-  </div>
+<h2>你已验收的候选（v2 页）</h2>
+<div class="cand ok">
+  <h3>B · vv_e8d43507 <span class="tag g">融合·全景（你已验收）</span></h3>
   <video src="fu2_vv_e8d43507.mp4" controls preload="metadata"></video>
-  <p class="note">入缝 43.0／出缝 40.2。与 A 同起点，动作细节与门外景色略有差异。</p>
+  <p class="note">入缝 43.0 / 出缝 40.2。</p>
 </div>
-
-<div class="cand">
-  <h3>候选 C · vv_1b24ecac（上一批「直生」意外达标版，备选）</h3>
-  <div class="frames">
-    <figure><img src="acc_first.png"><figcaption>第0帧：门在左缘（模型自己构图带入）</figcaption></figure>
-    <figure><img src="acc_tail.png"><figcaption>尾帧：门开+灯塔</figcaption></figure>
-  </div>
+<div class="cand ok">
+  <h3>C · vv_1b24ecac <span class="tag g">直生·半全景（你已验收）</span></h3>
   <video src="acc_vv_1b24ecac.mp4" controls preload="metadata"></video>
-  <p class="note">入缝 59.0／出缝 38.9。这版不是融合路径（模型构图碰巧把门画进了第 0 帧）；
-  毛色偏冷、开场构图跳变更大。同批另一支（d0b55069）门+栅栏+木桶凭空出现，已否决不列。</p>
+  <p class="note">入缝 59.0 / 出缝 38.9。</p>
+</div>
+<div class="cand">
+  <h3>A · vv_eacf0026 <span class="tag n">融合·全景（v2 页候选，你未点名）</span></h3>
+  <video src="fu1_vv_eacf0026.mp4" controls preload="metadata"></video>
+  <p class="note">入缝 43.0 / 出缝 39.2。如需可一并比较。</p>
 </div>
 
-<div class="cand rej">
-  <h3>已否决参照（上一轮，门凭空出现）</h3>
-  <video src="cand1_vv_1c54b0af.mp4" controls preload="metadata"></video>
-  <p class="note">vv_1c54b0af / vv_7e31d14b：动作好，但门在第 0 帧不存在、随视野扩大凭空出现——你已否决。</p>
-</div>
-
-<h2>裁定</h2>
-<div class="q">1. 本镜正式选片（set-final）：</div>
+<h2>终选裁定</h2>
+<div class="q">1. s02_c03 正式选片（set-final）：</div>
 <select id="sel">
   <option value="">（待定）</option>
-  <option value="vv_eacf0026">候选 A（vv_eacf0026，融合）</option>
-  <option value="vv_e8d43507">候选 B（vv_e8d43507，融合）</option>
-  <option value="vv_1b24ecac">候选 C（vv_1b24ecac，备选）</option>
-  <option value="redo">都不用（再迭代）</option>
+  <option value="vv_6bf66392">甲-1 · vv_6bf66392（镜头跟随，本轮综合最优）</option>
+  <option value="vv_49e4bd19">甲-2 · vv_49e4bd19（镜头跟随，带原木墙漂移）</option>
+  <option value="vv_47a58f5d">乙-1 · vv_47a58f5d（融合·门在身后）</option>
+  <option value="vv_ca0c3fa8">乙-2 · vv_ca0c3fa8（融合·门在身后）</option>
+  <option value="vv_e8d43507">B · vv_e8d43507（融合·全景，已验收）</option>
+  <option value="vv_1b24ecac">C · vv_1b24ecac（直生·半全景，已验收）</option>
+  <option value="vv_eacf0026">A · vv_eacf0026（融合·全景）</option>
+  <option value="redo">都不用（继续迭代）</option>
 </select>
-<div class="q">2. 意见（动作/门外景色/毛色/开场切换是否可接受）：</div>
+<div class="q">2. 备注（原木墙漂移口径 / 门样式 / 门外景色 / 其它）：</div>
 <input type="text" id="q_note" placeholder="可选">
 <br>
-<button onclick="save()">提交裁定（落盘 FEEDBACK_44a.json）</button><span class="ok" id="ok"></span>
+<button onclick="save()">提交终选（落盘 FEEDBACK_44a.json）</button><span class="ok" id="ok"></span>
 
-<h2>执行侧核验记录（自动生成）</h2>
+<h2>全部候选接缝总表（执行侧实测）</h2>
 <table>
-  <tr><th>项</th><th>A 融合</th><th>B 融合</th><th>C 备选</th></tr>
-  <tr><td>门从第 0 帧成立（关闭在画）</td><td>✓（合成帧保证）</td><td>✓</td><td>✓（模型构图，非保证）</td></tr>
-  <tr><td>开门动作完整</td><td>✓</td><td>✓</td><td>✓</td></tr>
-  <tr><td>凭空门/凭空元素</td><td>未见</td><td>未见</td><td>未见</td></tr>
-  <tr><td>入缝 MAE（c02尾→首帧）</td><td>43.0</td><td>43.0</td><td>59.0</td></tr>
-  <tr><td>出缝 MAE（尾帧→s03_c01首）</td><td>39.2</td><td>40.2</td><td>38.9</td></tr>
-  <tr><td>input_visuals 首槽记录</td><td colspan="3">A/B：first hard_start_boundary=融合帧 ✓（融合帧 URL 与选定候选一致）；C：无首帧（直生）</td></tr>
+  <tr><th>候选</th><th>路线</th><th>入缝 MAE（c02尾→首帧）</th><th>出缝 MAE（尾帧→s03_c01首）</th><th>门第0帧成立方式</th></tr>
+  <tr><td>甲-1 6bf66392</td><td>镜头跟随</td><td>19.1</td><td>35.2</td><td>盲区揭露（新显露墙面）</td></tr>
+  <tr><td>甲-2 49e4bd19</td><td>镜头跟随</td><td>19.0</td><td>39.4</td><td>盲区揭露</td></tr>
+  <tr><td>乙-1 47a58f5d</td><td>融合v2</td><td>43.9</td><td>54.0</td><td>合成帧保证（门在身后）</td></tr>
+  <tr><td>乙-2 ca0c3fa8</td><td>融合v2</td><td>44.0</td><td>57.3</td><td>合成帧保证</td></tr>
+  <tr><td>B e8d43507</td><td>融合v1</td><td>43.0</td><td>40.2</td><td>合成帧保证（门在左墙）</td></tr>
+  <tr><td>C 1b24ecac</td><td>直生</td><td>59.0</td><td>38.9</td><td>模型构图（非保证）</td></tr>
 </table>
-<p class="note">配额真实口径：本轮融合路径 +2 视频=10s（账本 155/500）；融合首帧图像 3 张（含 2 张失败样本留档）。
-过程记录：Agent 的 select_frame 只同步了 legacy 槽、未翻转 link_mode（multi 模式构建不消费硬首帧，
-video_adapter.py:489）——前两支「直生」视频由此产生；执行侧接管机械步骤（link_mode→i2v）后融合路径打通。</p>
+<p class="note">配额真实口径：本轮测试 +4 视频=20s（账本 175/500）；融合帧图像 2 张。经验区间参照：接力≈2-17／切换 26-60／剧变 90+（跨段接缝用切换带上段为正常）。</p>
 
 <script>
 async function save() {
-  const fb = { phase44a_c03_r2_select: {
+  const fb = { phase44a_c03_final: {
     q_sel_s02_c03: { choice: document.getElementById('sel').value,
                      note: document.getElementById('q_note').value },
     ts: new Date().toISOString() } };
