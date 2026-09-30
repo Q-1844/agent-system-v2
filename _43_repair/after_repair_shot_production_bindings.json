@@ -1,0 +1,489 @@
+{
+  "schema_version": 1,
+  "bindings": {
+    "s03_c04": {
+      "shot_id": "s03_c04",
+      "scene_id": "s03",
+      "scene_binding": {
+        "scene_instance_id": "scin_f3effc02c359",
+        "location_view_id": "view_24c55d041058",
+        "pinned_scene_instance_view_id": null
+      },
+      "character_bindings": [],
+      "prop_bindings": [],
+      "action": null,
+      "dialogue_speaker_binding": null,
+      "production_notes": "no otter in this shot",
+      "dependency_fingerprints": {
+        "visual_profile": "21bbaa92",
+        "characters": {},
+        "looks": {},
+        "props": {},
+        "compositions": {},
+        "scene_instance": "b0522189",
+        "scene_instance_view": null
+      },
+      "created_at": 1790514188.6110377,
+      "updated_at": 1790514338.9545662
+    },
+    "s01_c01": {
+      "shot_id": "s01_c01",
+      "scene_id": "s01",
+      "scene_binding": {
+        "scene_instance_id": "scin_e2bdadb3beca",
+        "location_view_id": "view_cd8f12307b70",
+        "pinned_scene_instance_view_id": null
+      },
+      "character_bindings": [
+        {
+          "character_name": "阿獭",
+          "look_id": "look_295fc0cd2345",
+          "composition_id": null
+        }
+      ],
+      "prop_bindings": [],
+      "action": null,
+      "dialogue_speaker_binding": null,
+      "production_notes": "",
+      "dependency_fingerprints": {
+        "visual_profile": "21bbaa92",
+        "characters": {
+          "阿獭": "1ade8d78"
+        },
+        "looks": {
+          "look_295fc0cd2345": "11bb2ad2"
+        },
+        "props": {},
+        "compositions": {},
+        "scene_instance": "feb571c5",
+        "scene_instance_view": null
+      },
+      "created_at": 1790514209.9413836,
+      "updated_at": 1790568035.8362782
+    },
+    "s01_c02": {
+      "shot_id": "s01_c02",
+      "scene_id": "s01",
+      "scene_binding": {
+        "scene_instance_id": "scin_e2bdadb3beca",
+        "location_view_id": "view_cd8f12307b70",
+        "pinned_scene_instance_view_id": null
+      },
+      "character_bindings": [
+        {
+          "character_name": "阿獭",
+          "look_id": "look_295fc0cd2345",
+          "composition_id": null
+        }
+      ],
+      "prop_bindings": [],
+      "action": null,
+      "dialogue_speaker_binding": null,
+      "production_notes": "",
+      "dependency_fingerprints": {
+        "visual_profile": "21bbaa92",
+        "characters": {
+          "阿獭": "1ade8d78"
+        },
+        "looks": {
+          "look_295fc0cd2345": "11bb2ad2"
+        },
+        "props": {},
+        "compositions": {},
+        "scene_instance": "feb571c5",
+        "scene_instance_view": null
+      },
+      "created_at": 1790514209.974463,
+      "updated_at": 1790515205.3246834
+    },
+    "s01_c03": {
+      "shot_id": "s01_c03",
+      "scene_id": "s01",
+      "scene_binding": {
+        "scene_instance_id": "scin_e2bdadb3beca",
+        "location_view_id": "view_cd8f12307b70",
+        "pinned_scene_instance_view_id": null
+      },
+      "character_bindings": [
+        {
+          "character_name": "阿獭",
+          "look_id": "look_295fc0cd2345",
+          "composition_id": null
+        }
+      ],
+      "prop_bindings": [
+        {
+          "prop_id": "prop_fb1bd0b18fb1",
+          "relation": "near",
+          "anchor": "beside_character",
+          "visual_state_note": "BROKEN and UNLIT: glass chimney cracked, muddy, lying on the wooden planks, no glow"
+        }
+      ],
+      "action": null,
+      "dialogue_speaker_binding": null,
+      "production_notes": "",
+      "dependency_fingerprints": {
+        "visual_profile": "21bbaa92",
+        "characters": {
+          "阿獭": "1ade8d78"
+        },
+        "looks": {
+          "look_295fc0cd2345": "11bb2ad2"
+        },
+        "props": {
+          "prop_fb1bd0b18fb1": "822aab6d"
+        },
+        "compositions": {},
+        "scene_instance": "feb571c5",
+        "scene_instance_view": null
+      },
+      "created_at": 1790514210.002931,
+      "updated_at": 1790515205.3621964
+    },
+    "s01_c04": {
+      "shot_id": "s01_c04",
+      "scene_id": "s01",
+      "scene_binding": {
+        "scene_instance_id": "scin_e2bdadb3beca",
+        "location_view_id": "view_cd8f12307b70",
+        "pinned_scene_instance_view_id": null
+      },
+      "character_bindings": [
+        {
+          "character_name": "阿獭",
+          "look_id": "look_295fc0cd2345",
+          "composition_id": null
+        }
+      ],
+      "prop_bindings": [
+        {
+          "prop_id": "prop_fb1bd0b18fb1",
+          "relation": "held",
+          "anchor": "left_hand",
+          "visual_state_note": "BROKEN and UNLIT: glass chimney cracked at one corner, muddy brass body, held against chest"
+        }
+      ],
+      "action": null,
+      "dialogue_speaker_binding": null,
+      "production_notes": "",
+      "dependency_fingerprints": {
+        "visual_profile": "21bbaa92",
+        "characters": {
+          "阿獭": "1ade8d78"
+        },
+        "looks": {
+          "look_295fc0cd2345": "11bb2ad2"
+        },
+        "props": {
+          "prop_fb1bd0b18fb1": "822aab6d"
+        },
+        "compositions": {},
+        "scene_instance": "feb571c5",
+        "scene_instance_view": null
+      },
+      "created_at": 1790514210.0325797,
+      "updated_at": 1790732961.105198
+    },
+    "s01_c05": {
+      "shot_id": "s01_c05",
+      "scene_id": "s01",
+      "scene_binding": {
+        "scene_instance_id": "scin_e2bdadb3beca",
+        "location_view_id": "view_cd8f12307b70",
+        "pinned_scene_instance_view_id": null
+      },
+      "character_bindings": [
+        {
+          "character_name": "阿獭",
+          "look_id": "look_295fc0cd2345",
+          "composition_id": "comp_fb128c718c86"
+        }
+      ],
+      "prop_bindings": [],
+      "action": null,
+      "dialogue_speaker_binding": null,
+      "production_notes": "",
+      "dependency_fingerprints": {
+        "visual_profile": "21bbaa92",
+        "characters": {
+          "阿獭": "1ade8d78"
+        },
+        "looks": {
+          "look_295fc0cd2345": "11bb2ad2"
+        },
+        "props": {},
+        "compositions": {
+          "comp_fb128c718c86": "a1f3581a"
+        },
+        "scene_instance": "feb571c5",
+        "scene_instance_view": null
+      },
+      "created_at": 1790514210.0598676,
+      "updated_at": 1790515205.4501905
+    },
+    "s01_c06": {
+      "shot_id": "s01_c06",
+      "scene_id": "s01",
+      "scene_binding": {
+        "scene_instance_id": "scin_e2bdadb3beca",
+        "location_view_id": "view_cd8f12307b70",
+        "pinned_scene_instance_view_id": null
+      },
+      "character_bindings": [
+        {
+          "character_name": "阿獭",
+          "look_id": "look_295fc0cd2345",
+          "composition_id": "comp_fb128c718c86"
+        }
+      ],
+      "prop_bindings": [],
+      "action": null,
+      "dialogue_speaker_binding": null,
+      "production_notes": "",
+      "dependency_fingerprints": {
+        "visual_profile": "21bbaa92",
+        "characters": {
+          "阿獭": "1ade8d78"
+        },
+        "looks": {
+          "look_295fc0cd2345": "11bb2ad2"
+        },
+        "props": {},
+        "compositions": {
+          "comp_fb128c718c86": "a1f3581a"
+        },
+        "scene_instance": "feb571c5",
+        "scene_instance_view": null
+      },
+      "created_at": 1790514210.0880542,
+      "updated_at": 1790515205.4881372
+    },
+    "s02_c01": {
+      "shot_id": "s02_c01",
+      "scene_id": "s02",
+      "scene_binding": {
+        "scene_instance_id": "scin_6f1e453d5a32",
+        "location_view_id": "view_12503eb06cff",
+        "pinned_scene_instance_view_id": null
+      },
+      "character_bindings": [
+        {
+          "character_name": "阿獭",
+          "look_id": "look_295fc0cd2345",
+          "composition_id": "comp_fb128c718c86"
+        }
+      ],
+      "prop_bindings": [],
+      "action": null,
+      "dialogue_speaker_binding": null,
+      "production_notes": "",
+      "dependency_fingerprints": {
+        "visual_profile": "21bbaa92",
+        "characters": {
+          "阿獭": "1ade8d78"
+        },
+        "looks": {
+          "look_295fc0cd2345": "11bb2ad2"
+        },
+        "props": {},
+        "compositions": {
+          "comp_fb128c718c86": "a1f3581a"
+        },
+        "scene_instance": "da744390",
+        "scene_instance_view": null
+      },
+      "created_at": 1790514210.1169355,
+      "updated_at": 1790515205.5237217
+    },
+    "s02_c02": {
+      "shot_id": "s02_c02",
+      "scene_id": "s02",
+      "scene_binding": {
+        "scene_instance_id": "scin_6f1e453d5a32",
+        "location_view_id": "view_12503eb06cff",
+        "pinned_scene_instance_view_id": null
+      },
+      "character_bindings": [
+        {
+          "character_name": "阿獭",
+          "look_id": "look_295fc0cd2345",
+          "composition_id": null
+        }
+      ],
+      "prop_bindings": [
+        {
+          "prop_id": "prop_fb1bd0b18fb1",
+          "relation": "near",
+          "anchor": "beside_character",
+          "visual_state_note": "DARK and UNLIT lantern sitting on the workbench, paw reaching for the switch"
+        }
+      ],
+      "action": null,
+      "dialogue_speaker_binding": null,
+      "production_notes": "",
+      "dependency_fingerprints": {
+        "visual_profile": "21bbaa92",
+        "characters": {
+          "阿獭": "1ade8d78"
+        },
+        "looks": {
+          "look_295fc0cd2345": "11bb2ad2"
+        },
+        "props": {
+          "prop_fb1bd0b18fb1": "822aab6d"
+        },
+        "compositions": {},
+        "scene_instance": "da744390",
+        "scene_instance_view": null
+      },
+      "created_at": 1790514210.146269,
+      "updated_at": 1790515740.1044755
+    },
+    "s02_c03": {
+      "shot_id": "s02_c03",
+      "scene_id": "s02",
+      "scene_binding": {
+        "scene_instance_id": "scin_6f1e453d5a32",
+        "location_view_id": "view_12503eb06cff",
+        "pinned_scene_instance_view_id": null
+      },
+      "character_bindings": [
+        {
+          "character_name": "阿獭",
+          "look_id": "look_295fc0cd2345",
+          "composition_id": "comp_1894770b967f"
+        }
+      ],
+      "prop_bindings": [],
+      "action": null,
+      "dialogue_speaker_binding": null,
+      "production_notes": "",
+      "dependency_fingerprints": {
+        "visual_profile": "21bbaa92",
+        "characters": {
+          "阿獭": "1ade8d78"
+        },
+        "looks": {
+          "look_295fc0cd2345": "11bb2ad2"
+        },
+        "props": {},
+        "compositions": {
+          "comp_1894770b967f": "aa945c9e"
+        },
+        "scene_instance": "da744390",
+        "scene_instance_view": null
+      },
+      "created_at": 1790514210.177499,
+      "updated_at": 1790514210.177499
+    },
+    "s03_c01": {
+      "shot_id": "s03_c01",
+      "scene_id": "s03",
+      "scene_binding": {
+        "scene_instance_id": "scin_f3effc02c359",
+        "location_view_id": "view_24c55d041058",
+        "pinned_scene_instance_view_id": null
+      },
+      "character_bindings": [
+        {
+          "character_name": "阿獭",
+          "look_id": "look_295fc0cd2345",
+          "composition_id": "comp_1894770b967f"
+        }
+      ],
+      "prop_bindings": [],
+      "action": null,
+      "dialogue_speaker_binding": null,
+      "production_notes": "",
+      "dependency_fingerprints": {
+        "visual_profile": "21bbaa92",
+        "characters": {
+          "阿獭": "1ade8d78"
+        },
+        "looks": {
+          "look_295fc0cd2345": "11bb2ad2"
+        },
+        "props": {},
+        "compositions": {
+          "comp_1894770b967f": "aa945c9e"
+        },
+        "scene_instance": "b0522189",
+        "scene_instance_view": null
+      },
+      "created_at": 1790514210.2085998,
+      "updated_at": 1790514210.2085998
+    },
+    "s03_c02": {
+      "shot_id": "s03_c02",
+      "scene_id": "s03",
+      "scene_binding": {
+        "scene_instance_id": "scin_f3effc02c359",
+        "location_view_id": "view_24c55d041058",
+        "pinned_scene_instance_view_id": null
+      },
+      "character_bindings": [
+        {
+          "character_name": "阿獭",
+          "look_id": "look_295fc0cd2345",
+          "composition_id": "comp_1894770b967f"
+        }
+      ],
+      "prop_bindings": [],
+      "action": null,
+      "dialogue_speaker_binding": null,
+      "production_notes": "",
+      "dependency_fingerprints": {
+        "visual_profile": "21bbaa92",
+        "characters": {
+          "阿獭": "1ade8d78"
+        },
+        "looks": {
+          "look_295fc0cd2345": "11bb2ad2"
+        },
+        "props": {},
+        "compositions": {
+          "comp_1894770b967f": "aa945c9e"
+        },
+        "scene_instance": "b0522189",
+        "scene_instance_view": null
+      },
+      "created_at": 1790514210.2393382,
+      "updated_at": 1790514210.2393382
+    },
+    "s03_c03": {
+      "shot_id": "s03_c03",
+      "scene_id": "s03",
+      "scene_binding": {
+        "scene_instance_id": "scin_f3effc02c359",
+        "location_view_id": "view_95e565c848aa",
+        "pinned_scene_instance_view_id": "sciv_3f130c7b6259"
+      },
+      "character_bindings": [
+        {
+          "character_name": "阿獭",
+          "look_id": "look_295fc0cd2345",
+          "composition_id": null
+        }
+      ],
+      "prop_bindings": [],
+      "action": null,
+      "dialogue_speaker_binding": null,
+      "production_notes": "",
+      "dependency_fingerprints": {
+        "visual_profile": "21bbaa92",
+        "characters": {
+          "阿獭": "1ade8d78"
+        },
+        "looks": {
+          "look_295fc0cd2345": "11bb2ad2"
+        },
+        "props": {},
+        "compositions": {},
+        "scene_instance": "b0522189",
+        "scene_instance_view": "f45885ae"
+      },
+      "created_at": 1790514210.272176,
+      "updated_at": 1790735321.8171005
+    }
+  }
+}

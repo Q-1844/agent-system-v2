@@ -1,0 +1,404 @@
+{
+  "schema_version": 2,
+  "looks": {
+    "look_295fc0cd2345": {
+      "look_id": "look_295fc0cd2345",
+      "character_name": "阿獭",
+      "scope": "project",
+      "label": "default",
+      "clothing_id": null,
+      "appearance_description": "A small otter with rounded brown fur, wearing an orange-yellow raincoat with hood and a dark blue scarf; a small white triangular fur patch on its left cheek. Cute storybook proportions, 2D hand-drawn style, clean lines, soft watercolor-like shading.",
+      "appearance_delta": "",
+      "reference_asset_ids": [
+        "ref_117d3687b8aa",
+        "ref_92ad3512a47f",
+        "ref_d08606529c00",
+        "ref_e648f628ad69",
+        "ref_c99d853a80a2"
+      ],
+      "approved_reference_asset_ids": [
+        "ref_92ad3512a47f"
+      ],
+      "cover_asset_id": "ref_92ad3512a47f",
+      "generation_status": "ready",
+      "approval_status": "approved",
+      "origin": null,
+      "created_at": 1790510408.1725204,
+      "updated_at": 1790512575.4845767
+    }
+  },
+  "clothings": {},
+  "props": {
+    "prop_fb1bd0b18fb1": {
+      "prop_id": "prop_fb1bd0b18fb1",
+      "scope": "project",
+      "name": "旧铜灯",
+      "description": "An old brass lantern with a red-painted handle (paint chipped), a brass body, and a glass chimney. In act one the glass is cracked and the lamp is muddy; after repair the glass is new and the lamp glows warm yellow when lit. 2D hand-drawn storybook style.",
+      "reference_asset_ids": [
+        "ref_074ed60714d0"
+      ],
+      "approved_reference_asset_ids": [
+        "ref_074ed60714d0"
+      ],
+      "cover_asset_id": "ref_074ed60714d0",
+      "tags": [
+        "core-prop"
+      ],
+      "approval_status": "approved",
+      "origin": null,
+      "created_at": 1790510408.2389157,
+      "updated_at": 1790513616.439848
+    }
+  },
+  "compositions": {
+    "comp_1894770b967f": {
+      "composition_id": "comp_1894770b967f",
+      "scope": "project",
+      "label": "otter holding brass lantern",
+      "character_name": "阿獭",
+      "look_id": "look_295fc0cd2345",
+      "prop_bindings": [
+        {
+          "prop_id": "prop_fb1bd0b18fb1",
+          "relation": "carried",
+          "anchor": "left_hand",
+          "visual_state_note": "held with both paws in front of the chest",
+          "required_visibility": "required"
+        }
+      ],
+      "pose_note": "",
+      "composition_description": "",
+      "reference_asset_ids": [
+        "ref_3d372c85a955",
+        "ref_fc5edd3823ce"
+      ],
+      "approved_reference_asset_ids": [
+        "ref_3d372c85a955"
+      ],
+      "cover_asset_id": "ref_3d372c85a955",
+      "generation_status": "ready",
+      "approval_status": "approved",
+      "origin": null,
+      "created_at": 1790512760.924702,
+      "updated_at": 1790513724.1610699
+    },
+    "comp_fb128c718c86": {
+      "composition_id": "comp_fb128c718c86",
+      "scope": "project",
+      "label": "otter carrying unlit damaged lantern",
+      "character_name": "阿獭",
+      "look_id": "look_295fc0cd2345",
+      "prop_bindings": [
+        {
+          "prop_id": "prop_fb1bd0b18fb1",
+          "relation": "carried",
+          "anchor": "left_hand",
+          "visual_state_note": "DAMAGED and UNLIT: glass chimney cracked, body muddy, no glow, carried with both paws",
+          "required_visibility": "required"
+        }
+      ],
+      "pose_note": "",
+      "composition_description": "",
+      "reference_asset_ids": [
+        "ref_e4e31677e7ab",
+        "ref_43f33d6ea13e"
+      ],
+      "approved_reference_asset_ids": [
+        "ref_e4e31677e7ab"
+      ],
+      "cover_asset_id": "ref_e4e31677e7ab",
+      "generation_status": "ready",
+      "approval_status": "approved",
+      "origin": null,
+      "created_at": 1790515042.5560448,
+      "updated_at": 1790515115.5950022
+    }
+  },
+  "reference_assets": {
+    "ref_117d3687b8aa": {
+      "asset_id": "ref_117d3687b8aa",
+      "scope": "project",
+      "media_type": "image",
+      "local": "output/resources/looks/look_295fc0cd2345/generations/gen_84b377c581c9/candidate_01.png",
+      "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_VBMBW1pNotohGOeMJaEFgCcBf0FOTHzE/output.png",
+      "checksum": "57e8ec9020f50ec01c311b0ac4cba94a69cfb53cd15d3f1ebd91c4f91342f9f9",
+      "view": "identity front reference",
+      "purpose": "look",
+      "background_type": "",
+      "source": "generated",
+      "origin": null,
+      "created_at": 1790510768.805995,
+      "updated_at": 1790510768.8059955
+    },
+    "ref_92ad3512a47f": {
+      "asset_id": "ref_92ad3512a47f",
+      "scope": "project",
+      "media_type": "image",
+      "local": "output/resources/looks/look_295fc0cd2345/generations/gen_84b377c581c9/candidate_02.png",
+      "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_kRdI2rkUUrTWOXSGRZqTjneUVWAqKSVd/output.png",
+      "checksum": "133df74d6ce9f6aaf26c3bd56831017dd129f10551540c9a6ef62cee7600b734",
+      "view": "identity front reference",
+      "purpose": "look",
+      "background_type": "",
+      "source": "generated",
+      "origin": null,
+      "created_at": 1790510768.8066897,
+      "updated_at": 1790510768.80669
+    },
+    "ref_d08606529c00": {
+      "asset_id": "ref_d08606529c00",
+      "scope": "project",
+      "media_type": "image",
+      "local": "output/resources/looks/look_295fc0cd2345/generations/gen_84b377c581c9/candidate_03.png",
+      "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_SGR8A0cRx7M2QrtmGb2cMVqP7zloE9ht/output.png",
+      "checksum": "302d70b9c3e3d5199184b5cc99d98bda3093577a8561654e306089100a92205b",
+      "view": "identity front reference",
+      "purpose": "look",
+      "background_type": "",
+      "source": "generated",
+      "origin": null,
+      "created_at": 1790510768.807445,
+      "updated_at": 1790510768.8074455
+    },
+    "ref_e648f628ad69": {
+      "asset_id": "ref_e648f628ad69",
+      "scope": "project",
+      "media_type": "image",
+      "local": "output/resources/looks/look_295fc0cd2345/generations/gen_c0ccf26b2150/candidate_01.png",
+      "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_hyy6oS8AxX68hMAumALypf9PTyXBjcah/output.png",
+      "checksum": "fa8316560e72d2ec1378cb0f6e0f08bf14fd7bae69f2228f88ea769e30ec75aa",
+      "view": "",
+      "purpose": "look",
+      "background_type": "",
+      "source": "generated",
+      "origin": null,
+      "created_at": 1790512076.8226907,
+      "updated_at": 1790512076.822691
+    },
+    "ref_c99d853a80a2": {
+      "asset_id": "ref_c99d853a80a2",
+      "scope": "project",
+      "media_type": "image",
+      "local": "output/resources/looks/look_295fc0cd2345/generations/gen_c0ccf26b2150/candidate_02.png",
+      "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_Dnw5ORcPi9h1JZR1iBOgCgdKI8kgbSjK/output.png",
+      "checksum": "821c3c89292c55168df9f38710211ce071cd505c93959601ce418dae21aa1802",
+      "view": "",
+      "purpose": "look",
+      "background_type": "",
+      "source": "generated",
+      "origin": null,
+      "created_at": 1790512076.8238027,
+      "updated_at": 1790512076.823803
+    },
+    "ref_92948c284a69": {
+      "asset_id": "ref_92948c284a69",
+      "scope": "project",
+      "media_type": "image",
+      "local": "output/scene_system/locations/loc_1552fd4e32da/views/view_cd8f12307b70/generations/gen_9f8a4e41a1f0/candidate_02.png",
+      "url": null,
+      "checksum": "ac871f084e0c733e23290acda9c84837a593e3479a50c5e44a6ba605808da666",
+      "view": "",
+      "purpose": "location_view",
+      "background_type": "",
+      "source": "scene_system",
+      "origin": null,
+      "created_at": 1790512575.567204,
+      "updated_at": 1790512575.5672047
+    },
+    "ref_5557e56729e8": {
+      "asset_id": "ref_5557e56729e8",
+      "scope": "project",
+      "media_type": "image",
+      "local": "output/scene_system/locations/loc_8b686b5f555f/views/view_12503eb06cff/generations/gen_1202dc4874c0/candidate_02.png",
+      "url": null,
+      "checksum": "447b6c3c3edefeb072c8ac9de86bd6c654f034b7b75a0765d3a27264355ebec9",
+      "view": "",
+      "purpose": "location_view",
+      "background_type": "",
+      "source": "scene_system",
+      "origin": null,
+      "created_at": 1790512575.6537948,
+      "updated_at": 1790512575.6537952
+    },
+    "ref_f61d680e4044": {
+      "asset_id": "ref_f61d680e4044",
+      "scope": "project",
+      "media_type": "image",
+      "local": "output/scene_system/locations/loc_212643ad898c/views/view_24c55d041058/generations/gen_787f6cf16251/candidate_02.png",
+      "url": null,
+      "checksum": "c7dc45e9bd3e4dd7effed7f731965787d3ce28f1557420661469763156e0e405",
+      "view": "",
+      "purpose": "location_view",
+      "background_type": "",
+      "source": "scene_system",
+      "origin": null,
+      "created_at": 1790512575.7382727,
+      "updated_at": 1790512575.7382734
+    },
+    "ref_55a42a746b28": {
+      "asset_id": "ref_55a42a746b28",
+      "scope": "project",
+      "media_type": "image",
+      "local": "output/resources/props/lantern_ref_01.png",
+      "url": null,
+      "checksum": "c070d731b09042cd65f03890241ab036790a4796b441797e4472bda7e2f29a4a",
+      "view": "hero",
+      "purpose": "prop_reference",
+      "background_type": "",
+      "source": "agnes",
+      "origin": null,
+      "created_at": 1790513506.21371,
+      "updated_at": 1790513506.2137105
+    },
+    "ref_074ed60714d0": {
+      "asset_id": "ref_074ed60714d0",
+      "scope": "project",
+      "media_type": "image",
+      "local": "output/resources/props/lantern_ref_01.png",
+      "url": null,
+      "checksum": "f0008d8fe6fb6daebe35d5ef0fc86367c262068022ecc9c85afc63b59e39ede6",
+      "view": "hero",
+      "purpose": "prop_reference",
+      "background_type": "",
+      "source": "agnes",
+      "origin": null,
+      "created_at": 1790513533.2491276,
+      "updated_at": 1790513533.249128
+    },
+    "ref_3d372c85a955": {
+      "asset_id": "ref_3d372c85a955",
+      "scope": "project",
+      "media_type": "image",
+      "local": "output/resources/compositions/comp_1894770b967f/generations/gen_0eb54ee0df70/candidate_01.png",
+      "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_e2nC62WGmvqYM93T1YXAXJ4CZ54uelpW/output.png",
+      "checksum": "ece649d867a8bd58d535b8baea8f70d44e867e0ad0e2fc9d7dfe4177f3324da4",
+      "view": "composition",
+      "purpose": "composition",
+      "background_type": "",
+      "source": "generated",
+      "origin": null,
+      "created_at": 1790513673.4644463,
+      "updated_at": 1790513673.4644465
+    },
+    "ref_fc5edd3823ce": {
+      "asset_id": "ref_fc5edd3823ce",
+      "scope": "project",
+      "media_type": "image",
+      "local": "output/resources/compositions/comp_1894770b967f/generations/gen_0eb54ee0df70/candidate_02.png",
+      "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_KcTyoKR9bRv3iNxrMTvsv9kg1g0FD0zg/output.png",
+      "checksum": "1aaa227041e32ba393fe86adf371b902e03290d8d49bf5dd266e10808e161811",
+      "view": "composition",
+      "purpose": "composition",
+      "background_type": "",
+      "source": "generated",
+      "origin": null,
+      "created_at": 1790513673.4652023,
+      "updated_at": 1790513673.4652026
+    },
+    "ref_d5881214348a": {
+      "asset_id": "ref_d5881214348a",
+      "scope": "project",
+      "media_type": "image",
+      "local": "output/scene_system/scene_instances/scin_e2bdadb3beca/views/sciv_a0d0b69a2761/generations/gen_053b7dad3acc/candidate_01.png",
+      "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_uytmu7w5At5j49l2X4wzn0xoEMUaaOg8/output.png",
+      "checksum": "e22201d716104b2fa7849fc6d6355db083d2c99f09c5812a5830b5230ef25583",
+      "view": "",
+      "purpose": "scene_instance_view",
+      "background_type": "",
+      "source": "scene_system",
+      "origin": null,
+      "created_at": 1790513947.7625966,
+      "updated_at": 1790517462.4753387
+    },
+    "ref_f0a099a2e973": {
+      "asset_id": "ref_f0a099a2e973",
+      "scope": "project",
+      "media_type": "image",
+      "local": "output/scene_system/scene_instances/scin_6f1e453d5a32/views/sciv_8c9742b8016b/generations/gen_b586b66b8125/candidate_01.png",
+      "url": "https://Q-1844.github.io/agnes-frame-host/objects/5629ac7df26b86ab.png",
+      "checksum": "5629ac7df26b86ab7962191ddb07a5f3b960ff2599ef44838a8e8893b559a94b",
+      "view": "",
+      "purpose": "scene_instance_view",
+      "background_type": "",
+      "source": "scene_system",
+      "origin": null,
+      "created_at": 1790513947.8681102,
+      "updated_at": 1790517297.3161771
+    },
+    "ref_826b39576f62": {
+      "asset_id": "ref_826b39576f62",
+      "scope": "project",
+      "media_type": "image",
+      "local": "output/scene_system/scene_instances/scin_f3effc02c359/views/sciv_2a95c7419f28/generations/gen_18d4e2f53886/candidate_02.png",
+      "url": "https://Q-1844.github.io/agnes-frame-host/objects/a7eadcb8d6c9f4db.png",
+      "checksum": "a7eadcb8d6c9f4dbeb4c43ab71be5cdbc5e3312db0c9ca5dd8668d8d5d53b034",
+      "view": "",
+      "purpose": "scene_instance_view",
+      "background_type": "",
+      "source": "scene_system",
+      "origin": null,
+      "created_at": 1790513947.9723556,
+      "updated_at": 1790517384.6309662
+    },
+    "ref_e4e31677e7ab": {
+      "asset_id": "ref_e4e31677e7ab",
+      "scope": "project",
+      "media_type": "image",
+      "local": "output/resources/compositions/comp_fb128c718c86/generations/gen_bde7a87c3577/candidate_01.png",
+      "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_vLfWGBbAcFVJWGHm2TjfgoHYEA11T7V4/output.png",
+      "checksum": "4c2be476c1f8abc1f7ed91cea5c0c719c9f585e8ff2d7497468f3d4f6fdfec2f",
+      "view": "composition",
+      "purpose": "composition",
+      "background_type": "",
+      "source": "generated",
+      "origin": null,
+      "created_at": 1790515080.5449727,
+      "updated_at": 1790515080.5449731
+    },
+    "ref_43f33d6ea13e": {
+      "asset_id": "ref_43f33d6ea13e",
+      "scope": "project",
+      "media_type": "image",
+      "local": "output/resources/compositions/comp_fb128c718c86/generations/gen_bde7a87c3577/candidate_02.png",
+      "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_qzRdBP6IRWJlFMMW0l4iPzW9Y4NO7WMg/output.png",
+      "checksum": "ac12276fcee6bd33e4102479bd9520d44ad8df2af65487214449c4db777cb989",
+      "view": "composition",
+      "purpose": "composition",
+      "background_type": "",
+      "source": "generated",
+      "origin": null,
+      "created_at": 1790515080.5457578,
+      "updated_at": 1790515080.545758
+    },
+    "ref_d71775ca19ee": {
+      "asset_id": "ref_d71775ca19ee",
+      "scope": "project",
+      "media_type": "image",
+      "local": "output/scene_system/locations/loc_212643ad898c/views/view_95e565c848aa/generations/gen_2c1d5b785fe5/candidate_01.png",
+      "url": null,
+      "checksum": "e5eea9b8f1f292cbd7db99decfec7509f49f6a12497bab2e8447a8beeb58a7fa",
+      "view": "",
+      "purpose": "location_view",
+      "background_type": "",
+      "source": "scene_system",
+      "origin": null,
+      "created_at": 1790732458.798321,
+      "updated_at": 1790732458.7983215
+    },
+    "ref_4325cd92522d": {
+      "asset_id": "ref_4325cd92522d",
+      "scope": "project",
+      "media_type": "image",
+      "local": "output/scene_system/scene_instances/scin_f3effc02c359/views/sciv_3f130c7b6259/generations/gen_eea287f5401d/candidate_01.png",
+      "url": null,
+      "checksum": "fa23020a41d239bb6bad863f4c6f3af183ed84f3c11adf89afd92893bc2412b0",
+      "view": "",
+      "purpose": "scene_instance_view",
+      "background_type": "",
+      "source": "scene_system",
+      "origin": null,
+      "created_at": 1790732523.1440575,
+      "updated_at": 1790732523.1440582
+    }
+  }
+}

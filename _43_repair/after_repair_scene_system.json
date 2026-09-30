@@ -1,0 +1,216 @@
+{
+  "schema_version": 3,
+  "locations": {
+    "loc_1552fd4e32da": {
+      "location_id": "loc_1552fd4e32da",
+      "name": "雨后河岸与栈桥",
+      "description": "A riverbank after heavy rain: silvery overcast sky with clouds parting, a wide river with gentle ripples reflecting light, an old wooden pier/boardwalk extending from the bank into the river, wet wooden planks glistening, grassy bank with reeds. Distant low hills. 2D hand-drawn storybook style, soft watercolor textures, muted silver-blue palette.",
+      "identity_description": "Old weathered wooden pier with wooden posts and simple railings extending into a wide river; grassy riverbank with reeds; low hills across the water; silver-grey after-rain sky.",
+      "style_notes": "2D hand-drawn storybook, soft watercolor",
+      "created_at": 1790510918.5775158,
+      "updated_at": 1790510918.5775163
+    },
+    "loc_8b686b5f555f": {
+      "location_id": "loc_8b686b5f555f",
+      "name": "夜间修理间",
+      "description": "A cozy repair workshop at night: warm yellow desk lamp glow, sturdy wooden workbench with tools, small drawers and shelves on the stone wall, a heavy wooden door leading outside; rain streaks on a small window. 2D hand-drawn storybook style, warm amber light against deep blue night shadows.",
+      "identity_description": "Small stone-and-timber workshop interior; central wooden workbench; warm hanging desk lamp; heavy wooden door; small window with rain streaks; tools and jars on shelves.",
+      "style_notes": "2D hand-drawn storybook, soft watercolor",
+      "created_at": 1790510967.8710558,
+      "updated_at": 1790510967.871056
+    },
+    "loc_212643ad898c": {
+      "location_id": "loc_212643ad898c",
+      "name": "灯塔门厅与灯室",
+      "description": "Interior of an old lighthouse at night: ground-floor hall with a spiral stone staircase winding upward, rough stone walls; at the top a lamp room with a large empty lamp seat and window openings facing the river. 2D hand-drawn storybook style, cool blue night tones with warm lantern glow.",
+      "identity_description": "Round stone lighthouse interior; spiral stone staircase with wooden handrail winding counterclockwise upward; top lamp room with glazing panels, a large brass lamp seat, and window openings overlooking the river.",
+      "style_notes": "2D hand-drawn storybook, soft watercolor",
+      "created_at": 1790511013.9007854,
+      "updated_at": 1790511013.900786
+    }
+  },
+  "anchors": {},
+  "layouts": {},
+  "views": {
+    "view_cd8f12307b70": {
+      "view_id": "view_cd8f12307b70",
+      "location_id": "loc_1552fd4e32da",
+      "label": "main establishing view",
+      "camera_zone": "general",
+      "look_direction": "toward the river/pier or interior focus",
+      "visible_anchor_ids": [],
+      "reference_asset_id": "ref_92948c284a69",
+      "approval_status": "approved",
+      "generation_status": "ready",
+      "active_generation_id": "gen_9f8a4e41a1f0",
+      "created_at": 1790510918.6146612,
+      "updated_at": 1790510918.6146615
+    },
+    "view_12503eb06cff": {
+      "view_id": "view_12503eb06cff",
+      "location_id": "loc_8b686b5f555f",
+      "label": "main establishing view",
+      "camera_zone": "general",
+      "look_direction": "toward the river/pier or interior focus",
+      "visible_anchor_ids": [],
+      "reference_asset_id": "ref_5557e56729e8",
+      "approval_status": "approved",
+      "generation_status": "ready",
+      "active_generation_id": "gen_1202dc4874c0",
+      "created_at": 1790510967.9081273,
+      "updated_at": 1790510967.9081275
+    },
+    "view_24c55d041058": {
+      "view_id": "view_24c55d041058",
+      "location_id": "loc_212643ad898c",
+      "label": "main establishing view",
+      "camera_zone": "general",
+      "look_direction": "toward the river/pier or interior focus",
+      "visible_anchor_ids": [],
+      "reference_asset_id": "ref_f61d680e4044",
+      "approval_status": "approved",
+      "generation_status": "ready",
+      "active_generation_id": "gen_787f6cf16251",
+      "created_at": 1790511013.9374895,
+      "updated_at": 1790511013.93749
+    },
+    "view_a6dd535fc5c1": {
+      "view_id": "view_a6dd535fc5c1",
+      "location_id": "loc_212643ad898c",
+      "label": "lamp room interior",
+      "camera_zone": "interior_lamp_room",
+      "look_direction": "toward the large brass lamp seat at center with glazing panels surrounding",
+      "visible_anchor_ids": [],
+      "reference_asset_id": null,
+      "approval_status": "unreviewed",
+      "generation_status": "ready",
+      "active_generation_id": "gen_d993181d1ad4",
+      "created_at": 1790732287.645547,
+      "updated_at": 1790732287.6455472
+    },
+    "view_95e565c848aa": {
+      "view_id": "view_95e565c848aa",
+      "location_id": "loc_212643ad898c",
+      "label": "lamp room interior",
+      "camera_zone": "front_interior",
+      "look_direction": "toward the large brass lamp seat at center with glazing panels surrounding",
+      "visible_anchor_ids": [],
+      "reference_asset_id": "ref_d71775ca19ee",
+      "approval_status": "approved",
+      "generation_status": "ready",
+      "active_generation_id": "gen_2c1d5b785fe5",
+      "created_at": 1790732432.8436995,
+      "updated_at": 1790732432.8437
+    }
+  },
+  "scene_instances": {
+    "scin_e2bdadb3beca": {
+      "scene_instance_id": "scin_e2bdadb3beca",
+      "story_scene_id": "s01",
+      "location_id": "loc_1552fd4e32da",
+      "location_revision_at_bind": "8db6776a",
+      "status": "active",
+      "state": {
+        "time_of_day": "",
+        "weather": "",
+        "lighting": "",
+        "environment_conditions": "",
+        "anchor_states": {},
+        "prop_placements": {},
+        "notes": ""
+      },
+      "created_at": 1790511054.4867523,
+      "updated_at": 1790511054.4867525
+    },
+    "scin_6f1e453d5a32": {
+      "scene_instance_id": "scin_6f1e453d5a32",
+      "story_scene_id": "s02",
+      "location_id": "loc_8b686b5f555f",
+      "location_revision_at_bind": "3ce38612",
+      "status": "active",
+      "state": {
+        "time_of_day": "",
+        "weather": "",
+        "lighting": "",
+        "environment_conditions": "",
+        "anchor_states": {},
+        "prop_placements": {},
+        "notes": ""
+      },
+      "created_at": 1790511054.5876849,
+      "updated_at": 1790511054.587685
+    },
+    "scin_f3effc02c359": {
+      "scene_instance_id": "scin_f3effc02c359",
+      "story_scene_id": "s03",
+      "location_id": "loc_212643ad898c",
+      "location_revision_at_bind": "219791f6",
+      "status": "active",
+      "state": {
+        "time_of_day": "",
+        "weather": "",
+        "lighting": "",
+        "environment_conditions": "",
+        "anchor_states": {},
+        "prop_placements": {},
+        "notes": ""
+      },
+      "created_at": 1790511054.6699815,
+      "updated_at": 1790511054.6699817
+    }
+  },
+  "scene_instance_views": {
+    "sciv_a0d0b69a2761": {
+      "scene_instance_view_id": "sciv_a0d0b69a2761",
+      "scene_instance_id": "scin_e2bdadb3beca",
+      "location_view_id": "view_cd8f12307b70",
+      "label": "s01 main",
+      "generation_status": "ready",
+      "active_generation_id": "gen_053b7dad3acc",
+      "reference_asset_id": "ref_d5881214348a",
+      "approval_status": "approved",
+      "approved_basis_fingerprint": "efdd949e",
+      "created_at": 1790511054.5256572,
+      "updated_at": 1790511054.5256577
+    },
+    "sciv_8c9742b8016b": {
+      "scene_instance_view_id": "sciv_8c9742b8016b",
+      "scene_instance_id": "scin_6f1e453d5a32",
+      "location_view_id": "view_12503eb06cff",
+      "label": "s02 main",
+      "generation_status": "ready",
+      "active_generation_id": "gen_b586b66b8125",
+      "reference_asset_id": "ref_f0a099a2e973",
+      "approval_status": "approved",
+      "approved_basis_fingerprint": "82576cf8",
+      "created_at": 1790511054.6222594,
+      "updated_at": 1790511054.6222603
+    },
+    "sciv_2a95c7419f28": {
+      "scene_instance_view_id": "sciv_2a95c7419f28",
+      "scene_instance_id": "scin_f3effc02c359",
+      "location_view_id": "view_24c55d041058",
+      "label": "s03 main",
+      "generation_status": "ready",
+      "active_generation_id": "gen_18d4e2f53886",
+      "reference_asset_id": "ref_826b39576f62",
+      "approval_status": "approved",
+      "approved_basis_fingerprint": "62340f31",
+      "created_at": 1790511054.7012882,
+      "updated_at": 1790511054.7012885
+    },
+    "sciv_3f130c7b6259": {
+      "scene_instance_view_id": "sciv_3f130c7b6259",
+      "scene_instance_id": "scin_f3effc02c359",
+      "location_view_id": "view_95e565c848aa",
+      "label": "",
+      "generation_status": "ready",
+      "active_generation_id": "gen_eea287f5401d",
+      "reference_asset_id": "ref_4325cd92522d",
+      "approval_status": "approved",
+      "approved_basis_fingerprint": "f45885ae",
+      "created_at": 1790732488.552274,
+      "updated_at": 1790732488.5522742
+    }
+  }
+}

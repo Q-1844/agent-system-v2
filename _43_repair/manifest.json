@@ -1,41 +1,58 @@
 {
- "round": "repair43",
- "round_title": "Phase 43 修复轮 · 《雨灯归航》偏差链正式候选（2026-09-30）",
+ "round": "repair43_v2",
+ "round_title": "Phase 43 修复轮 · 两轮候选总评审（2026-09-30）",
  "round_date": "2026-09-30",
- "intro": "<b>修复轮候选评审</b>：偏差根（s01_c04/s02_c02）按定版配方（crop 根帧+prop 绑定+双参考接力）重做，下游沿真实依赖重做/复核（系统 Agent 按 Skill v1.2 自主选择，trace 在档）。每个分组=先看对照（修复前现役版），再看新候选。你的选择=正式选片依据；选择后执行 set-final+下游校验。<br><b>已知事项</b>：①新根帧 s01_c04 画面有雨丝（对照版无）②s02_c02 两个根帧候选的白斑侧别都反了（Look=观众左侧）③s01_c06 用时间戳分拍动作描述（1s 粒度），0.5s 细粒度对照未做（是否补测？）④铜灯在多个候选里是亮的（s01 剧情状态=未修；但用户好评基线同样亮灯）。",
- "image_groups": [],
+ "intro": "<b>修复轮候选评审 v2</b>：一轮（上午）后按你的指示「继续慢慢生成」补了二轮——①s02_c02 补种子修白斑侧别（新根帧 vision pass，视频+下游 c03 已重做）②s01_c06 补 0.5s 分拍对照（与 1s 分拍版并存）。每个分组：对照（修复前）→ 一轮候选 → 二轮候选。你的 ✅/⭐/❌ = 正式选片依据。",
+ "image_groups": [
+  {
+   "id": "patchside",
+   "title": "白斑侧别对照（s02_c02 根帧修复）",
+   "images": [
+    {
+     "name": "hero Look（基准：白斑=观众左侧）",
+     "src": "review_media/patchside_look.png",
+     "note": "approved hero Look，白斑侧别的唯一基准"
+    },
+    {
+     "name": "二轮根帧（seed42，侧别✓，vision 审查 pass）",
+     "src": "review_media/patchside_r2.png",
+     "note": "当前选定根帧；白斑位置略高于 Look（耳侧），侧别正确"
+    }
+   ]
+  }
+ ],
  "video_groups": [
   {
    "id": "s01_c04",
    "title": "s01_c04（medium close-up，5.0s）",
-   "note": "先看对照再看新候选。判定：人物（白斑侧别/兜帽向下/黑豆眼/小巧可爱）、画风（水彩）、道具（铜灯样式与状态）、场景（空间正确/无凭空延伸）、动作与时长匹配、整体观感。",
+   "note": "先看对照，再按序看候选。判定：人物（白斑侧别/兜帽/黑豆眼/小巧）、画风（水彩）、道具（铜灯样式状态）、场景（空间/无凭空延伸）、动作与时长匹配、整体观感。",
    "videos": [
     {
      "name": "对照：修复前现役版（74d248e6）",
      "video_srcs": [
       {
-       "label": "s01_c04 修复前",
-       "src": "review_media/s01_c04_old_d248e6.mp4"
+       "label": "对照：修复前现役版",
+       "src": "review_media/对照：修复前现役版_d248e6.mp4"
       }
      ],
      "thumbs": [
-      "review_media/s01_c04_old_d248e6_f.jpg",
-      "review_media/s01_c04_old_d248e6_m.jpg",
-      "review_media/s01_c04_old_d248e6_e.jpg"
+      "review_media/对照：修复前现役版_d248e6_f.jpg",
+      "review_media/对照：修复前现役版_d248e6_m.jpg",
+      "review_media/对照：修复前现役版_d248e6_e.jpg"
      ]
     },
     {
-     "name": "新候选 1（80dc90a5）",
+     "name": "一轮候选（80dc90a5）",
      "video_srcs": [
       {
-       "label": "s01_c04 新候选",
-       "src": "review_media/s01_c04_new_dc90a5.mp4"
+       "label": "一轮候选",
+       "src": "review_media/一轮候选_dc90a5.mp4"
       }
      ],
      "thumbs": [
-      "review_media/s01_c04_new_dc90a5_f.jpg",
-      "review_media/s01_c04_new_dc90a5_m.jpg",
-      "review_media/s01_c04_new_dc90a5_e.jpg"
+      "review_media/一轮候选_dc90a5_f.jpg",
+      "review_media/一轮候选_dc90a5_m.jpg",
+      "review_media/一轮候选_dc90a5_e.jpg"
      ]
     }
    ]
@@ -43,34 +60,34 @@
   {
    "id": "s01_c05",
    "title": "s01_c05（medium shot，5.0s）",
-   "note": "先看对照再看新候选。判定：人物（白斑侧别/兜帽向下/黑豆眼/小巧可爱）、画风（水彩）、道具（铜灯样式与状态）、场景（空间正确/无凭空延伸）、动作与时长匹配、整体观感。",
+   "note": "先看对照，再按序看候选。判定：人物（白斑侧别/兜帽/黑豆眼/小巧）、画风（水彩）、道具（铜灯样式状态）、场景（空间/无凭空延伸）、动作与时长匹配、整体观感。",
    "videos": [
     {
      "name": "对照：修复前现役版（eb4a6f6d）",
      "video_srcs": [
       {
-       "label": "s01_c05 修复前",
-       "src": "review_media/s01_c05_old_4a6f6d.mp4"
+       "label": "对照：修复前现役版",
+       "src": "review_media/对照：修复前现役版_4a6f6d.mp4"
       }
      ],
      "thumbs": [
-      "review_media/s01_c05_old_4a6f6d_f.jpg",
-      "review_media/s01_c05_old_4a6f6d_m.jpg",
-      "review_media/s01_c05_old_4a6f6d_e.jpg"
+      "review_media/对照：修复前现役版_4a6f6d_f.jpg",
+      "review_media/对照：修复前现役版_4a6f6d_m.jpg",
+      "review_media/对照：修复前现役版_4a6f6d_e.jpg"
      ]
     },
     {
-     "name": "新候选 1（70728b9b）",
+     "name": "一轮候选（70728b9b）",
      "video_srcs": [
       {
-       "label": "s01_c05 新候选",
-       "src": "review_media/s01_c05_new_728b9b.mp4"
+       "label": "一轮候选",
+       "src": "review_media/一轮候选_728b9b.mp4"
       }
      ],
      "thumbs": [
-      "review_media/s01_c05_new_728b9b_f.jpg",
-      "review_media/s01_c05_new_728b9b_m.jpg",
-      "review_media/s01_c05_new_728b9b_e.jpg"
+      "review_media/一轮候选_728b9b_f.jpg",
+      "review_media/一轮候选_728b9b_m.jpg",
+      "review_media/一轮候选_728b9b_e.jpg"
      ]
     }
    ]
@@ -78,34 +95,48 @@
   {
    "id": "s01_c06",
    "title": "s01_c06（wide shot，5.0s）",
-   "note": "先看对照再看新候选。判定：人物（白斑侧别/兜帽向下/黑豆眼/小巧可爱）、画风（水彩）、道具（铜灯样式与状态）、场景（空间正确/无凭空延伸）、动作与时长匹配、整体观感。",
+   "note": "先看对照，再按序看候选。判定：人物（白斑侧别/兜帽/黑豆眼/小巧）、画风（水彩）、道具（铜灯样式状态）、场景（空间/无凭空延伸）、动作与时长匹配、整体观感。",
    "videos": [
     {
      "name": "对照：修复前现役版（41e435bc）",
      "video_srcs": [
       {
-       "label": "s01_c06 修复前",
-       "src": "review_media/s01_c06_old_e435bc.mp4"
+       "label": "对照：修复前现役版",
+       "src": "review_media/对照：修复前现役版_e435bc.mp4"
       }
      ],
      "thumbs": [
-      "review_media/s01_c06_old_e435bc_f.jpg",
-      "review_media/s01_c06_old_e435bc_m.jpg",
-      "review_media/s01_c06_old_e435bc_e.jpg"
+      "review_media/对照：修复前现役版_e435bc_f.jpg",
+      "review_media/对照：修复前现役版_e435bc_m.jpg",
+      "review_media/对照：修复前现役版_e435bc_e.jpg"
      ]
     },
     {
-     "name": "新候选 1（5ad9192d）",
+     "name": "一轮候选（5ad9192d）",
      "video_srcs": [
       {
-       "label": "s01_c06 新候选",
-       "src": "review_media/s01_c06_new_d9192d.mp4"
+       "label": "一轮候选",
+       "src": "review_media/一轮候选_d9192d.mp4"
       }
      ],
      "thumbs": [
-      "review_media/s01_c06_new_d9192d_f.jpg",
-      "review_media/s01_c06_new_d9192d_m.jpg",
-      "review_media/s01_c06_new_d9192d_e.jpg"
+      "review_media/一轮候选_d9192d_f.jpg",
+      "review_media/一轮候选_d9192d_m.jpg",
+      "review_media/一轮候选_d9192d_e.jpg"
+     ]
+    },
+    {
+     "name": "二轮候选（6d3b05db）",
+     "video_srcs": [
+      {
+       "label": "二轮候选",
+       "src": "review_media/二轮候选_3b05db.mp4"
+      }
+     ],
+     "thumbs": [
+      "review_media/二轮候选_3b05db_f.jpg",
+      "review_media/二轮候选_3b05db_m.jpg",
+      "review_media/二轮候选_3b05db_e.jpg"
      ]
     }
    ]
@@ -113,34 +144,48 @@
   {
    "id": "s02_c02",
    "title": "s02_c02（medium close-up，5.0s）",
-   "note": "先看对照再看新候选。判定：人物（白斑侧别/兜帽向下/黑豆眼/小巧可爱）、画风（水彩）、道具（铜灯样式与状态）、场景（空间正确/无凭空延伸）、动作与时长匹配、整体观感。",
+   "note": "先看对照，再按序看候选。判定：人物（白斑侧别/兜帽/黑豆眼/小巧）、画风（水彩）、道具（铜灯样式状态）、场景（空间/无凭空延伸）、动作与时长匹配、整体观感。",
    "videos": [
     {
      "name": "对照：修复前现役版（19d81de3）",
      "video_srcs": [
       {
-       "label": "s02_c02 修复前",
-       "src": "review_media/s02_c02_old_d81de3.mp4"
+       "label": "对照：修复前现役版",
+       "src": "review_media/对照：修复前现役版_d81de3.mp4"
       }
      ],
      "thumbs": [
-      "review_media/s02_c02_old_d81de3_f.jpg",
-      "review_media/s02_c02_old_d81de3_m.jpg",
-      "review_media/s02_c02_old_d81de3_e.jpg"
+      "review_media/对照：修复前现役版_d81de3_f.jpg",
+      "review_media/对照：修复前现役版_d81de3_m.jpg",
+      "review_media/对照：修复前现役版_d81de3_e.jpg"
      ]
     },
     {
-     "name": "新候选 1（4bdf6b08）",
+     "name": "一轮候选（4bdf6b08）",
      "video_srcs": [
       {
-       "label": "s02_c02 新候选",
-       "src": "review_media/s02_c02_new_df6b08.mp4"
+       "label": "一轮候选",
+       "src": "review_media/一轮候选_df6b08.mp4"
       }
      ],
      "thumbs": [
-      "review_media/s02_c02_new_df6b08_f.jpg",
-      "review_media/s02_c02_new_df6b08_m.jpg",
-      "review_media/s02_c02_new_df6b08_e.jpg"
+      "review_media/一轮候选_df6b08_f.jpg",
+      "review_media/一轮候选_df6b08_m.jpg",
+      "review_media/一轮候选_df6b08_e.jpg"
+     ]
+    },
+    {
+     "name": "二轮候选（1c4b7001）",
+     "video_srcs": [
+      {
+       "label": "二轮候选",
+       "src": "review_media/二轮候选_4b7001.mp4"
+      }
+     ],
+     "thumbs": [
+      "review_media/二轮候选_4b7001_f.jpg",
+      "review_media/二轮候选_4b7001_m.jpg",
+      "review_media/二轮候选_4b7001_e.jpg"
      ]
     }
    ]
@@ -148,34 +193,48 @@
   {
    "id": "s02_c03",
    "title": "s02_c03（medium shot to wide，5.0s）",
-   "note": "先看对照再看新候选。判定：人物（白斑侧别/兜帽向下/黑豆眼/小巧可爱）、画风（水彩）、道具（铜灯样式与状态）、场景（空间正确/无凭空延伸）、动作与时长匹配、整体观感。",
+   "note": "先看对照，再按序看候选。判定：人物（白斑侧别/兜帽/黑豆眼/小巧）、画风（水彩）、道具（铜灯样式状态）、场景（空间/无凭空延伸）、动作与时长匹配、整体观感。",
    "videos": [
     {
      "name": "对照：修复前现役版（fdee5e7d）",
      "video_srcs": [
       {
-       "label": "s02_c03 修复前",
-       "src": "review_media/s02_c03_old_ee5e7d.mp4"
+       "label": "对照：修复前现役版",
+       "src": "review_media/对照：修复前现役版_ee5e7d.mp4"
       }
      ],
      "thumbs": [
-      "review_media/s02_c03_old_ee5e7d_f.jpg",
-      "review_media/s02_c03_old_ee5e7d_m.jpg",
-      "review_media/s02_c03_old_ee5e7d_e.jpg"
+      "review_media/对照：修复前现役版_ee5e7d_f.jpg",
+      "review_media/对照：修复前现役版_ee5e7d_m.jpg",
+      "review_media/对照：修复前现役版_ee5e7d_e.jpg"
      ]
     },
     {
-     "name": "新候选 1（42ba16c5）",
+     "name": "一轮候选（42ba16c5）",
      "video_srcs": [
       {
-       "label": "s02_c03 新候选",
-       "src": "review_media/s02_c03_new_ba16c5.mp4"
+       "label": "一轮候选",
+       "src": "review_media/一轮候选_ba16c5.mp4"
       }
      ],
      "thumbs": [
-      "review_media/s02_c03_new_ba16c5_f.jpg",
-      "review_media/s02_c03_new_ba16c5_m.jpg",
-      "review_media/s02_c03_new_ba16c5_e.jpg"
+      "review_media/一轮候选_ba16c5_f.jpg",
+      "review_media/一轮候选_ba16c5_m.jpg",
+      "review_media/一轮候选_ba16c5_e.jpg"
+     ]
+    },
+    {
+     "name": "二轮候选（8241caf8）",
+     "video_srcs": [
+      {
+       "label": "二轮候选",
+       "src": "review_media/二轮候选_41caf8.mp4"
+      }
+     ],
+     "thumbs": [
+      "review_media/二轮候选_41caf8_f.jpg",
+      "review_media/二轮候选_41caf8_m.jpg",
+      "review_media/二轮候选_41caf8_e.jpg"
      ]
     }
    ]
@@ -183,34 +242,34 @@
   {
    "id": "s03_c01",
    "title": "s03_c01（medium shot，8.0s）",
-   "note": "先看对照再看新候选。判定：人物（白斑侧别/兜帽向下/黑豆眼/小巧可爱）、画风（水彩）、道具（铜灯样式与状态）、场景（空间正确/无凭空延伸）、动作与时长匹配、整体观感。",
+   "note": "先看对照，再按序看候选。判定：人物（白斑侧别/兜帽/黑豆眼/小巧）、画风（水彩）、道具（铜灯样式状态）、场景（空间/无凭空延伸）、动作与时长匹配、整体观感。",
    "videos": [
     {
      "name": "对照：修复前现役版（af37a055）",
      "video_srcs": [
       {
-       "label": "s03_c01 修复前",
-       "src": "review_media/s03_c01_old_37a055.mp4"
+       "label": "对照：修复前现役版",
+       "src": "review_media/对照：修复前现役版_37a055.mp4"
       }
      ],
      "thumbs": [
-      "review_media/s03_c01_old_37a055_f.jpg",
-      "review_media/s03_c01_old_37a055_m.jpg",
-      "review_media/s03_c01_old_37a055_e.jpg"
+      "review_media/对照：修复前现役版_37a055_f.jpg",
+      "review_media/对照：修复前现役版_37a055_m.jpg",
+      "review_media/对照：修复前现役版_37a055_e.jpg"
      ]
     },
     {
-     "name": "新候选 1（f741a354）",
+     "name": "一轮候选（f741a354）",
      "video_srcs": [
       {
-       "label": "s03_c01 新候选",
-       "src": "review_media/s03_c01_new_41a354.mp4"
+       "label": "一轮候选",
+       "src": "review_media/一轮候选_41a354.mp4"
       }
      ],
      "thumbs": [
-      "review_media/s03_c01_new_41a354_f.jpg",
-      "review_media/s03_c01_new_41a354_m.jpg",
-      "review_media/s03_c01_new_41a354_e.jpg"
+      "review_media/一轮候选_41a354_f.jpg",
+      "review_media/一轮候选_41a354_m.jpg",
+      "review_media/一轮候选_41a354_e.jpg"
      ]
     }
    ]
@@ -218,34 +277,34 @@
   {
    "id": "s03_c02",
    "title": "s03_c02（wide shot，8.0s）",
-   "note": "先看对照再看新候选。判定：人物（白斑侧别/兜帽向下/黑豆眼/小巧可爱）、画风（水彩）、道具（铜灯样式与状态）、场景（空间正确/无凭空延伸）、动作与时长匹配、整体观感。",
+   "note": "先看对照，再按序看候选。判定：人物（白斑侧别/兜帽/黑豆眼/小巧）、画风（水彩）、道具（铜灯样式状态）、场景（空间/无凭空延伸）、动作与时长匹配、整体观感。",
    "videos": [
     {
      "name": "对照：修复前现役版（a9ab4df5）",
      "video_srcs": [
       {
-       "label": "s03_c02 修复前",
-       "src": "review_media/s03_c02_old_ab4df5.mp4"
+       "label": "对照：修复前现役版",
+       "src": "review_media/对照：修复前现役版_ab4df5.mp4"
       }
      ],
      "thumbs": [
-      "review_media/s03_c02_old_ab4df5_f.jpg",
-      "review_media/s03_c02_old_ab4df5_m.jpg",
-      "review_media/s03_c02_old_ab4df5_e.jpg"
+      "review_media/对照：修复前现役版_ab4df5_f.jpg",
+      "review_media/对照：修复前现役版_ab4df5_m.jpg",
+      "review_media/对照：修复前现役版_ab4df5_e.jpg"
      ]
     },
     {
-     "name": "新候选 1（03ff6e45）",
+     "name": "一轮候选（03ff6e45）",
      "video_srcs": [
       {
-       "label": "s03_c02 新候选",
-       "src": "review_media/s03_c02_new_ff6e45.mp4"
+       "label": "一轮候选",
+       "src": "review_media/一轮候选_ff6e45.mp4"
       }
      ],
      "thumbs": [
-      "review_media/s03_c02_new_ff6e45_f.jpg",
-      "review_media/s03_c02_new_ff6e45_m.jpg",
-      "review_media/s03_c02_new_ff6e45_e.jpg"
+      "review_media/一轮候选_ff6e45_f.jpg",
+      "review_media/一轮候选_ff6e45_m.jpg",
+      "review_media/一轮候选_ff6e45_e.jpg"
      ]
     }
    ]
@@ -253,34 +312,34 @@
   {
    "id": "s03_c03",
    "title": "s03_c03（medium shot，8.0s）",
-   "note": "先看对照再看新候选。判定：人物（白斑侧别/兜帽向下/黑豆眼/小巧可爱）、画风（水彩）、道具（铜灯样式与状态）、场景（空间正确/无凭空延伸）、动作与时长匹配、整体观感。",
+   "note": "先看对照，再按序看候选。判定：人物（白斑侧别/兜帽/黑豆眼/小巧）、画风（水彩）、道具（铜灯样式状态）、场景（空间/无凭空延伸）、动作与时长匹配、整体观感。",
    "videos": [
     {
      "name": "对照：修复前现役版（7339c1d5）",
      "video_srcs": [
       {
-       "label": "s03_c03 修复前",
-       "src": "review_media/s03_c03_old_39c1d5.mp4"
+       "label": "对照：修复前现役版",
+       "src": "review_media/对照：修复前现役版_39c1d5.mp4"
       }
      ],
      "thumbs": [
-      "review_media/s03_c03_old_39c1d5_f.jpg",
-      "review_media/s03_c03_old_39c1d5_m.jpg",
-      "review_media/s03_c03_old_39c1d5_e.jpg"
+      "review_media/对照：修复前现役版_39c1d5_f.jpg",
+      "review_media/对照：修复前现役版_39c1d5_m.jpg",
+      "review_media/对照：修复前现役版_39c1d5_e.jpg"
      ]
     },
     {
-     "name": "新候选 1（070329c4）",
+     "name": "一轮候选（070329c4）",
      "video_srcs": [
       {
-       "label": "s03_c03 新候选",
-       "src": "review_media/s03_c03_new_0329c4.mp4"
+       "label": "一轮候选",
+       "src": "review_media/一轮候选_0329c4.mp4"
       }
      ],
      "thumbs": [
-      "review_media/s03_c03_new_0329c4_f.jpg",
-      "review_media/s03_c03_new_0329c4_m.jpg",
-      "review_media/s03_c03_new_0329c4_e.jpg"
+      "review_media/一轮候选_0329c4_f.jpg",
+      "review_media/一轮候选_0329c4_m.jpg",
+      "review_media/一轮候选_0329c4_e.jpg"
      ]
     }
    ]
@@ -289,13 +348,18 @@
  "questions": [
   {
    "id": "q_overall",
-   "title": "总判：哪些镜的新候选可以正式替换？（逐组 ✅可用/⭐首选/❌不可用 + 备注）",
-   "why": "正式选片依据"
+   "title": "总判：哪些镜的哪个候选可以正式替换？（逐组 ✅/⭐/❌ + 备注，⭐=首选）",
+   "why": "正式选片依据；可跨轮混选（如 s02_c02 选二轮、其余选一轮）"
   },
   {
    "id": "q_c06",
    "title": "s01_c06：凭空甲板是否消失？收束动作自然吗？",
    "why": "动作延伸+场景边界约束首轮正式验证"
+  },
+  {
+   "id": "q_gran",
+   "title": "c06 对照：1s 分拍（一轮）vs 0.5s 分拍（二轮）哪个更稳/更自然？",
+   "why": "你提出的「描述与秒数对应关系」对照实测"
   },
   {
    "id": "q_rain",
@@ -304,23 +368,18 @@
   },
   {
    "id": "q_lamp",
-   "title": "铜灯状态口径：新候选灯多为亮态（好评基线 EXP4 同样亮灯）；要不要强制 s01=未点亮状态？",
-   "why": "剧情状态 vs 好评基线的口径裁定"
-  },
-  {
-   "id": "q_gran",
-   "title": "c06 时间戳分拍描述（1s 粒度）观感是否更稳？要不要补 0.5s 细粒度对照（你提的方向）？",
-   "why": "「描述与秒数对应关系」首轮实测"
-  },
-  {
-   "id": "q_patch",
-   "title": "s02_c02 两个根帧候选白斑侧别都反——是否补生成更多种子直到侧别正确（再重做 s02_c02/c03）？",
-   "why": "用户验收判据：白斑侧别=Look 同侧；EXP3 同样记录过此方差"
+   "title": "铜灯亮态口径：候选多为亮灯（好评基线 EXP4 同样亮灯）；要不要强制 s01=未点亮？",
+   "why": "剧情状态 vs 好评基线"
   },
   {
    "id": "q_s03",
    "title": "s03 链回正效果与空间达标吗？c03 灯室结构（新 SIV）准确吗？",
    "why": "灯室内部 SIV 首次实战"
+  },
+  {
+   "id": "q_patch",
+   "title": "s02_c02 二轮根帧：侧别✓，但白斑位置略高（耳侧）——可接受吗？",
+   "why": "侧别是硬判据，位置微差属方差；用户终审"
   }
  ]
 }
