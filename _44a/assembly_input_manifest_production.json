@@ -1,6 +1,6 @@
 {
  "project_id": "雨灯归航",
- "snapshot_id": "snap_44a_production_20260930_221636",
+ "snapshot_id": "snap_44a_production_20261001_001801",
  "mode": "production",
  "shots": [
   {
@@ -323,19 +323,19 @@
    "order": 9,
    "scene_id": "s02",
    "shot_id": "s02_c03",
-   "video_version_id": "vv_7e31d14b",
-   "approved_status": "temp_candidate_for_dev",
-   "verdict_source": "repair43_v3：「可以继续按照之前来做…人物不开门了」——44A2 迭代候选待用户终审",
-   "media_uri": "projects\\雨灯归航\\output\\videos\\s02_c03.mp4",
-   "media_sha256": "13fd814c72b5d4ada156223b4ec6c32ca20755f309c224d93952e0805a8744c7",
-   "snapshot_media": "_44a\\snapshot_media\\09_s02_c03_vv_7e31d14b.mp4",
-   "provider_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_cjP8GwnyqwBwd6IB4a5krJ4MSWh58dVU.mp4",
+   "video_version_id": "vv_49e4bd19",
+   "approved_status": "user_locked",
+   "verdict_source": "评审页终选（phase44a_c03_final）：甲-2 镜头跟随·盲区揭露 vv_49e4bd19——求稳优选+无背景音（用户听审）；全景路线已沉淀 Skill v1.3.1",
+   "media_uri": "projects\\雨灯归航\\output\\videos\\s02_c03__vv_49e4bd19.mp4",
+   "media_sha256": "7fdcfe4890786dea5ae532d0ce4603d53ffdfc4ac7812b2ab99d11374d39caf5",
+   "snapshot_media": "_44a\\snapshot_media\\09_s02_c03_vv_49e4bd19.mp4",
+   "provider_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_6ni2MmREV0LwIWIXO8GiDBGfENKTBH8t.mp4",
    "source_receipt_ref": {
-    "task_id": "task_cjP8GwnyqwBwd6IB4a5krJ4MSWh58dVU",
-    "video_id": "task_cjP8GwnyqwBwd6IB4a5krJ4MSWh58dVU",
-    "origin_run_id": "dgv_ecbb1b88",
+    "task_id": "task_6ni2MmREV0LwIWIXO8GiDBGfENKTBH8t",
+    "video_id": "task_6ni2MmREV0LwIWIXO8GiDBGfENKTBH8t",
+    "origin_run_id": "p44a_follow_12c20fec",
     "model": "agnes-video-2.5-flash",
-    "created_at": 1790777425.730284
+    "created_at": 1790782610.4003074
    },
    "duration_probe": {
     "duration": 5.184,
@@ -347,16 +347,16 @@
     "audio_codec": "aac"
    },
    "end_frame": {
-    "local": "projects\\雨灯归航\\output\\frames\\s02_c03_video_end_vv_7e31d14b.jpg",
-    "url": "https://Q-1844.github.io/agnes-frame-host/objects/9afcbf748a3b3d12.jpg",
-    "source_version": "vv_7e31d14b"
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\雨灯归航\\output\\frames\\s02_c03_video_end_vv_49e4bd19.jpg",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/93b7a138daf9007c.jpg",
+    "source_version": "vv_49e4bd19"
    },
    "relay": {
     "source_shot_id": "s02_c02",
     "end_source_version": "vv_4bdf6b08",
     "tail_url_recorded": "https://Q-1844.github.io/agnes-frame-host/objects/47a6874c588072c8.jpg"
    },
-   "sentinel": "prev_tail_look_scene",
+   "sentinel": null,
    "shot_updated_at": null
   },
   {

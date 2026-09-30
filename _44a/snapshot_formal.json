@@ -1,0 +1,189 @@
+{
+ "snapshot_id": "snap_44a_formal_20261001_001753",
+ "mode": "formal",
+ "created_at": 1790785079.3646512,
+ "project": {
+  "name": "雨灯归航",
+  "project_updated_at": 1790784603.2975044
+ },
+ "frozen_code": {
+  "git_head": "77ed471074f3fe1cce649a8785330e998812a01d",
+  "dirty_files": 526,
+  "note": "projects/ 与 cache/ 不入库（运行时数据）"
+ },
+ "skills": {
+  "full-story-relay-calibration": "1.3.1",
+  "keyframes-bridge-repair": "1.3.1"
+ },
+ "model_config_digest": {
+  "video": "agnes-video-2.5-flash",
+  "text": "agnes-2.5-flash",
+  "note": "以 config/config.yaml 为准，密钥不入档"
+ },
+ "approved_assets": {
+  "looks_approved": [],
+  "sivs_approved": [
+   {
+    "siv_id": "sciv_a0d0b69a2761",
+    "inst": "scin_e2bdadb3beca",
+    "status": "approved"
+   },
+   {
+    "siv_id": "sciv_8c9742b8016b",
+    "inst": "scin_6f1e453d5a32",
+    "status": "approved"
+   },
+   {
+    "siv_id": "sciv_2a95c7419f28",
+    "inst": "scin_f3effc02c359",
+    "status": "approved"
+   },
+   {
+    "siv_id": "sciv_3f130c7b6259",
+    "inst": "scin_f3effc02c359",
+    "status": "approved"
+   }
+  ]
+ },
+ "quota_ledger_local": {
+  "date": "2026-09-30",
+  "video_seconds": 175.0,
+  "images": 58,
+  "text_calls": 267
+ },
+ "seams_at_snapshot": [
+  {
+   "from": "s01_c01",
+   "to": "s01_c02",
+   "seam_mae": 61.4
+  },
+  {
+   "from": "s01_c02",
+   "to": "s01_c03",
+   "seam_mae": 17.0
+  },
+  {
+   "from": "s01_c03",
+   "to": "s01_c04",
+   "seam_mae": 51.1
+  },
+  {
+   "from": "s01_c04",
+   "to": "s01_c05",
+   "seam_mae": 10.8
+  },
+  {
+   "from": "s01_c05",
+   "to": "s01_c06",
+   "seam_mae": 9.8
+  },
+  {
+   "from": "s01_c06",
+   "to": "s02_c01",
+   "seam_mae": 45.2
+  },
+  {
+   "from": "s02_c01",
+   "to": "s02_c02",
+   "seam_mae": 38.1
+  },
+  {
+   "from": "s02_c02",
+   "to": "s02_c03",
+   "seam_mae": 15.2
+  },
+  {
+   "from": "s02_c03",
+   "to": "s03_c01",
+   "seam_mae": 39.1
+  },
+  {
+   "from": "s03_c01",
+   "to": "s03_c02",
+   "seam_mae": 28.7
+  },
+  {
+   "from": "s03_c02",
+   "to": "s03_c03",
+   "seam_mae": 31.8
+  },
+  {
+   "from": "s03_c03",
+   "to": "s03_c04",
+   "seam_mae": 86.6
+  }
+ ],
+ "shots": [
+  {
+   "shot_id": "s01_c01",
+   "final": "vv_55accb16",
+   "approved": "user_locked"
+  },
+  {
+   "shot_id": "s01_c02",
+   "final": "vv_9cda3271",
+   "approved": "user_locked"
+  },
+  {
+   "shot_id": "s01_c03",
+   "final": "vv_703eb03f",
+   "approved": "user_locked"
+  },
+  {
+   "shot_id": "s01_c04",
+   "final": "vv_80dc90a5",
+   "approved": "user_locked"
+  },
+  {
+   "shot_id": "s01_c05",
+   "final": "vv_70728b9b",
+   "approved": "user_locked"
+  },
+  {
+   "shot_id": "s01_c06",
+   "final": "vv_5ad9192d",
+   "approved": "user_locked"
+  },
+  {
+   "shot_id": "s02_c01",
+   "final": "vv_ebbc77f8",
+   "approved": "user_locked"
+  },
+  {
+   "shot_id": "s02_c02",
+   "final": "vv_4bdf6b08",
+   "approved": "user_locked"
+  },
+  {
+   "shot_id": "s02_c03",
+   "final": "vv_49e4bd19",
+   "approved": "user_locked"
+  },
+  {
+   "shot_id": "s03_c01",
+   "final": "vv_f741a354",
+   "approved": "user_locked"
+  },
+  {
+   "shot_id": "s03_c02",
+   "final": "vv_03ff6e45",
+   "approved": "user_locked"
+  },
+  {
+   "shot_id": "s03_c03",
+   "final": "vv_49b85cd1",
+   "approved": "user_locked_with_caveat"
+  },
+  {
+   "shot_id": "s03_c04",
+   "final": "vv_6684f5dd",
+   "approved": "user_locked"
+  }
+ ],
+ "media_mirror_dir": "_44a\\snapshot_media",
+ "discipline_notes": [
+  "approved_status=temp_candidate_for_dev 的镜头只可用于工程预览，不得称最终成片",
+  "成片输出是派生版本，不反写 Shot.final_video",
+  "媒体已按 URL 下载核验 sha256，不依赖临时 URL"
+ ]
+}

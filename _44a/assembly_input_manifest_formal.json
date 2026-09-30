@@ -1,0 +1,522 @@
+{
+ "project_id": "雨灯归航",
+ "snapshot_id": "snap_44a_formal_20261001_001753",
+ "mode": "formal",
+ "shots": [
+  {
+   "order": 1,
+   "scene_id": "s01",
+   "shot_id": "s01_c01",
+   "video_version_id": "vv_55accb16",
+   "approved_status": "user_locked",
+   "verdict_source": "合格保留（09-28 基线，此前阶段用户认可）",
+   "media_uri": "projects\\雨灯归航\\output\\videos\\s01_c01.mp4",
+   "media_sha256": "707e262a631f82c3393a35e24b97d72d0c6e356f0ca327d95e2a6c485d2fbcff",
+   "snapshot_media": "_44a\\snapshot_media\\01_s01_c01_vv_55accb16.mp4",
+   "provider_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_TEMvZuJZgFkrxAEFDSHNURQG11SRX8hs.mp4",
+   "source_receipt_ref": {
+    "task_id": "task_TEMvZuJZgFkrxAEFDSHNURQG11SRX8hs",
+    "video_id": "task_TEMvZuJZgFkrxAEFDSHNURQG11SRX8hs",
+    "origin_run_id": "dgv_bccdfb6b",
+    "model": "agnes-video-2.5-flash",
+    "created_at": 1790586796.948052
+   },
+   "duration_probe": {
+    "duration": 8.0,
+    "width": 1280,
+    "height": 720,
+    "fps": "24/1",
+    "video_codec": "h264",
+    "has_audio": true,
+    "audio_codec": "aac"
+   },
+   "end_frame": {
+    "local": "projects\\雨灯归航\\output\\frames\\s01_c01_video_end_vv_55accb16.jpg",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/2ae80ad90cfb1cc7.jpg",
+    "source_version": "vv_55accb16"
+   },
+   "relay": {
+    "source_shot_id": null,
+    "note": "hard/independent 开场"
+   },
+   "sentinel": null,
+   "shot_updated_at": null
+  },
+  {
+   "order": 2,
+   "scene_id": "s01",
+   "shot_id": "s01_c02",
+   "video_version_id": "vv_9cda3271",
+   "approved_status": "user_locked",
+   "verdict_source": "合格保留（09-28 基线）",
+   "media_uri": "projects\\雨灯归航\\output\\videos\\s01_c02.mp4",
+   "media_sha256": "f6ddaec5a85fa27c00e993ccaa655f8d464b14f339c4d7187c26c9705b92238a",
+   "snapshot_media": "_44a\\snapshot_media\\02_s01_c02_vv_9cda3271.mp4",
+   "provider_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_A6Ptk1ptKdKmBUndHckxpWQtE2S7AqzW.mp4",
+   "source_receipt_ref": {
+    "task_id": "task_A6Ptk1ptKdKmBUndHckxpWQtE2S7AqzW",
+    "video_id": "task_A6Ptk1ptKdKmBUndHckxpWQtE2S7AqzW",
+    "origin_run_id": "dgv_4e3cb1b4",
+    "model": "agnes-video-2.5-flash",
+    "created_at": 1790587172.6213036
+   },
+   "duration_probe": {
+    "duration": 8.0,
+    "width": 1280,
+    "height": 720,
+    "fps": "24/1",
+    "video_codec": "h264",
+    "has_audio": true,
+    "audio_codec": "aac"
+   },
+   "end_frame": {
+    "local": "projects\\雨灯归航\\output\\frames\\s01_c02_video_end_vv_9cda3271.jpg",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/f91dbb2fa1b657c9.jpg",
+    "source_version": "vv_9cda3271"
+   },
+   "relay": {
+    "source_shot_id": "s01_c01",
+    "end_source_version": "vv_55accb16",
+    "tail_url_recorded": "https://Q-1844.github.io/agnes-frame-host/objects/2ae80ad90cfb1cc7.jpg"
+   },
+   "sentinel": "prev_tail",
+   "shot_updated_at": null
+  },
+  {
+   "order": 3,
+   "scene_id": "s01",
+   "shot_id": "s01_c03",
+   "video_version_id": "vv_703eb03f",
+   "approved_status": "user_locked",
+   "verdict_source": "合格保留（09-28 基线）",
+   "media_uri": "projects\\雨灯归航\\output\\videos\\s01_c03.mp4",
+   "media_sha256": "84bb5e7ca36d4de633e2c0709c030f3105a8b66e363b5abb270b726634a8573b",
+   "snapshot_media": "_44a\\snapshot_media\\03_s01_c03_vv_703eb03f.mp4",
+   "provider_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_KGYubTSPSilu1Bg96GEpWW4aNhRLESyW.mp4",
+   "source_receipt_ref": {
+    "task_id": "task_KGYubTSPSilu1Bg96GEpWW4aNhRLESyW",
+    "video_id": "task_KGYubTSPSilu1Bg96GEpWW4aNhRLESyW",
+    "origin_run_id": "dgv_576c674a",
+    "model": "agnes-video-2.5-flash",
+    "created_at": 1790587532.5895476
+   },
+   "duration_probe": {
+    "duration": 8.0,
+    "width": 1280,
+    "height": 720,
+    "fps": "24/1",
+    "video_codec": "h264",
+    "has_audio": true,
+    "audio_codec": "aac"
+   },
+   "end_frame": {
+    "local": "projects\\雨灯归航\\output\\frames\\s01_c03_video_end_vv_703eb03f.jpg",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/7ad0ed0f86e9d8af.jpg",
+    "source_version": "vv_703eb03f"
+   },
+   "relay": {
+    "source_shot_id": "s01_c02",
+    "end_source_version": "vv_9cda3271",
+    "tail_url_recorded": "https://Q-1844.github.io/agnes-frame-host/objects/f91dbb2fa1b657c9.jpg"
+   },
+   "sentinel": "prev_tail",
+   "shot_updated_at": null
+  },
+  {
+   "order": 4,
+   "scene_id": "s01",
+   "shot_id": "s01_c04",
+   "video_version_id": "vv_80dc90a5",
+   "approved_status": "user_locked",
+   "verdict_source": "repair43_v3：q_sel_s01_c04=「一轮候选」→ vv_80dc90a5",
+   "media_uri": "projects\\雨灯归航\\output\\videos\\s01_c04__vv_80dc90a5.mp4",
+   "media_sha256": "c78778c5c353c35c5f12a8fbec804ce9cde1e2fec5594d16317b818ba41710cd",
+   "snapshot_media": "_44a\\snapshot_media\\04_s01_c04_vv_80dc90a5.mp4",
+   "provider_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_eWkL3QnWkeGnM8hKDtXNftYn7ZdDIMvo.mp4",
+   "source_receipt_ref": {
+    "task_id": "task_eWkL3QnWkeGnM8hKDtXNftYn7ZdDIMvo",
+    "video_id": "task_eWkL3QnWkeGnM8hKDtXNftYn7ZdDIMvo",
+    "origin_run_id": "dgv_8509299f",
+    "model": "agnes-video-2.5-flash",
+    "created_at": 1790733265.3148835
+   },
+   "duration_probe": {
+    "duration": 5.175,
+    "width": 1280,
+    "height": 704,
+    "fps": "24/1",
+    "video_codec": "h264",
+    "has_audio": true,
+    "audio_codec": "aac"
+   },
+   "end_frame": {
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\雨灯归航\\output\\frames\\s01_c04_video_end_vv_80dc90a5.jpg",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/0791e96d0cb6c558.jpg",
+    "source_version": "vv_80dc90a5"
+   },
+   "relay": {
+    "source_shot_id": null,
+    "note": "hard/independent 开场"
+   },
+   "sentinel": null,
+   "shot_updated_at": null
+  },
+  {
+   "order": 5,
+   "scene_id": "s01",
+   "shot_id": "s01_c05",
+   "video_version_id": "vv_70728b9b",
+   "approved_status": "user_locked",
+   "verdict_source": "repair43_v2：q_sel_s01_c05=「一轮候选」",
+   "media_uri": "projects\\雨灯归航\\output\\videos\\s01_c05.mp4",
+   "media_sha256": "301bb574a96ed1e7f24c0c0a6f30e16a85369ffd291abfd66ad3acdd07251caf",
+   "snapshot_media": "_44a\\snapshot_media\\05_s01_c05_vv_70728b9b.mp4",
+   "provider_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_AnmFk0O7fZy1Ke21o5GaabdfgF5oLBl0.mp4",
+   "source_receipt_ref": {
+    "task_id": "task_AnmFk0O7fZy1Ke21o5GaabdfgF5oLBl0",
+    "video_id": "task_AnmFk0O7fZy1Ke21o5GaabdfgF5oLBl0",
+    "origin_run_id": "dgv_5326e649",
+    "model": "agnes-video-2.5-flash",
+    "created_at": 1790733545.4807546
+   },
+   "duration_probe": {
+    "duration": 5.184,
+    "width": 1280,
+    "height": 720,
+    "fps": "24/1",
+    "video_codec": "h264",
+    "has_audio": true,
+    "audio_codec": "aac"
+   },
+   "end_frame": {
+    "local": "projects\\雨灯归航\\output\\frames\\s01_c05_video_end_vv_70728b9b.jpg",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/5b4b3727b7c59b89.jpg",
+    "source_version": "vv_70728b9b"
+   },
+   "relay": {
+    "source_shot_id": "s01_c04",
+    "end_source_version": "vv_80dc90a5",
+    "tail_url_recorded": "https://Q-1844.github.io/agnes-frame-host/objects/0791e96d0cb6c558.jpg"
+   },
+   "sentinel": "prev_tail_look",
+   "shot_updated_at": null
+  },
+  {
+   "order": 6,
+   "scene_id": "s01",
+   "shot_id": "s01_c06",
+   "video_version_id": "vv_5ad9192d",
+   "approved_status": "user_locked",
+   "verdict_source": "报告 §2.8：终选一轮（1s 分拍）；反馈文件 v3 层无 c06 条目（v2 层曾选二轮 0.5s，终审翻回——档案缺口，报告为准）",
+   "media_uri": "projects\\雨灯归航\\output\\videos\\s01_c06__vv_5ad9192d.mp4",
+   "media_sha256": "a0d5654e808914137f10d7fb32246f4fe58f339d74061940a6dda436333fefcb",
+   "snapshot_media": "_44a\\snapshot_media\\06_s01_c06_vv_5ad9192d.mp4",
+   "provider_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_TSKsV4Q5Fb7na9uBoFo8L3yRCexP4loG.mp4",
+   "source_receipt_ref": {
+    "task_id": "task_TSKsV4Q5Fb7na9uBoFo8L3yRCexP4loG",
+    "video_id": "task_TSKsV4Q5Fb7na9uBoFo8L3yRCexP4loG",
+    "origin_run_id": "dgv_5a079900",
+    "model": "agnes-video-2.5-flash",
+    "created_at": 1790733904.74038
+   },
+   "duration_probe": {
+    "duration": 5.184,
+    "width": 1280,
+    "height": 720,
+    "fps": "24/1",
+    "video_codec": "h264",
+    "has_audio": true,
+    "audio_codec": "aac"
+   },
+   "end_frame": {
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\雨灯归航\\output\\frames\\s01_c06_video_end_vv_5ad9192d.jpg",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/2c41192826715e45.jpg",
+    "source_version": "vv_5ad9192d"
+   },
+   "relay": {
+    "source_shot_id": "s01_c05",
+    "end_source_version": "vv_70728b9b",
+    "tail_url_recorded": "https://Q-1844.github.io/agnes-frame-host/objects/5b4b3727b7c59b89.jpg"
+   },
+   "sentinel": "prev_tail_look",
+   "shot_updated_at": null
+  },
+  {
+   "order": 7,
+   "scene_id": "s02",
+   "shot_id": "s02_c01",
+   "video_version_id": "vv_ebbc77f8",
+   "approved_status": "user_locked",
+   "verdict_source": "合格保留（09-28 基线）",
+   "media_uri": "projects\\雨灯归航\\output\\videos\\s02_c01.mp4",
+   "media_sha256": "d7e356d2c68b9fc800273738e15b80f174ce20bd576eca6662d6091a9c21711c",
+   "snapshot_media": "_44a\\snapshot_media\\07_s02_c01_vv_ebbc77f8.mp4",
+   "provider_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_dKX1QoKCOZ2lNLKwXtSbhg1ICxXHC2Oh.mp4",
+   "source_receipt_ref": {
+    "task_id": "task_dKX1QoKCOZ2lNLKwXtSbhg1ICxXHC2Oh",
+    "video_id": "task_dKX1QoKCOZ2lNLKwXtSbhg1ICxXHC2Oh",
+    "origin_run_id": "dgv_4930c732",
+    "model": "agnes-video-2.5-flash",
+    "created_at": 1790588889.0679212
+   },
+   "duration_probe": {
+    "duration": 8.0,
+    "width": 1280,
+    "height": 720,
+    "fps": "24/1",
+    "video_codec": "h264",
+    "has_audio": true,
+    "audio_codec": "aac"
+   },
+   "end_frame": {
+    "local": "projects\\雨灯归航\\output\\frames\\s02_c01_video_end_vv_ebbc77f8.png",
+    "url": null,
+    "source_version": "vv_ebbc77f8"
+   },
+   "relay": {
+    "source_shot_id": null,
+    "note": "hard/independent 开场"
+   },
+   "sentinel": null,
+   "shot_updated_at": null
+  },
+  {
+   "order": 8,
+   "scene_id": "s02",
+   "shot_id": "s02_c02",
+   "video_version_id": "vv_4bdf6b08",
+   "approved_status": "user_locked",
+   "verdict_source": "repair43_v3：q_sel_s02_c02=「一轮候选」→ vv_4bdf6b08",
+   "media_uri": "projects\\雨灯归航\\output\\videos\\s02_c02__vv_4bdf6b08.mp4",
+   "media_sha256": "5f836b5ee7dbfbbe3b40e60799dd3a0f6d61f68ef93b5205af59ddb098fe3040",
+   "snapshot_media": "_44a\\snapshot_media\\08_s02_c02_vv_4bdf6b08.mp4",
+   "provider_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_SypOdeCYVBGdKpYpikZNSKdXjq4ILAJB.mp4",
+   "source_receipt_ref": {
+    "task_id": "task_SypOdeCYVBGdKpYpikZNSKdXjq4ILAJB",
+    "video_id": "task_SypOdeCYVBGdKpYpikZNSKdXjq4ILAJB",
+    "origin_run_id": "dgv_19bb409a",
+    "model": "agnes-video-2.5-flash",
+    "created_at": 1790734133.8197186
+   },
+   "duration_probe": {
+    "duration": 5.175,
+    "width": 1280,
+    "height": 704,
+    "fps": "24/1",
+    "video_codec": "h264",
+    "has_audio": true,
+    "audio_codec": "aac"
+   },
+   "end_frame": {
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\雨灯归航\\output\\frames\\s02_c02_video_end_vv_4bdf6b08.jpg",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/47a6874c588072c8.jpg",
+    "source_version": "vv_4bdf6b08"
+   },
+   "relay": {
+    "source_shot_id": null,
+    "note": "hard/independent 开场"
+   },
+   "sentinel": null,
+   "shot_updated_at": null
+  },
+  {
+   "order": 9,
+   "scene_id": "s02",
+   "shot_id": "s02_c03",
+   "video_version_id": "vv_49e4bd19",
+   "approved_status": "user_locked",
+   "verdict_source": "评审页终选（phase44a_c03_final）：甲-2 镜头跟随·盲区揭露 vv_49e4bd19——求稳优选+无背景音（用户听审）；全景路线已沉淀 Skill v1.3.1",
+   "media_uri": "projects\\雨灯归航\\output\\videos\\s02_c03__vv_49e4bd19.mp4",
+   "media_sha256": "7fdcfe4890786dea5ae532d0ce4603d53ffdfc4ac7812b2ab99d11374d39caf5",
+   "snapshot_media": "_44a\\snapshot_media\\09_s02_c03_vv_49e4bd19.mp4",
+   "provider_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_6ni2MmREV0LwIWIXO8GiDBGfENKTBH8t.mp4",
+   "source_receipt_ref": {
+    "task_id": "task_6ni2MmREV0LwIWIXO8GiDBGfENKTBH8t",
+    "video_id": "task_6ni2MmREV0LwIWIXO8GiDBGfENKTBH8t",
+    "origin_run_id": "p44a_follow_12c20fec",
+    "model": "agnes-video-2.5-flash",
+    "created_at": 1790782610.4003074
+   },
+   "duration_probe": {
+    "duration": 5.184,
+    "width": 1280,
+    "height": 720,
+    "fps": "24/1",
+    "video_codec": "h264",
+    "has_audio": true,
+    "audio_codec": "aac"
+   },
+   "end_frame": {
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\雨灯归航\\output\\frames\\s02_c03_video_end_vv_49e4bd19.jpg",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/93b7a138daf9007c.jpg",
+    "source_version": "vv_49e4bd19"
+   },
+   "relay": {
+    "source_shot_id": "s02_c02",
+    "end_source_version": "vv_4bdf6b08",
+    "tail_url_recorded": "https://Q-1844.github.io/agnes-frame-host/objects/47a6874c588072c8.jpg"
+   },
+   "sentinel": null,
+   "shot_updated_at": null
+  },
+  {
+   "order": 10,
+   "scene_id": "s03",
+   "shot_id": "s03_c01",
+   "video_version_id": "vv_f741a354",
+   "approved_status": "user_locked",
+   "verdict_source": "repair43_v2：q_sel_s03_c01=「一轮候选」",
+   "media_uri": "projects\\雨灯归航\\output\\videos\\s03_c01.mp4",
+   "media_sha256": "2426b69b65263125c22d7c76f2cb2115923f784407407b0c386c39910f68aaee",
+   "snapshot_media": "_44a\\snapshot_media\\10_s03_c01_vv_f741a354.mp4",
+   "provider_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_RAEKfK8S6qaGmbOqGRPqVVt32txeUkrY.mp4",
+   "source_receipt_ref": {
+    "task_id": "task_RAEKfK8S6qaGmbOqGRPqVVt32txeUkrY",
+    "video_id": "task_RAEKfK8S6qaGmbOqGRPqVVt32txeUkrY",
+    "origin_run_id": "dgv_0675f2bc",
+    "model": "agnes-video-2.5-flash",
+    "created_at": 1790734893.4490228
+   },
+   "duration_probe": {
+    "duration": 8.0,
+    "width": 1280,
+    "height": 720,
+    "fps": "24/1",
+    "video_codec": "h264",
+    "has_audio": true,
+    "audio_codec": "aac"
+   },
+   "end_frame": {
+    "local": "projects\\雨灯归航\\output\\frames\\s03_c01_video_end_vv_f741a354.jpg",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/2d4a7f6dd00dc3be.jpg",
+    "source_version": "vv_f741a354"
+   },
+   "relay": {
+    "source_shot_id": "s02_c03",
+    "end_source_version": "vv_42ba16c5",
+    "tail_url_recorded": "https://Q-1844.github.io/agnes-frame-host/objects/6c3d6835bae5684d.jpg"
+   },
+   "sentinel": "prev_tail_look",
+   "shot_updated_at": null
+  },
+  {
+   "order": 11,
+   "scene_id": "s03",
+   "shot_id": "s03_c02",
+   "video_version_id": "vv_03ff6e45",
+   "approved_status": "user_locked",
+   "verdict_source": "repair43_v2：q_sel_s03_c02=「一轮候选」",
+   "media_uri": "projects\\雨灯归航\\output\\videos\\s03_c02.mp4",
+   "media_sha256": "13de86189313680d916469134230a7ca53f633b63f629156726d2d659e3bb38d",
+   "snapshot_media": "_44a\\snapshot_media\\11_s03_c02_vv_03ff6e45.mp4",
+   "provider_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_yiTs9Y9n4QG9sbWqUlKIo3rYjBEu7A58.mp4",
+   "source_receipt_ref": {
+    "task_id": "task_yiTs9Y9n4QG9sbWqUlKIo3rYjBEu7A58",
+    "video_id": "task_yiTs9Y9n4QG9sbWqUlKIo3rYjBEu7A58",
+    "origin_run_id": "dgv_d4c4c637",
+    "model": "agnes-video-2.5-flash",
+    "created_at": 1790735257.1161978
+   },
+   "duration_probe": {
+    "duration": 8.0,
+    "width": 1280,
+    "height": 720,
+    "fps": "24/1",
+    "video_codec": "h264",
+    "has_audio": true,
+    "audio_codec": "aac"
+   },
+   "end_frame": {
+    "local": "projects\\雨灯归航\\output\\frames\\s03_c02_video_end_vv_03ff6e45.jpg",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/a5265f35155b7543.jpg",
+    "source_version": "vv_03ff6e45"
+   },
+   "relay": {
+    "source_shot_id": "s03_c01",
+    "end_source_version": "vv_f741a354",
+    "tail_url_recorded": "https://Q-1844.github.io/agnes-frame-host/objects/2d4a7f6dd00dc3be.jpg"
+   },
+   "sentinel": "prev_tail_look",
+   "shot_updated_at": null
+  },
+  {
+   "order": 12,
+   "scene_id": "s03",
+   "shot_id": "s03_c03",
+   "video_version_id": "vv_49b85cd1",
+   "approved_status": "user_locked_with_caveat",
+   "verdict_source": "repair43_v3：「虽然灯的问题还在，但是暂时就这样吧。」",
+   "media_uri": "projects\\雨灯归航\\output\\videos\\s03_c03.mp4",
+   "media_sha256": "659838cd30670b05f576aff1ce52c02a42b0553c55f9e035103bfbc13d937e25",
+   "snapshot_media": "_44a\\snapshot_media\\12_s03_c03_vv_49b85cd1.mp4",
+   "provider_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_8GrpOVsRT7fzeuG06Bjm6zmLOW1VzrlR.mp4",
+   "source_receipt_ref": {
+    "task_id": "task_8GrpOVsRT7fzeuG06Bjm6zmLOW1VzrlR",
+    "video_id": "task_8GrpOVsRT7fzeuG06Bjm6zmLOW1VzrlR",
+    "origin_run_id": "dgv_ff946baf",
+    "model": "agnes-video-2.5-flash",
+    "created_at": 1790767062.5745914
+   },
+   "duration_probe": {
+    "duration": 8.0,
+    "width": 1280,
+    "height": 720,
+    "fps": "24/1",
+    "video_codec": "h264",
+    "has_audio": true,
+    "audio_codec": "aac"
+   },
+   "end_frame": {
+    "local": "projects\\雨灯归航\\output\\frames\\s03_c03_video_end_vv_49b85cd1.jpg",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/db8e030e69cf437b.jpg",
+    "source_version": "vv_49b85cd1"
+   },
+   "relay": {
+    "source_shot_id": "s03_c02",
+    "end_source_version": "vv_03ff6e45",
+    "tail_url_recorded": "https://Q-1844.github.io/agnes-frame-host/objects/a5265f35155b7543.jpg"
+   },
+   "sentinel": "prev_tail",
+   "shot_updated_at": null
+  },
+  {
+   "order": 13,
+   "scene_id": "s03",
+   "shot_id": "s03_c04",
+   "video_version_id": "vv_6684f5dd",
+   "approved_status": "user_locked",
+   "verdict_source": "合格保留（09-28 基线）",
+   "media_uri": "projects\\雨灯归航\\output\\videos\\s03_c04.mp4",
+   "media_sha256": "adc309beed58239398ae8370257cc0cbb63a188d44c9ceb49c7316f2a2fff5f1",
+   "snapshot_media": "_44a\\snapshot_media\\13_s03_c04_vv_6684f5dd.mp4",
+   "provider_url": "https://cos-platform-outputs.agnes-ai.cn/videos/agnes-video-2.5/task_FIXYnwV8fl8r2rnZ4KkrdVlu8F9Ho0au.mp4",
+   "source_receipt_ref": {
+    "task_id": "task_FIXYnwV8fl8r2rnZ4KkrdVlu8F9Ho0au",
+    "video_id": "task_FIXYnwV8fl8r2rnZ4KkrdVlu8F9Ho0au",
+    "origin_run_id": "dgv_d4b44f66",
+    "model": "agnes-video-2.5-flash",
+    "created_at": 1790591157.0718114
+   },
+   "duration_probe": {
+    "duration": 8.0,
+    "width": 1280,
+    "height": 720,
+    "fps": "24/1",
+    "video_codec": "h264",
+    "has_audio": true,
+    "audio_codec": "aac"
+   },
+   "end_frame": {
+    "local": "projects\\雨灯归航\\output\\frames\\s03_c04_video_end_vv_6684f5dd.jpg",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/91cf2290a349d948.jpg",
+    "source_version": "vv_6684f5dd"
+   },
+   "relay": {
+    "source_shot_id": null,
+    "note": "hard/independent 开场"
+   },
+   "sentinel": null,
+   "shot_updated_at": null
+  }
+ ]
+}
