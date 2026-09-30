@@ -79,6 +79,7 @@ async def run(mode: str, session_id: str | None = None) -> int:
             agent_id, turn_fn, task_file = "director", director_turn, "task_repair.txt"
         else:
             raise ValueError(f"未知 mode: {mode}")
+        task_file = os.environ.get("P43_TASK_FILE", task_file)
 
         rt = get_agent_runtime()
         store = rt._session_store(PROJECT)
