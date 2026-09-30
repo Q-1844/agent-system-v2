@@ -58,17 +58,17 @@
  {
   "from": "s02_c02",
   "to": "s02_c03",
-  "seam_mae": 50.8,
-  "end_to_end_mae": 49.3,
+  "seam_mae": 15.2,
+  "end_to_end_mae": 45.7,
   "left_src_ver": "vv_4bdf6b08",
-  "right_src_ver": "vv_e4441f21"
+  "right_src_ver": "vv_49e4bd19"
  },
  {
   "from": "s02_c03",
   "to": "s03_c01",
-  "seam_mae": 52.4,
-  "end_to_end_mae": 67.5,
-  "left_src_ver": "vv_e4441f21",
+  "seam_mae": 39.1,
+  "end_to_end_mae": 45.8,
+  "left_src_ver": "vv_49e4bd19",
   "right_src_ver": "vv_f741a354"
  },
  {

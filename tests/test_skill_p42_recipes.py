@@ -129,9 +129,25 @@ def test_bridge_skill_p25_status_and_positioning():
     assert "端点质量与桥无关" in b
 
 
-# ---- 5. 注册表加载 v1.2.0 ----
+# ---- 5. 注册表加载 v1.3.1 ----
 
-def test_registry_loads_v120():
+def test_p44a_findings_anchored():
+    """44A 终选沉淀（v1.3.1）：凭空元素揭露路线二选一（镜头跟随·盲区揭露默认求稳 /
+    融合首帧·全景按需）+ 音轨注记 + multi 不消费硬首帧配方坑。"""
+    s = _t(f"{_RELAY}/SKILL.md")
+    assert "元素出现方式二选一" in s
+    assert "镜头跟随·盲区揭露" in s
+    assert "融合首帧·全景" in s
+    assert "未知区域可创建" in s
+    r = _t(f"{_RELAY}/references/production-recipes.md")
+    assert "揭露路线" in r
+    assert "第 0 帧未建立元素" in r
+    assert "link_mode 必须" in r and "multi 模式构建不消费 boundary frames" in r
+    assert "元素置于人物身后的背景" in r
+    assert "以用户听审为准" in r
+
+
+def test_registry_loads_v131():
     import sys
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from src.agents.skill_system.registry import SkillRegistry
@@ -140,5 +156,5 @@ def test_registry_loads_v120():
     assert not errs, f"注册错误: {errs}"
     relay = reg.skills().get(_RELAY)
     bridge = reg.skills().get(_BRIDGE)
-    assert relay is not None and relay.version == "1.3.0"
-    assert bridge is not None and bridge.version == "1.3.0"
+    assert relay is not None and relay.version == "1.3.1"
+    assert bridge is not None and bridge.version == "1.3.1"

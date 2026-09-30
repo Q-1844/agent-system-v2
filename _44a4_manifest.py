@@ -39,8 +39,8 @@ VERDICTS = {
                                "（v2 层曾选二轮 0.5s，终审翻回——档案缺口，报告为准）"),
     "s02_c01": ("user_locked", "合格保留（09-28 基线）"),
     "s02_c02": ("user_locked", "repair43_v3：q_sel_s02_c02=「一轮候选」→ vv_4bdf6b08"),
-    "s02_c03": ("pending_user_review", "repair43_v3：「可以继续按照之前来做…人物不开门了」"
-                                       "——44A2 迭代候选待用户终审"),
+    "s02_c03": ("user_locked", "评审页终选（phase44a_c03_final）：甲-2 镜头跟随·盲区揭露 "
+                               "vv_49e4bd19——求稳优选+无背景音（用户听审）；全景路线已沉淀 Skill v1.3.1"),
     "s03_c01": ("user_locked", "repair43_v2：q_sel_s03_c01=「一轮候选」"),
     "s03_c02": ("user_locked", "repair43_v2：q_sel_s03_c02=「一轮候选」"),
     "s03_c03": ("user_locked_with_caveat", "repair43_v3：「虽然灯的问题还在，但是暂时就"

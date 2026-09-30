@@ -1,6 +1,6 @@
 {
   "skill_id": "full-story-relay-calibration",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "name": "全片尾帧接力连续性校准",
   "description": "整条故事镜头链的尾帧接力连续性生产协作：预编剧冻结→逐镜生成→接缝测量→Vision 证据→三档裁定（none/minor/major）→trace 落档→按档继续/修复/升级。 起步/再锚定决策入口（路径 a-f）统一在此 Skill；Phase 42 定版生产判据（特写身份锚定/道具绑定/根帧先修/修法矩阵/动作-时长-场景匹配/候选策略）见「定版生产判据」节。",
   "category": "workflow",

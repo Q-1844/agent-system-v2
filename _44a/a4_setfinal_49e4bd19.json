@@ -1,0 +1,17 @@
+{
+ "shot": "s02_c03",
+ "final": "vv_49e4bd19",
+ "managed_copy": "projects\\雨灯归航\\output\\videos\\s02_c03__vv_49e4bd19.mp4",
+ "sha256": "7fdcfe4890786dea5ae532d0ce4603d53ffdfc4ac7812b2ab99d11374d39caf5",
+ "probe_duration": "5.184000",
+ "audio": {
+  "present": true,
+  "codec": "aac",
+  "note": "用户听审判定甲-2 无背景音；dB 见报告（选片以听审为准）"
+ },
+ "end_frame": {
+  "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\雨灯归航\\output\\frames\\s02_c03_video_end_vv_49e4bd19.jpg",
+  "url": "https://Q-1844.github.io/agnes-frame-host/objects/93b7a138daf9007c.jpg",
+  "source_version": "vv_49e4bd19"
+ }
+}

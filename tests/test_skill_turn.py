@@ -84,7 +84,7 @@ def test_director_turn_loads_skill_via_official_entry(tmp_path):
     skill_events = meta.get("skills") or []
     assert [e["event"] for e in skill_events] == ["hint", "load"]
     assert skill_events[1]["skill_id"] == "full-story-relay-calibration"
-    assert skill_events[1]["version"] == "1.3.0"
+    assert skill_events[1]["version"] == "1.3.1"
     assert skill_events[1]["detail"]["role"] == "primary_executor"
     # ⑤ trace.jsonl 持久化
     tj = pdir / "output" / "agents" / "skills" / "trace.jsonl"
