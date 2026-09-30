@@ -21,6 +21,11 @@ EVROOT = BASE_DIR / "_44a"
 TASK_FILE = EVROOT / "task_c03_iter.txt"
 
 
+def _set_task(p: Path):
+    global TASK_FILE
+    TASK_FILE = p
+
+
 def _load_env():
     env_file = BASE_DIR / ".env"
     if env_file.is_file():
@@ -147,7 +152,11 @@ def main():
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument("--continue", dest="session", default=None)
+    ap.add_argument("--task", dest="task", default=None,
+                    help="任务文件路径（默认 _44a/task_c03_iter.txt）")
     a = ap.parse_args()
+    if a.task:
+        _set_task(Path(a.task) if Path(a.task).is_absolute() else BASE_DIR / a.task)
     _load_env()
     rc = asyncio.run(run(a.session))
     sys.exit(rc)
