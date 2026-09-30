@@ -46,6 +46,7 @@ LANG = "Mandarin Chinese"
 BOUND_KEYS = {"shot_id", "prompt", "provider_mode", "first_frame", "last_frame",
               "video_reference",  # 34.md §13：multi 单语义参考槽（i2v/keyframes 下为空串）
               "identity_reference",  # 42.md 缺陷⑤：Look+尾帧双参考（prev_tail_look 哨兵；None=未启用）
+              "scene_reference",  # 43.md §二：场景实例视图第三参考（prev_tail_look_scene 哨兵；None=未启用）
               "used_reference_ids", "dropped_optional", "diagnostics",
               "semantic_roles", "basis", "generation_basis"}
 FAKE_VIDEO_KEYS = {"prompt", "mode", "image_url", "image_urls", "num_frames",

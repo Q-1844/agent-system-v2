@@ -500,3 +500,118 @@ def test_relay_identity_sentinel_pure_function():
     assert resolve_multi_relay_source(proj, target)["identity"] is False
     target.video_reference_asset_id = None
     assert resolve_multi_relay_source(proj, target) is None
+
+
+# ============ 43.md §二：尾帧+Look+场景三参考（哨兵 prev_tail_look_scene）============
+
+def _give_siv_public_url(pdir):
+    """测试 SIV 资产无公网 URL（FakeClient b64）——注入公网 URL 以过视频槽约束。"""
+    from src.resources.store import ResourceStore
+    import json as _json
+    ss = _json.loads((pdir / "output" / "scene_system.json").read_text(encoding="utf-8"))
+    rdoc = ResourceStore(pdir, pdir.name).load()
+    for siv in (ss.get("scene_instance_views") or {}).values():
+        rid = siv.get("reference_asset_id")
+        if rid and rid in rdoc.reference_assets and not rdoc.reference_assets[rid].url:
+            rdoc.reference_assets[rid].url = "http://example/siv.png"
+    ResourceStore(pdir, pdir.name).save(rdoc)
+
+
+def test_multi_relay_scene_triple_reference(venv):
+    """43.md §二：vref=prev_tail_look_scene → 三参考=[尾帧, Look, SIV]；
+    roles/used_ids 含 scene_instance_view；prompt 带 <Picture 1/2/3>；投影+
+    编译 image_urls 顺序=尾帧→Look→SIV；freshness 对称（scene 键两侧同源）。"""
+    pdir, ids, svc, fake = venv
+    from src.core.models import Scene, Shot, Asset, ShotStatus
+    _bind(svc, inst=ids["inst"], view=ids["view_a"])
+    _give_siv_public_url(pdir)
+    proj = ProjectStore(pdir).load()
+    proj.scenes[0].shots.append(Shot(shot_id="s02_c01", scene_id="s01", index=2,
+                                     characters=["Alice"]))
+    ProjectStore(pdir).save(proj)
+    assert _bind(svc, shot_id="s02_c01", inst=ids["inst"],
+                 view=ids["view_a"])["ok"]
+    ProjectStore(pdir).update_shot("s01_c02", lambda s: (
+        setattr(s.video_end_frame, "url", "http://example/s01_tail.png"),
+        setattr(s.video_end_frame, "status", ShotStatus.DONE.value),
+        setattr(s, "video_end_source_version", "vv_prev000001")))
+    ProjectStore(pdir).update_shot("s02_c01", lambda s: (
+        setattr(s, "video_reference_asset_id", "prev_tail_look_scene"),
+        setattr(s, "link_mode", "multi"),
+        setattr(s.video, "num_frames", 73),
+        setattr(s.video, "frame_rate", 24)))
+    project = _load_project(pdir)
+    shot = project.get_shot("s02_c01")
+    req = build_bound_video_input(pdir, project, shot)
+    assert req.identity_reference is not None
+    assert req.scene_reference is not None
+    assert req.scene_reference["url"] == "http://example/siv.png"
+    assert [r["source_type"] for r in req.semantic_roles] == \
+        ["prev_tail_relay", "character_look", "scene_instance_view"]
+    assert req.used_reference_ids[-1] == req.scene_reference["reference_asset_id"]
+    assert "<Picture 1>" in req.prompt and "<Picture 2>" in req.prompt \
+        and "<Picture 3>" in req.prompt
+    gen = req.to_generation_request(model=None)
+    assert [r.source_type for r in gen.reference_inputs] == \
+        ["video_reference", "character_look", "scene_instance_view"]
+    call = compile_agnes_video_call(gen)
+    assert call.slots() == {"image_urls": ["http://example/s01_tail.png",
+                                           "http://example/alice.png",
+                                           "http://example/siv.png"]}
+    from src.generation.native_av_pack import compute_current_dependency_keys
+    keys = compute_current_dependency_keys(pdir, project, shot)
+    assert req.generation_basis["visual_basis_fingerprint"] == \
+        keys["visual_basis_fingerprint"]
+
+
+def test_multi_relay_scene_fingerprint_differs_from_dual(venv):
+    """prev_tail_look 与 prev_tail_look_scene 的 visual 指纹必须不同（scene 键）。"""
+    pdir, ids, svc, fake = venv
+    from src.core.models import Scene, Shot
+    _bind(svc, inst=ids["inst"], view=ids["view_a"])
+    _give_siv_public_url(pdir)
+    proj = ProjectStore(pdir).load()
+    proj.scenes[0].shots.append(Shot(shot_id="s02_c01", scene_id="s01", index=2,
+                                     characters=["Alice"]))
+    ProjectStore(pdir).save(proj)
+    assert _bind(svc, shot_id="s02_c01", inst=ids["inst"],
+                 view=ids["view_a"])["ok"]
+    ProjectStore(pdir).update_shot("s01_c02", lambda s: (
+        setattr(s.video_end_frame, "url", "http://example/s01_tail.png"),
+        setattr(s, "video_end_source_version", "vv_prev000001")))
+    fps = {}
+    for sentinel in ("prev_tail_look", "prev_tail_look_scene"):
+        ProjectStore(pdir).update_shot("s02_c01", lambda s, sn=sentinel: (
+            setattr(s, "video_reference_asset_id", sn),
+            setattr(s, "link_mode", "multi"),
+            setattr(s.video, "num_frames", 73),
+            setattr(s.video, "frame_rate", 24)))
+        project = _load_project(pdir)
+        shot = project.get_shot("s02_c01")
+        req = build_bound_video_input(pdir, project, shot)
+        fps[sentinel] = req.generation_basis["visual_basis_fingerprint"]
+    assert fps["prev_tail_look"] != fps["prev_tail_look_scene"]
+
+
+def test_relay_scene_sentinel_pure_function():
+    """prev_tail_look_scene → identity=True + scene=True（双开关同真）。"""
+    from src.generation.video_adapter import resolve_multi_relay_source
+    from src.core.models import Project, Scene, Shot, Asset, ShotStatus
+    proj = Project(name="p")
+    s1 = Scene(scene_id="s01", shots=[Shot(shot_id="s01_c01", scene_id="s01", index=1)])
+    s2 = Scene(scene_id="s02", shots=[Shot(shot_id="s02_c01", scene_id="s02", index=1)])
+    proj.scenes = [s1, s2]
+    s1.shots[0].video_end_frame = Asset(url="http://example/s01_tail.png",
+                                        status=ShotStatus.DONE.value)
+    target = s2.shots[0]
+    target.video_reference_asset_id = "prev_tail_look_scene"
+    r = resolve_multi_relay_source(proj, target)
+    assert r is not None and r["identity"] is True and r["scene"] is True
+
+
+def test_relay_scene_reference_resolver_fail_closed():
+    """pack 无 SIV / 媒体不可解析 → 结构化拒绝（不静默跳过场景锚定）。"""
+    from src.generation.video_adapter import _resolve_relay_scene_reference
+    with pytest.raises(BoundGenerationError) as ei:
+        _resolve_relay_scene_reference({"references": []}, object(), [])
+    assert ei.value.code == "relay_scene_reference_unresolvable"

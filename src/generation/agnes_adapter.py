@@ -114,7 +114,8 @@ def compile_agnes_video_call(req: GenerationRequest) -> AgnesVideoCall:
                 {"first_present": bool(first), "last_present": bool(last),
                  "hint": "multi 模式不消费 boundary frames——视觉输入只有单语义参考"})
         multi_refs = [ri.media for ri in req.reference_inputs
-                      if ri.source_type in ("video_reference", "character_look")
+                      if ri.source_type in ("video_reference", "character_look",
+                                            "scene_instance_view")
                       and ri.media]
         if not (1 <= len(multi_refs) <= 5):
             raise AgnesRequestCompileError(
