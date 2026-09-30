@@ -1,0 +1,43 @@
+项目：雨灯归航。你是 Director，负责《雨灯归航》正式修复轮（Phase 43 §二步，集成验证）。方法决策走你的正式 Skill（full-story-relay-calibration v1.2：起步/再锚定决策入口 + 定版生产判据 + references/production-recipes.md），本任务书给的是目标、项目事实与用户已定意见——怎么修、先修哪、用什么配方，你按 Skill 和项目状态提出选择并记录理由。
+
+## 背景（已定事实）
+
+- 13 镜已全量 2.5-flash 重测。画风偏差根因已定论：s01_c04/s02_c02（中近景）当年生成时 Look 被 auto 规则丢弃→模型按文本重造角色→i2v 冻结进尾帧→裸尾帧 relay 沿链传播（s01_c05/c06、s02_c03、s03_c01/c02/c03 均受染）。
+- 系统默认已修正（2026-09-30）：紧景别 auto→crop（头肩派生 Look 进请求）。你生成根帧时核对 receipt 确认。
+- 双参考接力已接线：shot.update 把 video_reference_asset_id 设为 "prev_tail_look"（尾帧=Picture 1 + hero Look=Picture 2）。
+- Scene Agent 已在本轮先行建立「灯室内部」LocationView + SceneInstanceView（用户授权的正式新增）——你生成 s03 前先 production.inspect 确认其就位并按需 pinned 到 s03_c03 的 binding。
+
+## 用户好评候选索引（Phase 42 五轮评审定案，重放对照用）
+
+- s01_c04（偏差根）：crop 臂好评（EXP2：crop_s42/crop_comp_s42；EXP3 补 prop 后：s1/s3/s5/s7/s42+prop_s7）。链A 实际采用 crop_prop_s7 根。
+- s01_c04→c05→c06（链A，seeds 42/7，5s）：c06 凭空甲板（时长>场景容量）+ 种子7 移速降低。EXP6 动作延伸版（5s，seeds 42/7）：甲板变短+人物更丰富（有效不完全）。
+- s02_c02（偏差根）：crop_s42「很好」（EXP2）；EXP3 多种子 s1/s3/s5/s11 选中（s2 出双人=方差数据点）；终选根=链4 的 s42 根。EXP6 修灯三候选 s7/s11/s23——灯问题结案。
+- s02_c02→c03（链4，seed 42，5s）：用户裁定「达标，可正式替换」。EXP5 同配方 4 候选（42/7/11/23）3 条零瑕疵。
+- s03_c03：空间已修（文本强化+relay 保留）但画风偏差+蓝眼累积。
+- 用户验收判据：人物小巧可爱（比例圆润不撑满）、水彩画风、白三角斑侧别正确、兜帽向下、蓝围巾；铜灯样式+状态一致（带状态注记）；动作-时长-场景匹配。
+
+## 用户本轮新定意见（必须落实）
+
+1. 时长规格：偏差链镜（s01_c04/c05/c06、s02_c02/c03）target_duration_s 由 8.0 改 5.0（用户裁定，已验收证据全部在 5s 上）。其余镜不动。正常阶段正常生成；修复阶段按偏离大小调节秒数与镜头数。
+2. 动作描述粒度对照试验（用户提出，本轮在 s01_c06 上测试）：现状动作描述约每 2 秒一个动作；生成对照候选验证「每 0.5 秒描述动作」是否更稳。若成立，核心规则=描述密度与秒数的对应关系，与秒数本身无关。至少各 1 候选。
+3. 动作描述必须按尾帧场景可行性写：不能让人物朝场景边界外一直走（场景前方没路却让人物继续跑=凭空延伸的另一诱因）。动作延伸的后续动作要选场景内合理的收束动作（如跑到栈桥尽头放缓、转身、望灯等），不是硬加动作。
+
+## 任务（按序执行，每步留痕）
+
+1. calibration.run_create 建本轮 run（run_id 全程复用）；skill 事实以 references/capability-facts.md 为准。
+2. shot.production.inspect 全镜读现状：binding/freshness/依赖指纹/vref。列出你的修复顺序与理由（含哪些镜不动的判断）。
+3. s01_c04：核对 prop_bindings（应为空）→ 经正式 Binding 入口补铜灯 prop（prop_fb1bd0b18fb1，relation/anchor 参照 s02_c02 同款做法，visual_state_note 按剧情写：摔坏的旧铜灯、未点亮）→ shot.update target_duration_s=5.0（记录原因：动作-时长-场景匹配，用户已验收证据在 5s）→ 重生成根帧（候选≥2，种子 7/42 起步，crop 配方）→ 核对 receipt：Look 以 crop 派生进请求（human_reference_mode=crop；若派生失败回落+诊断=如实记录）、构图参考在列。
+4. 选定根帧（select_frame；对照好评判据预筛并写理由）→ s01_c04 视频（i2v 硬首帧，5s，seed 重放好评种子）→ 核对实际首帧=选定根帧。
+5. 提真实尾帧 → s01_c05：vref 切 prev_tail_look，5s，双参考接力 → 提尾帧 → s01_c06：5s + 动作延伸，候选含粒度对照（≥2：现行密度 vs 0.5s/动作细粒度；都按场景可行性写动作）。
+6. s02_c02：重生成根帧（种子 42 优先=终选根对照，7 备选）→ i2v 5s → 提尾帧 → s02_c03：vref 切 prev_tail_look，5s，seed 42=链4 好评重放（备选 7）。
+7. s03 复核：s02_c03 新版本落地后，c01/c02 freshness 预期过期→按依赖真实重检→重生成（双参考，5s）；c03 按修法矩阵（production-recipes）选择：灯室内部 SIV 已就位后「真解除+独立重生（带场景先验）」vs「双参考回正」——你选并写理由与预期；c04 合格保留（仅接缝复核）。
+8. 每镜 trace_upsert：expected_tail/actual_tail/vision_assessment/deviation_level/root_cause/options_considered/selected_action/why 裁定字段非空；重试/重生成旧 attempt 用 archive_existing=true 归档（原始版本与评语保留，不覆盖）。
+9. 收尾：汇总评审页待评清单（每镜：候选版本+对照期望+你的预筛意见+残留问题如实记录——动作延伸不完全、白斑侧别竞争等不得宣称已解决）；报告本轮视频秒数总消耗。
+
+## 纪律
+
+- 本轮产出=候选+证据+trace。正式选片（set-final）由用户评审后走正式入口执行——不得自行 set-final，不得以「已有好视频」冒充「已正式替换」。
+- 合格镜不动：s01_c01/c02/c03、s02_c01、s03_c04。
+- 预算：视频 500 秒/天口径，图片 4000/天；候选宁精勿滥，失败重试先归因再动手。
+- 任务回执提交即落库；中断不重提交不重复生成；发现 Skill/系统缺陷→停下如实上报（本轮是集成验证，发现缺陷先归因修好）。
+- 汇报语言：中文，简洁。

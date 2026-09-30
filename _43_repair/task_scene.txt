@@ -1,0 +1,23 @@
+项目：雨灯归航。你是 Scene Agent，本会话只做一件事：为 s03 补「灯室内部」场景素材（用户已在 Phase 42 授权的正式新增，走你自己的正式入口）。
+
+背景（只读参考，不要改动）：
+- location loc_212643ad898c「灯塔门厅与灯室」，identity_description：
+  "Round stone lighthouse interior; spiral stone staircase with wooden handrail winding counterclockwise upward; top lamp room with glazing panels, a large brass lamp seat, and window openings overlooking the river."（style_notes：2D hand-drawn storybook, soft watercolor）
+- 现有 LocationView view_24c55d041058（label "main establishing view"，camera_zone general）+ 对应 SceneInstanceView——这是门厅/楼梯视角。
+- 生产缺口：s03_c03 是灯室内部镜（巨大主灯座占画面中心），现有视图没有灯室内部先验，导致该镜重生成时空间自由度过大。
+
+任务：
+1. 先 scene.production.inspect / scene.inventory 读现状（location/view/instance/SIV 清单），确认「灯室内部」确实缺（不要凭记忆）。
+2. 用 scene.view.prepare 新建 LocationView：
+   - label：lamp room interior（灯室内部）
+   - camera_zone：interior_lamp_room（相机在灯室内部）
+   - look_direction：面向巨大黄铜主灯座（brass lamp seat）与玻璃罩（glazing panels），环形窗可见河面夜景
+   - 描述只写【可见视觉特征】（画面里能看到什么），与 identity_description 一致，不得引入新地理/新物件
+   - approval_mode=approve_if_pass
+3. 用 scene.state_view.prepare 为 instance scin_f3effc02c359 + 上述新 base view 新建 SceneInstanceView（同一 (instance, base view) 对唯一），approval_mode=approve_if_pass。
+4. 完成后 scene.production.inspect 复核：新 view 与新 SIV 均为 approved/ready，把两个 id 写进你的回复（View id / SIV id）。
+
+纪律：
+- 一次 prepare=一次正式生成尝试；审查不过按 retry guard 语义修改 basis（view 描述）再试，不要蛮多重试。
+- 不动其它 location/view/instance/SIV；不改 project.json 的任何镜头。
+- 若审查连续失败，如实报告失败原因并停止（不要降标准放行）。
