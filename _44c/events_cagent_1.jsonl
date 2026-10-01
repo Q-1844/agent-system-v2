@@ -1,0 +1,1327 @@
+{"type": "tool.pending", "step_id": 0, "name": "assembly.briefing", "label": "成片全局状态一览"}
+{"type": "tool.started", "step_id": 0, "call_id": "call_29701f8ca664481998c02faf", "name": "assembly.briefing", "label": "成片全局状态一览"}
+{"type": "tool.completed", "step_id": 0, "call_id": "call_29701f8ca664481998c02faf", "name": "assembly.briefing", "ok": true, "summary": "成片全局状态一览完成"}
+{"type": "tool.pending", "step_id": 1, "name": "assembly.narration_read", "label": "旁白编排上下文"}
+{"type": "tool.pending", "step_id": 1, "name": "assembly.audio_plan_read", "label": "读取混音计划"}
+{"type": "tool.started", "step_id": 1, "call_id": "call_4bb1c589e6404566b0d7c5ae", "name": "assembly.narration_read", "label": "旁白编排上下文"}
+{"type": "tool.completed", "step_id": 1, "call_id": "call_4bb1c589e6404566b0d7c5ae", "name": "assembly.narration_read", "ok": true, "summary": "旁白编排上下文完成"}
+{"type": "tool.started", "step_id": 1, "call_id": "call_d0268b8c6ff14918b3abf516", "name": "assembly.audio_plan_read", "label": "读取混音计划"}
+{"type": "tool.completed", "step_id": 1, "call_id": "call_d0268b8c6ff14918b3abf516", "name": "assembly.audio_plan_read", "ok": true, "summary": "读取混音计划完成"}
+{"type": "tool.pending", "step_id": 2, "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.pending", "step_id": 2, "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.pending", "step_id": 2, "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.pending", "step_id": 2, "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.pending", "step_id": 2, "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.started", "step_id": 2, "call_id": "call_a4b4c9c9a5194169adf9d282", "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.failed", "step_id": 2, "call_id": "call_a4b4c9c9a5194169adf9d282", "name": "assembly.tts_synthesize", "error": "工具执行异常：float() argument must be a string or a real number, not 'NoneType'"}
+{"type": "tool.started", "step_id": 2, "call_id": "call_bef85aec8b044a158dff9103", "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.completed", "step_id": 2, "call_id": "call_bef85aec8b044a158dff9103", "name": "assembly.tts_synthesize", "ok": false, "summary": "本步写工具串行，已跳过"}
+{"type": "tool.started", "step_id": 2, "call_id": "call_0d7e5381bf5a457086ee5fe3", "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.completed", "step_id": 2, "call_id": "call_0d7e5381bf5a457086ee5fe3", "name": "assembly.tts_synthesize", "ok": false, "summary": "本步写工具串行，已跳过"}
+{"type": "tool.started", "step_id": 2, "call_id": "call_7e4079213ba049ef96b86685", "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.completed", "step_id": 2, "call_id": "call_7e4079213ba049ef96b86685", "name": "assembly.tts_synthesize", "ok": false, "summary": "本步写工具串行，已跳过"}
+{"type": "tool.started", "step_id": 2, "call_id": "call_2df5fafffcc147bca4cc1ad0", "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.completed", "step_id": 2, "call_id": "call_2df5fafffcc147bca4cc1ad0", "name": "assembly.tts_synthesize", "ok": false, "summary": "本步写工具串行，已跳过"}
+{"type": "tool.pending", "step_id": 3, "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.started", "step_id": 3, "call_id": "call_a51a817375374cd4ba187357", "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.failed", "step_id": 3, "call_id": "call_a51a817375374cd4ba187357", "name": "assembly.tts_synthesize", "error": "工具执行异常：float() argument must be a string or a real number, not 'NoneType'"}
+{"type": "tool.pending", "step_id": 4, "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.started", "step_id": 4, "call_id": "call_badaf8358ec840558ad1bd3b", "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.completed", "step_id": 4, "call_id": "call_badaf8358ec840558ad1bd3b", "name": "assembly.tts_synthesize", "ok": true, "summary": "旁白 na01 → nver_1e4023c9（新合成，4.969479s，voice=Chinese (Mandarin)_Gentleman）"}
+{"type": "tool.pending", "step_id": 5, "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.pending", "step_id": 5, "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.pending", "step_id": 5, "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.pending", "step_id": 5, "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.started", "step_id": 5, "call_id": "call_7079d41e3bfd4b429d9a5fda", "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.completed", "step_id": 5, "call_id": "call_7079d41e3bfd4b429d9a5fda", "name": "assembly.tts_synthesize", "ok": true, "summary": "旁白 na02 → nver_efc68c06（新合成，4.028688s，voice=Chinese (Mandarin)_Gentleman）"}
+{"type": "tool.started", "step_id": 5, "call_id": "call_2979e8ba1cab4a02b1aac97a", "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.completed", "step_id": 5, "call_id": "call_2979e8ba1cab4a02b1aac97a", "name": "assembly.tts_synthesize", "ok": false, "summary": "本步写工具串行，已跳过"}
+{"type": "tool.started", "step_id": 5, "call_id": "call_1be3bc537cad44ea98f51412", "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.completed", "step_id": 5, "call_id": "call_1be3bc537cad44ea98f51412", "name": "assembly.tts_synthesize", "ok": false, "summary": "本步写工具串行，已跳过"}
+{"type": "tool.started", "step_id": 5, "call_id": "call_257800298ac34b99b02c7d3b", "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.completed", "step_id": 5, "call_id": "call_257800298ac34b99b02c7d3b", "name": "assembly.tts_synthesize", "ok": false, "summary": "本步写工具串行，已跳过"}
+{"type": "tool.pending", "step_id": 6, "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.pending", "step_id": 6, "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.pending", "step_id": 6, "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.started", "step_id": 6, "call_id": "call_0e6509c2c3324d82bbdc946e", "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.completed", "step_id": 6, "call_id": "call_0e6509c2c3324d82bbdc946e", "name": "assembly.tts_synthesize", "ok": true, "summary": "旁白 na03 → nver_cc38983f（新合成，3.262417s，voice=Chinese (Mandarin)_Gentleman）"}
+{"type": "tool.started", "step_id": 6, "call_id": "call_25763f7e10fc435d92822b7e", "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.completed", "step_id": 6, "call_id": "call_25763f7e10fc435d92822b7e", "name": "assembly.tts_synthesize", "ok": false, "summary": "本步写工具串行，已跳过"}
+{"type": "tool.started", "step_id": 6, "call_id": "call_e21ac0559914487b93588b1c", "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.completed", "step_id": 6, "call_id": "call_e21ac0559914487b93588b1c", "name": "assembly.tts_synthesize", "ok": false, "summary": "本步写工具串行，已跳过"}
+{"type": "tool.pending", "step_id": 7, "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.pending", "step_id": 7, "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.started", "step_id": 7, "call_id": "call_becc7f2dc41b4649a2f74e2c", "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.completed", "step_id": 7, "call_id": "call_becc7f2dc41b4649a2f74e2c", "name": "assembly.tts_synthesize", "ok": true, "summary": "旁白 na04 → nver_ab1aa572（新合成，3.552667s，voice=Chinese (Mandarin)_Gentleman）"}
+{"type": "tool.started", "step_id": 7, "call_id": "call_d0e6b22526fc44bdb472e5ce", "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.completed", "step_id": 7, "call_id": "call_d0e6b22526fc44bdb472e5ce", "name": "assembly.tts_synthesize", "ok": false, "summary": "本步写工具串行，已跳过"}
+{"type": "tool.pending", "step_id": 8, "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.started", "step_id": 8, "call_id": "call_26b25930ed1a4e16936dabc9", "name": "assembly.tts_synthesize", "label": "合成/复用一句旁白"}
+{"type": "tool.completed", "step_id": 8, "call_id": "call_26b25930ed1a4e16936dabc9", "name": "assembly.tts_synthesize", "ok": true, "summary": "旁白 na05 → nver_f9a82a9d（新合成，4.35375s，voice=Chinese (Mandarin)_Gentleman）"}
+{"type": "tool.pending", "step_id": 9, "name": "assembly.audio_plan_put", "label": "写入混音计划"}
+{"type": "tool.started", "step_id": 9, "call_id": "call_c3b9eca40bcc44c79acb72b8", "name": "assembly.audio_plan_put", "label": "写入混音计划"}
+{"type": "tool.completed", "step_id": 9, "call_id": "call_c3b9eca40bcc44c79acb72b8", "name": "assembly.audio_plan_put", "ok": true, "summary": "AudioPlan 写入 seq_a3d5b19b（6 层，revision=a4f416fd）"}
+{"type": "tool.pending", "step_id": 10, "name": "assembly.render_submit", "label": "发起成片渲染"}
+{"type": "tool.started", "step_id": 10, "call_id": "call_d796d1f5b14d4ddfbee30204", "name": "assembly.render_submit", "label": "发起成片渲染"}
+{"type": "tool.completed", "step_id": 10, "call_id": "call_d796d1f5b14d4ddfbee30204", "name": "assembly.render_submit", "ok": true, "summary": "渲染已受理 srender_3da0e76d（job=b04de598cf64，sequence=seq_a3d5b19b）——完成状态以 render_status 回执为准"}
+{"type": "tool.pending", "step_id": 11, "name": "assembly.proposal_write", "label": "写剪辑提案"}
+{"type": "tool.started", "step_id": 11, "call_id": "call_cc1d8ae3e951421391c77e32", "name": "assembly.proposal_write", "label": "写剪辑提案"}
+{"type": "tool.completed", "step_id": 11, "call_id": "call_cc1d8ae3e951421391c77e32", "name": "assembly.proposal_write", "ok": false, "summary": "写剪辑提案失败：title 与 content_md 必填"}
+{"type": "tool.pending", "step_id": 12, "name": "assembly.proposal_write", "label": "写剪辑提案"}
+{"type": "tool.started", "step_id": 12, "call_id": "call_0e9da21ab5ad4064a12905ee", "name": "assembly.proposal_write", "label": "写剪辑提案"}
+{"type": "tool.completed", "step_id": 12, "call_id": "call_0e9da21ab5ad4064a12905ee", "name": "assembly.proposal_write", "ok": false, "summary": "写剪辑提案失败：title 与 content_md 必填"}
+{"type": "tool.pending", "step_id": 13, "name": "assembly.proposal_write", "label": "写剪辑提案"}
+{"type": "tool.started", "step_id": 13, "call_id": "call_8bd6a5c4b87349dca6c55049", "name": "assembly.proposal_write", "label": "写剪辑提案"}
+{"type": "tool.completed", "step_id": 13, "call_id": "call_8bd6a5c4b87349dca6c55049", "name": "assembly.proposal_write", "ok": true, "summary": "提案 v4 已写入（雨灯归航 Phase 44C 旁白与配乐 A/B 候选提案）——等待用户评审"}
+{"type": "assistant.delta", "delta": "提案"}
+{"type": "assistant.delta", "delta": "已"}
+{"type": "assistant.delta", "delta": "写入"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "proposal"}
+{"type": "assistant.delta", "delta": "_v"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": ".md"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "---"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "##"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "汇报"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "###"}
+{"type": "assistant.delta", "delta": " A"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "候选"}
+{"type": "assistant.delta", "delta": "旁"}
+{"type": "assistant.delta", "delta": "白"}
+{"type": "assistant.delta", "delta": " cue"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "表"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " Cue"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "文本"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "落"}
+{"type": "assistant.delta", "delta": "点"}
+{"type": "assistant.delta", "delta": " ("}
+{"type": "assistant.delta", "delta": "ms"}
+{"type": "assistant.delta", "delta": ")"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "实测"}
+{"type": "assistant.delta", "delta": "时长"}
+{"type": "assistant.delta", "delta": " ("}
+{"type": "assistant.delta", "delta": "ms"}
+{"type": "assistant.delta", "delta": ")"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "依据"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": "-----"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": "------"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": "-----------"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": "---------------"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": "------"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " na"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "暴雨"}
+{"type": "assistant.delta", "delta": "过后"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "河"}
+{"type": "assistant.delta", "delta": "面上"}
+{"type": "assistant.delta", "delta": "只剩"}
+{"type": "assistant.delta", "delta": "下一"}
+{"type": "assistant.delta", "delta": "盏"}
+{"type": "assistant.delta", "delta": "被"}
+{"type": "assistant.delta", "delta": "摔"}
+{"type": "assistant.delta", "delta": "坏的"}
+{"type": "assistant.delta", "delta": "旧"}
+{"type": "assistant.delta", "delta": "铜"}
+{"type": "assistant.delta", "delta": "灯"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " s"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "_c"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "–"}
+{"type": "assistant.delta", "delta": "c"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "区域"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "画面"}
+{"type": "assistant.delta", "delta": "："}
+{"type": "assistant.delta", "delta": "暴雨"}
+{"type": "assistant.delta", "delta": "后"}
+{"type": "assistant.delta", "delta": "河岸"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "阿"}
+{"type": "assistant.delta", "delta": "獭"}
+{"type": "assistant.delta", "delta": "发现"}
+{"type": "assistant.delta", "delta": "铜"}
+{"type": "assistant.delta", "delta": "灯"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " na"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "修理"}
+{"type": "assistant.delta", "delta": "间的"}
+{"type": "assistant.delta", "delta": "灯"}
+{"type": "assistant.delta", "delta": "亮了"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "铜"}
+{"type": "assistant.delta", "delta": "灯"}
+{"type": "assistant.delta", "delta": "里的"}
+{"type": "assistant.delta", "delta": "火"}
+{"type": "assistant.delta", "delta": "苗"}
+{"type": "assistant.delta", "delta": "也"}
+{"type": "assistant.delta", "delta": "醒了"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " s"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "_c"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "–"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "7"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "），"}
+{"type": "assistant.delta", "delta": "场景"}
+{"type": "assistant.delta", "delta": "转换"}
+{"type": "assistant.delta", "delta": "："}
+{"type": "assistant.delta", "delta": "夜间"}
+{"type": "assistant.delta", "delta": "修理"}
+{"type": "assistant.delta", "delta": "间"}
+{"type": "assistant.delta", "delta": "亮"}
+{"type": "assistant.delta", "delta": "灯"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " na"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "它"}
+{"type": "assistant.delta", "delta": "捧着"}
+{"type": "assistant.delta", "delta": "灯"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "沿"}
+{"type": "assistant.delta", "delta": "石"}
+{"type": "assistant.delta", "delta": "阶"}
+{"type": "assistant.delta", "delta": "一圈"}
+{"type": "assistant.delta", "delta": "圈"}
+{"type": "assistant.delta", "delta": "向上"}
+{"type": "assistant.delta", "delta": "走"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " s"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "_c"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "7"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "–"}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "），"}
+{"type": "assistant.delta", "delta": "登"}
+{"type": "assistant.delta", "delta": "塔"}
+{"type": "assistant.delta", "delta": "开始"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " na"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "灯"}
+{"type": "assistant.delta", "delta": "座"}
+{"type": "assistant.delta", "delta": "上的"}
+{"type": "assistant.delta", "delta": "铜"}
+{"type": "assistant.delta", "delta": "灯"}
+{"type": "assistant.delta", "delta": "亮起"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "光束"}
+{"type": "assistant.delta", "delta": "扫"}
+{"type": "assistant.delta", "delta": "过河"}
+{"type": "assistant.delta", "delta": "面"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " s"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "_c"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "–"}
+{"type": "assistant.delta", "delta": "7"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "），"}
+{"type": "assistant.delta", "delta": "灯"}
+{"type": "assistant.delta", "delta": "室"}
+{"type": "assistant.delta", "delta": "点亮"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " na"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "远处的"}
+{"type": "assistant.delta", "delta": "船"}
+{"type": "assistant.delta", "delta": "看见了"}
+{"type": "assistant.delta", "delta": "光"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "调"}
+{"type": "assistant.delta", "delta": "转"}
+{"type": "assistant.delta", "delta": "船"}
+{"type": "assistant.delta", "delta": "头"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "往"}
+{"type": "assistant.delta", "delta": "回"}
+{"type": "assistant.delta", "delta": "走"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " s"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "_c"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "–"}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "），"}
+{"type": "assistant.delta", "delta": "结尾"}
+{"type": "assistant.delta", "delta": "呼应"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": "切"}
+{"type": "assistant.delta", "delta": "点"}
+{"type": "assistant.delta", "delta": "合规"}
+{"type": "assistant.delta", "delta": "：**"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "所有"}
+{"type": "assistant.delta", "delta": " cue"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "均"}
+{"type": "assistant.delta", "delta": "不"}
+{"type": "assistant.delta", "delta": "跨"}
+{"type": "assistant.delta", "delta": " scene"}
+{"type": "assistant.delta", "delta": "_boundary"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "或"}
+{"type": "assistant.delta", "delta": "相邻"}
+{"type": "assistant.delta", "delta": "镜"}
+{"type": "assistant.delta", "delta": "边界"}
+{"type": "assistant.delta", "delta": " ±"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "ms"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "###"}
+{"type": "assistant.delta", "delta": " Audio"}
+{"type": "assistant.delta", "delta": "Plan"}
+{"type": "assistant.delta", "delta": " Revision"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "a"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "f"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": "fd"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "层"}
+{"type": "assistant.delta", "delta": "："}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": " music"}
+{"type": "assistant.delta", "delta": " +"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": " narration"}
+{"type": "assistant.delta", "delta": "）"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "###"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "渲染"}
+{"type": "assistant.delta", "delta": "状态"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "job"}
+{"type": "assistant.delta", "delta": "_id"}
+{"type": "assistant.delta", "delta": "**:"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "b"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "de"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "cf"}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "render"}
+{"type": "assistant.delta", "delta": "_version"}
+{"type": "assistant.delta", "delta": "_id"}
+{"type": "assistant.delta", "delta": "**:"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "s"}
+{"type": "assistant.delta", "delta": "render"}
+{"type": "assistant.delta", "delta": "_"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "da"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "e"}
+{"type": "assistant.delta", "delta": "7"}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": "d"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "状态"}
+{"type": "assistant.delta", "delta": "**:"}
+{"type": "assistant.delta", "delta": " queued"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "后台"}
+{"type": "assistant.delta", "delta": "异步"}
+{"type": "assistant.delta", "delta": "执行"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "完成"}
+{"type": "assistant.delta", "delta": "状态"}
+{"type": "assistant.delta", "delta": "以下"}
+{"type": "assistant.delta", "delta": "一轮"}
+{"type": "assistant.delta", "delta": "系统"}
+{"type": "assistant.delta", "delta": "告知"}
+{"type": "assistant.delta", "delta": "为准"}
+{"type": "assistant.delta", "delta": "）"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "###"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "提案"}
+{"type": "assistant.delta", "delta": "文件"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "projects"}
+{"type": "assistant.delta", "delta": "\\\\"}
+{"type": "assistant.delta", "delta": "雨"}
+{"type": "assistant.delta", "delta": "灯"}
+{"type": "assistant.delta", "delta": "归"}
+{"type": "assistant.delta", "delta": "航"}
+{"type": "assistant.delta", "delta": "\\\\"}
+{"type": "assistant.delta", "delta": "output"}
+{"type": "assistant.delta", "delta": "\\\\"}
+{"type": "assistant.delta", "delta": "assembly"}
+{"type": "assistant.delta", "delta": "\\\\"}
+{"type": "assistant.delta", "delta": "proposal"}
+{"type": "assistant.delta", "delta": "_v"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": ".md"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "---"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": "待"}
+{"type": "assistant.delta", "delta": "用户"}
+{"type": "assistant.delta", "delta": "裁定"}
+{"type": "assistant.delta", "delta": "：**"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": " A"}
+{"type": "assistant.delta", "delta": " vs"}
+{"type": "assistant.delta", "delta": " B"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "候选"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "哪"}
+{"type": "assistant.delta", "delta": "版"}
+{"type": "assistant.delta", "delta": "旁"}
+{"type": "assistant.delta", "delta": "白"}
+{"type": "assistant.delta", "delta": "更"}
+{"type": "assistant.delta", "delta": "贴合"}
+{"type": "assistant.delta", "delta": "故事"}
+{"type": "assistant.delta", "delta": "气质"}
+{"type": "assistant.delta", "delta": "？）"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "落"}
+{"type": "assistant.delta", "delta": "点"}
+{"type": "assistant.delta", "delta": "微调"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "是否需要"}
+{"type": "assistant.delta", "delta": "调整"}
+{"type": "assistant.delta", "delta": "某"}
+{"type": "assistant.delta", "delta": "句"}
+{"type": "assistant.delta", "delta": "的"}
+{"type": "assistant.delta", "delta": " start"}
+{"type": "assistant.delta", "delta": "_ms"}
+{"type": "assistant.delta", "delta": "？）"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "配乐"}
+{"type": "assistant.delta", "delta": "强度"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "gain"}
+{"type": "assistant.delta", "delta": "_db"}
+{"type": "assistant.delta", "delta": "=-"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "是否"}
+{"type": "assistant.delta", "delta": "合适"}
+{"type": "assistant.delta", "delta": "？）"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "最终"}
+{"type": "assistant.delta", "delta": " select"}
+{"type": "assistant.delta", "delta": " final"}
+{"type": "assistant.delta", "delta": "_render"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "用户"}
+{"type": "assistant.delta", "delta": "显"}
+{"type": "assistant.delta", "delta": "式"}
+{"type": "assistant.delta", "delta": "动作"}
+{"type": "assistant.delta", "delta": "）"}
+{"type": "tool.pending", "step_id": 15, "name": "assembly.sequence_read", "label": "读取 Sequence canonical"}
+{"type": "tool.pending", "step_id": 15, "name": "assembly.render_status", "label": "渲染状态与诊断"}
+{"type": "tool.pending", "step_id": 15, "name": "assembly.audio_plan_read", "label": "读取混音计划"}
+{"type": "tool.started", "step_id": 15, "call_id": "call_50835c9eee4749cea1f3fbd5", "name": "assembly.sequence_read", "label": "读取 Sequence canonical"}
+{"type": "tool.completed", "step_id": 15, "call_id": "call_50835c9eee4749cea1f3fbd5", "name": "assembly.sequence_read", "ok": true, "summary": "读取 Sequence canonical完成"}
+{"type": "tool.started", "step_id": 15, "call_id": "call_3c8d4e9293024dae9862b060", "name": "assembly.render_status", "label": "渲染状态与诊断"}
+{"type": "tool.completed", "step_id": 15, "call_id": "call_3c8d4e9293024dae9862b060", "name": "assembly.render_status", "ok": true, "summary": "渲染状态与诊断完成"}
+{"type": "tool.started", "step_id": 15, "call_id": "call_641869d1b52d4adb9f12f579", "name": "assembly.audio_plan_read", "label": "读取混音计划"}
+{"type": "tool.completed", "step_id": 15, "call_id": "call_641869d1b52d4adb9f12f579", "name": "assembly.audio_plan_read", "ok": true, "summary": "读取混音计划完成"}
+{"type": "assistant.delta", "delta": "根据"}
+{"type": "assistant.delta", "delta": "最新"}
+{"type": "assistant.delta", "delta": "读取"}
+{"type": "assistant.delta", "delta": "的真实"}
+{"type": "assistant.delta", "delta": "状态"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "汇报"}
+{"type": "assistant.delta", "delta": "如下"}
+{"type": "assistant.delta", "delta": "："}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "---"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "##"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "已完成"}
+{"type": "assistant.delta", "delta": "事项"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "基于"}
+{"type": "assistant.delta", "delta": "真实"}
+{"type": "assistant.delta", "delta": "工具"}
+{"type": "assistant.delta", "delta": "回执"}
+{"type": "assistant.delta", "delta": "）"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "###"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "旁"}
+{"type": "assistant.delta", "delta": "白"}
+{"type": "assistant.delta", "delta": " cue"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "合成"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "句"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "na"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "–"}
+{"type": "assistant.delta", "delta": "na"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "）"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " Cue"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "文本"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "落"}
+{"type": "assistant.delta", "delta": "点"}
+{"type": "assistant.delta", "delta": " ("}
+{"type": "assistant.delta", "delta": "ms"}
+{"type": "assistant.delta", "delta": ")"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "实测"}
+{"type": "assistant.delta", "delta": "时长"}
+{"type": "assistant.delta", "delta": " ("}
+{"type": "assistant.delta", "delta": "ms"}
+{"type": "assistant.delta", "delta": ")"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " version"}
+{"type": "assistant.delta", "delta": "_id"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": "-----"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": "------"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": "-----------"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": "---------------"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": "------------"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " na"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "暴雨"}
+{"type": "assistant.delta", "delta": "过后"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "河"}
+{"type": "assistant.delta", "delta": "面上"}
+{"type": "assistant.delta", "delta": "只剩"}
+{"type": "assistant.delta", "delta": "下一"}
+{"type": "assistant.delta", "delta": "盏"}
+{"type": "assistant.delta", "delta": "被"}
+{"type": "assistant.delta", "delta": "摔"}
+{"type": "assistant.delta", "delta": "坏的"}
+{"type": "assistant.delta", "delta": "旧"}
+{"type": "assistant.delta", "delta": "铜"}
+{"type": "assistant.delta", "delta": "灯"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " n"}
+{"type": "assistant.delta", "delta": "ver"}
+{"type": "assistant.delta", "delta": "_"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "e"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "c"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " na"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "修理"}
+{"type": "assistant.delta", "delta": "间的"}
+{"type": "assistant.delta", "delta": "灯"}
+{"type": "assistant.delta", "delta": "亮了"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "铜"}
+{"type": "assistant.delta", "delta": "灯"}
+{"type": "assistant.delta", "delta": "里的"}
+{"type": "assistant.delta", "delta": "火"}
+{"type": "assistant.delta", "delta": "苗"}
+{"type": "assistant.delta", "delta": "也"}
+{"type": "assistant.delta", "delta": "醒了"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " n"}
+{"type": "assistant.delta", "delta": "ver"}
+{"type": "assistant.delta", "delta": "_ef"}
+{"type": "assistant.delta", "delta": "c"}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "c"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " na"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "它"}
+{"type": "assistant.delta", "delta": "捧着"}
+{"type": "assistant.delta", "delta": "灯"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "沿"}
+{"type": "assistant.delta", "delta": "石"}
+{"type": "assistant.delta", "delta": "阶"}
+{"type": "assistant.delta", "delta": "一圈"}
+{"type": "assistant.delta", "delta": "圈"}
+{"type": "assistant.delta", "delta": "向上"}
+{"type": "assistant.delta", "delta": "走"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " n"}
+{"type": "assistant.delta", "delta": "ver"}
+{"type": "assistant.delta", "delta": "_cc"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "f"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " na"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "灯"}
+{"type": "assistant.delta", "delta": "座"}
+{"type": "assistant.delta", "delta": "上的"}
+{"type": "assistant.delta", "delta": "铜"}
+{"type": "assistant.delta", "delta": "灯"}
+{"type": "assistant.delta", "delta": "亮起"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "光束"}
+{"type": "assistant.delta", "delta": "扫"}
+{"type": "assistant.delta", "delta": "过河"}
+{"type": "assistant.delta", "delta": "面"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " n"}
+{"type": "assistant.delta", "delta": "ver"}
+{"type": "assistant.delta", "delta": "_ab"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "aa"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "7"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "|"}
+{"type": "assistant.delta", "delta": " na"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "远处的"}
+{"type": "assistant.delta", "delta": "船"}
+{"type": "assistant.delta", "delta": "看见了"}
+{"type": "assistant.delta", "delta": "光"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "调"}
+{"type": "assistant.delta", "delta": "转"}
+{"type": "assistant.delta", "delta": "船"}
+{"type": "assistant.delta", "delta": "头"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "往"}
+{"type": "assistant.delta", "delta": "回"}
+{"type": "assistant.delta", "delta": "走"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": " n"}
+{"type": "assistant.delta", "delta": "ver"}
+{"type": "assistant.delta", "delta": "_f"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "a"}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "a"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "d"}
+{"type": "assistant.delta", "delta": " |"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": "切"}
+{"type": "assistant.delta", "delta": "点"}
+{"type": "assistant.delta", "delta": "合规"}
+{"type": "assistant.delta", "delta": "：**"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "所有"}
+{"type": "assistant.delta", "delta": " cue"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "均"}
+{"type": "assistant.delta", "delta": "不"}
+{"type": "assistant.delta", "delta": "跨"}
+{"type": "assistant.delta", "delta": " scene"}
+{"type": "assistant.delta", "delta": "_boundary"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "或"}
+{"type": "assistant.delta", "delta": "相邻"}
+{"type": "assistant.delta", "delta": "镜"}
+{"type": "assistant.delta", "delta": "边界"}
+{"type": "assistant.delta", "delta": " ±"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "ms"}
+{"type": "assistant.delta", "delta": "。"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "###"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": " Audio"}
+{"type": "assistant.delta", "delta": "Plan"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "写入"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "当前"}
+{"type": "assistant.delta", "delta": " revision"}
+{"type": "assistant.delta", "delta": "**:"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "7"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "7"}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": "c"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "层"}
+{"type": "assistant.delta", "delta": "："}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": " music"}
+{"type": "assistant.delta", "delta": " +"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": " narration"}
+{"type": "assistant.delta", "delta": "）"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "配置"}
+{"type": "assistant.delta", "delta": "："}
+{"type": "assistant.delta", "delta": "base"}
+{"type": "assistant.delta", "delta": "_gain"}
+{"type": "assistant.delta", "delta": "_db"}
+{"type": "assistant.delta", "delta": "=-"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "duck"}
+{"type": "assistant.delta", "delta": "ing"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "threshold"}
+{"type": "assistant.delta", "delta": "=-"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "dB"}
+{"type": "assistant.delta", "delta": ","}
+{"type": "assistant.delta", "delta": " ratio"}
+{"type": "assistant.delta", "delta": "="}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": ":"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "），"}
+{"type": "assistant.delta", "delta": "loud"}
+{"type": "assistant.delta", "delta": "ness"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "I"}
+{"type": "assistant.delta", "delta": "=-"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": ","}
+{"type": "assistant.delta", "delta": " TP"}
+{"type": "assistant.delta", "delta": "=-"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": ","}
+{"type": "assistant.delta", "delta": " L"}
+{"type": "assistant.delta", "delta": "RA"}
+{"type": "assistant.delta", "delta": "="}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "）"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "###"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "渲染"}
+{"type": "assistant.delta", "delta": "提交"}
+{"type": "assistant.delta", "delta": "与"}
+{"type": "assistant.delta", "delta": "完成"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "job"}
+{"type": "assistant.delta", "delta": "_id"}
+{"type": "assistant.delta", "delta": "**:"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "b"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "de"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "cf"}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "render"}
+{"type": "assistant.delta", "delta": "_version"}
+{"type": "assistant.delta", "delta": "_id"}
+{"type": "assistant.delta", "delta": "**:"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "s"}
+{"type": "assistant.delta", "delta": "render"}
+{"type": "assistant.delta", "delta": "_"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "da"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "e"}
+{"type": "assistant.delta", "delta": "7"}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": "d"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "状态"}
+{"type": "assistant.delta", "delta": "**:"}
+{"type": "assistant.delta", "delta": " ✅"}
+{"type": "assistant.delta", "delta": " done"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "非"}
+{"type": "assistant.delta", "delta": " queued"}
+{"type": "assistant.delta", "delta": "）"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "输出"}
+{"type": "assistant.delta", "delta": "文件"}
+{"type": "assistant.delta", "delta": "**:"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "projects"}
+{"type": "assistant.delta", "delta": "\\"}
+{"type": "assistant.delta", "delta": "雨"}
+{"type": "assistant.delta", "delta": "灯"}
+{"type": "assistant.delta", "delta": "归"}
+{"type": "assistant.delta", "delta": "航"}
+{"type": "assistant.delta", "delta": "\\"}
+{"type": "assistant.delta", "delta": "output"}
+{"type": "assistant.delta", "delta": "\\"}
+{"type": "assistant.delta", "delta": "sequences"}
+{"type": "assistant.delta", "delta": "\\"}
+{"type": "assistant.delta", "delta": "seq"}
+{"type": "assistant.delta", "delta": "_a"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "d"}
+{"type": "assistant.delta", "delta": "5"}
+{"type": "assistant.delta", "delta": "b"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "b"}
+{"type": "assistant.delta", "delta": "\\s"}
+{"type": "assistant.delta", "delta": "render"}
+{"type": "assistant.delta", "delta": "_"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "da"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "e"}
+{"type": "assistant.delta", "delta": "7"}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": "d"}
+{"type": "assistant.delta", "delta": ".mp"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "实测"}
+{"type": "assistant.delta", "delta": "时长"}
+{"type": "assistant.delta", "delta": "**:"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "6"}
+{"type": "assistant.delta", "delta": "ms"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "计划"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "8"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "9"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "ms"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "偏差"}
+{"type": "assistant.delta", "delta": " +"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "ms"}
+{"type": "assistant.delta", "delta": "）"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "audio"}
+{"type": "assistant.delta", "delta": "_peak"}
+{"type": "assistant.delta", "delta": "_warning"}
+{"type": "assistant.delta", "delta": "**:"}
+{"type": "assistant.delta", "delta": " null"}
+{"type": "assistant.delta", "delta": "（"}
+{"type": "assistant.delta", "delta": "无"}
+{"type": "assistant.delta", "delta": " clipping"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "风险"}
+{"type": "assistant.delta", "delta": "）"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "###"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "提案"}
+{"type": "assistant.delta", "delta": "文档"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "文件"}
+{"type": "assistant.delta", "delta": "**:"}
+{"type": "assistant.delta", "delta": " `"}
+{"type": "assistant.delta", "delta": "projects"}
+{"type": "assistant.delta", "delta": "\\"}
+{"type": "assistant.delta", "delta": "雨"}
+{"type": "assistant.delta", "delta": "灯"}
+{"type": "assistant.delta", "delta": "归"}
+{"type": "assistant.delta", "delta": "航"}
+{"type": "assistant.delta", "delta": "\\"}
+{"type": "assistant.delta", "delta": "output"}
+{"type": "assistant.delta", "delta": "\\"}
+{"type": "assistant.delta", "delta": "assembly"}
+{"type": "assistant.delta", "delta": "\\"}
+{"type": "assistant.delta", "delta": "proposal"}
+{"type": "assistant.delta", "delta": "_v"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": ".md"}
+{"type": "assistant.delta", "delta": "`"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "-"}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "内容"}
+{"type": "assistant.delta", "delta": "**:"}
+{"type": "assistant.delta", "delta": " A"}
+{"type": "assistant.delta", "delta": "/B"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "候选"}
+{"type": "assistant.delta", "delta": "对比"}
+{"type": "assistant.delta", "delta": "、"}
+{"type": "assistant.delta", "delta": "cue"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "表"}
+{"type": "assistant.delta", "delta": "、"}
+{"type": "assistant.delta", "delta": "待"}
+{"type": "assistant.delta", "delta": "裁定"}
+{"type": "assistant.delta", "delta": "事项"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "---"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "##"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "待"}
+{"type": "assistant.delta", "delta": "用户"}
+{"type": "assistant.delta", "delta": "裁定"}
+{"type": "assistant.delta", "delta": "\n\n"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "A"}
+{"type": "assistant.delta", "delta": " vs"}
+{"type": "assistant.delta", "delta": " B"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "候选"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": "："}
+{"type": "assistant.delta", "delta": "哪"}
+{"type": "assistant.delta", "delta": "版"}
+{"type": "assistant.delta", "delta": "旁"}
+{"type": "assistant.delta", "delta": "白"}
+{"type": "assistant.delta", "delta": "更"}
+{"type": "assistant.delta", "delta": "贴合"}
+{"type": "assistant.delta", "delta": "故事"}
+{"type": "assistant.delta", "delta": "气质"}
+{"type": "assistant.delta", "delta": "？"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "2"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "落"}
+{"type": "assistant.delta", "delta": "点"}
+{"type": "assistant.delta", "delta": "微调"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": "："}
+{"type": "assistant.delta", "delta": "是否需要"}
+{"type": "assistant.delta", "delta": "调整"}
+{"type": "assistant.delta", "delta": "某"}
+{"type": "assistant.delta", "delta": "句"}
+{"type": "assistant.delta", "delta": "的"}
+{"type": "assistant.delta", "delta": " start"}
+{"type": "assistant.delta", "delta": "_ms"}
+{"type": "assistant.delta", "delta": "？"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "3"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "配乐"}
+{"type": "assistant.delta", "delta": "强度"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": "："}
+{"type": "assistant.delta", "delta": "gain"}
+{"type": "assistant.delta", "delta": "_db"}
+{"type": "assistant.delta", "delta": "=-"}
+{"type": "assistant.delta", "delta": "1"}
+{"type": "assistant.delta", "delta": "0"}
+{"type": "assistant.delta", "delta": " "}
+{"type": "assistant.delta", "delta": "是否"}
+{"type": "assistant.delta", "delta": "合适"}
+{"type": "assistant.delta", "delta": "？"}
+{"type": "assistant.delta", "delta": "\n"}
+{"type": "assistant.delta", "delta": "4"}
+{"type": "assistant.delta", "delta": "."}
+{"type": "assistant.delta", "delta": " **"}
+{"type": "assistant.delta", "delta": "最终"}
+{"type": "assistant.delta", "delta": " select"}
+{"type": "assistant.delta", "delta": " final"}
+{"type": "assistant.delta", "delta": "_render"}
+{"type": "assistant.delta", "delta": "**"}
+{"type": "assistant.delta", "delta": "："}
+{"type": "assistant.delta", "delta": "用户"}
+{"type": "assistant.delta", "delta": "显"}
+{"type": "assistant.delta", "delta": "式"}
+{"type": "assistant.delta", "delta": "动作"}
+{"type": "assistant.delta", "delta": "，"}
+{"type": "assistant.delta", "delta": "由"}
+{"type": "assistant.delta", "delta": "用户"}
+{"type": "assistant.delta", "delta": "决定"}
+{"type": "assistant.delta", "delta": "。"}

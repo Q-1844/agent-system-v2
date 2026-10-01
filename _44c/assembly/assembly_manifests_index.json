@@ -1,0 +1,33 @@
+{
+  "schema": "assembly_manifest_index_v1",
+  "latest_revision": 3,
+  "history": [
+    {
+      "revision": 1,
+      "file": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\雨灯归航\\output\\assembly\\manifest_v1.json",
+      "sequence_id": "seq_900fdf75",
+      "sequence_revision": "4df4d8cb",
+      "doc_fingerprint": "a8436691",
+      "total_duration_ms": 89902,
+      "published_at": 1790788883.3745127
+    },
+    {
+      "revision": 2,
+      "file": "projects\\雨灯归航\\output\\assembly\\manifest_v2.json",
+      "sequence_id": "seq_a3d5b19b",
+      "sequence_revision": "4df4d8cb",
+      "doc_fingerprint": "cadae1f1",
+      "total_duration_ms": 89902,
+      "published_at": 1790792949.919635
+    },
+    {
+      "revision": 3,
+      "file": "projects\\雨灯归航\\output\\assembly\\manifest_v3.json",
+      "sequence_id": "seq_a3d5b19b",
+      "sequence_revision": "4df4d8cb",
+      "doc_fingerprint": "a1128989",
+      "total_duration_ms": 89902,
+      "published_at": 1790815237.512278
+    }
+  ]
+}

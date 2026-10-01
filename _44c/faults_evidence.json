@@ -1,0 +1,46 @@
+{
+ "F1_bad_voice_id": {
+  "code": "provider_request_failed",
+  "provider_status_code": 2054,
+  "provider_msg": "voice id not exist",
+  "trace_id": ""
+ },
+ "F2_music_overlong": {
+  "render_version_id": "srender_de8629cf",
+  "status": "failed",
+  "error": "[audio_layer_invalid] layer lay_music_bed: source_in(0) + duration(999999) > 源时长(96120)ms（§14 fail closed；不自动 loop §15）",
+  "output_exists": false
+ },
+ "F2_plan_restored": {
+  "revision": "2543e107",
+  "identical_to_pre": true
+ },
+ "F3_cue_text_change": {
+  "new_cue": "nc05_alt",
+  "new_version_id": "nver_2e88885f",
+  "new_file": "audio_imports/narration/nc05_alt__nver_2e88885f.wav",
+  "nc05_versions_untouched": true,
+  "old_render_intact": true
+ },
+ "F4_repeat_render": {
+  "plan_revision": "2543e107",
+  "renders": [
+   {
+    "version_id": "srender_dfca3cd1",
+    "status": "done",
+    "duration_ms": 89926
+   },
+   {
+    "version_id": "srender_5efc2a58",
+    "status": "done",
+    "duration_ms": 89926
+   }
+  ],
+  "decoded_audio_hashes": [
+   "MD5=3a71d1dc22a20e9600a8fdc498648f84",
+   "MD5=3a71d1dc22a20e9600a8fdc498648f84"
+  ],
+  "reproducible": true,
+  "old_outputs_untouched": true
+ }
+}

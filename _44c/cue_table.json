@@ -1,0 +1,151 @@
+{
+ "voice_ab": {
+  "text": "山坡上的灯塔，很多年没人点亮过了。",
+  "samples": [
+   {
+    "ab_id": "ab_gentleman",
+    "label": "温润男声（主选）",
+    "voice_id": "Chinese (Mandarin)_Gentleman",
+    "file": "audio_imports/narration/ab_gentleman__nver_a1cd6a02.wav",
+    "duration_s": 3.506229,
+    "cache_hit": true,
+    "trace_id": "070cd8b672754f9fe6cf79d255f7e25b"
+   },
+   {
+    "ab_id": "ab_chengshu",
+    "label": "成熟女性音色",
+    "voice_id": "female-chengshu",
+    "file": "audio_imports/narration/ab_chengshu__nver_9ae36941.wav",
+    "duration_s": 4.028688,
+    "cache_hit": true,
+    "trace_id": "070cd8b98f04371c4f99ebfac139a637"
+   },
+   {
+    "ab_id": "ab_wisewomen",
+    "label": "阅历姐姐",
+    "voice_id": "Chinese (Mandarin)_Wise_Women",
+    "file": "audio_imports/narration/ab_wisewomen__nver_f424bbc2.wav",
+    "duration_s": 3.784875,
+    "cache_hit": true,
+    "trace_id": "070cd8bc08f64c30089a59ddfe783c33"
+   }
+  ]
+ },
+ "narration_cues": [
+  {
+   "cue_id": "nc01",
+   "shot_id": "s01_c01",
+   "offset_ms": 1500,
+   "text": "暴雨过后的河面，总会留下一些东西。",
+   "why": "定调+主题伏笔；大远景本就安静，画面不解释来历，旁白给出叙事入口",
+   "version_id": "nver_64272666",
+   "voice_id": "Chinese (Mandarin)_Gentleman",
+   "speed": 0.9,
+   "file": "audio_imports/narration/nc01__nver_64272666.wav",
+   "sha256": "19a4e533c3828e3b1131f33d1f35df4153d0bbe3f8f2c6e30936df403af7c848",
+   "duration_ms": 3402,
+   "window_ms": [
+    0,
+    8000
+   ],
+   "start_ms": 1500,
+   "end_ms": 4902,
+   "fits_window": true,
+   "cache_hit": true,
+   "trace_id": "070cd8bf890113f97016a24bc888bd04"
+  },
+  {
+   "cue_id": "nc02",
+   "shot_id": "s01_c06",
+   "offset_ms": 500,
+   "text": "山坡上的灯塔，很多年没人点亮过了。",
+   "why": "补充画面不可得的背景信息（灯塔久未点亮）；静观收尾镜头",
+   "version_id": "nver_abc9c584",
+   "voice_id": "Chinese (Mandarin)_Gentleman",
+   "speed": 0.9,
+   "file": "audio_imports/narration/nc02__nver_abc9c584.wav",
+   "sha256": "37cf45c73058a80e41155fb0beb9b82aede844abe533dcc154942f8b5ae27794",
+   "duration_ms": 3355,
+   "window_ms": [
+    34359,
+    39543
+   ],
+   "start_ms": 34859,
+   "end_ms": 38214,
+   "fits_window": true,
+   "cache_hit": true,
+   "trace_id": "070cd8d86f92b064a1b3b30fad766494"
+  },
+  {
+   "cue_id": "nc03",
+   "shot_id": "s02_c02",
+   "offset_ms": 400,
+   "text": "灯芯亮起的那一刻，像有什么被重新修好了。",
+   "why": "情绪句：修好的不只是灯；点灯后的静止段落",
+   "version_id": "nver_c37a2a75",
+   "voice_id": "Chinese (Mandarin)_Gentleman",
+   "speed": 0.9,
+   "file": "audio_imports/narration/nc03__nver_c37a2a75.wav",
+   "sha256": "e80466e5ffa101101b8737ba808e0d625845b0beb1f698f3f221fc299f85cf92",
+   "duration_ms": 4354,
+   "window_ms": [
+    47543,
+    52718
+   ],
+   "start_ms": 47943,
+   "end_ms": 52297,
+   "fits_window": true,
+   "cache_hit": true,
+   "trace_id": "070cd8db3898a502c4b0ee16badf7bc5"
+  },
+  {
+   "cue_id": "nc04",
+   "shot_id": "s03_c02",
+   "offset_ms": 4820,
+   "text": "抱着灯往上走的人，其实也在往家走。",
+   "why": "主题句（归航点题）；盘旋楼梯节奏最缓、环境声最弱",
+   "version_id": "nver_2ce8f431",
+   "voice_id": "Chinese (Mandarin)_Gentleman",
+   "speed": 0.9,
+   "file": "audio_imports/narration/nc04__nver_2ce8f431.wav",
+   "sha256": "54035c53d2e2cd594fed83d29d463cf935aee74a944cdc827d4ac95115395612",
+   "duration_ms": 3030,
+   "window_ms": [
+    65902,
+    73902
+   ],
+   "start_ms": 70722,
+   "end_ms": 73752,
+   "fits_window": true,
+   "cache_hit": true,
+   "trace_id": "070cd8de42dc86367bae5cbaa08279bb"
+  },
+  {
+   "cue_id": "nc05",
+   "shot_id": "s03_c04",
+   "offset_ms": 1800,
+   "text": "灯亮了，晚归的船，就认得回家的路。",
+   "why": "收束（信号—回应闭环）；结尾远景留白给音乐淡出",
+   "version_id": "nver_fbfb97ee",
+   "voice_id": "Chinese (Mandarin)_Gentleman",
+   "speed": 0.9,
+   "file": "audio_imports/narration/nc05__nver_fbfb97ee.wav",
+   "sha256": "dc8ba3da815db2610a7ee405585042f33ce375e80827f1ef8cb038bd8e637f4d",
+   "duration_ms": 3785,
+   "window_ms": [
+    81902,
+    89902
+   ],
+   "start_ms": 83702,
+   "end_ms": 87487,
+   "fits_window": true,
+   "cache_hit": true,
+   "trace_id": "070cd8e12893579b622c3bf85e56e0bd"
+  }
+ ],
+ "placement_check": {
+  "all_fit": true,
+  "overflow_cues": [],
+  "rule": "start>=镜起点+300ms；end<=镜终点-150ms（不跨切点、不截断音节）"
+ }
+}

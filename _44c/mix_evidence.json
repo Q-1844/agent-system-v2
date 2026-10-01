@@ -1,0 +1,74 @@
+{
+ "audio_plan": {
+  "revision": "2543e107",
+  "layer_count": 6,
+  "base_gain_db": -3.0,
+  "ducking": {
+   "threshold_db": -30.0,
+   "ratio": 4.0,
+   "attack_ms": 50,
+   "release_ms": 800,
+   "trigger_roles": [
+    "narration"
+   ],
+   "ducked_roles": [
+    "music"
+   ]
+  },
+  "loudness": {
+   "i": -16.0,
+   "tp": -2.0,
+   "lra": 11.0
+  }
+ },
+ "mixed_render": {
+  "render_version_id": "srender_ce68b7f0",
+  "job_id": "39ac6086a540",
+  "status": "done",
+  "seconds": 12.1,
+  "planned_ms": 89902,
+  "duration_ms": 89926,
+  "output": "projects\\雨灯归航\\output\\sequences\\seq_a3d5b19b\\srender_ce68b7f0.mp4",
+  "audio_peak_warning": null,
+  "base_render_version_id": "srender_aca99c81",
+  "error": null
+ },
+ "stems": {
+  "narration": {
+   "file": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\雨灯归航\\output\\assembly\\stems\\stem_narration_rev2543e107.wav",
+   "sha256": "d694724bd86db70f7d0ae1b8c341d7636cc13d05c2455579a39dd98a35ed8a6a",
+   "plan_revision": "2543e107"
+  },
+  "music": {
+   "file": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\雨灯归航\\output\\assembly\\stems\\stem_music_rev2543e107.wav",
+   "sha256": "083cd8776a395eae0d118b16757d8ba7d749fa167f146d570ffd6598fa93a8ee",
+   "plan_revision": "2543e107"
+  }
+ },
+ "measurements": {
+  "final": {
+   "i_lufs": -16.7,
+   "peak_dbfs": -1.1
+  },
+  "av_duration": {
+   "container_ms": 89926,
+   "audio_ms": 89926.0,
+   "delta_ms": 0.0
+  },
+  "target_loudness": {
+   "i": -16.0,
+   "tp": -2.0,
+   "lra": 11.0
+  },
+  "note": "目标平台=桌面/在线流媒体（I=-16 LUFS 口径存 plan，非全平台通用声明）；自动测量不替代人耳验收"
+ },
+ "silent_baseline": {
+  "sequence_id": "seq_900fdf75",
+  "render_version_id": "srender_9e9ba8ee",
+  "status": "done",
+  "seconds": 26.3,
+  "duration_ms": 89855,
+  "output": "projects\\雨灯归航\\output\\sequences\\seq_900fdf75\\srender_9e9ba8ee.mp4",
+  "freshness_after_revert": "stale"
+ }
+}

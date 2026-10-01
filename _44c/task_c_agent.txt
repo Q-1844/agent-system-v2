@@ -1,0 +1,29 @@
+任务：为《雨灯归航》全片设计并接线旁白与配乐（Phase 44C 工程预览）。
+
+背景：全片时间线已就绪（最新 AssemblyManifest 指向 seq_a3d5b19b，89.9s，13 镜）。
+执行侧已先行做了一版旁白候选（nc01–nc05，见 narration_versions）与混音，作为对照
+版本——你的任务是提出【你自己的】cue 集并完成接线，形成 A/B 候选供用户试听。
+
+要求：
+1. 用 assembly.narration_read 读取故事全文、逐镜时间线窗口、执行侧候选与当前
+   AudioPlan（作参考，不要照抄——你可以保留明显好的句子，但必须给出你自己的判断）。
+2. 提出你自己的 3–6 个旁白 cue。克制原则：画面已讲清的动作不配旁白；旁白只补
+   充故事信息、情绪与必要的场景转换；每句文字稿 ≤40 字；不跨组切点起句或收句
+   （切点 = timeline_windows 中 scene_boundary 或相邻镜边界 ±200ms）；若某镜空间
+   不足（实测时长会回来），优先改短文案而不是硬塞。
+3. 逐句 assembly.tts_synthesize：cue_id 用 na01…na06（与执行侧 nc 区分）；
+   voice_id 缺省（温润男声）、speed 0.9。记下每句实测时长。
+4. 用 assembly.audio_plan_read 看当前 plan（revision 会用到），然后
+   assembly.audio_plan_put 写入你的版本：
+   - music 层 1 个：source={"kind":"imported_audio","file":"audio_imports/music/bed_44c_v1.wav"}，
+     start_ms=0，duration_ms=89902，gain_db=-10，fade_in_ms=3000，fade_out_ms=4000；
+   - narration 层 = 你的每句 cue（start_ms=镜起点+offset，duration_ms=实测时长，
+     gain_db=2，fade_in_ms=30，fade_out_ms=60）；
+   - plan_config = {"base_gain_db":-3,
+                    "ducking":{"threshold_db":-30,"ratio":4,"attack_ms":50,"release_ms":800},
+                    "loudness":{"i":-16,"tp":-2,"lra":11}}；
+   - expected_revision 用 audio_plan_read 返回的值。
+5. assembly.render_submit 发起渲染（后台异步执行，发起成功即收尾，不要等待）。
+
+汇报：你的 cue 表（逐句：落点/依据/实测时长）、plan revision、job_id 与
+render_version_id。只能引用工具回执真实字段；渲染完成与否以下一轮系统告知为准。

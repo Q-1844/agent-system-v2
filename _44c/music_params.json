@@ -1,0 +1,37 @@
+{
+ "segments": [
+  "seg_00_Am.wav",
+  "seg_01_F.wav",
+  "seg_02_C.wav",
+  "seg_03_G.wav",
+  "seg_04_Am.wav",
+  "seg_05_F.wav",
+  "seg_06_C.wav",
+  "seg_07_G.wav",
+  "seg_08_Am.wav",
+  "seg_09_F.wav",
+  "seg_10_C.wav",
+  "seg_11_G.wav"
+ ],
+ "segment_seconds": 8,
+ "chords": [
+  "Am",
+  "F",
+  "C",
+  "G"
+ ],
+ "cycles": 3,
+ "sample_rate": 48000,
+ "levels": [
+  0.22,
+  0.16,
+  0.12
+ ],
+ "detune_hz": 0.6,
+ "post_fx": "lowpass=1800,tremolo=f=0.22:d=0.18,aecho=0.8:0.85:60|120:0.25|0.15",
+ "origin": "locally_synthesized_test_asset",
+ "license": "self_generated_no_third_party_rights",
+ "file": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\雨灯归航\\output\\audio_imports\\music\\bed_44c_v1.wav",
+ "sha256": "c277d1fad09d4e326f5387946e3c8e4f2a1404666f9271721edd9a246588696b",
+ "duration": "96.120000"
+}

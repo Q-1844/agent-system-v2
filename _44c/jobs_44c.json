@@ -1,0 +1,94 @@
+{
+  "1da15c3206a4": {
+    "job_id": "1da15c3206a4",
+    "project": "雨灯归航",
+    "kind": "sequence_render",
+    "shot_id": null,
+    "params": {
+      "sequence_id": "seq_a3d5b19b",
+      "render_version_id": "srender_58893dfa"
+    },
+    "state": "done",
+    "progress": 100,
+    "message": "seq_a3d5b19b 完成（89926ms，Δ+24ms，⚠ 0.0dB 峰值告警）: projects\\雨灯归航\\output\\sequences\\seq_a3d5b19b\\srender_58893dfa.mp4",
+    "error": null,
+    "created_at": 1790813809.7827928,
+    "started_at": 1790813809.809298,
+    "finished_at": 1790813821.4893584,
+    "attempts": 1,
+    "last_progress_at": 1790813821.478266,
+    "error_class": null,
+    "error_stage": "done",
+    "error_provider": null,
+    "error_model": null
+  },
+  "d230c28cd4a7": {
+    "job_id": "d230c28cd4a7",
+    "project": "雨灯归航",
+    "kind": "sequence_render",
+    "shot_id": null,
+    "params": {
+      "sequence_id": "seq_a3d5b19b",
+      "render_version_id": "srender_ff7bd34b"
+    },
+    "state": "done",
+    "progress": 100,
+    "message": "seq_a3d5b19b 完成（89926ms，Δ+24ms）: projects\\雨灯归航\\output\\sequences\\seq_a3d5b19b\\srender_ff7bd34b.mp4",
+    "error": null,
+    "created_at": 1790814284.5419443,
+    "started_at": 1790814284.5674403,
+    "finished_at": 1790814296.5974548,
+    "attempts": 1,
+    "last_progress_at": 1790814296.5860329,
+    "error_class": null,
+    "error_stage": "done",
+    "error_provider": null,
+    "error_model": null
+  },
+  "39ac6086a540": {
+    "job_id": "39ac6086a540",
+    "project": "雨灯归航",
+    "kind": "sequence_render",
+    "shot_id": null,
+    "params": {
+      "sequence_id": "seq_a3d5b19b",
+      "render_version_id": "srender_ce68b7f0"
+    },
+    "state": "done",
+    "progress": 100,
+    "message": "seq_a3d5b19b 完成（89926ms，Δ+24ms）: projects\\雨灯归航\\output\\sequences\\seq_a3d5b19b\\srender_ce68b7f0.mp4",
+    "error": null,
+    "created_at": 1790814665.6861532,
+    "started_at": 1790814665.7084398,
+    "finished_at": 1790814676.4539943,
+    "attempts": 1,
+    "last_progress_at": 1790814676.443289,
+    "error_class": null,
+    "error_stage": "done",
+    "error_provider": null,
+    "error_model": null
+  },
+  "0b163018612b": {
+    "job_id": "0b163018612b",
+    "project": "雨灯归航",
+    "kind": "sequence_render",
+    "shot_id": null,
+    "params": {
+      "sequence_id": "seq_900fdf75",
+      "render_version_id": "srender_9e9ba8ee"
+    },
+    "state": "done",
+    "progress": 100,
+    "message": "seq_900fdf75 完成（89855ms，Δ-47ms）: projects\\雨灯归航\\output\\sequences\\seq_900fdf75\\srender_9e9ba8ee.mp4",
+    "error": null,
+    "created_at": 1790814765.7605402,
+    "started_at": 1790814765.7872345,
+    "finished_at": 1790814790.8496506,
+    "attempts": 1,
+    "last_progress_at": 1790814790.8416734,
+    "error_class": null,
+    "error_stage": "done",
+    "error_provider": null,
+    "error_model": null
+  }
+}

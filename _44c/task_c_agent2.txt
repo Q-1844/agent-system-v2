@@ -1,0 +1,17 @@
+任务（续）：你在上一轮发起的全片混音渲染，后台 JobQueue 现已执行完毕（系统告知）。
+
+要求：
+1. assembly.render_status（deep_audit=true）确认你的渲染 done 并记录量化指标
+   （计划 vs 实测时长、峰值/响度 advisory）。
+2. assembly.stem_render 导出分轨：roles=["narration"] 和 roles=["music"] 各一次。
+3. assembly.manifest_publish 发布新 manifest，narration_cues 传入你的 cue 表
+   （每项含 cue_id/shot_id/start_ms/end_ms/duration_ms/text/voice_id/why）。
+4. assembly.proposal_write 写评审提案，必须包含：
+   - 你的 cue 表与逐句依据；
+   - A/B 试听说明：执行侧候选（nc01–05，render srender_ce68b7f0）vs 你的版本
+     （本渲染），用户在评审页分别试听；
+   - 音乐素材身份声明：本地合成测试垫（license=self_generated_no_third_party_
+     rights），正式音乐待用户提供后替换（换文件+新 plan revision 即可）；
+   - 音轨策略：原生环境声保留（base_gain -3dB），旁白期间音乐自动 ducking；
+   - 「工程预览」标注：成片定版与 final_render select 由用户完成。
+5. 汇报最终状态（渲染版本/时长/manifest revision/分轨/提案文件）。

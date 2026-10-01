@@ -1,0 +1,25 @@
+{
+  "b04de598cf64": {
+    "job_id": "b04de598cf64",
+    "project": "雨灯归航",
+    "kind": "sequence_render",
+    "shot_id": null,
+    "params": {
+      "sequence_id": "seq_a3d5b19b",
+      "render_version_id": "srender_3da0e76d"
+    },
+    "state": "done",
+    "progress": 100,
+    "message": "seq_a3d5b19b 完成（89926ms，Δ+24ms）: projects\\雨灯归航\\output\\sequences\\seq_a3d5b19b\\srender_3da0e76d.mp4",
+    "error": null,
+    "created_at": 1790815154.3058712,
+    "started_at": 1790815155.4166327,
+    "finished_at": 1790815167.826817,
+    "attempts": 1,
+    "last_progress_at": 1790815167.8101146,
+    "error_class": null,
+    "error_stage": "done",
+    "error_provider": null,
+    "error_model": null
+  }
+}

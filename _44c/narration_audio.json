@@ -1,0 +1,1026 @@
+{
+  "schema": "narration_audio_v1",
+  "cues": {
+    "nc01_smoke": {
+      "versions": [
+        {
+          "version_id": "nver_a1e9b593",
+          "cue_id": "nc01_smoke",
+          "text": "暴雨过后的河面，总会留下一些东西。",
+          "idempotency_key": "6d1c7fb7",
+          "provider": "minimax",
+          "model": "speech-2.8-turbo",
+          "voice_id": "Chinese (Mandarin)_Gentleman",
+          "speed": 0.9,
+          "vol": 1.0,
+          "pitch": 0,
+          "language_boost": "",
+          "audio_import_path": "audio_imports/narration/nc01_smoke__nver_a1e9b593.wav",
+          "audio_sha256": "48af41ceabeb8648b9e91f904d999ff497cd0dd81346607d7777d48adadb3b05",
+          "duration_probe": {
+            "duration_s": 3.692,
+            "format": "wav",
+            "size_bytes": 354510,
+            "bitrate": 768169,
+            "codec": "pcm_s16le",
+            "sample_rate": 48000,
+            "channels": 1
+          },
+          "provider_trace_id": "070c906a0b0fc505d895c2c82459d3c2",
+          "provider_request_snapshot": {
+            "model": "speech-2.8-turbo",
+            "text": "暴雨过后的河面，总会留下一些东西。",
+            "stream": false,
+            "voice_setting": {
+              "voice_id": "Chinese (Mandarin)_Gentleman",
+              "speed": 0.9,
+              "vol": 1.0,
+              "pitch": 0
+            },
+            "audio_setting": {
+              "sample_rate": 32000,
+              "bitrate": 128000,
+              "format": "mp3",
+              "channel": 1
+            },
+            "subtitle_enable": true,
+            "subtitle_type": "word"
+          },
+          "provider_extra": {
+            "audio_length": 3744,
+            "audio_sample_rate": 32000,
+            "audio_size": 61620,
+            "bitrate": 128000,
+            "word_count": 17,
+            "invisible_character_ratio": 0,
+            "usage_characters": 32,
+            "audio_format": "mp3",
+            "audio_channel": 1,
+            "data_fields": {
+              "status": 2,
+              "ced": "",
+              "subtitle_file": "https://minimax-algeng-chat-tts.oss-cn-wulanchabu.aliyuncs.com/audio%2Ftts-20261001030514-fJZDVXhLuHHQOmDY.titles?Expires=1790881515&OSSAccessKeyId=LTAI5tGLnRTkBjLuYPjNcKQ8&Signature=Hup%2BOZwVt7m6XGenBAG16dRdbII%3D"
+            },
+            "trace_id": "070c906a0b0fc505d895c2c82459d3c2"
+          },
+          "latency_ms": 2658,
+          "cache_hit": false,
+          "created_at": 1790795115.298251
+        }
+      ]
+    },
+    "ab_gentleman": {
+      "versions": [
+        {
+          "version_id": "nver_a1cd6a02",
+          "cue_id": "ab_gentleman",
+          "text": "山坡上的灯塔，很多年没人点亮过了。",
+          "idempotency_key": "6dc2f79d",
+          "provider": "minimax",
+          "model": "speech-2.8-turbo",
+          "voice_id": "Chinese (Mandarin)_Gentleman",
+          "speed": 0.9,
+          "vol": 1.0,
+          "pitch": 0,
+          "language_boost": "",
+          "audio_import_path": "audio_imports/narration/ab_gentleman__nver_a1cd6a02.wav",
+          "audio_sha256": "140e69ad3c0bfaee269ab836a8b214455bb1a69cd43582943a625bd1c5c2ddad",
+          "duration_probe": {
+            "duration_s": 3.506229,
+            "format": "wav",
+            "size_bytes": 336676,
+            "bitrate": 768178,
+            "codec": "pcm_s16le",
+            "sample_rate": 48000,
+            "channels": 1
+          },
+          "provider_trace_id": "070cd8b672754f9fe6cf79d255f7e25b",
+          "provider_request_snapshot": {
+            "model": "speech-2.8-turbo",
+            "text": "山坡上的灯塔，很多年没人点亮过了。",
+            "stream": false,
+            "voice_setting": {
+              "voice_id": "Chinese (Mandarin)_Gentleman",
+              "speed": 0.9,
+              "vol": 1.0,
+              "pitch": 0
+            },
+            "audio_setting": {
+              "sample_rate": 32000,
+              "bitrate": 128000,
+              "format": "mp3",
+              "channel": 1
+            },
+            "subtitle_enable": true,
+            "subtitle_type": "word"
+          },
+          "provider_extra": {
+            "audio_length": 3564,
+            "audio_sample_rate": 32000,
+            "audio_size": 58740,
+            "bitrate": 128000,
+            "word_count": 17,
+            "invisible_character_ratio": 0,
+            "usage_characters": 32,
+            "audio_format": "mp3",
+            "audio_channel": 1,
+            "data_fields": {
+              "status": 2,
+              "ced": "",
+              "subtitle_file": "https://minimax-algeng-chat-tts.oss-cn-wulanchabu.aliyuncs.com/audio%2Ftts-20261001081342-ELxXKLpCRpfGQNMz.titles?Expires=1790900023&OSSAccessKeyId=LTAI5tGLnRTkBjLuYPjNcKQ8&Signature=NA5UIekz2aJKa7N0fP5TPgKf888%3D"
+            },
+            "trace_id": "070cd8b672754f9fe6cf79d255f7e25b"
+          },
+          "latency_ms": 3040,
+          "cache_hit": false,
+          "created_at": 1790813623.3627667
+        }
+      ]
+    },
+    "ab_chengshu": {
+      "versions": [
+        {
+          "version_id": "nver_9ae36941",
+          "cue_id": "ab_chengshu",
+          "text": "山坡上的灯塔，很多年没人点亮过了。",
+          "idempotency_key": "c3baee72",
+          "provider": "minimax",
+          "model": "speech-2.8-turbo",
+          "voice_id": "female-chengshu",
+          "speed": 0.9,
+          "vol": 1.0,
+          "pitch": 0,
+          "language_boost": "",
+          "audio_import_path": "audio_imports/narration/ab_chengshu__nver_9ae36941.wav",
+          "audio_sha256": "e9cca4754cfa7943f472228b13a6208fe4fdfba55bb8a74e6ced71194b8271f4",
+          "duration_probe": {
+            "duration_s": 4.028688,
+            "format": "wav",
+            "size_bytes": 386832,
+            "bitrate": 768154,
+            "codec": "pcm_s16le",
+            "sample_rate": 48000,
+            "channels": 1
+          },
+          "provider_trace_id": "070cd8b98f04371c4f99ebfac139a637",
+          "provider_request_snapshot": {
+            "model": "speech-2.8-turbo",
+            "text": "山坡上的灯塔，很多年没人点亮过了。",
+            "stream": false,
+            "voice_setting": {
+              "voice_id": "female-chengshu",
+              "speed": 0.9,
+              "vol": 1.0,
+              "pitch": 0
+            },
+            "audio_setting": {
+              "sample_rate": 32000,
+              "bitrate": 128000,
+              "format": "mp3",
+              "channel": 1
+            },
+            "subtitle_enable": true,
+            "subtitle_type": "word"
+          },
+          "provider_extra": {
+            "audio_length": 4067,
+            "audio_sample_rate": 32000,
+            "audio_size": 66804,
+            "bitrate": 128000,
+            "word_count": 17,
+            "invisible_character_ratio": 0,
+            "usage_characters": 32,
+            "audio_format": "mp3",
+            "audio_channel": 1,
+            "data_fields": {
+              "status": 2,
+              "ced": "",
+              "subtitle_file": "https://minimax-algeng-chat-tts.oss-cn-wulanchabu.aliyuncs.com/audio%2Ftts-20261001081345-NfVQcqgjeTeSNPwo.titles?Expires=1790900026&OSSAccessKeyId=LTAI5tGLnRTkBjLuYPjNcKQ8&Signature=inYz1dHsirhKcNip4q9yLBBReVw%3D"
+            },
+            "trace_id": "070cd8b98f04371c4f99ebfac139a637"
+          },
+          "latency_ms": 2470,
+          "cache_hit": false,
+          "created_at": 1790813626.263023
+        }
+      ]
+    },
+    "ab_wisewomen": {
+      "versions": [
+        {
+          "version_id": "nver_f424bbc2",
+          "cue_id": "ab_wisewomen",
+          "text": "山坡上的灯塔，很多年没人点亮过了。",
+          "idempotency_key": "b6938f59",
+          "provider": "minimax",
+          "model": "speech-2.8-turbo",
+          "voice_id": "Chinese (Mandarin)_Wise_Women",
+          "speed": 0.9,
+          "vol": 1.0,
+          "pitch": 0,
+          "language_boost": "",
+          "audio_import_path": "audio_imports/narration/ab_wisewomen__nver_f424bbc2.wav",
+          "audio_sha256": "e44d33b18d8b8ff7706bb9fc4a042e87c2ef47fdb1d22447b6e1f88ae91d7fad",
+          "duration_probe": {
+            "duration_s": 3.784875,
+            "format": "wav",
+            "size_bytes": 363426,
+            "bitrate": 768164,
+            "codec": "pcm_s16le",
+            "sample_rate": 48000,
+            "channels": 1
+          },
+          "provider_trace_id": "070cd8bc08f64c30089a59ddfe783c33",
+          "provider_request_snapshot": {
+            "model": "speech-2.8-turbo",
+            "text": "山坡上的灯塔，很多年没人点亮过了。",
+            "stream": false,
+            "voice_setting": {
+              "voice_id": "Chinese (Mandarin)_Wise_Women",
+              "speed": 0.9,
+              "vol": 1.0,
+              "pitch": 0
+            },
+            "audio_setting": {
+              "sample_rate": 32000,
+              "bitrate": 128000,
+              "format": "mp3",
+              "channel": 1
+            },
+            "subtitle_enable": true,
+            "subtitle_type": "word"
+          },
+          "provider_extra": {
+            "audio_length": 3852,
+            "audio_sample_rate": 32000,
+            "audio_size": 63348,
+            "bitrate": 128000,
+            "word_count": 17,
+            "invisible_character_ratio": 0,
+            "usage_characters": 32,
+            "audio_format": "mp3",
+            "audio_channel": 1,
+            "data_fields": {
+              "status": 2,
+              "ced": "",
+              "subtitle_file": "https://minimax-algeng-chat-tts.oss-cn-wulanchabu.aliyuncs.com/audio%2Ftts-20261001081348-JywfZmatqgmzEyFU.titles?Expires=1790900029&OSSAccessKeyId=LTAI5tGLnRTkBjLuYPjNcKQ8&Signature=WSZ0Nx%2F0Lo%2FlyKfeA1GohY72Q7w%3D"
+            },
+            "trace_id": "070cd8bc08f64c30089a59ddfe783c33"
+          },
+          "latency_ms": 2358,
+          "cache_hit": false,
+          "created_at": 1790813629.0683079
+        }
+      ]
+    },
+    "nc01": {
+      "versions": [
+        {
+          "version_id": "nver_64272666",
+          "cue_id": "nc01",
+          "text": "暴雨过后的河面，总会留下一些东西。",
+          "idempotency_key": "6d1c7fb7",
+          "provider": "minimax",
+          "model": "speech-2.8-turbo",
+          "voice_id": "Chinese (Mandarin)_Gentleman",
+          "speed": 0.9,
+          "vol": 1.0,
+          "pitch": 0,
+          "language_boost": "",
+          "audio_import_path": "audio_imports/narration/nc01__nver_64272666.wav",
+          "audio_sha256": "19a4e533c3828e3b1131f33d1f35df4153d0bbe3f8f2c6e30936df403af7c848",
+          "duration_probe": {
+            "duration_s": 3.40175,
+            "format": "wav",
+            "size_bytes": 326646,
+            "bitrate": 768183,
+            "codec": "pcm_s16le",
+            "sample_rate": 48000,
+            "channels": 1
+          },
+          "provider_trace_id": "070cd8bf890113f97016a24bc888bd04",
+          "provider_request_snapshot": {
+            "model": "speech-2.8-turbo",
+            "text": "暴雨过后的河面，总会留下一些东西。",
+            "stream": false,
+            "voice_setting": {
+              "voice_id": "Chinese (Mandarin)_Gentleman",
+              "speed": 0.9,
+              "vol": 1.0,
+              "pitch": 0
+            },
+            "audio_setting": {
+              "sample_rate": 32000,
+              "bitrate": 128000,
+              "format": "mp3",
+              "channel": 1
+            },
+            "subtitle_enable": true,
+            "subtitle_type": "word"
+          },
+          "provider_extra": {
+            "audio_length": 3456,
+            "audio_sample_rate": 32000,
+            "audio_size": 57012,
+            "bitrate": 128000,
+            "word_count": 17,
+            "invisible_character_ratio": 0,
+            "usage_characters": 32,
+            "audio_format": "mp3",
+            "audio_channel": 1,
+            "data_fields": {
+              "status": 2,
+              "ced": "",
+              "subtitle_file": "https://minimax-algeng-chat-tts.oss-cn-wulanchabu.aliyuncs.com/audio%2Ftts-20261001081351-UfTivTpBIryBdAAA.titles?Expires=1790900031&OSSAccessKeyId=LTAI5tGLnRTkBjLuYPjNcKQ8&Signature=%2BHhLM7AIxYa3tfFT0zlU5Fq2Hf0%3D"
+            },
+            "trace_id": "070cd8bf890113f97016a24bc888bd04"
+          },
+          "latency_ms": 2296,
+          "cache_hit": false,
+          "created_at": 1790813631.7789052
+        }
+      ]
+    },
+    "nc02": {
+      "versions": [
+        {
+          "version_id": "nver_abc9c584",
+          "cue_id": "nc02",
+          "text": "山坡上的灯塔，很多年没人点亮过了。",
+          "idempotency_key": "6dc2f79d",
+          "provider": "minimax",
+          "model": "speech-2.8-turbo",
+          "voice_id": "Chinese (Mandarin)_Gentleman",
+          "speed": 0.9,
+          "vol": 1.0,
+          "pitch": 0,
+          "language_boost": "",
+          "audio_import_path": "audio_imports/narration/nc02__nver_abc9c584.wav",
+          "audio_sha256": "37cf45c73058a80e41155fb0beb9b82aede844abe533dcc154942f8b5ae27794",
+          "duration_probe": {
+            "duration_s": 3.355313,
+            "format": "wav",
+            "size_bytes": 322188,
+            "bitrate": 768185,
+            "codec": "pcm_s16le",
+            "sample_rate": 48000,
+            "channels": 1
+          },
+          "provider_trace_id": "070cd8d86f92b064a1b3b30fad766494",
+          "provider_request_snapshot": {
+            "model": "speech-2.8-turbo",
+            "text": "山坡上的灯塔，很多年没人点亮过了。",
+            "stream": false,
+            "voice_setting": {
+              "voice_id": "Chinese (Mandarin)_Gentleman",
+              "speed": 0.9,
+              "vol": 1.0,
+              "pitch": 0
+            },
+            "audio_setting": {
+              "sample_rate": 32000,
+              "bitrate": 128000,
+              "format": "mp3",
+              "channel": 1
+            },
+            "subtitle_enable": true,
+            "subtitle_type": "word"
+          },
+          "provider_extra": {
+            "audio_length": 3420,
+            "audio_sample_rate": 32000,
+            "audio_size": 56436,
+            "bitrate": 128000,
+            "word_count": 17,
+            "invisible_character_ratio": 0,
+            "usage_characters": 32,
+            "audio_format": "mp3",
+            "audio_channel": 1,
+            "data_fields": {
+              "status": 2,
+              "ced": "",
+              "subtitle_file": "https://minimax-algeng-chat-tts.oss-cn-wulanchabu.aliyuncs.com/audio%2Ftts-20261001081416-hfQHMSbGeXAZRORC.titles?Expires=1790900057&OSSAccessKeyId=LTAI5tGLnRTkBjLuYPjNcKQ8&Signature=O%2Fd6rzfgvXD97xtY7I0shO7lXak%3D"
+            },
+            "trace_id": "070cd8d86f92b064a1b3b30fad766494"
+          },
+          "latency_ms": 2632,
+          "cache_hit": false,
+          "created_at": 1790813657.3950973
+        }
+      ]
+    },
+    "nc03": {
+      "versions": [
+        {
+          "version_id": "nver_c37a2a75",
+          "cue_id": "nc03",
+          "text": "灯芯亮起的那一刻，像有什么被重新修好了。",
+          "idempotency_key": "cb34deb9",
+          "provider": "minimax",
+          "model": "speech-2.8-turbo",
+          "voice_id": "Chinese (Mandarin)_Gentleman",
+          "speed": 0.9,
+          "vol": 1.0,
+          "pitch": 0,
+          "language_boost": "",
+          "audio_import_path": "audio_imports/narration/nc03__nver_c37a2a75.wav",
+          "audio_sha256": "e80466e5ffa101101b8737ba808e0d625845b0beb1f698f3f221fc299f85cf92",
+          "duration_probe": {
+            "duration_s": 4.35375,
+            "format": "wav",
+            "size_bytes": 418038,
+            "bitrate": 768143,
+            "codec": "pcm_s16le",
+            "sample_rate": 48000,
+            "channels": 1
+          },
+          "provider_trace_id": "070cd8db3898a502c4b0ee16badf7bc5",
+          "provider_request_snapshot": {
+            "model": "speech-2.8-turbo",
+            "text": "灯芯亮起的那一刻，像有什么被重新修好了。",
+            "stream": false,
+            "voice_setting": {
+              "voice_id": "Chinese (Mandarin)_Gentleman",
+              "speed": 0.9,
+              "vol": 1.0,
+              "pitch": 0
+            },
+            "audio_setting": {
+              "sample_rate": 32000,
+              "bitrate": 128000,
+              "format": "mp3",
+              "channel": 1
+            },
+            "subtitle_enable": true,
+            "subtitle_type": "word"
+          },
+          "provider_extra": {
+            "audio_length": 4392,
+            "audio_sample_rate": 32000,
+            "audio_size": 71988,
+            "bitrate": 128000,
+            "word_count": 20,
+            "invisible_character_ratio": 0,
+            "usage_characters": 38,
+            "audio_format": "mp3",
+            "audio_channel": 1,
+            "data_fields": {
+              "status": 2,
+              "ced": "",
+              "subtitle_file": "https://minimax-algeng-chat-tts.oss-cn-wulanchabu.aliyuncs.com/audio%2Ftts-20261001081419-ccwJpHsPXTxenpfb.titles?Expires=1790900060&OSSAccessKeyId=LTAI5tGLnRTkBjLuYPjNcKQ8&Signature=rCz3iSmg%2FUN%2FsP9yUvIt043QEbg%3D"
+            },
+            "trace_id": "070cd8db3898a502c4b0ee16badf7bc5"
+          },
+          "latency_ms": 2393,
+          "cache_hit": false,
+          "created_at": 1790813660.1954775
+        }
+      ]
+    },
+    "nc04": {
+      "versions": [
+        {
+          "version_id": "nver_2ce8f431",
+          "cue_id": "nc04",
+          "text": "抱着灯往上走的人，其实也在往家走。",
+          "idempotency_key": "80ea2cc5",
+          "provider": "minimax",
+          "model": "speech-2.8-turbo",
+          "voice_id": "Chinese (Mandarin)_Gentleman",
+          "speed": 0.9,
+          "vol": 1.0,
+          "pitch": 0,
+          "language_boost": "",
+          "audio_import_path": "audio_imports/narration/nc04__nver_2ce8f431.wav",
+          "audio_sha256": "54035c53d2e2cd594fed83d29d463cf935aee74a944cdc827d4ac95115395612",
+          "duration_probe": {
+            "duration_s": 3.030229,
+            "format": "wav",
+            "size_bytes": 290980,
+            "bitrate": 768205,
+            "codec": "pcm_s16le",
+            "sample_rate": 48000,
+            "channels": 1
+          },
+          "provider_trace_id": "070cd8de42dc86367bae5cbaa08279bb",
+          "provider_request_snapshot": {
+            "model": "speech-2.8-turbo",
+            "text": "抱着灯往上走的人，其实也在往家走。",
+            "stream": false,
+            "voice_setting": {
+              "voice_id": "Chinese (Mandarin)_Gentleman",
+              "speed": 0.9,
+              "vol": 1.0,
+              "pitch": 0
+            },
+            "audio_setting": {
+              "sample_rate": 32000,
+              "bitrate": 128000,
+              "format": "mp3",
+              "channel": 1
+            },
+            "subtitle_enable": true,
+            "subtitle_type": "word"
+          },
+          "provider_extra": {
+            "audio_length": 3096,
+            "audio_sample_rate": 32000,
+            "audio_size": 51252,
+            "bitrate": 128000,
+            "word_count": 17,
+            "invisible_character_ratio": 0,
+            "usage_characters": 32,
+            "audio_format": "mp3",
+            "audio_channel": 1,
+            "data_fields": {
+              "status": 2,
+              "ced": "",
+              "subtitle_file": "https://minimax-algeng-chat-tts.oss-cn-wulanchabu.aliyuncs.com/audio%2Ftts-20261001081422-xfisfnlQAkGizBUr.titles?Expires=1790900063&OSSAccessKeyId=LTAI5tGLnRTkBjLuYPjNcKQ8&Signature=QzQhsyq9cMCfRtNB%2Fiezb7xApVw%3D"
+            },
+            "trace_id": "070cd8de42dc86367bae5cbaa08279bb"
+          },
+          "latency_ms": 2421,
+          "cache_hit": false,
+          "created_at": 1790813663.0301757
+        }
+      ]
+    },
+    "nc05": {
+      "versions": [
+        {
+          "version_id": "nver_fbfb97ee",
+          "cue_id": "nc05",
+          "text": "灯亮了，晚归的船，就认得回家的路。",
+          "idempotency_key": "27a5cbb4",
+          "provider": "minimax",
+          "model": "speech-2.8-turbo",
+          "voice_id": "Chinese (Mandarin)_Gentleman",
+          "speed": 0.9,
+          "vol": 1.0,
+          "pitch": 0,
+          "language_boost": "",
+          "audio_import_path": "audio_imports/narration/nc05__nver_fbfb97ee.wav",
+          "audio_sha256": "dc8ba3da815db2610a7ee405585042f33ce375e80827f1ef8cb038bd8e637f4d",
+          "duration_probe": {
+            "duration_s": 3.784875,
+            "format": "wav",
+            "size_bytes": 363426,
+            "bitrate": 768164,
+            "codec": "pcm_s16le",
+            "sample_rate": 48000,
+            "channels": 1
+          },
+          "provider_trace_id": "070cd8e12893579b622c3bf85e56e0bd",
+          "provider_request_snapshot": {
+            "model": "speech-2.8-turbo",
+            "text": "灯亮了，晚归的船，就认得回家的路。",
+            "stream": false,
+            "voice_setting": {
+              "voice_id": "Chinese (Mandarin)_Gentleman",
+              "speed": 0.9,
+              "vol": 1.0,
+              "pitch": 0
+            },
+            "audio_setting": {
+              "sample_rate": 32000,
+              "bitrate": 128000,
+              "format": "mp3",
+              "channel": 1
+            },
+            "subtitle_enable": true,
+            "subtitle_type": "word"
+          },
+          "provider_extra": {
+            "audio_length": 3852,
+            "audio_sample_rate": 32000,
+            "audio_size": 63348,
+            "bitrate": 128000,
+            "word_count": 17,
+            "invisible_character_ratio": 0,
+            "usage_characters": 31,
+            "audio_format": "mp3",
+            "audio_channel": 1,
+            "data_fields": {
+              "status": 2,
+              "ced": "",
+              "subtitle_file": "https://minimax-algeng-chat-tts.oss-cn-wulanchabu.aliyuncs.com/audio%2Ftts-20261001081425-arRAxpWYeKHDiARk.titles?Expires=1790900065&OSSAccessKeyId=LTAI5tGLnRTkBjLuYPjNcKQ8&Signature=jpQ8Dm0ECt7LscL5am7motp%2F0mw%3D"
+            },
+            "trace_id": "070cd8e12893579b622c3bf85e56e0bd"
+          },
+          "latency_ms": 2319,
+          "cache_hit": false,
+          "created_at": 1790813665.7728617
+        }
+      ]
+    },
+    "nc05_alt": {
+      "versions": [
+        {
+          "version_id": "nver_2e88885f",
+          "cue_id": "nc05_alt",
+          "text": "灯亮了，回家的船，就认得路了。",
+          "idempotency_key": "28f94569",
+          "provider": "minimax",
+          "model": "speech-2.8-turbo",
+          "voice_id": "Chinese (Mandarin)_Gentleman",
+          "speed": 0.9,
+          "vol": 1.0,
+          "pitch": 0,
+          "language_boost": "",
+          "audio_import_path": "audio_imports/narration/nc05_alt__nver_2e88885f.wav",
+          "audio_sha256": "ee87d7792ebafc7a72b9eb9f153a3132b4da144f0b545bf23dbe4a72739b9728",
+          "duration_probe": {
+            "duration_s": 3.355313,
+            "format": "wav",
+            "size_bytes": 322188,
+            "bitrate": 768185,
+            "codec": "pcm_s16le",
+            "sample_rate": 48000,
+            "channels": 1
+          },
+          "provider_trace_id": "070cdbe759e8c4cf3188bdd3a3c28d30",
+          "provider_request_snapshot": {
+            "model": "speech-2.8-turbo",
+            "text": "灯亮了，回家的船，就认得路了。",
+            "stream": false,
+            "voice_setting": {
+              "voice_id": "Chinese (Mandarin)_Gentleman",
+              "speed": 0.9,
+              "vol": 1.0,
+              "pitch": 0
+            },
+            "audio_setting": {
+              "sample_rate": 32000,
+              "bitrate": 128000,
+              "format": "mp3",
+              "channel": 1
+            },
+            "subtitle_enable": true,
+            "subtitle_type": "word"
+          },
+          "provider_extra": {
+            "audio_length": 3420,
+            "audio_sample_rate": 32000,
+            "audio_size": 56436,
+            "bitrate": 128000,
+            "word_count": 15,
+            "invisible_character_ratio": 0,
+            "usage_characters": 27,
+            "audio_format": "mp3",
+            "audio_channel": 1,
+            "data_fields": {
+              "status": 2,
+              "ced": "",
+              "subtitle_file": "https://minimax-algeng-chat-tts.oss-cn-wulanchabu.aliyuncs.com/audio%2Ftts-20261001082719-jIfBNEmSYFSAHaSh.titles?Expires=1790900840&OSSAccessKeyId=LTAI5tGLnRTkBjLuYPjNcKQ8&Signature=xlRufDP16AMvzcGSQj57IWIXdPM%3D"
+            },
+            "trace_id": "070cdbe759e8c4cf3188bdd3a3c28d30"
+          },
+          "latency_ms": 1919,
+          "cache_hit": false,
+          "created_at": 1790814440.2624176
+        }
+      ]
+    },
+    "na01": {
+      "versions": [
+        {
+          "version_id": "nver_1e4023c9",
+          "cue_id": "na01",
+          "text": "暴雨过后，河面上只剩下一盏被摔坏的旧铜灯。",
+          "idempotency_key": "9a9e170b",
+          "provider": "minimax",
+          "model": "speech-2.8-turbo",
+          "voice_id": "Chinese (Mandarin)_Gentleman",
+          "speed": 0.9,
+          "vol": 1.0,
+          "pitch": 0,
+          "language_boost": "",
+          "audio_import_path": "audio_imports/narration/na01__nver_1e4023c9.wav",
+          "audio_sha256": "40f0067f72060bbde042c7acfef19221825795f29a88e7d544fa5725f82e4341",
+          "duration_probe": {
+            "duration_s": 4.969479,
+            "format": "wav",
+            "size_bytes": 477148,
+            "bitrate": 768125,
+            "codec": "pcm_s16le",
+            "sample_rate": 48000,
+            "channels": 1
+          },
+          "provider_trace_id": "070cde821fc47c0390e1e83e7ccc540f",
+          "provider_request_snapshot": {
+            "model": "speech-2.8-turbo",
+            "text": "暴雨过后，河面上只剩下一盏被摔坏的旧铜灯。",
+            "stream": false,
+            "voice_setting": {
+              "voice_id": "Chinese (Mandarin)_Gentleman",
+              "speed": 0.9,
+              "vol": 1.0,
+              "pitch": 0
+            },
+            "audio_setting": {
+              "sample_rate": 32000,
+              "bitrate": 128000,
+              "format": "mp3",
+              "channel": 1
+            },
+            "subtitle_enable": true,
+            "subtitle_type": "word"
+          },
+          "provider_extra": {
+            "audio_length": 5040,
+            "audio_sample_rate": 32000,
+            "audio_size": 82356,
+            "bitrate": 128000,
+            "word_count": 21,
+            "invisible_character_ratio": 0,
+            "usage_characters": 40,
+            "audio_format": "mp3",
+            "audio_channel": 1,
+            "data_fields": {
+              "status": 2,
+              "ced": "",
+              "subtitle_file": "https://minimax-algeng-chat-tts.oss-cn-wulanchabu.aliyuncs.com/audio%2Ftts-20261001083827-CIhcimLvECUtvJml.titles?Expires=1790901508&OSSAccessKeyId=LTAI5tGLnRTkBjLuYPjNcKQ8&Signature=nlEqEakjj3Tx%2BT0Xs9NFq1PEMss%3D"
+            },
+            "trace_id": "070cde821fc47c0390e1e83e7ccc540f"
+          },
+          "latency_ms": 3714,
+          "cache_hit": false,
+          "created_at": 1790815108.2379084
+        }
+      ]
+    },
+    "na02": {
+      "versions": [
+        {
+          "version_id": "nver_efc68c06",
+          "cue_id": "na02",
+          "text": "修理间的灯亮了，铜灯里的火苗也醒了。",
+          "idempotency_key": "4dd00f8d",
+          "provider": "minimax",
+          "model": "speech-2.8-turbo",
+          "voice_id": "Chinese (Mandarin)_Gentleman",
+          "speed": 0.9,
+          "vol": 1.0,
+          "pitch": 0,
+          "language_boost": "",
+          "audio_import_path": "audio_imports/narration/na02__nver_efc68c06.wav",
+          "audio_sha256": "7fc5035b485682f30e6eda5cb8c35360668481f9099bd8be6ff03c8c6acb5f91",
+          "duration_probe": {
+            "duration_s": 4.028688,
+            "format": "wav",
+            "size_bytes": 386832,
+            "bitrate": 768154,
+            "codec": "pcm_s16le",
+            "sample_rate": 48000,
+            "channels": 1
+          },
+          "provider_trace_id": "070cde8e88d25253a5a1850ab2d905da",
+          "provider_request_snapshot": {
+            "model": "speech-2.8-turbo",
+            "text": "修理间的灯亮了，铜灯里的火苗也醒了。",
+            "stream": false,
+            "voice_setting": {
+              "voice_id": "Chinese (Mandarin)_Gentleman",
+              "speed": 0.9,
+              "vol": 1.0,
+              "pitch": 0
+            },
+            "audio_setting": {
+              "sample_rate": 32000,
+              "bitrate": 128000,
+              "format": "mp3",
+              "channel": 1
+            },
+            "subtitle_enable": true,
+            "subtitle_type": "word"
+          },
+          "provider_extra": {
+            "audio_length": 4067,
+            "audio_sample_rate": 32000,
+            "audio_size": 66804,
+            "bitrate": 128000,
+            "word_count": 18,
+            "invisible_character_ratio": 0,
+            "usage_characters": 34,
+            "audio_format": "mp3",
+            "audio_channel": 1,
+            "data_fields": {
+              "status": 2,
+              "ced": "",
+              "subtitle_file": "https://minimax-algeng-chat-tts.oss-cn-wulanchabu.aliyuncs.com/audio%2Ftts-20261001083838-RzVMnFiMpYqdyySi.titles?Expires=1790901519&OSSAccessKeyId=LTAI5tGLnRTkBjLuYPjNcKQ8&Signature=B%2FeWIiQMkQCKlK4NHYxnZl2f5Rc%3D"
+            },
+            "trace_id": "070cde8e88d25253a5a1850ab2d905da"
+          },
+          "latency_ms": 2632,
+          "cache_hit": false,
+          "created_at": 1790815119.015004
+        }
+      ]
+    },
+    "na03": {
+      "versions": [
+        {
+          "version_id": "nver_cc38983f",
+          "cue_id": "na03",
+          "text": "它捧着灯，沿石阶一圈圈向上走。",
+          "idempotency_key": "e27d7b9c",
+          "provider": "minimax",
+          "model": "speech-2.8-turbo",
+          "voice_id": "Chinese (Mandarin)_Gentleman",
+          "speed": 0.9,
+          "vol": 1.0,
+          "pitch": 0,
+          "language_boost": "",
+          "audio_import_path": "audio_imports/narration/na03__nver_cc38983f.wav",
+          "audio_sha256": "837d527b8655b60520c46bedfed72c3088f65805017e769ae574a3c8d3370ed1",
+          "duration_probe": {
+            "duration_s": 3.262417,
+            "format": "wav",
+            "size_bytes": 313270,
+            "bitrate": 768191,
+            "codec": "pcm_s16le",
+            "sample_rate": 48000,
+            "channels": 1
+          },
+          "provider_trace_id": "070cde9503f09dede2d6f90a1309ed0b",
+          "provider_request_snapshot": {
+            "model": "speech-2.8-turbo",
+            "text": "它捧着灯，沿石阶一圈圈向上走。",
+            "stream": false,
+            "voice_setting": {
+              "voice_id": "Chinese (Mandarin)_Gentleman",
+              "speed": 0.9,
+              "vol": 1.0,
+              "pitch": 0
+            },
+            "audio_setting": {
+              "sample_rate": 32000,
+              "bitrate": 128000,
+              "format": "mp3",
+              "channel": 1
+            },
+            "subtitle_enable": true,
+            "subtitle_type": "word"
+          },
+          "provider_extra": {
+            "audio_length": 3312,
+            "audio_sample_rate": 32000,
+            "audio_size": 54708,
+            "bitrate": 128000,
+            "word_count": 15,
+            "invisible_character_ratio": 0,
+            "usage_characters": 28,
+            "audio_format": "mp3",
+            "audio_channel": 1,
+            "data_fields": {
+              "status": 2,
+              "ced": "",
+              "subtitle_file": "https://minimax-algeng-chat-tts.oss-cn-wulanchabu.aliyuncs.com/audio%2Ftts-20261001083845-yRwiQRPGKOvCOqza.titles?Expires=1790901526&OSSAccessKeyId=LTAI5tGLnRTkBjLuYPjNcKQ8&Signature=fq9tZt6J%2BNn3uR0DC9ParUVrKmY%3D"
+            },
+            "trace_id": "070cde9503f09dede2d6f90a1309ed0b"
+          },
+          "latency_ms": 2274,
+          "cache_hit": false,
+          "created_at": 1790815125.931811
+        }
+      ]
+    },
+    "na04": {
+      "versions": [
+        {
+          "version_id": "nver_ab1aa572",
+          "cue_id": "na04",
+          "text": "灯座上的铜灯亮起，光束扫过河面。",
+          "idempotency_key": "1532af25",
+          "provider": "minimax",
+          "model": "speech-2.8-turbo",
+          "voice_id": "Chinese (Mandarin)_Gentleman",
+          "speed": 0.9,
+          "vol": 1.0,
+          "pitch": 0,
+          "language_boost": "",
+          "audio_import_path": "audio_imports/narration/na04__nver_ab1aa572.wav",
+          "audio_sha256": "ef74c5de8e4b4a61692ba4d37e4614c5ec7f2fb68bb85ad8bc45fcd0afaa26d1",
+          "duration_probe": {
+            "duration_s": 3.552667,
+            "format": "wav",
+            "size_bytes": 341134,
+            "bitrate": 768175,
+            "codec": "pcm_s16le",
+            "sample_rate": 48000,
+            "channels": 1
+          },
+          "provider_trace_id": "070cde9a956da38ab0b3e7d8df6cdfc0",
+          "provider_request_snapshot": {
+            "model": "speech-2.8-turbo",
+            "text": "灯座上的铜灯亮起，光束扫过河面。",
+            "stream": false,
+            "voice_setting": {
+              "voice_id": "Chinese (Mandarin)_Gentleman",
+              "speed": 0.9,
+              "vol": 1.0,
+              "pitch": 0
+            },
+            "audio_setting": {
+              "sample_rate": 32000,
+              "bitrate": 128000,
+              "format": "mp3",
+              "channel": 1
+            },
+            "subtitle_enable": true,
+            "subtitle_type": "word"
+          },
+          "provider_extra": {
+            "audio_length": 3600,
+            "audio_sample_rate": 32000,
+            "audio_size": 59316,
+            "bitrate": 128000,
+            "word_count": 16,
+            "invisible_character_ratio": 0,
+            "usage_characters": 30,
+            "audio_format": "mp3",
+            "audio_channel": 1,
+            "data_fields": {
+              "status": 2,
+              "ced": "",
+              "subtitle_file": "https://minimax-algeng-chat-tts.oss-cn-wulanchabu.aliyuncs.com/audio%2Ftts-20261001083851-YHDiQAzGewiQofiG.titles?Expires=1790901531&OSSAccessKeyId=LTAI5tGLnRTkBjLuYPjNcKQ8&Signature=8zCHZvDPCOC8060055KBXkPaJvI%3D"
+            },
+            "trace_id": "070cde9a956da38ab0b3e7d8df6cdfc0"
+          },
+          "latency_ms": 2091,
+          "cache_hit": false,
+          "created_at": 1790815131.589936
+        }
+      ]
+    },
+    "na05": {
+      "versions": [
+        {
+          "version_id": "nver_f9a82a9d",
+          "cue_id": "na05",
+          "text": "远处的船看见了光，调转船头，往回走。",
+          "idempotency_key": "a49dd692",
+          "provider": "minimax",
+          "model": "speech-2.8-turbo",
+          "voice_id": "Chinese (Mandarin)_Gentleman",
+          "speed": 0.9,
+          "vol": 1.0,
+          "pitch": 0,
+          "language_boost": "",
+          "audio_import_path": "audio_imports/narration/na05__nver_f9a82a9d.wav",
+          "audio_sha256": "0f2f6a95eb2c4635c1b27d5a780322630eb6b2479e640385b994d6b0b4053287",
+          "duration_probe": {
+            "duration_s": 4.35375,
+            "format": "wav",
+            "size_bytes": 418038,
+            "bitrate": 768143,
+            "codec": "pcm_s16le",
+            "sample_rate": 48000,
+            "channels": 1
+          },
+          "provider_trace_id": "070cde9ff76f80ed24bbbf98e0b1352c",
+          "provider_request_snapshot": {
+            "model": "speech-2.8-turbo",
+            "text": "远处的船看见了光，调转船头，往回走。",
+            "stream": false,
+            "voice_setting": {
+              "voice_id": "Chinese (Mandarin)_Gentleman",
+              "speed": 0.9,
+              "vol": 1.0,
+              "pitch": 0
+            },
+            "audio_setting": {
+              "sample_rate": 32000,
+              "bitrate": 128000,
+              "format": "mp3",
+              "channel": 1
+            },
+            "subtitle_enable": true,
+            "subtitle_type": "word"
+          },
+          "provider_extra": {
+            "audio_length": 4392,
+            "audio_sample_rate": 32000,
+            "audio_size": 71988,
+            "bitrate": 128000,
+            "word_count": 18,
+            "invisible_character_ratio": 0,
+            "usage_characters": 33,
+            "audio_format": "mp3",
+            "audio_channel": 1,
+            "data_fields": {
+              "status": 2,
+              "ced": "",
+              "subtitle_file": "https://minimax-algeng-chat-tts.oss-cn-wulanchabu.aliyuncs.com/audio%2Ftts-20261001083856-trdSzyrjVKQcSDCm.titles?Expires=1790901536&OSSAccessKeyId=LTAI5tGLnRTkBjLuYPjNcKQ8&Signature=hQUrbeeb0omLYOBLsR24hIET7Qk%3D"
+            },
+            "trace_id": "070cde9ff76f80ed24bbbf98e0b1352c"
+          },
+          "latency_ms": 2078,
+          "cache_hit": false,
+          "created_at": 1790815136.4727745
+        }
+      ]
+    }
+  },
+  "updated_at": 1790815136.4742157
+}
