@@ -207,6 +207,20 @@ manifest_v3 narration_cues + `_44c/cue_table.json`。
 3. **旁白男声确认**：温润男声（Chinese (Mandarin)_Gentleman）定为主声线。
 4. 提案编号撞号修复（取最大 N+1，不再覆盖历史提案）。
 
+## §9.2 增补（2026-10-01 用户第二次反馈）
+
+用户确认混音构成（BGM+旁白）与男声选择；指出**部分源视频自带背景音属视频生成
+线缺陷**，混音侧只负责自己的部分。处置〔已核验〕：
+
+1. **逐镜原生音轨电平扫描**（`_44c/native_audio_scan.json`，交视频线的缺陷清单）：
+   最响 s03_c03（mean -27.5 / max -1.9dB，近满量程）、s03_c04、s02_c03、s01_c02、
+   s01_c01（mean ≈-28~-31dB）。
+2. **"纯 BGM+旁白版"渲染** `srender_d5a9ca9f`（plan rev 2509868f：base_gain=-60
+   原生音轨静默，音乐/旁白/ducking/loudness 不变）：**I=-16.7 LUFS / 峰值
+   -1.1 dBFS**——缺陷音频不进成片。评审页新增该版本；"含环境声版"
+   （srender_a95fbb7a，base_gain=-6）保留可对比。
+3. 镜头本身的重生成由视频线按缺陷清单处置；本批不动任何 Shot。
+
 ## §10 用户待办
 
 1. **试听定版**：评审页 A/B 两版混音（执行侧 cue vs Agent cue）+ 声线 A/B +

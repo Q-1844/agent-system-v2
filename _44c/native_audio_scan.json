@@ -1,0 +1,133 @@
+{
+ "scanned_at": "44C+",
+ "shots": [
+  {
+   "shot_id": "s01_c01",
+   "video_version_id": "vv_55accb16",
+   "native_mean_db": -30.8,
+   "native_max_db": -14.0,
+   "note": "视频生成线自带音轨（44C 用户判定为源缺陷，混音侧隔离）"
+  },
+  {
+   "shot_id": "s01_c02",
+   "video_version_id": "vv_9cda3271",
+   "native_mean_db": -30.5,
+   "native_max_db": -12.2,
+   "note": "视频生成线自带音轨（44C 用户判定为源缺陷，混音侧隔离）"
+  },
+  {
+   "shot_id": "s01_c03",
+   "video_version_id": "vv_703eb03f",
+   "native_mean_db": -35.1,
+   "native_max_db": -20.6,
+   "note": "视频生成线自带音轨（44C 用户判定为源缺陷，混音侧隔离）"
+  },
+  {
+   "shot_id": "s01_c04",
+   "video_version_id": "vv_80dc90a5",
+   "native_mean_db": -55.0,
+   "native_max_db": -17.8,
+   "note": "视频生成线自带音轨（44C 用户判定为源缺陷，混音侧隔离）"
+  },
+  {
+   "shot_id": "s01_c05",
+   "video_version_id": "vv_70728b9b",
+   "native_mean_db": -33.3,
+   "native_max_db": -13.0,
+   "note": "视频生成线自带音轨（44C 用户判定为源缺陷，混音侧隔离）"
+  },
+  {
+   "shot_id": "s01_c06",
+   "video_version_id": "vv_5ad9192d",
+   "native_mean_db": -38.7,
+   "native_max_db": -22.4,
+   "note": "视频生成线自带音轨（44C 用户判定为源缺陷，混音侧隔离）"
+  },
+  {
+   "shot_id": "s02_c01",
+   "video_version_id": "vv_ebbc77f8",
+   "native_mean_db": -34.1,
+   "native_max_db": -6.5,
+   "note": "视频生成线自带音轨（44C 用户判定为源缺陷，混音侧隔离）"
+  },
+  {
+   "shot_id": "s02_c02",
+   "video_version_id": "vv_4bdf6b08",
+   "native_mean_db": -46.2,
+   "native_max_db": -15.1,
+   "note": "视频生成线自带音轨（44C 用户判定为源缺陷，混音侧隔离）"
+  },
+  {
+   "shot_id": "s02_c03",
+   "video_version_id": "vv_49e4bd19",
+   "native_mean_db": -29.9,
+   "native_max_db": -5.5,
+   "note": "视频生成线自带音轨（44C 用户判定为源缺陷，混音侧隔离）"
+  },
+  {
+   "shot_id": "s03_c01",
+   "video_version_id": "vv_f741a354",
+   "native_mean_db": -33.6,
+   "native_max_db": -10.3,
+   "note": "视频生成线自带音轨（44C 用户判定为源缺陷，混音侧隔离）"
+  },
+  {
+   "shot_id": "s03_c02",
+   "video_version_id": "vv_03ff6e45",
+   "native_mean_db": -35.6,
+   "native_max_db": -18.7,
+   "note": "视频生成线自带音轨（44C 用户判定为源缺陷，混音侧隔离）"
+  },
+  {
+   "shot_id": "s03_c03",
+   "video_version_id": "vv_49b85cd1",
+   "native_mean_db": -27.5,
+   "native_max_db": -1.9,
+   "note": "视频生成线自带音轨（44C 用户判定为源缺陷，混音侧隔离）"
+  },
+  {
+   "shot_id": "s03_c04",
+   "video_version_id": "vv_6684f5dd",
+   "native_mean_db": -28.0,
+   "native_max_db": -15.4,
+   "note": "视频生成线自带音轨（44C 用户判定为源缺陷，混音侧隔离）"
+  }
+ ],
+ "loudest_top5": [
+  {
+   "shot_id": "s03_c03",
+   "video_version_id": "vv_49b85cd1",
+   "native_mean_db": -27.5,
+   "native_max_db": -1.9,
+   "note": "视频生成线自带音轨（44C 用户判定为源缺陷，混音侧隔离）"
+  },
+  {
+   "shot_id": "s03_c04",
+   "video_version_id": "vv_6684f5dd",
+   "native_mean_db": -28.0,
+   "native_max_db": -15.4,
+   "note": "视频生成线自带音轨（44C 用户判定为源缺陷，混音侧隔离）"
+  },
+  {
+   "shot_id": "s02_c03",
+   "video_version_id": "vv_49e4bd19",
+   "native_mean_db": -29.9,
+   "native_max_db": -5.5,
+   "note": "视频生成线自带音轨（44C 用户判定为源缺陷，混音侧隔离）"
+  },
+  {
+   "shot_id": "s01_c02",
+   "video_version_id": "vv_9cda3271",
+   "native_mean_db": -30.5,
+   "native_max_db": -12.2,
+   "note": "视频生成线自带音轨（44C 用户判定为源缺陷，混音侧隔离）"
+  },
+  {
+   "shot_id": "s01_c01",
+   "video_version_id": "vv_55accb16",
+   "native_mean_db": -30.8,
+   "native_max_db": -14.0,
+   "note": "视频生成线自带音轨（44C 用户判定为源缺陷，混音侧隔离）"
+  }
+ ]
+}

@@ -194,6 +194,18 @@ def build() -> Path:
                 + f"<p>测量：I={meas.get('final',{}).get('i_lufs')} LUFS（目标 -16），"
                   f"峰值={meas.get('final',{}).get('peak_dbfs')} dBFS，"
                   f"A/V 时长差={meas.get('av_duration',{}).get('delta_ms')}ms</p></section>")
+        pr = mix_ev.get("pure_bgm_narration_render") or {}
+        if pr.get("output"):
+            cparts.append(
+                "<section><h2>C+｜纯 BGM+旁白版（原生音轨静默——源视频自带背景音属"
+                "视频生成线缺陷，混音侧隔离；缺陷清单 _44c/native_audio_scan.json）</h2>"
+                + video_block("成片 = BGM（程序化作曲）+ 旁白（温润男声）",
+                              pr["output"],
+                              f"render {pr.get('render_version_id')} / plan rev "
+                              f"{pr.get('plan_revision')} / "
+                              f"I={pr.get('measurements',{}).get('i_lufs')} LUFS / "
+                              f"峰值 {pr.get('measurements',{}).get('peak_dbfs')} dBFS")
+                + "</section>")
         sb = mix_ev.get("silent_baseline") or {}
         if sb.get("output"):
             cparts.append(

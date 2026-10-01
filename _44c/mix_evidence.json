@@ -70,5 +70,18 @@
   "duration_ms": 89855,
   "output": "projects\\雨灯归航\\output\\sequences\\seq_900fdf75\\srender_9e9ba8ee.mp4",
   "freshness_after_revert": "stale"
+ },
+ "pure_bgm_narration_render": {
+  "note": "用户反馈轮：源视频自带背景音属视频生成线缺陷（native_audio_scan.json 交视频线）——混音侧隔离：base_gain=-60 原生音轨静默，成片=纯 BGM+旁白",
+  "render_version_id": "srender_d5a9ca9f",
+  "status": "done",
+  "seconds": 12.1,
+  "duration_ms": 89926,
+  "output": "projects\\雨灯归航\\output\\sequences\\seq_a3d5b19b\\srender_d5a9ca9f.mp4",
+  "plan_revision": "2509868f",
+  "measurements": {
+   "i_lufs": -16.7,
+   "peak_dbfs": -1.1
+  }
  }
 }

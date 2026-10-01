@@ -113,5 +113,28 @@
     "error_stage": "done",
     "error_provider": null,
     "error_model": null
+  },
+  "5aac0e48176d": {
+    "job_id": "5aac0e48176d",
+    "project": "雨灯归航",
+    "kind": "sequence_render",
+    "shot_id": null,
+    "params": {
+      "sequence_id": "seq_a3d5b19b",
+      "render_version_id": "srender_d5a9ca9f"
+    },
+    "state": "done",
+    "progress": 100,
+    "message": "seq_a3d5b19b 完成（89926ms，Δ+24ms）: projects\\雨灯归航\\output\\sequences\\seq_a3d5b19b\\srender_d5a9ca9f.mp4",
+    "error": null,
+    "created_at": 1790818793.269258,
+    "started_at": 1790818793.2880502,
+    "finished_at": 1790818804.6629212,
+    "attempts": 1,
+    "last_progress_at": 1790818804.6509814,
+    "error_class": null,
+    "error_stage": "done",
+    "error_provider": null,
+    "error_model": null
   }
 }
