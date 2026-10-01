@@ -186,6 +186,27 @@ manifest_v3 narration_cues + `_44c/cue_table.json`。
 7. Agent T1 有 2 次 TTS 调用失败（speed=null，§6.3，已修）与 2 次空参提案写入
    （串行闸门+参数校验拦截）——如实留痕。
 
+## §9.1 增补（2026-10-01 用户试听反馈轮）
+
+用户试听评审页后反馈三项，处置如下〔已核验〕：
+
+1. **"旁白分轨只有一句"** → 实测分轨 5 句俱全（silencedetect 定位 1.7/34.9/48.2/
+   70.9/83.9s）；真因=评审 HTTP 服务不支持 Range 请求，浏览器进度条拖动失效。
+   **已修复**（206 Partial Content，实测返回 206），全站媒体可拖动。
+2. **"music 分轨没有音乐/成片仍是缝合感"** → v1 正弦垫电平过低（stem 峰值
+   -20.2dBFS）被环境声掩盖。处置：
+   a. MiniMax Music API 真机探测 → **HTTP 410 / status 2153**（"no longer
+      available to new users"，与官方 2026-08 停开公告一致）——该账户无法真实
+      生成音乐（证据 `_44c/music_gen_probe.json`）；
+   b. 替代=**程序化作曲 BGM v2**（`_44c7_music_v2.py`，numpy 合成）：A 小调
+      60BPM 96s，弦乐垫+钢琴主旋律（5 乐句 50 音符）+低音声部，原始
+      -13.6 LUFS；素材身份 `locally_composed_synthesized_test_asset`；
+   c. 配比重调：音乐 -13.5dB（混入 ≈-27 LUFS，旁白下 ~4LU）、环境声 -6dB
+      （原 -3）。新版混音 `srender_a95fbb7a`：**I=-16.7 LUFS / 峰值 -1.5 dBFS /
+      A/V 0ms**；新分轨 rev0ff0b92b（music stem 峰值 -16.4dB，清晰可闻）。
+3. **旁白男声确认**：温润男声（Chinese (Mandarin)_Gentleman）定为主声线。
+4. 提案编号撞号修复（取最大 N+1，不再覆盖历史提案）。
+
 ## §10 用户待办
 
 1. **试听定版**：评审页 A/B 两版混音（执行侧 cue vs Agent cue）+ 声线 A/B +

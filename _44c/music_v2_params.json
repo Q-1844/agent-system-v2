@@ -1,0 +1,11 @@
+{
+ "file": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\雨灯归航\\output\\audio_imports\\music\\bgm_44c_v2.wav",
+ "sha256": "aa58c7c46aebfca8757f6d5d77e47959e569b17fe9ea6c8fcf1308d7c0ec185f",
+ "origin": "locally_composed_synthesized_test_asset",
+ "license": "self_composed_no_third_party_rights",
+ "structure": "A小调 60BPM 96s；弦乐垫(Am-F-C-G×3)+钢琴主旋律(5乐句 25 音符)+低音声部",
+ "timbre": "piano=6谐波+指数衰减；pad=多谐波+慢起音+微颤+tape宽度；bass=根音全音符",
+ "note_count": 50,
+ "sample_rate": 48000,
+ "note": "MiniMax Music API 对本账户已关闭(HTTP 410/2153 实测)——程序化作曲为替代方案；正式配乐待用户提供授权素材后一键替换"
+}

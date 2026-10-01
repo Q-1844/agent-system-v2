@@ -27,12 +27,15 @@ SEQ_ID = "seq_a3d5b19b"   # B 批 Agent 装配序列（manifest_v2 目标时间�
 # 混音配比（C0 §1/§3；响度实测依据见报告）：
 #   旁白源 -25.4 LUFS +2dB；音乐源 -19.2 LUFS -10dB（垫底 ≈ 旁白下 4 LU）；
 #   环境声 base_gain -3dB；终混 loudnorm I=-16/TP=-1.5/LRA=11（桌面/流媒体口径）
+# 44C+ 重调（用户实测反馈：v1 音乐不可闻、成片"缝合感"）：
+#   BGM v2（程序化作曲 -13.6 LUFS）-13.5dB → 混入 ≈-27 LUFS（旁白 -23.4 下 ~4LU，
+#   ducking 期间更深）；环境声 -6dB 让位；终混 loudnorm 不变。
 NARRATION_GAIN_DB = 2.0
-MUSIC_GAIN_DB = -10.0
-BASE_GAIN_DB = -3.0
-MUSIC_FADE_IN_MS = 3000
-MUSIC_FADE_OUT_MS = 4000
-MUSIC_PATH = "audio_imports/music/bed_44c_v1.wav"
+MUSIC_GAIN_DB = -13.5
+BASE_GAIN_DB = -6.0
+MUSIC_FADE_IN_MS = 2500
+MUSIC_FADE_OUT_MS = 5000
+MUSIC_PATH = "audio_imports/music/bgm_44c_v2.wav"
 
 
 def sha256_file(p: Path) -> str:

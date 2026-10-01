@@ -1,0 +1,12 @@
+{
+ "model": "music-3.0-free",
+ "http_status": 410,
+ "base_resp": {
+  "status_code": 2153,
+  "status_msg": "This Music API is no longer available to new users. Existing paying customers can continue to use the service. For new access, please try MiniMax Audio (https://www.minimax.io/audio) or the open-sourc"
+ },
+ "trace_id": "070ce882ce97606ab138f84af5b4b358",
+ "latency_ms": 1670,
+ "endpoint": "https://api.minimax.cn/v1/music_generation",
+ "result": "provider_error"
+}
