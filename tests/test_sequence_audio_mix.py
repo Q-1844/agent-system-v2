@@ -36,7 +36,7 @@ def test_graph_zero_layers_is_passthrough_mix():
     g = compile_audio_filter_graph(build_audio_mix_plan("base.mp4", "srender_a", []))
     assert g["input_args"] == []
     assert g["filter_complex"] == "[0:a]amix=inputs=1:duration=first:normalize=0[mixed]"
-    assert "-c:v" in g["out_args"] and "copy" in g["out_args"]
+    assert g["final_label"] == "[mixed]"    # 44C+：图只产中间 PCM（两遍渲染第一遍）
 
 
 def test_graph_encodes_layer_semantics():
@@ -61,8 +61,7 @@ def test_graph_encodes_layer_semantics():
     assert "adelay=delays=4200:all=1" in fc
     # amix：base + 2 层，normalize=0（不衰减），时长以 base 为准
     assert "[0:a][l1][l2]amix=inputs=3:duration=first:normalize=0[mixed]" in fc
-    # 方案 A：视频流 copy
-    assert g["out_args"][g["out_args"].index("-c:v") + 1] == "copy"
+    # 44C+：视频流 copy 断言移至 service 两遍渲染回归锁（单遍图→AAC 丢延迟层）
 
 
 def test_graph_deterministic_same_plan_same_string():

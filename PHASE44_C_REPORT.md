@@ -221,6 +221,34 @@ manifest_v3 narration_cues + `_44c/cue_table.json`。
    （srender_a95fbb7a，base_gain=-6）保留可对比。
 3. 镜头本身的重生成由视频线按缺陷清单处置；本批不动任何 Shot。
 
+## §9.3 增补（2026-10-01 测试师接管轮：成片"听不到旁白"二次根因）
+
+用户试听 `srender_f746f196`/`srender_9978e82a` 仍听不到旁白。接管复验（逐句
+旁白 stem 与成片对应时间窗的 Pearson 相关，比频谱比值更硬的判据）发现：
+
+1. **§9.2 后的 asplit 修复（ducking 图标签复用）真实生效**，但只救回了 nc01
+   （corr +0.990）；**nc02–nc05 全部缺失**（corr ≈ 0）。前一轮验证只查了
+   nc01 时间窗，恰好是旧缺陷下唯一幸存句，造成"已修复"假象。
+2. **真实根因（新进程复现排除"旧代码常驻进程"假说）**：单遍「混音图 → AAC」
+   丢延迟层。`amix`+`adelay` 与定长帧编码器（ffmpeg 原生 aac）组合下，多个
+   延迟输入层仅第一个进成片。同一滤镜图：PCM/MP3/FLAC 输出逐句相关
+   0.91–0.95 全在场、PCM 两次运行结果一致；AAC 输出 nc02 在全片任何位置
+   都不存在（滞后扫描最佳相关仅 0.106）。触发条件随延迟值漂移
+   （34.9s 通过 / 1.5s 反而丢），`apad` 替代、`asetnsamples=1024` 均不可靠
+   ——属 ffmpeg 编码路径深层缺陷，图内无稳妥规避。
+3. **修复：两遍渲染**〔已核验〕。`_mix_to` 改为：第一遍 filter_complex →
+   中间 PCM WAV（`final_label` 供 map；空文件 fail closed）；第二遍视频流
+   copy + WAV→AAC（无 filter_complex）。`compile_audio_filter_graph` 不再
+   返回 AAC `out_args`（杜绝"规格声明≠实际输出"第二真相）。回归测试锁定
+   两遍命令形状（tests/test_sequence_audio_service.py）。
+4. **重渲 `srender_c081beae`**（plan rev be64b193 不变）：五句旁白逐句相关
+   0.912–0.990 全在场；音乐窗高频比 0.0005（环境声 0.0371，无泄漏）；
+   I=-18.1 LUFS / 峰值 -1.9 dBFS。缺陷版 `srender_9978e82a` 作废留档。
+   试听页 LISTEN_44c.html / 主评审页已指向新成片。
+5. 环境备注：系统 PATH 中 ffmpeg 路径用户名乱码（`锟斤拷…`）导致子进程
+   找不到 ffmpeg——本轮所有命令以前置真实路径（`C:\Users\曹文淇\Downloads\
+   ffmpeg-2026-01-07-git-af6a1dd0b2-full_build\bin`）运行。建议后续修 PATH。
+
 ## §10 用户待办
 
 1. **试听定版**：评审页 A/B 两版混音（执行侧 cue vs Agent cue）+ 声线 A/B +

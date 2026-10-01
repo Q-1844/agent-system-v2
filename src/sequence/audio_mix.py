@@ -102,11 +102,15 @@ def _ducking_config_of(plan: AudioMixPlan) -> Optional[Dict[str, Any]]:
 
 def compile_audio_filter_graph(plan: AudioMixPlan) -> Dict[str, Any]:
     """把 AudioMixPlan 编译为 ffmpeg 参数片段。
-    返回 {input_args: [...], filter_complex: str, out_args: [...]}：
+    返回 {input_args: [...], filter_complex: str, final_label: str}：
     - input_args：除 base 外每层一个 `-i <source>`（base 由 caller 作为 input 0 传入）；
-    - 输出：-map 0:v -c:v copy（方案 A：零视频重转码）+ 混音 aac；
     - 44C：base 增益（volume）、music 侧链压低（sidechaincompress，trigger=旁白层
       混合为键信号）、终混响度（loudnorm+aresample，目标平台口径存 plan）。
+    🔴 44C+ 接管修复：图只产出**中间 PCM**（final_label 供 -map）——单遍「混音图
+    → AAC」实测丢延迟层（amix+adelay 与定长帧编码器组合：多句旁白仅第一句
+    幸存；PCM/MP3/FLAC 输出全部正常，图本身逐句相关验证无误，触发条件随延迟
+    值漂移、apad/asetnsamples 均不可靠）。成片编码由 service 两遍渲染的第二遍
+    （视频流 copy + WAV→AAC，无 filter_complex）完成。
     确定性：同 plan → 同 graph 字符串（单测锁）。默认配置下图与 v1 逐字节等价。"""
     parts: List[str] = []
     n_layers = len(plan.layers)
@@ -123,6 +127,9 @@ def compile_audio_filter_graph(plan: AudioMixPlan) -> Dict[str, Any]:
 
     # ---- 44C ducking：ducked_roles 层 × trigger_roles 键信号 → sidechaincompress ----
     # 仅当配置存在且 ducked/trigger 两类层都真实存在时启用；否则全层直通（v1 语义）。
+    # 🔴 44C+ 修复：trigger（旁白）层要同时喂「键信号」和「最终 amix」——同一标签
+    # 复用两处会让 ffmpeg 图连接错乱（实测 base 全电平泄漏、旁白丢失）。必须显式
+    # asplit=2 分成键信号/最终混音两路。
     duck_cfg = _ducking_config_of(plan)
     ducked_idx: List[int] = []
     trigger_idx: List[int] = []
@@ -135,12 +142,18 @@ def compile_audio_filter_graph(plan: AudioMixPlan) -> Dict[str, Any]:
     ducking_active = bool(duck_cfg and ducked_idx and trigger_idx)
 
     ducked_labels: List[str] = []
+    final_narr_labels: List[str] = []
     if ducking_active:
-        if len(trigger_idx) == 1:
-            key_label = f"l{trigger_idx[0]}"      # 无括号（下方 f-string 统一加括号）
+        key_labels: List[str] = []
+        for i in trigger_idx:
+            parts.append(f"[l{i}]asplit=2[l{i}k][l{i}f]")
+            key_labels.append(f"[l{i}k]")
+            final_narr_labels.append(f"[l{i}f]")
+        if len(key_labels) == 1:
+            key_label = key_labels[0][1:-1]        # "l2k"（下方统一加括号）
         else:
-            parts.append("".join(f"[l{i}]" for i in trigger_idx)
-                         + f"amix=inputs={len(trigger_idx)}"
+            parts.append("".join(key_labels)
+                         + f"amix=inputs={len(key_labels)}"
                            ":duration=longest:normalize=0[narrkey]")
             key_label = "narrkey"
         threshold_lin = 10 ** (float(duck_cfg["threshold_db"]) / 20.0)
@@ -156,9 +169,9 @@ def compile_audio_filter_graph(plan: AudioMixPlan) -> Dict[str, Any]:
     other_idx = [i for i in range(1, n_layers + 1)
                  if i not in (ducked_idx if ducking_active else [])
                  and i not in (trigger_idx if ducking_active else [])]
-    # trigger（旁白）层始终参与最终 amix（旁白本体不能被自己的键信号压掉）
     mix_inputs = ([base_label] + ducked_labels
-                  + [f"[l{i}]" for i in sorted(other_idx + (trigger_idx if ducking_active else []))])
+                  + final_narr_labels
+                  + [f"[l{i}]" for i in other_idx])
     parts.append("".join(mix_inputs)
                  + f"amix=inputs={len(mix_inputs)}:duration=first:normalize=0[mixed]")
 
@@ -174,15 +187,9 @@ def compile_audio_filter_graph(plan: AudioMixPlan) -> Dict[str, Any]:
     input_args: List[str] = []
     for l in plan.layers:
         input_args += ["-i", l.source_file]
-    out_args = ["-map", "0:v", "-c:v", "copy",          # 方案 A：视频流零重转码
-                "-map", final_label,
-                # 44C：192k（默认 ~128k 的解码过冲可达 ~2dB，会吃掉 loudnorm 的
-                # TP 余量导致解码后触顶）；TP 目标在 plan 中显式声明
-                "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
-                "-map_metadata", "-1"]
     return {"input_args": input_args,
             "filter_complex": ";".join(parts),
-            "out_args": out_args}
+            "final_label": final_label}
 
 
 def compile_stem_filter_graph(plan: AudioMixPlan, roles: List[str]) -> Dict[str, Any]:

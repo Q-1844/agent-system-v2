@@ -55,7 +55,7 @@ def test_default_config_graph_is_v1_identical():
         "volume=0.000000dB,afade=t=in:st=0:d=0.000000,"
         "afade=t=out:st=3.000000:d=0.000000,adelay=delays=0:all=1[l1];"
         "[0:a][l1]amix=inputs=2:duration=first:normalize=0[mixed]")
-    assert "-map" in g["out_args"] and "[mixed]" in g["out_args"]
+    assert g["final_label"] == "[mixed]"     # 44C+：图只产中间 PCM，无 AAC out_args
 
 
 # ============ ducking ============
@@ -69,10 +69,14 @@ def test_ducking_single_trigger_graph_shape():
     # threshold dB → 线性振幅
     assert "sidechaincompress=threshold=0.031622777:ratio=4.000000:attack=50:release=800" \
         in g["filter_complex"]
-    # 单 trigger：无 narrkey 合并段；键信号直接用旁白链
+    # 单 trigger：无 narrkey 合并段；键信号 = 旁白链 asplit 的 k 路
+    # 🔴 44C+ 回归：旁白层必须 asplit（标签复用会让 ffmpeg 图连接错乱——
+    # 实测 base 全电平泄漏、旁白丢失）
+    assert "[l2]asplit=2[l2k][l2f]" in g["filter_complex"]
+    assert "[l1][l2k]sidechaincompress" in g["filter_complex"]
     assert "narrkey" not in g["filter_complex"]
     # 最终 amix：base + 压低后音乐 + 旁白本体
-    assert "[0:a][l1d][l2]amix=inputs=3:duration=first:normalize=0[mixed]"         == g["filter_complex"].split(";")[-1]
+    assert "[0:a][l1d][l2f]amix=inputs=3:duration=first:normalize=0[mixed]"         == g["filter_complex"].split(";")[-1]
     # 确定性
     g2 = compile_audio_filter_graph(_mix_plan(plan))
     assert g["filter_complex"] == g2["filter_complex"]
@@ -87,6 +91,11 @@ def test_ducking_multi_trigger_merges_key():
     g = compile_audio_filter_graph(_mix_plan(plan))
     assert "amix=inputs=2:duration=longest:normalize=0[narrkey]" in g["filter_complex"]
     assert "[l1][narrkey]sidechaincompress" in g["filter_complex"]
+    # 多 trigger：每个旁白层 asplit，键走 k 路、最终混音走 f 路
+    assert "[l2]asplit=2[l2k][l2f]" in g["filter_complex"]
+    assert "[l3]asplit=2[l3k][l3f]" in g["filter_complex"]
+    assert "[l2k][l3k]amix" in g["filter_complex"]
+    assert "[l3f]amix" in g["filter_complex"].split(";")[-1]
 
 
 def test_ducking_inert_without_trigger_layers():
@@ -124,8 +133,7 @@ def test_loudness_and_base_gain_graph():
     assert "[0:a]volume=-3.500000dB[b0]" in g["filter_complex"]
     assert "[mixed]loudnorm=I=-16.0:TP=-1.5:LRA=11.0,aresample=48000[final]" \
         in g["filter_complex"]
-    assert g["out_args"][g["out_args"].index("-map") + 1] == "0:v"
-    assert "[final]" in g["out_args"]
+    assert g["final_label"] == "[final]"     # 44C+：loudnorm 后最终标签（供 -map）
 
 
 def test_loudness_validation_fail_closed():

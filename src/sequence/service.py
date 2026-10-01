@@ -394,11 +394,32 @@ class SequenceService:
                 return segments
 
             def _mix_to(mix: AudioMixPlan, dst: str) -> None:
+                # 🔴 44C+ 接管修复：两遍渲染。单遍「混音图 → AAC」实测丢延迟层
+                # （amix+adelay+定长帧编码器组合缺陷：多句旁白仅第一句幸存、
+                # 其后全丢；同一图 PCM/MP3/FLAC 输出逐句相关 0.9+ 全在场，且
+                # PCM 两次运行逐字节同判——图正确、编码路径坏）。第二遍无
+                # filter_complex，视频流 copy + WAV→AAC，规避该缺陷。
                 g = compile_audio_filter_graph(mix)
-                cmd = (["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-                        "-i", mix.base_file] + g["input_args"]
-                       + ["-filter_complex", g["filter_complex"]] + g["out_args"] + [dst])
-                _run_ffmpeg(cmd, timeout=600)
+                tmp_wav = work_dir / "mix_pcm.wav"
+                cmd1 = (["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                         "-i", mix.base_file] + g["input_args"]
+                        + ["-filter_complex", g["filter_complex"],
+                           "-map", g["final_label"],
+                           "-c:a", "pcm_s16le", "-ar", "48000", "-ac", "2",
+                           "-map_metadata", "-1", str(tmp_wav)])
+                _run_ffmpeg(cmd1, timeout=600)
+                if not tmp_wav.exists() or tmp_wav.stat().st_size == 0:
+                    raise SequenceError("render_failed",
+                                        f"混音中间 PCM 为空: {tmp_wav}")
+                # 44C：192k（默认 ~128k 的解码过冲可达 ~2dB，会吃掉 loudnorm 的
+                # TP 余量导致解码后触顶）；TP 目标在 plan 中显式声明
+                cmd2 = (["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                         "-i", mix.base_file, "-i", str(tmp_wav),
+                         "-map", "0:v", "-c:v", "copy",     # 方案 A：视频零重转码
+                         "-map", "1:a",
+                         "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
+                         "-map_metadata", "-1", dst])
+                _run_ffmpeg(cmd2, timeout=600)
                 if not Path(dst).exists() or Path(dst).stat().st_size == 0:
                     raise SequenceError("render_failed", f"混音输出为空: {dst}")
 

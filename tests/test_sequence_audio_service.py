@@ -132,10 +132,20 @@ def test_first_render_rebuilds_then_mix(asvc):
     assert res["status"] == RSTATUS_DONE
     row = asvc.get_entry(blk.sequence_id).get_render(prep.render_version.version_id)
     assert row.base_render_version_id is None                 # 首渲染=重建路径
-    assert len(asvc.calls["concat"]) == 1 and len(asvc.calls["mix_cmds"]) == 1
-    cmd = asvc.calls["mix_cmds"][0]
-    assert "amix=inputs=2:duration=first:normalize=0" in " ".join(cmd)
-    assert cmd[cmd.index("-c:v") + 1] == "copy"               # 方案 A：视频流 copy
+    assert len(asvc.calls["concat"]) == 1 and len(asvc.calls["mix_cmds"]) == 2
+    # 🔴 44C+ 接管回归锁：混音必须两遍——第一遍 图→中间 PCM（filter_complex 在、
+    # 无视频 map），第二遍 视频 copy + WAV→AAC（无 filter_complex）。单遍「图→AAC」
+    # 实测丢延迟层（amix+adelay+定长帧编码器缺陷：多句旁白仅第一句幸存）。
+    cmd_pcm, cmd_aac = asvc.calls["mix_cmds"]
+    assert "-filter_complex" in cmd_pcm and "amix=inputs=2:duration=first:normalize=0" \
+        in " ".join(cmd_pcm)
+    assert cmd_pcm[cmd_pcm.index("-c:a") + 1] == "pcm_s16le"  # 中间产物为 PCM
+    assert "0:v" not in cmd_pcm[cmd_pcm.index("-map"):]       # 不碰视频流
+    assert "-filter_complex" not in cmd_aac                   # 第二遍无图
+    assert cmd_aac[cmd_aac.index("-c:v") + 1] == "copy"       # 方案 A：视频流 copy
+    assert cmd_aac[cmd_aac.index("-c:a") + 1] == "aac"        # 音频重编码
+    assert cmd_aac[cmd_aac.index("-map") + 1] == "0:v" and \
+        cmd_aac[cmd_aac.index("-map", cmd_aac.index("-map") + 1) + 1] == "1:a"
     # §10：渲染完不自动 select
     assert asvc.get_entry(blk.sequence_id).final_render is None
 

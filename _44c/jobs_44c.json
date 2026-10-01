@@ -159,5 +159,74 @@
     "error_stage": "done",
     "error_provider": null,
     "error_model": null
+  },
+  "986f63560465": {
+    "job_id": "986f63560465",
+    "project": "雨灯归航",
+    "kind": "sequence_render",
+    "shot_id": null,
+    "params": {
+      "sequence_id": "seq_a3d5b19b",
+      "render_version_id": "srender_9978e82a"
+    },
+    "state": "done",
+    "progress": 100,
+    "message": "seq_a3d5b19b 完成（89926ms，Δ+24ms）: projects\\雨灯归航\\output\\sequences\\seq_a3d5b19b\\srender_9978e82a.mp4",
+    "error": null,
+    "created_at": 1790821637.8750882,
+    "started_at": 1790821637.9018323,
+    "finished_at": 1790821648.8601375,
+    "attempts": 1,
+    "last_progress_at": 1790821648.8484304,
+    "error_class": null,
+    "error_stage": "done",
+    "error_provider": null,
+    "error_model": null
+  },
+  "da136774dc7e": {
+    "job_id": "da136774dc7e",
+    "project": "雨灯归航",
+    "kind": "sequence_render",
+    "shot_id": null,
+    "params": {
+      "sequence_id": "seq_a3d5b19b",
+      "render_version_id": "srender_eeda36d0"
+    },
+    "state": "done",
+    "progress": 100,
+    "message": "seq_a3d5b19b 完成（89926ms，Δ+24ms）: projects\\雨灯归航\\output\\sequences\\seq_a3d5b19b\\srender_eeda36d0.mp4",
+    "error": null,
+    "created_at": 1790823744.5791907,
+    "started_at": 1790823744.605118,
+    "finished_at": 1790823756.3377414,
+    "attempts": 1,
+    "last_progress_at": 1790823756.326278,
+    "error_class": null,
+    "error_stage": "done",
+    "error_provider": null,
+    "error_model": null
+  },
+  "52c47aa78972": {
+    "job_id": "52c47aa78972",
+    "project": "雨灯归航",
+    "kind": "sequence_render",
+    "shot_id": null,
+    "params": {
+      "sequence_id": "seq_a3d5b19b",
+      "render_version_id": "srender_c081beae"
+    },
+    "state": "done",
+    "progress": 100,
+    "message": "seq_a3d5b19b 完成（90197ms，Δ+295ms）: projects\\雨灯归航\\output\\sequences\\seq_a3d5b19b\\srender_c081beae.mp4",
+    "error": null,
+    "created_at": 1790825019.0872476,
+    "started_at": 1790825019.1159992,
+    "finished_at": 1790825033.429131,
+    "attempts": 1,
+    "last_progress_at": 1790825033.4179206,
+    "error_class": null,
+    "error_stage": "done",
+    "error_provider": null,
+    "error_model": null
   }
 }

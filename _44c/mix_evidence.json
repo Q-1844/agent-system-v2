@@ -72,20 +72,27 @@
   "freshness_after_revert": "stale"
  },
  "pure_bgm_narration_render": {
-  "note": "第三次重调：旁白+6dB/音乐-16.5dB（语音-音乐间距≈11LU，语音清晰度惯例）；原生音轨静默。前版旁白被 BGM 旋律掩蔽（仅差≈4LU）",
-  "render_version_id": "srender_f746f196",
+  "note": "第四次重渲（接管测试师，两遍渲染修复）：真实根因=单遍「混音图→AAC」丢延迟层——amix+adelay 与定长帧编码器(aac)组合缺陷，nc02–05 全丢、仅首个延迟层幸存（新进程复现排除旧代码假说；同一图 PCM/MP3/FLAC 输出逐句相关 0.9+ 全在场、PCM 两跑逐字节同判；触发随延迟值漂移、apad/asetnsamples 均不可靠）。修复=图→中间 PCM WAV→视频 copy+WAV→AAC 两遍。srender_9978e82a 为缺陷版（已作废）。配比：旁白+6dB/音乐-16.5dB/原生静默(-60dB)",
+  "render_version_id": "srender_c081beae",
   "status": "done",
-  "duration_ms": 89926,
-  "output": "projects\\雨灯归航\\output\\sequences\\seq_a3d5b19b\\srender_f746f196.mp4",
+  "duration_ms": 90197,
+  "output": "projects\\雨灯归航\\output\\sequences\\seq_a3d5b19b\\srender_c081beae.mp4",
   "plan_revision": "be64b193",
   "measurements": {
-   "i_lufs": -16.8,
-   "peak_dbfs": -1.3
+   "i_lufs": -18.1,
+   "peak_dbfs": -1.9
   },
-  "segment_check": {
-   "nc01_window_1.5-4.9s": "-19.9",
-   "music_only_10-30s": "-21.0",
-   "nc05_window_83.7-87.5s": "-15.5"
+  "narration_cue_correlation": {
+   "lay_nc01": 0.9903,
+   "lay_nc02": 0.9122,
+   "lay_nc03": 0.9227,
+   "lay_nc04": 0.9415,
+   "lay_nc05": 0.9537
+  },
+  "superseded_broken_render": "srender_9978e82a",
+  "spectral_check": {
+   "music_window_hi_lo": 0.0004603722969000069,
+   "ambience_hi_lo": 0.037070984157097794
   }
  }
 }
