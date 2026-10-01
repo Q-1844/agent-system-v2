@@ -285,6 +285,16 @@ class _Handler(SimpleHTTPRequestHandler):
     def log_message(self, fmt, *args):   # 静默
         pass
 
+    # 44C+ 兜底：页面导航打错路径（如复制链接带尾巴）→ 302 回评审页。
+    # 仅对 Accept 含 text/html 的导航请求生效；媒体请求照常 404（不破坏播放器）。
+    def send_error(self, code, message=None, explain=None):
+        if code == 404 and "text/html" in (self.headers.get("Accept") or ""):
+            self.send_response(302)
+            self.send_header("Location", "/_44b/review/REVIEW_44b.html")
+            self.end_headers()
+            return
+        return super().send_error(code, message, explain)
+
     # ---- Phase 44C+ 修复：支持 HTTP Range（浏览器媒体进度条 seek 必需；
     # 无 Range 支持时音频只能从头播、拖动失效——用户实测"分轨只有一句"）----
     def send_head(self):
