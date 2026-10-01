@@ -270,6 +270,7 @@ section{{margin-bottom:12px}}
 音轨=原生环境声（audio=native），未加任何 BGM/旁白；s02_c03 原生近静音为用户已知选择（甲-2）。</p>
 {''.join(parts)}
 <h1>Phase 44C｜旁白 · 音乐 · 混音（雨灯归航）</h1>
+<p><b><a href="/_44c/review/LISTEN_44c.html">▶ 点这里进入「旁白逐句试听页」</a></b>（每句旁白独立播放 + 纯 BGM + 混音成片）</p>
 {''.join(cparts)}
 </body></html>"""
     out = REVIEW_DIR / "REVIEW_44b.html"
