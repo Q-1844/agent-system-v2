@@ -117,10 +117,12 @@ def test_registered_as_specialist():
 
 
 def test_write_domain_single_sequence_scope():
+    # Phase 44C：+tts_synthesize / audio_plan_put / stem_render（同一 sequence 域）
     assert set(WRITE_TOOL_DOMAIN) == {
         "assembly.sequence_create", "assembly.sequence_update",
         "assembly.render_submit", "assembly.manifest_publish",
-        "assembly.proposal_write"}
+        "assembly.proposal_write", "assembly.tts_synthesize",
+        "assembly.audio_plan_put", "assembly.stem_render"}
     assert set(WRITE_TOOL_DOMAIN.values()) == {"sequence"}
 
 

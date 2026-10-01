@@ -30,7 +30,10 @@ from .models import SequenceError
 SEQUENCE_AUDIO_PLAN_STORE_SCHEMA_VERSION = 1
 
 # mixer schema（25.md §26/§31-§32：进 basis；升级 = 带 plan 的旧 render 诚实 STALE）
-SEQUENCE_AUDIO_MIXER_SCHEMA = "sequence_audio_mixer_v1"
+# v2（Phase 44C）：+base_gain_db / ducking(sidechaincompress) / loudness(loudnorm)。
+# 默认值（gain=0、ducking/loudness=None）下编译图与 v1 逐字节等价——升级只为让
+# 「混音器语义已扩展」进 basis（旧 plan 渲染诚实 STALE，可零成本复渲染）。
+SEQUENCE_AUDIO_MIXER_SCHEMA = "sequence_audio_mixer_v2"
 
 # basis v2（25.md §26：plan 存在时的实际依赖 schema；命名按项目风格）
 SEQUENCE_RENDER_BASIS_SCHEMA_V2 = "sequence_render_basis_v2"
@@ -214,6 +217,104 @@ class SequenceAudioLayer:
                    **{k: v for k, v in d.items() if k != "layer_id"})
 
 
+# ============ Phase 44C：ducking / loudness / base gain（加法扩展）============
+
+# sidechaincompress 参数域（编译层把 threshold_db 换算成线性振幅——ffmpeg 该滤镜
+# 的 threshold 是线性值 [0.000976563, 1]）
+DUCKING_THRESHOLD_DB_RANGE = (-80.0, -6.0)
+DUCKING_RATIO_RANGE = (1.0, 20.0)
+DUCKING_ATTACK_MS_RANGE = (1, 1000)
+DUCKING_RELEASE_MS_RANGE = (1, 5000)
+
+LOUDNESS_I_RANGE = (-40.0, -5.0)     # 目标综合响度 LUFS
+LOUDNESS_TP_RANGE = (-12.0, 0.0)     # 真峰值上限 dBTP
+LOUDNESS_LRA_RANGE = (1.0, 20.0)     # 响度动态范围 LU
+
+
+@dataclass
+class SequenceDuckingConfig:
+    """旁白触发、音乐让路的平滑压低配置（C3）。
+    trigger_roles 的层混合成侧链键信号；ducked_roles 的层经 sidechaincompress 压低。
+    参数全部显式、进 plan revision（改参数 = 诚实 STALE）。"""
+    threshold_db: float = -30.0
+    ratio: float = 4.0
+    attack_ms: int = 50
+    release_ms: int = 800
+    trigger_roles: Tuple[str, ...] = ("narration",)
+    ducked_roles: Tuple[str, ...] = ("music",)
+
+    def __post_init__(self) -> None:
+        for name, v, rng in (("threshold_db", self.threshold_db, DUCKING_THRESHOLD_DB_RANGE),
+                             ("ratio", self.ratio, DUCKING_RATIO_RANGE)):
+            if isinstance(v, bool) or not isinstance(v, (int, float)) \
+                    or not (rng[0] <= float(v) <= rng[1]):
+                raise SequenceError(
+                    "ducking_invalid",
+                    f"ducking.{name}={v!r} 超出 {rng}（fail closed）")
+        for name, v, rng in (("attack_ms", self.attack_ms, DUCKING_ATTACK_MS_RANGE),
+                             ("release_ms", self.release_ms, DUCKING_RELEASE_MS_RANGE)):
+            if isinstance(v, bool) or not isinstance(v, int) \
+                    or not (rng[0] <= v <= rng[1]):
+                raise SequenceError(
+                    "ducking_invalid",
+                    f"ducking.{name}={v!r} 超出 {rng}（fail closed）")
+        for roles, field_name in ((self.trigger_roles, "trigger_roles"),
+                                  (self.ducked_roles, "ducked_roles")):
+            if not roles or any(r not in AUDIO_LAYER_ROLES for r in roles):
+                raise SequenceError(
+                    "ducking_invalid",
+                    f"ducking.{field_name} 必须是 {AUDIO_LAYER_ROLES} 的非空子集，"
+                    f"收到: {roles!r}")
+
+    def semantic_snapshot(self) -> Dict[str, Any]:
+        return {"threshold_db": float(self.threshold_db), "ratio": float(self.ratio),
+                "attack_ms": int(self.attack_ms), "release_ms": int(self.release_ms),
+                "trigger_roles": list(self.trigger_roles),
+                "ducked_roles": list(self.ducked_roles)}
+
+    def to_dict(self) -> Dict[str, Any]:
+        return self.semantic_snapshot()
+
+    @classmethod
+    def from_dict(cls, d: Any) -> "SequenceDuckingConfig":
+        if not isinstance(d, dict):
+            raise SequenceError("ducking_invalid", f"ducking 必须是对象，收到: {d!r}")
+        known = ("threshold_db", "ratio", "attack_ms", "release_ms",
+                 "trigger_roles", "ducked_roles")
+        return cls(**{k: d[k] for k in known if k in d})
+
+
+@dataclass
+class SequenceLoudnessTarget:
+    """终混响度目标（C3：按目标播放平台显式声明，不硬编码全平台通用值）。
+    编译层在 amix 后接 loudnorm + aresample 回 48kHz。"""
+    i: float = -16.0        # LUFS
+    tp: float = -1.5        # dBTP
+    lra: float = 11.0       # LU
+
+    def __post_init__(self) -> None:
+        for name, v, rng in (("i", self.i, LOUDNESS_I_RANGE),
+                             ("tp", self.tp, LOUDNESS_TP_RANGE),
+                             ("lra", self.lra, LOUDNESS_LRA_RANGE)):
+            if isinstance(v, bool) or not isinstance(v, (int, float)) \
+                    or not (rng[0] <= float(v) <= rng[1]):
+                raise SequenceError(
+                    "loudness_invalid",
+                    f"loudness.{name}={v!r} 超出 {rng}（fail closed）")
+
+    def semantic_snapshot(self) -> Dict[str, Any]:
+        return {"i": float(self.i), "tp": float(self.tp), "lra": float(self.lra)}
+
+    def to_dict(self) -> Dict[str, Any]:
+        return self.semantic_snapshot()
+
+    @classmethod
+    def from_dict(cls, d: Any) -> "SequenceLoudnessTarget":
+        if not isinstance(d, dict):
+            raise SequenceError("loudness_invalid", f"loudness 必须是对象，收到: {d!r}")
+        return cls(**{k: d[k] for k in ("i", "tp", "lra") if k in d})
+
+
 # ============ SequenceAudioPlan（25.md §7，声音侧 canonical）============
 
 @dataclass
@@ -223,6 +324,10 @@ class SequenceAudioPlan:
     避免「空 plan」与「无 plan」双真相）。"""
     sequence_id: str
     layers: List[SequenceAudioLayer] = field(default_factory=list)
+    # Phase 44C 加法扩展（默认值 = S2 v1 语义；进 semantic_snapshot → revision → basis）
+    base_gain_db: float = 0.0                 # 原生环境声整体增益（负值 = 压低让位）
+    ducking: Optional[SequenceDuckingConfig] = None
+    loudness: Optional[SequenceLoudnessTarget] = None
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
 
@@ -232,10 +337,18 @@ class SequenceAudioPlan:
         self.sequence_id = str(self.sequence_id).strip()
         self.layers = [l if isinstance(l, SequenceAudioLayer) else SequenceAudioLayer.from_dict(l)
                        for l in (self.layers or [])]
+        self.base_gain_db = _check_gain(self.base_gain_db)
+        if self.ducking is not None and not isinstance(self.ducking, SequenceDuckingConfig):
+            self.ducking = SequenceDuckingConfig.from_dict(self.ducking)
+        if self.loudness is not None and not isinstance(self.loudness, SequenceLoudnessTarget):
+            self.loudness = SequenceLoudnessTarget.from_dict(self.loudness)
 
     def semantic_snapshot(self) -> Dict[str, Any]:
-        """plan revision = layers 语义指纹（列表顺序敏感——编辑顺序视为编辑）。"""
-        return {"layers": [l.semantic_snapshot() for l in self.layers]}
+        """plan revision = layers + 混音配置语义指纹（列表顺序敏感——编辑顺序视为编辑）。"""
+        return {"layers": [l.semantic_snapshot() for l in self.layers],
+                "base_gain_db": self.base_gain_db,
+                "ducking": self.ducking.semantic_snapshot() if self.ducking else None,
+                "loudness": self.loudness.semantic_snapshot() if self.loudness else None}
 
     @property
     def revision(self) -> str:
@@ -248,6 +361,9 @@ class SequenceAudioPlan:
         return {"sequence_id": self.sequence_id,
                 "revision": self.revision,
                 "layers": [l.to_dict() for l in self.layers],
+                "base_gain_db": self.base_gain_db,
+                "ducking": self.ducking.to_dict() if self.ducking else None,
+                "loudness": self.loudness.to_dict() if self.loudness else None,
                 "created_at": self.created_at, "updated_at": self.updated_at}
 
     @classmethod
@@ -260,5 +376,8 @@ class SequenceAudioPlan:
                                     f"audio plan 缺少 {required}（fail closed）")
         return cls(sequence_id=d.get("sequence_id"),
                    layers=[SequenceAudioLayer.from_dict(l) for l in (d.get("layers") or [])],
+                   base_gain_db=(d.get("base_gain_db") or 0.0),
+                   ducking=d.get("ducking"),
+                   loudness=d.get("loudness"),
                    created_at=float(d.get("created_at") or 0.0) or time.time(),
                    updated_at=float(d.get("updated_at") or 0.0) or time.time())

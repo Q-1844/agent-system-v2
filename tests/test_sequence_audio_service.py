@@ -140,21 +140,49 @@ def test_first_render_rebuilds_then_mix(asvc):
     assert asvc.get_entry(blk.sequence_id).final_render is None
 
 
-def test_second_render_uses_base_video_copy(asvc):
+def test_second_render_rebuilds_when_only_mixed_base_exists(asvc):
+    """Phase 44C 修复语义：混音渲染（v2 basis）不得作方案 A 的 base——[0:a] 语义 =
+    native 音轨，用已混音渲染做 base 会把上一版 layers 叠加进新渲染。
+    仅有混音 base 时走降级路径：重建基线（concat 再跑一次）+ 正确混音。"""
     blk = _create(asvc)
     asvc.put_audio_plan(blk.sequence_id, [_music_layer()])
     prep1, _ = _full_render(asvc, blk.sequence_id)
     vid1 = prep1.render_version.version_id
     n_mix_1, n_concat_1 = len(asvc.calls["mix_cmds"]), len(asvc.calls["concat"])
-    # 迭代：gain 调整后再次渲染 → base = 第一次渲染（视频零重编码，无新分段）
     asvc.put_audio_plan(blk.sequence_id, [_music_layer(gain=-26.0)])
     prep2, res2 = _full_render(asvc, blk.sequence_id)
     assert res2["status"] == RSTATUS_DONE
     row2 = asvc.get_entry(blk.sequence_id).get_render(prep2.render_version.version_id)
-    assert row2.base_render_version_id == vid1
-    cmd = asvc.calls["mix_cmds"][n_mix_1]         # 第二次混音命令
-    assert cmd[cmd.index("-i") + 1].endswith(f"{vid1}.mp4")   # base = 第一次输出
-    assert len(asvc.calls["concat"]) == n_concat_1            # 零新分段=零视频重编码
+    assert row2.base_render_version_id is None              # 无合格 v1 base → 降级
+    assert len(asvc.calls["concat"]) == n_concat_1 + 1       # 重建基线：新分段
+    cmd = asvc.calls["mix_cmds"][n_mix_1]
+    assert cmd[cmd.index("-i") + 1].endswith("base.mp4")     # 混音基线=临时重建文件
+
+
+def test_third_render_uses_pure_s1_base_after_mix(asvc):
+    """存在纯 S1 渲染时，后续混音一律以其为 base（视频零重编码且不叠加）。"""
+    blk = _create(asvc)
+    # 先渲染一次纯 S1（无 plan）→ v1 basis
+    rv0 = asvc.create_render(blk.sequence_id)
+    prep0 = asvc.prepare_render(blk.sequence_id, rv0.version_id)
+    asvc.execute_render(blk.sequence_id, prep0.render_version.version_id, prep0)
+    asvc.commit_render(blk.sequence_id, prep0.render_version.version_id)
+    vid0 = prep0.render_version.version_id
+    n_mix_0, n_concat_0 = len(asvc.calls["mix_cmds"]), len(asvc.calls["concat"])
+    # 混音渲染 #1（base = vid0）
+    asvc.put_audio_plan(blk.sequence_id, [_music_layer()])
+    prep1, _ = _full_render(asvc, blk.sequence_id)
+    assert asvc.get_entry(blk.sequence_id).get_render(
+        prep1.render_version.version_id).base_render_version_id == vid0
+    # 混音渲染 #2（gain 调整）→ base 仍 = vid0（纯 S1），绝不使用混音渲染 #1
+    asvc.put_audio_plan(blk.sequence_id, [_music_layer(gain=-26.0)])
+    prep2, res2 = _full_render(asvc, blk.sequence_id)
+    assert res2["status"] == RSTATUS_DONE
+    row2 = asvc.get_entry(blk.sequence_id).get_render(prep2.render_version.version_id)
+    assert row2.base_render_version_id == vid0
+    assert len(asvc.calls["concat"]) == n_concat_0           # 零新分段（base 复用 vid0）
+    cmd = asvc.calls["mix_cmds"][-1]
+    assert cmd[cmd.index("-i") + 1].endswith(f"{vid0}.mp4")
 
 
 # ============ §12/§14/§33 越界 fail closed ============

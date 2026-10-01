@@ -76,6 +76,7 @@ MAX_TIMEOUT_RETRIES = 2
 ASSEMBLY_READ_TOOLS = {
     "assembly.briefing", "assembly.snapshot_read", "assembly.sequence_read",
     "assembly.media_probe", "assembly.timeline_preview", "assembly.render_status",
+    "assembly.narration_read", "assembly.audio_plan_read",
     "web.search",
 }
 
@@ -87,6 +88,10 @@ WRITE_TOOL_DOMAIN: Dict[str, str] = {
     "assembly.render_submit": RESOURCE_SEQUENCE,
     "assembly.manifest_publish": RESOURCE_SEQUENCE,
     "assembly.proposal_write": RESOURCE_SEQUENCE,
+    # Phase 44C：声音域（同一 sequence 资源锁域）
+    "assembly.tts_synthesize": RESOURCE_SEQUENCE,
+    "assembly.audio_plan_put": RESOURCE_SEQUENCE,
+    "assembly.stem_render": RESOURCE_SEQUENCE,
 }
 
 # 冻结快照默认路径（44A §11 正式快照输入契约；相对仓库根）。
@@ -517,11 +522,109 @@ PROPOSAL_WRITE_TOOL = {
     },
 }
 
+# ---- Phase 44C：旁白 / 音乐 / 混音工具面（加法式）----
+
+NARRATION_READ_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "assembly.narration_read",
+        "description": ("旁白编排入口：读取故事段全文、时间线逐镜窗口（来自最新 "
+                        "AssemblyManifest）、已合成旁白版本（含试听文件/时长/回执）、"
+                        "当前 AudioPlan。用于提出 cue 候选与核对落点。只读工具。"),
+        "parameters": {"type": "object", "properties": {}},
+    },
+}
+
+TTS_SYNTHESIZE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "assembly.tts_synthesize",
+        "description": ("合成（或幂等复用）一句旁白：MiniMax TTS，产物 = 48kHz WAV 进 "
+                        "audio_imports/narration/，回执含版本号/哈希/实测时长/trace_id。"
+                        "同 cue_id+同文本+同参数 = 缓存命中零调用。cue 是短句（≤200 字）。"
+                        "写工具（旁白产物仓，幂等安全）。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "cue_id": {"type": "string",
+                           "description": "cue 身份（如 nc01；同一 cue 改文案=新版本）。"},
+                "text": {"type": "string", "description": "旁白文字稿（原样合成，不改写）。"},
+                "voice_id": {"type": "string",
+                             "description": "可选，缺省=温润男声 Chinese (Mandarin)_Gentleman。"},
+                "speed": {"type": "number", "description": "可选，缺省 0.9（沉稳叙事）。"},
+            },
+            "required": ["cue_id", "text"],
+        },
+    },
+}
+
+AUDIO_PLAN_READ_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "assembly.audio_plan_read",
+        "description": ("读取某 sequence 的 AudioPlan（声音侧 canonical）：layers（角色/"
+                        "源/时间/增益/淡入出）、base_gain_db、ducking、loudness、OCC "
+                        "revision。只读工具。"),
+        "parameters": {
+            "type": "object",
+            "properties": {"sequence_id": {"type": "string"}},
+            "required": ["sequence_id"],
+        },
+    },
+}
+
+AUDIO_PLAN_PUT_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "assembly.audio_plan_put",
+        "description": ("整体写入 AudioPlan（旁白/音乐层的 canonical，OCC）。layers 每 "
+                        "层 = {role: narration|music|ambience, source:{kind:"
+                        "imported_audio, file}, start_ms, duration_ms, gain_db, "
+                        "fade_in_ms, fade_out_ms}；plan_config = {base_gain_db, "
+                        "ducking:{threshold_db,ratio,attack_ms,release_ms}|null, "
+                        "loudness:{i,tp,lra}|null}。时间窗校验在渲染前 fail-closed。"
+                        "写工具（必须带 expected_revision）。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "sequence_id": {"type": "string"},
+                "layers": {"type": "array", "items": {"type": "object"}},
+                "plan_config": {"type": "object"},
+                "expected_revision": {"type": "string",
+                                      "description": "audio_plan_read 返回的 revision；"
+                                                     "首次写入可省略。"},
+            },
+            "required": ["sequence_id", "layers"],
+        },
+    },
+}
+
+STEM_RENDER_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "assembly.stem_render",
+        "description": ("导出分轨（narration / music 独立 WAV，provenance=当前 plan "
+                        "revision）。写工具（产物文件）。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "sequence_id": {"type": "string"},
+                "roles": {"type": "array", "items": {"type": "string",
+                                                     "enum": ["narration", "music",
+                                                              "ambience"]}},
+            },
+            "required": ["sequence_id", "roles"],
+        },
+    },
+}
+
 ASSEMBLY_TOOLS = [
     BRIEFING_TOOL, SNAPSHOT_READ_TOOL, SEQUENCE_READ_TOOL, MEDIA_PROBE_TOOL,
     TIMELINE_PREVIEW_TOOL, RENDER_STATUS_TOOL, SEQUENCE_CREATE_TOOL,
     SEQUENCE_UPDATE_TOOL, RENDER_SUBMIT_TOOL, MANIFEST_PUBLISH_TOOL,
     PROPOSAL_WRITE_TOOL,
+    NARRATION_READ_TOOL, TTS_SYNTHESIZE_TOOL, AUDIO_PLAN_READ_TOOL,
+    AUDIO_PLAN_PUT_TOOL, STEM_RENDER_TOOL,
 ]
 
 
@@ -1017,7 +1120,10 @@ def _execute_proposal_write(rt: AgentRuntime, project: str, arguments: str,
     root = pdir / "output" / "assembly"
     root.mkdir(parents=True, exist_ok=True)
     existing = sorted(root.glob("proposal_v*.md"))
-    n = len(existing) + 1
+    # 🔴 44C 修复：编号取最大 N（文件数会因历史文件缺失/清理而撞号覆盖旧提案）
+    ns = [int(m.group(1)) for f in existing
+          if (m := re.search(r"proposal_v(\d+)\.md", f.name))]
+    n = max(ns or [0]) + 1
     file = root / f"proposal_v{n}.md"
     header = (f"# 剪辑提案 v{n}｜{title}\n\n"
               f"- 项目：{project}\n- 提出者：Assembly Agent\n"
@@ -1036,7 +1142,224 @@ def _execute_proposal_write(rt: AgentRuntime, project: str, arguments: str,
         op_summary=f"提案 v{n} 已写入（{title}）——等待用户评审")
 
 
+# ===== splice: 44C executors for src/agents/assembly.py =====
+
+# ============ Phase 44C 执行器：旁白 / AudioPlan / 分轨 ============
+
+def _execute_narration_read(rt: AgentRuntime, project: str, arguments: str,
+                            instruction, message_id) -> dict:
+    """旁白编排入口：故事文本 + 时间线窗口 + 已有旁白版本 + 当前 plan。只读。"""
+    from src.audio.narration import NarrationStore
+    pdir = rt._resolve_project_dir(project)
+    proj = ProjectStore(pdir).load()
+    scene_summaries = [{"scene_id": sc.scene_id, "summary": (sc.summary or "")[:200]}
+                       for sc in (proj.scenes or [])]
+    windows = []
+    try:
+        from src.sequence.assembly_manifest import load_assembly_manifest
+        doc = load_assembly_manifest(pdir)
+        windows = [{"shot_id": it["shot_id"], "scene_id": it["scene_id"],
+                    "start_ms": it["timeline_start_ms"],
+                    "end_ms": it["timeline_end_ms"],
+                    "scene_boundary": it["scene_boundary"]}
+                   for it in doc["shot_items"]]
+        manifest_info = {"revision": doc["assembly_revision"],
+                         "sequence_id": doc["sequence_id"],
+                         "total_duration_ms": doc["total_duration_ms"]}
+    except Exception as e:   # noqa: BLE001
+        manifest_info = {"error": str(e)[:120]}
+        windows = [{"shot_id": s.shot_id, "scene_id": s.scene_id,
+                    "start_ms": None, "end_ms": None, "scene_boundary": None}
+                   for s in proj.all_shots()]
+    store = NarrationStore(pdir)
+    cues = {}
+    for cue_id, entry in store.load().items():
+        vs = entry.get("versions") or []
+        cues[cue_id] = [{"version_id": v.get("version_id"),
+                         "text": v.get("text"),
+                         "voice_id": v.get("voice_id"), "speed": v.get("speed"),
+                         "file": v.get("audio_import_path"),
+                         "duration_s": (v.get("duration_probe") or {}).get("duration_s"),
+                         "sha256": (v.get("audio_sha256") or "")[:12] + "…",
+                         "trace_id": v.get("provider_trace_id")}
+                        for v in vs]
+    return {"ok": True, "story_text": (proj.story_text or "")[:3000],
+            "scenes": scene_summaries, "timeline_windows": windows,
+            "manifest": manifest_info, "narration_versions": cues}
+
+
+async def _execute_tts_synthesize(rt: AgentRuntime, project: str, arguments: str,
+                                  instruction, message_id) -> dict:
+    """合成/幂等复用一句旁白（MiniMax TTS；产物进 audio_imports/narration/）。"""
+    args = _parse_args(arguments)
+    cue_id = str(args.get("cue_id") or "").strip()
+    text = str(args.get("text") or "").strip()
+    if not cue_id or not text:
+        return {"ok": False, "error": "cue_id 与 text 必填"}
+    from src.audio.narration import synthesize_narration_cue
+    from src.audio.minimax_adapter import VoiceProviderError
+    pdir = rt._resolve_project_dir(project)
+    try:
+        r = await synthesize_narration_cue(
+            pdir, cue_id=cue_id, text=text,
+            voice_id=(str(args.get("voice_id")).strip()
+                      if args.get("voice_id") else None),
+            speed=(float(args["speed"]) if args.get("speed") is not None else None))
+    except VoiceProviderError as e:
+        return _base_receipt("assembly.tts_synthesize", ok=False, target=cue_id,
+                             error=e.message, code=e.code,
+                             detail={k: str(v)[:120] for k, v in (e.detail or {}).items()})
+    v = r["version"]
+    _audit(rt, project).record(
+        agent_id="assembly", field=f"narration.{cue_id}.{v['version_id']}",
+        before=None, after={"text": text, "voice_id": v["voice_id"],
+                            "sha256": v["audio_sha256"][:16],
+                            "trace_id": v["provider_trace_id"]},
+        instruction=instruction, message_id=message_id)
+    return _base_receipt(
+        "assembly.tts_synthesize", ok=True, target=cue_id,
+        before=None, after={"file": v["audio_import_path"],
+                            "duration_s": (v.get("duration_probe") or {}).get("duration_s")},
+        verified=True, cue_id=cue_id, version_id=v["version_id"],
+        voice_id=v["voice_id"], speed=v["speed"], cache_hit=r["cache_hit"],
+        audio_import_path=v["audio_import_path"],
+        duration_probe=v.get("duration_probe"),
+        provider_trace_id=v["provider_trace_id"],
+        op_summary=(f"旁白 {cue_id} → {v['version_id']}"
+                    f"（{'缓存复用' if r['cache_hit'] else '新合成'}，"
+                    f"{(v.get('duration_probe') or {}).get('duration_s')}s，"
+                    f"voice={v['voice_id']}）"))
+
+
+def _execute_audio_plan_read(rt: AgentRuntime, project: str, arguments: str,
+                             instruction, message_id) -> dict:
+    args = _parse_args(arguments)
+    sid = args.get("sequence_id")
+    if not sid:
+        return {"ok": False, "error": "sequence_id 必填"}
+    pdir = rt._resolve_project_dir(project)
+    svc = _svc(pdir, project)
+    plan = svc.get_audio_plan(sid)
+    if plan is None:
+        return {"ok": True, "sequence_id": sid, "audio_plan": None,
+                "revision": None,
+                "hint": "当前无 AudioPlan（首次写入可省略 expected_revision）"}
+    return {"ok": True, "sequence_id": sid, "audio_plan": plan.to_dict(),
+            "revision": plan.revision}
+
+
+def _execute_audio_plan_put(rt: AgentRuntime, project: str, arguments: str,
+                            instruction, message_id) -> dict:
+    """整体写入 AudioPlan（OCC；plan_config=混音配置整体替换）。"""
+    args = _parse_args(arguments)
+    sid = args.get("sequence_id")
+    layers = args.get("layers")
+    if not sid or not isinstance(layers, list) or not layers:
+        return {"ok": False, "error": "sequence_id 与非空 layers 必填"}
+    pdir = rt._resolve_project_dir(project)
+    svc = _svc(pdir, project)
+    before = svc.get_audio_plan(sid)
+    before_rev = before.revision if before else None
+    if before is not None:
+        if not args.get("expected_revision"):
+            return {"ok": False,
+                    "error": f"AudioPlan 已存在（revision={before_rev}）——"
+                             "必须带 expected_revision（OCC）；先 audio_plan_read"}
+        expected = args.get("expected_revision")
+    else:
+        expected = None
+    try:
+        plan = svc.put_audio_plan(
+            sid, layers, expected_revision=expected,
+            plan_config=(args.get("plan_config")
+                         if isinstance(args.get("plan_config"), dict) else None))
+    except SequenceError as e:
+        cur = svc.get_audio_plan(sid)
+        return _base_receipt("assembly.audio_plan_put", ok=False, target=sid,
+                             error=e.message, code=e.code,
+                             current_revision=(cur.revision if cur else None))
+    if plan is None:
+        return _base_receipt("assembly.audio_plan_put", ok=False, target=sid,
+                             error="layers 为空被归一化为删除 plan（本工具不接受空 layers）")
+    plan_now = svc.get_audio_plan(sid)      # 写后重读 canonical 验证
+    verified = plan_now is not None and plan_now.revision == plan.revision
+    if verified:
+        _audit(rt, project).record(
+            agent_id="assembly", field=f"audio_plan.{sid}",
+            before={"revision": before_rev},
+            after={"revision": plan.revision, "layers": len(plan.layers)},
+            instruction=instruction, message_id=message_id)
+    return _base_receipt(
+        "assembly.audio_plan_put", ok=True, target=sid,
+        revision=plan.revision, verified=verified,
+        sequence_id=sid, layer_count=len(plan.layers),
+        base_gain_db=plan.base_gain_db,
+        ducking=plan.ducking.to_dict() if plan.ducking else None,
+        loudness=plan.loudness.to_dict() if plan.loudness else None,
+        op_summary=(f"AudioPlan 写入 {sid}（{len(plan.layers)} 层，"
+                    f"revision={plan.revision}）"))
+
+
+def _run_ffmpeg_graph(graph: dict, out: Path) -> None:
+    import subprocess as _sp
+    cmd = (["ffmpeg", "-hide_banner", "-loglevel", "error", "-y"]
+           + graph["input_args"] + ["-filter_complex", graph["filter_complex"]]
+           + graph["out_args"] + [str(out)])
+    proc = _sp.run(cmd, capture_output=True, timeout=600)
+    if proc.returncode != 0 or not out.exists() or out.stat().st_size == 0:
+        raise SequenceError("stem_render_failed",
+                            proc.stderr.decode("utf-8", errors="replace")[-300:])
+
+
+def _execute_stem_render(rt: AgentRuntime, project: str, arguments: str,
+                         instruction, message_id) -> dict:
+    """分轨导出（provenance=plan revision；旁白/音乐独立 WAV）。"""
+    args = _parse_args(arguments)
+    sid = args.get("sequence_id")
+    roles = args.get("roles") or []
+    if not sid or not roles:
+        return {"ok": False, "error": "sequence_id 与 roles 必填"}
+    pdir = rt._resolve_project_dir(project)
+    svc = _svc(pdir, project)
+    plan = svc.get_audio_plan(sid)
+    if plan is None:
+        return {"ok": False, "error": "该 sequence 无 AudioPlan——先 audio_plan_put"}
+    from src.sequence.audio_basis import resolve_audio_source
+    from src.sequence.audio_mix import (MixLayer, build_audio_mix_plan,
+                                        compile_stem_filter_graph)
+    mix_layers = [MixLayer(layer_id=l.layer_id, role=l.role,
+                           source_file=str(resolve_audio_source(
+                               pdir, l.layer_id, l.source).file),
+                           source_in_ms=l.source_in_ms, duration_ms=l.duration_ms,
+                           start_ms=l.start_ms, gain_db=l.gain_db,
+                           fade_in_ms=l.fade_in_ms, fade_out_ms=l.fade_out_ms)
+                  for l in plan.layers]
+    outdir = pdir / "output" / "assembly" / "stems"
+    outdir.mkdir(parents=True, exist_ok=True)
+    stems = []
+    try:
+        plan_ = build_audio_mix_plan("", plan.revision, mix_layers)
+        g = compile_stem_filter_graph(plan_, [str(r) for r in roles])
+        out = outdir / f"stem_{'_'.join(sorted(str(r) for r in roles))}_rev{plan.revision}.wav"
+        _run_ffmpeg_graph(g, out)
+        import hashlib as _hashlib
+        stems.append({"roles": list(roles), "file": str(out),
+                      "sha256": _hashlib.sha256(out.read_bytes()).hexdigest()})
+    except SequenceError as e:
+        return _base_receipt("assembly.stem_render", ok=False, target=sid,
+                             error=e.message, code=e.code)
+    _audit(rt, project).record(
+        agent_id="assembly", field=f"stems.{sid}.{plan.revision}",
+        before=None, after={"roles": list(roles)}, instruction=instruction,
+        message_id=message_id)
+    return _base_receipt(
+        "assembly.stem_render", ok=True, target=sid, verified=True,
+        sequence_id=sid, plan_revision=plan.revision, stems=stems,
+        op_summary=f"分轨导出 {list(roles)}（plan rev {plan.revision}）")
+
+
 TOOL_EXECUTORS: Dict[str, Any] = {
+
     "assembly.briefing": _execute_briefing,
     "assembly.snapshot_read": _execute_snapshot_read,
     "assembly.sequence_read": _execute_sequence_read,
@@ -1048,6 +1371,11 @@ TOOL_EXECUTORS: Dict[str, Any] = {
     "assembly.render_submit": _execute_render_submit,
     "assembly.manifest_publish": _execute_manifest_publish,
     "assembly.proposal_write": _execute_proposal_write,
+    "assembly.narration_read": _execute_narration_read,
+    "assembly.tts_synthesize": _execute_tts_synthesize,
+    "assembly.audio_plan_read": _execute_audio_plan_read,
+    "assembly.audio_plan_put": _execute_audio_plan_put,
+    "assembly.stem_render": _execute_stem_render,
     "web.search": lambda rt, project, arguments, instruction, message_id:
         _execute_web_search(rt, project, arguments, instruction, message_id),
 }
@@ -1064,6 +1392,11 @@ TOOL_LABELS = {
     "assembly.render_submit": "发起成片渲染",
     "assembly.manifest_publish": "发布时间线契约 manifest",
     "assembly.proposal_write": "写剪辑提案",
+    "assembly.narration_read": "旁白编排上下文",
+    "assembly.tts_synthesize": "合成/复用一句旁白",
+    "assembly.audio_plan_read": "读取混音计划",
+    "assembly.audio_plan_put": "写入混音计划",
+    "assembly.stem_render": "导出分轨",
     "shot.list": "列出镜头",
     "web.search": "搜索资料",
 }

@@ -137,7 +137,8 @@ def test_build_v2_keeps_v1_keys_and_adds_audio(env, tmp_path):
         assert k in v2                                    # §26：S1 键继续保留
     assert v2["audio"]["audio_plan_revision"] == plan.revision
     assert v2["audio"]["layers"][0]["source_artifact_sha256"] ==         resolve_audio_source(project_dir, "layer_a", plan.layers[0].source).sha256
-    assert v2["audio"]["mixer_schema"] == "sequence_audio_mixer_v1"
+    # Phase 44C：mixer schema 升 v2（默认配置下编译图与 v1 逐字节等价，仅 schema 标识升级）
+    assert v2["audio"]["mixer_schema"] == "sequence_audio_mixer_v2"
 
 
 # ============ mismatch 矩阵（§25/§27/§28/§29）============

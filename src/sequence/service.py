@@ -49,7 +49,9 @@ from .audio_mix import (
     compile_audio_filter_graph,
     peak_warning,
 )
-from .audio_models import SequenceAudioLayer, SequenceAudioPlan
+from .audio_models import (SequenceAudioLayer, SequenceAudioPlan,
+                           SequenceDuckingConfig, SequenceLoudnessTarget,
+                           _check_gain)
 from .audio_store import SequenceAudioPlanStore
 from .basis import (
     basis_mismatched_keys,
@@ -212,11 +214,15 @@ class SequenceService:
         return self.audio_store.plan_for(sequence_id)
 
     def put_audio_plan(self, sequence_id: str, layers_payload: List[Dict[str, Any]],
-                       expected_revision: Optional[str] = None) -> Optional[SequenceAudioPlan]:
+                       expected_revision: Optional[str] = None,
+                       plan_config: Optional[Dict[str, Any]] = None) -> Optional[SequenceAudioPlan]:
         """整体替换 AudioPlan（25.md §37：一个完整 PUT + OCC 足够第一版）。
         - layers 非法 → fail closed（role 限制 §8 / 负值 / fade 越界 / gain 越界）；
         - expected_revision 与当前不符 → revision_conflict（§38 409，不 last-write-wins）；
-        - layers 为空 → 删除 plan（canonical 归一化：空 plan ≡ 无 plan = S1 语义）。
+        - layers 为空 → 删除 plan（canonical 归一化：空 plan ≡ 无 plan = S1 语义）；
+        - plan_config（44C）：混音配置整体替换 {base_gain_db, ducking, loudness}
+          （ducking/loudness 为 dict 或 None；None = 显式关闭该特性）。 layers 为空时
+          plan_config 一并清除（无 plan 即无配置）。
         时间轴媒体事实（start+duration <= sequence duration、source_in+duration <=
         源时长）在 render Phase 1 以 ffprobe 实测校验（§5-3/§12/§14——不根据历史值猜）。"""
         with _store_lock(self.project_name):
@@ -238,6 +244,18 @@ class SequenceService:
                 return None
             plan = current if current is not None else SequenceAudioPlan(sequence_id=sequence_id)
             plan.layers = layers
+            if plan_config is not None:
+                if not isinstance(plan_config, dict):
+                    raise SequenceError("audio_plan_invalid",
+                                        "plan_config 必须是对象（整体替换语义）")
+                # 🔴 44C 修复：必须经 _check_gain 归一为 float——直接赋 int 会让
+                # 内存指纹（-3）与重载指纹（-3.0）不一致（verified=False 实证）
+                plan.base_gain_db = _check_gain(
+                    plan_config.get("base_gain_db", 0.0) or 0.0)
+                d = plan_config.get("ducking")
+                plan.ducking = SequenceDuckingConfig.from_dict(d) if d else None
+                ln = plan_config.get("loudness")
+                plan.loudness = SequenceLoudnessTarget.from_dict(ln) if ln else None
             plan.touch()
             plans[sequence_id] = plan
             self.audio_store.save(plans)
@@ -392,16 +410,22 @@ class SequenceService:
                 current_s1 = compute_current_basis(self._load_project(),
                                                    self.get_entry(sequence_id).block)
                 base_rv = self._eligible_mix_base(sequence_id, version_id, current_s1)
+                cfg = prepared.audio_plan
+                mix_kwargs = {
+                    "base_gain_db": cfg.base_gain_db,
+                    "ducking": cfg.ducking.semantic_snapshot() if cfg.ducking else None,
+                    "loudness": cfg.loudness.semantic_snapshot() if cfg.loudness else None,
+                }
                 if base_rv is not None:
                     mix = build_audio_mix_plan(
                         str(self._sequences_root() / sequence_id / f"{base_rv.version_id}.mp4"),
-                        base_rv.version_id, self._mix_layers(prepared))
+                        base_rv.version_id, self._mix_layers(prepared), **mix_kwargs)
                     _mix_to(mix, str(output_file))                    # 视频零重编码
                 else:
                     temp_base = work_dir / "base.mp4"                 # 降级：先重建基线
                     concat_clips(_build_segments(), str(temp_base))
                     mix = build_audio_mix_plan(str(temp_base), "",
-                                               self._mix_layers(prepared))
+                                               self._mix_layers(prepared), **mix_kwargs)
                     _mix_to(mix, str(output_file))
         except SequenceError as e:
             self._mark_failed(sequence_id, version_id, e.code, e.message)
@@ -432,7 +456,10 @@ class SequenceService:
                            current_s1_basis: Dict[str, Any]) -> Optional[SequenceRenderVersion]:
         """方案 A 的 base：最近 done、输出文件在、且其 basis 的 S1 子集与当前重算一致
         （clips/shots/profile/renderer 未变 → 视频比特与现渲染一致）。
-        v1/v2 basis 都可作 base（v2 含全部 v1 键；audio 段与本判定无关）。"""
+        🔴 Phase 44C 修复：base 还必须是【纯 S1 渲染】（basis schema=v1、无 audio 段）。
+        混音图对 base 的 [0:a] 语义 = native 音轨；v2（已混音）渲染的音轨含 layers，
+        作 base 会把上一版混音整体叠加进新渲染（C 批迭代混音实测触发——F4 证据）。
+        无合格 v1 base → 走既有降级路径（重建基线：视频重编码一次，诚实行为）。"""
         entry = self._require_entry(self.store.load(), sequence_id)
         for r in reversed(entry.render_versions):
             if r.version_id == exclude_version_id or r.status != RSTATUS_DONE:
@@ -440,6 +467,8 @@ class SequenceService:
             out = self._sequences_root() / sequence_id / f"{r.version_id}.mp4"
             if not out.exists() or not r.generation_basis:
                 continue
+            if (r.generation_basis or {}).get("schema") == "sequence_render_basis_v2":
+                continue          # 混音渲染不作 base（防叠加，见上）
             if not basis_mismatched_keys(r.generation_basis, current_s1_basis):
                 return r
         return None

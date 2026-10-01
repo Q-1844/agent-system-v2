@@ -44,7 +44,10 @@ REQUEST_AUDIO_SETTING = {"sample_rate": 32000, "bitrate": 128000,
 # raw status_code 始终保留在 detail.provider_status_code。
 _PROVIDER_CODE_MAP = {
     1008: "provider_quota_exceeded",     # 余额不足
-    2049: "provider_invalid_voice",      # voice_id 无效/不存在
+    2049: "provider_invalid_voice",      # voice_id 无效/不存在（文档口径）
+    # Phase 44C 实测补充（F1 真机证据）：当前端点对不存在 voice 实际返回 2054
+    # "voice id not exist"——映射到同一结构化错误，raw status_code 始终保留。
+    2054: "provider_invalid_voice",
 }
 _SECRET_KEY_MARKS = ("key", "token", "secret", "authorization", "password")
 
