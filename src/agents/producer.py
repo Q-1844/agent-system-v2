@@ -45,7 +45,7 @@ from .models import (AgentMessage, AgentTask, AgentOp, ResultStatus,
 from .tasks import AgentTaskStore
 from .project_events import (get_project_bus, emit_changed,
                              RESOURCE_STORY, RESOURCE_CHARACTER, RESOURCE_STORYBOARD,
-                             RESOURCE_SCENE_SYSTEM)
+                             RESOURCE_SCENE_SYSTEM, RESOURCE_SEQUENCE)
 from . import turn_registry
 # —— Skill System V1（40.md）：生产技能工具面（只读，不占写槽）——
 from .skill_system.tools import (
@@ -90,8 +90,10 @@ PRODUCER_WRITE_OPERATIONS: set = set()
 
 # delegate 工具名集合（长任务通道：走 event_cb + cancel_event）。
 # Phase C2（28.md §23）：scene_designer.delegate 成为第四个正式 delegate。
+# Phase 45.2：assembly.delegate 成为第五个（成片装配，单写域 sequence）。
 DELEGATE_TOOLS = {"script_writer.delegate", "character_designer.delegate",
-                  "director.delegate", "scene_designer.delegate"}
+                  "director.delegate", "scene_designer.delegate",
+                  "assembly.delegate"}
 
 # agent_id → (resource, capability_id 前缀)
 _SPECIALIST_RESOURCE = {
@@ -99,30 +101,32 @@ _SPECIALIST_RESOURCE = {
     "character_designer": RESOURCE_CHARACTER,
     "scene_designer": RESOURCE_SCENE_SYSTEM,
     "director": RESOURCE_STORYBOARD,
+    "assembly": RESOURCE_SEQUENCE,
 }
 
 
 # ============ Producer system prompt ============
-PRODUCER_SYSTEM = """你是 AGNES 的 Producer Supervisor——动画项目的总制片协调者。你代替用户在四个专业 Specialist（Script Writer / Resource Agent / Scene Agent / Director）之间持续、可靠、自主地推进项目级目标。你始终持有用户对话控制权，不把对话交给 Specialist。
+PRODUCER_SYSTEM = """你是 AGNES 的 Producer Supervisor——动画项目的总制片协调者。你代替用户在五个专业 Specialist（Script Writer / Resource Agent / Scene Agent / Director / Assembly）之间持续、可靠、自主地推进项目级目标。你始终持有用户对话控制权，不把对话交给 Specialist。
 
-【身份与权限】你不是第四个创作 Agent。你不写剧本、不设计角色、不改分镜、不生成图/视频。你的工作是：读懂用户的项目级目标 → 观察真实项目状态 → 决定下一步该找谁 → 委派 → 读真实结果 → 评估影响 → 重新规划 → 判断完成 → 继续或结束或问用户。事实自己读，专业判断问 Specialist，专业修改交给 owner。你永远不直接修改任何 canonical。
+【身份与权限】你不是第五个创作 Agent。你不写剧本、不设计角色、不改分镜、不生成图/视频、不剪辑成片。你的工作是：读懂用户的项目级目标 → 观察真实项目状态 → 决定下一步该找谁 → 委派 → 读真实结果 → 评估影响 → 重新规划 → 判断完成 → 继续或结束或问用户。事实自己读，专业判断问 Specialist，专业修改交给 owner。你永远不直接修改任何 canonical。
 
-【硬边界（物理保证，不是提示词约束）】你的工具面里【根本没有】story/character/scene/shot 的写工具与生成工具——只有只读工具与四个 *.delegate 委派工具。修改必须经对应 *.delegate 委派给 owner。
+【硬边界（物理保证，不是提示词约束）】你的工具面里【根本没有】story/character/scene/shot/sequence 的写工具与生成工具——只有只读工具与五个 *.delegate 委派工具。修改必须经对应 *.delegate 委派给 owner。
 - Script Writer（script_writer.delegate）→ Story / 剧本正文 / 故事段结构 / 情节逻辑 / 人物动机在故事层的成立 / 对白 / Scene 的叙事内容
 - Resource Agent（character_designer.delegate——兼容工具名，内部历史 id）→ Character identity（是谁/外貌/发型）+ 三视图 + 生产视觉资源全套：Clothing 服装 / CharacterLook 造型 / Prop 道具参考 / Composition 组合参考 / 共享库。production-ready 的资源准备（角色→身份参考→服装→造型→道具→组合）是它的招牌任务。
 - Scene Agent（scene_designer.delegate）→ 地点、场景状态和场景视觉参考：Location 地点身份 / SpatialAnchor 空间锚点 / SetLayout 布局 / LocationView 地点视角图 / SceneInstance 场景实例 / SceneState 场景状态 / SceneInstanceView 可绑定场景参考。production-ready 的场景准备（建/复用地点→锚点→hero 视角→绑定故事段→状态→场景状态图）是它的招牌任务。不负责：Story 改写、角色/Prop 创建、Shot 设计、Binding。
 - Director（director.delegate）→ Shot / Storyboard / 镜头结构 / 构图 / 景别 / 运镜 / 分镜连续性 / 分镜图 / 视频
+- Assembly（assembly.delegate）→ 成片装配：SequenceBlock（镜头顺序/trim/渲染 profile）/ 旁白设计与合成 / 分场景配乐选材与混音 / 渲染与逐句审计 / 成片候选与提案。渲染/TTS 是长任务（可能数分钟），回执以 Task Result 的 assembly_evidence（sequence/plan/render/manifest ID 与 revision）为准；最终 select final_render 永远由用户显式执行——向用户交付时必须说明这是候选版。
 
 【决策循环】每个 Specialist 返回后，不要机械执行原计划——回到原始目标、对照当前项目真实状态、重新判断下一步最佳动作。这个循环贯穿整个 turn：理解目标 → 观察现状 → 决定下一步 → 委派 → 读真实 Task Result → 评估影响 → 重新规划 → 完成检查 → 继续/结束/问用户。
 
 【目标锚定——防止"有工具就全用"】
 - "把 s06 分镜节奏优化一下" → 纯 Director 域，只找 Director。
 - "修改后半段剧情并同步受影响分镜" → Script Writer 完成不等于任务完成（还有下游分镜要同步）。
-- "全流程优化但不要乱改" → 对整个项目结果负责 ≠ 把三个 Agent 各调一遍。按真实问题调用。
+- "全流程优化但不要乱改" → 对整个项目结果负责 ≠ 把每个 Agent 各调一遍。按真实问题调用。
 
 【Observe 纪律】默认读轻量地图（project.inspect / story.list / character.list / shot.list）；定位问题才局部 read（story.read / script.read / character.read / shot.read）；Specialist 完成后先看 Task Result（status/verified/changed_refs/warnings），只有判断下游影响时才局部重读 canonical。不要每轮全量读。明确单域任务可直接委派，无需大量前置读取。
 
-【动态路由与 Skip】允许任意顺序与回头：SW only / CD→Director / Director→SW→Director / …，由目标 + canonical + 真实结果决定。知道不调用谁也是智能——例如 SW 改了 s05/s06 节奏与动机但未动人物身份/外貌/服装 → 跳过 CD；Director 可能需要重新检查。禁止为显示"全流程"机械跑三个 Agent。
+【动态路由与 Skip】允许任意顺序与回头：SW only / CD→Director / Director→SW→Director / …，由目标 + canonical + 真实结果决定。知道不调用谁也是智能——例如 SW 改了 s05/s06 节奏与动机但未动人物身份/外貌/服装 → 跳过 CD；Director 可能需要重新检查。禁止为显示"全流程"机械跑全部 Agent。
 
 【下游影响思考方向（思考方向，不是机械规则——每次按真实变化判断）】
 - Story 变了 → 考虑：哪些 Scene 实际变化 / Character 是否受影响 / 分镜是否需重新检查 / 已生成图视频是否基于旧内容——但不是所有 Story change 都触发所有下游。
@@ -268,17 +272,25 @@ def _build_producer_tools() -> tuple:
                                                _execute_character_read)
     from src.agents.director import (DIRECTOR_TOOLS as _DIR,
                                      _execute_shot_list, _execute_shot_read)
+    from src.agents.assembly import (ASSEMBLY_TOOLS as _ASM,
+                                     _execute_sequence_read as _asm_seq_read,
+                                     _execute_render_status as _asm_render_status)
     sw_names = {"story.list", "story.read", "script.read"}
     cd_names = {"character.list", "character.read"}
     dir_names = {"shot.list", "shot.read"}
+    # Phase 45.2：成片域只读（消费 assembly 回执后核验谱系用）
+    asm_names = {"assembly.sequence_read", "assembly.render_status"}
     read_schemas = ([t for t in _SW if t["function"]["name"] in sw_names]
                     + [t for t in _CD if t["function"]["name"] in cd_names]
-                    + [t for t in _DIR if t["function"]["name"] in dir_names])
+                    + [t for t in _DIR if t["function"]["name"] in dir_names]
+                    + [t for t in _ASM if t["function"]["name"] in asm_names])
     read_executors = {
         "story.list": _execute_story_list, "story.read": _execute_story_read,
         "script.read": _execute_script_read,
         "character.list": _execute_character_list, "character.read": _execute_character_read,
         "shot.list": _execute_shot_list, "shot.read": _execute_shot_read,
+        "assembly.sequence_read": _asm_seq_read,
+        "assembly.render_status": _asm_render_status,
     }
     delegate_schemas = [
         _delegate_schema("script_writer", "Script Writer",
@@ -325,6 +337,20 @@ def _build_producer_tools() -> tuple:
                          "【不适用】剧情/动机/对白（→ Script Writer）；角色外貌/服装（→ Character Designer）。\n"
                          "【要点】Director 会自己读最新 canonical——situation 写发生了什么+为什么找它，不要把分镜列表全文复制进去。\n"
                          "【重要】若任务是'检查并优化/修改'：发现真实问题就用 shot 写工具直接执行修改，不要只返回审查报告或只列建议；若确认没有值得修改的问题，明确说明无需修改，不要为了产生写操作而乱改。"),
+        _delegate_schema("assembly", "Assembly Agent",
+                         "委派任务给 Assembly Agent（成片装配；第五正式 delegate，Phase 45）。\n"
+                         "【owns】SequenceBlock（镜头顺序/trim/渲染 profile）/ AudioPlan（旁白/配乐/混音编排）"
+                         "/ 渲染与分轨导出 / AssemblyManifest / 剪辑提案。渲染/混音/TTS 全部走它的正式工具。\n"
+                         "【适用】把已批准镜头装配成片；全片旁白设计与合成（MiniMax TTS）；"
+                         "分场景配乐选材与混音；渲染后逐句/逐段审计；产出待审候选成片与提案。\n"
+                         "【不适用】改剧本/镜头/角色（→ 对应 owner）；重新生成视频（→ 视频线）；"
+                         "select final_render（永远由用户显式执行，Assembly 无此工具）。\n"
+                         "【要点】constraints 里写清用户的声音方案（旁白密度/音乐策略/原音静默等）——"
+                         "Assembly 按 brief 执行，不臆造全局默认。素材身份如实入档（本地测试垫乐须标注 test_asset）。"
+                         "Assembly 会自己读最新 canonical（快照/Sequence/plan）——situation 写发生了什么+为什么找它，"
+                         "不要把镜头清单/旁白全文复制进去。渲染/合成是长任务，回执要等；"
+                         "完成判定只认 Task Result 的 assembly_evidence 与 render_status deep_audit 的逐句审计结果，"
+                         "不采信其对话文本。最终向用户交付时必须说明：这是候选版，select 由用户执行。"),
     ]
     offered = [_project_inspect_schema(), _project_quota_schema()] + read_schemas + delegate_schemas
     read_executors = {
@@ -494,6 +520,14 @@ _REF_KEY_TO_TYPE = {"clothings": "clothing", "looks": "look", "props": "prop",
                     "scene_instances": "scene_instance",
                     "scene_instance_views": "scene_instance_view"}
 
+# Phase 45.2：assembly 的【写】操作白名单（只有这些回执的 sequence_id 计入变更；
+# read 面回执携带 sequence_id 不算变更——与 scene/shot 域"只认写回执"同纪律）。
+_ASM_SEQUENCE_WRITE_OPS = {
+    "assembly.sequence_create", "assembly.sequence_update",
+    "assembly.render_submit", "assembly.audio_plan_put",
+    "assembly.manifest_publish", "assembly.stem_render",
+}
+
 
 def _derive_changed_refs(agent_id: str, receipts: list) -> dict:
     """只从真实 receipts 派生 changed_refs（绝不采信 LLM 自述）。
@@ -506,6 +540,7 @@ def _derive_changed_refs(agent_id: str, receipts: list) -> dict:
     scenes: set = set()
     shots: set = set()
     characters: set = set()
+    sequences: set = set()
     resources: Dict[str, set] = {k: set() for k in _RESOURCE_KIND_TO_REF.values()}
     for r in receipts or []:
         if not (r.get("ok") and r.get("verified") and not r.get("unchanged")):
@@ -516,6 +551,10 @@ def _derive_changed_refs(agent_id: str, receipts: list) -> dict:
             shots.add(r["shot_id"])
         if r.get("character_name"):
             characters.add(r["character_name"])
+        # Phase 45.2：成片域——仅【写】回执计入（写后重读验证过的 sequence_id）；
+        # 只读回执（sequence_read/render_status 等）即使携带 sequence_id 也不是变更。
+        if r.get("sequence_id") and (r.get("operation") or "") in _ASM_SEQUENCE_WRITE_OPS:
+            sequences.add(r["sequence_id"])
         for c in (r.get("created") or []):
             if c.get("scene_id"):
                 scenes.add(c["scene_id"])
@@ -548,7 +587,8 @@ def _derive_changed_refs(agent_id: str, receipts: list) -> dict:
     # （Map 里 "character"→"characters" 与 legacy set 同键——合并而非覆盖）。
     resources["characters"].update(characters)
     return {"scenes": sorted(scenes), "shots": sorted(shots),
-            **{k: sorted(resources[k]) for k in _RESOURCE_KIND_TO_REF.values()}}
+            **{k: sorted(resources[k]) for k in _RESOURCE_KIND_TO_REF.values()},
+            "sequences": sorted(sequences)}
 
 
 def _derive_warnings(receipts: list) -> list:
@@ -612,7 +652,7 @@ def _wrap_task_result(turn_result: Optional[dict], err: Optional[str],
             line = f"prerequisite[{code}] {sid_}: {detail}".strip()
             if line not in warnings:
                 warnings.append(line)
-    return {
+    result = {
         "task_id": task_id, "workflow_id": workflow_id, "agent": agent_id,
         "status": status,
         "summary": summary[:800], "assistant_message": summary,
@@ -622,6 +662,31 @@ def _wrap_task_result(turn_result: Optional[dict], err: Optional[str],
         "n_tool_calls": len(tr.get("trace") or []),
         "session_id": sid, "execution_ref": f"agent_task:{task_id}",
     }
+    # Phase 45.2：成片域证据（全部从真实回执派生，不采信模型文本）——
+    # 供 Producer 校验谱系（sequence/plan/render/manifest 的 ID 与 revision）。
+    if agent_id == "assembly":
+        evidence: Dict[str, Any] = {"sequence_ids": sorted(changed.get("sequences", []))}
+        for r in receipts or []:
+            if not (r.get("ok") and r.get("verified")):
+                continue
+            op = r.get("operation") or ""
+            if op == "assembly.render_submit" and r.get("render_version_id"):
+                evidence["render_version_id"] = r["render_version_id"]
+                evidence["render_job_id"] = r.get("job_id")
+            if op == "assembly.audio_plan_put" and r.get("revision"):
+                evidence["audio_plan_revision"] = r["revision"]
+            if op == "assembly.manifest_publish":
+                evidence["manifest_revision"] = r.get("assembly_revision")
+                if r.get("audio_plan_revision"):
+                    evidence["audio_plan_revision"] = r["audio_plan_revision"]
+            if op == "assembly.render_status" and isinstance(r.get("deep_audit"), dict):
+                audit = r["deep_audit"].get("audio") or {}
+                if audit:
+                    evidence["audio_audit_passed"] = audit.get("passed")
+                    if audit.get("failures"):
+                        evidence["audio_audit_failures"] = audit["failures"][:6]
+        result["assembly_evidence"] = evidence
+    return result
 
 
 # ============ 持久化：workflow + bridge 消息（§9）============
@@ -700,10 +765,11 @@ def _append_bridge_messages(pdir: Path, project: str, rows: list) -> None:
 
 # ============ delegate 执行器（§5.3，三个共用一个泛化实现）============
 def _empty_changed_refs() -> dict:
-    """changed_refs 全键空骨架（三老键 + Phase B 资源键 + Phase C2 场景键）。
-    早期失败回执保持全键形状。"""
+    """changed_refs 全键空骨架（三老键 + Phase B 资源键 + Phase C2 场景键
+    + Phase 45.2 成片键）。早期失败回执保持全键形状。"""
     out = {"scenes": [], "shots": [], "characters": []}
     out.update({k: [] for k in _RESOURCE_KIND_TO_REF.values()})
+    out["sequences"] = []
     return out
 
 
@@ -745,6 +811,11 @@ async def _delegate_specialist(rt, project: str, agent_id: str,
     elif agent_id == "director":
         from src.agents.director import director_turn, DIRECTOR_WRITE_OPERATIONS
         turn_fn, writes = director_turn, DIRECTOR_WRITE_OPERATIONS
+    elif agent_id == "assembly":
+        # Phase 45.2：成片装配（单写域 sequence；锁按工具查域挂，同 scene_designer 模式）
+        from src.agents.assembly import assembly_turn, WRITE_TOOL_DOMAIN
+        turn_fn, writes = assembly_turn, frozenset(WRITE_TOOL_DOMAIN)
+        write_domain_map = WRITE_TOOL_DOMAIN
     else:
         return {"ok": False, "operation": "delegate", "code": "unknown_agent",
                 "error": f"未知 Specialist: {agent_id}", "agent": agent_id,
@@ -861,6 +932,9 @@ async def _delegate_specialist(rt, project: str, agent_id: str,
         for key, ref_type in _REF_KEY_TO_TYPE.items():
             for rid in task_result["changed_refs"].get(key, []):
                 refs.append({"type": ref_type, "id": rid})
+        # Phase 45.2：成片域引用（sequence canonical）。
+        for sid_ in task_result["changed_refs"].get("sequences", []):
+            refs.append({"type": "sequence", "id": sid_})
         t.artifact_refs = refs
         t.error = (err or (None if tr_status == "completed" else tr_status))
         t.updated_at = time.time()
@@ -1224,7 +1298,8 @@ async def producer_turn(rt, project: str, session_id: str, content: str, *,
 
         tool_executors = dict(read_executors)
         tool_executors["project.inspect"] = _execute_project_inspect
-        for aid in ("script_writer", "character_designer", "scene_designer", "director"):
+        for aid in ("script_writer", "character_designer", "scene_designer",
+                    "director", "assembly"):
             tool_executors[f"{aid}.delegate"] = _make_delegate_executor(aid)
 
         loop_state: dict = {}

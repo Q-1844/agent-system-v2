@@ -162,8 +162,10 @@ def _apply_decision(t: "AgentTask", decision: Dict[str, Any]) -> None:
     幂等：若 task 已非 running（被别处结算），跳过（§18-9）。"""
     if t.status != TaskStatus.RUNNING.value:
         return
-    if not t.execution_ref or not t.execution_ref.get("job_id"):
-        return
+    # Phase 45.2：sync-delegate 中断结算不需要 execution_ref（无 durable job）。
+    if not decision.get("sync_interrupted"):
+        if not t.execution_ref or not t.execution_ref.get("job_id"):
+            return
     # video_id 录制（reattach 时从 shot.video.video_id 读到，fallback 身份用）
     rec_vid = decision.get("record_video_id")
     if rec_vid and not t.execution_ref.get("video_id"):
@@ -217,7 +219,7 @@ class AgentTaskSettler:
         不写盘——调用方（store.update）负责原子写。保留同步签名便于单测直接驱动。"""
         ref = task.execution_ref
         if not ref or not ref.get("job_id"):
-            return None
+            return self._reconcile_sync_delegate(task)
         try:
             q = self._job_queue_getter()
         except Exception:
@@ -265,6 +267,31 @@ class AgentTaskSettler:
             return decision
         # 未知状态：跳过，不误结算
         return None
+
+    def _reconcile_sync_delegate(self, task: "AgentTask") -> Optional[Dict[str, Any]]:
+        """Phase 45.2：sync-delegate 型 running task（*.delegate 委派，child turn 在
+        本进程内执行，无 durable job）。判据=其子会话是否仍被 turn_registry 占用：
+        占用中 → 正在运行的 live 委派，不动；未占用 → 中断遗留（后端重启/崩溃，
+        turn_registry 重启即清空）→ 诚实 failed（不永久 running，也不假装完成）。
+        child session 的消息/工具轨迹已在盘，续做=Producer 发起新委派任务。"""
+        if task.status != TaskStatus.RUNNING.value:
+            return None       # 防御：reconcile 只对 running task（调用方过滤，双保险）
+        from . import turn_registry
+        sid = task.session_id or ""
+        if sid and turn_registry.is_active(task.project, sid):
+            return None
+        return {"sync_interrupted": True, "record_video_id": None,
+                "result": AgentStructuredResult(
+                    status=ResultStatus.FAILED.value,
+                    summary=(f"委派任务中断：后端重启/崩溃时 {task.target_agent} "
+                             f"子会话未完成（session={sid or '未知'}）；"
+                             f"已完成部分见该会话轨迹，续做请重新委派。"),
+                    artifact_refs=([{"type": "session", "id": sid}] if sid else []),
+                    warnings=[f"interrupted_by_backend_restart:{task.capability_id}"],
+                    data={"code": "interrupted_by_backend_restart",
+                          "target_agent": task.target_agent,
+                          "capability_id": task.capability_id,
+                          "session_id": sid})}
 
     def _resolve_done_artifact(self, ref, job, task, loader) -> Optional[AgentStructuredResult]:
         """§24：Job done → 解析持久化 artifact（origin 精确匹配；video 含 exact-video_id fallback）。"""

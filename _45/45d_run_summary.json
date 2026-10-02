@@ -1,0 +1,11 @@
+{
+ "session_id": "sess_5941418125b1",
+ "turn1_seconds": 172.0,
+ "turn2_seconds": null,
+ "render": {
+  "sequence_id": "seq_b746d7f3",
+  "render_version_id": "srender_77107ae3",
+  "final_status": "done",
+  "wait_s": 0.0
+ }
+}

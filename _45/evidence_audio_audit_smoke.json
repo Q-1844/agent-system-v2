@@ -1,0 +1,312 @@
+{
+ "schema": "audio_audit_v1",
+ "render_version_id": "srender_fa9a2b7a",
+ "mix_duration_ms": 90197,
+ "loudness": {
+  "integrated_lufs": -16.0,
+  "true_peak": -1.8,
+  "true_peak_unit": "dBFS",
+  "lra_lu": 4.0
+ },
+ "narration_layers": [
+  {
+   "layer_id": "lay_nd01",
+   "role": "narration",
+   "probe_basis": "cue_window",
+   "windows": [
+    {
+     "start_ms": 800,
+     "end_ms": 5537,
+     "correlation": 0.967,
+     "window_rms_db": -19.1
+    }
+   ],
+   "min_correlation": 0.966985100983716,
+   "window_rms_db": -19.1,
+   "pass": true
+  },
+  {
+   "layer_id": "lay_nd02",
+   "role": "narration",
+   "probe_basis": "cue_window",
+   "windows": [
+    {
+     "start_ms": 8800,
+     "end_ms": 14199,
+     "correlation": 0.952,
+     "window_rms_db": -18.7
+    }
+   ],
+   "min_correlation": 0.9518316420685746,
+   "window_rms_db": -18.7,
+   "pass": true
+  },
+  {
+   "layer_id": "lay_nd03",
+   "role": "narration",
+   "probe_basis": "cue_window",
+   "windows": [
+    {
+     "start_ms": 16800,
+     "end_ms": 20922,
+     "correlation": 0.948,
+     "window_rms_db": -19.1
+    }
+   ],
+   "min_correlation": 0.9480414673958946,
+   "window_rms_db": -19.1,
+   "pass": true
+  },
+  {
+   "layer_id": "lay_nd04",
+   "role": "narration",
+   "probe_basis": "cue_window",
+   "windows": [
+    {
+     "start_ms": 24500,
+     "end_ms": 28238,
+     "correlation": 0.946,
+     "window_rms_db": -19.2
+    }
+   ],
+   "min_correlation": 0.9463485938087502,
+   "window_rms_db": -19.2,
+   "pass": true
+  },
+  {
+   "layer_id": "lay_nd05",
+   "role": "narration",
+   "probe_basis": "cue_window",
+   "windows": [
+    {
+     "start_ms": 29675,
+     "end_ms": 32043,
+     "correlation": 0.973,
+     "window_rms_db": -17.5
+    }
+   ],
+   "min_correlation": 0.9729859364889111,
+   "window_rms_db": -17.5,
+   "pass": true
+  },
+  {
+   "layer_id": "lay_nd06",
+   "role": "narration",
+   "probe_basis": "cue_window",
+   "windows": [
+    {
+     "start_ms": 34959,
+     "end_ms": 38790,
+     "correlation": 0.978,
+     "window_rms_db": -18.1
+    }
+   ],
+   "min_correlation": 0.9777584774094898,
+   "window_rms_db": -18.1,
+   "pass": true
+  },
+  {
+   "layer_id": "lay_nd07",
+   "role": "narration",
+   "probe_basis": "cue_window",
+   "windows": [
+    {
+     "start_ms": 40343,
+     "end_ms": 46218,
+     "correlation": 0.898,
+     "window_rms_db": -18.3
+    }
+   ],
+   "min_correlation": 0.8978174516581692,
+   "window_rms_db": -18.3,
+   "pass": true
+  },
+  {
+   "layer_id": "lay_nd08",
+   "role": "narration",
+   "probe_basis": "cue_window",
+   "windows": [
+    {
+     "start_ms": 47843,
+     "end_ms": 51872,
+     "correlation": 0.859,
+     "window_rms_db": -18.0
+    }
+   ],
+   "min_correlation": 0.8594098454485186,
+   "window_rms_db": -18.0,
+   "pass": true
+  },
+  {
+   "layer_id": "lay_nd09",
+   "role": "narration",
+   "probe_basis": "cue_window",
+   "windows": [
+    {
+     "start_ms": 53118,
+     "end_ms": 57240,
+     "correlation": 0.944,
+     "window_rms_db": -18.0
+    }
+   ],
+   "min_correlation": 0.9435833839456511,
+   "window_rms_db": -18.0,
+   "pass": true
+  },
+  {
+   "layer_id": "lay_nd10",
+   "role": "narration",
+   "probe_basis": "cue_window",
+   "windows": [
+    {
+     "start_ms": 58702,
+     "end_ms": 64391,
+     "correlation": 0.886,
+     "window_rms_db": -18.4
+    }
+   ],
+   "min_correlation": 0.8855772198722722,
+   "window_rms_db": -18.4,
+   "pass": true
+  },
+  {
+   "layer_id": "lay_nd11",
+   "role": "narration",
+   "probe_basis": "cue_window",
+   "windows": [
+    {
+     "start_ms": 66502,
+     "end_ms": 72853,
+     "correlation": 0.91,
+     "window_rms_db": -17.6
+    }
+   ],
+   "min_correlation": 0.9102581036176494,
+   "window_rms_db": -17.6,
+   "pass": true
+  },
+  {
+   "layer_id": "lay_nd12",
+   "role": "narration",
+   "probe_basis": "cue_window",
+   "windows": [
+    {
+     "start_ms": 74702,
+     "end_ms": 81053,
+     "correlation": 0.947,
+     "window_rms_db": -18.5
+    }
+   ],
+   "min_correlation": 0.947397117240163,
+   "window_rms_db": -18.5,
+   "pass": true
+  },
+  {
+   "layer_id": "lay_nd13",
+   "role": "narration",
+   "probe_basis": "cue_window",
+   "windows": [
+    {
+     "start_ms": 82902,
+     "end_ms": 89160,
+     "correlation": 0.965,
+     "window_rms_db": -18.8
+    }
+   ],
+   "min_correlation": 0.964913043135865,
+   "window_rms_db": -18.8,
+   "pass": true
+  }
+ ],
+ "music_layers": [
+  {
+   "layer_id": "lay_music_s1_riverside",
+   "role": "music",
+   "probe_basis": "gap_windows",
+   "windows": [
+    {
+     "start_ms": 6168,
+     "end_ms": 8168,
+     "correlation": 1.0,
+     "window_rms_db": -30.1
+    },
+    {
+     "start_ms": 14499,
+     "end_ms": 16499,
+     "correlation": 1.0,
+     "window_rms_db": -23.8
+    },
+    {
+     "start_ms": 21711,
+     "end_ms": 23711,
+     "correlation": 1.0,
+     "window_rms_db": -23.5
+    }
+   ],
+   "min_correlation": 0.9998151274138017,
+   "pass": true
+  },
+  {
+   "layer_id": "lay_music_s2_workshop",
+   "role": "music",
+   "probe_basis": "gap_windows",
+   "windows": [
+    {
+     "start_ms": 46218,
+     "end_ms": 47843,
+     "correlation": 1.0,
+     "window_rms_db": -23.0
+    },
+    {
+     "start_ms": 51872,
+     "end_ms": 53118,
+     "correlation": 1.0,
+     "window_rms_db": -23.1
+    }
+   ],
+   "min_correlation": 0.9999791538369964,
+   "pass": true
+  },
+  {
+   "layer_id": "lay_music_s3_tower",
+   "role": "music",
+   "probe_basis": "gap_windows",
+   "windows": [
+    {
+     "start_ms": 64446,
+     "end_ms": 66446,
+     "correlation": 0.999,
+     "window_rms_db": -23.6
+    },
+    {
+     "start_ms": 72853,
+     "end_ms": 74702,
+     "correlation": 0.992,
+     "window_rms_db": -25.7
+    },
+    {
+     "start_ms": 81053,
+     "end_ms": 82902,
+     "correlation": 0.997,
+     "window_rms_db": -30.6
+    }
+   ],
+   "min_correlation": 0.992039714496234,
+   "pass": true
+  }
+ ],
+ "native_leakage": {
+  "checked": true,
+  "base_gain_db": -60.0,
+  "gap_windows": [],
+  "max_gap_rms_db": null,
+  "pass": true
+ },
+ "thresholds": {
+  "correlation_pass": 0.5,
+  "silent_window_db": -55.0,
+  "native_silent_db": -50.0
+ },
+ "passed": true,
+ "failures": []
+}

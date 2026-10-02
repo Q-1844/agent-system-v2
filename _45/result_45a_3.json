@@ -1,0 +1,138 @@
+{
+ "assistant_message": "基于最新真实读取，总结完成情况：\n\n---\n\n## 实际完成清单（基于最后一次读取）\n\n### ✅ SequenceBlock\n- **sequence_id**: `seq_b746d7f3`\n- **revision**: `4df4d8cb`\n- **镜头**: 13 镜全部保留，无 trim\n- **渲染规格**: 1280×720, 24fps, H.264, AAC 48kHz\n\n### ✅ 渲染版本\n本轮共生产 4 个 render version：\n\n| version_id | 状态 | 说明 |\n|-----------|------|------|\n| srender_25b436aa | done | 第 1 次渲染 |\n| srender_b879471d | done | 第 2 次渲染 |\n| srender_43f8009d | raced_superseded | 因 plan 变更被覆盖 |\n| **srender_850946bd** | done | 第 3 次渲染（plan rev=602ab718） |\n| **srender_0a8daec0** | done | 第 4 次渲染（**当前最新**，plan rev=74199662） |\n\n### ✅ Deep Audit（srender_0a8daec0）\n| 审计项 | 结果 |\n|--------|------|\n| 视频规格 | 1280×720, 24fps, H.264, 90,197ms |\n| 响度 | -22.8 LUFS, -6.2 dBTP ✅ |\n| 旁白（13 句） | **13/13 pass**（最低 corr=0.521，narr_13）✅ |\n| 音乐（3 段） | **3/3 pass**（最低 corr=0.99996）✅ |\n| 原生泄漏 | base_gain_db=-60，pass ✅ |\n| 切点接缝 | 2 处 pts 空洞（[700,949]、[948,950]），源素材固有 |\n\n### ✅ 已完成的其他交付物\n| 项目 | 详情 |\n|------|------|\n| 旁白 TTS 合成 | narr_01~narr_13（13 句） |\n| AudioPlan | 最终 revision=74199662 |\n| 分轨导出 | `output/assembly/stems/stem_music_narration_rev74199662.wav` |\n| Manifest 发布 | manifest_v7 |\n| 提案撰写 | proposal_v9.md（已写入） |\n\n### ❌ 未完成\n| 项目 | 状态 |\n|------|------|\n| **select final_render** | `final_render: null`，需用户显式裁定 |\n\n---\n\n## 试听路径\n- **成片**: `projects\\雨灯归航\\output\\sequences\\seq_b746d7f3\\srender_0a8daec0.mp4`\n- **分轨**: `output/assembly/stems/stem_music_narration_rev74199662.wav`\n\n---\n\n## 待用户决策\n请用户执行 `select final_render = srender_0a8daec0` 以确认本次成片。",
+ "assembly_mutated": true,
+ "events": [
+  {
+   "kind": "sequence_change",
+   "summary": "提案 v9 已写入（雨灯归航_全片声音版成片候选 v1（新生产链））——等待用户评审"
+  }
+ ],
+ "message": {
+  "role": "assistant",
+  "content": "基于最新真实读取，总结完成情况：\n\n---\n\n## 实际完成清单（基于最后一次读取）\n\n### ✅ SequenceBlock\n- **sequence_id**: `seq_b746d7f3`\n- **revision**: `4df4d8cb`\n- **镜头**: 13 镜全部保留，无 trim\n- **渲染规格**: 1280×720, 24fps, H.264, AAC 48kHz\n\n### ✅ 渲染版本\n本轮共生产 4 个 render version：\n\n| version_id | 状态 | 说明 |\n|-----------|------|------|\n| srender_25b436aa | done | 第 1 次渲染 |\n| srender_b879471d | done | 第 2 次渲染 |\n| srender_43f8009d | raced_superseded | 因 plan 变更被覆盖 |\n| **srender_850946bd** | done | 第 3 次渲染（plan rev=602ab718） |\n| **srender_0a8daec0** | done | 第 4 次渲染（**当前最新**，plan rev=74199662） |\n\n### ✅ Deep Audit（srender_0a8daec0）\n| 审计项 | 结果 |\n|--------|------|\n| 视频规格 | 1280×720, 24fps, H.264, 90,197ms |\n| 响度 | -22.8 LUFS, -6.2 dBTP ✅ |\n| 旁白（13 句） | **13/13 pass**（最低 corr=0.521，narr_13）✅ |\n| 音乐（3 段） | **3/3 pass**（最低 corr=0.99996）✅ |\n| 原生泄漏 | base_gain_db=-60，pass ✅ |\n| 切点接缝 | 2 处 pts 空洞（[700,949]、[948,950]），源素材固有 |\n\n### ✅ 已完成的其他交付物\n| 项目 | 详情 |\n|------|------|\n| 旁白 TTS 合成 | narr_01~narr_13（13 句） |\n| AudioPlan | 最终 revision=74199662 |\n| 分轨导出 | `output/assembly/stems/stem_music_narration_rev74199662.wav` |\n| Manifest 发布 | manifest_v7 |\n| 提案撰写 | proposal_v9.md（已写入） |\n\n### ❌ 未完成\n| 项目 | 状态 |\n|------|------|\n| **select final_render** | `final_render: null`，需用户显式裁定 |\n\n---\n\n## 试听路径\n- **成片**: `projects\\雨灯归航\\output\\sequences\\seq_b746d7f3\\srender_0a8daec0.mp4`\n- **分轨**: `output/assembly/stems/stem_music_narration_rev74199662.wav`\n\n---\n\n## 待用户决策\n请用户执行 `select final_render = srender_0a8daec0` 以确认本次成片。",
+  "status": null,
+  "created_at": 1790877839.0466807,
+  "meta": {
+   "intent": "sequence_change",
+   "events": [
+    {
+     "kind": "sequence_change",
+     "summary": "提案 v9 已写入（雨灯归航_全片声音版成片候选 v1（新生产链））——等待用户评审"
+    }
+   ],
+   "evidence_refs": [],
+   "receipts": [
+    {
+     "operation": "assembly.proposal_write",
+     "ok": true,
+     "verified": true,
+     "stale": false,
+     "unchanged": false,
+     "error": null,
+     "code": null,
+     "op_summary": "提案 v9 已写入（雨灯归航_全片声音版成片候选 v1（新生产链））——等待用户评审",
+     "revision": null,
+     "expected_revision": null,
+     "current_revision": null,
+     "sequence_id": null,
+     "render_version_id": null,
+     "job_id": null,
+     "assembly_revision": null,
+     "manifest_file": null,
+     "proposal_file": "projects\\雨灯归航\\output\\assembly\\proposal_v9.md"
+    }
+   ],
+   "write_attempts": 1,
+   "write_success": 1,
+   "trace": [
+    {
+     "step": 0,
+     "tool": "assembly.proposal_write",
+     "target": "projects\\雨灯归航\\output\\assembly\\proposal_v9.md",
+     "result": "ok",
+     "revision": null,
+     "error": null
+    },
+    {
+     "step": 2,
+     "tool": "assembly.sequence_read",
+     "target": "",
+     "result": "ok",
+     "revision": null,
+     "error": null
+    },
+    {
+     "step": 2,
+     "tool": "assembly.render_status",
+     "target": "seq_b746d7f3",
+     "result": "ok",
+     "revision": null,
+     "error": null
+    }
+   ],
+   "reasonings": [],
+   "search_sources": []
+  },
+  "message_id": "msg_d9c4354347bb",
+  "conversation_id": null,
+  "agent_id": "assembly",
+  "linked_work_ids": [],
+  "linked_change_session_id": null,
+  "linked_execution_id": null
+ },
+ "intent": "sequence_change",
+ "receipts": [
+  {
+   "operation": "assembly.proposal_write",
+   "ok": true,
+   "verified": true,
+   "stale": false,
+   "unchanged": false,
+   "error": null,
+   "code": null,
+   "op_summary": "提案 v9 已写入（雨灯归航_全片声音版成片候选 v1（新生产链））——等待用户评审",
+   "revision": null,
+   "expected_revision": null,
+   "current_revision": null,
+   "sequence_id": null,
+   "render_version_id": null,
+   "job_id": null,
+   "assembly_revision": null,
+   "manifest_file": null,
+   "proposal_file": "projects\\雨灯归航\\output\\assembly\\proposal_v9.md"
+  }
+ ],
+ "trace": [
+  {
+   "step": 0,
+   "tool": "assembly.proposal_write",
+   "target": "projects\\雨灯归航\\output\\assembly\\proposal_v9.md",
+   "result": "ok",
+   "revision": null,
+   "error": null
+  },
+  {
+   "step": 2,
+   "tool": "assembly.sequence_read",
+   "target": "",
+   "result": "ok",
+   "revision": null,
+   "error": null
+  },
+  {
+   "step": 2,
+   "tool": "assembly.render_status",
+   "target": "seq_b746d7f3",
+   "result": "ok",
+   "revision": null,
+   "error": null
+  }
+ ],
+ "search_sources": [],
+ "evidence_refs": [],
+ "linked_task_ids": [],
+ "linked_change_session_id": null,
+ "session_id": "sess_a866df6be469",
+ "agent_id": "assembly",
+ "prerequisite_warnings": []
+}

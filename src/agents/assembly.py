@@ -77,6 +77,7 @@ ASSEMBLY_READ_TOOLS = {
     "assembly.briefing", "assembly.snapshot_read", "assembly.sequence_read",
     "assembly.media_probe", "assembly.timeline_preview", "assembly.render_status",
     "assembly.narration_read", "assembly.audio_plan_read",
+    "assembly.audio_assets_read",
     "web.search",
 }
 
@@ -265,6 +266,13 @@ ASSEMBLY_SYSTEM = """你是 AGNES 的 Assembly Agent（基础成片 Agent）—�
 6. assembly.manifest_publish —— 渲染 done 后发布成片时间线契约（assembly_revision 自增）。
 7. assembly.proposal_write —— 写提案（顺序依据/trim 依据/接缝注记/旁白候选），提交用户评审。最终 select final_render 是用户的显式动作，你不能代替。
 
+【声音工作流（旁白/配乐/混音）】用户 brief 会给定旁白密度与音乐方案（如"全片旁白/每场景不同配乐/原音静默"——按 brief 执行，不要臆造全局默认）：
+a. assembly.audio_assets_read —— 枚举音频资产库（时长/规格/sha256/身份档/现有 plan 引用）。origin 为 locally_* 的是本地测试垫乐（产物须如实标注 test_asset）；正式授权音乐只能等用户提供。
+b. 旁白：assembly.narration_read（传 sequence_id 按你的 canonical 复算逐镜窗口）→ 你自主决定每句文案、镜头内时点与依据（或基于用户给定稿出改稿提案）→ assembly.tts_synthesize 逐句合成（幂等缓存按文本+声线+参数隔离；改稿只重合成受影响句）。落点纪律：句内起止避开镜头切点与场景转场，句子完整落在镜窗内。
+c. 编排：assembly.audio_plan_read / audio_plan_put（OCC expected_revision）——role ∈ narration/music/ambience；音乐/环境声 source 对象用 kind="imported_audio" + file="audio_imports/…"（文件必须来自资产库，禁止虚构路径）；"原音静默"= plan_config.base_gain_db=-60。
+d. 渲染 done 后 deep_audit=true 的 audio 段 = 逐句旁白/逐段音乐落窗相关+电平+LUFS+原生泄漏抽查。**必须逐层核对全部结果，"仅首句在场"视为失败**；不过关 → 修 plan 重渲，或在提案如实上报缺陷，绝不只凭一条通过就宣称完成。
+e. assembly.stem_render 导出分轨供试听；manifest_publish 自动从 plan 投影 narration_cues/music_bed（显式传 narration_cues 仅作覆盖）；提案写明素材身份与试听方式。
+
 当前 project 与 scope 见下方上下文。"""
 
 
@@ -295,7 +303,7 @@ SNAPSHOT_READ_TOOL = {
                 "shot_id": {"type": "string",
                             "description": "可选，单镜 id（如 s01_c04）。"},
                 "relpath": {"type": "string",
-                            "description": "可选，快照 manifest 相对仓库根路径（默认正式快照）。"},
+                            "description": "可选，快照 manifest 相对仓库根路径。通常【留空】即读默认正式快照——不要猜路径。"},
             },
         },
     },
@@ -528,10 +536,15 @@ NARRATION_READ_TOOL = {
     "type": "function",
     "function": {
         "name": "assembly.narration_read",
-        "description": ("旁白编排入口：读取故事段全文、时间线逐镜窗口（来自最新 "
-                        "AssemblyManifest）、已合成旁白版本（含试听文件/时长/回执）、"
-                        "当前 AudioPlan。用于提出 cue 候选与核对落点。只读工具。"),
-        "parameters": {"type": "object", "properties": {}},
+        "description": ("旁白编排入口：读取故事段全文、时间线逐镜窗口、已合成旁白"
+                        "版本（含试听文件/时长/回执）、当前 AudioPlan。用于提出 cue "
+                        "候选与核对落点。传 sequence_id 时窗口按该 sequence 的 "
+                        "canonical 复算（推荐：先建自己的 sequence 再排旁白）；"
+                        "缺省回退最新 manifest。只读工具。"),
+        "parameters": {"type": "object",
+                       "properties": {"sequence_id": {"type": "string",
+                                                      "description": "可选，seq_xxxx"}},
+                       "required": []},
     },
 }
 
@@ -582,7 +595,10 @@ AUDIO_PLAN_PUT_TOOL = {
                         "imported_audio, file}, start_ms, duration_ms, gain_db, "
                         "fade_in_ms, fade_out_ms}；plan_config = {base_gain_db, "
                         "ducking:{threshold_db,ratio,attack_ms,release_ms}|null, "
-                        "loudness:{i,tp,lra}|null}。时间窗校验在渲染前 fail-closed。"
+                        "loudness:{i,tp,lra}|null}。🔴 plan_config 是【整体替换】"
+                        "语义：只改响度时也必须把现有 base_gain_db 一并写回"
+                        "（先 audio_plan_read 读当前值），漏写会被重置为 0。"
+                        "时间窗校验在渲染前 fail-closed。"
                         "写工具（必须带 expected_revision）。"),
         "parameters": {
             "type": "object",
@@ -618,6 +634,20 @@ STEM_RENDER_TOOL = {
     },
 }
 
+# Phase 45.1：音频资产库发现（只读）——配乐/环境声选材前的正式入口。
+AUDIO_ASSETS_READ_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "assembly.audio_assets_read",
+        "description": ("枚举项目音频资产库（output/audio_imports/）：文件路径、"
+                        "ffprobe 实测时长/规格、sha256 前 12 位、身份档（origin/license，"
+                        "若有登记）以及各 sequence AudioPlan 对它的现有引用。"
+                        "选配乐/环境声素材前必读；身份档 origin 为 locally_* 的都是"
+                        "本地测试素材，正式授权音乐需用户提供后替换。只读。"),
+        "parameters": {"type": "object", "properties": {}, "required": []},
+    },
+}
+
 ASSEMBLY_TOOLS = [
     BRIEFING_TOOL, SNAPSHOT_READ_TOOL, SEQUENCE_READ_TOOL, MEDIA_PROBE_TOOL,
     TIMELINE_PREVIEW_TOOL, RENDER_STATUS_TOOL, SEQUENCE_CREATE_TOOL,
@@ -625,6 +655,7 @@ ASSEMBLY_TOOLS = [
     PROPOSAL_WRITE_TOOL,
     NARRATION_READ_TOOL, TTS_SYNTHESIZE_TOOL, AUDIO_PLAN_READ_TOOL,
     AUDIO_PLAN_PUT_TOOL, STEM_RENDER_TOOL,
+    AUDIO_ASSETS_READ_TOOL,
 ]
 
 
@@ -917,7 +948,33 @@ def _execute_render_status(rt: AgentRuntime, project: str, arguments: str,
             out["deep_audit"] = {"probe": probe,
                                  "seam_source": "manifest" if seam_times
                                  else "whole_file_only",
-                                 **audit}
+                                 **audit}            # Phase 45.1：逐层音频落窗审计（44C §9.3 教训——"仅首句通过"掩盖整片缺失）。
+            # plan 存在且目标为 done 混音渲染时必跑；无 plan（纯 S1 native/silent）跳过。
+            try:
+                plan = svc.get_audio_plan(sid)
+            except Exception:   # noqa: BLE001
+                plan = None
+            if plan is not None and plan.layers:
+                try:
+                    from src.sequence.audio_audit import audit_audio_render
+                    out["deep_audit"]["audio"] = audit_audio_render(
+                        mix_file=str(target.output_file),
+                        layers=[{"layer_id": l.layer_id, "role": l.role,
+                                 "source_file": l.source.file or "",
+                                 "start_ms": l.start_ms,
+                                 "duration_ms": l.duration_ms,
+                                 "source_in_ms": l.source_in_ms,
+                                 "gain_db": l.gain_db,
+                                 "fade_in_ms": l.fade_in_ms,
+                                 "fade_out_ms": l.fade_out_ms}
+                                for l in plan.layers],
+                        project_output_dir=pdir / "output",
+                        base_gain_db=plan.base_gain_db,
+                        render_version_id=target.version_id,
+                        shot_boundaries_ms=seam_times)
+                except Exception as e:   # noqa: BLE001 - 审计自身失败如实透出
+                    out["deep_audit"]["audio"] = {"error": f"{type(e).__name__}: {e}",
+                                                  "passed": False}
     return out
 
 
@@ -1081,12 +1138,48 @@ def _execute_manifest_publish(rt: AgentRuntime, project: str, arguments: str,
                 "error": "该 sequence 尚无 done 渲染——先 render_submit 并等完成，"
                          "再发布 manifest（不得发布未渲染的时间线）"}
     from src.sequence.assembly_manifest import (
-        build_assembly_manifest, load_assembly_index, publish_assembly_manifest)
+        build_assembly_manifest, derive_audio_projection, load_assembly_index,
+        publish_assembly_manifest)
     index = load_assembly_index(pdir)
+    # Phase 45.1：声音段由 canonical 投影（plan 缺省=纯 S1 语义不变）。
+    # Agent 显式传 narration_cues 仅作覆盖（可加备注），music_bed 恒取投影。
+    audio_projection = None
+    try:
+        plan = svc.get_audio_plan(sid)
+    except Exception:   # noqa: BLE001
+        plan = None
+    if plan is not None and plan.layers:
+        # 🔴 45.5 真机教训：plan 改了但最新 done 渲染还是旧 plan 的混音时，
+        # manifest 会把「当前 plan 的 cues」与「旧 plan 的成片」绑成假谱系。
+        # fail closed：要求先渲染出与当前 plan 一致的版本再发布。
+        latest_done = next((r for r in reversed(entry.render_versions)
+                            if r.status == "done"), None)
+        if latest_done is not None:
+            fr = svc.freshness(sid, version_id=latest_done.version_id)
+            if fr.get("status") != "current":
+                return {"ok": False, "error":
+                        ("最新 done 渲染与当前 AudioPlan/Sequence 谱系无法证明一致"
+                         f"（{latest_done.version_id} freshness={fr.get('status')}，"
+                         f"detail={json.dumps(fr.get('detail') or {}, ensure_ascii=False)[:160]}）——"
+                         "manifest 的 narration_cues/music_bed 投影自当前 plan，"
+                         "发布会造成假谱系；请先 render_submit 渲染当前 plan 再发布。"),
+                        "code": "render_stale_vs_plan",
+                        "render_version_id": latest_done.version_id,
+                        "freshness": fr.get("status"),
+                        "sequence_id": sid}
+        from src.audio.narration import NarrationStore
+        audio_projection = derive_audio_projection(
+            plan, NarrationStore(pdir).load())
+    agent_cues = args.get("narration_cues") or []
+    narration_cues = agent_cues if agent_cues else \
+        (audio_projection or {}).get("narration_cues") or []
     doc = build_assembly_manifest(
         proj, snap, entry.block, assembly_revision=int(index.get("latest_revision") or 0) + 1,
         snapshot_path=snap.get("_resolved_path"),
-        narration_cues=args.get("narration_cues") or [])
+        narration_cues=narration_cues,
+        music_bed=((audio_projection or {}).get("layers")
+                   and {k: v for k, v in audio_projection.items()
+                        if k != "narration_cues"}) or None)
     published = publish_assembly_manifest(pdir, doc)
     _audit(rt, project).record(
         agent_id="assembly", field=f"assembly_manifest.v{doc['assembly_revision']}",
@@ -1103,10 +1196,17 @@ def _execute_manifest_publish(rt: AgentRuntime, project: str, arguments: str,
         total_duration_ms=doc["total_duration_ms"],
         seam_count=doc["seam_count"],
         audio_strategy=doc["audio_strategy"],
+        audio_plan_revision=(doc.get("music_bed") or {}).get("audio_plan_revision"),
+        narration_cue_count=len(doc.get("narration_cues") or []),
+        music_layer_count=len((doc.get("music_bed") or {}).get("layers") or []),
+        narration_cue_source=("agent" if agent_cues else
+                              ("audio_plan_projection" if narration_cues
+                               else "none")),
         snapshot_id=doc["snapshot_id"],
         op_summary=(f"发布 manifest_v{doc['assembly_revision']}（{len(doc['shot_items'])} 镜，"
                     f"片长 {doc['total_duration_ms']}ms，音轨策略 "
-                    f"{doc['audio_strategy']}）"))
+                    f"{doc['audio_strategy']}，旁白 {len(doc.get('narration_cues') or [])} 句，"
+                    f"音乐层 {len((doc.get('music_bed') or {}).get('layers') or [])}）"))
 
 
 def _execute_proposal_write(rt: AgentRuntime, project: str, arguments: str,
@@ -1115,7 +1215,11 @@ def _execute_proposal_write(rt: AgentRuntime, project: str, arguments: str,
     title = str(args.get("title") or "").strip()
     content = str(args.get("content_md") or "").strip()
     if not title or not content:
-        return {"ok": False, "error": "title 与 content_md 必填"}
+        # 45.1 真机会话教训：LLM 传错键名时需要看到"收到了什么"才能自纠
+        return {"ok": False,
+                "error": ("title 与 content_md 必填（收到键: "
+                          f"{sorted(k for k in args.keys()) or '无'}；"
+                          '参数必须是 JSON 对象，如 {"title": "...", "content_md": "markdown 正文"}）')}
     pdir = rt._resolve_project_dir(project)
     root = pdir / "output" / "assembly"
     root.mkdir(parents=True, exist_ok=True)
@@ -1148,29 +1252,46 @@ def _execute_proposal_write(rt: AgentRuntime, project: str, arguments: str,
 
 def _execute_narration_read(rt: AgentRuntime, project: str, arguments: str,
                             instruction, message_id) -> dict:
-    """旁白编排入口：故事文本 + 时间线窗口 + 已有旁白版本 + 当前 plan。只读。"""
+    """旁白编排入口：故事文本 + 时间线窗口 + 已有旁白版本 + 当前 plan。只读。
+    Phase 45.1：可选 sequence_id——窗口从该 sequence 的 canonical block + 快照实测
+    复算（Agent 自建 sequence 后窗口应来自其 canonical，而非旧 manifest）。"""
     from src.audio.narration import NarrationStore
+    args = _parse_args(arguments)
     pdir = rt._resolve_project_dir(project)
     proj = ProjectStore(pdir).load()
     scene_summaries = [{"scene_id": sc.scene_id, "summary": (sc.summary or "")[:200]}
                        for sc in (proj.scenes or [])]
     windows = []
-    try:
-        from src.sequence.assembly_manifest import load_assembly_manifest
-        doc = load_assembly_manifest(pdir)
-        windows = [{"shot_id": it["shot_id"], "scene_id": it["scene_id"],
-                    "start_ms": it["timeline_start_ms"],
-                    "end_ms": it["timeline_end_ms"],
-                    "scene_boundary": it["scene_boundary"]}
-                   for it in doc["shot_items"]]
-        manifest_info = {"revision": doc["assembly_revision"],
-                         "sequence_id": doc["sequence_id"],
-                         "total_duration_ms": doc["total_duration_ms"]}
-    except Exception as e:   # noqa: BLE001
-        manifest_info = {"error": str(e)[:120]}
-        windows = [{"shot_id": s.shot_id, "scene_id": s.scene_id,
-                    "start_ms": None, "end_ms": None, "scene_boundary": None}
-                   for s in proj.all_shots()]
+    window_source = None
+    manifest_info: Dict[str, Any] | None = None
+    sid = str(args.get("sequence_id") or "").strip()
+    if sid:
+        try:
+            windows = _sequence_timeline_windows(rt, pdir, project, sid)
+            window_source = f"sequence_canonical:{sid}"
+        except Exception as e:   # noqa: BLE001
+            return {"ok": False, "error": f"sequence {sid} 窗口复算失败: "
+                                          f"{type(e).__name__}: {str(e)[:160]}"}
+    if not windows:
+        try:
+            from src.sequence.assembly_manifest import load_assembly_manifest
+            doc = load_assembly_manifest(pdir)
+            windows = [{"shot_id": it["shot_id"], "scene_id": it["scene_id"],
+                        "start_ms": it["timeline_start_ms"],
+                        "end_ms": it["timeline_end_ms"],
+                        "scene_boundary": it["scene_boundary"]}
+                       for it in doc["shot_items"]]
+            window_source = f"latest_manifest_v{doc['assembly_revision']}"
+            manifest_info = {"revision": doc["assembly_revision"],
+                             "sequence_id": doc["sequence_id"],
+                             "total_duration_ms": doc["total_duration_ms"]}
+        except Exception as e:   # noqa: BLE001
+            manifest_info = {"error": str(e)[:120]}
+            windows = [{"shot_id": s.shot_id, "scene_id": s.scene_id,
+                        "start_ms": None, "end_ms": None, "scene_boundary": None}
+                       for s in proj.all_shots()]
+    if manifest_info is None:
+        manifest_info = {"note": "窗口来自 sequence canonical（未读 manifest）"}
     store = NarrationStore(pdir)
     cues = {}
     for cue_id, entry in store.load().items():
@@ -1185,7 +1306,38 @@ def _execute_narration_read(rt: AgentRuntime, project: str, arguments: str,
                         for v in vs]
     return {"ok": True, "story_text": (proj.story_text or "")[:3000],
             "scenes": scene_summaries, "timeline_windows": windows,
+            "window_source": window_source,
             "manifest": manifest_info, "narration_versions": cues}
+
+
+def _sequence_timeline_windows(rt: AgentRuntime, pdir, project: str,
+                               sequence_id: str) -> list:
+    """从 canonical SequenceBlock + 冻结快照复算逐镜时间线窗（0ms=成片首帧）。
+    trim 语义与 manifest 构建器一致（source_out = 实测时长 - trim_out）；此处只做
+    窗口规划不重复哈希核验（核验属 sequence_create/render/manifest 的真相闸门）。"""
+    from src.sequence.basis import resolve_clip_source
+    from src.sequence.media_ops import probe_video
+    snap = _snapshot_load(rt, project, None)
+    svc = _svc(pdir, project)
+    block = svc.get_entry(sequence_id).block
+    out: list = []
+    cursor = 0
+    prev_scene: Optional[str] = None
+    for clip in block.clips:
+        _shot, version = resolve_clip_source(ProjectStore(pdir).load(), clip)
+        src_dur = int(probe_video(str(version.local))["duration_ms"])
+        src_in = clip.trim_in_ms
+        src_out = src_dur - clip.trim_out_ms
+        effective = src_out - src_in
+        scene_id = str(getattr(_shot, "scene_id", "") or "")
+        out.append({"shot_id": clip.shot_id, "scene_id": scene_id,
+                    "start_ms": cursor, "end_ms": cursor + effective,
+                    "scene_boundary": bool(prev_scene is not None
+                                           and scene_id != prev_scene),
+                    "video_version_id": version.version_id})
+        cursor += effective
+        prev_scene = scene_id
+    return out
 
 
 async def _execute_tts_synthesize(rt: AgentRuntime, project: str, arguments: str,
@@ -1283,6 +1435,31 @@ def _execute_audio_plan_put(rt: AgentRuntime, project: str, arguments: str,
                              error="layers 为空被归一化为删除 plan（本工具不接受空 layers）")
     plan_now = svc.get_audio_plan(sid)      # 写后重读 canonical 验证
     verified = plan_now is not None and plan_now.revision == plan.revision
+    # 🔴 45.5 真机教训：narration 层 duration_ms 取整偏短（混音 atrim 截掉句尾
+    # 19–253ms）+ fade_out 淡出尾字——逐字被"吃"且相关审计不可见（截断切片与源
+    # 切片仍完美相关）。此处对 narration 层做确定性切片体检，回执显式告警。
+    narration_slice_warnings: list = []
+    if verified:
+        from src.sequence.media_ops import probe_video as _pv
+        out_root = pdir / "output"
+        for l in plan_now.layers:
+            if l.role != "narration" or l.source.kind != "imported_audio":
+                continue
+            f = out_root / (l.source.file or "")
+            try:
+                src_ms = int(_pv(str(f))["duration_ms"])
+            except Exception:   # noqa: BLE001 - 文件缺失留给 render Phase 1 fail closed
+                continue
+            used_end = l.source_in_ms + l.duration_ms
+            if used_end < src_ms:
+                narration_slice_warnings.append(
+                    f"{l.layer_id}: duration={l.duration_ms}ms 但源文件 {src_ms}ms"
+                    f"——句尾会被截断 {src_ms - used_end}ms；整句播放请把 duration_ms "
+                    f"设为 {src_ms}")
+            if l.fade_out_ms or l.fade_in_ms:
+                narration_slice_warnings.append(
+                    f"{l.layer_id}: fade_in/out={l.fade_in_ms}/{l.fade_out_ms}ms"
+                    "——旁白淡入淡出会吃掉句首/句尾字，通常应为 0")
     if verified:
         _audit(rt, project).record(
             agent_id="assembly", field=f"audio_plan.{sid}",
@@ -1293,6 +1470,7 @@ def _execute_audio_plan_put(rt: AgentRuntime, project: str, arguments: str,
         "assembly.audio_plan_put", ok=True, target=sid,
         revision=plan.revision, verified=verified,
         sequence_id=sid, layer_count=len(plan.layers),
+        narration_slice_warnings=narration_slice_warnings,
         base_gain_db=plan.base_gain_db,
         ducking=plan.ducking.to_dict() if plan.ducking else None,
         loudness=plan.loudness.to_dict() if plan.loudness else None,
@@ -1358,6 +1536,76 @@ def _execute_stem_render(rt: AgentRuntime, project: str, arguments: str,
         op_summary=f"分轨导出 {list(roles)}（plan rev {plan.revision}）")
 
 
+# ============ Phase 45.1：音频资产库发现（只读）============
+_AUDIO_ASSET_EXTS = {".wav", ".mp3", ".flac", ".m4a", ".aac", ".ogg"}
+
+
+def _execute_audio_assets_read(rt: AgentRuntime, project: str, arguments: str,
+                               instruction, message_id) -> dict:
+    """枚举 output/audio_imports/ 资产库：ffprobe 实测 + sha256 + 可选身份档
+    （assets_meta.json）+ 当前 AudioPlan 引用关系。45.0.3 最小补口——Agent 选配乐
+    /环境声前的正式只读入口，禁止经 shell 自行搬运文件。"""
+    import hashlib
+    pdir = rt._resolve_project_dir(project)
+    out_root = pdir / "output"
+    lib = out_root / "audio_imports"
+    identity: dict = {}
+    meta_path = lib / "assets_meta.json"
+    if meta_path.is_file():
+        try:
+            identity = (json.loads(meta_path.read_text(encoding="utf-8"))
+                        or {}).get("assets") or {}
+        except Exception:   # noqa: BLE001 - 身份档损坏不阻塞枚举，如实标注
+            identity = {}
+    # 当前各 sequence AudioPlan 对资产的引用（file → [{sequence_id, layer_id, role}]）
+    refs: Dict[str, list] = {}
+    try:
+        svc = _svc(pdir, project)
+        for sid, _entry in svc.list_entries().items():
+            plan = svc.get_audio_plan(sid)
+            if plan is None:
+                continue
+            for l in plan.layers:
+                if l.source.kind == "imported_audio" and l.source.file:
+                    refs.setdefault(l.source.file, []).append(
+                        {"sequence_id": sid, "layer_id": l.layer_id,
+                         "role": l.role})
+    except Exception:   # noqa: BLE001
+        pass
+    from src.sequence.media_ops import probe_video
+    assets: list = []
+    if lib.is_dir():
+        for p in sorted(lib.rglob("*")):
+            if not p.is_file() or p.suffix.lower() not in _AUDIO_ASSET_EXTS:
+                continue
+            parts = p.relative_to(lib).parts
+            if any(str(x).startswith(".") for x in parts):
+                continue    # .raw 等留证目录不作为可选资产
+            rel = p.relative_to(out_root).as_posix()
+            ident = identity.get(rel) or identity.get(p.name)
+            entry: Dict[str, Any] = {
+                "file": rel,
+                "referenced_by": refs.get(rel) or [],
+                "identity": ident or {"registered": False,
+                                      "note": "无身份档（assets_meta.json 未登记）"},
+            }
+            try:
+                probe = probe_video(str(p))
+                entry.update({
+                    "duration_ms": probe.get("duration_ms"),
+                    "acodec": probe.get("acodec"),
+                    "sample_rate": probe.get("sample_rate"),
+                    "channels": probe.get("channels"),
+                    "sha256_12": hashlib.sha256(p.read_bytes()).hexdigest()[:12],
+                    "size_bytes": p.stat().st_size,
+                })
+            except Exception as e:   # noqa: BLE001 - 单文件损坏不影响其余枚举
+                entry["probe_error"] = str(e)[:160]
+            assets.append(entry)
+    return {"ok": True, "library_dir": "output/audio_imports",
+            "asset_count": len(assets), "assets": assets}
+
+
 TOOL_EXECUTORS: Dict[str, Any] = {
 
     "assembly.briefing": _execute_briefing,
@@ -1376,6 +1624,7 @@ TOOL_EXECUTORS: Dict[str, Any] = {
     "assembly.audio_plan_read": _execute_audio_plan_read,
     "assembly.audio_plan_put": _execute_audio_plan_put,
     "assembly.stem_render": _execute_stem_render,
+    "assembly.audio_assets_read": _execute_audio_assets_read,
     "web.search": lambda rt, project, arguments, instruction, message_id:
         _execute_web_search(rt, project, arguments, instruction, message_id),
 }
@@ -1397,6 +1646,7 @@ TOOL_LABELS = {
     "assembly.audio_plan_read": "读取混音计划",
     "assembly.audio_plan_put": "写入混音计划",
     "assembly.stem_render": "导出分轨",
+    "assembly.audio_assets_read": "枚举音频资产库",
     "shot.list": "列出镜头",
     "web.search": "搜索资料",
 }

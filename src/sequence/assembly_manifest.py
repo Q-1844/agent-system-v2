@@ -192,6 +192,51 @@ def build_assembly_manifest(project, snapshot_manifest: Dict[str, Any],
     return doc
 
 
+def derive_audio_projection(plan, narration_versions: Optional[Dict[str, Any]] = None
+                            ) -> Dict[str, Any]:
+    """Phase 45.1：从 AudioPlan canonical（+旁白仓）确定性投影 manifest 声音段。
+    44B 交付时 music_bed 恒 null——分场景音乐与全片旁白（44C 终版）后 manifest
+    必须携带自己的声音事实。**只投影 canonical**：plan 是唯一来源，调用方不得
+    手工改写投影结果（与 narration_cues 由构建器组装的语义一致）。
+    plan: SequenceAudioPlan；narration_versions: NarrationStore.load() 的 cues dict
+    （cue_id → {versions: [{audio_import_path, text, version_id, audio_sha256}]}）。"""
+    layers_out: List[Dict[str, Any]] = []
+    cues_out: List[Dict[str, Any]] = []
+    # 旁白仓文件路径 → (cue_id, text, version_id, sha256)（取每 cue 最新版本）
+    by_file: Dict[str, Dict[str, Any]] = {}
+    for cue_id, entry in (narration_versions or {}).items():
+        vs = (entry or {}).get("versions") or []
+        if vs:
+            v = vs[-1]
+            by_file[str(v.get("audio_import_path") or "")] = {
+                "cue_id": cue_id, "text": v.get("text"),
+                "narration_version_id": v.get("version_id"),
+                "audio_sha256_12": str(v.get("audio_sha256") or "")[:12]}
+    for l in (plan.layers or []):
+        if l.role == "narration":
+            row: Dict[str, Any] = {
+                "layer_id": l.layer_id, "role": l.role,
+                "source": {"kind": l.source.kind, "file": l.source.file},
+                "start_ms": l.start_ms, "duration_ms": l.duration_ms,
+                "source_in_ms": l.source_in_ms, "gain_db": l.gain_db,
+                "fade_in_ms": l.fade_in_ms, "fade_out_ms": l.fade_out_ms}
+            if l.source.file in by_file:
+                row.update(by_file[l.source.file])
+            cues_out.append(row)
+            continue
+        layers_out.append({
+            "layer_id": l.layer_id, "role": l.role,
+            "source": {"kind": l.source.kind, "file": l.source.file},
+            "start_ms": l.start_ms, "duration_ms": l.duration_ms,
+            "source_in_ms": l.source_in_ms, "gain_db": l.gain_db,
+            "fade_in_ms": l.fade_in_ms, "fade_out_ms": l.fade_out_ms})
+    return {"source": "audio_plan_projection",
+            "audio_plan_revision": plan.revision,
+            "base_gain_db": plan.base_gain_db,
+            "layers": layers_out,
+            "narration_cues": cues_out}
+
+
 def validate_assembly_manifest(doc: Dict[str, Any]) -> None:
     """加载/交接时复核不变式（防手改；fail closed）。"""
     if not isinstance(doc, dict) or doc.get("schema") != ASSEMBLY_MANIFEST_SCHEMA:

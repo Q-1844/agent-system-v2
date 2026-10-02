@@ -179,7 +179,7 @@ def test_B5_verified_false_not_success(tmp_path):
     assert result["verified"] is False
     assert result["status"] == "completed"
     # Phase B：changed_refs 八键骨架（新资源键并存，空值语义不变）
-    assert result["changed_refs"] == {"scenes": [], "shots": [], "characters": [],
+    assert result["changed_refs"] == {"scenes": [], "shots": [], "characters": [], "sequences": [],
                                       "clothings": [], "looks": [], "props": [],
                                       "reference_assets": [], "compositions": [], "bindings": [],
                                    "locations": [], "location_views": [],

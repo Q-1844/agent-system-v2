@@ -1331,7 +1331,7 @@ def test_S62_S63_S64_prerequisite_routing_prompt():
     # §24：四专业分工 + Producer zero write
     assert "Script Writer" in ps and "Resource Agent" in ps
     assert "Scene Agent" in ps and "Director" in ps
-    assert "四个 *.delegate" in ps
+    assert "五个 *.delegate" in ps
     # Producer 无任何 scene.* 写工具（zero direct writes 工具面层）
     offered, _ = producer._build_producer_tools()
     names = {t["function"]["name"] for t in offered}

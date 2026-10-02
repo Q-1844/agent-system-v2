@@ -1,0 +1,429 @@
+{"type": "tool.pending", "step_id": 0, "name": "skill.load", "label": "skill.load"}
+{"type": "tool.pending", "step_id": 0, "name": "assembly.sequence_read", "label": "assembly.sequence_read"}
+{"type": "tool.pending", "step_id": 0, "name": "assembly.render_status", "label": "assembly.render_status"}
+{"type": "tool.started", "step_id": 0, "call_id": "call_8e5f42b908ee407bab7c303c", "name": "skill.load", "label": "skill.load"}
+{"type": "tool.completed", "step_id": 0, "call_id": "call_8e5f42b908ee407bab7c303c", "name": "skill.load", "ok": true, "summary": "skill.load完成"}
+{"type": "tool.started", "step_id": 0, "call_id": "call_936d22c037c54bfba415226a", "name": "assembly.sequence_read", "label": "assembly.sequence_read"}
+{"type": "tool.completed", "step_id": 0, "call_id": "call_936d22c037c54bfba415226a", "name": "assembly.sequence_read", "ok": true, "summary": "assembly.sequence_read完成"}
+{"type": "tool.started", "step_id": 0, "call_id": "call_26bac2a414624216a4c7b580", "name": "assembly.render_status", "label": "assembly.render_status"}
+{"type": "tool.completed", "step_id": 0, "call_id": "call_26bac2a414624216a4c7b580", "name": "assembly.render_status", "ok": true, "summary": "assembly.render_status完成"}
+{"type": "tool.pending", "step_id": 1, "name": "assembly.delegate", "label": "assembly.delegate"}
+{"type": "tool.started", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate"}
+{"type": "tool.progress", "step_id": -1, "call_id": "task_a32fa251f04d", "name": "assembly.delegate", "label": "委派 assembly", "phase": "delegation.started", "objective": "把当前成片现状（seq_b746d7f3 的最新渲染与审计结论）写成一份提案（assembly.proposal_write）提交用户评审。不要做其它任何修改、不要渲染。", "agent": "assembly"}
+{"type": "tool.pending", "step_id": 0, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.proposal_write", "label": "写剪辑提案", "agent": "assembly"}
+{"type": "tool.started", "step_id": 0, "call_id": "call_ca7ac653d74c442796b74325", "name": "assembly.proposal_write", "label": "写剪辑提案", "agent": "assembly"}
+{"type": "tool.completed", "step_id": 0, "call_id": "call_ca7ac653d74c442796b74325", "name": "assembly.proposal_write", "label": "assembly.delegate", "ok": true, "summary": "提案 v11 已写入（雨灯归航_全片声音版成片候选提案 v10）——等待用户评审", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "提案", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "撰写", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "成功", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "。", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "\n\n", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "---", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "\n\n", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "##", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "完成情况", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "\n\n", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "|", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "项目", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " |", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "状态", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " |", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "\n", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "|", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "------", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "|", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "------", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "|", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "\n", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "|", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " **", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "proposal", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "_write", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "**", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " |", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ✅", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "完成", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " |", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "\n", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "|", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " **", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "提案", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "文件", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "**", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " |", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " `", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "projects", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "\\", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "雨", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "灯", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "归", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "航", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "\\", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "output", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "\\", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "assembly", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "\\", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "proposal", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "_v", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "1", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "1", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": ".md", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "`", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " |", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "\n", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "|", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " **", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "提案", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "版本", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "**", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " |", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " v", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "1", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "1", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " |", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "\n\n", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "---", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "\n\n", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "##", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "提案", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "核心", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "内容", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "\n\n", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "|", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "章节", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " |", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "内容", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " |", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "\n", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "|", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "------", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "|", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "------", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "|", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "\n", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "|", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "序列", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "基本信息", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " |", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " seq", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "_b", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "7", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "4", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "6", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "d", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "7", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "f", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "3", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "，", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "1", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "3", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "镜", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "，", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "9", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "0", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": ".", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "2", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "秒", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "，", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "H", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": ".", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "2", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "6", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "4", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "/A", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "AC", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " |", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "\n", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "|", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "渲染", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "版本", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "历史", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " |", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "5", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "个", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " done", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "版本", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "，", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "s", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "render", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "_", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "5", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "1", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "9", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "8", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "6", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "6", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "5", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "b", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "为", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "最新", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " |", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "\n", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "|", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " Deep", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " Audit", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "结论", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " |", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " **", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "1", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "3", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "/", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "1", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "3", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "旁", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "白", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " pass", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "**", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "，", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "3", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "/", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "3", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "音乐", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " pass", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "，", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "原生", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "泄漏", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " pass", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "，", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "LU", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "FS", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "=-", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "2", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "2", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": ".", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "7", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " |", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "\n", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "|", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "逐", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "句", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "旁", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "白", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "文案", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " |", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " narr", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "_", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "0", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "1", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "~", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "n", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "arr", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "_", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "1", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "3", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "_new", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "，", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "含", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "落", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "点", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "与", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "时长", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " |", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "\n", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "|", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "配乐", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "选材", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "声明", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " |", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "3", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "段", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " test", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "_asset", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "（", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "本地", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "合成", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "），", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "已", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "如实", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "标注", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " |", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "\n", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "|", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " A", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "/B", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "说明", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " |", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "与", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " s", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "render", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "_fa", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "9", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "a", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "2", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "b", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "7", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "a", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "对比", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "（", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "旁", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "白", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "通过率", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "1", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "2", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "/", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "1", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "3", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " vs", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "1", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "3", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "/", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "1", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "3", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "）", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " |", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "\n", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "|", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "已知", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "瑕疵", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " |", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "2", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "处", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "切", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "点", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "pts", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "空洞", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "（", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "源", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "固有", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "）、", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "test", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "_asset", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "、", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "n", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "arr", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "_", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "1", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "3", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "旧", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "版", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "已", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "修复", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " |", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "\n", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "|", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "试听", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "方式", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " |", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "成片", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "路径", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " +", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "分", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "轨", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "路径", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " |", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "\n", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "|", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " select", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "提示", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " |", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "明确", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "需", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "用户", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "显", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "式", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "执行", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " `", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "select", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " final", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "_render", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " =", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " s", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "render", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "_", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "5", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "1", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "9", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "8", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "6", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "6", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "5", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "b", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "`", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " |", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "\n\n", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "---", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "\n\n", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "##", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "当前", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "状态", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "\n\n", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "-", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " `", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "final", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "_render", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "`:", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " **", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "null", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "**", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "（", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "待", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "用户", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "选定", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "）", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "\n", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "-", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "提案", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "已", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "写入", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "，", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "等待", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "用户", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "评审", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "\n", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "-", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "下一步", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "：", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "用户", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "审", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "看成", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "片", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "后", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "决定", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " `", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "select", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " final", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "_render", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "`", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": " ", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "或", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "提出", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "修改", "agent": "assembly"}
+{"type": "assistant.delta", "step_id": 1, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.delegate", "label": "assembly.delegate", "delta": "意见", "agent": "assembly"}
+{"type": "tool.pending", "step_id": 2, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.sequence_read", "label": "读取 Sequence canonical", "agent": "assembly"}
+{"type": "tool.pending", "step_id": 2, "call_id": "call_1b02752b1ffa4a5aa36c15ca", "name": "assembly.render_status", "label": "渲染状态与诊断", "agent": "assembly"}
+{"type": "tool.started", "step_id": 2, "call_id": "call_5e04bf6ef7964584b031ca8f", "name": "assembly.sequence_read", "label": "读取 Sequence canonical", "agent": "assembly"}
+{"type": "tool.completed", "step_id": 2, "call_id": "call_5e04bf6ef7964584b031ca8f", "name": "assembly.sequence_read", "label": "assembly.delegate", "ok": true, "summary": "读取 Sequence canonical完成", "agent": "assembly"}
+{"type": "tool.started", "step_id": 2, "call_id": "call_1f522a80d7c14e68a4571551", "name": "assembly.render_status", "label": "渲染状态与诊断", "agent": "assembly"}

@@ -1,0 +1,18 @@
+{
+ "task_a32fa251f04d": {
+  "status": "failed",
+  "error": "委派任务中断：后端重启/崩溃时 assembly 子会话未完成（session=sess_a866df6be469）；已完成部分见该会话轨迹，续做请重新委派。",
+  "warnings": [
+   "interrupted_by_backend_restart:assembly.delegate"
+  ],
+  "data": {
+   "code": "interrupted_by_backend_restart",
+   "target_agent": "assembly",
+   "capability_id": "assembly.delegate",
+   "session_id": "sess_a866df6be469"
+  },
+  "session_id": "sess_a866df6be469",
+  "child_session_messages": 9,
+  "child_session_tools": 0
+ }
+}

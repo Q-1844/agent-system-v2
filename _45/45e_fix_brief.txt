@@ -1,0 +1,10 @@
+【来自 Producer 的执行性纠偏——第一句旁白越窗】
+你刚写入的 narr_01 新版本（nver_a273e9cc）实测 8.011s，plan 层 start=500ms → 句尾 8511ms，
+越过首镜 s01_c01 的 8000ms 切点 511ms——违反"句子完整落在所属镜头窗内（句尾 ≤ 镜尾-150ms）"
+纪律。首镜可用窗最多 300ms→7850ms（≤7.55s）。
+
+请修复：把第一句改短（保留"雨后河面/有什么在等被拾起"的意象即可），目标实测时长 ≤7.4s；
+tts_synthesize 重合成（cue_id 仍用 narr_01，声线/speed 不变）→ audio_plan_put 更新该层
+（source.file 换新版本、start/duration 相应调整，OCC expected_revision 用当前值；**其它层一律不动**）
+→ render_submit 重渲染 → render_status（deep_audit=true）核对 13 句在场与响度 I≈-16
+→ manifest_publish → proposal_write 补记本轮修订。

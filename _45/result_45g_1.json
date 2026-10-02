@@ -1,0 +1,962 @@
+{
+ "assistant_message": "本轮已确认的成片域修改：assembly.tts_synthesize（旁白 narr_01 → nver_ab29c7a1（新合成，7.337542s，voice=Chinese (Mandarin)_Gentleman））；assembly.audio_plan_put（AudioPlan 写入 seq_b746d7f3（16 层，revision=b05aea95））；assembly.render_submit（渲染已受理 srender_a7f3a38d（job=80ad8c54e271，sequence=seq_b746d7f3）——完成状态以 render_status 回执为准）；assembly.manifest_publish（发布 manifest_v11（13 镜，片长 89902ms，音轨策略 native，旁白 13 句，音乐层 3））；assembly.proposal_write（提案 v14 已写入（提案 v14（第三轮修订：narr_01 整句换掉））——等待用户评审）；assembly.proposal_write（提案 v15 已写入（提案 v15（第三轮修订：narr_01 整句换掉））——等待用户评审）",
+ "assembly_mutated": true,
+ "events": [
+  {
+   "kind": "sequence_change",
+   "summary": "旁白 narr_01 → nver_ab29c7a1（新合成，7.337542s，voice=Chinese (Mandarin)_Gentleman）"
+  },
+  {
+   "kind": "sequence_change",
+   "summary": "AudioPlan 写入 seq_b746d7f3（16 层，revision=b05aea95）"
+  },
+  {
+   "kind": "sequence_change",
+   "summary": "渲染已受理 srender_a7f3a38d（job=80ad8c54e271，sequence=seq_b746d7f3）——完成状态以 render_status 回执为准"
+  },
+  {
+   "kind": "sequence_change",
+   "summary": "发布 manifest_v11（13 镜，片长 89902ms，音轨策略 native，旁白 13 句，音乐层 3）"
+  },
+  {
+   "kind": "sequence_change",
+   "summary": "提案 v14 已写入（提案 v14（第三轮修订：narr_01 整句换掉））——等待用户评审"
+  },
+  {
+   "kind": "sequence_change",
+   "summary": "提案 v15 已写入（提案 v15（第三轮修订：narr_01 整句换掉））——等待用户评审"
+  }
+ ],
+ "message": {
+  "role": "assistant",
+  "content": "本轮已确认的成片域修改：assembly.tts_synthesize（旁白 narr_01 → nver_ab29c7a1（新合成，7.337542s，voice=Chinese (Mandarin)_Gentleman））；assembly.audio_plan_put（AudioPlan 写入 seq_b746d7f3（16 层，revision=b05aea95））；assembly.render_submit（渲染已受理 srender_a7f3a38d（job=80ad8c54e271，sequence=seq_b746d7f3）——完成状态以 render_status 回执为准）；assembly.manifest_publish（发布 manifest_v11（13 镜，片长 89902ms，音轨策略 native，旁白 13 句，音乐层 3））；assembly.proposal_write（提案 v14 已写入（提案 v14（第三轮修订：narr_01 整句换掉））——等待用户评审）；assembly.proposal_write（提案 v15 已写入（提案 v15（第三轮修订：narr_01 整句换掉））——等待用户评审）",
+  "status": null,
+  "created_at": 1790911163.155124,
+  "meta": {
+   "intent": "sequence_change",
+   "events": [
+    {
+     "kind": "sequence_change",
+     "summary": "旁白 narr_01 → nver_ab29c7a1（新合成，7.337542s，voice=Chinese (Mandarin)_Gentleman）"
+    },
+    {
+     "kind": "sequence_change",
+     "summary": "AudioPlan 写入 seq_b746d7f3（16 层，revision=b05aea95）"
+    },
+    {
+     "kind": "sequence_change",
+     "summary": "渲染已受理 srender_a7f3a38d（job=80ad8c54e271，sequence=seq_b746d7f3）——完成状态以 render_status 回执为准"
+    },
+    {
+     "kind": "sequence_change",
+     "summary": "发布 manifest_v11（13 镜，片长 89902ms，音轨策略 native，旁白 13 句，音乐层 3）"
+    },
+    {
+     "kind": "sequence_change",
+     "summary": "提案 v14 已写入（提案 v14（第三轮修订：narr_01 整句换掉））——等待用户评审"
+    },
+    {
+     "kind": "sequence_change",
+     "summary": "提案 v15 已写入（提案 v15（第三轮修订：narr_01 整句换掉））——等待用户评审"
+    }
+   ],
+   "evidence_refs": [],
+   "receipts": [
+    {
+     "operation": "assembly.tts_synthesize",
+     "ok": true,
+     "verified": true,
+     "stale": false,
+     "unchanged": false,
+     "error": null,
+     "code": null,
+     "op_summary": "旁白 narr_01 → nver_ab29c7a1（新合成，7.337542s，voice=Chinese (Mandarin)_Gentleman）",
+     "revision": null,
+     "expected_revision": null,
+     "current_revision": null,
+     "sequence_id": null,
+     "render_version_id": null,
+     "job_id": null,
+     "assembly_revision": null,
+     "manifest_file": null,
+     "proposal_file": null
+    },
+    {
+     "operation": "assembly.audio_plan_put",
+     "ok": true,
+     "verified": true,
+     "stale": false,
+     "unchanged": false,
+     "error": null,
+     "code": null,
+     "op_summary": "AudioPlan 写入 seq_b746d7f3（16 层，revision=b05aea95）",
+     "revision": "b05aea95",
+     "expected_revision": null,
+     "current_revision": null,
+     "sequence_id": "seq_b746d7f3",
+     "render_version_id": null,
+     "job_id": null,
+     "assembly_revision": null,
+     "manifest_file": null,
+     "proposal_file": null
+    },
+    {
+     "operation": "assembly.render_submit",
+     "ok": true,
+     "verified": true,
+     "stale": false,
+     "unchanged": false,
+     "error": null,
+     "code": null,
+     "op_summary": "渲染已受理 srender_a7f3a38d（job=80ad8c54e271，sequence=seq_b746d7f3）——完成状态以 render_status 回执为准",
+     "revision": "4df4d8cb",
+     "expected_revision": null,
+     "current_revision": null,
+     "sequence_id": "seq_b746d7f3",
+     "render_version_id": "srender_a7f3a38d",
+     "job_id": "80ad8c54e271",
+     "assembly_revision": null,
+     "manifest_file": null,
+     "proposal_file": null
+    },
+    {
+     "operation": "assembly.manifest_publish",
+     "ok": false,
+     "verified": false,
+     "stale": false,
+     "unchanged": false,
+     "error": "最新 done 渲染与当前 AudioPlan/Sequence 谱系无法证明一致（srender_d6a99e65 freshness=stale，detail={\"reason\": \"dependency_keys_mismatch\", \"version_id\": \"srender_d6a99e65\", \"mismatched_keys\": [\"audio.audio_plan_revision\", \"audio.layers[0].source\", \"audio.layer）——manifest 的 narration_cues/music_bed 投影自当前 plan，发布会造成假谱系；请先 render_submit 渲染当前 plan 再发布。",
+     "code": "render_stale_vs_plan",
+     "op_summary": null,
+     "revision": null,
+     "expected_revision": null,
+     "current_revision": null,
+     "sequence_id": "seq_b746d7f3",
+     "render_version_id": "srender_d6a99e65",
+     "job_id": null,
+     "assembly_revision": null,
+     "manifest_file": null,
+     "proposal_file": null
+    },
+    {
+     "operation": "assembly.manifest_publish",
+     "ok": false,
+     "verified": false,
+     "stale": false,
+     "unchanged": false,
+     "error": "最新 done 渲染与当前 AudioPlan/Sequence 谱系无法证明一致（srender_d6a99e65 freshness=stale，detail={\"reason\": \"dependency_keys_mismatch\", \"version_id\": \"srender_d6a99e65\", \"mismatched_keys\": [\"audio.audio_plan_revision\", \"audio.layers[0].source\", \"audio.layer）——manifest 的 narration_cues/music_bed 投影自当前 plan，发布会造成假谱系；请先 render_submit 渲染当前 plan 再发布。",
+     "code": "render_stale_vs_plan",
+     "op_summary": null,
+     "revision": null,
+     "expected_revision": null,
+     "current_revision": null,
+     "sequence_id": "seq_b746d7f3",
+     "render_version_id": "srender_d6a99e65",
+     "job_id": null,
+     "assembly_revision": null,
+     "manifest_file": null,
+     "proposal_file": null
+    },
+    {
+     "operation": "assembly.manifest_publish",
+     "ok": true,
+     "verified": true,
+     "stale": false,
+     "unchanged": false,
+     "error": null,
+     "code": null,
+     "op_summary": "发布 manifest_v11（13 镜，片长 89902ms，音轨策略 native，旁白 13 句，音乐层 3）",
+     "revision": "4df4d8cb",
+     "expected_revision": null,
+     "current_revision": null,
+     "sequence_id": "seq_b746d7f3",
+     "render_version_id": null,
+     "job_id": null,
+     "assembly_revision": 11,
+     "manifest_file": "projects\\雨灯归航\\output\\assembly\\manifest_v11.json",
+     "proposal_file": null
+    },
+    {
+     "operation": "assembly.proposal_write",
+     "ok": true,
+     "verified": true,
+     "stale": false,
+     "unchanged": false,
+     "error": null,
+     "code": null,
+     "op_summary": "提案 v14 已写入（提案 v14（第三轮修订：narr_01 整句换掉））——等待用户评审",
+     "revision": null,
+     "expected_revision": null,
+     "current_revision": null,
+     "sequence_id": null,
+     "render_version_id": null,
+     "job_id": null,
+     "assembly_revision": null,
+     "manifest_file": null,
+     "proposal_file": "projects\\雨灯归航\\output\\assembly\\proposal_v14.md"
+    },
+    {
+     "operation": "assembly.manifest_publish",
+     "ok": false,
+     "verified": false,
+     "stale": false,
+     "unchanged": false,
+     "error": "工具执行异常：[manifest_revision_conflict] 内容与 revision 12 之前某版完全相同（拒绝空转版本；先改 sequence 再发布）",
+     "code": null,
+     "op_summary": null,
+     "revision": null,
+     "expected_revision": null,
+     "current_revision": null,
+     "sequence_id": null,
+     "render_version_id": null,
+     "job_id": null,
+     "assembly_revision": null,
+     "manifest_file": null,
+     "proposal_file": null
+    },
+    {
+     "operation": "assembly.proposal_write",
+     "ok": true,
+     "verified": true,
+     "stale": false,
+     "unchanged": false,
+     "error": null,
+     "code": null,
+     "op_summary": "提案 v15 已写入（提案 v15（第三轮修订：narr_01 整句换掉））——等待用户评审",
+     "revision": null,
+     "expected_revision": null,
+     "current_revision": null,
+     "sequence_id": null,
+     "render_version_id": null,
+     "job_id": null,
+     "assembly_revision": null,
+     "manifest_file": null,
+     "proposal_file": "projects\\雨灯归航\\output\\assembly\\proposal_v15.md"
+    }
+   ],
+   "write_attempts": 9,
+   "write_success": 6,
+   "trace": [
+    {
+     "step": 0,
+     "tool": "assembly.tts_synthesize",
+     "target": "narr_01",
+     "result": "ok",
+     "revision": null,
+     "error": null
+    },
+    {
+     "step": 1,
+     "tool": "assembly.audio_plan_read",
+     "target": "seq_b746d7f3",
+     "result": "ok",
+     "revision": "3480e5d0",
+     "error": null
+    },
+    {
+     "step": 1,
+     "tool": "assembly.media_probe",
+     "target": "",
+     "result": "error",
+     "revision": null,
+     "error": "工具执行异常：[source_unreadable] 媒体文件不存在或为空: audio_imports\\narration\\narr_01__nver_ab29c7a1.wav"
+    },
+    {
+     "step": 1,
+     "tool": "assembly.audio_assets_read",
+     "target": "",
+     "result": "ok",
+     "revision": null,
+     "error": null
+    },
+    {
+     "step": 2,
+     "tool": "assembly.audio_plan_put",
+     "target": "seq_b746d7f3",
+     "result": "ok",
+     "revision": "b05aea95",
+     "error": null
+    },
+    {
+     "step": 3,
+     "tool": "assembly.render_submit",
+     "target": "seq_b746d7f3",
+     "result": "ok",
+     "revision": "4df4d8cb",
+     "error": null
+    },
+    {
+     "step": 3,
+     "tool": "assembly.render_status",
+     "target": "seq_b746d7f3",
+     "result": "ok",
+     "revision": null,
+     "error": null
+    },
+    {
+     "step": 4,
+     "tool": "assembly.render_status",
+     "target": "seq_b746d7f3",
+     "result": "ok",
+     "revision": null,
+     "error": null
+    },
+    {
+     "step": 5,
+     "tool": "assembly.render_status",
+     "target": "seq_b746d7f3",
+     "result": "ok",
+     "revision": null,
+     "error": null
+    },
+    {
+     "step": 6,
+     "tool": "assembly.manifest_publish",
+     "target": "seq_b746d7f3",
+     "result": "error",
+     "revision": null,
+     "error": "最新 done 渲染与当前 AudioPlan/Sequence 谱系无法证明一致（srender_d6a99e65 freshness=stale，detail={\"reason\": \"dependency_keys_mismatch\", \"version_id\": \"srender_d6a99e65\", \"mism"
+    },
+    {
+     "step": 6,
+     "tool": "assembly.render_status",
+     "target": "seq_b746d7f3",
+     "result": "ok",
+     "revision": null,
+     "error": null
+    },
+    {
+     "step": 7,
+     "tool": "assembly.render_status",
+     "target": "seq_b746d7f3",
+     "result": "ok",
+     "revision": null,
+     "error": null
+    },
+    {
+     "step": 8,
+     "tool": "assembly.render_status",
+     "target": "seq_b746d7f3",
+     "result": "ok",
+     "revision": null,
+     "error": null
+    },
+    {
+     "step": 9,
+     "tool": "assembly.render_status",
+     "target": "seq_b746d7f3",
+     "result": "ok",
+     "revision": null,
+     "error": null
+    },
+    {
+     "step": 10,
+     "tool": "assembly.render_status",
+     "target": "seq_b746d7f3",
+     "result": "ok",
+     "revision": null,
+     "error": null
+    },
+    {
+     "step": 11,
+     "tool": "assembly.render_status",
+     "target": "seq_b746d7f3",
+     "result": "ok",
+     "revision": null,
+     "error": null
+    },
+    {
+     "step": 12,
+     "tool": "assembly.render_status",
+     "target": "seq_b746d7f3",
+     "result": "ok",
+     "revision": null,
+     "error": null
+    },
+    {
+     "step": 13,
+     "tool": "assembly.render_status",
+     "target": "seq_b746d7f3",
+     "result": "ok",
+     "revision": null,
+     "error": null
+    },
+    {
+     "step": 14,
+     "tool": "assembly.render_status",
+     "target": "seq_b746d7f3",
+     "result": "ok",
+     "revision": null,
+     "error": null
+    },
+    {
+     "step": 15,
+     "tool": "assembly.render_status",
+     "target": "seq_b746d7f3",
+     "result": "ok",
+     "revision": null,
+     "error": null
+    },
+    {
+     "step": 15,
+     "tool": "assembly.render_status",
+     "target": "seq_b746d7f3",
+     "result": "ok",
+     "revision": null,
+     "error": null
+    },
+    {
+     "step": 16,
+     "tool": "assembly.render_status",
+     "target": "seq_b746d7f3",
+     "result": "ok",
+     "revision": null,
+     "error": null
+    },
+    {
+     "step": 16,
+     "tool": "assembly.manifest_publish",
+     "target": "seq_b746d7f3",
+     "result": "error",
+     "revision": null,
+     "error": "最新 done 渲染与当前 AudioPlan/Sequence 谱系无法证明一致（srender_d6a99e65 freshness=stale，detail={\"reason\": \"dependency_keys_mismatch\", \"version_id\": \"srender_d6a99e65\", \"mism"
+    },
+    {
+     "step": 17,
+     "tool": "assembly.render_status",
+     "target": "seq_b746d7f3",
+     "result": "ok",
+     "revision": null,
+     "error": null
+    },
+    {
+     "step": 17,
+     "tool": "assembly.render_status",
+     "target": "seq_b746d7f3",
+     "result": "ok",
+     "revision": null,
+     "error": null
+    },
+    {
+     "step": 18,
+     "tool": "assembly.manifest_publish",
+     "target": "seq_b746d7f3",
+     "result": "ok",
+     "revision": "4df4d8cb",
+     "error": null
+    },
+    {
+     "step": 18,
+     "tool": "assembly.proposal_write",
+     "target": "",
+     "result": "error",
+     "revision": null,
+     "error": "本步已执行过一个写操作。写工具必须一个一个来：等前一个完成、拿到返回的最新 revision/状态后，再发下一个写工具调用。不要在同一次回复里批量发多个写工具（会用旧 revision 导致 stale）。只读工具（assembly.briefing/snapshot_read/sequence_read/media_"
+    },
+    {
+     "step": 19,
+     "tool": "assembly.proposal_write",
+     "target": "projects\\雨灯归航\\output\\assembly\\proposal_v14.md",
+     "result": "ok",
+     "revision": null,
+     "error": null
+    },
+    {
+     "step": 21,
+     "tool": "assembly.sequence_read",
+     "target": "",
+     "result": "ok",
+     "revision": null,
+     "error": null
+    },
+    {
+     "step": 21,
+     "tool": "assembly.render_status",
+     "target": "seq_b746d7f3",
+     "result": "ok",
+     "revision": null,
+     "error": null
+    },
+    {
+     "step": 22,
+     "tool": "assembly.manifest_publish",
+     "target": "",
+     "result": "error",
+     "revision": null,
+     "error": "工具执行异常：[manifest_revision_conflict] 内容与 revision 12 之前某版完全相同（拒绝空转版本；先改 sequence 再发布）"
+    },
+    {
+     "step": 22,
+     "tool": "assembly.proposal_write",
+     "target": "",
+     "result": "error",
+     "revision": null,
+     "error": "本步已执行过一个写操作。写工具必须一个一个来：等前一个完成、拿到返回的最新 revision/状态后，再发下一个写工具调用。不要在同一次回复里批量发多个写工具（会用旧 revision 导致 stale）。只读工具（assembly.briefing/snapshot_read/sequence_read/media_"
+    },
+    {
+     "step": 23,
+     "tool": "assembly.proposal_write",
+     "target": "projects\\雨灯归航\\output\\assembly\\proposal_v15.md",
+     "result": "ok",
+     "revision": null,
+     "error": null
+    }
+   ],
+   "reasonings": [],
+   "search_sources": []
+  },
+  "message_id": "msg_e78a73842723",
+  "conversation_id": null,
+  "agent_id": "assembly",
+  "linked_work_ids": [],
+  "linked_change_session_id": null,
+  "linked_execution_id": null
+ },
+ "intent": "sequence_change",
+ "receipts": [
+  {
+   "operation": "assembly.tts_synthesize",
+   "ok": true,
+   "verified": true,
+   "stale": false,
+   "unchanged": false,
+   "error": null,
+   "code": null,
+   "op_summary": "旁白 narr_01 → nver_ab29c7a1（新合成，7.337542s，voice=Chinese (Mandarin)_Gentleman）",
+   "revision": null,
+   "expected_revision": null,
+   "current_revision": null,
+   "sequence_id": null,
+   "render_version_id": null,
+   "job_id": null,
+   "assembly_revision": null,
+   "manifest_file": null,
+   "proposal_file": null
+  },
+  {
+   "operation": "assembly.audio_plan_put",
+   "ok": true,
+   "verified": true,
+   "stale": false,
+   "unchanged": false,
+   "error": null,
+   "code": null,
+   "op_summary": "AudioPlan 写入 seq_b746d7f3（16 层，revision=b05aea95）",
+   "revision": "b05aea95",
+   "expected_revision": null,
+   "current_revision": null,
+   "sequence_id": "seq_b746d7f3",
+   "render_version_id": null,
+   "job_id": null,
+   "assembly_revision": null,
+   "manifest_file": null,
+   "proposal_file": null
+  },
+  {
+   "operation": "assembly.render_submit",
+   "ok": true,
+   "verified": true,
+   "stale": false,
+   "unchanged": false,
+   "error": null,
+   "code": null,
+   "op_summary": "渲染已受理 srender_a7f3a38d（job=80ad8c54e271，sequence=seq_b746d7f3）——完成状态以 render_status 回执为准",
+   "revision": "4df4d8cb",
+   "expected_revision": null,
+   "current_revision": null,
+   "sequence_id": "seq_b746d7f3",
+   "render_version_id": "srender_a7f3a38d",
+   "job_id": "80ad8c54e271",
+   "assembly_revision": null,
+   "manifest_file": null,
+   "proposal_file": null
+  },
+  {
+   "operation": "assembly.manifest_publish",
+   "ok": false,
+   "verified": false,
+   "stale": false,
+   "unchanged": false,
+   "error": "最新 done 渲染与当前 AudioPlan/Sequence 谱系无法证明一致（srender_d6a99e65 freshness=stale，detail={\"reason\": \"dependency_keys_mismatch\", \"version_id\": \"srender_d6a99e65\", \"mismatched_keys\": [\"audio.audio_plan_revision\", \"audio.layers[0].source\", \"audio.layer）——manifest 的 narration_cues/music_bed 投影自当前 plan，发布会造成假谱系；请先 render_submit 渲染当前 plan 再发布。",
+   "code": "render_stale_vs_plan",
+   "op_summary": null,
+   "revision": null,
+   "expected_revision": null,
+   "current_revision": null,
+   "sequence_id": "seq_b746d7f3",
+   "render_version_id": "srender_d6a99e65",
+   "job_id": null,
+   "assembly_revision": null,
+   "manifest_file": null,
+   "proposal_file": null
+  },
+  {
+   "operation": "assembly.manifest_publish",
+   "ok": false,
+   "verified": false,
+   "stale": false,
+   "unchanged": false,
+   "error": "最新 done 渲染与当前 AudioPlan/Sequence 谱系无法证明一致（srender_d6a99e65 freshness=stale，detail={\"reason\": \"dependency_keys_mismatch\", \"version_id\": \"srender_d6a99e65\", \"mismatched_keys\": [\"audio.audio_plan_revision\", \"audio.layers[0].source\", \"audio.layer）——manifest 的 narration_cues/music_bed 投影自当前 plan，发布会造成假谱系；请先 render_submit 渲染当前 plan 再发布。",
+   "code": "render_stale_vs_plan",
+   "op_summary": null,
+   "revision": null,
+   "expected_revision": null,
+   "current_revision": null,
+   "sequence_id": "seq_b746d7f3",
+   "render_version_id": "srender_d6a99e65",
+   "job_id": null,
+   "assembly_revision": null,
+   "manifest_file": null,
+   "proposal_file": null
+  },
+  {
+   "operation": "assembly.manifest_publish",
+   "ok": true,
+   "verified": true,
+   "stale": false,
+   "unchanged": false,
+   "error": null,
+   "code": null,
+   "op_summary": "发布 manifest_v11（13 镜，片长 89902ms，音轨策略 native，旁白 13 句，音乐层 3）",
+   "revision": "4df4d8cb",
+   "expected_revision": null,
+   "current_revision": null,
+   "sequence_id": "seq_b746d7f3",
+   "render_version_id": null,
+   "job_id": null,
+   "assembly_revision": 11,
+   "manifest_file": "projects\\雨灯归航\\output\\assembly\\manifest_v11.json",
+   "proposal_file": null
+  },
+  {
+   "operation": "assembly.proposal_write",
+   "ok": true,
+   "verified": true,
+   "stale": false,
+   "unchanged": false,
+   "error": null,
+   "code": null,
+   "op_summary": "提案 v14 已写入（提案 v14（第三轮修订：narr_01 整句换掉））——等待用户评审",
+   "revision": null,
+   "expected_revision": null,
+   "current_revision": null,
+   "sequence_id": null,
+   "render_version_id": null,
+   "job_id": null,
+   "assembly_revision": null,
+   "manifest_file": null,
+   "proposal_file": "projects\\雨灯归航\\output\\assembly\\proposal_v14.md"
+  },
+  {
+   "operation": "assembly.manifest_publish",
+   "ok": false,
+   "verified": false,
+   "stale": false,
+   "unchanged": false,
+   "error": "工具执行异常：[manifest_revision_conflict] 内容与 revision 12 之前某版完全相同（拒绝空转版本；先改 sequence 再发布）",
+   "code": null,
+   "op_summary": null,
+   "revision": null,
+   "expected_revision": null,
+   "current_revision": null,
+   "sequence_id": null,
+   "render_version_id": null,
+   "job_id": null,
+   "assembly_revision": null,
+   "manifest_file": null,
+   "proposal_file": null
+  },
+  {
+   "operation": "assembly.proposal_write",
+   "ok": true,
+   "verified": true,
+   "stale": false,
+   "unchanged": false,
+   "error": null,
+   "code": null,
+   "op_summary": "提案 v15 已写入（提案 v15（第三轮修订：narr_01 整句换掉））——等待用户评审",
+   "revision": null,
+   "expected_revision": null,
+   "current_revision": null,
+   "sequence_id": null,
+   "render_version_id": null,
+   "job_id": null,
+   "assembly_revision": null,
+   "manifest_file": null,
+   "proposal_file": "projects\\雨灯归航\\output\\assembly\\proposal_v15.md"
+  }
+ ],
+ "trace": [
+  {
+   "step": 0,
+   "tool": "assembly.tts_synthesize",
+   "target": "narr_01",
+   "result": "ok",
+   "revision": null,
+   "error": null
+  },
+  {
+   "step": 1,
+   "tool": "assembly.audio_plan_read",
+   "target": "seq_b746d7f3",
+   "result": "ok",
+   "revision": "3480e5d0",
+   "error": null
+  },
+  {
+   "step": 1,
+   "tool": "assembly.media_probe",
+   "target": "",
+   "result": "error",
+   "revision": null,
+   "error": "工具执行异常：[source_unreadable] 媒体文件不存在或为空: audio_imports\\narration\\narr_01__nver_ab29c7a1.wav"
+  },
+  {
+   "step": 1,
+   "tool": "assembly.audio_assets_read",
+   "target": "",
+   "result": "ok",
+   "revision": null,
+   "error": null
+  },
+  {
+   "step": 2,
+   "tool": "assembly.audio_plan_put",
+   "target": "seq_b746d7f3",
+   "result": "ok",
+   "revision": "b05aea95",
+   "error": null
+  },
+  {
+   "step": 3,
+   "tool": "assembly.render_submit",
+   "target": "seq_b746d7f3",
+   "result": "ok",
+   "revision": "4df4d8cb",
+   "error": null
+  },
+  {
+   "step": 3,
+   "tool": "assembly.render_status",
+   "target": "seq_b746d7f3",
+   "result": "ok",
+   "revision": null,
+   "error": null
+  },
+  {
+   "step": 4,
+   "tool": "assembly.render_status",
+   "target": "seq_b746d7f3",
+   "result": "ok",
+   "revision": null,
+   "error": null
+  },
+  {
+   "step": 5,
+   "tool": "assembly.render_status",
+   "target": "seq_b746d7f3",
+   "result": "ok",
+   "revision": null,
+   "error": null
+  },
+  {
+   "step": 6,
+   "tool": "assembly.manifest_publish",
+   "target": "seq_b746d7f3",
+   "result": "error",
+   "revision": null,
+   "error": "最新 done 渲染与当前 AudioPlan/Sequence 谱系无法证明一致（srender_d6a99e65 freshness=stale，detail={\"reason\": \"dependency_keys_mismatch\", \"version_id\": \"srender_d6a99e65\", \"mism"
+  },
+  {
+   "step": 6,
+   "tool": "assembly.render_status",
+   "target": "seq_b746d7f3",
+   "result": "ok",
+   "revision": null,
+   "error": null
+  },
+  {
+   "step": 7,
+   "tool": "assembly.render_status",
+   "target": "seq_b746d7f3",
+   "result": "ok",
+   "revision": null,
+   "error": null
+  },
+  {
+   "step": 8,
+   "tool": "assembly.render_status",
+   "target": "seq_b746d7f3",
+   "result": "ok",
+   "revision": null,
+   "error": null
+  },
+  {
+   "step": 9,
+   "tool": "assembly.render_status",
+   "target": "seq_b746d7f3",
+   "result": "ok",
+   "revision": null,
+   "error": null
+  },
+  {
+   "step": 10,
+   "tool": "assembly.render_status",
+   "target": "seq_b746d7f3",
+   "result": "ok",
+   "revision": null,
+   "error": null
+  },
+  {
+   "step": 11,
+   "tool": "assembly.render_status",
+   "target": "seq_b746d7f3",
+   "result": "ok",
+   "revision": null,
+   "error": null
+  },
+  {
+   "step": 12,
+   "tool": "assembly.render_status",
+   "target": "seq_b746d7f3",
+   "result": "ok",
+   "revision": null,
+   "error": null
+  },
+  {
+   "step": 13,
+   "tool": "assembly.render_status",
+   "target": "seq_b746d7f3",
+   "result": "ok",
+   "revision": null,
+   "error": null
+  },
+  {
+   "step": 14,
+   "tool": "assembly.render_status",
+   "target": "seq_b746d7f3",
+   "result": "ok",
+   "revision": null,
+   "error": null
+  },
+  {
+   "step": 15,
+   "tool": "assembly.render_status",
+   "target": "seq_b746d7f3",
+   "result": "ok",
+   "revision": null,
+   "error": null
+  },
+  {
+   "step": 15,
+   "tool": "assembly.render_status",
+   "target": "seq_b746d7f3",
+   "result": "ok",
+   "revision": null,
+   "error": null
+  },
+  {
+   "step": 16,
+   "tool": "assembly.render_status",
+   "target": "seq_b746d7f3",
+   "result": "ok",
+   "revision": null,
+   "error": null
+  },
+  {
+   "step": 16,
+   "tool": "assembly.manifest_publish",
+   "target": "seq_b746d7f3",
+   "result": "error",
+   "revision": null,
+   "error": "最新 done 渲染与当前 AudioPlan/Sequence 谱系无法证明一致（srender_d6a99e65 freshness=stale，detail={\"reason\": \"dependency_keys_mismatch\", \"version_id\": \"srender_d6a99e65\", \"mism"
+  },
+  {
+   "step": 17,
+   "tool": "assembly.render_status",
+   "target": "seq_b746d7f3",
+   "result": "ok",
+   "revision": null,
+   "error": null
+  },
+  {
+   "step": 17,
+   "tool": "assembly.render_status",
+   "target": "seq_b746d7f3",
+   "result": "ok",
+   "revision": null,
+   "error": null
+  },
+  {
+   "step": 18,
+   "tool": "assembly.manifest_publish",
+   "target": "seq_b746d7f3",
+   "result": "ok",
+   "revision": "4df4d8cb",
+   "error": null
+  },
+  {
+   "step": 18,
+   "tool": "assembly.proposal_write",
+   "target": "",
+   "result": "error",
+   "revision": null,
+   "error": "本步已执行过一个写操作。写工具必须一个一个来：等前一个完成、拿到返回的最新 revision/状态后，再发下一个写工具调用。不要在同一次回复里批量发多个写工具（会用旧 revision 导致 stale）。只读工具（assembly.briefing/snapshot_read/sequence_read/media_"
+  },
+  {
+   "step": 19,
+   "tool": "assembly.proposal_write",
+   "target": "projects\\雨灯归航\\output\\assembly\\proposal_v14.md",
+   "result": "ok",
+   "revision": null,
+   "error": null
+  },
+  {
+   "step": 21,
+   "tool": "assembly.sequence_read",
+   "target": "",
+   "result": "ok",
+   "revision": null,
+   "error": null
+  },
+  {
+   "step": 21,
+   "tool": "assembly.render_status",
+   "target": "seq_b746d7f3",
+   "result": "ok",
+   "revision": null,
+   "error": null
+  },
+  {
+   "step": 22,
+   "tool": "assembly.manifest_publish",
+   "target": "",
+   "result": "error",
+   "revision": null,
+   "error": "工具执行异常：[manifest_revision_conflict] 内容与 revision 12 之前某版完全相同（拒绝空转版本；先改 sequence 再发布）"
+  },
+  {
+   "step": 22,
+   "tool": "assembly.proposal_write",
+   "target": "",
+   "result": "error",
+   "revision": null,
+   "error": "本步已执行过一个写操作。写工具必须一个一个来：等前一个完成、拿到返回的最新 revision/状态后，再发下一个写工具调用。不要在同一次回复里批量发多个写工具（会用旧 revision 导致 stale）。只读工具（assembly.briefing/snapshot_read/sequence_read/media_"
+  },
+  {
+   "step": 23,
+   "tool": "assembly.proposal_write",
+   "target": "projects\\雨灯归航\\output\\assembly\\proposal_v15.md",
+   "result": "ok",
+   "revision": null,
+   "error": null
+  }
+ ],
+ "search_sources": [],
+ "evidence_refs": [],
+ "linked_task_ids": [],
+ "linked_change_session_id": null,
+ "session_id": "sess_5941418125b1",
+ "agent_id": "assembly",
+ "prerequisite_warnings": []
+}

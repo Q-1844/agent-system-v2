@@ -688,7 +688,7 @@ def test_R3_fact_hierarchy_verified_from_receipts(tmp_path):
     # 🔴 事实层级：verified=False（无 ok+verified+非unchanged 回执），changed_refs 为空
     # （Phase B：changed_refs 扩为八键骨架，值为空语义不变）
     assert rec["verified"] is False
-    assert rec["changed_refs"] == {"scenes": [], "shots": [], "characters": [],
+    assert rec["changed_refs"] == {"scenes": [], "shots": [], "characters": [], "sequences": [],
                                    "clothings": [], "looks": [], "props": [],
                                    "reference_assets": [], "compositions": [], "bindings": [],
                                    "locations": [], "location_views": [],
@@ -732,6 +732,10 @@ def test_P1_prompt_content_weak_assertions():
     assert "owns" in cd_d and "外貌" in cd_d and "服装" in cd_d
     dir_d = descs["director.delegate"]
     assert "owns" in dir_d and "镜头" in dir_d and "构图" in dir_d
+    # Phase 45.2：assembly.delegate（成片装配）ownership 关键词
+    asm_d = descs["assembly.delegate"]
+    assert "owns" in asm_d and "SequenceBlock" in asm_d and "提案" in asm_d
+    assert "select final_render" in asm_d   # No Auto Select 边界写进工具描述
     # 各自不适用域（指向其他 owner）
     assert "Character Designer" in sw_d or "Director" in sw_d
     assert "Script Writer" in cd_d or "Director" in cd_d
@@ -785,7 +789,7 @@ def test_RE1_review_verified_false_accepted(tmp_path):
     assert rec["agent"] == "director"
     assert rec["status"] == "completed"
     assert rec["verified"] is False          # 无真实写入
-    assert rec["changed_refs"] == {"scenes": [], "shots": [], "characters": [],
+    assert rec["changed_refs"] == {"scenes": [], "shots": [], "characters": [], "sequences": [],
                                    "clothings": [], "looks": [], "props": [],
                                    "reference_assets": [], "compositions": [], "bindings": [],
                                    "locations": [], "location_views": [],
@@ -887,7 +891,8 @@ def test_RE3_second_false_no_third_mechanical_repeat(tmp_path):
                    "clothings": [], "looks": [], "props": [],
                    "reference_assets": [], "compositions": [], "bindings": [],
                                    "locations": [], "location_views": [],
-                                   "scene_instances": [], "scene_instance_views": []}
+                                   "scene_instances": [], "scene_instance_views": [],
+                                   "sequences": []}
     assert all(r["changed_refs"] == _empty_refs for r in res["receipts"])
     # canonical 未变（两次都失败写）
     assert ProjectStore(tmp_path).load().scenes[0].shots[0].shot_size == "medium shot"
@@ -918,7 +923,7 @@ def test_RE4_no_change_accept_not_force_write(tmp_path):
     assert len(res["receipts"]) == 1
     rec = res["receipts"][0]
     assert rec["verified"] is False
-    assert rec["changed_refs"] == {"scenes": [], "shots": [], "characters": [],
+    assert rec["changed_refs"] == {"scenes": [], "shots": [], "characters": [], "sequences": [],
                                    "clothings": [], "looks": [], "props": [],
                                    "reference_assets": [], "compositions": [], "bindings": [],
                                    "locations": [], "location_views": [],
@@ -974,7 +979,7 @@ def test_RE5_upstream_replan_director_to_script_writer(tmp_path):
     assert res["receipts"][0]["verified"] is False   # Director 1st no write
     assert res["receipts"][1]["verified"] is False   # Director 2nd no write
     assert res["receipts"][2]["verified"] is True    # SW wrote story
-    assert res["receipts"][2]["changed_refs"] == {"scenes": [], "shots": [], "characters": [],
+    assert res["receipts"][2]["changed_refs"] == {"scenes": [], "shots": [], "characters": [], "sequences": [],
                                                   "clothings": [], "looks": [], "props": [],
                                                   "reference_assets": [], "compositions": [], "bindings": [],
                                    "locations": [], "location_views": [],
