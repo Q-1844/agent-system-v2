@@ -47,7 +47,13 @@ def test_model_profile_text_provider_roundtrip():
 def test_default_profiles_agnes_first_and_sensenova_optional(rt):
     ids = {p.id: p for p in rt.profiles.list()}
     assert ids["text_default"].text_provider == "agnes"
-    assert ids["text_default"].reasoning_model == "agnes-2.5-flash"
+    # 2026-10-02 用户指令：全 Agent 文本模型切 agnes-3.0-flash（config.agnes.models.text）。
+    # 档案的 reasoning_model 是 config 的镜像；这里断言「跟随配置且必须是 agnes 系」，
+    # 不再钉死具体版本号（避免每次模型升级都改测试）。
+    from deps import _APP_CFG
+    expected_text = ((_APP_CFG.get("agnes") or {}).get("models") or {}).get("text")
+    assert expected_text and expected_text.startswith("agnes-")
+    assert ids["text_default"].reasoning_model == expected_text
     sn = ids["text_sensenova_68fl"]
     assert sn.text_provider == "sensenova"
     assert sn.reasoning_model == "sensenova-6.8-flash-lite"

@@ -374,7 +374,7 @@
       </aside>
 
       <!-- ============ 右：搭建助手（对话框）============ -->
-      <WorkflowAgentPanel v-if="assistantOpen" :draft="draft" :controller="wfController" :backend-online="backendOnline" />
+      <WorkflowAgentPanel v-if="assistantOpen" :draft="draft" :controller="wfController" :backend-online="backendOnline" :producer-model="producerModel" />
     </div>
   </div>
 </template>
@@ -471,6 +471,8 @@ const selectedEdgeId = ref<string | null>(null);
 
 const backendOnline = ref<boolean | null>(null);
 const disabledAgents = ref<Set<string>>(new Set());
+/** Producer 当前解析到的文本模型（透明度展示用，来自既有 listAgents 数据） */
+const producerModel = ref<string | null>(null);
 
 const validation = computed(() => validateDraft(draft.value));
 
@@ -493,6 +495,8 @@ onMounted(() => {
     .then((list) => {
       backendOnline.value = true;
       disabledAgents.value = new Set(list.filter((a) => !a.enabled).map((a) => a.id));
+      const producer = list.find((a) => a.id === 'producer');
+      producerModel.value = producer?.model_profile?.reasoning_model ?? null;
     })
     .catch(() => {
       backendOnline.value = false;

@@ -6,7 +6,10 @@ agnes:
   proxy: ""  # 国内入口直连，留空=不走代理。若改回国际站 .com 需配 Clash 代理 http://127.0.0.1:7890
 
   models:
-    text: "agnes-2.5-flash"   # 2026-08-07 升级：agnes-2.0-flash 的 API-compatible upgrade（Chat Completions 兼容）
+    text: "agnes-3.0-flash"   # 2026-10-02 用户指令：全部 Agent 文本模型切 agnes-3.0-flash（较 2.5 更强）。
+                              # 切换前实证：/v1/models 在列 + function-calling 探针通过（tool_calls 正确返回，1.2s）。
+                              # 前值 agnes-2.5-flash（2026-08-07 起）。注意：Director Vision 审查另有显式
+                              # VISION_MODEL=agnes-2.5-flash（director_vision_review.py，探针定版），不受本项影响。
     image: "agnes-image-2.1-flash"
     video: "agnes-video-2.5-flash"  # 2026-09-28：唯一视频模型（v2.0 官方 2026-09-25 23:59 下线 + 用户指令从系统删除；
                                     #  AgnesClient 对非 2.5 模型 id 显式拒绝。新契约 mode text/keyframe/reference

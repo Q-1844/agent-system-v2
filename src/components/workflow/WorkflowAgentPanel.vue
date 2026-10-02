@@ -2,7 +2,9 @@
   <aside class="wf-chat">
     <div class="chat-head">
       <span class="chat-title">搭建助手</span>
-      <span class="chat-mode">{{ backendOnline === false ? '本地规则' : '规则 + Producer' }}</span>
+      <span class="chat-mode" :title="backendOnline === false ? '后端未连接：仅本地规则' : `后端 Producer 文本模型：${props.producerModel ?? '…'}`">
+        {{ backendOnline === false ? '本地规则' : `规则 + Producer${props.producerModel ? ` · ${props.producerModel}` : ''}` }}
+      </span>
     </div>
     <div ref="scroller" class="chat-scroll">
       <div v-for="(m, i) in messages" :key="i" class="msg" :class="m.role">
@@ -45,6 +47,8 @@ const props = defineProps<{
   draft: WorkflowDraft;
   controller: WorkflowAssistantController;
   backendOnline: boolean | null;
+  /** Producer 当前文本模型（如 agnes-3.0-flash），来自后端 Profile 解析 */
+  producerModel?: string | null;
 }>();
 
 interface ChatMsg { role: 'user' | 'assistant'; text: string; meta?: string }
@@ -168,7 +172,12 @@ async function send(preset?: string) {
           let out = applyActions(iActions, '后端 Producer 解析');
           if (problems.length) out += `\n⚠ ${problems.join('；')}`;
           if (intent.note) out = `理解：${intent.note}\n${out}`;
-          messages.value.push({ role: 'assistant', text: out, meta: `后端 Producer · ${turn.agent_id}` });
+          // 副作用透明：助手只应改草稿；若本轮出现真实委派任务引用必须明示
+          if (turn.linked_task_ids?.length) {
+            out += `\n⚠⚠ 本轮出现了 ${turn.linked_task_ids.length} 个真实后台任务引用（${turn.linked_task_ids.join('、')}）——搭建助手不应触发任何执行，请到「AI 团队」核实`;
+          }
+          const meta = `后端 Producer · ${turn.agent_id}${props.producerModel ? ` · ${props.producerModel}` : ''}${turn.events?.length ? ` · 后台事件 ${turn.events.length} 条` : ''}`;
+          messages.value.push({ role: 'assistant', text: out, meta });
           scrollBottom();
           return;
         }

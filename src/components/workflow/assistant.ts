@@ -101,77 +101,71 @@ export function parseLocal(message: string, draft: WorkflowDraft): AssistantActi
     return [{ kind: 'check' }];
   }
 
-  // —— 插入 n 道审核（支持「在 A 和 B 之间」「在 A 之后」「追加」）——
+  // —— 组合式解析：一条消息可同时表达 链 + 审核 + 绑定（各意图条款级提取，互不截胡）——
+  const actions: AssistantAction[] = [];
+  const refs = extractAgentRefs(compact);
+
+  // 1) 执行链
+  const stdChain = /标准|全链|完整|整个|从头|从零|流水线/.test(compact) || /从剧本到成片/.test(compact);
+  const chainWords = /串|连(起来|接)|链|流水线|流程|搭|建|生成|从.+到/.test(compact);
+  if (stdChain) {
+    actions.push({ kind: 'chain', refIds: ['script_writer', 'character_designer', 'scene_designer', 'director', 'assembly'], withBoundary: true });
+  } else if (chainWords && refs.length >= 2) {
+    actions.push({ kind: 'chain', refIds: refs, withBoundary: /开始|结束|边界/.test(compact) });
+  } else if (/(串起|连起|串起来|连起来|连接)/.test(compact) && draft.nodes.length >= 2) {
+    // 「把画布上的节点串起来」：按 x 坐标串起全部 Agent 与审核
+    actions.push({ kind: 'chain', refIds: [] });
+  }
+
+  // 2) 插入 n 道审核（支持「在 A 和 B 之间」「在 A 之后」「追加」）
   const between = compact.match(/在(.+?)(?:和|与|跟)(.+?)之间[^。]*?插入?([^。]*?)?(审核|人审)/);
   if (between) {
     const aRefs = extractAgentRefs(between[1]);
     const bRefs = extractAgentRefs(between[2]);
     const count = parseCount(between[3] || between[1] + between[2], 1);
     if (aRefs.length) {
-      return [{ kind: 'insertReviews', afterRef: aRefs[0], beforeRef: bRefs[0], count, label: '人工审核' }];
+      actions.push({ kind: 'insertReviews', afterRef: aRefs[0], beforeRef: bRefs[0], count, label: '人工审核' });
     }
-  }
-  const after = compact.match(/在(.+?)(?:之后|后面|以后)[^。]*?(审核|人审)/);
-  if (after) {
-    const aRefs = extractAgentRefs(after[1]);
-    if (aRefs.length) {
-      return [{ kind: 'insertReviews', afterRef: aRefs[0], count: parseCount(compact, 1) }];
-    }
-  }
-  if (/(插入|加|放|需要|来)(一|两|二|三|四|五|[1-5])?道?.{0,4}(人工审核|人审|审核)/.test(compact) && !/之间/.test(compact)) {
-    const count = parseCount(compact, 1);
-    const actions: AssistantAction[] = [];
-    for (let i = 0; i < count; i++) actions.push({ kind: 'addReview', label: count > 1 ? `人工审核 #${i + 1}` : '人工审核' });
-    return actions;
-  }
-
-  // —— Skill 绑定 ——
-  if (/绑定|挂上?|配上|启用|使用/.test(compact)) {
-    const skillRefs = extractSkillRefs(compact);
-    const agentRefs = extractAgentRefs(compact);
-    if (skillRefs.length) {
-      const actions: AssistantAction[] = [];
-      for (const s of skillRefs) {
-        const skill = getSkill(s);
-        const defaultAgent = agentRefs[0] ?? skill?.bindings[0]?.agentId ?? 'director';
-        actions.push({ kind: 'bind', skillRefId: s, agentRefId: defaultAgent });
+  } else {
+    const after = compact.match(/在(.+?)(?:之后|后面|以后)[^。]*?(审核|人审)/);
+    if (after) {
+      const aRefs = extractAgentRefs(after[1]);
+      if (aRefs.length) {
+        actions.push({ kind: 'insertReviews', afterRef: aRefs[0], count: parseCount(compact, 1) });
       }
-      return actions;
+    } else if (/(插入|加|放|需要|来)(一|两|二|三|四|五|[1-5])?道?.{0,4}(人工审核|人审|审核)/.test(compact)) {
+      const count = parseCount(compact, 1);
+      for (let i = 0; i < count; i++) actions.push({ kind: 'addReview', label: count > 1 ? `人工审核 #${i + 1}` : '人工审核' });
     }
   }
 
-  // —— 串链 ——
-  const refs = extractAgentRefs(compact);
-  const wantsChain = /串|连(起来|接)|链|流程|搭|建|生成|从.+到/.test(compact);
-  const stdChain = /标准|全链|完整|整个|从头|从零/.test(compact) || /从剧本到成片/.test(compact);
-  if (stdChain) {
-    return [{ kind: 'chain', refIds: ['script_writer', 'character_designer', 'scene_designer', 'director', 'assembly'], withBoundary: true }];
-  }
-  if (wantsChain && refs.length >= 2) {
-    return [{ kind: 'chain', refIds: refs, withBoundary: /开始|结束|边界/.test(compact) }];
-  }
-  if (/(串起|连起|串起来|连起来|连接)/.test(compact) && draft.nodes.length >= 2) {
-    // 「把画布上的节点串起来」：按 x 坐标串起全部 Agent 与审核
-    return [{ kind: 'chain', refIds: [] }]; // 空数组 = 由控制器按画布现状处理
+  // 3) Skill 绑定（条款级：只取含绑定动词的子句里的 Agent，避免跨句误绑）
+  const bindVerb = /绑定|挂上|配上|启用|使用/;
+  for (const clause of compact.split(/[；。；,，!！？?\n]/)) {
+    if (!bindVerb.test(clause)) continue;
+    const clauseSkills = extractSkillRefs(clause);
+    const clauseAgents = extractAgentRefs(clause);
+    for (const s of clauseSkills) {
+      const skill = getSkill(s);
+      actions.push({ kind: 'bind', skillRefId: s, agentRefId: clauseAgents[0] ?? skill?.bindings[0]?.agentId ?? 'director' });
+    }
   }
 
-  // —— 添加单个节点（须为「动词+量词」形式，避免「立起来」这类误触发）——
-  const skillRefs2 = extractSkillRefs(compact);
-  const wantsAdd = /(添加|加一个|加个|加一道|加一台|放一个|放个|放一道|来一个|来个|来一台|新增)/.test(compact);
-  if (skillRefs2.length && wantsAdd) {
-    return skillRefs2.map((s) => ({ kind: 'addSkill', refId: s } as AssistantAction));
-  }
-  if (wantsAdd) {
-    const actions: AssistantAction[] = [];
-    if (/开始/.test(compact)) actions.push({ kind: 'addBoundary', which: 'start' });
-    if (/结束/.test(compact)) actions.push({ kind: 'addBoundary', which: 'end' });
-    if (refs.length) {
+  // 4) 添加单个节点（须为「动词+量词」形式；仅在没有任何组合意图时兜底）
+  if (!actions.length) {
+    const skillRefs2 = extractSkillRefs(compact);
+    const wantsAdd = /(添加|加一个|加个|加一道|加一台|放一个|放个|放一道|来一个|来个|来一台|新增)/.test(compact);
+    if (skillRefs2.length && wantsAdd) {
+      return skillRefs2.map((s) => ({ kind: 'addSkill', refId: s } as AssistantAction));
+    }
+    if (wantsAdd) {
+      if (/开始/.test(compact)) actions.push({ kind: 'addBoundary', which: 'start' });
+      if (/结束/.test(compact)) actions.push({ kind: 'addBoundary', which: 'end' });
       for (const r of refs) actions.push({ kind: 'addAgent', refId: r });
     }
-    if (actions.length) return actions;
   }
 
-  return [];
+  return actions;
 }
 
 // ============ 后端 Producer 意图 JSON ============
@@ -203,9 +197,10 @@ export function buildProducerPrompt(message: string, draft: WorkflowDraft): stri
     '  "chain": ["script_writer", "character_designer"],  // 按执行顺序的 Agent ref 数组；用户没表达链就给 []',
     '  "reviews": [{"after": "director", "before": "assembly", "label": "分镜抽检", "count": 1}],  // 在 after 与 before 之间插 count 道人工审核；before 可省略=追加在 after 之后；无审核给 []',
     '  "bindings": [{"skill": "full-story-relay-calibration", "agent": "director"}],  // 无绑定给 []',
-    '  "withBoundary": true,  // 是否需要 开始/结束 边界提示',
+    '  "withBoundary": false,  // 仅当用户明确要求首尾「开始/结束」边界时才为 true，否则保持 false',
     '  "note": "一句话说明你的理解"',
     '}',
+    '注意：ref 只能取自上面的注册项清单；用户提到清单外的新职责时，不要发明新 ref——在 note 里说明该职责应归入哪个现有 Agent（如旁白/配音归 assembly）。',
     '',
     `当前画布已有节点概要：${existing || '（空）'}`,
     `用户需求：${message}`,
