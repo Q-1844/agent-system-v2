@@ -280,3 +280,13 @@ missing_objective/并发 specialist_busy/changed_refs 白名单/evidence 派生/
    含全部 45 批新增 36 项与既有套件；此前的竞态抖动用例本轮亦通过）。
 6. **收尾提交**：见 submodule 本批提交（代码+测试+脚本+证据 `_45/`+报告）；
    `projects/` 为 gitignore 运行时数据不入库。
+
+
+## §13 定版（2026-10-02 用户显式 select）
+
+用户指令："就用 srender_a7f3a38d"。经用户专用 REST 入口执行
+`POST /sequences/seq_b746d7f3/renders/select`（Agent 无此工具），回执
+`final_render=srender_a7f3a38d`；canonical 复核：freshness=**current**。
+《雨灯归航》全片声音版正式定版——Phase 45 全链闭合（①工具链 ②Agent 自主链
+③Producer 委派与恢复 ④人审定版 全部完成；⑤视频线缺陷/44D/画布为独立事项）。
+评审页已重生成（seq_b746d7f3 显示"已正式定版"）。
