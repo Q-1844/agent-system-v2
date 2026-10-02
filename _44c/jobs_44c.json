@@ -228,5 +228,28 @@
     "error_stage": "done",
     "error_provider": null,
     "error_model": null
+  },
+  "ffdcc36120a2": {
+    "job_id": "ffdcc36120a2",
+    "project": "雨灯归航",
+    "kind": "sequence_render",
+    "shot_id": null,
+    "params": {
+      "sequence_id": "seq_a3d5b19b",
+      "render_version_id": "srender_fa9a2b7a"
+    },
+    "state": "done",
+    "progress": 100,
+    "message": "seq_a3d5b19b 完成（90197ms，Δ+295ms）: projects\\雨灯归航\\output\\sequences\\seq_a3d5b19b\\srender_fa9a2b7a.mp4",
+    "error": null,
+    "created_at": 1790850135.4941864,
+    "started_at": 1790850135.5181425,
+    "finished_at": 1790850156.0066187,
+    "attempts": 1,
+    "last_progress_at": 1790850155.9943695,
+    "error_class": null,
+    "error_stage": "done",
+    "error_provider": null,
+    "error_model": null
   }
 }

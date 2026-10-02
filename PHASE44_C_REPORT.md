@@ -11,21 +11,28 @@
 
 ## §0 结论摘要
 
+> **当前终版（2026-10-01 晚，用户试听反馈"还不错"）**：
+> `srender_fa9a2b7a` —— 原音静默 + 三段分场景配乐 + 全片 13 句旁白（62.9s 语音 /
+> 89.9s 片长），I=-16.0 LUFS 正中目标，验收全过（详见 §9.4；试听页
+> http://127.0.0.1:8786/_44c/review/LISTEN_44c.html）。原生音轨分离路线已实测
+> 不可行、正式关闭（§9.5）。以下 §1–§8 为该终版之下逐轮迭代的完整过程记录
+> （§9.1–§9.3 为历次用户反馈与根因修复，保留不删）。
+
 1. **声音三轨闭环建成并双路径验收**〔已核验〕：旁白（MiniMax TTS 真机）+ 贯穿
    配乐（本地合成器乐垫）+ ducking 混音，全部落在既有 S2 AudioPlan canonical 上。
    驱动器路径（cue nc01–05）与 **真实 Agent 会话**（cue na01–05，会话
    `sess_fca916781076`）各自完成「提案→合成→编排→渲染→分轨→manifest→提案」，
    两版混音成片 A/B 供用户试听。
-2. **量化达标**〔已核验〕：最终混音 I=-16.7 LUFS（目标 -16，桌面/流媒体口径）、
-   采样峰值 -1.1 dBFS（无削波）、A/V 时长差 0.0ms；重复渲染解码音频哈希一致
+2. **量化达标**〔已核验〕：终版混音 I=-16.0 LUFS（目标 -16，桌面/流媒体口径）、
+   真峰值 -1.8 dBTP（无削波）、A/V 时长差 0.0ms；重复渲染解码音频哈希一致
    （可复现）。
 3. **发现并修复 S2 一个潜在设计缺陷**（§6.1）：混音渲染可被选为方案 A 的 base
    → 迭代混音整体叠加。该缺陷被本批 F4 可复现性测试首次触发，已修复+测试锁定。
-4. **零视频生成费用**；TTS 为逐句短文本同步调用（6+5+3+2 次真实调用，全部
-   trace_id/哈希/参数留证，幂等缓存命中零重复付费）。
-5. **交付**〔待用户〕：评审页 http://127.0.0.1:8786/_44b/review/REVIEW_44b.html
-   ——C 区块含：混音成片×2（A/B）、静音基线、分轨×2、声线 A/B×3、cue 表、
-   Agent 会话证据。定版与 `final_render` select 由用户完成。
+4. **零视频生成费用**；TTS 为逐句短文本同步调用（全部 trace_id/哈希/参数留证，
+   幂等缓存命中零重复付费）。
+5. **交付**：终版试听页 LISTEN_44c.html（13 句逐句 + 三段音乐 + 分轨 + 成片 +
+   旧版 A/B）；历史评审页 http://127.0.0.1:8786/_44b/review/REVIEW_44b.html
+   C 区块保留。定版 `select final_render` 待用户明确指令。
 
 ---
 
@@ -152,23 +159,32 @@ TTS），证据 `_44c/events_cagent_{1,2}.jsonl`、`result_cagent_{1,2}.json`、
 
 ## §8 交付物清单
 
-**新增/修改**：`src/audio/narration.py`（旁白仓+TTS 胶水）、`src/sequence/
-audio_models.py`（ducking/loudness/base_gain 模型）、`audio_mix.py`（mixer v2+
-stem 编译）、`audio_basis.py`/`service.py`（basis/put/方案 A 修复）、
-`minimax_adapter.py`（2054）、`src/agents/assembly.py`（+5 声音工具，11→16）、
-`_44c1_assets.py`/`_44c2_cues.py`/`_44c3_mix.py`/`_44c4_faults.py`/
-`_44c5_agent_run.py`、评审页 C 区块。变更统计见提交。
+**新增/修改（代码/管线）**：`src/audio/narration.py`（旁白仓+TTS 胶水）、
+`src/sequence/audio_models.py`（ducking/loudness/base_gain 模型）、`audio_mix.py`
+（mixer v2+stem 编译）、`audio_basis.py`/`service.py`（basis/put/方案 A 修复/
+两遍渲染）、`minimax_adapter.py`（2054）、`src/agents/assembly.py`（+5 声音工具，
+11→16）。批次驱动脚本：`_44c1_assets.py`–`_44c5_agent_run.py`（首轮）、
+`_44c7_music_v2.py`/`_44c8_narration_full.py`/`_44c9_music_scenes.py`/
+`_44c10_mix_full.py`（终版轮）。变更统计见提交。
 
-**可播放成片**（评审页）：
+**可播放成片**（按演进顺序，全部保留可回看）：
 | 版本 | render | 内容 |
 |---|---|---|
-| 混音版 A（执行侧 cue） | srender_ce68b7f0 | 环境声-3dB+音乐-10dB+旁白+2dB，ducking，loudnorm -16 |
-| 混音版 B（Agent cue） | srender_3da0e76d | Agent na01–05，同一时间线 |
+| **终版（当前推荐）** | **srender_fa9a2b7a** | **原音静默 + 三段分场景配乐 + 全片 13 句旁白，I=-16.0 LUFS** |
+| 纯 BGM+旁白（5 句旧版） | srender_c081beae | 单段音乐贯穿 · 原生静默（两遍渲染修复后首个干净版） |
+| 混音版（BGM v2 重调） | srender_a95fbb7a | 环境声 -6dB + 音乐 -13.5dB + 旁白 5 句 |
+| 混音版 A（执行侧 cue） | srender_ce68b7f0 | 环境声-3dB+音乐-10dB+旁白+2dB（首轮配比） |
+| 混音版 B（Agent cue） | srender_3da0e76d | Agent 会话自主 na01–05 |
+| 原生音轨原片 | srender_aca99c81 | 13 镜原生音轨零处理（B 批产物，终版视频 base） |
 | 静音画面基线 | srender_9e9ba8ee | audio=silent |
-| 小样本 native/silent | （B 批） | 双音轨策略样片 |
 
-**分轨**：narration/music stem（rev2543e107 与 agent rev 对应版）；**文案+时间码**：
-manifest_v3 narration_cues + `_44c/cue_table.json`。
+**分轨**：终版 `stem_narration_reve4c7b33f.wav` / `stem_music_reve4c7b33f.wav`
+（plan rev e4c7b33f）；历史 rev2543e107 / rev0ff0b92b 对应各版。
+
+**证据链**：`_44c/mix_full_evidence.json`（终版验收）、`narration_full_table.json`
+（13 句逐句表）、`music_scenes_params.json`（三段音乐参数+哈希）、
+`native_audio_scan.json`（逐镜原生响度扫描）、`cue_table.json`/`mix_evidence.json`
+（历史轮）。文案+时间码：manifest_v3 narration_cues + 试听页逐句表。
 
 ## §9 已知限制（不隐瞒）
 
@@ -185,6 +201,10 @@ manifest_v3 narration_cues + `_44c/cue_table.json`。
    不可作为成片候选（音频为多层叠加）；评审页只列干净版本。
 7. Agent T1 有 2 次 TTS 调用失败（speed=null，§6.3，已修）与 2 次空参提案写入
    （串行闸门+参数校验拦截）——如实留痕。
+8. **原生音轨不可分离**（§9.5 实测结案）：生成模型单次烧录的混合音（配乐+
+   环境声+音效）对盲分离模型属分布外输入，Demucs/HTDemucs 实测环境声与
+   配乐同生共死（保留轨三场景能量一律 -9~-14dB）。想用原片真实环境声只能
+   走人工修补/真实素材库/生成线 prompt 修复，不走分离。
 
 ## §9.1 增补（2026-10-01 用户试听反馈轮）
 
@@ -249,12 +269,84 @@ manifest_v3 narration_cues + `_44c/cue_table.json`。
    找不到 ffmpeg——本轮所有命令以前置真实路径（`C:\Users\曹文淇\Downloads\
    ffmpeg-2026-01-07-git-af6a1dd0b2-full_build\bin`）运行。建议后续修 PATH。
 
+## §9.4 增补（2026-10-01 18:00 用户指令轮：全片旁白 + 分场景音乐终版）
+
+用户指令：①不用音频分离，原视频静默后加旁白和背景音；②分镜接好后每个场景
+配不同背景音；③不脚本生成音效；④旁白做成全片 ~90s，不要只有几句。处置〔已核验〕：
+
+1. **全片旁白 13 句**（每镜一句，`_44c8_narration_full.py` → `narration_full_table.json`）：
+   265 字 → 62.9s 语音铺满 89.9s；落点规则 start≥镜起+300ms / end≤镜尾-150ms，
+   **13/13 落窗**。nd02（8.06s>8s 窗）、nd09（差 142ms 触线）按 C2 纪律改短文案
+   重合成（仅 2 次真实 TTS 调用，其余 11 句幂等缓存命中零付费）；超窗长版本
+   nver_c542a921 / nver_6ef97d96 留档可回看。
+2. **分场景音乐三段**（`_44c9_music_scenes.py` → `music_scenes_params.json`）：
+   同已批准 v2 合成器风格（钢琴 6 谐波+弦垫+低音，60BPM），三段各有性格——
+   s1 河岸 Am-Em-F-G-Am-F（43s，忧郁稀疏）/ s2 修理间 F-C-Dm-C（21s，高八度
+   温暖）/ s3 登塔 Am-F-C-G-F-C（38s，攀升至 E5 收束）；实测 -13.4/-13.7/-14.1
+   LUFS，sha256 入档；**零音效**（用户指令）。
+3. **音乐落位**：s1@0–39543 / s2@39543–57902 / s3@57902–89902（source_in=6000：
+   从 F 和弦干净进入，E5 长音正落在片尾灯塔光束镜头）；场景切点处短淡入淡出
+   接力，无拍子突变。三段共享 ducking 键信号的滤镜图（1 键喂 3 路
+   sidechaincompress）先以 lavfi 探针验证 ffmpeg 接受，再进正式渲染。
+4. **终版混音** `srender_fa9a2b7a`（plan rev e4c7b33f，16 层 = music×3 +
+   narration×13；base_gain=-60 原生静默；旁白 +2dB / 音乐 -13.5dB / ducking
+   -30dB·4:1·50ms·800ms / loudnorm I=-16·TP=-2·LRA=11；base=aca99c81
+   video copy，22.2s）。
+5. **验收全过**（`_44c10_mix_full.py` → `mix_full_evidence.json`）：13 句旁白
+   逐句相关 0.859–0.978 全在场；三段音乐间隙窗相关 0.998–1.000；原生泄漏
+   相关 ≈0.005（静默确认）；**I=-16.0 LUFS 正中目标** / 真峰值 -1.8 dBTP /
+   LRA 4.0 LU / A/V 时长差 0ms。分轨 stem_{narration,music}_reve4c7b33f.wav。
+6. 试听页 LISTEN_44c.html 已重写为终版（13 句逐句 + 三段音乐 + 分轨 + 成片 +
+   旧版 A/B）；上一版 render/plan 全部保留可回看（OCC，零覆盖）。
+7. **用户试听反馈（2026-10-01 晚）**："还不错"——暂定认可终版，尚未下达
+   `select final_render` 定版指令；同轮确认本终版为**脚本驱动的工具验证路径**
+   （创意决策由批次执行 AI 完成），Agent 自主路径已另在 5 句规模验收（§5）。
+8. **原片交接（音频分离实验）**：原生音轨原片 `srender_aca99c81`（13 镜零处理
+   混合音）+ 逐镜响度对照表 `_44c/native_audio_scan.json` 交付用户，供其它
+   agent 测试"去配乐、留环境声/音效"的分离可行性。已知难点：AI 生成音频对
+   主流分离模型（人声/伴奏训练）属分布外输入，雨声等宽频噪声易被误切。
+   若分离出可用音轨，可经 imported_audio 接回混音管线出 A/B 对比版。
+
+## §9.5 结案（2026-10-01 晚：原生音轨分离实验——目前方式不可行）
+
+§9.4-8 将原生音轨原片交由专门 agent 做盲分离测试（任务书
+`_44c/separation_task_brief.md`）。实验完成，**结论：目前方式不行，该路线
+正式关闭**。过程与证据：
+
+1. **专门 agent 的做法**（`Downloads\output_rainlamp_separation\README_分离报告.md`）：
+   Demucs v4.1.0 / HTDemucs 盲分离（CPU，7s 分段）→ 取 `other` 茎 →
+   谐波/瞬态频谱掩蔽保守压音乐；保留轨=环境声/音效候选，去除轨=原声−保留轨。
+2. **其自评**：「需人工修补（中等可用），不建议直接作为最终混音的唯一环境声
+   来源」——无独立分轨；雨声与铺底配乐同为宽频持续成分，模型无法稳定分开；
+   保留轨有音乐残留且水声/风声片段被一并削弱。
+3. **本线一手核验**〔已核验〕（`_tmp/verify_separation.py`，非转述）：时长
+   全对齐（保留/去除轨 89.902s，两 mp4 89.922s）；响度 原生 -28.4 / 保留
+   -37.4 / 去除 -31.0 LUFS（与其报告一致）。**关键证据——保留轨三场景能量
+   一律下降 9.0~14.1 dB**（s01 河岸雨声最重 -10.4 / s02 修理间 -14.1 /
+   s03 登塔 -9.0）：若分离成功，保留轨在环境声主导的 s01 应只低约 3~6 dB
+   （仅扣除配乐）；实测普遍大幅衰减，说明**环境声与配乐被一并削掉**——正是
+   任务书 §4.2 预判的"宽频噪声误切/同生共死"失效模式。去除轨仅比原生低
+   2.6 LU，绝大部分节目能量（配乐+大部分环境声）都进了去除轨。
+4. **判定**：盲分离（去配乐、留环境声）对本素材**不可作为管线步骤**。该
+   agent 报告数字与实测完全吻合，评级诚实；失败源于素材本身（生成模型单次
+   烧录混合音、无结构先验），不是执行问题。
+5. **处置**：分离版/剪辑版 mp4 与保留/去除轨 WAV 留存于
+   `c:\Users\曹文淇\Downloads\output_rainlamp_separation\`（不入库、不接管线）；
+   用户试听后结论"做不到"。**现行方案维持** `srender_fa9a2b7a`（原生静默 +
+   三段场景配乐 + 全片旁白）。
+6. **若仍要真实环境声，替代路径**（未排期，供后续批次选）：a) 用保留轨中的
+   雨声/脚步/机械瞬态段做逐镜人工修补（劳动密集，质量取决于人）；b) 授权
+   真实环境声素材库按场景铺底——S2 已有 ambience 层角色，管线即插即用；
+   c) 推动视频生成线修 prompt 使原生音轨只含环境声（本轮开头已有此设想）。
+
 ## §10 用户待办
 
-1. **试听定版**：评审页 A/B 两版混音（执行侧 cue vs Agent cue）+ 声线 A/B +
-   分轨；选定后对相应 render 显式 `select final_render`。
-2. **正式音乐**：提供授权素材后一句命令替换重渲染。
-3. **旁白微调**：任何一句改文案/换声线 → `tts_synthesize`（新版本）→ plan put
-   （OCC）→ 重渲染该版；旧版可回看。
+1. **试听终版** `srender_fa9a2b7a`（试听页 LISTEN_44c.html ④，含逐句/分轨/旧版
+   A/B）：确认全片旁白密度、三段场景音乐衔接、旁白与音乐配比是否达到预期；
+   满意后对该 render 显式 `select final_render` 定版。
+2. **微调入口**：改任意一句文案/换声线 → 只重合成该句（新版本）→ plan put
+   （OCC）→ 重渲染；换某段音乐 → 换 imported_audio 文件 + 新 plan revision，
+   其它段不变；旧版全部可回看。
+3. **正式音乐**（可选）：提供授权素材后按场景替换重渲染，管线零改动。
 
 ——以上，Phase 44C 完毕（成片定版与 select 待用户试听后闭合）。
