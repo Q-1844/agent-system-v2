@@ -29,6 +29,11 @@
               @click="runCheckManually">
         结构检查{{ checkLabel }}
       </button>
+      <button class="btn btn-quiet btn-sm assistant-toggle" :class="{ 'assistant-on': assistantOpen }"
+              title="搭建助手：按你的描述自动搭建工作流草稿"
+              @click="assistantOpen = !assistantOpen">
+        搭建助手
+      </button>
       <button class="btn btn-quiet btn-sm" @click="loadSample">示例工作流</button>
       <button class="btn btn-quiet btn-sm" @click="exportJson">导出 JSON</button>
       <button class="btn btn-primary btn-sm" @click="saveNow">保存草稿</button>
@@ -367,6 +372,9 @@
           </div>
         </template>
       </aside>
+
+      <!-- ============ 右：搭建助手（对话框）============ -->
+      <WorkflowAgentPanel v-if="assistantOpen" :draft="draft" :controller="wfController" :backend-online="backendOnline" />
     </div>
   </div>
 </template>
@@ -397,6 +405,8 @@ import SkillNode from './nodes/SkillNode.vue';
 import ReviewNode from './nodes/ReviewNode.vue';
 import BoundaryNode from './nodes/BoundaryNode.vue';
 import WfEdge from './edges/WfEdge.vue';
+import WorkflowAgentPanel from './WorkflowAgentPanel.vue';
+import type { WorkflowAssistantController, ApplyResult } from './assistant';
 
 const { message, dialog } = createDiscreteApi(['message', 'dialog'], {
   configProviderProps: discreteConfigProviderProps,
