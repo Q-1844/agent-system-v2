@@ -233,6 +233,12 @@ const menuItems = [
     icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>'
   },
   {
+    // 可视化工作流：Agent/Skill/人工审核 三类画布组件（第一版前端草稿）
+    path: '/workflow',
+    title: '工作流',
+    icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="6" height="5" rx="1" /><rect x="16" y="4" width="6" height="5" rx="1" /><rect x="9" y="15" width="6" height="5" rx="1" /><path d="M5 9v3a2 2 0 0 0 2 2h2" /><path d="M19 9v3a2 2 0 0 1-2 2h-2" /></svg>'
+  },
+  {
     path: '/agents',
     title: 'AI 团队',
     icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2" /><circle cx="12" cy="5" r="2" /><path d="M12 7v4" /><line x1="8" y1="16" x2="8" y2="16" /><line x1="16" y1="16" x2="16" y2="16" /></svg>'

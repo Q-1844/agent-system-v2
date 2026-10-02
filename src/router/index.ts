@@ -56,6 +56,13 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '创作版本', icon: 'workspace' }
       },
       {
+        // 可视化工作流（第一版前端草稿）：三类画布组件 + 两类连线
+        path: 'workflow',
+        name: 'Workflow',
+        component: () => import('@/views/workflow/index.vue'),
+        meta: { title: '工作流', icon: 'workflow', fullBleed: true }
+      },
+      {
         path: 'agents',
         name: 'AgentCenter',
         component: () => import('@/views/agents/index.vue'),
