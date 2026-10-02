@@ -34,6 +34,7 @@
 6. **交付〔待用户〕**：评审页 http://127.0.0.1:8788/REVIEW_45.html
    （Agent 自主版 vs 44C 推荐版 A/B、逐句试听、审计证据、候选/定版状态标注）。
    `final_render` 全部保持 None——select 是用户显式动作。
+   （后经三轮用户反馈迭代与显式 select，已定版 `srender_a7f3a38d`，见 §9–§13。）
 
 ---
 
@@ -168,7 +169,7 @@ missing_objective/并发 specialist_busy/changed_refs 白名单/evidence 派生/
 | ① 成片工具链（sequence/plan/render/audit/manifest） | **完成** | 全量回归绿；审计/投影/资产面为确定性代码 |
 | ② Assembly Agent 自主链 | **完成**（45.1 证据线） | 新会话自主生产 seq_b746d7f3 全链（§4.1–4.3），非脚本重放 |
 | ③ Producer 委派与恢复 | **完成**（45.2/45.3 证据线） | 真实 dispatch+持久父子任务+谱系回执（§3）；硬杀恢复闭环（§5） |
-| ④ 人审与正式定版 | **待用户** | 候选就绪，select 未执行（按纪律不得代行） |
+| ④ 人审与正式定版 | **完成**（2026-10-02 用户显式 select，见 §13） | `final_render=srender_a7f3a38d`，freshness=current |
 | ⑤ 视频线缺陷（原生音轨）/44D/Grok/可视化画布 | **独立未完成事项** | 原生音轨缺陷清单已交视频线（44C §9.2）；画布按任务书 §6 属下一阶段，本批未提前宣告 |
 
 **硬性不通过项自查**：无口头委派（真实 tool 调用链）；无脚本生成新 Agent 产物
