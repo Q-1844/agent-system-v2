@@ -2,8 +2,8 @@
   <aside class="wf-chat">
     <div class="chat-head">
       <span class="chat-title">搭建助手</span>
-      <span class="chat-mode" :title="backendOnline === false ? '后端未连接：仅本地规则' : `后端 Producer 文本模型：${props.producerModel ?? '…'}`">
-        {{ backendOnline === false ? '本地规则' : `规则 + Producer${props.producerModel ? ` · ${props.producerModel}` : ''}` }}
+      <span class="chat-mode" :title="backendOnline === false ? '后端未连接：仅本地指令' : `AI 模型：${props.producerModel ?? '…'}`">
+        {{ backendOnline === false ? '本地模式' : `AI 搭建 · ${props.producerModel ?? '…'}` }}
       </span>
     </div>
     <div ref="scroller" class="chat-scroll">
@@ -29,7 +29,7 @@
       />
       <button class="btn btn-primary btn-sm" :disabled="pending || !input.trim()" @click="send()">发送</button>
     </div>
-    <p class="chat-foot">只编辑浏览器草稿，不触发任何执行。简单指令走本地规则；复杂描述在后端在线时交给 Producer（真实大模型）解析意图，再由本地按注册表落图。</p>
+    <p class="chat-foot">只修改画布草稿，不会触发生成或执行。</p>
   </aside>
 </template>
 
@@ -38,7 +38,7 @@ import { nextTick, onMounted, ref } from 'vue';
 import { apiClient } from '@/api';
 import {
   parseLocal, buildProducerPrompt, extractIntentJson, intentToActions,
-  describePlan, HELP_TEXT,
+  summarizeActions, HELP_TEXT,
 } from './assistant';
 import type { AssistantAction, WorkflowAssistantController } from './assistant';
 import type { WorkflowDraft } from './types';
@@ -59,7 +59,7 @@ const pending = ref(false);
 const pendingText = ref('');
 const scroller = ref<HTMLElement | null>(null);
 
-const CHIPS = ['搭一条从剧本到成片的标准链', '在导演和成片之间插两道审核', '给导演绑定接力校准', '清空画布'];
+const CHIPS = ['从剧本到成片搭标准链', '在导演和装配之间插两道审核', '给导演绑定接力校准', '清空画布'];
 
 onMounted(() => {
   messages.value.push({ role: 'assistant', text: HELP_TEXT, meta: '本地规则' });
@@ -71,29 +71,24 @@ function scrollBottom() {
   });
 }
 
-/** 应用动作并生成含结构检查结果的续播说明 */
-function applyActions(actions: AssistantAction[], via: string): string {
-  const plan = describePlan(actions);
-  const results: string[] = [];
+/** 应用动作并生成简短口语化回复（主句 ≤1 行 + 状态行；细节进 meta） */
+function applyActions(actions: AssistantAction[], via: string): { text: string; meta: string } {
+  const warns: string[] = [];
   let hadFail = false;
   for (const a of actions) {
-    let r: { ok: boolean; reason?: string; detail?: string } = { ok: true };
+    let r: { ok: boolean; reason?: string } = { ok: true };
     try {
       switch (a.kind) {
         case 'clear': props.controller.clearAll(); break;
         case 'sample': props.controller.loadSample(); break;
-        case 'check': {
-          const c = props.controller.runCheck();
-          r = { ok: true, detail: c.errors ? `${c.errors} 个错误、${c.warnings} 个警告` : c.warnings ? `${c.warnings} 个警告` : '通过' };
-          break;
-        }
+        case 'check': break;
         case 'addAgent': r = props.controller.addAgent(a.refId); break;
         case 'addSkill': r = props.controller.addSkill(a.refId); break;
         case 'addReview': r = props.controller.addReview(a.label); break;
         case 'addBoundary': r = props.controller.addBoundary(a.which); break;
         case 'chain': {
           const c = props.controller.chain(a.refIds, !!a.withBoundary);
-          r = { ok: c.ok, reason: c.reason, detail: `新建 ${c.created} 节点 / ${c.connected} 条连线` };
+          r = { ok: c.ok, reason: c.reason };
           break;
         }
         case 'insertReviews': r = props.controller.insertReviews(a.afterRef, a.beforeRef, a.count, a.label); break;
@@ -102,28 +97,28 @@ function applyActions(actions: AssistantAction[], via: string): string {
     } catch (e) {
       r = { ok: false, reason: e instanceof Error ? e.message : String(e) };
     }
-    if (!r.ok) {
+    if (!r.ok && r.reason) {
+      // 重复/已存在这类提示以轻量 ⚠ 展示，不淹没主句
       hadFail = true;
-      results.push(`⚠ ${r.reason ?? '执行失败'}`);
-    } else if (r.detail) {
-      results.push(r.detail);
+      warns.push(r.reason);
     }
   }
   props.controller.layoutRefit();
 
-  // 结构检查汇总（check 动作本身已有 detail，这里对结构性改动做总览）
-  const structural = actions.some((a) => a.kind !== 'check');
-  let summary = '';
-  if (structural && !hadFail) {
+  const d = props.draft;
+  const counts = `${d.nodes.length} 节点 ${d.edges.length} 线`;
+  const main = summarizeActions(actions);
+
+  let status = '';
+  if (actions.some((a) => a.kind === 'check')) {
     const c = props.controller.runCheck();
-    summary = c.errors
-      ? `结构检查：${c.errors} 个错误、${c.warnings} 个警告——首位：${c.issues.find((i) => i.level === 'error')?.message ?? ''}（右侧概览可定位）`
-      : c.warnings
-        ? `结构检查通过，含 ${c.warnings} 个警告`
-        : '结构检查：通过 ✓';
+    status = c.errors ? `⚠ 结构检查发现 ${c.errors} 个错误（右侧可定位）` : c.warnings ? `✓ 通过，${c.warnings} 个提示` : '✓ 结构检查通过';
+  } else if (main && !hadFail) {
+    const c = props.controller.runCheck();
+    status = c.errors ? `⚠ 有 ${c.errors} 个结构错误（右侧可定位）` : c.warnings ? `✓ 已完成，${c.warnings} 个提示` : '✓ 结构检查通过';
   }
-  const lines = [plan ? `已执行：${plan}。` : '', ...results, summary].filter(Boolean);
-  return `${lines.join('\n')}\n（${via}）`;
+  const text = [main, ...warns.map((w) => `· ${w}`), status].filter(Boolean).join('\n');
+  return { text, meta: `${via} · ${counts}` };
 }
 
 async function ensureProducerSession(): Promise<string> {
@@ -151,7 +146,8 @@ async function send(preset?: string) {
   // 1) 本地规则层
   const actions = parseLocal(text, props.draft);
   if (actions.length) {
-    messages.value.push({ role: 'assistant', text: applyActions(actions, '本地规则解析'), meta: '本地规则' });
+    const rep = applyActions(actions, '本地规则');
+    messages.value.push({ role: 'assistant', text: rep.text, meta: rep.meta });
     scrollBottom();
     return;
   }
@@ -159,7 +155,7 @@ async function send(preset?: string) {
   // 2) 后端 Producer 解析层（后端在线才可用）
   if (props.backendOnline !== false) {
     pending.value = true;
-    pendingText.value = 'Producer 正在解析需求…';
+    pendingText.value = '正在理解你的需求…';
     scrollBottom();
     try {
       const sid = await ensureProducerSession();
@@ -169,24 +165,25 @@ async function send(preset?: string) {
       if (intent) {
         const { actions: iActions, problems } = intentToActions(intent);
         if (iActions.length) {
-          let out = applyActions(iActions, '后端 Producer 解析');
-          if (problems.length) out += `\n⚠ ${problems.join('；')}`;
-          if (intent.note) out = `理解：${intent.note}\n${out}`;
+          const rep = applyActions(iActions, `Producer · ${props.producerModel ?? ''}`);
+          let text = rep.text;
+          if (intent.note) text = `${intent.note}\n${text}`;
+          if (problems.length) text += `\n· ${problems.join('；')}`;
           // 副作用透明：助手只应改草稿；若本轮出现真实委派任务引用必须明示
           if (turn.linked_task_ids?.length) {
-            out += `\n⚠⚠ 本轮出现了 ${turn.linked_task_ids.length} 个真实后台任务引用（${turn.linked_task_ids.join('、')}）——搭建助手不应触发任何执行，请到「AI 团队」核实`;
+            text += `\n⚠⚠ 本轮触发了 ${turn.linked_task_ids.length} 个真实后台任务（${turn.linked_task_ids.join('、')}）——搭建助手不应触发执行，请到「AI 团队」核实`;
           }
-          const meta = `后端 Producer · ${turn.agent_id}${props.producerModel ? ` · ${props.producerModel}` : ''}${turn.events?.length ? ` · 后台事件 ${turn.events.length} 条` : ''}`;
-          messages.value.push({ role: 'assistant', text: out, meta });
+          const evMeta = turn.events?.length ? ` · 事件 ${turn.events.length}` : '';
+          messages.value.push({ role: 'assistant', text, meta: `${rep.meta}${evMeta}` });
           scrollBottom();
           return;
         }
         messages.value.push({
           role: 'assistant',
-          text: problems.length
-            ? `Producer 的解析无法落图：${problems.join('；')}。换个说法试试，或用下方快捷指令。`
-            : 'Producer 认为无需改动（chain/reviews/bindings 均为空）。换个说法试试。',
-          meta: '后端 Producer',
+          text: intent.note
+            ? `${intent.note}\n（画布未改动。换个说法，或用下面的快捷指令。）`
+            : '这条我没看出要改什么。换个说法，或用下面的快捷指令。',
+          meta: `Producer · ${props.producerModel ?? ''}`,
         });
         scrollBottom();
         return;
@@ -195,17 +192,17 @@ async function send(preset?: string) {
       messages.value.push({
         role: 'assistant',
         text: reply.trim()
-          ? `Producer 没有返回可执行的搭建意图。它的回复：\n${reply.trim().slice(0, 500)}`
-          : 'Producer 返回为空。请换个说法，或使用下方快捷指令。',
-        meta: '后端 Producer · 未解析出 JSON',
+          ? `这条我没解析成画布操作。它回复：\n${reply.trim().slice(0, 300)}`
+          : '这条我没解析成画布操作。换个说法，或用下面的快捷指令。',
+        meta: `Producer · ${props.producerModel ?? ''}`,
       });
       scrollBottom();
       return;
     } catch (e) {
       messages.value.push({
         role: 'assistant',
-        text: `后端解析失败（${e instanceof Error ? e.message : String(e)}）。可改用本地规则指令，见「你能做什么」。`,
-        meta: '后端不可用',
+        text: `AI 解析暂时不可用（${e instanceof Error ? e.message : String(e)}）。可以先用快捷指令搭建。`,
+        meta: 'AI 暂不可用',
       });
       scrollBottom();
       return;
@@ -217,7 +214,7 @@ async function send(preset?: string) {
   // 3) 兜底
   messages.value.push({
     role: 'assistant',
-    text: `这条我暂时没看懂（后端未连接，无法转给 Producer 解析）。${HELP_TEXT}`,
+    text: `这条我没看懂（当前离线，无法转给 AI 解析）。${HELP_TEXT}`,
     meta: '本地规则',
   });
   scrollBottom();
@@ -235,6 +232,8 @@ defineExpose({ send });
   display: flex;
   flex-direction: column;
   min-height: 0;
+  /* 底部避让全局悬浮 Agent 条（fixed，含名字行+输入行，实测占高约 117px） */
+  padding-bottom: 124px;
 }
 .chat-head {
   display: flex;

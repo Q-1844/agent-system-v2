@@ -299,32 +299,50 @@ export interface WorkflowAssistantController {
 }
 
 /** 把动作应用到画布（控制器执行），并生成一条助手续播说明 */
-export function describePlan(actions: AssistantAction[]): string {
+export const HELP_TEXT = [
+  '试试：「从剧本到成片搭一条标准链」「在导演和装配之间插两道人工审核」「给导演绑定接力校准」。',
+  '我按你的描述直接修改画布草稿；只编辑草稿，不会触发生成。',
+].join('\n');
+
+// ============ 用户友好短标签（界面回复用，避免英文 Agent 名与长 Skill 名）============
+const AGENT_SHORT: Record<string, string> = {
+  producer: '总协调',
+  script_writer: '编剧',
+  character_designer: '角色资源',
+  scene_designer: '场景',
+  director: '导演',
+  assembly: '装配',
+};
+
+export function shortAgentName(refId: string | null | undefined): string {
+  if (!refId) return '审核';
+  return AGENT_SHORT[refId] ?? getAgent(refId)?.role.split(' ·')[0] ?? refId;
+}
+
+export function shortSkillName(refId: string | null | undefined): string {
+  if (refId === 'full-story-relay-calibration') return '接力校准';
+  if (refId === 'keyframes-bridge-repair') return 'keyframes 接续桥';
+  return getSkill(refId)?.name ?? String(refId);
+}
+
+/** 组合式解析（新）: 把动作列表转成一句话用户摘要（简短、口语、去术语） */
+export function summarizeActions(actions: AssistantAction[]): string {
   const parts: string[] = [];
   for (const a of actions) {
     switch (a.kind) {
-      case 'clear': parts.push('清空画布'); break;
-      case 'sample': parts.push('载入示例工作流'); break;
-      case 'check': parts.push('运行结构检查'); break;
-      case 'addAgent': parts.push(`添加 Agent「${getAgent(a.refId)?.name ?? a.refId}」`); break;
-      case 'addSkill': parts.push(`添加 Skill「${getSkill(a.refId)?.name ?? a.refId}」`); break;
-      case 'addReview': parts.push(`添加人工审核${a.label ? `「${a.label}」` : ''}`); break;
-      case 'addBoundary': parts.push(a.which === 'start' ? '添加「开始」边界' : '添加「结束」边界'); break;
+      case 'clear': parts.push('画布已清空'); break;
+      case 'sample': parts.push('已载入示例工作流'); break;
+      case 'check': break;
+      case 'addAgent': parts.push(`已添加 ${shortAgentName(a.refId)}`); break;
+      case 'addSkill': parts.push(`已添加「${shortSkillName(a.refId)}」`); break;
+      case 'addReview': parts.push(`已添加人工审核${a.label && a.label !== '人工审核' ? `「${a.label}」` : ''}`); break;
+      case 'addBoundary': parts.push(a.which === 'start' ? '已添加开始边界' : '已添加结束边界'); break;
       case 'chain': parts.push(a.refIds.length
-        ? `串接执行链：${a.refIds.map((r) => getAgent(r)?.name ?? r).join(' → ')}`
-        : '把画布上现有 Agent/审核按位置串成执行链'); break;
-      case 'insertReviews': parts.push(`在「${getAgent(a.afterRef)?.name ?? a.afterRef}」${a.beforeRef ? `与「${getAgent(a.beforeRef)?.name ?? a.beforeRef}」之间` : '之后'}插入 ${a.count} 道审核`); break;
-      case 'bind': parts.push(`把 Skill「${getSkill(a.skillRefId)?.name ?? a.skillRefId}」绑定给「${getAgent(a.agentRefId)?.name ?? a.agentRefId}」`); break;
+        ? `已搭好链：${a.refIds.map(shortAgentName).join(' → ')}${a.withBoundary ? '（含开始/结束）' : ''}`
+        : '已把画布上的节点按顺序连好'); break;
+      case 'insertReviews': parts.push(`已在${shortAgentName(a.afterRef)}${a.beforeRef ? `和${shortAgentName(a.beforeRef)}` : '之后'}之间插入 ${a.count} 道审核`); break;
+      case 'bind': parts.push(`已把「${shortSkillName(a.skillRefId)}」绑给${shortAgentName(a.agentRefId)}`); break;
     }
   }
   return parts.join('；');
 }
-
-export const HELP_TEXT = [
-  '我可以按你的描述搭建工作流草稿。试试：',
-  '· 「搭一条从剧本到成片的标准链」',
-  '· 「在导演和成片之间插两道审核」',
-  '· 「给导演绑定接力校准」',
-  '· 「加一个场景 Agent」「串起画布上的节点」「清空画布」「检查结构」',
-  '简单指令由本地规则即时完成；复杂描述会转给后端 Producer（大模型）解析成搭建意图，再由本地用真实注册表落图。所有操作只编辑浏览器草稿，不会触发任何执行。',
-].join('\n');

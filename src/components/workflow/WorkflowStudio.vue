@@ -447,7 +447,7 @@ function fitToContent(duration = 220) {
   const zoom = Math.max(0.25, Math.min(1.5, Math.min((cont.width - pad * 2) / bw, (cont.height - pad * 2) / bh)));
   const tx = cont.width / 2 - ((minX + maxX) / 2) * zoom;
   const ty = cont.height / 2 - ((minY + maxY) / 2) * zoom;
-  setTransform({ x: tx, y: ty, zoom }, { duration });
+  setTransform({ x: tx, y: ty, zoom });  // duration>0 的 d3 过渡在部分场景静默失效，用立即变换
 }
 
 /** 把画布视图居中到某个流程坐标点（定位校验问题用） */
@@ -456,7 +456,7 @@ function centerOnFlowPoint(x: number, y: number, zoom?: number) {
   if (!el) return;
   const cont = el.getBoundingClientRect();
   const z = zoom ?? (vp.value?.zoom ?? 1);
-  setTransform({ x: cont.width / 2 - x * z, y: cont.height / 2 - y * z, zoom: z }, { duration: 240 });
+  setTransform({ x: cont.width / 2 - x * z, y: cont.height / 2 - y * z, zoom: z });
 }
 
 // ============ 草稿状态 ============
@@ -1220,6 +1220,26 @@ function createAgentSilent(refId: string, x?: number, y?: number): ApplyResult &
   return { ok: true, nodeId: node.id };
 }
 
+/** A 是否已能沿执行依赖到达 B（幂等搭链用：可达则不必再连） */
+function execReachable(from: string, to: string): boolean {
+  const adj = new Map<string, string[]>();
+  for (const e of draft.value.edges) {
+    if (e.type !== 'execution') continue;
+    if (!adj.has(e.source)) adj.set(e.source, []);
+    adj.get(e.source)!.push(e.target);
+  }
+  const seen = new Set<string>([from]);
+  const queue = [from];
+  while (queue.length) {
+    const cur = queue.shift()!;
+    if (cur === to) return true;
+    for (const next of adj.get(cur) ?? []) {
+      if (!seen.has(next)) { seen.add(next); queue.push(next); }
+    }
+  }
+  return false;
+}
+
 const wfController: WorkflowAssistantController = {
   clearAll() {
     draft.value = newEmptyDraft(props.projectName, draft.value.name);
@@ -1292,6 +1312,8 @@ const wfController: WorkflowAssistantController = {
     let connected = 0;
     let failed: string | undefined;
     for (let i = 0; i + 1 < ids.length; i++) {
+      // 幂等：A 已能沿执行依赖到达 B（含经审核中转）则跳过，避免重复搭链产生平行边
+      if (execReachable(ids[i], ids[i + 1])) continue;
       const r = connectNodes(ids[i], ids[i + 1], 'execution');
       if (!r.ok) { failed = r.reason; break; }
       if (!r.skipped) connected++;
