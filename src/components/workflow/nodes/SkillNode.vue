@@ -70,6 +70,19 @@ const ICON_SKILL =
   font-size: 12px;
   color: var(--text-primary);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  animation: wf-pop-in 0.16s ease-out;
+}
+
+/* 新节点落场（点击添加/拖放入画布时的一次性入场） */
+@keyframes wf-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* 悬停快捷删除（画布管理基本操作） */

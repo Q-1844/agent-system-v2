@@ -111,8 +111,17 @@
       </aside>
 
       <!-- ============ 中：画布 ============ -->
-      <section ref="canvasWrap" class="wf-canvas-wrap" @dragover.prevent @drop="onDrop">
+      <section
+        ref="canvasWrap"
+        class="wf-canvas-wrap"
+        :class="{ 'drag-over': draggingOver }"
+        @dragover.prevent
+        @dragenter.prevent="onDragEnterWrap"
+        @dragleave="onDragLeaveWrap"
+        @drop="onDrop"
+      >
         <VueFlow
+          :id="WF_FLOW_ID"
           :nodes="flowNodes"
           :edges="flowEdges"
           :delete-key-code="null"
@@ -212,19 +221,22 @@
                 ◌ 后端已停用该 Agent（settings.enabled=false）：画布可编辑，运行不可用。
               </div>
 
-              <div class="sec-label">工具（获准工具面 · 草稿勾选）</div>
-              <div class="tool-actions">
-                <span class="tool-count">{{ selectedTools.length }}/{{ selAgent.tools.length }}</span>
-                <button class="btn btn-quiet btn-sm" @click="selectAllTools">全选</button>
-                <button class="btn btn-quiet btn-sm" @click="clearTools">清空</button>
+              <div class="sec-label">工具面</div>
+              <div class="tool-block-head">
+                <span>核心工具 · 模块自带必有</span>
+                <span class="tool-count">{{ selAgent.tools.length }}</span>
               </div>
-              <div class="tool-list">
-                <label v-for="t in selAgent.tools" :key="t" class="tool-item">
-                  <input type="checkbox" :checked="selectedTools.includes(t)" @change="toggleTool(t)" />
+              <div class="tool-list core">
+                <div v-for="t in selAgent.tools" :key="t" class="tool-item core">
+                  <span class="core-tick">✓</span>
                   <span class="mono-num">{{ t }}</span>
-                </label>
+                </div>
               </div>
-              <p class="sem-note tiny">仅编辑前端草稿，不扩大权限、不创建新工具类型；未勾选 = 使用该 Agent 全部默认工具面。</p>
+              <div class="tool-block-head extra">
+                <span>额外工具 · 可选</span>
+              </div>
+              <p class="unset-hint">暂无额外工具。系统后续注册新工具后，可在此为该 Agent 勾选启用。</p>
+              <p class="sem-note tiny">核心工具由注册表定义、随 Agent 必带；额外工具仅记录在前端草稿，不扩大权限、不创建新工具类型。</p>
             </template>
             <button class="btn btn-outline btn-sm danger-link" @click="removeNode(selectedAgentNode!.id)">删除此节点</button>
           </div>
@@ -416,9 +428,13 @@ const { message, dialog } = createDiscreteApi(['message', 'dialog'], {
 
 const props = defineProps<{ projectName: string }>();
 
+// 显式 store id：<VueFlow> 子组件按 id 从 storage 认领同一个实例。
+// 隐式 adopt（provide/inject）在部分加载时序下会让父级拿到永远未初始化的孤儿实例
+// ——表现为 zoomIn/setTransform/screenToFlowCoordinate 全部静默无效（真机复现过）。
+const WF_FLOW_ID = 'wf-studio';
 const {
-  zoomIn, zoomOut, setTransform, screenToFlowCoordinate, vueFlowRef, viewport: vp,
-} = useVueFlow();
+  zoomIn, zoomOut, setTransform, screenToFlowCoordinate, vueFlowRef, viewport: vp, dimensions,
+} = useVueFlow(WF_FLOW_ID);
 
 // 自研「适应画布」：vue-flow 内置 fitView 在受控节点场景下会因 store 尺寸状态
 // 静默失败，这里直接用 DOM 实测包围盒 + setTransform，结果确定可复现。
@@ -491,6 +507,16 @@ onMounted(() => {
     savedAt.value = restored.updatedAt ?? null;
     scheduleFitView();
   }
+  // 后台页签加载时 ResizeObserver 不投递（无渲染帧），dimensions 停在 0 会让
+  // 缩放/适配/落点换算整体静默失效——挂载后兜底实测一次视口尺寸。
+  window.setTimeout(() => {
+    const el = vueFlowRef.value as HTMLElement | null;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0 && !(dimensions.value.width > 0)) {
+      dimensions.value = { width: r.width, height: r.height };
+    }
+  }, 600);
   // 后端在线核对：拿到 Agent 停用状态（可选能力，失败不影响草稿编辑）
   apiClient
     .listAgents()
@@ -709,25 +735,81 @@ interface LibItem {
   refId?: string;
 }
 
+/** 背景点距 20px，落点/点击落位统一吸附，和网格视觉对齐 */
+const GRID = 20;
+const snapGrid = (v: number) => Math.round(v / GRID) * GRID;
+/** 各类型节点的半宽/半高（落点居中到光标） */
+const HALF_SIZE: Record<LibItem['kind'], [number, number]> = {
+  agent: [116, 48],
+  skill: [112, 44],
+  human_review: [112, 48],
+  boundary_start: [60, 18],
+  boundary_end: [60, 18],
+};
+
+function libItemLabel(item: LibItem): string {
+  if (item.kind === 'agent') return getAgent(item.refId)?.name ?? 'Agent';
+  if (item.kind === 'skill') return getSkill(item.refId)?.name ?? 'Skill';
+  if (item.kind === 'human_review') return '人工审核';
+  return item.kind === 'boundary_start' ? '开始' : '结束';
+}
+
 function onLibDragStart(evt: DragEvent, item: LibItem) {
   evt.dataTransfer?.setData('application/x-wf-item', JSON.stringify(item));
-  if (evt.dataTransfer) evt.dataTransfer.effectAllowed = 'copy';
+  if (!evt.dataTransfer) return;
+  evt.dataTransfer.effectAllowed = 'copy';
+  // 自定义拖拽幽灵：跟随光标的小徽章（默认是整张卡的半透明镜像，大且糊）
+  const ghost = document.createElement('div');
+  ghost.textContent = libItemLabel(item);
+  Object.assign(ghost.style, {
+    position: 'fixed',
+    top: '-200px',
+    left: '-200px',
+    zIndex: '9999',
+    padding: '5px 12px',
+    borderRadius: '999px',
+    border: '1px solid rgba(96, 165, 250, 0.55)',
+    background: 'var(--bg-surface, #1a1a1a)',
+    color: 'var(--text-primary, #e5e5e5)',
+    fontSize: '12px',
+    fontWeight: '500',
+    whiteSpace: 'nowrap',
+    pointerEvents: 'none',
+    boxShadow: '0 6px 18px rgba(0, 0, 0, 0.45)',
+  } as CSSStyleDeclaration);
+  document.body.appendChild(ghost);
+  evt.dataTransfer.setDragImage(ghost, 18, 16);
+  window.setTimeout(() => ghost.remove(), 0);
+}
+
+let dragEnterCount = 0;
+const draggingOver = ref(false);
+function onDragEnterWrap() {
+  dragEnterCount++;
+  draggingOver.value = true;
+}
+function onDragLeaveWrap() {
+  dragEnterCount = Math.max(0, dragEnterCount - 1);
+  if (!dragEnterCount) draggingOver.value = false;
 }
 
 function onDrop(evt: DragEvent) {
+  dragEnterCount = 0;
+  draggingOver.value = false;
   const raw = evt.dataTransfer?.getData('application/x-wf-item');
   if (!raw) return;
   try {
     const item = JSON.parse(raw) as LibItem;
     const pos = screenToFlowCoordinate({ x: evt.clientX, y: evt.clientY });
-    addNode(item, { x: pos.x - 110, y: pos.y - 40 });
+    const [hw, hh] = HALF_SIZE[item.kind] ?? [110, 40];
+    addNode(item, { x: snapGrid(pos.x - hw), y: snapGrid(pos.y - hh) });
   } catch {
     /* 忽略非法拖拽数据 */
   }
 }
 
 function addNodeFromLib(item: LibItem) {
-  // 点击添加：放到当前视口中心附近（带少量错位，避免叠放）
+  // 点击添加：落到当前视口中心（吸附网格），连续点击按序错位避免叠放
   const rect = (vueFlowRef.value as HTMLElement | null)?.getBoundingClientRect();
   let pos = { x: 160, y: 160 };
   if (rect) {
@@ -736,7 +818,8 @@ function addNodeFromLib(item: LibItem) {
       y: rect.top + rect.height * 0.5,
     });
     const jitter = draft.value.nodes.length % 5;
-    pos = { x: c.x - 110 + jitter * 36, y: c.y - 40 + jitter * 28 };
+    const [hw, hh] = HALF_SIZE[item.kind] ?? [110, 40];
+    pos = { x: snapGrid(c.x - hw + jitter * 40), y: snapGrid(c.y - hh + jitter * 32) };
   }
   addNode(item, pos);
 }
@@ -834,26 +917,8 @@ const selectedEdge = computed(
 const selAgent = computed(() => getAgent(selectedAgentNode.value?.refId));
 const selSkill = computed(() => getSkill(selectedSkillNode.value?.refId));
 
-const selectedTools = computed(() => selectedAgentNode.value?.config.selectedTools ?? []);
-function toggleTool(tool: string) {
-  const n = selectedAgentNode.value;
-  if (!n) return;
-  const cur = n.config.selectedTools ?? [];
-  n.config.selectedTools = cur.includes(tool) ? cur.filter((t) => t !== tool) : [...cur, tool];
-  markDirty();
-}
-function selectAllTools() {
-  const n = selectedAgentNode.value;
-  if (!n || !selAgent.value) return;
-  n.config.selectedTools = [...selAgent.value.tools];
-  markDirty();
-}
-function clearTools() {
-  const n = selectedAgentNode.value;
-  if (!n) return;
-  n.config.selectedTools = [];
-  markDirty();
-}
+// 工具语义（2026-10-03 用户定义）：核心工具=注册表自带必有（不可勾选）；
+// 额外工具=以后系统扩展后在草稿里勾选启用（config.selectedTools，当前恒空）。
 
 // —— 人工审核字段双向 ——
 const reviewLabel = computed({
@@ -1719,10 +1784,19 @@ select.input { appearance: auto; }
   padding: 7px 9px;
   margin-bottom: 6px;
   cursor: grab;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
+  transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.12s ease, box-shadow 0.12s ease;
 
-  &:hover { border-color: var(--border-hover); background: var(--bg-hover); }
-  &:active { cursor: grabbing; }
+  &:hover {
+    border-color: var(--border-hover);
+    background: var(--bg-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+  }
+  &:active {
+    cursor: grabbing;
+    transform: translateY(0) scale(0.99);
+    box-shadow: none;
+  }
 }
 .lib-skill { border-color: rgba(96, 165, 250, 0.25); }
 .lib-review { border-color: rgba(234, 179, 8, 0.25); }
@@ -1781,6 +1855,17 @@ select.input { appearance: auto; }
   position: relative;
   min-width: 0;
   background: var(--bg-root);
+
+  /* 拖拽组件悬停在画布上时的落点提示 */
+  &.drag-over::after {
+    content: '';
+    position: absolute;
+    inset: 6px;
+    pointer-events: none;
+    border: 1.5px dashed rgba(96, 165, 250, 0.5);
+    border-radius: 10px;
+    background: rgba(96, 165, 250, 0.045);
+  }
 }
 .wf-flow { width: 100%; height: 100%; }
 
@@ -2002,12 +2087,23 @@ select.input { appearance: auto; }
   &.warn { color: var(--warning); }
 }
 
-.tool-actions {
+.tool-block-head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding: 2px 0 6px;
 
-  .tool-count { font-size: 11px; color: var(--text-muted); margin-right: auto; }
+  &.extra { padding-top: 10px; }
+  .tool-count {
+    font-size: 10px;
+    color: var(--text-faint);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0 6px;
+    line-height: 15px;
+  }
 }
 .tool-list {
   display: flex;
@@ -2026,13 +2122,19 @@ select.input { appearance: auto; }
   gap: 7px;
   font-size: 11px;
   color: var(--text-secondary);
-  cursor: pointer;
+  cursor: default;
   padding: 2px 0;
 
-  input { accent-color: var(--text-primary); }
   span { word-break: break-all; }
 
-  &:hover { color: var(--text-primary); }
+  .core-tick {
+    flex-shrink: 0;
+    font-size: 10px;
+    line-height: 14px;
+    width: 14px;
+    text-align: center;
+    color: #4ade80;
+  }
 }
 
 .bind-table {

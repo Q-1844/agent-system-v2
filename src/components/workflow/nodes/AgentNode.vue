@@ -46,7 +46,7 @@
       <span v-else-if="d.unavailable" class="nd-badge badge-off">◌ 不可用</span>
       <span v-else-if="d.boundSkillCount" class="nd-badge badge-skill">◈ 已绑 {{ d.boundSkillCount }} 个 Skill</span>
       <span v-else class="nd-badge">Agent</span>
-      <span v-if="selectedToolsCount" class="nd-badge badge-tool">工具 {{ selectedToolsCount }}</span>
+      <span class="nd-badge badge-tool">工具 {{ toolCount }}<template v-if="selectedToolsCount"> · 额外 {{ selectedToolsCount }}</template></span>
     </div>
 
     <span class="port-label label-in">执行输入</span>
@@ -86,6 +86,8 @@ const artifactText = computed(() => {
   return first.length > 44 ? `${first.slice(0, 44)}…` : first;
 });
 const selectedToolsCount = computed(() => d.value.node.config.selectedTools?.length ?? 0);
+/** 核心工具=注册表自带必有；selectedTools 只存以后可能有的额外工具 */
+const toolCount = computed(() => getAgent(d.value.node.refId)?.tools.length ?? 0);
 
 const ICON_AGENT =
   '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>';
@@ -101,6 +103,19 @@ const ICON_AGENT =
   font-size: 12px;
   color: var(--text-primary);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  animation: wf-pop-in 0.16s ease-out;
+}
+
+/* 新节点落场（点击添加/拖放入画布时的一次性入场） */
+@keyframes wf-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* 悬停快捷删除（画布管理基本操作） */
