@@ -469,8 +469,8 @@ export function intentToActions(intent: WorkflowIntent): { actions: AssistantAct
     }
     buildPhase.push({ kind: 'bind', skillRefId: b.skill, agentRefId: b.agent });
   }
-  if (intent.withBoundary && !(validChain.length >= 2) && (buildPhase.length || removePhase.length)) {
-    // chain 动作已自带 withBoundary；这里只在没有 chain 时补边界
+  if (intent.withBoundary && !(validChain.length >= 2)) {
+    // chain 动作已自带 withBoundary；没有 chain 时（含纯边界意图「加上开始和结束」）在此补边界
     buildPhase.push({ kind: 'addBoundary', which: 'start' });
     buildPhase.push({ kind: 'addBoundary', which: 'end' });
   }
@@ -572,7 +572,9 @@ export function summarizeActions(actions: AssistantAction[]): string {
       case 'chain': parts.push(a.refIds.length
         ? `已搭好链：${a.refIds.map(shortAgentName).join(' → ')}${a.withBoundary ? '（含开始/结束）' : ''}`
         : '已把画布上的节点按顺序连好'); break;
-      case 'insertReviews': parts.push(`已在${shortAgentName(a.afterRef)}${a.beforeRef ? `和${shortAgentName(a.beforeRef)}` : '之后'}之间插入 ${a.count} 道审核`); break;
+      case 'insertReviews': parts.push(a.beforeRef
+        ? `已在${shortAgentName(a.afterRef)}和${shortAgentName(a.beforeRef)}之间插入 ${a.count} 道审核`
+        : `已在${shortAgentName(a.afterRef)}之后插入 ${a.count} 道审核`); break;
       case 'bind': parts.push(`已把「${shortSkillName(a.skillRefId)}」绑给${shortAgentName(a.agentRefId)}`); break;
       case 'removeAgent': parts.push(`已删掉${shortAgentName(a.refId)}（相关连线一并移除）`); break;
       case 'removeSkill': parts.push(`已删掉「${shortSkillName(a.refId)}」`); break;
