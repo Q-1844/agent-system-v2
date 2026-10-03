@@ -59,7 +59,7 @@ const pending = ref(false);
 const pendingText = ref('');
 const scroller = ref<HTMLElement | null>(null);
 
-const CHIPS = ['从剧本到成片搭标准链', '在导演和装配之间插两道审核', '给导演绑定接力校准', '清空画布'];
+const CHIPS = ['搭一条从剧本到成片的标准链', '在导演和装配之间插两道审核', '解除导演的接力校准绑定', '给审核写说明：重点查运镜'];
 
 onMounted(() => {
   messages.value.push({ role: 'assistant', text: HELP_TEXT, meta: '本地规则' });
@@ -74,9 +74,13 @@ function scrollBottom() {
 /** 应用动作并生成简短口语化回复（主句 ≤1 行 + 状态行；细节进 meta） */
 function applyActions(actions: AssistantAction[], via: string): { text: string; meta: string } {
   const warns: string[] = [];
+  const details: string[] = [];
+  const failedIdx = new Set<number>();
   let hadFail = false;
+  let idx = 0;
   for (const a of actions) {
-    let r: { ok: boolean; reason?: string } = { ok: true };
+    const at = idx++;
+    let r: { ok: boolean; reason?: string; detail?: string } = { ok: true };
     try {
       switch (a.kind) {
         case 'clear': props.controller.clearAll(); break;
@@ -93,31 +97,55 @@ function applyActions(actions: AssistantAction[], via: string): { text: string; 
         }
         case 'insertReviews': r = props.controller.insertReviews(a.afterRef, a.beforeRef, a.count, a.label); break;
         case 'bind': r = props.controller.bind(a.skillRefId, a.agentRefId); break;
+        case 'removeAgent': r = props.controller.removeAgent(a.refId); break;
+        case 'removeSkill': r = props.controller.removeSkill(a.refId); break;
+        case 'removeReviews': {
+          const c = props.controller.removeReviews(a.afterRef, a.beforeRef);
+          r = { ok: c.ok, reason: c.reason, detail: c.removed ? `已移除 ${c.removed} 个审核节点` : undefined };
+          break;
+        }
+        case 'removeBoundary': r = props.controller.removeBoundary(a.which); break;
+        case 'unbind': {
+          const c = props.controller.unbind(a.skillRefId, a.agentRefId);
+          r = { ok: c.ok, reason: c.reason, detail: c.removed ? `已移除 ${c.removed} 条绑定` : undefined };
+          break;
+        }
+        case 'disconnect': r = props.controller.disconnect(a.fromRef, a.toRef); break;
+        case 'fillReview':
+          r = props.controller.fillReview({ afterRef: a.afterRef }, { label: a.label, instructions: a.instructions, reviewer: a.reviewer });
+          break;
+        case 'outline':
+          r = { ok: true, detail: props.controller.outline() };
+          break;
       }
     } catch (e) {
       r = { ok: false, reason: e instanceof Error ? e.message : String(e) };
     }
     if (!r.ok && r.reason) {
-      // 重复/已存在这类提示以轻量 ⚠ 展示，不淹没主句
+      // 失败动作不计入主句（避免「已删掉 X」与失败提示自相矛盾）
       hadFail = true;
+      failedIdx.add(at);
       warns.push(r.reason);
+    } else if (r.detail) {
+      // 补充信息（如删除数量、画布结构汇报）
+      details.push(r.detail);
     }
   }
   props.controller.layoutRefit();
 
   const d = props.draft;
   const counts = `${d.nodes.length} 节点 ${d.edges.length} 线`;
-  const main = summarizeActions(actions);
+  const main = summarizeActions(actions.filter((_, i) => !failedIdx.has(i)));
 
   let status = '';
   if (actions.some((a) => a.kind === 'check')) {
     const c = props.controller.runCheck();
     status = c.errors ? `⚠ 结构检查发现 ${c.errors} 个错误（右侧可定位）` : c.warnings ? `✓ 通过，${c.warnings} 个提示` : '✓ 结构检查通过';
-  } else if (main && !hadFail) {
+  } else if (main && !hadFail && !actions.some((a) => a.kind === 'outline')) {
     const c = props.controller.runCheck();
     status = c.errors ? `⚠ 有 ${c.errors} 个结构错误（右侧可定位）` : c.warnings ? `✓ 已完成，${c.warnings} 个提示` : '✓ 结构检查通过';
   }
-  const text = [main, ...warns.map((w) => `· ${w}`), status].filter(Boolean).join('\n');
+  const text = [main, ...details, ...warns.map((w) => `· ${w}`), status].filter(Boolean).join('\n');
   return { text, meta: `${via} · ${counts}` };
 }
 

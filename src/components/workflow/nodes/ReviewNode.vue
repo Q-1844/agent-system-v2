@@ -28,6 +28,10 @@
         <span class="io-k">审核者</span>
         <span class="io-v" :class="{ unset: !d.node.config.reviewer }">{{ d.node.config.reviewer || '未设置（草稿）' }}</span>
       </div>
+      <div v-if="d.node.config.instructions" class="nd-io">
+        <span class="io-k">说明</span>
+        <span class="io-v" :title="d.node.config.instructions">{{ d.node.config.instructions }}</span>
+      </div>
     </div>
 
     <div class="nd-foot">
@@ -38,6 +42,7 @@
 
     <span class="port-label label-in">送审</span>
     <span class="port-label label-out">通过后</span>
+    <button v-if="controller" class="nd-del" title="删除节点" @pointerdown.stop @mousedown.stop @click.stop="onDelete">✕</button>
   </div>
 </template>
 
@@ -45,6 +50,7 @@
 import { computed } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import type { WorkflowNode } from '../types';
+import { useNodeDelete } from './useNodeDelete';
 
 export interface ReviewNodeData {
   node: WorkflowNode;
@@ -57,9 +63,10 @@ export interface ReviewNodeData {
   upstreamAgentName?: string;
 }
 
-const props = defineProps<{ data: ReviewNodeData; selected?: boolean }>();
+const props = defineProps<{ data: ReviewNodeData; selected?: boolean; id?: string }>();
 defineOptions({ inheritAttrs: false });
 const d = computed(() => props.data);
+const { controller, onDelete } = useNodeDelete(props);
 
 const targetArtifact = computed(() => d.value.node.config.targetArtifact || '');
 const seqLabel = computed(() => (d.value.reviewSeq ? `#${d.value.reviewSeq}` : ''));
@@ -70,6 +77,7 @@ const ICON_REVIEW =
 
 <style lang="scss" scoped>
 .wf-node {
+  position: relative;
   width: 224px;
   background: var(--bg-surface);
   border: 1px solid rgba(234, 179, 8, 0.35);
@@ -77,6 +85,33 @@ const ICON_REVIEW =
   font-size: 12px;
   color: var(--text-primary);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* 悬停快捷删除（画布管理基本操作） */
+.nd-del {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-faint);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  z-index: 3;
+
+  &:hover {
+    color: var(--error);
+    border-color: var(--error);
+  }
+}
+.wf-node:hover .nd-del {
+  opacity: 1;
 }
 .wf-review {
   &.selected {

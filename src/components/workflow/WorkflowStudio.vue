@@ -124,6 +124,7 @@
           @connect="onConnect"
           @node-click="onNodeClick"
           @edge-click="onEdgeClick"
+          @edge-double-click="onEdgeDoubleClick"
           @pane-click="clearSelection"
         >
           <Background :gap="20" :size="1.4" pattern-color="#808080" />
@@ -380,7 +381,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, provide, ref } from 'vue';
 import { VueFlow, useVueFlow, MarkerType } from '@vue-flow/core';
 import type { Connection, EdgeChange, NodeChange } from '@vue-flow/core';
 // vue-flow 基础布局样式（.vue-flow__node 绝对定位 / handle 定位 / viewport 层级）
@@ -406,6 +407,7 @@ import ReviewNode from './nodes/ReviewNode.vue';
 import BoundaryNode from './nodes/BoundaryNode.vue';
 import WfEdge from './edges/WfEdge.vue';
 import WorkflowAgentPanel from './WorkflowAgentPanel.vue';
+import { shortAgentName, shortSkillName } from './assistant';
 import type { WorkflowAssistantController, ApplyResult } from './assistant';
 
 const { message, dialog } = createDiscreteApi(['message', 'dialog'], {
@@ -788,6 +790,10 @@ function removeEdge(id: string) {
   if (selectedEdgeId.value === id) clearSelection();
   markDirty();
   message.info('连线已删除，依赖提示已更新', { duration: 1600 });
+}
+/** 连线双击 = 快捷删除（与面板「删除连线」等效） */
+function onEdgeDoubleClick(e: { edge: { id: string } }) {
+  if (e?.edge?.id) removeEdge(e.edge.id);
 }
 
 // ============ 右侧面板 ============
@@ -1418,10 +1424,131 @@ const wfController: WorkflowAssistantController = {
         : `已绑定 ${skill.name} v${skill.version} → ${getAgent(agentRefId)?.name ?? agentRefId}`,
     };
   },
+  // —— 删除 / 解绑 / 断开 / 填内容 / 只读汇报 ——
+  removeAgent(refId) {
+    const node = findAgentNodeByRef(refId);
+    if (!node) return { ok: false, reason: `画布上没有${shortAgentName(refId)}的节点` };
+    removeNode(node.id);
+    return { ok: true };
+  },
+  removeSkill(refId) {
+    const node = findSkillNodeByRef(refId);
+    if (!node) return { ok: false, reason: `画布上没有「${shortSkillName(refId)}」的节点` };
+    removeNode(node.id);
+    return { ok: true };
+  },
+  removeReviews(afterRef, beforeRef) {
+    const reviews = draft.value.nodes.filter((n) => n.type === 'human_review');
+    if (!reviews.length) return { ok: false, removed: 0, reason: '画布上没有人工审核' };
+    const afterNode = afterRef ? findAgentNodeByRef(afterRef) : undefined;
+    const beforeNode = beforeRef ? findAgentNodeByRef(beforeRef) : undefined;
+    if (afterRef && !afterNode) return { ok: false, removed: 0, reason: `画布上没有${shortAgentName(afterRef)}的节点，无法定位审核` };
+    if (beforeRef && !beforeNode) return { ok: false, removed: 0, reason: `画布上没有${shortAgentName(beforeRef)}的节点，无法定位审核` };
+    let targets = reviews;
+    if (afterNode) targets = targets.filter((n) => n.position.x > afterNode.position.x);
+    if (beforeNode) targets = targets.filter((n) => n.position.x < beforeNode.position.x);
+    if (!targets.length) return { ok: false, removed: 0, reason: '该范围内没有找到审核' };
+    for (const n of targets) removeNode(n.id);
+    return { ok: true, removed: targets.length };
+  },
+  removeBoundary(which) {
+    const type = which === 'start' ? 'boundary_start' : 'boundary_end';
+    const node = draft.value.nodes.find((n) => n.type === type);
+    if (!node) return { ok: false, reason: `画布上没有${which === 'start' ? '开始' : '结束'}边界` };
+    removeNode(node.id);
+    return { ok: true };
+  },
+  unbind(skillRefId, agentRefId) {
+    const skillNode = findSkillNodeByRef(skillRefId);
+    if (!skillNode) return { ok: false, removed: 0, reason: `画布上没有「${shortSkillName(skillRefId)}」的节点` };
+    const agentNode = agentRefId ? findAgentNodeByRef(agentRefId) : undefined;
+    if (agentRefId && !agentNode) return { ok: false, removed: 0, reason: `画布上没有${shortAgentName(agentRefId)}的节点` };
+    const before = draft.value.edges.length;
+    draft.value.edges = draft.value.edges.filter((e) => {
+      if (e.type !== 'skill_binding' || e.source !== skillNode.id) return true;
+      if (agentNode && e.target !== agentNode.id) return true;
+      return false;
+    });
+    const removed = before - draft.value.edges.length;
+    if (!removed) return { ok: false, removed: 0, reason: agentNode ? '该绑定不存在' : '该 Skill 没有任何绑定' };
+    markDirty();
+    return { ok: true, removed };
+  },
+  disconnect(fromRef, toRef) {
+    const fromNode = findAgentNodeByRef(fromRef);
+    const toNode = findAgentNodeByRef(toRef);
+    if (!fromNode || !toNode) {
+      const missing = !fromNode ? shortAgentName(fromRef) : shortAgentName(toRef);
+      return { ok: false, reason: `画布上没有${missing}的节点` };
+    }
+    const before = draft.value.edges.length;
+    draft.value.edges = draft.value.edges.filter((e) => !(e.type === 'execution' && e.source === fromNode.id && e.target === toNode.id));
+    const removed = before - draft.value.edges.length;
+    if (!removed) return { ok: false, reason: `${shortAgentName(fromRef)}和${shortAgentName(toRef)}之间没有直接连线` };
+    markDirty();
+    return { ok: true, detail: `已断开 ${removed} 条直接连线` };
+  },
+  fillReview(match, patch) {
+    const reviews = draft.value.nodes
+      .filter((n) => n.type === 'human_review')
+      .sort((a, b) => a.position.x - b.position.x);
+    if (!reviews.length) return { ok: false, reason: '画布上还没有人工审核，先插入一道' };
+    let target = reviews[0];
+    if (match.afterRef) {
+      const afterNode = findAgentNodeByRef(match.afterRef);
+      if (!afterNode) return { ok: false, reason: `画布上没有${shortAgentName(match.afterRef)}的节点，无法定位审核` };
+      const inRange = reviews.filter((n) => n.position.x > afterNode.position.x);
+      if (!inRange.length) return { ok: false, reason: `没有找到${shortAgentName(match.afterRef)}之后的审核` };
+      target = inRange[0];
+    }
+    if (patch.label !== undefined) target.label = patch.label;
+    if (patch.instructions !== undefined) target.config = { ...target.config, instructions: patch.instructions };
+    if (patch.reviewer !== undefined) target.config = { ...target.config, reviewer: patch.reviewer };
+    markDirty();
+    return { ok: true, detail: `已更新${target.label ? `「${target.label}」` : '人工审核'}的内容` };
+  },
+  outline() {
+    const chainNodes = draft.value.nodes
+      .filter((n) => n.type === 'agent' || n.type === 'human_review')
+      .sort((a, b) => a.position.x - b.position.x);
+    if (!chainNodes.length) return '画布现在是空的。可以试试「搭一条从剧本到成片的标准链」。';
+    const skillNameById = new Map(
+      draft.value.nodes.filter((n) => n.type === 'skill').map((n) => [n.id, shortSkillName(n.refId)]),
+    );
+    const bindsByAgent = new Map<string, string[]>();
+    for (const e of draft.value.edges) {
+      if (e.type !== 'skill_binding') continue;
+      const name = skillNameById.get(e.source);
+      if (name) bindsByAgent.set(e.target, [...(bindsByAgent.get(e.target) ?? []), name]);
+    }
+    const lines: string[] = ['当前画布（从左到右）：'];
+    chainNodes.forEach((n, i) => {
+      if (n.type === 'agent') {
+        const binds = bindsByAgent.get(n.id);
+        lines.push(`${i + 1}. ${shortAgentName(n.refId)}${binds?.length ? `（绑定：${binds.join('、')}）` : ''}`);
+      } else {
+        const who = n.config.reviewer ? ` · 审核者：${n.config.reviewer}` : '';
+        const note = n.config.instructions ? ` · 说明：${n.config.instructions}` : '';
+        lines.push(`${i + 1}. 人工审核${n.label ? `「${n.label}」` : ''}${who}${note}`);
+      }
+    });
+    const skills = draft.value.nodes.filter((n) => n.type === 'skill').length;
+    const start = draft.value.nodes.some((n) => n.type === 'boundary_start');
+    const end = draft.value.nodes.some((n) => n.type === 'boundary_end');
+    lines.push(
+      `另有 Skill 节点 ${skills} 个；边界：${start ? '有开始' : '无开始'}/${end ? '有结束' : '无结束'}；`
+      + `连线：执行 ${draft.value.edges.filter((e) => e.type === 'execution').length} 条、绑定 ${draft.value.edges.filter((e) => e.type === 'skill_binding').length} 条。`,
+    );
+    return lines.join('\n');
+  },
+  removeNodeById(nodeId) { removeNode(nodeId); },
+  removeEdgeById(edgeId) { removeEdge(edgeId); },
   layoutRefit() {
     scheduleFitView();
   },
 };
+// 画布节点上的快捷 ✕ 通过注入拿到控制器（避免节点组件层层透传事件）
+provide('wfController', wfController);
 </script>
 
 <style lang="scss" scoped>

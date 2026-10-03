@@ -27,6 +27,7 @@
       </div>
       <span class="nd-id mono-num">{{ d.node.refId }}</span>
     </div>
+    <button v-if="controller" class="nd-del" title="删除节点" @pointerdown.stop @mousedown.stop @click.stop="onDelete">✕</button>
 
     <div class="nd-body">
       <p class="nd-desc">{{ agent?.description ?? '引用失效：注册表中找不到该 Agent' }}</p>
@@ -59,6 +60,7 @@ import { computed } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import type { WorkflowNode } from '../types';
 import { getAgent } from '../catalog';
+import { useNodeDelete } from './useNodeDelete';
 
 export interface AgentNodeData {
   node: WorkflowNode;
@@ -70,10 +72,11 @@ export interface AgentNodeData {
   boundSkillCount?: number;
 }
 
-const props = defineProps<{ data: AgentNodeData; selected?: boolean }>();
+const props = defineProps<{ data: AgentNodeData; selected?: boolean; id?: string }>();
 // vue-flow 会传入大量标准 NodeProps，未声明的不要落到根元素上
 defineOptions({ inheritAttrs: false });
 const d = computed(() => props.data);
+const { controller, onDelete } = useNodeDelete(props);
 
 const agent = computed(() => getAgent(d.value.node.refId));
 const artifactText = computed(() => {
@@ -90,6 +93,7 @@ const ICON_AGENT =
 
 <style lang="scss" scoped>
 .wf-node {
+  position: relative;
   width: 232px;
   background: var(--bg-surface);
   border: 1px solid var(--border);
@@ -97,6 +101,33 @@ const ICON_AGENT =
   font-size: 12px;
   color: var(--text-primary);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* 悬停快捷删除（画布管理基本操作） */
+.nd-del {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-faint);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  z-index: 3;
+
+  &:hover {
+    color: var(--error);
+    border-color: var(--error);
+  }
+}
+.wf-node:hover .nd-del {
+  opacity: 1;
 }
 .wf-agent {
   &.selected {

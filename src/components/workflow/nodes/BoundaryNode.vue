@@ -10,21 +10,24 @@
     <span class="bd-icon" v-html="d.kind === 'start' ? ICON_START : ICON_END" />
     <span class="bd-text">{{ d.kind === 'start' ? '开始' : '结束' }}</span>
     <span class="bd-hint">边界</span>
+    <button v-if="controller" class="nd-del" title="删除节点" @pointerdown.stop @mousedown.stop @click.stop="onDelete">✕</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
+import { useNodeDelete } from './useNodeDelete';
 
 export interface BoundaryNodeData {
   kind: 'start' | 'end';
 }
 
 // 开始/结束只是画布边界提示，不算新增组件类型：不做任何执行语义
-const props = defineProps<{ data: BoundaryNodeData; selected?: boolean }>();
+const props = defineProps<{ data: BoundaryNodeData; selected?: boolean; id?: string }>();
 defineOptions({ inheritAttrs: false });
 const d = computed(() => props.data);
+const { controller, onDelete } = useNodeDelete(props);
 
 const ICON_START =
   '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6 4 20 12 6 20"/></svg>';
@@ -34,6 +37,7 @@ const ICON_END =
 
 <style lang="scss" scoped>
 .wf-boundary {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -49,6 +53,33 @@ const ICON_END =
     border-color: var(--text-secondary);
     box-shadow: 0 0 0 1.5px var(--text-secondary);
   }
+}
+
+/* 悬停快捷删除（画布管理基本操作） */
+.nd-del {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-faint);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  z-index: 3;
+
+  &:hover {
+    color: var(--error);
+    border-color: var(--error);
+  }
+}
+.wf-boundary:hover .nd-del {
+  opacity: 1;
 }
 
 .bd-icon {
