@@ -346,7 +346,8 @@ class AgentRuntime:
         return msg.to_dict()
 
     # ---------- AI-7D D1 · Unified Direct Chat Turn Runtime ----------
-    async def unified_turn(self, project: str, sid: str, content: str) -> dict:
+    async def unified_turn(self, project: str, sid: str, content: str,
+                           *, thinking: bool = False) -> dict:
         """Direct Chat 统一 turn 入口（D1.7 单一 runtime）。按 session 取 agent+scope →
         classify_turn_intent 分流：
           conversation（含 change 降级，D2 接桥）→ _produce_chat_reply（聊天）
@@ -354,7 +355,9 @@ class AgentRuntime:
           runtime_query → 同 inquiry 路径 + active_workflow_snapshot 注入
         返回 AgentTurnResult（D1.5）：assistant_message 是用户唯一所见自然语言；events 是真后台事件
         （非模型叙述）；evidence_refs 来自真实 inspect。user+assistant(meta) 落盘 AgentSessionStore。
-        assistant_message 永不含 tool-call JSON / capability id / raw stack（D1.6）。"""
+        assistant_message 永不含 tool-call JSON / capability id / raw stack（D1.6）。
+        Phase 46（M02）：thinking 显式开启时透传给各原生 tool-loop（ Producer 解析等；
+        缺省 False 保持旧行为）。"""
         import secrets as _secrets
         store = self._session_store(project)
         session = store.load(sid)
@@ -373,26 +376,26 @@ class AgentRuntime:
         # scene/shot 级会话保留 D1 specialist read-answer 路径。
         if agent_id == "script_writer" and scope_type == ScopeType.PROJECT.value:
             from .script_writer import script_writer_turn
-            return await script_writer_turn(self, project, sid, content)
+            return await script_writer_turn(self, project, sid, content, thinking=thinking)
 
         # 2026-08-30：Character Designer 项目级 Direct Chat 同走原生 tool-loop（只写角色
         # canonical；story/script 只读参考）。与 script_writer 同语义：在持久化 user 之前委派。
         if agent_id == "character_designer" and scope_type == ScopeType.PROJECT.value:
             from .character_designer import character_designer_turn
-            return await character_designer_turn(self, project, sid, content)
+            return await character_designer_turn(self, project, sid, content, thinking=thinking)
 
         # Agent System V2 Phase C2（28.md §3/§4）：Scene Agent 项目级 Direct Chat 走原生
         # tool-loop（只写 Scene System canonical；story/shot/profile 只读参考）。
         # 与 SW/CD 同语义：在持久化 user 之前委派，避免重复落盘。
         if agent_id == "scene_designer" and scope_type == ScopeType.PROJECT.value:
             from .scene_designer import scene_designer_turn
-            return await scene_designer_turn(self, project, sid, content)
+            return await scene_designer_turn(self, project, sid, content, thinking=thinking)
 
         # Phase 44B：Assembly Agent 项目级 Direct Chat 走原生 tool-loop（只写成片装配域
         # canonical；Shot/Story/快照只读消费）。与 SW/CD/SD 同语义：在持久化 user 之前委派。
         if agent_id == "assembly" and scope_type == ScopeType.PROJECT.value:
             from .assembly import assembly_turn
-            return await assembly_turn(self, project, sid, content)
+            return await assembly_turn(self, project, sid, content, thinking=thinking)
 
         # Producer V1 Phase 1：Producer 项目级 Direct Chat 走原生 tool-loop（自己持久化
         # 消息、自己循环，经 *.delegate 真实调用 SW/CD/Director *_turn；不经过 inquiry
@@ -404,7 +407,7 @@ class AgentRuntime:
             _pclient = self._resolve_client_or_none(agent_id="producer")
             if _pclient is not None and hasattr(_pclient, "chat_completion"):
                 from .producer import producer_turn
-                return await producer_turn(self, project, sid, content)
+                return await producer_turn(self, project, sid, content, thinking=thinking)
 
         # 捕获对话历史（append 当前 user 之前的 messages）供 inquiry 路径多轮承接（D1.3 / Bug B）。
         # conversation 路径（_produce_chat_reply）自己读 session.messages 含历史；inquiry 路径需显式注入。

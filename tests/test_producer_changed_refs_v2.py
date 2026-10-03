@@ -124,7 +124,7 @@ def test_A5_mixed_resources_all_recorded():
 
 def test_A6_zero_mutation_all_keys_empty():
     refs = _derive_changed_refs("character_designer", [])
-    assert refs == {"scenes": [], "shots": [], "characters": [], "sequences": [],
+    assert refs == {"scenes": [], "shots": [], "characters": [], "sequences": [], "story": [],
                     "clothings": [], "looks": [], "props": [],
                     "reference_assets": [], "compositions": [], "bindings": [],
                     "locations": [], "location_views": [],
@@ -169,7 +169,7 @@ def test_A8_wrap_task_result_resource_keys():
 
 def test_A8b_empty_changed_refs_skeleton_shape():
     # 28.md §22：Phase C2 场景域四键
-    assert _empty_changed_refs() == {"scenes": [], "shots": [], "characters": [], "sequences": [],
+    assert _empty_changed_refs() == {"scenes": [], "shots": [], "characters": [], "sequences": [], "story": [],
                                      "clothings": [], "looks": [], "props": [],
                                      "reference_assets": [], "compositions": [],
                                      "bindings": [], "locations": [],

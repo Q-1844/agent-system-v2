@@ -187,7 +187,9 @@ async function send(preset?: string) {
     scrollBottom();
     try {
       const sid = await ensureProducerSession();
-      const turn = await apiClient.agentTurn(props.draft.projectId, sid, buildProducerPrompt(text, props.draft));
+      // Phase 46（M02）：复杂解析开启思考（后端 chat_template_kwargs.enable_thinking）
+      const turn = await apiClient.agentTurn(
+        props.draft.projectId, sid, buildProducerPrompt(text, props.draft), true);
       const reply = turn.assistant_message ?? '';
       const intent = extractIntentJson(reply);
       if (intent) {

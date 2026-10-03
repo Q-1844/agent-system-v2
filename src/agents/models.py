@@ -362,6 +362,10 @@ class AgentTask:
     error: Optional[str] = None
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
+    # Phase 46：工作流运行关联（最小兼容扩展，同 execution_ref 先例）。None=非工作流派发。
+    # 形状 {"runId","nodeId","attemptId","allowedDelegates"?}——R04 找回同任务、
+    # 防止工作流重复派发的 correlation 身份。
+    workflow_ref: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> dict:
         return {
@@ -381,6 +385,7 @@ class AgentTask:
             "suggested_next_actions": list(self.suggested_next_actions),
             "error": self.error,
             "created_at": self.created_at, "updated_at": self.updated_at,
+            "workflow_ref": self.workflow_ref,
         }
 
     @classmethod
@@ -407,4 +412,5 @@ class AgentTask:
             error=d.get("error"),
             created_at=d.get("created_at", time.time()),
             updated_at=d.get("updated_at", time.time()),
+            workflow_ref=d.get("workflow_ref"),
         )

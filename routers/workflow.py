@@ -1,0 +1,338 @@
+# routers/workflow.py
+# Phase 46：可视化工作流后端 API（PHASE46_01 §8.1 语义表落地）。
+# 所有查询/保存/校验都不派发生产任务；只有 start/approve/continue 推动执行。
+# 错误响应区分结构/版本/权限/前置素材/未知提交，不以 200 包裹全部错误。
+from __future__ import annotations
+import logging
+from pathlib import Path
+from typing import Optional
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
+from deps import get_project_manager
+from src.agents.runtime import get_agent_runtime, AgentError
+from src.workflow import models as M
+from src.workflow.catalog import build_catalog
+from src.workflow.executor import WorkflowEngine, WorkflowError, get_engine
+from src.workflow.plan import build_start_snapshot, compile_plan
+from src.workflow.store import DefinitionStore, EventLog, RevisionConflict, RunStore
+from src.workflow.validate import preflight_for_start, validate_definition
+
+log = logging.getLogger("routers.workflow")
+router = APIRouter()
+
+_HTTP = {
+    "unknown_project": 404, "unknown_run": 404, "unknown_review": 404,
+    "unknown_node": 404, "unknown_workflow": 404,
+    "revision_conflict": 409, "idempotency_conflict": 409,
+    "waiting_human": 409, "run_terminal": 409, "stopping": 409,
+    "not_retryable": 409, "review_object_changed": 409, "bad_decision": 400,
+    "invalid_definition": 422, "start_blocked": 422, "disabled_agent": 400,
+}
+
+
+def _pdir(project_name: str) -> Path:
+    try:
+        return get_project_manager().get_project_dir(project_name)
+    except FileNotFoundError:
+        raise HTTPException(404, f"项目不存在: {project_name}")
+
+
+def _err(e: Exception):
+    if isinstance(e, WorkflowError):
+        raise HTTPException(_HTTP.get(e.code, 400), f"[{e.code}] {e}")
+    if isinstance(e, AgentError):
+        raise HTTPException(_HTTP.get(e.code, 400), f"[{e.code}] {e.message}")
+    if isinstance(e, RevisionConflict):
+        raise HTTPException(409, f"[revision_conflict] 当前服务端 revision={e.current}：{e}")
+    raise HTTPException(500, f"[internal] {type(e).__name__}: {str(e)[:300]}")
+
+
+# ============ 请求模型 ============
+class SaveDefinitionReq(BaseModel):
+    definition: dict
+    expectedRevision: Optional[int] = None
+
+
+class StartRunReq(BaseModel):
+    definition: Optional[dict] = None          # 缺省=用已保存定义
+    idempotencyKey: str
+    expectedRevision: Optional[int] = None
+    saveIfChanged: bool = True                 # 带定义时先保存（走 revision 冲突保护）
+
+
+class ReviewDecisionReq(BaseModel):
+    decision: str                              # approve | reject
+    note: str = ""
+    expectedFingerprint: Optional[str] = None
+
+
+class ContinueReq(BaseModel):
+    nodeId: Optional[str] = None
+
+
+# ============ A批：动态组件目录 ============
+@router.get("/api/project/{project_name}/workflow/catalog")
+async def workflow_catalog(project_name: str):
+    try:
+        rt = get_agent_runtime()
+        _pdir(project_name)   # 项目存在性
+        return build_catalog(rt, project_name)
+    except HTTPException:
+        raise
+    except Exception as e:
+        _err(e)
+
+
+# ============ B批：定义保存/读取（revision 冲突保护） ============
+@router.get("/api/project/{project_name}/workflow/definitions/{workflow_id}")
+async def get_definition(project_name: str, workflow_id: str):
+    try:
+        store = DefinitionStore(_pdir(project_name), project_name)
+        doc = store.load(workflow_id)
+        if doc is None:
+            raise HTTPException(404, f"工作流定义不存在: {workflow_id}")
+        return doc
+    except HTTPException:
+        raise
+    except Exception as e:
+        _err(e)
+
+
+@router.put("/api/project/{project_name}/workflow/definitions/{workflow_id}")
+async def save_definition(project_name: str, workflow_id: str, req: SaveDefinitionReq):
+    """保存定义。expectedRevision=None=首次创建。返回 {revision, updatedAt, contentHash}。
+    保存前做后端结构校验（错误仍允许保存草稿，但响应携带 issues——与前端一致：
+    草稿可存，启动必挡）。"""
+    try:
+        pdir = _pdir(project_name)
+        store = DefinitionStore(pdir, project_name)
+        definition = dict(req.definition or {})
+        definition["projectId"] = project_name
+        definition["workflowId"] = workflow_id
+        v = validate_definition(definition, get_agent_runtime(), project_name)
+        doc = store.save(workflow_id, definition, req.expectedRevision)
+        return {"workflowId": workflow_id, "revision": doc["revision"],
+                "updatedAt": doc["updatedAt"], "contentHash": doc["contentHash"],
+                "validation": {"ok": v["ok"], "errors": v["errors"],
+                               "warnings": v["warnings"]}}
+    except HTTPException:
+        raise
+    except Exception as e:
+        _err(e)
+
+
+# ============ B批：校验 / 编译（无执行副作用） ============
+@router.post("/api/project/{project_name}/workflow/definitions/{workflow_id}/validate")
+async def validate_workflow(project_name: str, workflow_id: str,
+                            req: SaveDefinitionReq):
+    try:
+        definition = req.definition
+        if definition is None:
+            definition = DefinitionStore(_pdir(project_name), project_name).load(workflow_id)
+            if definition is None:
+                raise HTTPException(404, f"工作流定义不存在: {workflow_id}")
+        v = validate_definition(definition, get_agent_runtime(), project_name)
+        return {"ok": v["ok"], "errors": v["errors"], "warnings": v["warnings"]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        _err(e)
+
+
+@router.post("/api/project/{project_name}/workflow/definitions/{workflow_id}/compile")
+async def compile_workflow(project_name: str, workflow_id: str,
+                           req: SaveDefinitionReq):
+    """编译顺序计划（确定性，无模型调用，无副作用）。结构非法时返回 blockers。"""
+    try:
+        definition = req.definition
+        if definition is None:
+            definition = DefinitionStore(_pdir(project_name), project_name).load(workflow_id)
+            if definition is None:
+                raise HTTPException(404, f"工作流定义不存在: {workflow_id}")
+        definition = dict(definition)
+        definition["projectId"] = project_name
+        definition["workflowId"] = workflow_id
+        v = validate_definition(definition, get_agent_runtime(), project_name)
+        if not v["ok"]:
+            return {"ok": False, "plan": None, "blockers": v["errors"]}
+        plan = compile_plan(definition, v, v["catalog"])
+        return {"ok": True, "plan": plan, "blockers": []}
+    except HTTPException:
+        raise
+    except Exception as e:
+        _err(e)
+
+
+# ============ D批：启动 run（幂等键；尽快返回已持久化 run） ============
+@router.post("/api/project/{project_name}/workflow/definitions/{workflow_id}/runs")
+async def start_run(project_name: str, workflow_id: str, req: StartRunReq):
+    try:
+        pdir = _pdir(project_name)
+        rt = get_agent_runtime()
+        dstore = DefinitionStore(pdir, project_name)
+        definition = req.definition
+        if definition is not None and req.saveIfChanged:
+            definition = dict(definition)
+            definition["projectId"] = project_name
+            definition["workflowId"] = workflow_id
+            v0 = validate_definition(definition, rt, project_name)
+            definition = dstore.save(workflow_id, definition, req.expectedRevision)
+        else:
+            definition = dstore.load(workflow_id)
+            if definition is None:
+                raise WorkflowError("unknown_workflow",
+                                    f"工作流定义不存在且请求未携带定义: {workflow_id}")
+        definition = dict(definition)
+        definition["projectId"] = project_name
+        definition["workflowId"] = workflow_id
+
+        # 启动 preflight（§4.3.8/§4.1：缺目标/禁用 Agent 等具体缺项）
+        pre = preflight_for_start(definition, rt, project_name)
+        if not pre["ok"]:
+            raise WorkflowError("start_blocked",
+                                "启动被阻止：" + "；".join(
+                                    f"{b.get('nodeId') or ''}{b.get('message')}"
+                                    for b in pre["blockers"][:6]))
+        v = validate_definition(definition, rt, project_name)
+        plan = compile_plan(definition, v, v["catalog"])
+        snapshot = build_start_snapshot(definition, rt, project_name, v, plan)
+        engine = get_engine()
+        out = engine.start_run(pdir, project_name, definition, v, plan, snapshot,
+                               req.idempotencyKey)
+        run = out["run"]
+        # 尽快返回已持久化 run；执行由后台 worker 推进（启动响应不等模型）
+        engine.drive(pdir, project_name, run["runId"])
+        return {"run": _project_run(run), "reused": out["reused"]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        _err(e)
+
+
+# ============ D批：查询 run / 事件 ============
+def _project_run(run: dict) -> dict:
+    """run 投影：全量返回（单链规模小；前端运行视图直接消费）。"""
+    return run
+
+
+@router.get("/api/project/{project_name}/workflow/runs")
+async def list_runs(project_name: str, status: Optional[str] = None):
+    try:
+        runs = RunStore(_pdir(project_name), project_name)
+        return {"runs": runs.list(status)}
+    except Exception as e:
+        _err(e)
+
+
+@router.get("/api/project/{project_name}/workflow/runs/{run_id}")
+async def get_run(project_name: str, run_id: str):
+    try:
+        run = RunStore(_pdir(project_name), project_name).load(run_id)
+        if run is None:
+            raise HTTPException(404, f"run 不存在: {run_id}")
+        run = dict(run)
+        run["workerRunning"] = get_engine().worker_running(run_id)
+        return run
+    except HTTPException:
+        raise
+    except Exception as e:
+        _err(e)
+
+
+@router.get("/api/project/{project_name}/workflow/runs/{run_id}/events")
+async def get_run_events(project_name: str, run_id: str, after: int = 0,
+                         limit: int = 500):
+    try:
+        _pdir(project_name)
+        ev = EventLog(_pdir(project_name), run_id).read(after=after, limit=limit)
+        return {"events": ev, "lastSeq": ev[-1]["seq"] if ev else after}
+    except HTTPException:
+        raise
+    except Exception as e:
+        _err(e)
+
+
+# ============ D批：审核决策 / 显式继续 / 停止 ============
+@router.post("/api/project/{project_name}/workflow/runs/{run_id}/reviews/{request_id}/decision")
+async def review_decision(project_name: str, run_id: str, request_id: str,
+                          req: ReviewDecisionReq):
+    try:
+        engine = get_engine()
+        pdir = _pdir(project_name)
+        out = engine.decide_review(pdir, project_name, run_id,
+                                   request_id, req.decision, req.note,
+                                   req.expectedFingerprint)
+        # 通过 → 下一节点唯一启动（在事件循环内驱动；驳回已停止派发，驱动无害）
+        if not out.get("alreadyDecided"):
+            engine.drive(pdir, project_name, run_id)
+        run = RunStore(pdir, project_name).load(run_id)
+        return {**out, "run": run}
+    except HTTPException:
+        raise
+    except Exception as e:
+        _err(e)
+
+
+@router.post("/api/project/{project_name}/workflow/runs/{run_id}/continue")
+async def continue_run(project_name: str, run_id: str, req: ContinueReq):
+    try:
+        engine = get_engine()
+        pdir = _pdir(project_name)
+        run = engine.continue_run(pdir, project_name, run_id, req.nodeId)
+        engine.drive(pdir, project_name, run_id)
+        return {"run": run}
+    except HTTPException:
+        raise
+    except Exception as e:
+        _err(e)
+
+
+@router.post("/api/project/{project_name}/workflow/runs/{run_id}/stop")
+async def stop_run(project_name: str, run_id: str):
+    try:
+        run = get_engine().request_stop(_pdir(project_name), project_name, run_id)
+        return {"run": run, "note": "已请求停止：不再派发下游；在途任务按真实能力处理"
+                                     "（本版本 turn 协作取消，已提交的生成任务可能仍会完成）"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        _err(e)
+
+
+# ============ 启动恢复（api_server startup 调用） ============
+def recover_workflows() -> dict:
+    """启动恢复（§7.4）：扫描各项目 workflow runs，运行中/需要核对的 run
+    重新对账（不自动派发新节点——需要显式继续；审核等待保持等待）。"""
+    pm = get_project_manager()
+    out = {"scanned": 0, "reconciled": 0, "errors": []}
+    try:
+        projects = pm.list_projects() if hasattr(pm, "list_projects") else []
+    except Exception as e:
+        out["errors"].append(f"list_projects: {e}")
+        return out
+    for name in projects:
+        try:
+            pdir = pm.get_project_dir(name)
+            runs = RunStore(pdir, name)
+            active = runs.active_run_ids()
+            out["scanned"] += len(active)
+            for rid in active:
+                run = runs.load(rid)
+                if run is None:
+                    continue
+                el = EventLog(pdir, rid)
+                engine = get_engine()
+                # 对账每个节点的在途 attempt（不派发新任务）
+                for nid, node in (run.get("nodes") or {}).items():
+                    cur = node.get("currentAttemptId")
+                    att = next((a for a in node.get("attempts") or []
+                                if a.get("attemptId") == cur), None)
+                    if att and att.get("status") in ("dispatching", "running"):
+                        engine._reconcile_attempt(pdir, run, nid, att, runs, el)
+                        out["reconciled"] += 1
+                runs.save(runs.load(rid) or run)
+        except Exception as e:
+            out["errors"].append(f"{name}: {type(e).__name__}: {e}")
+    return out

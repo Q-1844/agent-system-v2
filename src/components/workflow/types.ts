@@ -21,6 +21,8 @@ export type NodePort = 'out' | 'in' | 'bind';
 export interface WorkflowNodeConfig {
   /** agent：从该 Agent 获准工具面中勾选的子集（仅草稿，不改变运行时权限） */
   selectedTools?: string[];
+  /** agent：本节点任务目标与范围（Phase 46 运行必需字段；留空可存草稿，启动被后端阻止） */
+  objective?: string;
   /** human_review：审核对象来源节点（上游产物） */
   targetSourceNodeId?: string | null;
   /** human_review：审核对象/产物（可从上游产物受约束选择，也可草稿自由填写） */

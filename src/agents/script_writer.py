@@ -2114,6 +2114,11 @@ async def script_writer_turn(rt: AgentRuntime, project: str, session_id: str,
             "deleted": deleted,
             "events": events, "message": asst.to_dict(),
             "intent": intent, "receipts": receipts_meta, "trace": trace,
+            # Phase 46：原始回执（含 created/results 等机器可读 id 字段）。
+            # receipts_meta 是给会话 meta/UI 的白名单投影（剥掉富字段）；
+            # 委派底座（_wrap_task_result → _derive_changed_refs）必须吃原始回执，
+            # 否则 story.create_many / story.update_many 的产物 id 会丢失。
+            "receipts_raw": receipts,
             "search_sources": search_sources,
             "evidence_refs": [], "linked_task_ids": [],
             "linked_change_session_id": None, "session_id": session_id,

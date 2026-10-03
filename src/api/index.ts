@@ -647,6 +647,75 @@ export interface AgentEvidenceRef {
 export interface AgentTurnEvent {
   kind: string; summary: string; refs?: AgentEvidenceRef[];
 }
+
+// ============ Phase 46 · 可视化工作流（六员后端接入）类型 ============
+export interface ValidationIssue2 {
+  level: 'error' | 'warning'; code: string; message: string;
+  nodeId: string | null; edgeId: string | null;
+}
+export interface WorkflowCatalogAgent {
+  id: string; name: string; role: string; description: string;
+  readScopes: string[]; writeScopes: string[]; canDelegateTo: string[];
+  coreTools: string[]; optionalTools: string[]; toolCount: number;
+  writeDomains: string[]; expectedArtifactDomains: string[];
+  skillBindable: boolean; registryDigest: string; turnEntry: string;
+  enabled: boolean; unavailableReason: string | null;
+  modelProfile: AgentModelProfile | null;
+}
+export interface WorkflowCatalogSkill {
+  id: string; version: string; name: string; description: string;
+  applicability: string; category: string; source: string; status: string;
+  dependsOn: string[];
+  bindings: { agentId: string; role: string; routingPriority: number; activationMode: string }[];
+  contentHash: string; registryError?: string;
+}
+export interface WorkflowCatalog {
+  catalogVersion: string;
+  agents: WorkflowCatalogAgent[];
+  skills: WorkflowCatalogSkill[];
+  notes: string[];
+}
+export interface WorkflowDefinitionDoc {
+  schemaVersion: string; projectId: string; workflowId: string;
+  name?: string; revision: number; createdAt?: string; updatedAt?: string;
+  contentHash?: string; nodes: any[]; edges: any[];
+}
+export interface WorkflowSaveResult {
+  workflowId: string; revision: number; updatedAt: string; contentHash: string;
+  validation: { ok: boolean; errors: ValidationIssue2[]; warnings: ValidationIssue2[] };
+}
+export interface WorkflowAttempt {
+  attemptId: string; status: string; startedAt: number; endedAt: number | null;
+  taskRefs: string[]; result: any | null; error: string | null;
+  inputs?: any; outputs?: any; skillEvidence?: any; thinking?: boolean;
+  session?: string;
+}
+export interface WorkflowRunNode {
+  nodeId: string; type: string; refId: string | null; status: string;
+  attempts: WorkflowAttempt[]; currentAttemptId: string | null;
+  handoff: any | null; error: string | null; upstreamNodeId?: string | null;
+  statusAt?: number; currentReviewId?: string; lastReviewDecision?: string;
+}
+export interface WorkflowReviewRequest {
+  requestId: string; nodeId: string; reviewIndex?: number; label?: string;
+  targetNodeId: string | null; targetAttemptId: string | null;
+  targetArtifact: string; instructions: string; reviewerLabel: string;
+  artifactRefs: { kind: string; id: string; source?: string }[];
+  artifactFingerprint: string;
+  status: 'pending' | 'decided' | 'cancelled';
+  createdAt: number; decidedAt: string | null; decision: string | null;
+  decisionNote: string | null; decisionReceipt: any | null;
+}
+export interface WorkflowRun {
+  runId: string; project: string; workflowId: string; status: string;
+  idempotencyKey: string; startParamsHash: string;
+  snapshot: any; plan: any;
+  nodes: Record<string, WorkflowRunNode>;
+  reviews: WorkflowReviewRequest[];
+  cursor: number; stopRequested: boolean; error: string | null;
+  createdAt?: string; updatedAt?: string; workerRunning?: boolean;
+}
+
 /** AI-7D D1 · 统一 Direct Chat turn 结果（POST /turn）。assistant_message 是用户唯一所见。 */
 export interface AgentTurnResult {
   turn_id: string; session_id: string; agent_id: string;
@@ -1965,11 +2034,12 @@ class ApiClient {
     });
   }
   /** AI-7D D1 · 统一 Direct Chat turn。返回 AgentTurnResult（intent + assistant_message +
-   * events + evidence_refs）。assistant_message 是用户唯一所见；events 是真后台事件。 */
-  async agentTurn(projectName: string, sid: string, content: string): Promise<AgentTurnResult> {
+   * events + evidence_refs）。assistant_message 是用户唯一所见；events 是真后台事件。
+   * Phase 46（M02）：thinking=true 时后端以 enable_thinking 出站（工作流助手 Producer 解析用）。 */
+  async agentTurn(projectName: string, sid: string, content: string, thinking = false): Promise<AgentTurnResult> {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/agents/sessions/${encodeURIComponent(sid)}/turn`, {
       method: 'POST',
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, thinking }),
     });
   }
   /** AI-7D-R：协作式停止进行中的流式 turn（步骤边界安全停下）。 */
@@ -1986,6 +2056,58 @@ class ApiClient {
   /** Producer V1 Phase 3 · Production Room 只读投影（稳定 ID / 确定顺序 / 真实状态）。 */
   async getProductionRoom(projectName: string): Promise<RoomSnapshot> {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/agents/producer/room`);
+  }
+
+  // ============ Phase 46 · 可视化工作流（六员后端接入）============
+  async getWorkflowCatalog(projectName: string): Promise<WorkflowCatalog> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/workflow/catalog`);
+  }
+  async getWorkflowDefinition(projectName: string, workflowId: string): Promise<WorkflowDefinitionDoc> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/workflow/definitions/${encodeURIComponent(workflowId)}`);
+  }
+  async saveWorkflowDefinition(projectName: string, workflowId: string, definition: any, expectedRevision: number | null): Promise<WorkflowSaveResult> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/workflow/definitions/${encodeURIComponent(workflowId)}`, {
+      method: 'PUT', body: JSON.stringify({ definition, expectedRevision }),
+    });
+  }
+  async validateWorkflow(projectName: string, workflowId: string, definition: any): Promise<{ ok: boolean; errors: ValidationIssue2[]; warnings: ValidationIssue2[] }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/workflow/definitions/${encodeURIComponent(workflowId)}/validate`, {
+      method: 'POST', body: JSON.stringify({ definition }),
+    });
+  }
+  async compileWorkflow(projectName: string, workflowId: string, definition: any): Promise<{ ok: boolean; plan: any | null; blockers: ValidationIssue2[] }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/workflow/definitions/${encodeURIComponent(workflowId)}/compile`, {
+      method: 'POST', body: JSON.stringify({ definition }),
+    });
+  }
+  async startWorkflowRun(projectName: string, workflowId: string, payload: {
+    definition?: any; idempotencyKey: string; expectedRevision?: number | null; saveIfChanged?: boolean;
+  }): Promise<{ run: WorkflowRun; reused: boolean }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/workflow/definitions/${encodeURIComponent(workflowId)}/runs`, {
+      method: 'POST', body: JSON.stringify(payload),
+    });
+  }
+  async listWorkflowRuns(projectName: string): Promise<{ runs: any[] }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/workflow/runs`);
+  }
+  async getWorkflowRun(projectName: string, runId: string): Promise<WorkflowRun> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/workflow/runs/${encodeURIComponent(runId)}`);
+  }
+  async getWorkflowRunEvents(projectName: string, runId: string, after = 0): Promise<{ events: any[]; lastSeq: number }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/workflow/runs/${encodeURIComponent(runId)}/events?after=${after}`);
+  }
+  async decideWorkflowReview(projectName: string, runId: string, requestId: string, decision: 'approve' | 'reject', note = '', expectedFingerprint?: string | null): Promise<any> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/workflow/runs/${encodeURIComponent(runId)}/reviews/${encodeURIComponent(requestId)}/decision`, {
+      method: 'POST', body: JSON.stringify({ decision, note, expectedFingerprint: expectedFingerprint ?? null }),
+    });
+  }
+  async continueWorkflowRun(projectName: string, runId: string, nodeId?: string | null): Promise<{ run: WorkflowRun }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/workflow/runs/${encodeURIComponent(runId)}/continue`, {
+      method: 'POST', body: JSON.stringify({ nodeId: nodeId ?? null }),
+    });
+  }
+  async stopWorkflowRun(projectName: string, runId: string): Promise<{ run: WorkflowRun; note: string }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/workflow/runs/${encodeURIComponent(runId)}/stop`, { method: 'POST' });
   }
 
   // ============ AI-7D-R · Script Writer 最小测试弹窗（隔离，单工具 edit_story_text）============

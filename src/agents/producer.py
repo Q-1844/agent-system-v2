@@ -26,6 +26,7 @@
 # 模块，收口 §1B 瞬态恢复需要判定可重试状态码；Specialist 模块一律 lazy import 的纪律不变）。
 from __future__ import annotations
 import asyncio
+import contextvars
 import json
 import logging
 import random
@@ -56,6 +57,15 @@ from .skill_system.tools import (
 from .skill_system.runtime import get_skill_runtime as _get_skill_runtime
 
 log = logging.getLogger("producer")
+
+# ============ Phase 46：工作流派发守卫（服务端限制，非提示词约束）============
+# 工作流上下文中运行 Producer 节点时，executor 会 set 本 ContextVar：
+#   {"runId","nodeId","attemptId","allowedDelegates":[...]}。
+# _delegate_specialist 据此做服务端限制：目标不在 allowedDelegates → 直接回执失败，
+# 不建立 AgentTask、不进入 Specialist turn（§5.1：不能用提示词"请不要多做"代替）。
+# 默认 None = 非工作流上下文，既有 Producer 聊天/委派行为完全不变。
+WF_DELEGATE_GUARD: "contextvars.ContextVar[Optional[dict]]" = contextvars.ContextVar(
+    "wf_delegate_guard", default=None)
 
 # ============ 常量 ============
 DEFAULT_MAX_TOOL_STEPS = 1024
@@ -541,10 +551,16 @@ def _derive_changed_refs(agent_id: str, receipts: list) -> dict:
     shots: set = set()
     characters: set = set()
     sequences: set = set()
+    story: set = set()
     resources: Dict[str, set] = {k: set() for k in _RESOURCE_KIND_TO_REF.values()}
     for r in receipts or []:
         if not (r.get("ok") and r.get("verified") and not r.get("unchanged")):
             continue
+        # Phase 46：script.update 是整篇故事文本的已验证写入（回执无 scene_id，
+        # 只带 revision/old_len/new_len）——计入 story 域，否则工作流完成校验
+        # 会把真实成功误判为「无产物」。
+        if (r.get("operation") or "") == "script.update":
+            story.add("story_text")
         if r.get("scene_id"):
             scenes.add(r["scene_id"])
         if r.get("shot_id"):
@@ -566,8 +582,12 @@ def _derive_changed_refs(agent_id: str, receipts: list) -> dict:
         for sid in (d.get("shots") or []):
             shots.add(sid)
         for res in (r.get("results") or []):
+            # story.update_many 的 results=[{scene_id, changed}]；
+            # shot 域批量回执的 results=[{shot_id, ...}]——两种都收。
             if res.get("shot_id"):
                 shots.add(res["shot_id"])
+            if res.get("scene_id"):
+                scenes.add(res["scene_id"])
         # Phase B：Resource Agent mutation 工具回执的确定性聚合清单。
         for cr in (r.get("changed_resources") or []):
             if isinstance(cr, dict):
@@ -587,6 +607,7 @@ def _derive_changed_refs(agent_id: str, receipts: list) -> dict:
     # （Map 里 "character"→"characters" 与 legacy set 同键——合并而非覆盖）。
     resources["characters"].update(characters)
     return {"scenes": sorted(scenes), "shots": sorted(shots),
+            "story": sorted(story),
             **{k: sorted(resources[k]) for k in _RESOURCE_KIND_TO_REF.values()},
             "sequences": sorted(sequences)}
 
@@ -622,9 +643,12 @@ def _wrap_task_result(turn_result: Optional[dict], err: Optional[str],
                       task_id: str, workflow_id: str, agent_id: str,
                       sid: str) -> dict:
     """从真实 *_turn 返回包装 Task Result（§6）。verified/changed_refs 只从 receipts 派生。
-    status 映射：turn message.status 为 None → completed；否则原样透传。"""
+    status 映射：turn message.status 为 None → completed；否则原样透传。
+    Phase 46：script_writer_turn 的 "receipts" 是会话 meta 的白名单投影（剥掉
+    created/results 等富字段）——优先取其新增的 "receipts_raw"（原始回执），
+    否则批量工具的产物 id 会丢失；其它五员 "receipts" 本就是原始回执。"""
     tr = turn_result or {}
-    receipts = tr.get("receipts") or []
+    receipts = tr.get("receipts_raw") or tr.get("receipts") or []
     if err:
         status = "failed"
         summary = f"[委派执行异常: {err}]"
@@ -766,8 +790,8 @@ def _append_bridge_messages(pdir: Path, project: str, rows: list) -> None:
 # ============ delegate 执行器（§5.3，三个共用一个泛化实现）============
 def _empty_changed_refs() -> dict:
     """changed_refs 全键空骨架（三老键 + Phase B 资源键 + Phase C2 场景键
-    + Phase 45.2 成片键）。早期失败回执保持全键形状。"""
-    out = {"scenes": [], "shots": [], "characters": []}
+    + Phase 45.2 成片键 + Phase 46 story 键）。早期失败回执保持全键形状。"""
+    out = {"scenes": [], "shots": [], "characters": [], "story": []}
     out.update({k: [] for k in _RESOURCE_KIND_TO_REF.values()})
     out["sequences"] = []
     return out
@@ -777,11 +801,28 @@ async def _delegate_specialist(rt, project: str, agent_id: str,
                                envelope: dict, *, event_cb, cancel_event,
                                prev_task_id: Optional[str],
                                workflow_id: str,
-                               thinking: bool = False) -> dict:
+                               thinking: bool = False,
+                               requester_agent: str = "producer",
+                               workflow_ref: Optional[dict] = None) -> dict:
     """委派给真实 Specialist *_turn。锁与 *.changed 事件在 Bridge 的 _cb 里复制
     （§5.3-⑤b）——直接调 *_turn 而不复制接线时前端所有页面都看不到锁与内容变化。
     thinking 随 Producer turn 的快照透传（Phase 39：用户指令——agent 系统测试
-    打开 Agnes 文本模型思考能力；不再硬编码 False）。"""
+    打开 Agnes 文本模型思考能力；不再硬编码 False）。
+    Phase 46：requester_agent/workflow_ref 支持工作流执行层复用同一委派底座
+    （任务归属记录 workflow_ref；requester 默认 producer，工作流派发为 "workflow"，
+    不进 production_room 的 producer 投影）。本函数开头还做 WF_DELEGATE_GUARD
+    服务端派发限制——Producer 节点在工作流上下文中越权委派会被拒绝。"""
+    # ⓪ Phase 46 服务端派发守卫：工作流上下文中只允许派发到 allowedDelegates 名单。
+    guard = WF_DELEGATE_GUARD.get()
+    if guard is not None and agent_id not in set(guard.get("allowedDelegates") or []):
+        return {"ok": False, "operation": f"{agent_id}.delegate",
+                "code": "workflow_scope_denied", "agent": agent_id,
+                "error": (f"工作流守卫：当前节点（{guard.get('nodeId')}）不允许委派 "
+                          f"{agent_id}——后续专业节点由工作流顺序执行层派发"),
+                "fix_hint": "后续节点由画布顺序调度，不要在本节点内委派 Specialist",
+                "status": "failed", "task_id": None,
+                "workflow": {"runId": guard.get("runId"), "nodeId": guard.get("nodeId")},
+                "changed_refs": _empty_changed_refs()}
     # ① envelope 校验：objective 非空必填
     objective = (envelope.get("objective") or "").strip()
     if not objective:
@@ -842,11 +883,12 @@ async def _delegate_specialist(rt, project: str, agent_id: str,
     task_store = AgentTaskStore(pdir, project)
     task_id = "task_" + secrets.token_hex(6)
     task = AgentTask(
-        task_id=task_id, project=project, requester_agent="producer",
+        task_id=task_id, project=project, requester_agent=requester_agent,
         target_agent=agent_id, capability_id=f"{agent_id}.delegate",
         instruction=objective, scope_type=ScopeType.PROJECT.value, scope_id="",
         session_id=sid, operation=AgentOp.EXECUTE.value,
-        parent_task_id=prev_task_id, status=TaskStatus.RUNNING.value)
+        parent_task_id=prev_task_id, status=TaskStatus.RUNNING.value,
+        workflow_ref=workflow_ref)
     task_store.create(task)
 
     # ⑤ event_cb 包装 _cb（三层职责，逐条照抄 routers/agents.py 的 _cb 语义）
@@ -935,6 +977,9 @@ async def _delegate_specialist(rt, project: str, agent_id: str,
         # Phase 45.2：成片域引用（sequence canonical）。
         for sid_ in task_result["changed_refs"].get("sequences", []):
             refs.append({"type": "sequence", "id": sid_})
+        # Phase 46：story 域引用（script.update 整篇故事文本写入）。
+        for sid_ in task_result["changed_refs"].get("story", []):
+            refs.append({"type": "story", "id": sid_})
         t.artifact_refs = refs
         t.error = (err or (None if tr_status == "completed" else tr_status))
         t.updated_at = time.time()

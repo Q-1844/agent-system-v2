@@ -37,8 +37,14 @@
       <button class="btn btn-quiet btn-sm" @click="loadSample">示例工作流</button>
       <button class="btn btn-quiet btn-sm" @click="exportJson">导出 JSON</button>
       <button class="btn btn-primary btn-sm" @click="saveNow">保存草稿</button>
-      <button class="btn btn-outline btn-sm run-disabled" disabled title="待后端接入：第一版仅做前端草稿，不触发任何执行">
-        <span class="run-full">运行（待后端接入）</span><span class="run-short" title="待后端接入">运行*</span>
+      <button class="btn btn-outline btn-sm" :disabled="starting || backendOnline !== true"
+              :title="runBtnTitle" @click="startRun">
+        <span class="run-full">{{ starting ? '启动中…' : '运行' }}</span>
+        <span class="run-short" title="运行">运行</span>
+      </button>
+      <button v-if="activeRun" class="btn btn-outline btn-sm"
+              :class="{ 'assistant-on': runPanelOpen }" @click="toggleRunPanel">
+        运行状态<span v-if="runBadge" class="run-badge">{{ runBadge }}</span>
       </button>
     </header>
 
@@ -159,8 +165,20 @@
 
       <!-- ============ 右：配置面板 ============ -->
       <aside class="wf-panel">
+        <!-- 运行视图（run 面板开关打开时优先） -->
+        <template v-if="panelMode === 'run'">
+          <WorkflowRunPanel
+            :run="activeRun"
+            :get-ref-id="getRefId"
+            @decide="onDecideReview"
+            @stop="onStopRun"
+            @continue="onContinueRun"
+            @locate="locateNode"
+          />
+        </template>
+
         <!-- 概览（未选中） -->
-        <template v-if="panelMode === 'overview'">
+        <template v-else-if="panelMode === 'overview'">
           <div class="panel-head">
             <span class="panel-title">工作流概览</span>
           </div>
@@ -191,11 +209,11 @@
               </button>
             </div>
 
-            <div class="sec-label">本页语义（第一版）</div>
+            <div class="sec-label">本页语义</div>
             <p class="sem-note">
-              本页为<b>浏览器草稿</b>：按「项目 + 工作流标识」存于本机 localStorage，刷新后可恢复；
-              「保存草稿」不触发任何后端执行；「运行」待后端接入。
-              执行依赖为无环顺序图；人工审核「通过→继续、驳回→停止」，自动返工待后端定义。
+              草稿保存到<b>后端</b>（带版本冲突保护，浏览器留离线副本）；「运行」按保存的
+              定义启动一条真实生产链（后端顺序调度，文本调用开启思考）。执行依赖为无环
+              顺序图；人工审核「通过→继续、驳回→停止」；资产批准/选片/定版仍走项目页正式入口。
             </p>
             <button class="btn btn-quiet btn-sm danger-link" @click="clearCanvas">新建空白工作流</button>
           </div>
@@ -220,6 +238,20 @@
               <div v-if="selectedAgentNode && isAgentDisabled(selectedAgentNode.refId)" class="unset-hint warn">
                 ◌ 后端已停用该 Agent（settings.enabled=false）：画布可编辑，运行不可用。
               </div>
+
+              <div class="sec-label">任务目标与范围（运行必需）</div>
+              <textarea
+                :value="selectedAgentNode.config.objective ?? ''"
+                class="input obj-input"
+                rows="3"
+                placeholder="本节点要做什么、范围是什么（例如：为本项目编写两段小故事）。启动前必填。"
+                spellcheck="false"
+                @input="onObjectiveInput"
+              />
+              <p class="sem-note tiny">
+                留空时草稿可保存，但「运行」会被后端阻止并指出缺项。
+                上游节点的产物会作为交接包自动传给本节点，无需在此粘贴内容。
+              </p>
 
               <div class="sec-label">工具面</div>
               <div class="tool-block-head">
@@ -419,8 +451,10 @@ import ReviewNode from './nodes/ReviewNode.vue';
 import BoundaryNode from './nodes/BoundaryNode.vue';
 import WfEdge from './edges/WfEdge.vue';
 import WorkflowAgentPanel from './WorkflowAgentPanel.vue';
+import WorkflowRunPanel from './WorkflowRunPanel.vue';
 import { shortAgentName, shortSkillName } from './assistant';
 import type { WorkflowAssistantController, ApplyResult } from './assistant';
+import type { WorkflowRun, WorkflowReviewRequest, ValidationIssue2 } from '@/api';
 
 const { message, dialog } = createDiscreteApi(['message', 'dialog'], {
   configProviderProps: discreteConfigProviderProps,
@@ -492,10 +526,25 @@ const disabledAgents = ref<Set<string>>(new Set());
 /** Producer 当前解析到的文本模型（透明度展示用，来自既有 listAgents 数据） */
 const producerModel = ref<string | null>(null);
 
+// ============ Phase 46：后端保存 / 运行状态 ============
+/** 服务端定义 revision（保存与启动的冲突保护凭据）；null=后端尚无该定义 */
+const serverRevision = ref<number | null>(null);
+/** 后端保存状态：idle=本地改动未同步 | saved=后端已保存 | conflict=revision 冲突 | error */
+const backendSaveState = ref<'idle' | 'saved' | 'conflict' | 'error' | 'offline'>('idle');
+const conflictServerRevision = ref<number | null>(null);
+const starting = ref(false);
+const activeRun = ref<WorkflowRun | null>(null);
+const runPanelOpen = ref(false);
+const runPollTimer = ref<number | null>(null);
+const runEventsSeq = ref(0);
+/** 后端校验返回的启动阻塞项（node/edge 定位；与前端体检并存，运行前权威） */
+const backendBlockers = ref<ValidationIssue2[]>([]);
+
 const validation = computed(() => validateDraft(draft.value));
 
 function markDirty() {
   dirty.value = true;
+  if (backendSaveState.value === 'saved') backendSaveState.value = 'idle';
 }
 
 // ============ 生命周期 ============
@@ -542,15 +591,53 @@ onMounted(() => {
       disabledAgents.value = new Set(list.filter((a) => !a.enabled).map((a) => a.id));
       const producer = list.find((a) => a.id === 'producer');
       producerModel.value = producer?.model_profile?.reasoning_model ?? null;
+      // Phase 46：加载服务端定义（revision 冲突保护基线）。
+      // 本地已有草稿时保持本地为工作副本（旧草稿只在用户主动保存/运行时导入，
+      // 不被后端静默覆盖）；仅当本地为空时采用服务端版本。
+      apiClient
+        .getWorkflowDefinition(props.projectName, draft.value.workflowId)
+        .then((doc) => {
+          serverRevision.value = doc.revision;
+          backendSaveState.value = dirty.value ? 'idle' : 'saved';
+          if (!draft.value.nodes.length && (doc.nodes?.length || doc.edges?.length)) {
+            draft.value = {
+              ...newEmptyDraft(props.projectName, doc.name || '未命名工作流'),
+              createdAt: doc.createdAt ?? new Date().toISOString(),
+              nodes: doc.nodes || [],
+              edges: doc.edges || [],
+            };
+            dirty.value = false;
+            savedAt.value = doc.updatedAt ?? null;
+            scheduleFitView();
+          }
+        })
+        .catch(() => {
+          /* 服务端无定义（404）或失败：保持本地草稿与 idle 状态 */
+        });
+      // 恢复观察：找本项目非终态 run（刷新后从后端找回，不依赖 localStorage）
+      apiClient
+        .listWorkflowRuns(props.projectName)
+        .then(({ runs }) => {
+          const active = (runs || []).find(
+            (r: any) => r.status && !['failed', 'stopped', 'rejected', 'completed'].includes(r.status)
+          );
+          if (active?.runId) {
+            refreshRun(active.runId);
+            runPanelOpen.value = true;
+          }
+        })
+        .catch(() => {});
     })
     .catch(() => {
       backendOnline.value = false;
+      backendSaveState.value = 'offline';
     });
 
   window.addEventListener('beforeunload', onBeforeUnload);
 });
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', onBeforeUnload);
+  stopPolling();   // 关页不取消任务（后端继续按真实状态运行）；仅停止前端观察
 });
 function onBeforeUnload(e: BeforeUnloadEvent) {
   if (dirty.value) {
@@ -897,7 +984,8 @@ function onEdgeDoubleClick(e: { edge: { id: string } }) {
 }
 
 // ============ 右侧面板 ============
-const panelMode = computed<'overview' | 'agent' | 'skill' | 'review' | 'boundary' | 'edge'>(() => {
+const panelMode = computed<'run' | 'overview' | 'agent' | 'skill' | 'review' | 'boundary' | 'edge'>(() => {
+  if (runPanelOpen.value) return 'run';   // 运行视图优先（草稿与运行分离：编辑面板暂被遮盖，可再点关闭）
   if (selectedEdgeId.value) return 'edge';
   const n = draft.value.nodes.find((x) => x.id === selectedNodeId.value);
   if (!n) return 'overview';
@@ -1032,6 +1120,14 @@ const reviewTargetArtifact = computed({
   },
 });
 
+// —— Agent 节点任务目标（运行必需字段；§4.1）——
+function onObjectiveInput(e: Event) {
+  const n = selectedAgentNode.value;
+  if (!n) return;
+  n.config.objective = (e.target as HTMLTextAreaElement).value;
+  markDirty();
+}
+
 // —— 连线面板 ——
 function nodeTitle(id: string): string {
   const n = draft.value.nodes.find((x) => x.id === id);
@@ -1109,12 +1205,18 @@ const filteredSkills = computed<SkillCatalogEntry[]>(() => {
 
 // ============ 保存 / 导出 / 检查 / 示例 ============
 const saveText = computed(() => {
-  if (dirty.value) return '未保存更改';
+  if (backendSaveState.value === 'conflict') return '保存冲突';
+  if (backendSaveState.value === 'offline') return dirty.value ? '未保存（后端未连接）' : '草稿（后端未连接）';
+  if (dirty.value) return backendSaveState.value === 'saved' ? '本地有未同步更改' : '未保存更改';
   return savedAt.value
-    ? `草稿已保存 · ${formatTime(savedAt.value)}`
+    ? `已保存${backendSaveState.value === 'saved' ? '（后端）' : ''} · ${formatTime(savedAt.value)}`
     : '草稿（未保存）';
 });
-const saveTone = computed(() => (dirty.value ? 'chip-warn' : 'chip-ok'));
+const saveTone = computed(() => {
+  if (backendSaveState.value === 'conflict' || backendSaveState.value === 'error') return 'chip-warn';
+  if (dirty.value) return 'chip-warn';
+  return 'chip-ok';
+});
 function formatTime(iso: string): string {
   const d = new Date(iso);
   const p = (x: number) => String(x).padStart(2, '0');
@@ -1140,22 +1242,76 @@ function runCheckManually() {
   }
 }
 
-function saveNow() {
-  // 保存草稿前运行前端结构检查（错误不阻止保存草稿，但明确报告）
+function saveNow(): Promise<boolean> {
+  // 保存：后端为权威（带 revision 冲突保护），localStorage 恒为离线副本。
+  // 保存前运行前端结构检查（错误不阻止保存草稿，但明确报告）。
   const r = validateDraft(draft.value);
   saveDraft(draft.value);
-  dirty.value = false;
-  savedAt.value = draft.value.updatedAt;
-  if (r.errors) {
-    message.warning(
-      `草稿已保存到浏览器，但存在 ${r.errors} 个结构错误、${r.warnings} 个警告（点「结构检查」定位）`,
-      { duration: 4200 }
-    );
-  } else if (r.warnings) {
-    message.success(`草稿已保存（${r.warnings} 个警告，见结构检查）`, { duration: 2600 });
-  } else {
-    message.success('草稿已保存（浏览器草稿 · 结构检查通过）', { duration: 2400 });
+  const payload = { ...draft.value, updatedAt: new Date().toISOString() };
+  if (backendOnline.value !== true) {
+    dirty.value = false;
+    savedAt.value = payload.updatedAt;
+    backendSaveState.value = 'offline';
+    message.warning('后端未连接：草稿仅保存到浏览器（不会同步到服务端）', { duration: 3200 });
+    return Promise.resolve(false);
   }
+  return apiClient
+    .saveWorkflowDefinition(props.projectName, draft.value.workflowId, payload, serverRevision.value)
+    .then((res) => {
+      serverRevision.value = res.revision;
+      savedAt.value = res.updatedAt;
+      dirty.value = false;
+      backendSaveState.value = 'saved';
+      if (res.validation?.errors?.length) {
+        message.warning(
+          `已保存到后端，但存在 ${res.validation.errors.length} 个结构错误（启动会被阻止；点「结构检查」定位）`,
+          { duration: 4200 }
+        );
+      } else {
+        message.success('已保存到后端（含离线副本）', { duration: 2200 });
+      }
+      return true;
+    })
+    .catch((err: any) => {
+      const detail = String(err?.message || err || '');
+      if (detail.includes('revision_conflict')) {
+        backendSaveState.value = 'conflict';
+        conflictServerRevision.value = null;
+        apiClient
+          .getWorkflowDefinition(props.projectName, draft.value.workflowId)
+          .then((doc) => { conflictServerRevision.value = doc.revision; })
+          .catch(() => {});
+        dialog.warning({
+          title: '保存冲突',
+          content: '服务端已有更新的版本（另一处已保存）。你的本地修改不会覆盖它。可选择：'
+            + '「加载服务端版本」（丢弃本地未同步修改）或「保持本地」（稍后自行处理）。',
+          positiveText: '加载服务端版本',
+          negativeText: '保持本地',
+          onPositiveClick: () => {
+            apiClient
+              .getWorkflowDefinition(props.projectName, draft.value.workflowId)
+              .then((doc) => {
+                draft.value = {
+                  ...newEmptyDraft(props.projectName, doc.name || '未命名工作流'),
+                  nodes: doc.nodes || [],
+                  edges: doc.edges || [],
+                };
+                serverRevision.value = doc.revision;
+                dirty.value = false;
+                savedAt.value = doc.updatedAt ?? null;
+                backendSaveState.value = 'saved';
+                scheduleFitView();
+                message.success('已加载服务端版本', { duration: 2200 });
+              })
+              .catch(() => message.error('加载服务端版本失败'));
+          },
+        });
+      } else {
+        backendSaveState.value = 'error';
+        message.error(`后端保存失败：${detail.slice(0, 160)}（浏览器副本已保存）`, { duration: 4200 });
+      }
+      return false;
+    });
 }
 
 function exportJson() {
@@ -1177,6 +1333,171 @@ function exportJson() {
     message.warning(`JSON 已导出（含 ${r.errors} 个结构错误的检查结果）`, { duration: 3200 });
   } else {
     message.success('JSON 已导出（含结构检查结果）', { duration: 2400 });
+  }
+}
+
+// ============ Phase 46：运行（真实后端执行） ============
+const runBtnTitle = computed(() => {
+  if (backendOnline.value !== true) return '后端未连接，无法运行';
+  if (starting.value) return '正在启动…';
+  return '保存草稿并启动一条真实生产链（后端顺序调度）';
+});
+const runBadge = computed(() => {
+  const st = activeRun.value?.status;
+  if (st === 'waiting_human') return ' · 待审核';
+  if (st === 'needs_reconciliation') return ' · 需核对';
+  if (st === 'running') return ' · 运行中';
+  return '';
+});
+/** 已知非终态 run 的节点 refId（面板与画布定位用） */
+function getRefId(nodeId: string): string | null {
+  return activeRun.value?.nodes?.[nodeId]?.refId ?? null;
+}
+function toggleRunPanel() {
+  runPanelOpen.value = !runPanelOpen.value;
+}
+
+async function startRun() {
+  if (starting.value) return;
+  starting.value = true;
+  try {
+    // 先保存（带 revision 冲突保护）；保存失败/冲突时不启动（run 必须基于已确认定义）
+    const saved = await saveNow();
+    if (!saved) {
+      message.warning('未保存到后端，已取消启动（运行基于服务端已确认的定义）', { duration: 3600 });
+      return;
+    }
+    const idemKey = `run-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const { run, reused } = await apiClient.startWorkflowRun(
+      props.projectName, draft.value.workflowId,
+      { idempotencyKey: idemKey, expectedRevision: serverRevision.value, saveIfChanged: false }
+    );
+    activeRun.value = run;
+    runPanelOpen.value = true;
+    runEventsSeq.value = 0;
+    startPolling();
+    message.success(reused ? `已存在相同启动键的 run：${run.runId}（未重复创建）`
+                           : `run 已启动：${run.runId}`, { duration: 3200 });
+  } catch (err: any) {
+    const detail = String(err?.message || err || '');
+    if (detail.includes('start_blocked')) {
+      message.error(`启动被阻止：${detail.replace('[start_blocked] ', '').slice(0, 300)}`, { duration: 6000 });
+    } else if (detail.includes('revision_conflict')) {
+      backendSaveState.value = 'conflict';
+      message.error('定义版本冲突：请先处理保存冲突再运行', { duration: 4200 });
+    } else {
+      message.error(`启动失败：${detail.slice(0, 260)}`, { duration: 5200 });
+    }
+  } finally {
+    starting.value = false;
+  }
+}
+
+function startPolling() {
+  stopPolling();
+  // 轮询 run 状态（§8.3：无可靠事件流时轮询即可；后台标签页激活时靠 navigate 重拉）
+  runPollTimer.value = window.setInterval(refreshActiveRun, 2500);
+  refreshActiveRun();
+}
+function stopPolling() {
+  if (runPollTimer.value != null) {
+    window.clearInterval(runPollTimer.value);
+    runPollTimer.value = null;
+  }
+}
+async function refreshActiveRun() {
+  const rid = activeRun.value?.runId;
+  if (!rid) return;
+  try {
+    const run = await apiClient.getWorkflowRun(props.projectName, rid);
+    const prev = activeRun.value;
+    activeRun.value = run;
+    // 终态后降频（保留面板可查，但停止轮询新变化以外的负担）
+    if (['failed', 'stopped', 'rejected', 'completed'].includes(run.status)) {
+      stopPolling();
+    }
+    if (prev && run.updatedAt !== prev.updatedAt) {
+      // 状态变化可见性：轻提示（不打断）
+      if (run.status !== prev.status) {
+        if (run.status === 'waiting_human') message.info('流程等待人工审核（右侧面板可决策）', { duration: 3000 });
+        else if (run.status === 'completed') message.success('工作流全部节点完成', { duration: 3200 });
+        else if (run.status === 'failed') message.error(`流程失败：${run.nodes?.[run.plan?.order?.[run.cursor]]?.error || '见运行面板'}`, { duration: 4200 });
+      }
+    }
+  } catch {
+    /* 观察连接问题不打断本地；下一轮重试 */
+  }
+}
+async function refreshRun(runId: string) {
+  try {
+    activeRun.value = await apiClient.getWorkflowRun(props.projectName, runId);
+    runPanelOpen.value = true;
+    startPolling();
+  } catch {
+    message.warning(`恢复观察 run ${runId} 失败`, { duration: 3000 });
+  }
+}
+
+async function onDecideReview(rv: WorkflowReviewRequest, decision: 'approve' | 'reject', note: string) {
+  if (!activeRun.value) return;
+  try {
+    const out = await apiClient.decideWorkflowReview(
+      props.projectName, activeRun.value.runId, rv.requestId, decision, note,
+      rv.artifactFingerprint);
+    if (out?.alreadyDecided) {
+      message.warning(`该审核已被处理过（决策：${out.decision === 'approve' ? '通过' : '驳回'}）`, { duration: 3200 });
+    } else {
+      message.success(decision === 'approve' ? '已通过：下一节点开始' : '已驳回：流程停止', { duration: 2800 });
+    }
+    await refreshActiveRun();
+  } catch (err: any) {
+    const detail = String(err?.message || err || '');
+    if (detail.includes('review_object_changed')) {
+      message.error('审核对象已变化（待审产物指纹不一致），请刷新后复核', { duration: 4200 });
+    } else {
+      message.error(`审核提交失败：${detail.slice(0, 200)}`, { duration: 4200 });
+    }
+    await refreshActiveRun();
+  }
+}
+
+async function onStopRun() {
+  if (!activeRun.value) return;
+  try {
+    await apiClient.stopWorkflowRun(props.projectName, activeRun.value.runId);
+    message.success('已请求停止：不再派发下游；在途任务按真实能力收尾', { duration: 3600 });
+    await refreshActiveRun();
+  } catch (err: any) {
+    message.error(`停止失败：${String(err?.message || err).slice(0, 200)}`, { duration: 3600 });
+  }
+}
+
+async function onContinueRun(nodeId: string | null) {
+  if (!activeRun.value) return;
+  try {
+    const { run } = await apiClient.continueWorkflowRun(
+      props.projectName, activeRun.value.runId, nodeId);
+    activeRun.value = run;
+    startPolling();
+    message.success('已显式继续：从当前节点重新派发（新尝试）', { duration: 3000 });
+  } catch (err: any) {
+    const detail = String(err?.message || err || '');
+    if (detail.includes('waiting_human')) {
+      message.warning('流程在等待人工审核：请先在运行面板完成审核决策', { duration: 3600 });
+    } else {
+      message.error(`继续失败：${detail.slice(0, 200)}`, { duration: 3600 });
+    }
+  }
+}
+
+function locateNode(nodeId: string) {
+  runPanelOpen.value = false;
+  const n = draft.value.nodes.find((x) => x.id === nodeId);
+  if (n) {
+    selectedNodeId.value = nodeId;
+    selectedEdgeId.value = null;
+  } else {
+    message.info('该节点不在当前草稿中（运行使用的是启动时的冻结定义）', { duration: 3200 });
   }
 }
 
@@ -2141,6 +2462,12 @@ select.input { appearance: auto; }
 
   b { color: var(--text-secondary); }
   &.tiny { font-size: 10px; }
+}
+.obj-input {
+  width: 100%;
+  resize: vertical;
+  font-size: 12px;
+  line-height: 1.6;
 }
 .danger-link {
   align-self: flex-start;

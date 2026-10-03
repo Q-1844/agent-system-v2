@@ -329,7 +329,7 @@ class AgnesClient:
             ok, why = self.quota.can("text_calls", 1)
             if not ok: raise AgnesError(why)
         _, _, model, provider = self._text_cfg()
-        log.info("[text] provider=%s model=%s", provider, model)
+        log.info("[text] provider=%s model=%s thinking=%s", provider, model, bool(thinking))
         body: Dict[str, Any] = {"model": model, "messages": messages,
                                 "temperature": temperature, "max_tokens": max_tokens}
         body.update(self._thinking_body(thinking, provider))
@@ -359,7 +359,7 @@ class AgnesClient:
             ok, why = self.quota.can("text_calls", 1)
             if not ok: raise AgnesError(why)
         _, _, model, provider = self._text_cfg()
-        log.info("[text] provider=%s model=%s", provider, model)
+        log.info("[text] provider=%s model=%s thinking=%s", provider, model, bool(thinking))
         body: Dict[str, Any] = {"model": model, "messages": messages,
                                 "temperature": temperature, "max_tokens": max_tokens}
         body.update(self._thinking_body(thinking, provider))
@@ -425,7 +425,7 @@ class AgnesClient:
             if not ok: raise AgnesError(why)
         base_url, key, model, provider = self._text_cfg()
         label = "SenseNova" if self._text_ep else "Agnes"
-        log.info("[text] provider=%s model=%s", provider, model)
+        log.info("[text] provider=%s model=%s thinking=%s", provider, model, bool(thinking))
         body: Dict[str, Any] = {"model": model, "messages": messages,
                                 "temperature": temperature, "max_tokens": max_tokens,
                                 "stream": True}

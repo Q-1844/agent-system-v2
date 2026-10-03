@@ -138,6 +138,9 @@ class CreateSessionReq(BaseModel):
 
 class SendMessageReq(BaseModel):
     content: str
+    # Phase 46（M02）：非流式 turn 也支持显式开启思考（工作流助手 Producer 解析传 true；
+    # 缺省 False 保持旧行为）。
+    thinking: bool = False
 
 
 class StreamTurnReq(BaseModel):
@@ -233,7 +236,8 @@ async def agent_turn(project_name: str, sid: str, req: SendMessageReq):
     （非模型叙述）。conversation/project_inquiry/runtime_query 三意图经既有真实运行时；
     creative_change/runtime_control 列入 TurnIntent 枚举但 D2/D3 实现。"""
     try:
-        return await get_agent_runtime().unified_turn(project_name, sid, req.content)
+        return await get_agent_runtime().unified_turn(project_name, sid, req.content,
+                                                      thinking=req.thinking)
     except AgentError as e:
         _raise(e)
 

@@ -688,7 +688,7 @@ def test_R3_fact_hierarchy_verified_from_receipts(tmp_path):
     # 🔴 事实层级：verified=False（无 ok+verified+非unchanged 回执），changed_refs 为空
     # （Phase B：changed_refs 扩为八键骨架，值为空语义不变）
     assert rec["verified"] is False
-    assert rec["changed_refs"] == {"scenes": [], "shots": [], "characters": [], "sequences": [],
+    assert rec["changed_refs"] == {"scenes": [], "shots": [], "characters": [], "sequences": [], "story": [],
                                    "clothings": [], "looks": [], "props": [],
                                    "reference_assets": [], "compositions": [], "bindings": [],
                                    "locations": [], "location_views": [],
@@ -789,7 +789,7 @@ def test_RE1_review_verified_false_accepted(tmp_path):
     assert rec["agent"] == "director"
     assert rec["status"] == "completed"
     assert rec["verified"] is False          # 无真实写入
-    assert rec["changed_refs"] == {"scenes": [], "shots": [], "characters": [], "sequences": [],
+    assert rec["changed_refs"] == {"scenes": [], "shots": [], "characters": [], "sequences": [], "story": [],
                                    "clothings": [], "looks": [], "props": [],
                                    "reference_assets": [], "compositions": [], "bindings": [],
                                    "locations": [], "location_views": [],
@@ -887,7 +887,7 @@ def test_RE3_second_false_no_third_mechanical_repeat(tmp_path):
 
     assert len(res["receipts"]) == 2          # 仅 2 次，无第三次
     assert all(r["verified"] is False for r in res["receipts"])
-    _empty_refs = {"scenes": [], "shots": [], "characters": [],
+    _empty_refs = {"scenes": [], "shots": [], "characters": [], "story": [],
                    "clothings": [], "looks": [], "props": [],
                    "reference_assets": [], "compositions": [], "bindings": [],
                                    "locations": [], "location_views": [],
@@ -923,7 +923,7 @@ def test_RE4_no_change_accept_not_force_write(tmp_path):
     assert len(res["receipts"]) == 1
     rec = res["receipts"][0]
     assert rec["verified"] is False
-    assert rec["changed_refs"] == {"scenes": [], "shots": [], "characters": [], "sequences": [],
+    assert rec["changed_refs"] == {"scenes": [], "shots": [], "characters": [], "sequences": [], "story": [],
                                    "clothings": [], "looks": [], "props": [],
                                    "reference_assets": [], "compositions": [], "bindings": [],
                                    "locations": [], "location_views": [],
@@ -979,7 +979,7 @@ def test_RE5_upstream_replan_director_to_script_writer(tmp_path):
     assert res["receipts"][0]["verified"] is False   # Director 1st no write
     assert res["receipts"][1]["verified"] is False   # Director 2nd no write
     assert res["receipts"][2]["verified"] is True    # SW wrote story
-    assert res["receipts"][2]["changed_refs"] == {"scenes": [], "shots": [], "characters": [], "sequences": [],
+    assert res["receipts"][2]["changed_refs"] == {"scenes": [], "shots": [], "characters": [], "sequences": [], "story": ["story_text"],
                                                   "clothings": [], "looks": [], "props": [],
                                                   "reference_assets": [], "compositions": [], "bindings": [],
                                    "locations": [], "location_views": [],

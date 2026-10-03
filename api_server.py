@@ -87,6 +87,7 @@ from routers import scene_system  # noqa: E402  Scene System V1 Phase S1（空�
 from routers import sequences  # noqa: E402  Sequence S1 Assembly Foundation（24.md；Shot Production 的消费者）
 from routers import shot_binding  # noqa: E402  Shot Production Binding HTTP 层（S3B.4；业务在 src/shot_binding）
 from routers import experiments  # noqa: E402  Phase 37A Calibration Trace（37.md §2/§16；非 canonical 实验记录）
+from routers import workflow as workflow_router  # noqa: E402  Phase 46 六员可视化工作流（定义/校验/编译/顺序执行/审核/恢复）
 app.include_router(system.router)
 app.include_router(projects.router)
 app.include_router(script.router)
@@ -109,6 +110,7 @@ app.include_router(scene_system.router)   # Scene System V1 Phase S1（Location/
 app.include_router(sequences.router)   # Sequence S1 Assembly Foundation（24.md；hard cut + trim + render versioning）
 app.include_router(shot_binding.router)   # Shot Production Binding（S3B.4；BOUND 生成参考）
 app.include_router(experiments.router)   # Calibration Trace（37A；尾帧接力校准实验记录）
+app.include_router(workflow_router.router)   # Phase 46 可视化工作流后端（单条顺序链首版）
 
 
 @app.on_event("startup")
@@ -279,6 +281,19 @@ async def startup():
         logger.info("AI-7C Execution 恢复已就绪")
     except Exception as e:
         logger.error(f"AI-7C Execution 恢复失败: {e}")
+
+    # Phase 46：工作流 run 启动恢复——对账在途 attempt（不自动派发新节点；等待显式
+    # 继续/审核决策）。诚实语义见 routers/workflow.recover_workflows。
+    try:
+        from routers.workflow import recover_workflows
+        rec = recover_workflows()
+        if rec.get("scanned") or rec.get("errors"):
+            logger.info(f"Workflow 恢复：扫描 {rec.get('scanned')} 个活跃 run，"
+                        f"对账 {rec.get('reconciled')} 个在途 attempt"
+                        + (f"，错误 {rec['errors']}" if rec.get("errors") else ""))
+        logger.info("Workflow 恢复已就绪")
+    except Exception as e:
+        logger.error(f"Workflow 恢复失败: {e}")
 
 
 if __name__ == "__main__":
