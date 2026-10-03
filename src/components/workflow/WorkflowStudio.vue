@@ -393,7 +393,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, provide, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref } from 'vue';
 import { VueFlow, useVueFlow, MarkerType } from '@vue-flow/core';
 import type { Connection, EdgeChange, NodeChange } from '@vue-flow/core';
 // vue-flow 基础布局样式（.vue-flow__node 绝对定位 / handle 定位 / viewport 层级）
@@ -508,15 +508,32 @@ onMounted(() => {
     scheduleFitView();
   }
   // 后台页签加载时 ResizeObserver 不投递（无渲染帧），dimensions 停在 0 会让
-  // 缩放/适配/落点换算整体静默失效——挂载后兜底实测一次视口尺寸。
-  window.setTimeout(() => {
-    const el = vueFlowRef.value as HTMLElement | null;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    if (r.width > 0 && r.height > 0 && !(dimensions.value.width > 0)) {
-      dimensions.value = { width: r.width, height: r.height };
+  // 缩放/适配/落点换算整体静默失效——挂载后分几档兜底实测视口尺寸。
+  // （vue-flow 的 dimensions 是 ref；这里只在该写的时候写，不与 ResizeObserver 抢。）
+  const patchDimensions = () => {
+    try {
+      const el = vueFlowRef.value as HTMLElement | null;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0 && !(dimensions.value?.width > 0)) {
+        dimensions.value = { width: r.width, height: r.height };
+        scheduleFitView(); // 挂载早期的自动适配因 dimensions=0 而空转，这里补一次
+      }
+    } catch {
+      /* 视口未就绪时静默，下一档重试 */
     }
-  }, 600);
+  };
+  [600, 1500, 3000, 6000].forEach((ms) => window.setTimeout(patchDimensions, ms));
+  // 后台页签被 Chrome 强节流时上面的定时器可能迟迟不跑：用户任何一次真实
+  // 交互（按下/滚轮/拖入）必然发生在渲染帧里，当场补测一次，确定性兜底。
+  patchDimensions();
+  nextTick(() => {
+    const wrap = canvasWrap.value;
+    if (!wrap) return;
+    for (const evt of ['pointerdown', 'wheel', 'dragenter'] as const) {
+      wrap.addEventListener(evt, patchDimensions, { capture: true, passive: true });
+    }
+  });
   // 后端在线核对：拿到 Agent 停用状态（可选能力，失败不影响草稿编辑）
   apiClient
     .listAgents()
@@ -1223,6 +1240,62 @@ function findSkillNodeByRef(refId: string): WorkflowNode | undefined {
   return draft.value.nodes.find((n) => n.type === 'skill' && n.refId === refId);
 }
 
+/** 沿执行边从 startId 正向收集可抵达的审核（不穿过其它 Agent/边界）。
+ *  「A 之后的审核」按图拓扑找，节点被拖到任何 x 位置都不影响定位。 */
+function reviewsReachableFrom(startId: string, stopAtId?: string): WorkflowNode[] {
+  const byId = new Map(draft.value.nodes.map((n) => [n.id, n]));
+  const found: WorkflowNode[] = [];
+  const seen = new Set<string>([startId]);
+  const queue = [startId];
+  while (queue.length) {
+    const cur = queue.shift()!;
+    for (const e of draft.value.edges) {
+      if (e.type !== 'execution' || e.source !== cur || seen.has(e.target)) continue;
+      if (stopAtId && e.target === stopAtId) continue;
+      const n = byId.get(e.target);
+      if (!n) continue;
+      if (n.type === 'human_review') { found.push(n); queue.push(n.id); }
+      // Agent / 边界是别的站点：不穿过、不收集
+    }
+  }
+  return found;
+}
+
+/** 反向：收集所有能沿执行边抵达 targetId 的审核（「B 之前的审核」） */
+function reviewsReachingInto(targetId: string): WorkflowNode[] {
+  const byId = new Map(draft.value.nodes.map((n) => [n.id, n]));
+  const found: WorkflowNode[] = [];
+  const seen = new Set<string>([targetId]);
+  const queue = [targetId];
+  while (queue.length) {
+    const cur = queue.shift()!;
+    for (const e of draft.value.edges) {
+      if (e.type !== 'execution' || e.target !== cur || seen.has(e.source)) continue;
+      const n = byId.get(e.source);
+      if (!n) continue;
+      if (n.type === 'human_review') { found.push(n); queue.push(n.id); }
+      // 不穿过其它 Agent/边界
+    }
+  }
+  return found;
+}
+
+/** 图定位优先，找不到时回退 x 坐标窗口（覆盖尚未连线的游离审核） */
+function locateReviews(afterId?: string, beforeId?: string): WorkflowNode[] {
+  let graph: WorkflowNode[] = [];
+  if (afterId && beforeId) graph = reviewsReachableFrom(afterId, beforeId);
+  else if (afterId) graph = reviewsReachableFrom(afterId);
+  else if (beforeId) graph = reviewsReachingInto(beforeId);
+  if (graph.length) return graph;
+  // 回退：x 窗口（含游离未连线的审核）
+  const afterNode = afterId ? draft.value.nodes.find((n) => n.id === afterId) : undefined;
+  const beforeNode = beforeId ? draft.value.nodes.find((n) => n.id === beforeId) : undefined;
+  let targets = draft.value.nodes.filter((n) => n.type === 'human_review');
+  if (afterNode) targets = targets.filter((n) => n.position.x > afterNode.position.x);
+  if (beforeNode) targets = targets.filter((n) => n.position.x < beforeNode.position.x);
+  return targets.sort((a, b) => a.position.x - b.position.x);
+}
+
 /** 静默连线（不走 toast；重复边视为 skipped 而非失败） */
 function connectNodes(
   sourceId: string,
@@ -1509,9 +1582,7 @@ const wfController: WorkflowAssistantController = {
     const beforeNode = beforeRef ? findAgentNodeByRef(beforeRef) : undefined;
     if (afterRef && !afterNode) return { ok: false, removed: 0, reason: `画布上没有${shortAgentName(afterRef)}的节点，无法定位审核` };
     if (beforeRef && !beforeNode) return { ok: false, removed: 0, reason: `画布上没有${shortAgentName(beforeRef)}的节点，无法定位审核` };
-    let targets = reviews;
-    if (afterNode) targets = targets.filter((n) => n.position.x > afterNode.position.x);
-    if (beforeNode) targets = targets.filter((n) => n.position.x < beforeNode.position.x);
+    const targets = locateReviews(afterNode?.id, beforeNode?.id);
     if (!targets.length) return { ok: false, removed: 0, reason: '该范围内没有找到审核' };
     for (const n of targets) removeNode(n.id);
     return { ok: true, removed: targets.length };
@@ -1554,17 +1625,15 @@ const wfController: WorkflowAssistantController = {
     return { ok: true, detail: `已断开 ${removed} 条直接连线` };
   },
   fillReview(match, patch) {
-    const reviews = draft.value.nodes
-      .filter((n) => n.type === 'human_review')
-      .sort((a, b) => a.position.x - b.position.x);
+    const reviews = draft.value.nodes.filter((n) => n.type === 'human_review');
     if (!reviews.length) return { ok: false, reason: '画布上还没有人工审核，先插入一道' };
-    let target = reviews[0];
+    let target = reviews.slice().sort((a, b) => a.position.x - b.position.x)[0];
     if (match.afterRef) {
       const afterNode = findAgentNodeByRef(match.afterRef);
       if (!afterNode) return { ok: false, reason: `画布上没有${shortAgentName(match.afterRef)}的节点，无法定位审核` };
-      const inRange = reviews.filter((n) => n.position.x > afterNode.position.x);
-      if (!inRange.length) return { ok: false, reason: `没有找到${shortAgentName(match.afterRef)}之后的审核` };
-      target = inRange[0];
+      const located = locateReviews(afterNode.id);
+      if (!located.length) return { ok: false, reason: `没有找到${shortAgentName(match.afterRef)}之后的审核` };
+      target = located[0];
     }
     if (patch.label !== undefined) target.label = patch.label;
     if (patch.instructions !== undefined) target.config = { ...target.config, instructions: patch.instructions };

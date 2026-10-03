@@ -104,14 +104,28 @@ export function parseLocal(message: string, draft: WorkflowDraft): AssistantActi
   if (!t) return [];
   const compact = t.replace(/\s+/g, '');
 
-  // 多意图组合（如「删掉后重建」「插入并填内容」跨多个子句）：本地单层解析只会做一半、
+  // 多意图组合（如「删掉后重建」「插入并填内容」）：本地单层解析只会做一半、
   // 悄悄漏掉其余意图。整句交给后端 Producer 解析（离线时面板会如实说看不懂）。
+  const REMOVE_SRC = '删掉|删除|去掉|移除|拿掉|下掉|撤掉|清除|解绑|断开|清空|清掉|重画|推倒|重来|重新开始|重新(搭|画|建)';
+  const BUILD_SRC = '插入|新增|添加|加一个|加一道|加一台|串|挂上|配上|绑定|搭|生成|连起|链';
+  const FILL_SRC = '说明写|写说明|审核者写|审核说明|审核者设|设置审核者';
   const clauseCount = compact.split(/[；。；,，!！？?\n]/).filter((c) => c.trim()).length;
   const intentKinds =
-    (/(删掉|删除|去掉|移除|拿掉|下掉|撤掉|清除|解绑|断开)/.test(compact) ? 1 : 0) +
-    (/(插入|新增|添加|加一个|加一道|加一台|串|挂上|配上|绑定)/.test(compact) ? 1 : 0) +
-    (/(说明写|写说明|审核者写|审核说明|审核者设|设置审核者)/.test(compact) ? 1 : 0);
-  if (clauseCount >= 2 && intentKinds >= 2) return [];
+    (new RegExp(REMOVE_SRC).test(compact) ? 1 : 0) +
+    (new RegExp(BUILD_SRC).test(compact) ? 1 : 0) +
+    (new RegExp(FILL_SRC).test(compact) ? 1 : 0);
+  const hasRemoveIntent = new RegExp(REMOVE_SRC).test(compact);
+  if (hasRemoveIntent && (intentKinds >= 2)) {
+    // 组合判定：解绑短语先挖掉（其中的「绑定」是名词不是搭建动词），
+    // 若搭建/填内容动词出现在删除动词之后，无论有无标点都视为组合语义让位 Producer。
+    const stripped = compact.replace(/解绑|解除.{0,10}?绑定|取消.{0,10}?绑定|去掉.{0,10}?绑定|移除.{0,10}?绑定/g, '＊');
+    const firstRemove = stripped.search(new RegExp(REMOVE_SRC));
+    const firstBuild = stripped.search(new RegExp(BUILD_SRC));
+    const firstFill = stripped.search(new RegExp(FILL_SRC));
+    const later = (i: number) => i >= 0 && (firstRemove < 0 || i > firstRemove);
+    if (firstRemove >= 0 && (later(firstBuild) || later(firstFill))) return [];
+    if (clauseCount >= 2 && intentKinds >= 2) return [];
+  }
 
   // —— 画布级操作 ——
   if (/^(帮我)?(清空|清掉|重画|推倒重来|重新开始)/.test(compact) || /清空(画布|工作流)/.test(compact)) {
@@ -295,6 +309,8 @@ export interface WorkflowIntent {
   withBoundary?: boolean;
   /** 删除类操作（与上面的搭建操作可共存） */
   remove?: {
+    /** 清空整个画布（仅当用户明确要求清空/推倒重来） */
+    all?: boolean;
     agents?: string[];
     skills?: string[];
     /** 'all' = 删掉全部审核；或用 after/before 定位某两站之间的审核 */
@@ -343,12 +359,14 @@ export function buildProducerPrompt(message: string, draft: WorkflowDraft): stri
     '    "reviews": "all",  // "all"=删全部审核；或 [{"after": "director", "before": "assembly"}] 只删这两站之间的',
     '    "boundaries": ["start"],',
     '    "bindings": [{"skill": "full-story-relay-calibration", "agent": "director"}],  // 解绑（节点保留）；agent 省略=解绑全部',
-    '    "connections": [{"from": "script_writer", "to": "character_designer"}]  // 断开执行连线',
+    '    "connections": [{"from": "script_writer", "to": "character_designer"}],  // 断开执行连线',
+    '    "all": true  // 清空整个画布；仅当用户明确要求清空/推倒重来/重新开始时为 true，否则省略',
     '  },',
     '  "fill": [{"target": "review", "after": "director", "label": "分镜抽检", "instructions": "重点查运镜与角色一致性", "reviewer": "制作人"}],  // 给已有审核填内容；after=定位某 Agent 之后的审核，缺省=第一道；没填内容就省略',
     '  "note": "一句话说明你的理解"',
     '}',
     '注意：ref 只能取自上面的注册项清单；用户提到清单外的新职责时，不要发明新 ref——在 note 里说明该职责应归入哪个现有 Agent（如旁白/配音归 assembly）。',
+    '当用户要求清空/重画/推倒重来时，用 remove.all=true 表达清空，不要逐个枚举删除各节点。',
     '',
     `当前画布已有节点概要：${existing || '（空）'}`,
     `用户需求：${message}`,
@@ -384,40 +402,46 @@ export function intentToActions(intent: WorkflowIntent): { actions: AssistantAct
   // —— 1) 删除 / 解绑 / 断开 ——
   const rm = intent.remove;
   if (rm && typeof rm === 'object') {
-    for (const ref of rm.agents ?? []) {
-      if (AGENT_ID_SET.has(ref)) removePhase.push({ kind: 'removeAgent', refId: ref });
-      else problems.push(`remove.agents 是未知 Agent ref：${ref}（已跳过）`);
-    }
-    for (const ref of rm.skills ?? []) {
-      if (SKILL_ID_SET.has(ref)) removePhase.push({ kind: 'removeSkill', refId: ref });
-      else problems.push(`remove.skills 是未知 Skill ref：${ref}（已跳过）`);
-    }
-    if (rm.reviews === 'all') {
-      removePhase.push({ kind: 'removeReviews' });
-    } else if (Array.isArray(rm.reviews)) {
-      for (const r of rm.reviews) {
-        const after = r?.after && AGENT_ID_SET.has(r.after) ? r.after : undefined;
-        const before = r?.before && AGENT_ID_SET.has(r.before) ? r.before : undefined;
-        if (after || before) removePhase.push({ kind: 'removeReviews', afterRef: after, beforeRef: before });
-        else removePhase.push({ kind: 'removeReviews' });
+    if (rm.all === true) {
+      // 清空即全部删除：忽略同句里枚举的 agents/skills/reviews/... （全是冗余，
+      // 且先枚举删除会让同句的 disconnect/解绑 全部空转、刷一排无意义的 ⚠）
+      removePhase.push({ kind: 'clear' });
+    } else {
+      for (const ref of rm.agents ?? []) {
+        if (AGENT_ID_SET.has(ref)) removePhase.push({ kind: 'removeAgent', refId: ref });
+        else problems.push(`remove.agents 是未知 Agent ref：${ref}（已跳过）`);
       }
-    }
-    for (const b of rm.boundaries ?? []) {
-      if (b === 'start' || b === 'end') removePhase.push({ kind: 'removeBoundary', which: b });
-    }
-    for (const b of rm.bindings ?? []) {
-      if (!SKILL_ID_SET.has(b.skill)) {
-        problems.push(`remove.bindings.skill 是未知 Skill ref：${b.skill}（已跳过）`);
-        continue;
+      for (const ref of rm.skills ?? []) {
+        if (SKILL_ID_SET.has(ref)) removePhase.push({ kind: 'removeSkill', refId: ref });
+        else problems.push(`remove.skills 是未知 Skill ref：${ref}（已跳过）`);
       }
-      const agent = b.agent && AGENT_ID_SET.has(b.agent) ? b.agent : undefined;
-      removePhase.push({ kind: 'unbind', skillRefId: b.skill, agentRefId: agent });
-    }
-    for (const c of rm.connections ?? []) {
-      if (AGENT_ID_SET.has(c.from) && AGENT_ID_SET.has(c.to)) {
-        removePhase.push({ kind: 'disconnect', fromRef: c.from, toRef: c.to });
-      } else {
-        problems.push(`remove.connections 有未知 ref：${c.from}/${c.to}（已跳过）`);
+      if (rm.reviews === 'all') {
+        removePhase.push({ kind: 'removeReviews' });
+      } else if (Array.isArray(rm.reviews)) {
+        for (const r of rm.reviews) {
+          const after = r?.after && AGENT_ID_SET.has(r.after) ? r.after : undefined;
+          const before = r?.before && AGENT_ID_SET.has(r.before) ? r.before : undefined;
+          if (after || before) removePhase.push({ kind: 'removeReviews', afterRef: after, beforeRef: before });
+          else removePhase.push({ kind: 'removeReviews' });
+        }
+      }
+      for (const b of rm.boundaries ?? []) {
+        if (b === 'start' || b === 'end') removePhase.push({ kind: 'removeBoundary', which: b });
+      }
+      for (const b of rm.bindings ?? []) {
+        if (!SKILL_ID_SET.has(b.skill)) {
+          problems.push(`remove.bindings.skill 是未知 Skill ref：${b.skill}（已跳过）`);
+          continue;
+        }
+        const agent = b.agent && AGENT_ID_SET.has(b.agent) ? b.agent : undefined;
+        removePhase.push({ kind: 'unbind', skillRefId: b.skill, agentRefId: agent });
+      }
+      for (const c of rm.connections ?? []) {
+        if (AGENT_ID_SET.has(c.from) && AGENT_ID_SET.has(c.to)) {
+          removePhase.push({ kind: 'disconnect', fromRef: c.from, toRef: c.to });
+        } else {
+          problems.push(`remove.connections 有未知 ref：${c.from}/${c.to}（已跳过）`);
+        }
       }
     }
   }
