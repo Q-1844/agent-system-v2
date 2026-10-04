@@ -52,7 +52,7 @@ def _err(e: Exception):
 
 # ============ 请求模型 ============
 class SaveDefinitionReq(BaseModel):
-    definition: dict
+    definition: Optional[dict] = None          # 缺省=用已保存定义（validate/compile）
     expectedRevision: Optional[int] = None
 
 

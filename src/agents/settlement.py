@@ -204,6 +204,10 @@ class AgentTaskSettler:
         self._poll_interval = poll_interval
         self._project_loader_for = project_loader_for
         self._loop_task: Optional[asyncio.Task] = None
+        # Phase 47 修复（真机排障：turn 尾释放 registry 与任务落账之间的轮询窗口内，
+        # 本 boot 的活任务被误判为"重启遗留"）——记录本 boot 起始墙钟，同步委派
+        # 中断判定只对【上个 boot】遗留的 running task 生效。
+        self._boot_wall = time.time()
 
     # ---------- 单 task 对账（核心，可独立单测）----------
     def _loader_for(self, project_name: str):
@@ -276,6 +280,11 @@ class AgentTaskSettler:
         child session 的消息/工具轨迹已在盘，续做=Producer 发起新委派任务。"""
         if task.status != TaskStatus.RUNNING.value:
             return None       # 防御：reconcile 只对 running task（调用方过滤，双保险）
+        # 本 boot 创建的 task 不判"重启中断"——它的结算由其委派自身负责
+        # （registry 释放与落账之间的轮询窗口不是崩溃）。跨 boot 遗留才走中断判定。
+        created_at = getattr(task, "created_at", None)
+        if isinstance(created_at, (int, float)) and created_at >= self._boot_wall - 5.0:
+            return None
         from . import turn_registry
         sid = task.session_id or ""
         if sid and turn_registry.is_active(task.project, sid):

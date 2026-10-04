@@ -288,6 +288,11 @@ def test_settlement_interrupted_delegate_marked_failed(tmp_path):
     store = AgentTaskStore(tmp_path, proj)
     _mk_task(store, tmp_path)
     settler = AgentTaskSettler(lambda: [], lambda: None)
+    # Phase 47 boot 守卫：中断判定只对【上个 boot】遗留 task 生效——
+    # 把任务 created_at 回溯到 settler boot 之前，模拟重启遗留。
+    import time as _t
+    store.update("task_s1", lambda tt: setattr(tt, "created_at",
+                                              _t.time() - (settler._boot_wall - _t.time()) - 60))
     task = store.list(status="running")[0]
     decision = settler.reconcile_task(store, task)
     assert decision is not None and decision["sync_interrupted"] is True

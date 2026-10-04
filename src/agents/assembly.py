@@ -102,7 +102,12 @@ DEFAULT_SNAPSHOT_RELPATH = "_44a/assembly_input_manifest_formal.json"
 # ============ system ============
 
 def _snapshot_load(rt: AgentRuntime, project: str, relpath: Optional[str]) -> dict:
-    """加载冻结快照 manifest（fail closed；路径仅允许仓库根内，防越界读）。"""
+    """加载冻结快照 manifest（fail closed；路径仅允许仓库根内，防越界读）。
+
+    Phase 47 修复（真实排障：新项目装配读到 44A 全局快照 → 跨项目对齐失败）：
+    relpath 缺省时【先读本项目】output/assembly/snapshot_formal.json；
+    不存在时才回落 44A 旧默认路径（保持雨灯归航等既有项目行为不变）。
+    新项目应先用 assembly.snapshot_freeze 生成本项目正式快照。"""
     base: Path = rt._resolve_project_dir(project)
     # 项目根 = projects/<name> 的仓库根（上溯到含 _44a 的目录）
     repo_root = base
@@ -110,7 +115,11 @@ def _snapshot_load(rt: AgentRuntime, project: str, relpath: Optional[str]) -> di
         if (repo_root / "_44a").exists() or (repo_root / "animation-storyboard" / "_44a").exists():
             break
         repo_root = repo_root.parent
-    p = Path(relpath or DEFAULT_SNAPSHOT_RELPATH)
+    if relpath:
+        p = Path(relpath)
+    else:
+        project_local = base / "output" / "assembly" / "snapshot_formal.json"
+        p = project_local if project_local.exists() else Path(DEFAULT_SNAPSHOT_RELPATH)
     if not p.is_absolute():
         # 允许相对仓库根（animation-storyboard 子仓）或相对父仓
         cand = [repo_root / p, repo_root / "animation-storyboard" / p]
@@ -287,6 +296,31 @@ BRIEFING_TOOL = {
                         "AssemblyManifest 历史、以及按素材实测推导的【推荐渲染 profile】"
                         "（可直接传给 sequence_create）。开销中等（含逐镜 ffprobe）。只读工具。"),
         "parameters": {"type": "object", "properties": {}},
+    },
+}
+
+SNAPSHOT_FREEZE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "assembly.snapshot_freeze",
+        "description": (
+            "为本项目冻结一份正式装配快照（Phase 47）：从 live 真实状态逐镜读取 "
+            "final_video 版本与文件 sha256，写入本项目 "
+            "output/assembly/snapshot_formal.json。新项目（无 44A 快照）装配前"
+            "必须先冻结；只 pin 当前 live final_video——不重写指针、不偷换素材、"
+            "不生成媒体。shot_ids 缺省 = 全部有视频版本的镜头。"),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "shot_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "可选，要冻结的镜头 id 列表（如 [\"s01_c01\"]）；缺省=全部。",
+                },
+                "note": {"type": "string", "description": "可选，冻结缘由（进 manifest）。",
+                         },
+            },
+        },
     },
 }
 
@@ -649,7 +683,7 @@ AUDIO_ASSETS_READ_TOOL = {
 }
 
 ASSEMBLY_TOOLS = [
-    BRIEFING_TOOL, SNAPSHOT_READ_TOOL, SEQUENCE_READ_TOOL, MEDIA_PROBE_TOOL,
+    BRIEFING_TOOL, SNAPSHOT_FREEZE_TOOL, SNAPSHOT_READ_TOOL, SEQUENCE_READ_TOOL, MEDIA_PROBE_TOOL,
     TIMELINE_PREVIEW_TOOL, RENDER_STATUS_TOOL, SEQUENCE_CREATE_TOOL,
     SEQUENCE_UPDATE_TOOL, RENDER_SUBMIT_TOOL, MANIFEST_PUBLISH_TOOL,
     PROPOSAL_WRITE_TOOL,
@@ -832,6 +866,81 @@ def _execute_snapshot_read(rt: AgentRuntime, project: str, arguments: str,
         return {"ok": False, "error": f"快照中无该镜头: {sid}"}
     return {"ok": True, **_snapshot_summary(snap),
             "seams_at_snapshot": snap.get("seams_at_snapshot") or []}
+
+
+def _execute_snapshot_freeze(rt: AgentRuntime, project: str, arguments: str,
+                             instruction, message_id) -> dict:
+    """Phase 47：为本项目冻结正式装配快照（live final_video + sha256）。
+    只记录真实状态（含无 final 的镜头如实标 frozen=false）；绝不改指针、不生成媒体。
+    与 44A manifest 同构字段（shot_id/video_version_id/media_sha256），对齐门直接可用。"""
+    import hashlib
+    import time as _time
+    args = _parse_args(arguments)
+    want_ids = args.get("shot_ids") or None
+    pdir = rt._resolve_project_dir(project)
+    proj = ProjectStore(pdir).load()
+    shots_out = []
+    skipped = []
+    for sc in (proj.scenes or []):
+        for sh in (sc.shots or []):
+            if want_ids and sh.shot_id not in set(want_ids):
+                continue
+            vid = sh.final_video
+            vv = next((v for v in (sh.video_versions or [])
+                       if v.version_id == vid), None) if vid else None
+            if vv is None or not vv.local:
+                skipped.append({"shot_id": sh.shot_id,
+                                "reason": "无完成 final_video 版本或本地文件"})
+                continue
+            f = Path(str(vv.local))
+            if not f.is_absolute():
+                cand = [pdir / f, pdir.parent.parent / f]
+                f = next((c for c in cand if c.exists()), cand[0])
+            if not f.exists():
+                skipped.append({"shot_id": sh.shot_id, "reason": f"文件缺失 {f.name}"})
+                continue
+            digest = hashlib.sha256(f.read_bytes()).hexdigest()
+            probe = {}
+            try:
+                from src.sequence.media_ops import probe_video
+                probe = probe_video(str(f))
+            except Exception as e:   # noqa: BLE001 - 探测失败不阻塞冻结（诚实记录）
+                probe = {"error": str(e)[:120]}
+            shots_out.append({
+                "shot_id": sh.shot_id,
+                "scene_id": sh.scene_id,
+                "video_version_id": vv.version_id,
+                "approved_status": "frozen_from_live",
+                "local": str(f),
+                "media_uri": str(f),
+                "media_sha256": digest,
+                "duration_probe": {"duration_ms": probe.get("duration_ms"),
+                                   "width": probe.get("width"),
+                                   "height": probe.get("height")},
+            })
+    if not shots_out:
+        return {"ok": False,
+                "error": "无可冻结镜头（没有任何带本地文件的 final_video 版本）",
+                "skipped": skipped}
+    out_dir = pdir / "output" / "assembly"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "snapshot_id": f"snap_{project}_{_time.strftime('%Y%m%d_%H%M%S')}",
+        "mode": "formal",
+        "project": project,
+        "created_at": _time.time(),
+        "frozen_by": "assembly.snapshot_freeze",
+        "note": (args.get("note") or "")[:200],
+        "shots": shots_out,
+    }
+    out = out_dir / "snapshot_formal.json"
+    tmp = out.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(manifest, ensure_ascii=False, indent=1),
+                   encoding="utf-8")
+    tmp.replace(out)
+    return {"ok": True, "snapshot_id": manifest["snapshot_id"],
+            "path": str(out), "frozen_shots": [s["shot_id"] for s in shots_out],
+            "skipped": skipped}
 
 
 def _execute_sequence_read(rt: AgentRuntime, project: str, arguments: str,
@@ -1610,6 +1719,7 @@ TOOL_EXECUTORS: Dict[str, Any] = {
 
     "assembly.briefing": _execute_briefing,
     "assembly.snapshot_read": _execute_snapshot_read,
+    "assembly.snapshot_freeze": _execute_snapshot_freeze,
     "assembly.sequence_read": _execute_sequence_read,
     "assembly.media_probe": _execute_media_probe,
     "assembly.timeline_preview": _execute_timeline_preview,
@@ -1632,6 +1742,7 @@ TOOL_EXECUTORS: Dict[str, Any] = {
 TOOL_LABELS = {
     "assembly.briefing": "成片全局状态一览",
     "assembly.snapshot_read": "读取冻结快照",
+    "assembly.snapshot_freeze": "冻结本项目正式装配快照",
     "assembly.sequence_read": "读取 Sequence canonical",
     "assembly.media_probe": "媒体实测探测",
     "assembly.timeline_preview": "时间线 dry-run 预演",
