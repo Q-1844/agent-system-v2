@@ -11,6 +11,7 @@
 #   才启动下游。
 # - 选用指针变更只指向精确版本（entityId+versionId），拒绝模糊选择。
 from __future__ import annotations
+import asyncio
 import logging
 from pathlib import Path
 from typing import Optional
@@ -75,9 +76,42 @@ def resolve_selection_candidates(pdir: Path, project: str, spec: dict,
 
 
 def perform_selection(pdir: Path, project: str, spec: dict) -> dict:
-    """执行一次精确选用。spec = {kind, entityId, versionId?}。
+    """执行一次精确选用（同步版：仅供无事件循环上下文调用）。
+    spec = {kind, entityId, versionId?}。
     返回 {ok, kind, entityId, versionId, pointer, error?}。幂等：指针已指向该版本
-    时返回 ok=True（alreadySelected），不重复产生副作用。"""
+    时返回 ok=True（alreadySelected），不重复产生副作用。
+    在运行中的事件循环内请使用 perform_selection_async（asyncio.Lock 归属约束）。"""
+    try:
+        asyncio.get_running_loop()
+        return {"ok": False, "kind": spec.get("kind"),
+                "error": "事件循环运行中不可调用同步 perform_selection——"
+                         "请使用 perform_selection_async"}
+    except RuntimeError:
+        pass
+    return _perform_selection_impl(pdir, project, spec, _approve_reference_blocking)
+
+
+async def perform_selection_async(pdir: Path, project: str, spec: dict) -> dict:
+    """异步版：在路由/执行器的事件循环内使用（资源批准 await 同一写服务/锁）。
+    spec.items = [{entityId, versionId}, ...] 时为多选用（如一次审定选用多个镜头
+    的视频版本）；部分失败如实返回 items[].error。"""
+    items = spec.get("items")
+    if isinstance(items, list) and items:
+        results = []
+        ok_all = True
+        for it in items:
+            sub = {k: v for k, v in spec.items() if k != "items"}
+            sub.update(it if isinstance(it, dict) else {"versionId": str(it)})
+            r = await _perform_selection_impl_async(pdir, project, sub)
+            results.append(r)
+            ok_all = ok_all and bool(r.get("ok"))
+        return {"ok": ok_all, "kind": spec.get("kind"), "multi": True,
+                "items": results,
+                "error": None if ok_all else "部分选用失败（见 items[].error）"}
+    return await _perform_selection_impl_async(pdir, project, spec)
+
+
+async def _perform_selection_impl_async(pdir: Path, project: str, spec: dict) -> dict:
     kind = (spec.get("kind") or "").strip()
     entity_id = (spec.get("entityId") or "").strip()
     version_id = (spec.get("versionId") or "").strip() or None
@@ -92,7 +126,35 @@ def perform_selection(pdir: Path, project: str, spec: dict) -> dict:
         if kind == "sequence_render":
             return _select_sequence_render(pdir, project, entity_id, version_id)
         if kind in ("look_reference", "prop_reference", "composition_candidate"):
-            return _approve_reference(pdir, project, kind, entity_id, version_id)
+            return await _approve_reference_async(pdir, project, kind, entity_id,
+                                                  version_id)
+        if kind == "first_frame":
+            return _select_first_frame(pdir, entity_id, version_id)
+    except Exception as e:
+        log.exception("选用执行异常 project=%s spec=%s", project, spec)
+        return {"ok": False, "kind": kind, "entityId": entity_id,
+                "versionId": version_id,
+                "error": f"{type(e).__name__}: {str(e)[:200]}"}
+    return {"ok": False, "kind": kind, "error": "未实现的选用类型"}
+
+
+def _perform_selection_impl(pdir: Path, project: str, spec: dict,
+                            approve_fn) -> dict:
+    kind = (spec.get("kind") or "").strip()
+    entity_id = (spec.get("entityId") or "").strip()
+    version_id = (spec.get("versionId") or "").strip() or None
+    if kind not in SUPPORTED_KINDS:
+        return {"ok": False, "kind": kind, "entityId": entity_id,
+                "error": f"selection.kind 不支持: {kind!r}（支持 {SUPPORTED_KINDS}）"}
+    if not entity_id:
+        return {"ok": False, "kind": kind, "error": "selection.entityId 必填"}
+    try:
+        if kind == "video_version":
+            return _select_video_version(pdir, entity_id, version_id)
+        if kind == "sequence_render":
+            return _select_sequence_render(pdir, project, entity_id, version_id)
+        if kind in ("look_reference", "prop_reference", "composition_candidate"):
+            return approve_fn(pdir, project, kind, entity_id, version_id)
         if kind == "first_frame":
             return _select_first_frame(pdir, entity_id, version_id)
     except Exception as e:
@@ -158,29 +220,51 @@ def _select_sequence_render(pdir: Path, project: str, sequence_id: str,
             "versionId": version_id, "pointer": "final_render"}
 
 
-def _approve_reference(pdir: Path, project: str, kind: str, entity_id: str,
-                       asset_id: Optional[str]) -> dict:
-    """复用 resources 写服务的 approve（与用户 REST 入口同层；review pass 证据
-    由该服务自身强制，这里不绕过）。"""
+def _approve_reference_blocking(pdir: Path, project: str, kind: str,
+                                entity_id: str, asset_id: Optional[str]) -> dict:
+    """无事件循环上下文的阻塞版（asyncio.run 起独立循环）。"""
     import asyncio
+
+    async def _run():
+        return await _approve_reference_async(pdir, project, kind, entity_id, asset_id)
+
+    return asyncio.run(_run())
+
+
+async def _approve_reference_async(pdir: Path, project: str, kind: str,
+                                   entity_id: str, asset_id: Optional[str]) -> dict:
+    """复用 resources 写服务的 approve（与用户 REST 入口同层；review pass 证据
+    由该服务自身强制，这里不绕过）。OCC 依据=服务端读取当前 revision（与用户
+    入口「读后批准」同一语义；stale 时诚实失败可重试）。"""
     from src.resources.write_service import ResourceWriteService
+    from src.resources.models import (look_revision, prop_revision,
+                                      composition_revision)
     if not asset_id:
         return {"ok": False, "kind": kind, "entityId": entity_id,
                 "error": "缺少 versionId（应传 reference asset_id）"}
     ws = ResourceWriteService(pdir, project)
-
-    async def _run():
-        if kind == "look_reference":
-            return await ws.approve_look_reference(entity_id, asset_id)
-        if kind == "prop_reference":
-            return await ws.approve_prop_reference(entity_id, asset_id)
-        return await ws.approve_composition_candidate(entity_id, asset_id)
-
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
-    r = asyncio.run(_run()) if loop is None else loop.run_until_complete(_run())
+    doc = ws.store.load()
+    if kind == "look_reference":
+        e = (doc.looks or {}).get(entity_id)
+        if e is None:
+            return {"ok": False, "kind": kind, "entityId": entity_id,
+                    "error": f"Look 不存在: {entity_id}"}
+        r = await ws.approve_look_reference(
+            entity_id, asset_id, expected_revision=look_revision(e))
+    elif kind == "prop_reference":
+        e = (doc.props or {}).get(entity_id)
+        if e is None:
+            return {"ok": False, "kind": kind, "entityId": entity_id,
+                    "error": f"Prop 不存在: {entity_id}"}
+        r = await ws.approve_prop_reference(
+            entity_id, asset_id, expected_revision=prop_revision(e))
+    else:
+        e = (doc.compositions or {}).get(entity_id)
+        if e is None:
+            return {"ok": False, "kind": kind, "entityId": entity_id,
+                    "error": f"Composition 不存在: {entity_id}"}
+        r = await ws.approve_composition_candidate(
+            entity_id, asset_id, expected_revision=composition_revision(e))
     ok = bool(r.get("ok")) if isinstance(r, dict) else bool(r)
     out = {"ok": ok, "kind": kind, "entityId": entity_id, "versionId": asset_id,
            "pointer": "approved_reference_asset_ids"}

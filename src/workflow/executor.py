@@ -164,12 +164,13 @@ class WorkflowEngine:
                 continue
             pn = plan["nodes"][nid]
 
-            # Phase 47 §4.6：决策已落、选用未执行的崩溃窗口恢复（幂等）
+            # Phase 47 §4.6：决策已落、选用未执行的窗口恢复（幂等；async 执行）
             ps = node_run.get("pendingSelection")
             if (ps and ps.get("state") != "done"
                     and node_run["status"] in (M.NODE_DISPATCHING,
                                                M.NODE_NEEDS_RECONCILIATION)):
-                self._execute_pending_selection(project_dir, project, run_id, nid, el)
+                await self._execute_pending_selection(project_dir, project,
+                                                      run_id, nid, el)
                 run2 = runs.load(run_id)
                 if (run2["nodes"][nid]["status"] == M.NODE_SUCCESS):
                     self._advance(runs, el, run2, cursor + 1)
@@ -692,19 +693,30 @@ class WorkflowEngine:
         el.append(run_id, M.EV_REVIEW_DECIDED, node_id=nid, requestId=request_id,
                   decision=decision, receiptId=receipt["receiptId"],
                   withSelection=receipt.get("withSelection"))
-        # 选用执行（决策已持久化后进行；失败可由 continue 幂等重试）
-        if decision == "approve" and rv.get("selectionRequired"):
-            self._execute_pending_selection(project_dir, project, run_id, nid, el)
+        # 选用执行：决策已持久化；实际执行为 async（资源批准须在事件循环内 await
+        # 同一 project 锁）——由调用方在循环内调用 execute_pending_selection，
+        # 或由 drive 的恢复路径补执行（DISPATCHING+pendingSelection 幂等）。
+        selection_pending = bool(decision == "approve" and rv.get("selectionRequired"))
         # 注意：本方法只做状态落地，不自行驱动 worker——「通过后下一节点唯一启动」
         # 由 async 路由层在事件循环内调用 engine.drive()（同步测试/脚本上下文无运行循环，
         # ensure_future 会失败；驱动职责上移）。
         return {"alreadyDecided": False, "decision": decision, "requestId": request_id,
+                "selectionPending": selection_pending,
                 "receipt": receipt}
 
-    def _execute_pending_selection(self, project_dir: Path, project: str,
-                                   run_id: str, nid: str, el: EventLog) -> None:
-        """执行节点 pendingSelection（幂等）：成功 → 节点 success；失败 →
-        needs_reconciliation + 具体缺项（continue 时重试）。"""
+    async def execute_pending_selection(self, project_dir: Path, project: str,
+                                        run_id: str, node_id: str) -> dict:
+        """（async）执行节点的待完成选用（决策 API / continue 之后由异步层调用）。"""
+        el = EventLog(project_dir, run_id)
+        await self._execute_pending_selection(project_dir, project, run_id,
+                                              node_id, el)
+        return RunStore(project_dir, project).load(run_id) or {}
+
+    async def _execute_pending_selection(self, project_dir: Path, project: str,
+                                         run_id: str, nid: str, el: EventLog) -> None:
+        """执行节点 pendingSelection（幂等；async——资源批准走同一事件循环的
+        project 锁）：成功 → 节点 success；失败 → needs_reconciliation + 具体缺项
+        （continue 时重试）。"""
         from . import selection as _selection
         runs = RunStore(project_dir, project)
         run = runs.load(run_id)
@@ -715,7 +727,7 @@ class WorkflowEngine:
         if ps.get("state") == "done":
             return
         spec = ps.get("spec") or {}
-        receipt = _selection.perform_selection(project_dir, project, spec)
+        receipt = await _selection.perform_selection_async(project_dir, project, spec)
         receipt["at"] = _now()
 
         def _rec(r):
@@ -733,11 +745,24 @@ class WorkflowEngine:
                 # 本节点交接包 outputs（disposition=selected），下游逐节点冻结
                 # 即可解析到精确版本（assembly 守卫据此放行）。
                 spec_sel = ps_local.get("spec") or {}
-                out_kind = ("video_version" if spec_sel.get("kind") == "video_version"
-                            else spec_sel.get("kind") or "unknown")
+                # selection kind → 交接输出 kind（reference 批准落回资源域；
+                # versionId 仅对"实体带版本"的 kind 有意义，reference 批准记录
+                # approvedAssetId——与 outputs.py 的 versionId=None 记录保持
+                # freeze 一致性）
+                _SEL_KIND_MAP = {"look_reference": "look",
+                                 "prop_reference": "prop",
+                                 "composition_candidate": "composition"}
+                out_kind = _SEL_KIND_MAP.get(spec_sel.get("kind"),
+                                             spec_sel.get("kind") or "unknown")
+                _VERSIONED_KINDS = ("video_version", "sequence_render", "first_frame")
                 out_rec = {"kind": out_kind,
                            "entityId": spec_sel.get("entityId"),
-                           "versionId": spec_sel.get("versionId"),
+                           "versionId": (spec_sel.get("versionId")
+                                         if spec_sel.get("kind") in _VERSIONED_KINDS
+                                         else None),
+                           "approvedAssetId": (spec_sel.get("versionId")
+                                               if spec_sel.get("kind")
+                                               not in _VERSIONED_KINDS else None),
                            "disposition": "selected",
                            "reviewState": "selected",
                            "contentHash": None, "fileOk": True}
@@ -748,7 +773,7 @@ class WorkflowEngine:
                         rspec["shotId"] = spec_sel.get("entityId")
                         rspec["id"] = spec_sel.get("versionId")
                     else:
-                        rspec["id"] = spec_sel.get("versionId") or spec_sel.get("entityId")
+                        rspec["id"] = spec_sel.get("entityId")
                     matches = _resolve_kind(project_dir, project, rspec)
                     m = next((x for x in matches
                               if x["entityId"] == spec_sel.get("entityId")), None)
@@ -804,20 +829,21 @@ class WorkflowEngine:
             raise WorkflowError("not_retryable",
                                 f"节点状态 {node['status']} 不支持显式重试")
 
-        # Phase 47 §4.6：选片未完成的 needs_reconciliation → 幂等重试选用
-        # （Agent 已真实成功，不重新派发 Agent——只补完选用动作）
+        # Phase 47 §4.6：选片未完成的 needs_reconciliation → 重置为派发态，
+        # 由随后的 drive 恢复路径幂等重试选用（async；Agent 已真实成功，不重派）
         ps = node.get("pendingSelection")
         if (node["status"] == M.NODE_NEEDS_RECONCILIATION and ps
                 and ps.get("state") != "done"):
-            el = EventLog(project_dir, run_id)
-            self._execute_pending_selection(project_dir, project, run_id, target, el)
-            fresh = runs.load(run_id)
-            if (fresh.get("nodes") or {}).get(target, {}).get("status") == M.NODE_SUCCESS:
-                el.append(run_id, M.EV_NODE_STATE, node_id=target,
-                          from_=M.NODE_NEEDS_RECONCILIATION, to=M.NODE_SUCCESS,
-                          reason="selection_recovered")
-                return fresh
-            return fresh   # 仍失败：保留具体缺项，等待用户再次继续
+            def _rearm(r):
+                n = r["nodes"][target]
+                _set_node(n, M.NODE_DISPATCHING)
+                _set_run_state(r, None, None)
+            runs.update(run_id, _rearm)
+            EventLog(project_dir, run_id).append(
+                run_id, M.EV_NODE_STATE, node_id=target,
+                from_=M.NODE_NEEDS_RECONCILIATION, to=M.NODE_DISPATCHING,
+                reason="selection_retry")
+            return runs.load(run_id)
 
         def _retry(r):
             n = r["nodes"][target]

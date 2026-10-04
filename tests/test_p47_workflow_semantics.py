@@ -393,6 +393,9 @@ def test_review_approve_and_select_full_flow(tmp_path, monkeypatch):
                             r["reviews"][0]["requestId"], "approve", "通过并选用",
                             with_selection=True)
     assert out["alreadyDecided"] is False
+    assert out["selectionPending"] is True
+    # 选用执行在 drive 恢复路径（async；路由层同语义）
+    _drive_sync(eng, tmp_path, run["runId"])
     r2 = RunStore(tmp_path, "p47t").load(run["runId"])
     rv = r2["reviews"][0]
     assert rv["selectionState"] == "done"
@@ -418,6 +421,7 @@ def test_review_selection_failure_then_recovery(tmp_path, monkeypatch):
     eng.decide_review(tmp_path, "p47t", run["runId"],
                       r["reviews"][0]["requestId"], "approve", "选用",
                       with_selection=True)
+    _drive_sync(eng, tmp_path, run["runId"])   # 选用执行（失败 → needs_reconciliation）
     r2 = RunStore(tmp_path, "p47t").load(run["runId"])
     assert r2["status"] == M.RUN_NEEDS_RECONCILIATION
     assert r2["nodes"]["n_rv"]["status"] == M.NODE_NEEDS_RECONCILIATION
@@ -435,6 +439,7 @@ def test_review_selection_failure_then_recovery(tmp_path, monkeypatch):
     store.update_shot("s01_c01", lambda s: s.video_versions.append(
         VideoVersion(version_id="vv1", status="done", local=str(f))))
     eng.continue_run(tmp_path, "p47t", run["runId"], "n_rv")
+    _drive_sync(eng, tmp_path, run["runId"])   # drive 恢复路径幂等重试选用
     fresh = RunStore(tmp_path, "p47t").load(run["runId"])
     assert fresh["nodes"]["n_rv"]["status"] == M.NODE_SUCCESS
     assert fresh["reviews"][0]["selectionState"] == "done"

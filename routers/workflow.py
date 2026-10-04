@@ -319,6 +319,15 @@ async def review_decision(project_name: str, run_id: str, request_id: str,
                                    req.expectedFingerprint,
                                    with_selection=req.withSelection,
                                    selection_override=req.selectionOverride)
+        # 通过并选用 → 服务端立即执行选用（事件循环内 await 同一 project 锥；
+        # 失败时节点 needs_reconciliation，可用 continue 幂等重试）
+        if out.get("selectionPending"):
+            nid = next((rv["nodeId"] for rv in (RunStore(pdir, project_name)
+                                                .load(run_id).get("reviews") or [])
+                        if rv.get("requestId") == request_id), None)
+            if nid:
+                await engine.execute_pending_selection(pdir, project_name,
+                                                       run_id, nid)
         # 通过 → 下一节点唯一启动（在事件循环内驱动；驳回已停止派发，驱动无害）
         if not out.get("alreadyDecided"):
             engine.drive(pdir, project_name, run_id)
