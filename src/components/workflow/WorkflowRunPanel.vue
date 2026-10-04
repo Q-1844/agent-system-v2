@@ -60,6 +60,29 @@
             <span class="k">待审产物</span>
             <span class="v tiny">{{ artifactText(rv.artifactRefs) }}</span>
           </div>
+          <!-- Phase 47 §4.6：需要明确选用时，从真实候选中选定精确版本 -->
+          <template v-if="rv.selectionRequired">
+            <div class="kv"><span class="k">需选用</span>
+              <span class="v tiny">
+                {{ selKindText(rv.selectionSpec?.kind) }}
+                <template v-if="rv.selectionSpec?.versionId">（默认 {{ rv.selectionSpec.versionId }}）</template>
+              </span>
+            </div>
+            <div v-if="rv.selectionCandidates?.length" class="sel-cands">
+              <label v-for="c in rv.selectionCandidates" :key="c.versionId" class="sel-cand">
+                <input
+                  type="radio"
+                  :name="`sel-${rv.requestId}`"
+                  :value="c.versionId"
+                  v-model="selDrafts[rv.requestId]"
+                />
+                <span class="mono-num tiny">{{ c.versionId }}</span>
+                <span v-if="c.selected" class="run-chip ok tiny">当前已选</span>
+                <span v-else-if="c.status" class="tiny muted">{{ c.status }}</span>
+              </label>
+            </div>
+            <p v-else class="sem-note tiny">未解析到候选——可在决策时以 selectionOverride 指定精确版本。</p>
+          </template>
           <textarea
             v-model="noteDrafts[rv.requestId]"
             class="input rv-note"
@@ -67,10 +90,24 @@
             placeholder="审核意见（可留空）"
           />
           <div class="rv-actions">
-            <button class="btn btn-primary btn-sm" @click="$emit('decide', rv, 'approve', noteDrafts[rv.requestId] || '')">通过 · 继续</button>
-            <button class="btn btn-outline btn-sm danger-link" @click="$emit('decide', rv, 'reject', noteDrafts[rv.requestId] || '')">驳回 · 停止</button>
+            <button v-if="!rv.selectionRequired" class="btn btn-primary btn-sm" @click="$emit('decide', rv, 'approve', noteDrafts[rv.requestId] || '', {})">通过 · 继续</button>
+            <button
+              v-else
+              class="btn btn-primary btn-sm"
+              :disabled="!selDrafts[rv.requestId] && !(rv.selectionSpec?.versionId)"
+              @click="approveAndSelect(rv)"
+            >通过并选用 · 继续</button>
+            <button class="btn btn-outline btn-sm danger-link" @click="$emit('decide', rv, 'reject', noteDrafts[rv.requestId] || '', {})">驳回 · 停止</button>
           </div>
-          <p class="sem-note tiny">审核通过仅许可流程继续；资产批准/选片/定版仍走项目页的正式入口。</p>
+          <p class="sem-note tiny">
+            <template v-if="rv.selectionRequired">
+              「通过并选用」会把上面选定的精确版本设为正式选片指针（与项目页选片入口同一服务）；
+              两步各自落账，失败时可「继续」幂等重试。
+            </template>
+            <template v-else>
+              审核通过仅许可流程继续；资产批准/选片/定版仍走项目页的正式入口。
+            </template>
+          </p>
         </div>
       </template>
 
@@ -81,6 +118,10 @@
           <span class="rd-name">{{ rv.label || '人工审核' }}</span>
           <span class="run-chip" :class="rv.decision === 'approve' ? 'ok' : 'bad'">
             {{ rv.decision === 'approve' ? '已通过' : '已驳回' }}
+          </span>
+          <span v-if="rv.selectionRequired" class="run-chip tiny"
+                :class="rv.selectionState === 'done' ? 'ok' : (rv.selectionState === 'failed' ? 'bad' : 'warn')">
+            选用{{ selStateText(rv.selectionState) }}
           </span>
           <span v-if="rv.decisionNote" class="rd-note tiny">{{ rv.decisionNote }}</span>
         </div>
@@ -115,14 +156,39 @@ import type { WorkflowRun, WorkflowRunNode, WorkflowReviewRequest } from '@/api'
 import { shortAgentName } from './assistant';
 
 const props = defineProps<{ run: WorkflowRun | null; getRefId: (nodeId: string) => string | null }>();
-defineEmits<{
-  (e: 'decide', rv: WorkflowReviewRequest, decision: 'approve' | 'reject', note: string): void;
+const emit = defineEmits<{
+  (e: 'decide', rv: WorkflowReviewRequest, decision: 'approve' | 'reject', note: string,
+   opts?: { withSelection?: boolean; selectionOverride?: { kind: string; entityId: string; versionId: string } | null }): void;
   (e: 'stop'): void;
   (e: 'continue', nodeId: string | null): void;
   (e: 'locate', nodeId: string): void;
 }>();
 
 const noteDrafts = reactive<Record<string, string>>({});
+const selDrafts = reactive<Record<string, string>>({});
+
+const SEL_KIND: Record<string, string> = {
+  video_version: '视频版本（shot final_video）',
+  sequence_render: '成片 render（final_render）',
+  look_reference: 'Look 参考图批准',
+  prop_reference: '道具参考图批准',
+  composition_candidate: '构图候选批准',
+  first_frame: '分镜首帧候选',
+};
+function selKindText(k?: string): string { return SEL_KIND[k || ''] || k || '—'; }
+function selStateText(s?: string): string {
+  return ({ none: '不适用', pending: '待执行', done: '完成', failed: '失败' } as Record<string, string>)[s || ''] || s || '—';
+}
+function approveAndSelect(rv: WorkflowReviewRequest) {
+  const versionId = selDrafts[rv.requestId] || rv.selectionSpec?.versionId || '';
+  if (!versionId) return;
+  const entityId = rv.selectionSpec?.entityId || '';
+  const kind = rv.selectionSpec?.kind || '';
+  // entityId 为占位符（模板生成）时从候选所属对象推断：video_version 的 entityId 即 shotId，
+  // 已在候选解析时按真实对象展开——这里仅透传用户选择的精确版本。
+  emit('decide', rv, 'approve', noteDrafts[rv.requestId] || '',
+       { withSelection: true, selectionOverride: { kind, entityId, versionId } });
+}
 
 const shortRunId = computed(() => (props.run ? props.run.runId.replace('run_', 'run ') : ''));
 const shortHash = computed(() => {
@@ -179,6 +245,16 @@ function nodeTooltip(n?: WorkflowRunNode): string {
   }
   const refs = n.handoff?.artifactRefs || [];
   if (refs.length) parts.push(`产物: ${refs.map((r: any) => `${r.kind}:${r.id}`).join(', ')}`);
+  // Phase 47：输出（created/reused/selected）与缺项（诚实缺项不假成功）
+  const outs = n.handoff?.outputs || [];
+  if (outs.length) {
+    parts.push(`输出: ${outs.slice(0, 6).map((o: any) =>
+      `${o.kind}:${o.entityId}${o.versionId ? `@${o.versionId}` : ''}${o.disposition ? `(${o.disposition})` : ''}`).join(', ')}`);
+  }
+  const reused = n.handoff?.reusedRefs || [];
+  if (reused.length) parts.push(`复用: ${reused.map((r: any) => `${r.kind}:${r.entityId}`).join(', ')}`);
+  const missing = n.handoff?.missingRequirements || [];
+  if (missing.length) parts.push(`缺项: ${missing.map((m: any) => m.reason || m.kind).join('；').slice(0, 200)}`);
   return parts.join('\n');
 }
 function nodeName(nid: string): string {
@@ -250,6 +326,13 @@ const continueLabel = computed(() =>
   .rv-name { font-size: 13px; font-weight: 600; }
   .rv-note { width: 100%; resize: vertical; }
   .rv-actions { display: flex; gap: 8px; }
+  .sel-cands {
+    display: flex; flex-direction: column; gap: 3px; max-height: 150px; overflow-y: auto;
+    border: 1px solid var(--wf-border, #2a2a2a); border-radius: 6px; padding: 5px 7px;
+    .sel-cand { display: flex; align-items: center; gap: 7px; cursor: pointer; font-size: 12px;
+      input { accent-color: #60a5fa; } }
+  }
+  .muted { color: #9a9a9a; }
 }
 .review-done { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap;
   .rd-name { font-size: 12px; }

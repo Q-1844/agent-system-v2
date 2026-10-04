@@ -92,11 +92,12 @@ def _ok_task_result(ref_id, domain_ids=("s01",)):
 
 
 def _make_dispatch(monkeypatch, outcomes):
-    """outcomes: {refId: task_result 或 Exception}；记录调用顺序。"""
+    """outcomes: {refId: task_result 或 Exception}；记录调用顺序。
+    Phase 47：签名跟随 adapter.dispatch_node（frozen_inputs §4.5 逐节点输入冻结）。"""
     calls = []
 
     async def fake_dispatch(rt, project, run, node_plan, attempt, *, event_cb,
-                            cancel_event):
+                            cancel_event, frozen_inputs=None):
         ref = node_plan["refId"]
         calls.append(ref)
         out = outcomes.get(ref)

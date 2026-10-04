@@ -34,6 +34,7 @@
               @click="assistantOpen = !assistantOpen">
         搭建助手
       </button>
+      <button class="btn btn-quiet btn-sm" @click="openTemplates">从模板新建</button>
       <button class="btn btn-quiet btn-sm" @click="loadSample">示例工作流</button>
       <button class="btn btn-quiet btn-sm" @click="exportJson">导出 JSON</button>
       <button class="btn btn-primary btn-sm" @click="saveNow">保存草稿</button>
@@ -253,6 +254,34 @@
                 上游节点的产物会作为交接包自动传给本节点，无需在此粘贴内容。
               </p>
 
+              <!-- Phase 47 B批：产物要求（目标级完成校验契约） -->
+              <div class="sec-label">产物要求（完成判定）</div>
+              <div class="kv">
+                <span class="k">完成策略</span>
+                <select class="input tpl-input" :value="selectedAgentNode.config.completion?.strategy ?? 'require_new'" @change="onStrategyChange">
+                  <option value="require_new">require_new（本 attempt 必须有新产物）</option>
+                  <option value="allow_verified_reuse">allow_verified_reuse（允许服务端核验既有产物）</option>
+                </select>
+              </div>
+              <div v-for="(spec, i) in (selectedAgentNode.config.completion?.outputs || [])" :key="i" class="spec-row">
+                <select class="input spec-kind" :value="spec.kind" @change="onSpecKind(i, $event)">
+                  <option v-for="k in COMPLETION_KINDS" :key="k" :value="k">{{ k }}</option>
+                </select>
+                <input class="input spec-count" type="number" min="1" :value="spec.minCount ?? 1" @change="onSpecCount(i, $event)" title="最少数量" />
+                <input class="input spec-id" :value="spec.id ?? ''" placeholder="实体 ID（可选）" @change="onSpecId(i, $event)" />
+                <button class="btn btn-quiet btn-sm danger-link spec-del" @click="removeOutputSpec(i)">删</button>
+                <div class="spec-flags">
+                  <label v-for="f in COMPLETION_FLAGS" :key="f.key" class="spec-flag tiny">
+                    <input type="checkbox" :checked="specFlag(spec, f.key)" @change="onSpecFlag(i, f.key, $event)" />{{ f.label }}
+                  </label>
+                </div>
+              </div>
+              <button class="btn btn-quiet btn-sm" @click="addOutputSpec">+ 添加产物要求</button>
+              <p class="sem-note tiny">
+                产物要求逐项按项目真实事实核对（存在性/图像/审批/可播放）；
+                默认 require_new 不接受旧素材冒充新产物。留空 = 只按回执域校验（Phase 46 语义）。
+              </p>
+
               <div class="sec-label">工具面</div>
               <div class="tool-block-head">
                 <span>核心工具 · 模块自带必有</span>
@@ -350,6 +379,24 @@
               <input v-model="reviewReviewer" class="input" placeholder="如：制作人（草稿自由填写，仓库无审核者名册）" spellcheck="false" />
             </div>
 
+            <!-- Phase 47 §4.6：批准并选用目标（运行期在审核卡片从真实候选中选定） -->
+            <div class="field">
+              <span class="f-k">通过时需选用</span>
+              <select class="input" :value="reviewSelectionKind" @change="onReviewSelectionKind($event)">
+                <option value="">不要求（仅确认/意见）</option>
+                <option value="video_version">视频版本（shot final_video）</option>
+                <option value="sequence_render">成片 render（final_render）</option>
+                <option value="first_frame">分镜首帧候选</option>
+                <option value="look_reference">Look 参考图批准</option>
+                <option value="prop_reference">道具参考图批准</option>
+              </select>
+            </div>
+            <div v-if="reviewSelectionKind" class="field">
+              <span class="f-k">选用对象 ID</span>
+              <input v-model="reviewSelectionEntity" class="input mono-num"
+                     placeholder="shotId / sequenceId / lookId（运行期也可在卡片从候选选择）" spellcheck="false" />
+            </div>
+
             <div class="sec-label">首版语义</div>
             <p class="sem-note">
               通过 → 沿后续执行依赖继续；驳回 → 停止并留下意见，等待人工修改工作流或重新发起。
@@ -420,12 +467,47 @@
 
       <!-- ============ 右：搭建助手（对话框）============ -->
       <WorkflowAgentPanel v-if="assistantOpen" :draft="draft" :controller="wfController" :backend-online="backendOnline" :producer-model="producerModel" />
+
+      <!-- ============ Phase 47 C批：从模板新建（弹层）============ -->
+      <div v-if="templatesOpen" class="tpl-overlay" @click.self="templatesOpen = false">
+        <div class="tpl-modal">
+          <div class="tpl-head">
+            <span class="tpl-title">从模板新建工作流</span>
+            <button class="btn btn-quiet btn-sm" @click="templatesOpen = false">关闭</button>
+          </div>
+          <p class="sem-note tiny">
+            复制模板产生<b>新工作流身份</b>（保留模板版本来源）；创建后可改目标、节点顺序、
+            Skill 绑定与审核次数再保存。模板不触发任何生产任务，只有「运行」派发。
+          </p>
+          <div class="tpl-list">
+            <div v-for="t in templates" :key="t.id" class="tpl-item" :class="{ active: tplActive?.id === t.id }" @click="tplActive = t">
+              <div class="tpl-name">{{ t.name }}</div>
+              <div class="tpl-desc tiny">{{ t.description }}</div>
+              <div class="tpl-io tiny muted">需要：{{ (t.requiredInputs || []).join('、') || '—' }}</div>
+            </div>
+          </div>
+          <div v-if="tplActive" class="tpl-params">
+            <div class="sec-label">参数（{{ tplActive.id }}）</div>
+            <div v-for="p in tplActive.params || []" :key="p.key" class="kv">
+              <span class="k">{{ p.label }}</span>
+              <input v-model="tplParamDraft[p.key]" class="input tpl-input" :placeholder="p.required ? '必填' : '可选'" />
+            </div>
+            <div class="kv">
+              <span class="k">工作流标识</span>
+              <input v-model="tplWorkflowId" class="input tpl-input mono-num" placeholder="wf_自定义标识" />
+            </div>
+            <button class="btn btn-primary btn-sm tpl-create" :disabled="tplCreating" @click="createFromTemplate">
+              {{ tplCreating ? '创建中…' : '创建并载入画布' }}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, reactive, ref } from 'vue';
 import { VueFlow, useVueFlow, MarkerType } from '@vue-flow/core';
 import type { Connection, EdgeChange, NodeChange } from '@vue-flow/core';
 // vue-flow 基础布局样式（.vue-flow__node 绝对定位 / handle 定位 / viewport 层级）
@@ -1056,6 +1138,26 @@ const reviewReviewer = computed({
     }
   },
 });
+// —— Phase 47 §4.6：审核选用目标（selection）——
+const reviewSelectionKind = computed(() => selectedReviewNode.value?.config.selection?.kind ?? '');
+const reviewSelectionEntity = computed({
+  get: () => selectedReviewNode.value?.config.selection?.entityId ?? '',
+  set: (v: string) => {
+    const n = selectedReviewNode.value;
+    if (n && n.config.selection) {
+      n.config.selection.entityId = v;
+      markDirty();
+    }
+  },
+});
+function onReviewSelectionKind(e: Event) {
+  const n = selectedReviewNode.value;
+  if (!n) return;
+  const kind = (e.target as HTMLSelectElement).value;
+  if (!kind) delete n.config.selection;
+  else n.config.selection = { kind, entityId: n.config.selection?.entityId ?? '' };
+  markDirty();
+}
 
 /** 审核对象来源候选：所有执行入线的 source 节点 */
 const reviewUpstreamOptions = computed(() => {
@@ -1126,6 +1228,82 @@ function onObjectiveInput(e: Event) {
   if (!n) return;
   n.config.objective = (e.target as HTMLTextAreaElement).value;
   markDirty();
+}
+
+// —— Phase 47 B批：产物要求（completion 契约）编辑 ——
+const COMPLETION_KINDS = [
+  'scene', 'story', 'character', 'look', 'clothing', 'prop', 'composition',
+  'reference_asset', 'location', 'location_view', 'scene_instance',
+  'scene_instance_view', 'shot', 'video_version', 'sequence',
+];
+const COMPLETION_FLAGS = [
+  { key: 'withImage', label: '需有图/文件' },
+  { key: 'withApprovedRef', label: '需已批准' },
+  { key: 'playable', label: '需可播放' },
+  { key: 'withCompletedRender', label: '需完成渲染' },
+];
+
+function ensureCompletion(n: WorkflowNode): Record<string, any> {
+  if (!n.config.completion || typeof n.config.completion !== 'object') {
+    n.config.completion = { strategy: 'require_new', outputs: [] };
+  }
+  return n.config.completion;
+}
+function onStrategyChange(e: Event) {
+  const n = selectedAgentNode.value;
+  if (!n) return;
+  ensureCompletion(n).strategy = (e.target as HTMLSelectElement).value;
+  markDirty();
+}
+function addOutputSpec() {
+  const n = selectedAgentNode.value;
+  if (!n) return;
+  const c = ensureCompletion(n);
+  c.outputs = c.outputs || [];
+  c.outputs.push({ kind: 'scene', minCount: 1 });
+  markDirty();
+}
+function removeOutputSpec(i: number) {
+  const n = selectedAgentNode.value;
+  if (!n) return;
+  const c = n.config.completion;
+  if (!c) return;
+  (c.outputs || []).splice(i, 1);
+  markDirty();
+}
+function onSpecKind(i: number, e: Event) {
+  const outs = selectedAgentNode.value?.config.completion?.outputs;
+  if (outs && outs[i]) { outs[i].kind = (e.target as HTMLSelectElement).value; markDirty(); }
+}
+function onSpecCount(i: number, e: Event) {
+  const outs = selectedAgentNode.value?.config.completion?.outputs;
+  if (outs && outs[i]) {
+    const v = parseInt((e.target as HTMLInputElement).value, 10);
+    outs[i].minCount = Number.isFinite(v) && v >= 1 ? v : 1;
+    markDirty();
+  }
+}
+function onSpecFlag(i: number, key: string, e: Event) {
+  const outs = selectedAgentNode.value?.config.completion?.outputs;
+  if (outs && outs[i]) {
+    const checked = (e.target as HTMLInputElement).checked;
+    const spec = outs[i] as Record<string, any>;
+    if (checked) spec[key] = true;
+    else delete spec[key];
+    markDirty();
+  }
+}
+function specFlag(spec: Record<string, any>, key: string): boolean {
+  return !!spec[key];
+}
+function onSpecId(i: number, e: Event) {
+  const outs = selectedAgentNode.value?.config.completion?.outputs;
+  if (outs && outs[i]) {
+    const v = (e.target as HTMLInputElement).value.trim();
+    if (v) outs[i].id = v;
+    else delete outs[i].id;
+    markDirty();
+  }
 }
 
 // —— 连线面板 ——
@@ -1438,14 +1616,20 @@ async function refreshRun(runId: string) {
   }
 }
 
-async function onDecideReview(rv: WorkflowReviewRequest, decision: 'approve' | 'reject', note: string) {
+async function onDecideReview(rv: WorkflowReviewRequest, decision: 'approve' | 'reject', note: string,
+                              opts?: { withSelection?: boolean; selectionOverride?: { kind: string; entityId: string; versionId: string } | null }) {
   if (!activeRun.value) return;
   try {
     const out = await apiClient.decideWorkflowReview(
       props.projectName, activeRun.value.runId, rv.requestId, decision, note,
-      rv.artifactFingerprint);
+      rv.artifactFingerprint,
+      opts?.withSelection ?? false,
+      opts?.selectionOverride ?? null);
     if (out?.alreadyDecided) {
       message.warning(`该审核已被处理过（决策：${out.decision === 'approve' ? '通过' : '驳回'}）`, { duration: 3200 });
+    } else if (decision === 'approve' && opts?.withSelection) {
+      message.success(out?.receipt?.withSelection
+        ? '已通过并选用：指针已变更，下一节点开始' : '已通过', { duration: 3200 });
     } else {
       message.success(decision === 'approve' ? '已通过：下一节点开始' : '已驳回：流程停止', { duration: 2800 });
     }
@@ -1453,7 +1637,9 @@ async function onDecideReview(rv: WorkflowReviewRequest, decision: 'approve' | '
   } catch (err: any) {
     const detail = String(err?.message || err || '');
     if (detail.includes('review_object_changed')) {
-      message.error('审核对象已变化（待审产物指纹不一致），请刷新后复核', { duration: 4200 });
+      message.error('审核对象已变化（待审产物内容与打开时不一致），请刷新后复核', { duration: 4200 });
+    } else if (detail.includes('selection_required')) {
+      message.error('本审核要求明确选用：请选择精确版本后点「通过并选用」', { duration: 4200 });
     } else {
       message.error(`审核提交失败：${detail.slice(0, 200)}`, { duration: 4200 });
     }
@@ -1547,6 +1733,66 @@ function clearCanvas() {
       clearSelection();
     },
   });
+}
+
+// ============ Phase 47 C批：从模板新建 ============
+const templatesOpen = ref(false);
+const templates = ref<any[]>([]);
+const tplActive = ref<any>(null);
+const tplParamDraft = reactive<Record<string, string>>({});
+const tplWorkflowId = ref('');
+const tplCreating = ref(false);
+
+async function openTemplates() {
+  templatesOpen.value = true;
+  if (!templates.value.length) {
+    try {
+      const out = await apiClient.listWorkflowTemplates(props.projectName);
+      templates.value = out.templates || [];
+    } catch (err: any) {
+      message.error(`模板列表加载失败：${String(err?.message || err).slice(0, 160)}`, { duration: 3600 });
+    }
+  }
+}
+
+async function createFromTemplate() {
+  if (!tplActive.value || tplCreating.value) return;
+  const wid = (tplWorkflowId.value || '').trim() ||
+    `wf_${tplActive.value.id.toLowerCase()}_${Date.now().toString(36)}`;
+  const params: Record<string, any> = {};
+  for (const [k, v] of Object.entries(tplParamDraft)) {
+    if (String(v).trim() !== '') params[k] = v;
+  }
+  tplCreating.value = true;
+  try {
+    const out = await apiClient.createWorkflowFromTemplate(
+      props.projectName, tplActive.value.id, wid, params);
+    const doc = out?.definition;
+    if (!out?.validation?.ok) {
+      message.warning('模板定义已保存（含校验问题，可修正后再运行）', { duration: 3600 });
+    }
+    if (doc) {
+      draft.value = {
+        ...newEmptyDraft(props.projectName, doc.name || tplActive.value.name),
+        workflowId: wid,
+        createdAt: doc.createdAt ?? new Date().toISOString(),
+        nodes: doc.nodes || [],
+        edges: doc.edges || [],
+      };
+      serverRevision.value = doc.revision ?? 1;
+      dirty.value = false;
+      savedAt.value = doc.updatedAt ?? null;
+      clearSelection();
+      scheduleFitView();
+    }
+    templatesOpen.value = false;
+    message.success(`已从模板 ${tplActive.value.id} 创建新工作流（标识 ${wid}，revision ${out?.revision}）`,
+      { duration: 4200 });
+  } catch (err: any) {
+    message.error(`模板创建失败：${String(err?.message || err).slice(0, 200)}`, { duration: 4200 });
+  } finally {
+    tplCreating.value = false;
+  }
 }
 
 const zoomPct = computed(() => Math.round((vp.value?.zoom ?? 1) * 100));
@@ -2469,6 +2715,15 @@ select.input { appearance: auto; }
   font-size: 12px;
   line-height: 1.6;
 }
+// Phase 47：产物要求编辑行
+.spec-row {
+  display: grid; grid-template-columns: 1fr 56px 1fr auto; gap: 5px; align-items: center;
+  padding: 6px 7px; border: 1px solid var(--wf-border); border-radius: 7px;
+  .spec-kind, .spec-count, .spec-id { font-size: 12px; padding: 4px 6px; }
+  .spec-flags { grid-column: 1 / -1; display: flex; gap: 9px; flex-wrap: wrap;
+    .spec-flag { display: flex; align-items: center; gap: 3px; cursor: pointer;
+      input { accent-color: #60a5fa; } } }
+}
 .danger-link {
   align-self: flex-start;
 
@@ -2643,4 +2898,35 @@ select.input { appearance: auto; }
   .wf-lib { width: 168px; }
   .wf-panel { width: 224px; }
 }
+
+// ============ Phase 47 C批：模板弹层 ============
+.tpl-overlay {
+  position: fixed; inset: 0; z-index: 90;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex; align-items: center; justify-content: center;
+}
+.tpl-modal {
+  width: min(720px, 92vw); max-height: 84vh; overflow-y: auto;
+  background: var(--bg, #171717); border: 1px solid var(--wf-border, #2a2a2a);
+  border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;
+}
+.tpl-head { display: flex; align-items: center; justify-content: space-between; }
+.tpl-title { font-size: 15px; font-weight: 600; }
+.tpl-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.tpl-item {
+  border: 1px solid var(--wf-border, #2a2a2a); border-radius: 8px; padding: 8px 10px;
+  cursor: pointer; display: flex; flex-direction: column; gap: 3px;
+  &:hover { border-color: #555; }
+  &.active { border-color: #60a5fa; background: rgba(96, 165, 250, 0.08); }
+  .tpl-name { font-size: 13px; font-weight: 600; }
+  .tpl-desc { color: #c9c9c9; }
+  .tpl-io { color: #9a9a9a; }
+}
+.tpl-params {
+  border-top: 1px solid var(--wf-border, #2a2a2a); padding-top: 10px;
+  display: flex; flex-direction: column; gap: 6px;
+  .tpl-input { flex: 1; }
+  .tpl-create { align-self: flex-start; }
+}
+.muted { color: #9a9a9a; }
 </style>

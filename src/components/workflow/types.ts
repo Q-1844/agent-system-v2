@@ -23,6 +23,22 @@ export interface WorkflowNodeConfig {
   selectedTools?: string[];
   /** agent：本节点任务目标与范围（Phase 46 运行必需字段；留空可存草稿，启动被后端阻止） */
   objective?: string;
+  /** Phase 47 §4.2/§4.3：目标级完成契约（输出 spec + 完成策略） */
+  completion?: {
+    strategy?: 'require_new' | 'allow_verified_reuse';
+    outputs?: Array<{
+      kind: string;
+      id?: string;
+      minCount?: number;
+      withImage?: boolean;
+      withApprovedRef?: boolean;
+      playable?: boolean;
+      withCompletedRender?: boolean;
+      allowReuse?: boolean;
+    }>;
+  };
+  /** agent：节点任务范围（如 W08 的 videoVersions 显式素材声明） */
+  scope?: Record<string, any>;
   /** human_review：审核对象来源节点（上游产物） */
   targetSourceNodeId?: string | null;
   /** human_review：审核对象/产物（可从上游产物受约束选择，也可草稿自由填写） */
@@ -31,6 +47,8 @@ export interface WorkflowNodeConfig {
   instructions?: string;
   /** human_review：审核者（草稿自由文本，仓库无正式审核者名册） */
   reviewer?: string;
+  /** Phase 47 §4.6：审核「批准并选用」目标（versionId 运行期在卡片选定） */
+  selection?: { kind: string; entityId: string; versionId?: string };
   /** 通用备注 */
   note?: string;
 }

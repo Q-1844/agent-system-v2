@@ -29,6 +29,7 @@ _HTTP = {
     "waiting_human": 409, "run_terminal": 409, "stopping": 409,
     "not_retryable": 409, "review_object_changed": 409, "bad_decision": 400,
     "invalid_definition": 422, "start_blocked": 422, "disabled_agent": 400,
+    "selection_required": 409, "outputs_missing": 422,
 }
 
 
@@ -66,6 +67,10 @@ class ReviewDecisionReq(BaseModel):
     decision: str                              # approve | reject
     note: str = ""
     expectedFingerprint: Optional[str] = None
+    # Phase 47 §4.6：批准并选用——用户在审核卡片显式确认后才置 true；
+    # 服务端经 selection.perform_selection 走既有用户入口同一底层服务。
+    withSelection: bool = False
+    selectionOverride: Optional[dict] = None   # 覆盖默认 selection 目标（必须精确版本）
 
 
 class ContinueReq(BaseModel):
@@ -81,6 +86,54 @@ async def workflow_catalog(project_name: str):
         return build_catalog(rt, project_name)
     except HTTPException:
         raise
+    except Exception as e:
+        _err(e)
+
+
+# ============ Phase 47 C批：模板（从模板新建走保存/校验同一路径） ============
+@router.get("/api/project/{project_name}/workflow/templates")
+async def workflow_templates(project_name: str):
+    try:
+        from src.workflow.templates import TEMPLATE_VERSION, list_templates
+        _pdir(project_name)
+        return {"templates": list_templates(), "templateVersion": TEMPLATE_VERSION}
+    except HTTPException:
+        raise
+    except Exception as e:
+        _err(e)
+
+
+class TemplateCreateReq(BaseModel):
+    workflowId: str
+    params: Optional[dict] = None
+
+
+@router.post("/api/project/{project_name}/workflow/templates/{template_id}/create")
+async def workflow_template_create(project_name: str, template_id: str,
+                                   req: TemplateCreateReq):
+    """从模板复制产生新工作流定义并保存（revision 1）。
+    保存走与手工搭建相同的校验路径（错误草稿可存、启动必挡）；
+    definition.template 记录来源模板与版本。"""
+    try:
+        from src.workflow.templates import create_from_template
+        pdir = _pdir(project_name)
+        wid = (req.workflowId or "").strip()
+        if not wid:
+            raise WorkflowError("invalid_definition", "workflowId 必填")
+        definition = create_from_template(template_id, wid, req.params)
+        definition["projectId"] = project_name
+        v = validate_definition(definition, get_agent_runtime(), project_name)
+        doc = DefinitionStore(pdir, project_name).save(wid, definition, None)
+        return {"workflowId": wid, "revision": doc["revision"],
+                "contentHash": doc["contentHash"],
+                "template": definition.get("template"),
+                "validation": {"ok": v["ok"], "errors": v["errors"],
+                               "warnings": v["warnings"]},
+                "definition": doc}
+    except HTTPException:
+        raise
+    except KeyError as e:
+        raise HTTPException(404, str(e))
     except Exception as e:
         _err(e)
 
@@ -263,7 +316,9 @@ async def review_decision(project_name: str, run_id: str, request_id: str,
         pdir = _pdir(project_name)
         out = engine.decide_review(pdir, project_name, run_id,
                                    request_id, req.decision, req.note,
-                                   req.expectedFingerprint)
+                                   req.expectedFingerprint,
+                                   with_selection=req.withSelection,
+                                   selection_override=req.selectionOverride)
         # 通过 → 下一节点唯一启动（在事件循环内驱动；驳回已停止派发，驱动无害）
         if not out.get("alreadyDecided"):
             engine.drive(pdir, project_name, run_id)

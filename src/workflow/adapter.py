@@ -12,6 +12,7 @@
 from __future__ import annotations
 import json
 import logging
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .models import (NODE_SUCCESS, NODE_FAILED, NODE_STOPPED,
@@ -23,11 +24,16 @@ SPECIALISTS = ["script_writer", "character_designer", "scene_designer",
                "director", "assembly"]
 
 
-# ============ 交接包（§5.3 数据交接）============
+# ============ 交接包（§5.3/§4.4 数据交接）============
 def build_handoff(run: dict, node_id: str, attempt: dict, task_result: dict,
-                  summary: str) -> dict:
-    """从真实收货结果构造交接包。字段映射现有结构：
-    task_refs=AgentTask ID；artifact_refs 由 changed_refs（真实回执派生）+ 类型映射。"""
+                  summary: str, verify_outputs: Optional[dict] = None,
+                  node_plan: Optional[dict] = None) -> dict:
+    """从真实收货结果构造交接包（Phase 47 v2 语义）：
+    - workflowRef：run/节点/attempt 关联（§4.4 交接以运行上下文为单位）；
+    - outputs：verify_outputs 的 created/reused 输出记录（kind/entityId/versionId/
+      disposition/contentHash/reviewState）——具体范围与版本，不是"去项目里找最新"；
+    - reusedRefs 与 changedRefs 分开（§4.3：复用不混写为新产物）；
+    - missingRequirements：目标级缺项（诚实缺项，不假成功）。"""
     changed = task_result.get("changed_refs") or {}
     kind_map = [("scenes", "scene"), ("shots", "shot"), ("characters", "character"),
                 ("sequences", "sequence"), ("looks", "look"), ("props", "prop"),
@@ -42,10 +48,26 @@ def build_handoff(run: dict, node_id: str, attempt: dict, task_result: dict,
         for rid in changed.get(key) or []:
             artifact_refs.append({"kind": kind, "id": rid,
                                   "source": "changed_refs(ok+verified+非unchanged)"})
+    outputs: List[dict] = []
+    reused_refs: List[dict] = []
+    missing: List[dict] = []
+    if verify_outputs:
+        for o in verify_outputs.get("outputs") or []:
+            outputs.append({**o, "disposition": "created"})
+        for o in verify_outputs.get("reused") or []:
+            reused_refs.append({**o, "disposition": "reused"})
+            outputs.append({k: o.get(k) for k in
+                            ("kind", "entityId", "versionId", "contentHash",
+                             "reviewState", "fileOk")} | {"disposition": "reused"})
+        missing = list(verify_outputs.get("missing") or [])
+    scope = (node_plan or {}).get("scope") or None
     return {
         "runId": run["runId"],
         "nodeId": node_id,
         "attemptId": attempt.get("attemptId"),
+        "workflowRef": {"runId": run["runId"], "nodeId": node_id,
+                        "attemptId": attempt.get("attemptId")},
+        "scope": scope,
         "taskRefs": [task_result.get("task_id")] if task_result.get("task_id") else [],
         "receiptSummary": {
             "verified": bool(task_result.get("verified")),
@@ -53,6 +75,9 @@ def build_handoff(run: dict, node_id: str, attempt: dict, task_result: dict,
             "warnings": list(task_result.get("warnings") or [])[:6],
         },
         "artifactRefs": artifact_refs,
+        "outputs": outputs,
+        "reusedRefs": reused_refs,
+        "missingRequirements": missing,
         "brief": (summary or "")[:400],
     }
 
@@ -86,9 +111,14 @@ def upstream_context(run: dict, node_plan: dict) -> dict:
     return ctx
 
 
-def build_envelope(rt, project: str, run: dict, node_plan: dict) -> dict:
+def build_envelope(rt, project: str, run: dict, node_plan: dict,
+                   frozen_inputs: Optional[dict] = None) -> dict:
     """构造委派 envelope（objective/situation/constraints/scope/user_intent，
-    与 producer.py 委派 envelope 同构）。"""
+    与 producer.py 委派 envelope 同构）。
+
+    Phase 47 §4.5：frozen_inputs = freeze_node_inputs() 的结果（派发前服务端解析并
+    冻结的上游输出版本），写进 situation 作为本节点明确输入依据；§4.7：assembly
+    节点只允许采用冻结清单内的视频版本，禁止"找项目里最新的视频"。"""
     ref_id = node_plan.get("refId")
     objective = node_plan.get("objective") or ""
     ctx = upstream_context(run, node_plan)
@@ -104,10 +134,25 @@ def build_envelope(rt, project: str, run: dict, node_plan: dict) -> dict:
         sit_parts.append("上游引用是接续依据；正式制作前请用你的读工具核对项目内真实"
                          " canonical（story/characters/scenes/shots/sequences），"
                          "以上游交接与项目事实共同为准。")
+    if frozen_inputs:
+        fi = json.dumps(frozen_inputs.get("resolvedInputs") or [], ensure_ascii=False)[:1600]
+        sit_parts.append(f"本节点冻结输入（服务端派发前核验的版本清单）：{fi}")
+        if frozen_inputs.get("stale"):
+            sit_parts.append("注意：下列上游产物在派发前核验时已失效（不得采用）："
+                             + json.dumps(frozen_inputs["stale"], ensure_ascii=False)[:600])
     constraints = [
         "只在本节点职责与任务范围内工作；完成判定以真实工具回执为准，不是对话回复。",
         "完成本节点后用一段话总结你实际写入/产出的内容（含 ID），不要声称未执行的操作。",
     ]
+    if frozen_inputs and ref_id == "assembly":
+        constraints.append(
+            "装配素材边界（服务端强制）：本节点只允许采用冻结输入清单中列出的视频版本"
+            "（entityId+versionId），以及节点目标明确声明的补充依赖；"
+            "禁止用「项目里最新的视频」代替交接清单，禁止采用清单外或已失效版本。")
+    elif frozen_inputs:
+        constraints.append(
+            "输入边界：采用上游产物时以冻结输入清单所列版本为准；需要清单外的素材时"
+            "先在总结中声明补充依赖及其引用，不得暗中切换到其他版本。")
     for s in node_plan.get("skills") or []:
         constraints.append(f"本节点已绑定正式 Skill：{s.get('skillId')} v{s.get('version')}"
                            f"（适用时用 skill.load 加载并遵循其方法）。")
@@ -115,6 +160,14 @@ def build_envelope(rt, project: str, run: dict, node_plan: dict) -> dict:
         constraints.append(
             "工作流上下文：本节点只做制作计划/交接准备，不要委派任何 Specialist"
             "——后续专业节点由工作流顺序执行层派发（系统将在服务端拦截越权委派）。")
+    if ref_id == "character_designer":
+        # Phase 47 §4.1：目标与工具约束错配的最小引导（不是放宽 OCC）——
+        # 道具没有参考图时如实列为缺项，不要让它阻塞角色/Look 主目标。
+        constraints.append(
+            "范围纪律：角色/Look/参考图可用你的图像生成工具真实产出；"
+            "Prop 登记必须有用户提供的参考图——目标要求道具但没有可用参考时，"
+            "在总结中把它列为缺项（missingRequirements）交付人工处理，"
+            "不要反复重试也不要伪造参考。")
     envelope = {
         "objective": objective,
         "situation": "\n".join(sit_parts),
@@ -126,10 +179,15 @@ def build_envelope(rt, project: str, run: dict, node_plan: dict) -> dict:
     return envelope
 
 
-# ============ 收货校验（§5.3 节点成功条件）============
-def verify_completion(node_plan: dict, task_result: dict) -> dict:
+# ============ 收货校验（§5.3 节点成功条件 + Phase 47 §4.2 目标级核对）============
+def verify_completion(node_plan: dict, task_result: dict, *,
+                      pdir=None, project: Optional[str] = None) -> dict:
     """节点成功校验：turn 真实结果 + 必要 receipt + 产物在预期域。返回
-    {ok, reason, code}。工具 accepted/LLM 结束/任务已提交都不单独算成功。"""
+    {ok, reason, code}。工具 accepted/LLM 结束/任务已提交都不单独算成功。
+
+    Phase 47 §4.2：节点配置了 completion.outputs 时，域命中只算底线——再按目标
+    逐项核对真实项目事实（存在/图像/审批/可播放），缺项如实返回（不假成功）；
+    §4.3：completion.strategy=allow_verified_reuse 时允许服务端核验过的复用。"""
     status = (task_result.get("status") or "").lower()
     if status == "stopped":
         return {"ok": False, "code": "stopped", "reason": "任务被停止"}
@@ -143,14 +201,40 @@ def verify_completion(node_plan: dict, task_result: dict) -> dict:
     expected = set(node_plan.get("expectedDomains") or [])
     changed = task_result.get("changed_refs") or {}
     got = {k for k, v in changed.items() if v}
+    comp = node_plan.get("completion") or {}
+    strategy = comp.get("strategy") or "require_new"
     if ref_id == "producer":
         # 计划/协调节点：无 canonical 写域要求；但守卫下不应有真实委派
         return {"ok": True, "code": "planning_node", "reason": "计划节点完成（无 canonical 写入要求）"}
     if not expected & got:
-        return {"ok": False, "code": "no_expected_artifacts",
-                "reason": (f"任务结束但未见预期产物域的已验证回执"
-                           f"（预期 {sorted(expected)}，实际变更 {sorted(got) or '无'}）——"
-                           f"节点不能算成功")}
+        # §4.3：allow_verified_reuse 节点允许零新写入（纯核验复用）——由目标级
+        # 输出核对决定成败；require_new 仍以域命中为底线。
+        if not (comp.get("outputs") and strategy == "allow_verified_reuse"):
+            return {"ok": False, "code": "no_expected_artifacts",
+                    "reason": (f"任务结束但未见预期产物域的已验证回执"
+                               f"（预期 {sorted(expected)}，实际变更 {sorted(got) or '无'}）——"
+                               f"节点不能算成功")}
+    # ---- Phase 47 §4.2：目标级输出核对（completion.outputs 存在时）----
+    if comp.get("outputs"):
+        if pdir is None or project is None:
+            # 派发方未提供项目事实路径（旧调用点）——保守：不做目标级判定，
+            # 保留域命中结论（不静默放宽，也不在无事实时乱判失败）。
+            return {"ok": True, "code": "domain_hit",
+                    "reason": "域命中（目标级核对跳过：无项目事实上下文）"}
+        from . import outputs as _outputs
+        try:
+            ov = _outputs.verify_node_outputs(Path(pdir), project, node_plan, changed)
+        except Exception as e:
+            log.exception("目标级输出核对异常 node=%s", node_plan.get("nodeId"))
+            return {"ok": False, "code": "outputs_verify_error",
+                    "reason": f"目标级输出核对异常：{type(e).__name__}: {str(e)[:200]}"}
+        if not ov.get("ok"):
+            det = "；".join(m.get("reason", "") for m in (ov.get("missing") or [])[:4])
+            return {"ok": False, "code": "outputs_missing",
+                    "reason": f"目标级输出缺项：{det}",
+                    "outputsVerdict": ov}
+        return {"ok": True, "code": "outputs_verified", "reason": ov.get("reason"),
+                "outputsVerdict": ov}
     return {"ok": True, "code": "verified", "reason": "预期域存在 ok+verified 回执"}
 
 
@@ -172,14 +256,16 @@ def last_skill_evidence(rt, project: str, session_id: str) -> Optional[dict]:
 
 # ============ 派发 ============
 async def dispatch_node(rt, project: str, run: dict, node_plan: dict,
-                        attempt: dict, *, event_cb, cancel_event) -> dict:
+                        attempt: dict, *, event_cb, cancel_event,
+                        frozen_inputs: Optional[dict] = None) -> dict:
     """派发一个 Agent 节点并等待真实结果。返回归一化结果：
     {status, task_result, session_id, skillEvidence, error}。
-    status ∈ completed / failed / stopped / not_configured。"""
+    status ∈ completed / failed / stopped / not_configured。
+    frozen_inputs：executor 派发前冻结的上游输出版本（§4.5），进 envelope。"""
     from src.agents.producer import (WF_DELEGATE_GUARD, producer_turn,
                                      _delegate_specialist, render_envelope)
     ref_id = node_plan.get("refId")
-    envelope = build_envelope(rt, project, run, node_plan)
+    envelope = build_envelope(rt, project, run, node_plan, frozen_inputs)
     envelope_text = render_envelope(envelope)
     run_id = run["runId"]
     node_id = node_plan["nodeId"]

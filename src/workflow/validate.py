@@ -14,7 +14,7 @@ EXEC_ALLOWED = {
     ("agent", "agent"), ("agent", "human_review"), ("agent", "boundary_end"),
     ("human_review", "agent"), ("human_review", "human_review"),
     ("human_review", "boundary_end"),
-    ("boundary_start", "agent"),
+    ("boundary_start", "agent"), ("boundary_start", "human_review"),
 }
 
 
@@ -220,14 +220,33 @@ def validate_definition(definition: dict, rt, project: str) -> dict:
     # ⑧ Agent 节点任务目标（运行必需；缺失=可保存草稿但启动被挡——在 preflight 单列，
     #    这里作为 warning 提示，保证「添加卡片」与「可启动任务」分离）
     for nid, n in nodes.items():
-        if n.get("type") == "agent" and not (n.get("config") or {}).get("objective", "").strip():
-            _issue(errors, warnings, "warning", "AGENT_NO_OBJECTIVE",
-                   "Agent 节点未填写任务目标（启动前必填）", nid)
+        if n.get("type") == "agent":
+            cfg = n.get("config") or {}
+            if not (cfg.get("objective", "") or "").strip():
+                _issue(errors, warnings, "warning", "AGENT_NO_OBJECTIVE",
+                       "Agent 节点未填写任务目标（启动前必填）", nid)
+            # Phase 47 §4.2/§4.3：completion 契约结构校验（fail closed——
+            # 非法 kind/未知字段在保存时即报错，不等运行时才发现）
+            comp = cfg.get("completion")
+            if comp is not None:
+                from .outputs import validate_completion_config
+                for msg in validate_completion_config(comp):
+                    _issue(errors, warnings, "error", "COMPLETION_INVALID",
+                           msg, nid)
         if n.get("type") == "human_review":
             cfg = n.get("config") or {}
             if not cfg.get("targetSourceNodeId") and not cfg.get("targetArtifact"):
                 _issue(errors, warnings, "warning", "REVIEW_NO_TARGET",
                        "审核节点未指定审核对象（启动前建议填写）", nid)
+            # Phase 47 §4.6：selection 配置结构校验
+            sel = cfg.get("selection")
+            if sel is not None:
+                if not isinstance(sel, dict):
+                    _issue(errors, warnings, "error", "SELECTION_INVALID",
+                           "selection 必须是对象 {kind, entityId, versionId?}", nid)
+                elif not sel.get("kind") or not sel.get("entityId"):
+                    _issue(errors, warnings, "error", "SELECTION_INVALID",
+                           "selection 需要 kind 与 entityId", nid)
 
     # ⑨⑩ 结构外的运行时前置（批准状态、素材可读）在 preflight_for_start 处理。
 

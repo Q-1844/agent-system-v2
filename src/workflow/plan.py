@@ -68,11 +68,16 @@ def compile_plan(definition: dict, v: dict, cat: dict) -> dict:
         n = nodes[nid]
         if n["type"] == "agent":
             cfg = n.get("config") or {}
+            # Phase 47 B批：目标级完成契约随编译进入计划（completion.outputs 走
+            # outputs.OUTPUT_SPEC 语义；validate 已做 fail-closed 结构校验）。
+            completion = cfg.get("completion") or None
             plan_nodes[nid] = {
                 "nodeId": nid, "type": "agent", "refId": n.get("refId"),
                 "objective": (cfg.get("objective") or "").strip(),
                 "note": cfg.get("note") or "",
                 "expectedDomains": list(AGENT_EXPECTED_DOMAINS.get(n.get("refId")) or []),
+                "completion": completion,
+                "scope": cfg.get("scope") or None,
                 "skills": skills_by_agent.get(nid, []),
                 "upstreamNodeId": next(
                     (s for s in exec_in[nid]
@@ -91,6 +96,9 @@ def compile_plan(definition: dict, v: dict, cat: dict) -> dict:
                 "targetArtifact": cfg.get("targetArtifact") or "",
                 "instructions": cfg.get("instructions") or "",
                 "reviewer": cfg.get("reviewer") or "",
+                # Phase 47 §4.6：审核可携带「批准并选用」目标（kind/entityId[/versionId]）；
+                # 用户在审核卡片确认后由服务端走既有用户选片服务完成指针变更。
+                "selection": cfg.get("selection") or None,
                 "upstreamNodeId": up,
             }
     return {

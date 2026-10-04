@@ -702,6 +702,12 @@ export interface WorkflowReviewRequest {
   targetArtifact: string; instructions: string; reviewerLabel: string;
   artifactRefs: { kind: string; id: string; source?: string }[];
   artifactFingerprint: string;
+  // Phase 47 §4.6：批准并选用（用户在审核卡片上显式确认；服务端走既有用户入口同层服务）
+  selectionRequired?: boolean;
+  selectionSpec?: { kind: string; entityId: string; versionId?: string } | null;
+  selectionCandidates?: { versionId: string; status?: string; selected?: boolean; approved?: boolean }[];
+  selectionState?: 'none' | 'pending' | 'done' | 'failed';
+  selectionReceipt?: any | null;
   status: 'pending' | 'decided' | 'cancelled';
   createdAt: number; decidedAt: string | null; decision: string | null;
   decisionNote: string | null; decisionReceipt: any | null;
@@ -2090,15 +2096,28 @@ class ApiClient {
   async listWorkflowRuns(projectName: string): Promise<{ runs: any[] }> {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/workflow/runs`);
   }
+  // Phase 47 C批：模板（从模板新建 → 走保存/校验同一路径的新工作流身份）
+  async listWorkflowTemplates(projectName: string): Promise<{ templates: any[]; templateVersion: string }> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/workflow/templates`);
+  }
+  async createWorkflowFromTemplate(projectName: string, templateId: string, workflowId: string, params?: Record<string, any>): Promise<any> {
+    return this.request(`/api/project/${encodeURIComponent(projectName)}/workflow/templates/${encodeURIComponent(templateId)}/create`, {
+      method: 'POST', body: JSON.stringify({ workflowId, params: params ?? {} }),
+    });
+  }
   async getWorkflowRun(projectName: string, runId: string): Promise<WorkflowRun> {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/workflow/runs/${encodeURIComponent(runId)}`);
   }
   async getWorkflowRunEvents(projectName: string, runId: string, after = 0): Promise<{ events: any[]; lastSeq: number }> {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/workflow/runs/${encodeURIComponent(runId)}/events?after=${after}`);
   }
-  async decideWorkflowReview(projectName: string, runId: string, requestId: string, decision: 'approve' | 'reject', note = '', expectedFingerprint?: string | null): Promise<any> {
+  async decideWorkflowReview(projectName: string, runId: string, requestId: string, decision: 'approve' | 'reject', note = '', expectedFingerprint?: string | null,
+                             withSelection = false, selectionOverride?: { kind: string; entityId: string; versionId: string } | null): Promise<any> {
     return this.request(`/api/project/${encodeURIComponent(projectName)}/workflow/runs/${encodeURIComponent(runId)}/reviews/${encodeURIComponent(requestId)}/decision`, {
-      method: 'POST', body: JSON.stringify({ decision, note, expectedFingerprint: expectedFingerprint ?? null }),
+      method: 'POST', body: JSON.stringify({
+        decision, note, expectedFingerprint: expectedFingerprint ?? null,
+        withSelection, selectionOverride: selectionOverride ?? null,
+      }),
     });
   }
   async continueWorkflowRun(projectName: string, runId: string, nodeId?: string | null): Promise<{ run: WorkflowRun }> {
