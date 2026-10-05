@@ -1,0 +1,180 @@
+{
+ "schema": "phase48_a_frozen_baseline_v1",
+ "captured_at": 1791217606.2482448,
+ "captured_at_iso": "2026-10-06T00:26:46",
+ "git": {
+  "HEAD": "e52d615a481ccc07acf09754f4a0692ed918c807",
+  "branch": "feat/agent-v2-phase-d-golden-run",
+  "phase47_frozen_head": "d98578312bda7a818849bb2f6ad5809bb00d9bae",
+  "commits_since_phase47_freeze": [
+   {
+    "sha": "d7c95b2",
+    "kind": "docs+test（Phase47 交付定稿，无引擎代码变更）"
+   },
+   {
+    "sha": "e52d615",
+    "kind": "docs（§13 用户反馈记录，代码冻结不改）"
+   }
+  ],
+  "working_tree_note": "仅 components.d.ts 自动生成变化 + 620 项历史未入库测试工件（沿项目 _* 惯例）；本轮 A 批修复以新 diff 入库",
+  "untracked_count": 620
+ },
+ "environment": {
+  "python": "3.13.0",
+  "node": "v24.5.0",
+  "persistence": "无数据库：projects/{p}/output/**（原子写）+ cache/jobs.json + shared_library/resources.json",
+  "backup_location": "无独立备份目录；代码历史由 git 承担，项目数据以文件持久化（A批如实记录：无 DB 可备份）"
+ },
+ "text_model": {
+  "normalized_id": "agnes-3.0-flash",
+  "config_path": "config/config.yaml",
+  "config_sha256": "9f2286a15fa268dc60d14940415fda2ab71d5e622f3f4d0acba390a1eef93a8d",
+  "vision_model": "agnes-2.5-flash（director_vision_review.py 显式配置，独立不变）",
+  "outbound_thinking": {
+   "mechanism": "chat_template_kwargs.enable_thinking=true（provider 层 _thinking_body）",
+   "verification": "_p48_a_outbound_thinking_probe.py 抓包核验：出站请求体含 enable_thinking=true，响应含 reasoning_content；URL=https://api.agnes-ai.cn/v1/chat/completions",
+   "evidence_file": "_p48_a_outbound_thinking_result.json"
+  }
+ },
+ "provider": {
+  "base_url": "https://api.agnes-ai.cn（本账户已验证入口；apihub 域名拒绝 api token，入口隔离不采用）",
+  "video": {
+   "model": "agnes-video-2.5-flash",
+   "modes": [
+    "text(t2v)",
+    "keyframe(i2v)",
+    "keyframes(双帧)",
+    "reference(multi)"
+   ],
+   "seconds": "4-12（str 传输）",
+   "declared_size": "720P",
+   "actual_observed": "1280×704 @24fps（ffprobe D/F 真机文件）",
+   "receipt_source": "Phase47 D/F1-F3 共 40 条视频版本 + A10 演练 task_SMMqkUvC0F6Qa6BNX6NjThqCgbYPhaNx(4s/720P/24fps/121→124帧)"
+  },
+  "image": {
+   "model": "agnes-image-2.1-flash",
+   "size_tier": "1K",
+   "ratio": "16:9（1312×736）"
+  },
+  "tts": {
+   "config_entry": "mimo/mimo-v2.5-tts（config）",
+   "observed_in_production": "minimax/speech-2.8-turbo（四片旁白 narration_audio.json 回执）",
+   "note": "装配实际走 minimax 通道；两入口如实并记"
+  },
+  "limits": {
+   "rpm": {
+    "text": 20,
+    "image_1k": 20,
+    "image_2k": 16,
+    "video": 1
+   },
+   "quota": {
+    "video_seconds_day": 500,
+    "images_day": 4000,
+    "text_calls_5h_window": 7200
+   }
+  }
+ },
+ "skills": {
+  "full-story-relay-calibration": {
+   "version": "1.3.1",
+   "files": [
+    {
+     "path": "references/capability-facts.md",
+     "sha256": "6274e0c5dd0d2d8b4d7aa512522ff106994a7e1902a51205b0b01f91c4ca4c18",
+     "bytes": 10232
+    },
+    {
+     "path": "references/character_designer.md",
+     "sha256": "c7775b17c89810ac1f79be33b71ecbd22286e3c201256cf8182b797682175d4d",
+     "bytes": 1292
+    },
+    {
+     "path": "references/director.md",
+     "sha256": "d32314859a5b707c9ab0ecec5ec9948c132bbeb2240acc657f371f19aa1ae3e9",
+     "bytes": 14529
+    },
+    {
+     "path": "references/producer.md",
+     "sha256": "91d4a30bda9e91dcf5ffb574b1938ded90cec949d2a563bb253e8e9a40f20872",
+     "bytes": 4775
+    },
+    {
+     "path": "references/production-recipes.md",
+     "sha256": "a931e8ca153cae9001a4df423271d405d377678f9def9e27091b636582ca3195",
+     "bytes": 9612
+    },
+    {
+     "path": "references/scene_designer.md",
+     "sha256": "24c3e14b628425d09aa2969d2e96caecde4962cf952c388a7776015e732391fd",
+     "bytes": 1869
+    },
+    {
+     "path": "references/script_writer.md",
+     "sha256": "c7c60622f6a4246ce9d7b74d5fc4ebd6f6c38c43ed3a15c7742d31ab3b31d86d",
+     "bytes": 4507
+    },
+    {
+     "path": "skill.json",
+     "sha256": "476ece6f7ac9a63a6d6ac1f414b6d6df0a2db330248f4500217b38be87fdf910",
+     "bytes": 3466
+    },
+    {
+     "path": "SKILL.md",
+     "sha256": "0c5d2741afba6abafc3686b71af330b8b337d7d93e5f30780f6e57c123ddbdab",
+     "bytes": 24610
+    }
+   ],
+   "catalog_content_hash_24": "sha256:4c529461af9e20ada9b8b80b",
+   "catalog_content_hash_full": "sha256:4c529461af9e20ada9b8b80b02224bc6989bf99dbdfe5af1d1aa9cd836becda3",
+   "matches_phase47_truncated": true
+  },
+  "keyframes-bridge-repair": {
+   "version": "1.3.1",
+   "files": [
+    {
+     "path": "references/director.md",
+     "sha256": "8971f535faa027352067fa873145c6f8cbcd29d85a9d48797d9608c52ccc5592",
+     "bytes": 3226
+    },
+    {
+     "path": "references/producer.md",
+     "sha256": "5e9520473477d24e9a43ee5e5fe0bb05a2a44e6669daaa052fe438d02654ba65",
+     "bytes": 1083
+    },
+    {
+     "path": "skill.json",
+     "sha256": "9e85740d2b55cd378ceec47a755aa486b01215287acc7fc9f91d98fe0ef2c7ac",
+     "bytes": 1899
+    },
+    {
+     "path": "SKILL.md",
+     "sha256": "37c41d3303fd4b368a048c5beab92f557a623cc6e56a154ef623b3a9bb324234",
+     "bytes": 6179
+    }
+   ],
+   "catalog_content_hash_24": "sha256:eb23f971f4cadc1bd4968b23",
+   "catalog_content_hash_full": "sha256:eb23f971f4cadc1bd4968b23da36fd1df4e3b3f5c3c286dcca31e55896162924",
+   "matches_phase47_truncated": true
+  }
+ },
+ "templates": {
+  "version": "p47_templates_v1",
+  "templates_py_sha256": "2b437a3413fef55215d3dccaac2582ff6054d8357899a0da1a82971014403378",
+  "note": "Phase48 A批对 W03/W06/W07/W09 目标与 completion 有最小修改（templates.py hash 随之变化；修改内容见 PHASE48_A_BASELINE_AND_REPAIR_REPORT.md）"
+ },
+ "agent_registry_digests": {
+  "producer": "sha256:61913bd272ec7820",
+  "script_writer": "sha256:4e99956f40cf1545",
+  "character_designer": "sha256:fb18cdd6034ee0fb",
+  "scene_designer": "sha256:42673f11e915c3d3",
+  "director": "sha256:9c6e02b744f3c3e5",
+  "assembly": "sha256:3b46fc0fd06b4970",
+  "source": "GET /workflow/catalog（真实运行后端，工具面 24/16/20/22/32/18）"
+ },
+ "f1_f3_post_freeze_changes": {
+  "HEAD": "冻结后仅 2 个文档提交（见 git.commits_since_phase47_freeze）；引擎/Skill/模板零代码变更（git diff d985783..e52d615 仅探针脚本/结果 JSON/文档/冻结基线）",
+  "skill_hash_change": "无（relay/bridge 内容 hash 前 24 位与 PHASE47_FROZEN_BASELINE 一致）",
+  "template_change": "无（p47_templates_v1 未变，F1-F3 定义 template 记录一致）"
+ }
+}

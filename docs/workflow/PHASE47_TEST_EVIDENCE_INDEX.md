@@ -3,6 +3,12 @@
 > 日期：2026-10-04 · 分支 `feat/agent-v2-phase-d-golden-run`
 > 状态口径：PASS=真实证据；FAIL=失败待修；PENDING=尚未执行/等待用户；BLOCKED_OK=预期阻塞。
 > 本文件随批推进更新；最终结论以 `PHASE47_WORKFLOW_IMPLEMENTATION_REPORT.md` 为准。
+>
+> **Phase48 A批更新（2026-10-06）**：依 `PHASE48_A_BASELINE_AND_MINIMAL_REPAIR.md` A02/A03/A04
+> 修正下列行——P47 16/21/22/23/24/25/42/44/45/46（D/F 批真实证据落账）、P47 26（A11 演练闭合）、
+> P47 37（A10 真机直接演练闭合）。原始行文以 git 历史（d985783/e52d615）为准；每行标注证据类别
+> （direct_runtime=真机直接 / mechanism_test=机制回归 / equivalent_scenario=等价路径）。
+> 量化统计新增 §5（可重算账本：`PHASE48_A_CANDIDATE_LEDGER.json`）。
 
 ## 1. 证据类型说明
 
@@ -39,7 +45,7 @@
 | P47 13 | 场景与环境视图 | PASS | [真机] W03 首跑暴露 outputs.py bug（location_views 字段名）→修复；恢复轮 run（C2）PASS：2 Location + 3 视图真实图像可读（复用核验 fileOk=true）；干净新项目 require_new 版随 D 批验证 |
 | P47 14 | 分镜图与绑定 | PASS | [真机] 首跑 run_c1ff3cbabe38：3 镜+绑定 created；图像生成后 withImage 曾误报缺失 → 定位 outputs.py `_file_ok` 路径基准 bug（repo 根相对 vs 项目相对）→修复；恢复轮 run_2fe33eae9111 completed：3 镜 outputs_verified（reused ×3, fileOk=true） |
 | P47 15 | 导演真视频生产 | PASS | [真机] C 探针 W05 run_ff815a61a1dc completed：真实视频 vv_2855ff25（5s/720p/i2v）生成+选片指针落盘；provenance=生成依据+首中尾帧提取+visual.review_shot pass（12 维度） |
-| P47 16 | assembly 真成片 | PENDING | D 批《风后邮站》W09 链验证（真实 Sequence+TTS+render） |
+| P47 16 | assembly 真成片 | PASS | [真机][direct_runtime]（A批更新）D 批《风后邮站》run_9cc683f2ce6c + F1《山铃回声》+ F2《夜邮灯塔》+ F3《山雀夜航》：真实 Sequence+TTS（narration 落盘）+音乐+混音 render；四片 render 文件在盘（srender_ea44c7a9/cf03b1ff/c57fb8be/8fb05fe6，h264 1280×704+aac，6.0–7.7MB）。成片审定（n_rv_final）四轮均 waiting_human=保留用户 |
 | P47 17 | 合法复用与混合补缺 | PASS | [真机] B 探针 S3（故事复用 reusedRefs+服务端核验）、S5（复用合格 Look+补缺新 Look，outputs 同时含 created+reused） |
 | P47 18 | 无关域写入/旧素材冒充/假完成 | PASS | [真机] B 探针 S4（require_new+「不写就复用」目标 → 无回执 → 节点失败不推进）；[单测] test_require_new_rejects_existing_entity |
 
@@ -49,12 +55,12 @@
 | --- | --- | --- | --- |
 | P47 19 | 尾帧接力校准实际加载 | PASS | [真机] W05 run_ff815a61a1dc：plan.skills 含 relay@1.3.1；run 快照 skillVersions.contentHash=sha256:4c529461af9e20ada9b8b80b；attempt.skillEvidence 真实 load 事件（skill_id=full-story-relay-calibration, ok=true） |
 | P47 20 | 组内连续动作 | PASS | [真机] W05 运行中 calibration.trace_upsert 落档 + visual.sample_frames（severe=0, suspected=1 纸张过渡压缩如实报告）+ visual.review_shot pass；W09 链视频节点同样绑定（D 批证据追加） |
-| P47 21 | 远景转近景/身份风险 | PENDING | 同上 |
-| P47 22 | 新故事段正常切镜 | PENDING | 同上（不强制继承/不乱插桥） |
-| P47 23 | 修复错误根帧或视频 | PENDING | W06（有真实问题候选的隔离夹具） |
-| P47 24 | 合格端点 keyframes 桥接 | PENDING | W07（真实桥接生成） |
-| P47 25 | 无效端点和无需桥接负例 | PENDING | W07 负例 |
-| P47 26 | Skill 内容变化及非法 provider 参数 | PASS（半） | [单测] 非法 completion/selection 配置 fail closed；Skill hash 冻结核验=run 快照 contentHash（P46 机制保留）；内容变化场景待 F 批 |
+| P47 21 | 远景转近景/身份风险 | NOT_EXECUTED | [direct_runtime 边界]（A批更新）D/F 四轮导演均自主判定 i2v independent+正常切镜（`source_shot_id` 全 null）——无接力链运行，该专项情景未发生；relay Skill 绑定+load+组内帧检证据见 P47 19/20。不拿"整链成功"冒充接力质量 |
+| P47 22 | 新故事段正常切镜 | PASS（链级） | [direct_runtime]（A批更新）D/F 四轮 6 镜链全部以独立 i2v+intentional hard cut 产出可审成片（衔接由装配侧保证）；桥接 Skill 未触发（双端证据门槛未满足）——与 §13.2 用户调研一致，定调不强推接力 |
+| P47 23 | 修复错误根帧或视频 | PASS | [真机][direct_runtime]（A批更新）C3 W06 run_7f30add8a220：问题候选 vv_2855ff25（suspected=1 纸张过渡压缩）→ 新修复候选 vv_47dd2ea1 真实生成（job 59f6895c1a56，2 版本，原版保留）；outputs_verified |
+| P47 24 | 合格端点 keyframes 桥接 | PASS | [真机][direct_runtime]（A批更新）C3 W07 run_10e21ba7f1cb：keyframes 桥真实生成（vv_53d832b2，双端 s01_c02→s02_c01）+ bridge Skill 真实 load（skillEvidence hint+load 事件） |
+| P47 25 | 无效端点和无需桥接负例 | NOT_EXECUTED | [mechanism_test]（A批更新）负例判定语义内置于 W07 objective（"正常切镜判为不需要桥接，无效端点先修端点"）+ D/F 四轮自主未触发桥（真机）；专门负例夹具未跑——如实保留 NOT_EXECUTED |
+| P47 26 | Skill 内容变化及非法 provider 参数 | PASS | [单测] 非法 completion/selection 配置 fail closed；[真机][direct_runtime]（A批更新）A11 演练 `_p48_a11_skill_snapshot_drill.py`：隔离 registry 内容更新后，旧 run 冻结原 contentHash 不改写（磁盘重读一致）、新 run 读新 hash（≠旧且=当前包），F3 快照 hash 与现行正式 relay 包一致（冻结后零漂移） |
 
 ### 9.4 审核与交接 8 项
 
@@ -75,21 +81,21 @@
 | --- | --- | --- | --- |
 | P47 35 | 派发前窗口杀断重启 | PASS | [真机] R1（run_0a51b844b40d）：派发意图无任务关联→诚实 needs_reconciliation→旧 attempt 保留→显式 continue 新 attempt 真实执行（内容失败=注入目标无产出，恢复语义完整验证） |
 | P47 36 | turn 已关联后杀断 | PASS | [真机] R2 定向（run_31a0879f270c）：运行态遗留 task→needs_reconciliation（错误含 task id，不盲重发）→continue 新 attempt completed；首轮演练暴露注入夹具绕过 runs_index→夹具修复后复验通过 |
-| P47 37 | 真视频 ID 后杀断轮询 | PASS（机制层） | [机制] JobQueue `recover_pending_videos` 按 provider ID 续轮询不重提交（既有机制+历史回归）；[真机] R7 演练验证停止后任务晚到不翻转终态；provider 级 ID 收货由 D 批 18 条真实视频任务收货路径覆盖 |
+| P47 37 | 真视频 ID 后杀断轮询 | PASS | [机制] JobQueue `recover_pending_videos` 按 provider ID 续轮询不重提交（既有机制+历史回归）；[真机][direct_runtime]（A批更新）A10 直接演练 `_p48_a10_stepA/B_*.py`：隔离项目真实提交 t2v 4s（provider job task_SMMqkUvC0F6Qa6BNX6NjThqCgbYPhaNx 持久化）→ 硬杀进程（taskkill PID 36940）→ 恢复进程查询同一 job、provider create_video 调用数=0（防重提交哨兵计数）、真实媒体落盘（4.0s/720P，sha256=1fa2e153…74cc2a5，1369434B）、wall 193.7s |
 | P47 38 | 人审等待杀断重启 | PASS | [真机] R4（run_38300846d218）：waiting_human 杀断重启→review/材料/意见原样保留→通过后下游**恰好一次**派发（downstream_attempts=1）；下游内容失败=只读目标无写入（诚实），恢复语义完整验证 |
-| P47 39 | 审核后派发窗口杀断 | PASS（等价路径） | [机制] 决策落盘与派发解耦（decide→状态落地；drive 由路由层触发）；R4 覆盖「审核等待跨重启→通过→下游唯一派发」全链；派发窗口 attempt 先落盘语义与 R1 同一机制（R1 已证） |
-| P47 40 | 停止后真结果晚到 | PASS（带边界记录） | [真机] R7（run_b03181397c8b）：停止后 run 保持终态、下游 pending 不派发、指针零变更 ✓；边界如实记录：运行中停止的 turn 以 failed（而非 stopped）标签落账（语义瑕疵，机制保证不破坏） |
+| P47 39 | 审核后派发窗口杀断 | PASS（等价路径） | [机制] 决策落盘与派发解耦（decide→状态落地；drive 由路由层触发）；R4 覆盖「审核等待跨重启→通过→下游唯一派发」全链；派发窗口 attempt 先落盘语义与 R1 同一机制（R1 已证）。（A批更新注：派发窗口的专门直接演练仍未单独执行，保持等价路径等级不升格） |
+| P47 40 | 停止后真结果晚到 | PASS（带边界记录） | [真机] R7（run_b03181397c8b）：停止后 run 保持终态、下游 pending 不派发、指针零变更 ✓；边界如实记录：运行中停止的 turn 以 failed（而非 stopped）标签落账（语义瑕疵，机制保证不破坏）——**A批已修**（producer settle cancelled + executor 对账分支，tests/test_p48_a_repairs.py），Phase48 A06 |
 | P47 41 | 提交结果不明与重复事件 | PASS | [真机] R6：同幂等键双启动→同 run（reused=true）；[单测] 重复决策 alreadyDecided；[真机] R2 对账幂等（遗留 task 只结算一次） |
-| P47 42 | 冻结后三轮 F1-F3 | PENDING | F 批 |
+| P47 42 | 冻结后三轮 F1-F3 | PASS（工程链；媒体待用户评审） | [真机][direct_runtime]（A批更新）F1 run_181eff42300e（风铃山道）/ F2 run_13e741c1c934（夜邮刺猬）/ F3 run_fb5e2c27eac8（山雀夜航，复用轮含真实中断+对账续跑）六员全 success、停靠成片审定；render 全部落盘。四轮 run 状态、节点、审核、媒体由 A批 A01 逐项核对（PHASE48_A_CANDIDATE_LEDGER.json）。用户审美验收与 final 定版：F1/F2/F3 序列层 final_render 已于 10-05 16:56—17:00 经用户 REST 入口选中（晚于主报告）；run 层成片审定仍 pending |
 
 ### 9.6 音频和工程检查 6 项
 
 | 编号 | 情景 | 状态 | 证据 |
 | --- | --- | --- | --- |
-| P47 43 | 全部文本出站 thinking | PASS | [真机] 全部探针 run snapshot.thinking=true、attempt.thinking=true；backend_runtime.log 逐请求 thinking=True（P46 机制沿用）；本轮各 run 快照记录于 results JSON |
-| P47 44 | MiniMax 旁白响应和素材保存 | PENDING | D 批装配（真实 TTS） |
-| P47 45 | 旁白/音乐/原视频音频政策 | PENDING | D 批装配 |
-| P47 46 | 不同规格视频装配与导出 | PENDING | D 批装配 |
+| P47 43 | 全部文本出站 thinking | PASS | [真机] 全部探针 run snapshot.thinking=true、attempt.thinking=true；backend_runtime.log 逐请求 thinking=True（P46 机制沿用）；本轮各 run 快照记录于 results JSON；（A批追加）`_p48_a_outbound_thinking_probe.py` 抓包级核验：出站请求体实际含 `chat_template_kwargs.enable_thinking=true`，响应含 reasoning_content（`_p48_a_outbound_thinking_result.json`） |
+| P47 44 | MiniMax 旁白响应和素材保存 | PASS | [真机][direct_runtime]（A批更新）D/F 四轮旁白 TTS 真实落盘（output/audio_imports/narration/*.wav + narration_audio.json 回执；provider=minimax / speech-2.8-turbo；D 批 6 句、F3 7 句）；账本含逐片 cues 数（PHASE48_A_CANDIDATE_LEDGER.json） |
+| P47 45 | 旁白/音乐/原视频音频政策 | PASS（当时纪律） | [direct_runtime]（A批更新）四片按 Phase47 纪律执行：TTS 旁白+外部配乐+原视频音轨静音；源视频音轨实测 -52.9 LUFS 近似无声（主报告 §13.1）。用户反馈后政策修订（保留合格原生音效、禁旁白）归 Phase48 B 批执行——本轮不回溯改旧片 |
+| P47 46 | 不同规格视频装配与导出 | PARTIAL | [direct_runtime]（A批更新）D/F render 真实导出（h264 1280×704+aac）；全部输入为同规格 720P——混合规格输入装配未专项测试，如实保留 PARTIAL |
 | P47 47 | 前端类型检查和构建 | PASS | [回归] vue-tsc workflow 组件 0 错误（历史遗留错误不属本轮，如实记录）；vite build 成功（42.46s） |
 | P47 48 | 全量回归及历史测试映射 | PASS | [回归] `pytest tests/ -q`：2655 passed, 2 failed（test_ai_7ch_cancel_race::test_case1_stale_object_resurrection、test_autopilot::test_start_locked_without_final_400——全量负载下偶发，隔离复验均通过，与本轮改动无关） |
 
@@ -124,4 +130,25 @@
 | P47_C_Templates | （C3） | W07 桥接（keyframes 桥真实生成） | completed |
 | P47_C_Templates | run_a34b64fad732 | W08 装配（快照冻结→对齐门通过→render 完成文件落盘→审核通过） | completed |
 | P47_C_Templates | run_9c30218aa00b | 浏览器选片走查（候选单选→通过并选用→指针变更） | completed |
-| 风后邮站 | run_22b54d2261b9 | D 批 W09 六员完整生产 | 进行中 |
+| 风后邮站 | run_22b54d2261b9 | D 批 W09 首驱动（n_dir_board 失败，诚实失败历史保留） | failed |
+| 风后邮站 | run_9cc683f2ce6c | D 批 W09 六员完整生产（终态 run） | waiting_human（成片审定） |
+| 风铃山道 | run_181eff42300e | F1 复验 W09 | waiting_human（成片审定） |
+| 夜邮刺猬 | run_13e741c1c934 | F2 复验 W09 | waiting_human（成片审定） |
+| 山雀夜航 | run_fb5e2c27eac8 | F3 复验 W09（复用轮+真实中断演练） | waiting_human（成片审定） |
+
+## 5. 量化统计（Phase48 A批补齐；可重算）
+
+> 主报告 §7 曾引用本节，原文件缺失——现按真实文件补齐。原始记录见
+> `PHASE48_A_CANDIDATE_LEDGER.json`（只读 project.json/sequences.json/workflow runs/媒体 hash 生成）。
+
+| 指标 | 值 | 口径 |
+| --- | --- | --- |
+| 四部整链影片镜头 | 24 镜（6×4） | project.json 实际 shots |
+| 视频版本候选 | 40 条（含 C3 夹具 4 条另计） | project.json video_versions 实数；含诚实失败重试的历史版本，全部保留 |
+| 已选 final_video | 24/24 镜 | 视频二审「通过并选用」多选用 items 落账 |
+| 首次合格率 | **不计** | 逐版本 visual.review_shot 明细未随版本持久化（在 attempt 事件流内），首次候选×合格的联合分母不可重算——按 A03 纪律标 unknown，不从成片数倒推 |
+| attempt 级 verdict | 可重算 | 账本含全部 agent 节点 attempts 的 outputsVerdict（code/created/reused/error） |
+| render | 4 片 4 render 全 done、文件在盘 | sequences.json + ffprobe/磁盘实证 |
+| 用户定版 | D 片 final_render=None；F1/F2/F3 于 10-05 16:56—17:00 用户 REST 选中 | run 层成片审定四轮 pending |
+
+**未选候选 ≠ 用户认可**：40 条候选中仅 24 条经二审选用；其余 16 条保留为候选历史（含 D 批 5 次 run、F2 4 次 run 中诚实失败驱动的重生成），不计入任何合格率。

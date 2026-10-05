@@ -46,6 +46,22 @@ def _new_schar_id() -> str:
     return f"schar_{uuid.uuid4().hex[:12]}"
 
 
+def _repo_root() -> Path:
+    """仓库根（Phase48 A07：相对路径第二基准）。优先 deps.BASE_DIR（真实启动根），
+    导入失败时按模块位置回退（src/resources/shared_library.py → 上两级）。"""
+    global _REPO_ROOT_CACHE
+    if _REPO_ROOT_CACHE is None:
+        try:
+            from deps import BASE_DIR   # noqa: 延迟导入避免环
+            _REPO_ROOT_CACHE = Path(BASE_DIR)
+        except Exception:
+            _REPO_ROOT_CACHE = Path(__file__).resolve().parents[2]
+    return _REPO_ROOT_CACHE
+
+
+_REPO_ROOT_CACHE: Optional[Path] = None
+
+
 def _now_iso() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())
 
@@ -604,7 +620,11 @@ class SharedLibraryService:
                     "verified": verified}
 
     async def publish_character(self, character_name: str) -> dict:
-        """发布项目 Character（三视图母版）到共享库。只读项目 canonical。"""
+        """发布项目 Character（三视图母版）到共享库。只读项目 canonical。
+        Phase48 A07：发布前逐视图校验真实可读文件（双路径基准：项目相对/仓库根
+        相对——真实生成资产两种形态都存在）；缺失/不可读的视图阻塞发布并逐项具名
+        （不是笼统"发布失败"），共享库零改动；URL-only 视图如实具名（无法复制进
+        共享库），不误判为不存在。"""
         op = "shared.publish_character"
         try:
             project = ProjectStore(self.project_dir).load()
@@ -615,17 +635,30 @@ class SharedLibraryService:
             return {"ok": False, "operation": op, "error": "character_not_found",
                     "detail": f"Character 不存在于项目 canonical: {character_name}"}
         view_files: Dict[str, Path] = {}
+        problems: List[Dict[str, str]] = []
         for view, asset in (char.views or {}).items():
-            if not asset.local:
+            local = getattr(asset, "local", None)
+            if not local:
+                problems.append({"view": view, "code": "url_only_no_local_file",
+                                 "detail": (f"视图 {view} 只有 URL、没有本地文件——"
+                                            "发布要求本地可读文件（copy-on-publish 复制进共享库）")})
                 continue
-            p = Path(asset.local)
-            if not p.is_absolute():
-                p = Path(self.project_dir) / p
-            if p.is_file() and p.suffix.lower() in _IMAGE_SUFFIXES:
-                view_files[view] = p
-        if not view_files:
+            resolved = self._resolve_media_file(local)
+            if resolved is not None:
+                view_files[view] = resolved
+            else:
+                problems.append({"view": view, "code": "view_file_missing",
+                                 "detail": (f"视图 {view} 本地文件不存在或不可读: {local}"
+                                            "（已尝试项目相对与仓库根相对两种基准）")})
+        if not view_files and not problems:
             return {"ok": False, "operation": op, "error": "missing_character_reference",
                     "detail": f"Character {character_name} 没有可发布的视图文件"}
+        if problems:
+            return {"ok": False, "operation": op, "error": "character_view_files_unreadable",
+                    "detail": f"Character {character_name} 有 {len(problems)} 个视图无法发布："
+                              + "；".join(p["detail"] for p in problems),
+                    "failed_views": problems,
+                    "publishable_views": sorted(view_files.keys())}
         async with self.shared.write_lock():
             sdoc = self.shared.load()
             meta = self._find_meta_by_origin(sdoc, "character", character_name)
@@ -659,6 +692,24 @@ class SharedLibraryService:
                     "views": view_map, "verified": verified}
 
     # ---------- list / read（薄委托 SharedStore）----------
+
+    def _resolve_media_file(self, local: str) -> Optional[Path]:
+        """项目媒体路径双基准解析（Phase48 A07）：绝对路径直判；相对路径依次尝试
+        ①项目目录相对（legacy 形态）②仓库根相对（生成资产真实存储形态，如
+        "projects\\{p}\\output\\characters\\..."）。仅接受存在、非空、图片后缀的文件。"""
+        if not local:
+            return None
+        p = Path(local)
+        candidates = [p] if p.is_absolute() else [Path(self.project_dir) / p,
+                                                  _repo_root() / p]
+        for cand in candidates:
+            try:
+                if (cand.is_file() and cand.suffix.lower() in _IMAGE_SUFFIXES
+                        and cand.stat().st_size > 0):
+                    return cand
+            except OSError:
+                continue
+        return None
 
     # ---------- import ----------
     async def import_resource(self, shared_id: str, *, expected_document_revision: str) -> dict:

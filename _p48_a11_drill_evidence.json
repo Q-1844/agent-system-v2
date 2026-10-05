@@ -1,0 +1,47 @@
+{
+ "events": [
+  {
+   "ts": 1791217414.659663,
+   "event": "run1_started",
+   "runId": "run_5a8736483d3c",
+   "contentHash": "sha256:c2ce9e6bec6761c8f921ee46",
+   "version": "1.4.0"
+  },
+  {
+   "ts": 1791217415.7667768,
+   "event": "content_updated",
+   "version": "1.4.1",
+   "edit_ts": 1791217415.764625
+  },
+  {
+   "ts": 1791217415.8082511,
+   "event": "run2_started",
+   "runId": "run_b9200c81b099",
+   "contentHash": "sha256:c65b8443234d9d815e0f33c9",
+   "version": "1.4.0"
+  },
+  {
+   "ts": 1791217415.8094597,
+   "event": "run1_reloaded_from_disk",
+   "contentHash": "sha256:c2ce9e6bec6761c8f921ee46"
+  },
+  {
+   "ts": 1791217415.8438463,
+   "event": "cross_check_f3",
+   "f3_snapshot": "sha256:4c529461af9e20ada9b8b80b",
+   "relay_current": "sha256:4c529461af9e20ada9b8b80b"
+  }
+ ],
+ "results": {
+  "run1_hash": "sha256:c2ce9e6bec6761c8f921ee46",
+  "run1_version": "1.4.0",
+  "run2_hash": "sha256:c65b8443234d9d815e0f33c9",
+  "run2_version": "1.4.0",
+  "run1_hash_unchanged_on_disk": true,
+  "new_run_reads_new_content": true,
+  "note": "快照 version=定义边请求版本（定义层冻结）；contentHash=实际包内容快照——V2 内容由 hash 变化与 h_cur 等值证明",
+  "f3_snapshot_matches_current_builtin": true,
+  "isolated_pkg_v2_hash": "sha256:c65b8443234d9d815e0f33c9"
+ },
+ "pass": true
+}

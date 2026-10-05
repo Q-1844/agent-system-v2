@@ -1,0 +1,21 @@
+{
+ "step": "A_submit",
+ "pid": 36940,
+ "provider_submit_count": 1,
+ "video_id": "task_SMMqkUvC0F6Qa6BNX6NjThqCgbYPhaNx",
+ "task_id": "task_SMMqkUvC0F6Qa6BNX6NjThqCgbYPhaNx",
+ "model": "agnes-video-2.5-flash",
+ "mode": "t2v",
+ "duration_s": 4,
+ "persisted": true,
+ "persisted_shot": {
+  "status": "generating",
+  "video_id": "task_SMMqkUvC0F6Qa6BNX6NjThqCgbYPhaNx",
+  "model": "agnes-video-2.5-flash"
+ },
+ "submit_ts": [
+  1791216977.4216342,
+  1791216979.3551867
+ ],
+ "note": "进程将保持存活等待被硬杀（taskkill）；此后恢复进程只能查询同一 video_id。"
+}

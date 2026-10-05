@@ -502,17 +502,34 @@ class WorkflowEngine:
                       attemptId=att["attemptId"], outcome="settled_but_invalid",
                       taskId=task.task_id)
             return False
-        if task.status in ("failed", "cancelled"):
+        if task.status == "cancelled":
+            # Phase48 A06：用户停止语义（cancellation）≠ 真实失败——attempt 落
+            # stopped 并保留停止来源；不把 stopped run 翻成 success，不派发下游。
+            def _stopped(r):
+                a = _get_attempt(r, nid, att["attemptId"])
+                a["status"] = "stopped"
+                a["endedAt"] = _now()
+                a["taskRefs"] = [task.task_id]
+                a["error"] = ("恢复对账：正式任务已按用户停止结束（cancelled）"
+                              f"：task={task.task_id}；{(task.error or '')[:160]}")
+                _set_node(r["nodes"][nid], M.NODE_STOPPED, error=a["error"])
+                _set_run_state(r, el, runs)
+            runs.update(run_id, _stopped)
+            el.append(run_id, M.EV_RECONCILE, node_id=nid,
+                      attemptId=att["attemptId"], outcome="cancelled",
+                      taskId=task.task_id)
+            return False
+        if task.status == "failed":
             def _fail(r):
                 a = _get_attempt(r, nid, att["attemptId"])
                 a["status"] = "failed"
                 a["endedAt"] = _now()
-                a["error"] = f"恢复对账：正式任务已终态（{task.status}）：{(task.error or '')[:200]}"
+                a["error"] = f"恢复对账：正式任务已终态（failed）：{(task.error or '')[:200]}"
                 _set_node(r["nodes"][nid], M.NODE_FAILED, error=a["error"])
                 _set_run_state(r, el, runs)
             runs.update(run_id, _fail)
             el.append(run_id, M.EV_RECONCILE, node_id=nid,
-                      attemptId=att["attemptId"], outcome=task.status,
+                      attemptId=att["attemptId"], outcome="failed",
                       taskId=task.task_id)
             return False
         # running/pending：turn 随进程死亡，任务卡在运行态——诚实进入需要核对

@@ -37,7 +37,7 @@ KIND_TO_DOMAIN = {
 # 合法 spec 字段（fail closed：未知 kind / 非法字段在 validate 阶段拒绝）
 SPEC_FIELDS = {"kind", "id", "character", "shotId", "sequenceId", "label",
                "withImage", "withApprovedRef", "playable", "withCompletedRender",
-               "minCount", "allowReuse"}
+               "minCount", "allowReuse", "excludeVersionIds"}
 
 
 class OutputSpecError(ValueError):
@@ -75,6 +75,12 @@ def validate_completion_config(completion: Any) -> List[str]:
         mc = raw.get("minCount", 1)
         if not isinstance(mc, int) or isinstance(mc, bool) or mc < 1:
             errs.append(f"completion.outputs[{i}].minCount 必须是正整数")
+        if "excludeVersionIds" in raw:
+            exv = raw.get("excludeVersionIds")
+            if not isinstance(exv, list) or not exv or \
+                    not all(isinstance(v, str) and v.strip() for v in exv):
+                errs.append(f"completion.outputs[{i}].excludeVersionIds 必须是"
+                            "非空字符串数组（被排除的问题版本 id 清单）")
         for b in ("withImage", "withApprovedRef", "playable", "withCompletedRender",
                   "allowReuse"):
             if b in raw and not isinstance(raw[b], bool):
@@ -357,12 +363,23 @@ def verify_node_outputs(pdir: Path, project: str, node_plan: dict,
         domain = KIND_TO_DOMAIN.get(kind, "")
         min_count = int(spec.get("minCount") or 1)
         spec_allow_reuse = bool(spec.get("allowReuse")) or strategy == "allow_verified_reuse"
+        # Phase48 A08：修复目标钉定——被显式排除的版本（如已知问题视频本身）不得
+        # 满足本 spec（created 与 reused 两路都排除），防止"旧产物绕过修复目标"。
+        exclude_ids = {v for v in (spec.get("excludeVersionIds") or [])
+                       if isinstance(v, str) and v.strip()}
         try:
             matches = _resolve_kind(pdir, project, spec)
         except Exception as e:   # 项目事实不可读 = 该 spec 无法满足（诚实缺项，不猜）
             missing.append({"index": i, "kind": kind,
                             "reason": f"项目事实读取失败：{type(e).__name__}: {str(e)[:160]}"})
             continue
+        if exclude_ids:
+            excluded_hits = [m for m in matches
+                             if (m.get("versionId") or "") in exclude_ids]
+            matches = [m for m in matches
+                       if (m.get("versionId") or "") not in exclude_ids]
+        else:
+            excluded_hits = []
         changed_ids = set(changed_refs.get(domain) or [])
 
         def _is_changed(m: dict) -> bool:
@@ -411,7 +428,9 @@ def verify_node_outputs(pdir: Path, project: str, node_plan: dict,
             "index": i, "kind": kind,
             "spec": {k: v for k, v in spec.items() if k != "note"},
             "reason": _missing_reason(spec, matches, len(quality_created),
-                                      min_count, spec_allow_reuse)})
+                                      min_count, spec_allow_reuse)
+                      + (f"；已被目标排除的问题版本 {sorted(exclude_ids)} 不计入"
+                         f"（命中 {len(excluded_hits)} 项）" if exclude_ids else "")})
     ok = not missing
     return {"ok": ok, "code": "outputs_verified" if ok else "outputs_missing",
             "reason": ("目标级输出核对通过（created=%d, reused=%d）"

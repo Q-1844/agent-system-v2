@@ -1,0 +1,25 @@
+{
+ "step": "B_recover",
+ "pid": 7928,
+ "provider_create_video_calls": 0,
+ "queue_submit_count": 1,
+ "polled_video_ids": [
+  "task_SMMqkUvC0F6Qa6BNX6NjThqCgbYPhaNx"
+ ],
+ "events": [],
+ "video_id_from_persistence": "task_SMMqkUvC0F6Qa6BNX6NjThqCgbYPhaNx",
+ "model_from_persistence": "agnes-video-2.5-flash",
+ "recover_return": "None",
+ "final_shot_status": "done",
+ "same_video_id": true,
+ "media_local": "_p48_a10_root\\P48_A_Recovery\\output\\videos\\s01_c01.mp4",
+ "media_exists": true,
+ "media_sha256": "1fa2e153244a7e80017f5f3f64b40a1bc555f6e0f52ccfbcbe27d879074cc2a5",
+ "media_bytes": 1369434,
+ "seconds_returned": 4.0,
+ "size_returned": "720P",
+ "recovery_submit_never_called_provider": true,
+ "t_recover_start": 1791217018.0060973,
+ "t_media_done": 1791217211.6762383,
+ "wall_s": 193.7
+}

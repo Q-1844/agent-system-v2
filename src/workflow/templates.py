@@ -148,14 +148,19 @@ def _w03(params: dict) -> dict:
         "W03 场景设计", [
             _agent("n_sc", "scene_designer",
                    params.get("sceneObjective") or
-                   "按故事段建立 Location 与 SceneInstance，并生成有用途的环境视图。",
+                   "按故事段建立 Location 与 SceneInstance。视图目标按实际需要选择资产类型："
+                   "需要表达本故事段具体状态（时段/天气/门已开等）时，用 "
+                   "scene.state_view.prepare 生成 SceneInstanceView 状态图；"
+                   "仅补地点资料时用 scene.view.prepare 的 LocationView——"
+                   "按目标需要生成，不为达标一律生成新图。",
                    completion={"strategy": "require_new",
                                "outputs": [{"kind": "location", "minCount": 1}]}),
             _review("n_rv1", "场景审定", instructions="核对空间事实与环境视图。",
                     target_artifact="Location/SceneInstance/环境视图"),
         ], "W03",
-        description="场景设计（Location/SceneInstance + 实际环境视图）→ 审核。",
-        notes="必需输入：故事段、地点、时段及空间目标。")
+        description="场景设计（Location/SceneInstance + 按需环境视图）→ 审核。",
+        notes="必需输入：故事段、地点、时段及空间目标。目标要求具体场景状态时绑定正确 "
+              "SceneInstance 与状态版本（SceneInstanceView）；仅要地点资料时不强迫生成状态图。")
 
 def _w04(params: dict) -> dict:
     sel = None
@@ -216,42 +221,60 @@ def _w05(params: dict) -> dict:
                 skill_bindings=skill_bindings)
 
 def _w06(params: dict) -> dict:
+    # Phase48 A08：修复目标钉定——默认 require_new（修复必须产出新候选，已知问题
+    # 视频不得冒充修复结果）；problemVersionId/excludeVersionIds 显式排除问题版本。
+    spec = {"kind": "video_version", "playable": True, "minCount": 1}
+    exclude: List[str] = []
+    if (params.get("problemVersionId") or "").strip():
+        exclude.append(params["problemVersionId"].strip())
+    if isinstance(params.get("excludeVersionIds"), list):
+        exclude += [v for v in params["excludeVersionIds"]
+                    if isinstance(v, str) and v.strip()]
+    if exclude:
+        spec["excludeVersionIds"] = sorted(set(exclude))
     return _def(
         "W06 导演诊断与修复", [
             _agent("n_dir_fix", "director",
                    params.get("fixObjective") or
                    "对给定问题候选先判断第一处偏离（输入资产/根帧/资源绑定/视频过程/"
                    "叙事尾态/剪辑接缝），保留合格部分，做局部处理或小范围重生成；"
-                   "交付修复候选与前后对比。",
-                   completion={"strategy": "allow_verified_reuse",
-                               "outputs": [{"kind": "video_version", "playable": True,
-                                            "minCount": 1}]}),
+                   "交付修复候选与前后对比。原问题版本保留为对照，不得作为修复结果交付。",
+                   completion={"strategy": "require_new", "outputs": [spec]}),
             _review("n_rv1", "修复审定", instructions="核对修复候选、前后对比与影响下游清单；"
                                                       "原版保留，未正式切换前下游仍引用原选版。",
                     target_artifact="修复候选+前后对比"),
         ], "W06",
         description="导演诊断与修复（不新增 Repair Agent；依名册绑定已有适用 Skill）。",
-        notes="必需输入：已知问题的视频或根帧、反馈与范围。")
+        notes="必需输入：已知问题的视频或根帧、反馈与范围。修复目标钉定：completion 默认 "
+              "require_new，可用 problemVersionId 排除问题版本本身；确有合格旧产物可复用时"
+              "改 strategy=allow_verified_reuse（服务端仍逐项核验），不得以任意旧视频满足修复目标。")
 
 def _w07(params: dict) -> dict:
     bind_skill = bool(params.get("bindBridgeSkill", True))
     skill_bindings = [{"skillId": BRIDGE_SKILL, "skillVersion": "1.3.1",
                        "targetNodeId": "n_dir_bridge"}] if bind_skill else []
+    # Phase48 A08：桥接候选同样默认 require_new；excludeVersionIds 可显式排除
+    # 不得充当桥接候选的版本（如两端点本身）。
+    spec = {"kind": "video_version", "playable": True, "minCount": 1}
+    if isinstance(params.get("excludeVersionIds"), list):
+        exclude = [v for v in params["excludeVersionIds"]
+                   if isinstance(v, str) and v.strip()]
+        if exclude:
+            spec["excludeVersionIds"] = sorted(set(exclude))
     nodes = [
         _agent("n_dir_bridge", "director",
                params.get("bridgeObjective") or
                "两个端点各自合格且必须连续过渡时按 keyframes 桥接方法插桥：双端证据、"
                "桥时长、中间节拍；正常切镜判为不需要桥接，无效端点先修端点。",
-               completion={"strategy": "allow_verified_reuse",
-                           "outputs": [{"kind": "video_version", "playable": True,
-                                        "minCount": 1}]}),
+               completion={"strategy": "require_new", "outputs": [spec]}),
         _review("n_rv1", "桥接审定", instructions="核对桥接候选、双端请求依据与拼接预览；"
                                                   "是否加入 Sequence 由用户决定。",
                 target_artifact="桥接候选+拼接预览"),
     ]
     return _def("W07 有效端点桥接", nodes, "W07",
                 description="导演有效端点桥接（绑定 keyframes 接续桥 Skill）→ 审核。",
-                notes="必需输入：两个合格且拟保留的端点和真实接缝问题。",
+                notes="必需输入：两个合格且拟保留的端点和真实接缝问题。桥接候选默认要求本节点"
+                      "新产出（require_new）；excludeVersionIds 可排除端点版本冒充桥接候选。",
                 skill_bindings=skill_bindings)
 
 def _w08(params: dict) -> dict:
@@ -320,7 +343,10 @@ def _w09(params: dict) -> dict:
                 target_artifact="角色/Look/参考候选"),
         _agent("n_sc", "scene_designer",
                params.get("sceneObjective") or
-               "建立全部场景 Location/SceneInstance 与环境视图。",
+               "建立全部场景 Location/SceneInstance；每个故事段涉及的具体状态"
+               "（时段/天气/门已开等）用 scene.state_view.prepare 生成 "
+               "SceneInstanceView 状态图并绑定正确 SceneInstance——后续分镜的"
+               "首帧与视频以状态图为空间依据；仅补地点资料时才用 LocationView。",
                completion={"strategy": "require_new",
                            "outputs": [{"kind": "location", "minCount": 2}]}),
         _review("n_rv_sc", "场景审定", target_artifact="场景与视图"),
@@ -427,6 +453,10 @@ TEMPLATES: Dict[str, dict] = {
             "expectedOutputs": ["修复候选、前后对比、影响下游清单"],
             "build": _w06,
             "params": [{"key": "fixObjective", "label": "修复节点目标",
+                        "required": False},
+                       {"key": "problemVersionId", "label": "问题版本 ID"
+                        "（排除其冒充修复结果）", "required": False},
+                       {"key": "excludeVersionIds", "label": "排除版本 ID 清单 JSON 数组",
                         "required": False}]},
     "W07": {"id": "W07", "name": "W07 有效端点桥接",
             "description": "双端合格的接缝桥接（keyframes 接续桥 Skill）→ 审核。",
@@ -436,6 +466,8 @@ TEMPLATES: Dict[str, dict] = {
             "params": [{"key": "bridgeObjective", "label": "桥接节点目标",
                         "required": False},
                        {"key": "bindBridgeSkill", "label": "绑定接续桥 Skill",
+                        "required": False},
+                       {"key": "excludeVersionIds", "label": "排除版本 ID 清单 JSON 数组",
                         "required": False}]},
     "W08": {"id": "W08", "name": "W08 现有视频装配",
             "description": "装配已选视频（真实 Sequence/TTS/render）→ 审核。",

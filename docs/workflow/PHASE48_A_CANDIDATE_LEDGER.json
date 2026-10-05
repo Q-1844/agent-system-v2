@@ -1,0 +1,1815 @@
+{
+ "schema": "phase48_candidate_ledger_v1",
+ "built_at": 1791217547.0900605,
+ "source": "只读真实项目文件（project.json/sequences.json/workflow runs/媒体 hash）",
+ "first_pass_definition": {
+  "首次候选": "某镜头在其所属 workflow run 的首次 attempt 窗口内产生的第一个视频版本",
+  "合格": "可播放（本地文件可读）且（有 visual review pass 回执 或 用户选用为 final_video）——两者缺一按未知计",
+  "分母注记": "仅对 run 记录完整、时间窗可对齐的镜头计首次合格率；记录缺失者标 unknown，不从成片数倒推"
+ },
+ "films": [
+  {
+   "project": "风后邮站",
+   "workflow_run": "run_9cc683f2ce6c",
+   "run_status": "waiting_human",
+   "final_review_state": "pending",
+   "final_render_user_selected": null,
+   "attempt_verdicts": [
+    {
+     "node": "n_producer",
+     "attempt": "att_c1943ad0e7",
+     "status": "success",
+     "outputs_code": null,
+     "created": null,
+     "reused": null,
+     "error_head": null
+    },
+    {
+     "node": "n_sw",
+     "attempt": "att_c6bba361a2",
+     "status": "success",
+     "outputs_code": "outputs_verified",
+     "created": 3,
+     "reused": 0,
+     "error_head": null
+    },
+    {
+     "node": "n_cd",
+     "attempt": "att_12773ad33b",
+     "status": "success",
+     "outputs_code": "outputs_verified",
+     "created": 0,
+     "reused": 2,
+     "error_head": null
+    },
+    {
+     "node": "n_sc",
+     "attempt": "att_3680c8b044",
+     "status": "success",
+     "outputs_code": "outputs_verified",
+     "created": 0,
+     "reused": 2,
+     "error_head": null
+    },
+    {
+     "node": "n_dir_board",
+     "attempt": "att_a5bd7c8868",
+     "status": "success",
+     "outputs_code": "outputs_verified",
+     "created": 0,
+     "reused": 6,
+     "error_head": null
+    },
+    {
+     "node": "n_dir_video",
+     "attempt": "att_606a006a63",
+     "status": "success",
+     "outputs_code": "outputs_verified",
+     "created": 6,
+     "reused": 0,
+     "error_head": null
+    },
+    {
+     "node": "n_asm",
+     "attempt": "att_a91d3a7471",
+     "status": "success",
+     "outputs_code": "outputs_verified",
+     "created": 1,
+     "reused": 0,
+     "error_head": null
+    }
+   ],
+   "selection_receipts": [
+    {
+     "node": "n_rv_cd",
+     "kind": "look_reference",
+     "ok": true,
+     "items": null,
+     "entityId": "look_7154aba6e393",
+     "versionId": "ref_2bde201457f3"
+    },
+    {
+     "node": "n_rv_sc",
+     "kind": "scene_view",
+     "ok": true,
+     "items": null,
+     "entityId": "sciv_bc1ae868dd6f",
+     "versionId": null
+    },
+    {
+     "node": "n_rv_board",
+     "kind": "first_frame",
+     "ok": true,
+     "items": [
+      {
+       "ok": true,
+       "kind": "first_frame",
+       "entityId": "s01_c01",
+       "versionId": "ff_cf299898_1",
+       "pointer": "selected_first_frame",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "first_frame",
+       "entityId": "s01_c02",
+       "versionId": "ff_830f303f_1",
+       "pointer": "selected_first_frame",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "first_frame",
+       "entityId": "s02_c01",
+       "versionId": "ff_736322a1_1",
+       "pointer": "selected_first_frame",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "first_frame",
+       "entityId": "s02_c02",
+       "versionId": "ff_8b188dcf_1",
+       "pointer": "selected_first_frame",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "first_frame",
+       "entityId": "s03_c01",
+       "versionId": "ff_eae8892f_1",
+       "pointer": "selected_first_frame",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "first_frame",
+       "entityId": "s03_c02",
+       "versionId": "ff_25500839_1",
+       "pointer": "selected_first_frame",
+       "alreadySelected": true
+      }
+     ],
+     "entityId": null,
+     "versionId": null
+    },
+    {
+     "node": "n_rv_v2",
+     "kind": "video_version",
+     "ok": true,
+     "items": [
+      {
+       "ok": true,
+       "kind": "video_version",
+       "entityId": "s01_c01",
+       "versionId": "vv_4490e24c",
+       "pointer": "final_video",
+       "note": "末帧重提取由既有 set-final 语义负责（此处仅指针+字段同步）；接力链路下游按 final_video 真实版本解析"
+      },
+      {
+       "ok": true,
+       "kind": "video_version",
+       "entityId": "s01_c02",
+       "versionId": "vv_d6717e85",
+       "pointer": "final_video",
+       "note": "末帧重提取由既有 set-final 语义负责（此处仅指针+字段同步）；接力链路下游按 final_video 真实版本解析"
+      },
+      {
+       "ok": true,
+       "kind": "video_version",
+       "entityId": "s02_c01",
+       "versionId": "vv_0fa4f54f",
+       "pointer": "final_video",
+       "note": "末帧重提取由既有 set-final 语义负责（此处仅指针+字段同步）；接力链路下游按 final_video 真实版本解析"
+      },
+      {
+       "ok": true,
+       "kind": "video_version",
+       "entityId": "s02_c02",
+       "versionId": "vv_44d6f2fd",
+       "pointer": "final_video",
+       "note": "末帧重提取由既有 set-final 语义负责（此处仅指针+字段同步）；接力链路下游按 final_video 真实版本解析"
+      },
+      {
+       "ok": true,
+       "kind": "video_version",
+       "entityId": "s03_c01",
+       "versionId": "vv_54c14de6",
+       "pointer": "final_video",
+       "note": "末帧重提取由既有 set-final 语义负责（此处仅指针+字段同步）；接力链路下游按 final_video 真实版本解析"
+      },
+      {
+       "ok": true,
+       "kind": "video_version",
+       "entityId": "s03_c02",
+       "versionId": "vv_195e92f1",
+       "pointer": "final_video",
+       "note": "末帧重提取由既有 set-final 语义负责（此处仅指针+字段同步）；接力链路下游按 final_video 真实版本解析"
+      }
+     ],
+     "entityId": null,
+     "versionId": null
+    }
+   ],
+   "narration": {
+    "policy": "Phase47 纪律：成片旁白=TTS（MiniMax speech-2.8-turbo），原视频音轨静音；BGM=外部配乐（四片均含）",
+    "cues": 6,
+    "provider_model": "minimax/speech-2.8-turbo"
+   },
+   "shots": [
+    {
+     "shot": "s01_c01",
+     "final_video": "vv_4490e24c",
+     "n_versions": 3,
+     "versions": [
+      {
+       "version_id": "vv_4490e24c",
+       "created_at": 1791140968.509532,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_t2S875bDyHxeyF6W9uXiEjrHqaVSNhGF",
+       "file_ok": true,
+       "bytes": 1185342,
+       "sha256": "9df5ec5742dfa67728865f79eaf6b5db322871fb3d0048b6bf72001dfc730126",
+       "seconds_returned": 6.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_21936d7d",
+       "aligned_workflow_node": false,
+       "is_first_candidate_of_run": false,
+       "selected_final": true,
+       "previous_submit_uncertain": false
+      },
+      {
+       "version_id": "vv_24863cc5",
+       "created_at": 1791144045.2369199,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_M0uXhK6tpNGcpR6EDTHFEWhQmGnXY3zD",
+       "file_ok": true,
+       "bytes": 1185342,
+       "sha256": "9df5ec5742dfa67728865f79eaf6b5db322871fb3d0048b6bf72001dfc730126",
+       "seconds_returned": 6.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_5e6b41d4",
+       "aligned_workflow_node": false,
+       "is_first_candidate_of_run": false,
+       "selected_final": false,
+       "previous_submit_uncertain": false
+      },
+      {
+       "version_id": "vv_a9a5b2a1",
+       "created_at": 1791147649.0225756,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_yO3E4kfEeQhwnuO5S4lVuxUwv2iV5Y3t",
+       "file_ok": true,
+       "bytes": 1185342,
+       "sha256": "9df5ec5742dfa67728865f79eaf6b5db322871fb3d0048b6bf72001dfc730126",
+       "seconds_returned": 6.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_012c2705",
+       "aligned_workflow_node": true,
+       "is_first_candidate_of_run": true,
+       "selected_final": false,
+       "previous_submit_uncertain": false
+      }
+     ]
+    },
+    {
+     "shot": "s01_c02",
+     "final_video": "vv_d6717e85",
+     "n_versions": 3,
+     "versions": [
+      {
+       "version_id": "vv_d6717e85",
+       "created_at": 1791141098.1819725,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_M0FyvWiuhPDgMY4qKoyDt1sEZCX60Skb",
+       "file_ok": true,
+       "bytes": 669878,
+       "sha256": "129155ca3fe4437c11436e3ab20c7c3557c0ab0caa9d70e4219d5bed998a6ee1",
+       "seconds_returned": 5.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_54804cca",
+       "aligned_workflow_node": false,
+       "is_first_candidate_of_run": false,
+       "selected_final": true,
+       "previous_submit_uncertain": false
+      },
+      {
+       "version_id": "vv_8a9c69c7",
+       "created_at": 1791144185.065088,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_VQXm7K1Yi3qoHow9KlZgADWpAjQEiBXY",
+       "file_ok": true,
+       "bytes": 669878,
+       "sha256": "129155ca3fe4437c11436e3ab20c7c3557c0ab0caa9d70e4219d5bed998a6ee1",
+       "seconds_returned": 5.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_eaeeac70",
+       "aligned_workflow_node": false,
+       "is_first_candidate_of_run": false,
+       "selected_final": false,
+       "previous_submit_uncertain": false
+      },
+      {
+       "version_id": "vv_0c4614a8",
+       "created_at": 1791147821.492043,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_5w56L4yQdTY2H6hL0J53Ql23Zq5SxUYx",
+       "file_ok": true,
+       "bytes": 669878,
+       "sha256": "129155ca3fe4437c11436e3ab20c7c3557c0ab0caa9d70e4219d5bed998a6ee1",
+       "seconds_returned": 5.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_9caf64f3",
+       "aligned_workflow_node": true,
+       "is_first_candidate_of_run": true,
+       "selected_final": false,
+       "previous_submit_uncertain": false
+      }
+     ]
+    },
+    {
+     "shot": "s02_c01",
+     "final_video": "vv_0fa4f54f",
+     "n_versions": 3,
+     "versions": [
+      {
+       "version_id": "vv_0fa4f54f",
+       "created_at": 1791141409.7324193,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_c2wDkESxjV7CiSy1exjNNYN3TR87DigV",
+       "file_ok": true,
+       "bytes": 816110,
+       "sha256": "420848058923f30e56d4a19af05b40e987a414efaed2b45e33a1c1083441c2bf",
+       "seconds_returned": 7.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_78a8c3d9",
+       "aligned_workflow_node": false,
+       "is_first_candidate_of_run": false,
+       "selected_final": true,
+       "previous_submit_uncertain": false
+      },
+      {
+       "version_id": "vv_dd42c233",
+       "created_at": 1791144360.239943,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_53qG84qaLBz51sfYUAUpMKn7SMPW4MIt",
+       "file_ok": true,
+       "bytes": 816110,
+       "sha256": "420848058923f30e56d4a19af05b40e987a414efaed2b45e33a1c1083441c2bf",
+       "seconds_returned": 7.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_9c78d757",
+       "aligned_workflow_node": false,
+       "is_first_candidate_of_run": false,
+       "selected_final": false,
+       "previous_submit_uncertain": false
+      },
+      {
+       "version_id": "vv_cf83805c",
+       "created_at": 1791147952.1906462,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_1WXDYlmX4PhtqQDyKqaC2eXPJilmU59Q",
+       "file_ok": true,
+       "bytes": 816110,
+       "sha256": "420848058923f30e56d4a19af05b40e987a414efaed2b45e33a1c1083441c2bf",
+       "seconds_returned": 7.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_676afe5d",
+       "aligned_workflow_node": true,
+       "is_first_candidate_of_run": true,
+       "selected_final": false,
+       "previous_submit_uncertain": false
+      }
+     ]
+    },
+    {
+     "shot": "s02_c02",
+     "final_video": "vv_44d6f2fd",
+     "n_versions": 3,
+     "versions": [
+      {
+       "version_id": "vv_44d6f2fd",
+       "created_at": 1791141530.092014,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_Hu1zgMVKEMJVRHkAD3Z4FI5spfYI8Wf3",
+       "file_ok": true,
+       "bytes": 934287,
+       "sha256": "abba0542c3888d009ee8fd7eeaeac27878aa7764a0908da5a12a041e6c6ec672",
+       "seconds_returned": 5.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_b6194e95",
+       "aligned_workflow_node": false,
+       "is_first_candidate_of_run": false,
+       "selected_final": true,
+       "previous_submit_uncertain": false
+      },
+      {
+       "version_id": "vv_0dc65919",
+       "created_at": 1791144527.1231854,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_IbefVWKndbVwdZOtv5ti0f0BDFwi5Fin",
+       "file_ok": true,
+       "bytes": 934287,
+       "sha256": "abba0542c3888d009ee8fd7eeaeac27878aa7764a0908da5a12a041e6c6ec672",
+       "seconds_returned": 5.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_0395471a",
+       "aligned_workflow_node": false,
+       "is_first_candidate_of_run": false,
+       "selected_final": false,
+       "previous_submit_uncertain": false
+      },
+      {
+       "version_id": "vv_a09d3f47",
+       "created_at": 1791148083.6250377,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_Q3sYrsXdx31V2tW2kpxOQeswkjXHbEwo",
+       "file_ok": true,
+       "bytes": 934287,
+       "sha256": "abba0542c3888d009ee8fd7eeaeac27878aa7764a0908da5a12a041e6c6ec672",
+       "seconds_returned": 5.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_35d4b294",
+       "aligned_workflow_node": true,
+       "is_first_candidate_of_run": true,
+       "selected_final": false,
+       "previous_submit_uncertain": false
+      }
+     ]
+    },
+    {
+     "shot": "s03_c01",
+     "final_video": "vv_54c14de6",
+     "n_versions": 3,
+     "versions": [
+      {
+       "version_id": "vv_54c14de6",
+       "created_at": 1791141694.685181,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_CJALCGUmw7DEbP3o7Vc2dDZnO5TMSY5a",
+       "file_ok": true,
+       "bytes": 1560773,
+       "sha256": "ae39e28c5bc0384df1c8a6181ca7c2746bc258dd4319a899bd365166829636bb",
+       "seconds_returned": 7.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_897f6b63",
+       "aligned_workflow_node": false,
+       "is_first_candidate_of_run": false,
+       "selected_final": true,
+       "previous_submit_uncertain": false
+      },
+      {
+       "version_id": "vv_02a03d02",
+       "created_at": 1791144778.363637,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_49D31rXONPjPMGJlcQd09mbzyCkvvGxR",
+       "file_ok": true,
+       "bytes": 1560773,
+       "sha256": "ae39e28c5bc0384df1c8a6181ca7c2746bc258dd4319a899bd365166829636bb",
+       "seconds_returned": 7.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_b33dff37",
+       "aligned_workflow_node": false,
+       "is_first_candidate_of_run": false,
+       "selected_final": false,
+       "previous_submit_uncertain": false
+      },
+      {
+       "version_id": "vv_028882c6",
+       "created_at": 1791148269.8008952,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_nGCJKtwmXpGaHwuz8t1CIpoeOsmymGop",
+       "file_ok": true,
+       "bytes": 1560773,
+       "sha256": "ae39e28c5bc0384df1c8a6181ca7c2746bc258dd4319a899bd365166829636bb",
+       "seconds_returned": 7.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_2337744a",
+       "aligned_workflow_node": true,
+       "is_first_candidate_of_run": true,
+       "selected_final": false,
+       "previous_submit_uncertain": false
+      }
+     ]
+    },
+    {
+     "shot": "s03_c02",
+     "final_video": "vv_195e92f1",
+     "n_versions": 3,
+     "versions": [
+      {
+       "version_id": "vv_195e92f1",
+       "created_at": 1791141836.115653,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_FIXLm2dlyrBT5SwCfPtoftXEm2P9JKmT",
+       "file_ok": true,
+       "bytes": 653453,
+       "sha256": "8601f05a98d647f6a03bb4c64e04905269e4c9221ccd8bfff7212d9e4317acd0",
+       "seconds_returned": 5.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_58ddca8f",
+       "aligned_workflow_node": false,
+       "is_first_candidate_of_run": false,
+       "selected_final": true,
+       "previous_submit_uncertain": false
+      },
+      {
+       "version_id": "vv_53f1d6b0",
+       "created_at": 1791144901.6692035,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_sv7D1oYTbTJyyEbc6jU61Q1xKqzjfvNJ",
+       "file_ok": true,
+       "bytes": 653453,
+       "sha256": "8601f05a98d647f6a03bb4c64e04905269e4c9221ccd8bfff7212d9e4317acd0",
+       "seconds_returned": 5.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_ae30bf55",
+       "aligned_workflow_node": false,
+       "is_first_candidate_of_run": false,
+       "selected_final": false,
+       "previous_submit_uncertain": false
+      },
+      {
+       "version_id": "vv_ddad7f16",
+       "created_at": 1791148394.563475,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_sCHsMPDvmyqIJAb2eI2xemQrWuraPXnd",
+       "file_ok": true,
+       "bytes": 653453,
+       "sha256": "8601f05a98d647f6a03bb4c64e04905269e4c9221ccd8bfff7212d9e4317acd0",
+       "seconds_returned": 5.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_8fb8d614",
+       "aligned_workflow_node": true,
+       "is_first_candidate_of_run": true,
+       "selected_final": false,
+       "previous_submit_uncertain": false
+      }
+     ]
+    }
+   ],
+   "renders": [
+    {
+     "sequence": "seq_0bbaaa6d",
+     "version_id": "srender_ea44c7a9",
+     "status": "done",
+     "file_ok": true,
+     "bytes": 6489318,
+     "sha256": "46194184a0473ebedf30255d37e5a04f6548be7e5868c0c291838c3d425eb3ac",
+     "is_final": false
+    }
+   ]
+  },
+  {
+   "project": "风铃山道",
+   "workflow_run": "run_181eff42300e",
+   "run_status": "waiting_human",
+   "final_review_state": "pending",
+   "final_render_user_selected": "srender_cf03b1ff",
+   "attempt_verdicts": [
+    {
+     "node": "n_producer",
+     "attempt": "att_0569953097",
+     "status": "success",
+     "outputs_code": null,
+     "created": null,
+     "reused": null,
+     "error_head": null
+    },
+    {
+     "node": "n_sw",
+     "attempt": "att_fb5c444ea5",
+     "status": "success",
+     "outputs_code": "outputs_verified",
+     "created": 3,
+     "reused": 0,
+     "error_head": null
+    },
+    {
+     "node": "n_cd",
+     "attempt": "att_8f9bd02928",
+     "status": "success",
+     "outputs_code": "outputs_verified",
+     "created": 2,
+     "reused": 0,
+     "error_head": null
+    },
+    {
+     "node": "n_sc",
+     "attempt": "att_07805715f6",
+     "status": "success",
+     "outputs_code": "outputs_verified",
+     "created": 2,
+     "reused": 0,
+     "error_head": null
+    },
+    {
+     "node": "n_dir_board",
+     "attempt": "att_9a3eb14d2f",
+     "status": "success",
+     "outputs_code": "outputs_verified",
+     "created": 6,
+     "reused": 0,
+     "error_head": null
+    },
+    {
+     "node": "n_dir_video",
+     "attempt": "att_eceaebac16",
+     "status": "success",
+     "outputs_code": "outputs_verified",
+     "created": 6,
+     "reused": 0,
+     "error_head": null
+    },
+    {
+     "node": "n_asm",
+     "attempt": "att_5bf0297249",
+     "status": "success",
+     "outputs_code": "outputs_verified",
+     "created": 1,
+     "reused": 0,
+     "error_head": null
+    }
+   ],
+   "selection_receipts": [
+    {
+     "node": "n_rv_cd",
+     "kind": "look_reference",
+     "ok": true,
+     "items": null,
+     "entityId": "look_b962723fdd68",
+     "versionId": "ref_c422c512668e"
+    },
+    {
+     "node": "n_rv_sc",
+     "kind": "scene_view",
+     "ok": true,
+     "items": null,
+     "entityId": "sciv_577c68c0b89c",
+     "versionId": null
+    },
+    {
+     "node": "n_rv_board",
+     "kind": "first_frame",
+     "ok": true,
+     "items": [
+      {
+       "ok": true,
+       "kind": "first_frame",
+       "entityId": "s01_c01",
+       "versionId": "ff_130d9e26_1",
+       "pointer": "selected_first_frame",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "first_frame",
+       "entityId": "s01_c02",
+       "versionId": "ff_a38fdcd9_1",
+       "pointer": "selected_first_frame",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "first_frame",
+       "entityId": "s02_c01",
+       "versionId": "ff_001a55a9_1",
+       "pointer": "selected_first_frame",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "first_frame",
+       "entityId": "s02_c02",
+       "versionId": "ff_87300dba_1",
+       "pointer": "selected_first_frame",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "first_frame",
+       "entityId": "s03_c01",
+       "versionId": "ff_3bc1d291_1",
+       "pointer": "selected_first_frame",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "first_frame",
+       "entityId": "s03_c02",
+       "versionId": "ff_8b0d5590_1",
+       "pointer": "selected_first_frame",
+       "alreadySelected": true
+      }
+     ],
+     "entityId": null,
+     "versionId": null
+    },
+    {
+     "node": "n_rv_v2",
+     "kind": "video_version",
+     "ok": true,
+     "items": [
+      {
+       "ok": true,
+       "kind": "video_version",
+       "entityId": "s01_c01",
+       "versionId": "vv_a162cbf9",
+       "pointer": "final_video",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "video_version",
+       "entityId": "s01_c02",
+       "versionId": "vv_d5b0e85d",
+       "pointer": "final_video",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "video_version",
+       "entityId": "s02_c01",
+       "versionId": "vv_af837820",
+       "pointer": "final_video",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "video_version",
+       "entityId": "s02_c02",
+       "versionId": "vv_80039efd",
+       "pointer": "final_video",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "video_version",
+       "entityId": "s03_c01",
+       "versionId": "vv_250b722c",
+       "pointer": "final_video",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "video_version",
+       "entityId": "s03_c02",
+       "versionId": "vv_889b65e2",
+       "pointer": "final_video",
+       "alreadySelected": true
+      }
+     ],
+     "entityId": null,
+     "versionId": null
+    }
+   ],
+   "narration": {
+    "policy": "Phase47 纪律：成片旁白=TTS（MiniMax speech-2.8-turbo），原视频音轨静音；BGM=外部配乐（四片均含）",
+    "cues": 6,
+    "provider_model": "minimax/speech-2.8-turbo"
+   },
+   "shots": [
+    {
+     "shot": "s01_c01",
+     "final_video": "vv_a162cbf9",
+     "n_versions": 1,
+     "versions": [
+      {
+       "version_id": "vv_a162cbf9",
+       "created_at": 1791168215.3814006,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_WTIFl3v7RsYQiSpgjFXJRmGHtihdGJuz",
+       "file_ok": true,
+       "bytes": 530739,
+       "sha256": "a77162c2b142da479212ccd3b34cbf02b4aaf6ccc1a2caf466363ff5ef9e09cd",
+       "seconds_returned": 5.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_6a4680eb",
+       "aligned_workflow_node": true,
+       "is_first_candidate_of_run": true,
+       "selected_final": true,
+       "previous_submit_uncertain": false
+      }
+     ]
+    },
+    {
+     "shot": "s01_c02",
+     "final_video": "vv_d5b0e85d",
+     "n_versions": 1,
+     "versions": [
+      {
+       "version_id": "vv_d5b0e85d",
+       "created_at": 1791168433.6487737,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_aa0HWnorkafpaJjTLBerCFh95xLoncjZ",
+       "file_ok": true,
+       "bytes": 659865,
+       "sha256": "b6c2689813bf030b0865843915418994dd894305cf3d4026432687dd2e298557",
+       "seconds_returned": 4.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_b442b747",
+       "aligned_workflow_node": true,
+       "is_first_candidate_of_run": true,
+       "selected_final": true,
+       "previous_submit_uncertain": false
+      }
+     ]
+    },
+    {
+     "shot": "s02_c01",
+     "final_video": "vv_af837820",
+     "n_versions": 1,
+     "versions": [
+      {
+       "version_id": "vv_af837820",
+       "created_at": 1791168618.473496,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_cdpYsT0up9Ligmu1979DmeO1Ft1e6gwO",
+       "file_ok": true,
+       "bytes": 2080437,
+       "sha256": "bfa93854b889181ca4fabd96899236f5240d8f30f795671a86f3a1e0a0869565",
+       "seconds_returned": 6.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_a14a9be2",
+       "aligned_workflow_node": true,
+       "is_first_candidate_of_run": true,
+       "selected_final": true,
+       "previous_submit_uncertain": false
+      }
+     ]
+    },
+    {
+     "shot": "s02_c02",
+     "final_video": "vv_80039efd",
+     "n_versions": 1,
+     "versions": [
+      {
+       "version_id": "vv_80039efd",
+       "created_at": 1791168901.1177762,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_nzBpiGP1jPjH6WLyT3wLb8JErjsZdRv4",
+       "file_ok": true,
+       "bytes": 806292,
+       "sha256": "26504b596af5c60282f41727d0d9844f312f3fd4186559ae6e5ad0dc9871c16b",
+       "seconds_returned": 5.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_60a94d80",
+       "aligned_workflow_node": true,
+       "is_first_candidate_of_run": true,
+       "selected_final": true,
+       "previous_submit_uncertain": false
+      }
+     ]
+    },
+    {
+     "shot": "s03_c01",
+     "final_video": "vv_250b722c",
+     "n_versions": 1,
+     "versions": [
+      {
+       "version_id": "vv_250b722c",
+       "created_at": 1791169264.760353,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_zrDuWPaaL8Tp5fLneTSYSe53PDfum8LC",
+       "file_ok": true,
+       "bytes": 1014430,
+       "sha256": "7a083250f4da228541d33849930e254b1be72a61b2c00c6360a55ded40bd28f8",
+       "seconds_returned": 5.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_8fca3a56",
+       "aligned_workflow_node": true,
+       "is_first_candidate_of_run": true,
+       "selected_final": true,
+       "previous_submit_uncertain": false
+      }
+     ]
+    },
+    {
+     "shot": "s03_c02",
+     "final_video": "vv_889b65e2",
+     "n_versions": 1,
+     "versions": [
+      {
+       "version_id": "vv_889b65e2",
+       "created_at": 1791169422.362964,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_i6fxSouqxxMxh7L4eKbSXv2aedEDFYFo",
+       "file_ok": true,
+       "bytes": 874700,
+       "sha256": "28b9411a75b294c99110c25863cc90953e15343bc5342d3a053216c8080b835b",
+       "seconds_returned": 6.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_a4321748",
+       "aligned_workflow_node": true,
+       "is_first_candidate_of_run": true,
+       "selected_final": true,
+       "previous_submit_uncertain": false
+      }
+     ]
+    }
+   ],
+   "renders": [
+    {
+     "sequence": "seq_80326f20",
+     "version_id": "srender_cf03b1ff",
+     "status": "done",
+     "file_ok": true,
+     "bytes": 6651906,
+     "sha256": "8dde82cf697fa33ba6cc72d9986409fa8f2af82077f261ca14aac6c5b15d8384",
+     "is_final": true
+    }
+   ]
+  },
+  {
+   "project": "夜邮刺猬",
+   "workflow_run": "run_13e741c1c934",
+   "run_status": "waiting_human",
+   "final_review_state": "pending",
+   "final_render_user_selected": "srender_c57fb8be",
+   "attempt_verdicts": [
+    {
+     "node": "n_producer",
+     "attempt": "att_d02485cf81",
+     "status": "success",
+     "outputs_code": null,
+     "created": null,
+     "reused": null,
+     "error_head": null
+    },
+    {
+     "node": "n_sw",
+     "attempt": "att_92d8c251bf",
+     "status": "success",
+     "outputs_code": "outputs_verified",
+     "created": 3,
+     "reused": 0,
+     "error_head": null
+    },
+    {
+     "node": "n_cd",
+     "attempt": "att_4089acc3df",
+     "status": "success",
+     "outputs_code": "outputs_verified",
+     "created": 2,
+     "reused": 0,
+     "error_head": null
+    },
+    {
+     "node": "n_sc",
+     "attempt": "att_a2a2dfd08f",
+     "status": "success",
+     "outputs_code": "outputs_verified",
+     "created": 2,
+     "reused": 0,
+     "error_head": null
+    },
+    {
+     "node": "n_dir_board",
+     "attempt": "att_8bdf6d372e",
+     "status": "success",
+     "outputs_code": "outputs_verified",
+     "created": 6,
+     "reused": 0,
+     "error_head": null
+    },
+    {
+     "node": "n_dir_video",
+     "attempt": "att_214c33037c",
+     "status": "success",
+     "outputs_code": "outputs_verified",
+     "created": 6,
+     "reused": 0,
+     "error_head": null
+    },
+    {
+     "node": "n_asm",
+     "attempt": "att_e3ff53ddd7",
+     "status": "success",
+     "outputs_code": "outputs_verified",
+     "created": 1,
+     "reused": 0,
+     "error_head": null
+    }
+   ],
+   "selection_receipts": [
+    {
+     "node": "n_rv_cd",
+     "kind": "look_reference",
+     "ok": true,
+     "items": null,
+     "entityId": "look_2c75f6927b62",
+     "versionId": "ref_bea7f755f7d9"
+    },
+    {
+     "node": "n_rv_sc",
+     "kind": "scene_view",
+     "ok": true,
+     "items": null,
+     "entityId": "sciv_190bc42ffbbf",
+     "versionId": null
+    },
+    {
+     "node": "n_rv_board",
+     "kind": "first_frame",
+     "ok": true,
+     "items": [
+      {
+       "ok": true,
+       "kind": "first_frame",
+       "entityId": "s01_c01",
+       "versionId": "ff_91030e67_1",
+       "pointer": "selected_first_frame",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "first_frame",
+       "entityId": "s01_c02",
+       "versionId": "ff_c6e2e0ae_1",
+       "pointer": "selected_first_frame",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "first_frame",
+       "entityId": "s02_c01",
+       "versionId": "ff_da014262_1",
+       "pointer": "selected_first_frame",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "first_frame",
+       "entityId": "s02_c02",
+       "versionId": "ff_860d5125_1",
+       "pointer": "selected_first_frame",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "first_frame",
+       "entityId": "s03_c01",
+       "versionId": "ff_41a064b5_1",
+       "pointer": "selected_first_frame",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "first_frame",
+       "entityId": "s03_c02",
+       "versionId": "ff_9ec86db5_1",
+       "pointer": "selected_first_frame",
+       "alreadySelected": true
+      }
+     ],
+     "entityId": null,
+     "versionId": null
+    },
+    {
+     "node": "n_rv_v2",
+     "kind": "video_version",
+     "ok": true,
+     "items": [
+      {
+       "ok": true,
+       "kind": "video_version",
+       "entityId": "s01_c01",
+       "versionId": "vv_2af002c0",
+       "pointer": "final_video",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "video_version",
+       "entityId": "s01_c02",
+       "versionId": "vv_dcfc2f72",
+       "pointer": "final_video",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "video_version",
+       "entityId": "s02_c01",
+       "versionId": "vv_1cd2878d",
+       "pointer": "final_video",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "video_version",
+       "entityId": "s02_c02",
+       "versionId": "vv_36c3d4dd",
+       "pointer": "final_video",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "video_version",
+       "entityId": "s03_c01",
+       "versionId": "vv_fe3512f3",
+       "pointer": "final_video",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "video_version",
+       "entityId": "s03_c02",
+       "versionId": "vv_d1541f29",
+       "pointer": "final_video",
+       "alreadySelected": true
+      }
+     ],
+     "entityId": null,
+     "versionId": null
+    }
+   ],
+   "narration": {
+    "policy": "Phase47 纪律：成片旁白=TTS（MiniMax speech-2.8-turbo），原视频音轨静音；BGM=外部配乐（四片均含）",
+    "cues": 6,
+    "provider_model": "minimax/speech-2.8-turbo"
+   },
+   "shots": [
+    {
+     "shot": "s01_c01",
+     "final_video": "vv_2af002c0",
+     "n_versions": 1,
+     "versions": [
+      {
+       "version_id": "vv_2af002c0",
+       "created_at": 1791174154.5995708,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_LmdliiscnXMnDSa8aCkw93dMWkDGqXap",
+       "file_ok": true,
+       "bytes": 570441,
+       "sha256": "c2d69094d43e351a4f1fe6406be80f17345da95ca6089e00876e9fb016f9e532",
+       "seconds_returned": 5.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_0867ca88",
+       "aligned_workflow_node": true,
+       "is_first_candidate_of_run": true,
+       "selected_final": true,
+       "previous_submit_uncertain": false
+      }
+     ]
+    },
+    {
+     "shot": "s01_c02",
+     "final_video": "vv_dcfc2f72",
+     "n_versions": 1,
+     "versions": [
+      {
+       "version_id": "vv_dcfc2f72",
+       "created_at": 1791174393.1012287,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_n1kV4lCQ31schiNIxp1L3ZWasS6pm6Uz",
+       "file_ok": true,
+       "bytes": 865876,
+       "sha256": "0b7d6a31422d4f9e5cffbaf6873058b0fc155076c455053d97260b7bab9dacaa",
+       "seconds_returned": 5.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_435ce138",
+       "aligned_workflow_node": true,
+       "is_first_candidate_of_run": true,
+       "selected_final": true,
+       "previous_submit_uncertain": false
+      }
+     ]
+    },
+    {
+     "shot": "s02_c01",
+     "final_video": "vv_1cd2878d",
+     "n_versions": 1,
+     "versions": [
+      {
+       "version_id": "vv_1cd2878d",
+       "created_at": 1791174541.2206333,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_PtDFup0uA5tCg9qUKoEEXvC4QHCNavCe",
+       "file_ok": true,
+       "bytes": 1129774,
+       "sha256": "161f7eb28eba5579c448c36f94abaa1859211e67b4b2cd066bc017c9b49b5b3a",
+       "seconds_returned": 5.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_5c6d22f7",
+       "aligned_workflow_node": true,
+       "is_first_candidate_of_run": true,
+       "selected_final": true,
+       "previous_submit_uncertain": false
+      }
+     ]
+    },
+    {
+     "shot": "s02_c02",
+     "final_video": "vv_36c3d4dd",
+     "n_versions": 1,
+     "versions": [
+      {
+       "version_id": "vv_36c3d4dd",
+       "created_at": 1791174678.2239892,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_7RgbuD8L1AVSpOocxnxObkmyBbWeY2xp",
+       "file_ok": true,
+       "bytes": 855412,
+       "sha256": "03d641d1e9c7014e9065e6007ca157bc92a1c6e2b8b392cca7939f0f98656d37",
+       "seconds_returned": 4.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_9743ed23",
+       "aligned_workflow_node": true,
+       "is_first_candidate_of_run": true,
+       "selected_final": true,
+       "previous_submit_uncertain": false
+      }
+     ]
+    },
+    {
+     "shot": "s03_c01",
+     "final_video": "vv_fe3512f3",
+     "n_versions": 1,
+     "versions": [
+      {
+       "version_id": "vv_fe3512f3",
+       "created_at": 1791174882.9905388,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_kRZc6bBKl0Xr87R6E3K1qqi6N02drtNF",
+       "file_ok": true,
+       "bytes": 1004858,
+       "sha256": "61e22328f0de3dc15a2ff6949069695df119825dc219e3ac43e7bb2ef3f71e96",
+       "seconds_returned": 6.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_0ac4a65b",
+       "aligned_workflow_node": true,
+       "is_first_candidate_of_run": true,
+       "selected_final": true,
+       "previous_submit_uncertain": false
+      }
+     ]
+    },
+    {
+     "shot": "s03_c02",
+     "final_video": "vv_d1541f29",
+     "n_versions": 1,
+     "versions": [
+      {
+       "version_id": "vv_d1541f29",
+       "created_at": 1791175104.4892445,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_NInFiSIVbEvgVJihH80u5joyALqPEMVv",
+       "file_ok": true,
+       "bytes": 794177,
+       "sha256": "c454f5d7040a612e4d425deed36f18d3221e2b3bc99eff09d493e9738f3a4d51",
+       "seconds_returned": 5.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_ad71fbf0",
+       "aligned_workflow_node": true,
+       "is_first_candidate_of_run": true,
+       "selected_final": true,
+       "previous_submit_uncertain": false
+      }
+     ]
+    }
+   ],
+   "renders": [
+    {
+     "sequence": "seq_b1aaacd6",
+     "version_id": "srender_29ccbf6b",
+     "status": "failed",
+     "file_ok": false,
+     "is_final": false
+    },
+    {
+     "sequence": "seq_b1aaacd6",
+     "version_id": "srender_c57fb8be",
+     "status": "done",
+     "file_ok": true,
+     "bytes": 6048629,
+     "sha256": "2de62b11461ad84fcfd1507cf8a6ed236d95e6532fecd817e03aa70dd15c8baa",
+     "is_final": true
+    }
+   ]
+  },
+  {
+   "project": "山雀夜航",
+   "workflow_run": "run_fb5e2c27eac8",
+   "run_status": "waiting_human",
+   "final_review_state": "pending",
+   "final_render_user_selected": "srender_8fb05fe6",
+   "attempt_verdicts": [
+    {
+     "node": "n_producer",
+     "attempt": "att_2dd96cc764",
+     "status": "success",
+     "outputs_code": null,
+     "created": null,
+     "reused": null,
+     "error_head": null
+    },
+    {
+     "node": "n_sw",
+     "attempt": "att_728a9821ea",
+     "status": "success",
+     "outputs_code": "outputs_verified",
+     "created": 3,
+     "reused": 0,
+     "error_head": null
+    },
+    {
+     "node": "n_cd",
+     "attempt": "att_21b3be1a9b",
+     "status": "success",
+     "outputs_code": "outputs_verified",
+     "created": 0,
+     "reused": 2,
+     "error_head": null
+    },
+    {
+     "node": "n_sc",
+     "attempt": "att_87c1a89a11",
+     "status": "success",
+     "outputs_code": "outputs_verified",
+     "created": 0,
+     "reused": 2,
+     "error_head": null
+    },
+    {
+     "node": "n_dir_board",
+     "attempt": "att_47ff3cf7ee",
+     "status": "success",
+     "outputs_code": "outputs_verified",
+     "created": 6,
+     "reused": 0,
+     "error_head": null
+    },
+    {
+     "node": "n_dir_video",
+     "attempt": "att_5e895ce41d",
+     "status": "success",
+     "outputs_code": "outputs_verified",
+     "created": 6,
+     "reused": 0,
+     "error_head": null
+    },
+    {
+     "node": "n_asm",
+     "attempt": "att_042611c9fe",
+     "status": "needs_reconciliation",
+     "outputs_code": null,
+     "created": null,
+     "reused": null,
+     "error_head": "进程中断：正式任务仍为运行态（无法确认其真实进度）——task=task_b7a744341c2e；请人工核对后在页面显式重试"
+    },
+    {
+     "node": "n_asm",
+     "attempt": "att_c72ed2bf29",
+     "status": "success",
+     "outputs_code": "outputs_verified",
+     "created": 1,
+     "reused": 0,
+     "error_head": null
+    }
+   ],
+   "selection_receipts": [
+    {
+     "node": "n_rv_cd",
+     "kind": "look_reference",
+     "ok": true,
+     "items": null,
+     "entityId": "look_7bd9a782bacd",
+     "versionId": "ref_fc1d0654b127"
+    },
+    {
+     "node": "n_rv_sc",
+     "kind": "scene_view",
+     "ok": true,
+     "items": null,
+     "entityId": "sciv_0a988be2cec1",
+     "versionId": null
+    },
+    {
+     "node": "n_rv_board",
+     "kind": "first_frame",
+     "ok": true,
+     "items": [
+      {
+       "ok": true,
+       "kind": "first_frame",
+       "entityId": "s01_c01",
+       "versionId": "ff_ec1536bf_1",
+       "pointer": "selected_first_frame",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "first_frame",
+       "entityId": "s01_c02",
+       "versionId": "ff_b6151f30_1",
+       "pointer": "selected_first_frame",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "first_frame",
+       "entityId": "s02_c01",
+       "versionId": "ff_3e954379_1",
+       "pointer": "selected_first_frame",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "first_frame",
+       "entityId": "s02_c02",
+       "versionId": "ff_ef5bb35e_1",
+       "pointer": "selected_first_frame",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "first_frame",
+       "entityId": "s03_c01",
+       "versionId": "ff_8d6c9532_1",
+       "pointer": "selected_first_frame",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "first_frame",
+       "entityId": "s03_c02",
+       "versionId": "ff_932acc85_1",
+       "pointer": "selected_first_frame",
+       "alreadySelected": true
+      }
+     ],
+     "entityId": null,
+     "versionId": null
+    },
+    {
+     "node": "n_rv_v2",
+     "kind": "video_version",
+     "ok": true,
+     "items": [
+      {
+       "ok": true,
+       "kind": "video_version",
+       "entityId": "s01_c01",
+       "versionId": "vv_4497de8b",
+       "pointer": "final_video",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "video_version",
+       "entityId": "s01_c02",
+       "versionId": "vv_a71c8473",
+       "pointer": "final_video",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "video_version",
+       "entityId": "s02_c01",
+       "versionId": "vv_39003d86",
+       "pointer": "final_video",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "video_version",
+       "entityId": "s02_c02",
+       "versionId": "vv_4090fb09",
+       "pointer": "final_video",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "video_version",
+       "entityId": "s03_c01",
+       "versionId": "vv_24089395",
+       "pointer": "final_video",
+       "alreadySelected": true
+      },
+      {
+       "ok": true,
+       "kind": "video_version",
+       "entityId": "s03_c02",
+       "versionId": "vv_d5ebdd70",
+       "pointer": "final_video",
+       "alreadySelected": true
+      }
+     ],
+     "entityId": null,
+     "versionId": null
+    }
+   ],
+   "narration": {
+    "policy": "Phase47 纪律：成片旁白=TTS（MiniMax speech-2.8-turbo），原视频音轨静音；BGM=外部配乐（四片均含）",
+    "cues": 6,
+    "provider_model": "minimax/speech-2.8-turbo"
+   },
+   "shots": [
+    {
+     "shot": "s01_c01",
+     "final_video": "vv_4497de8b",
+     "n_versions": 2,
+     "versions": [
+      {
+       "version_id": "vv_34b86f7e",
+       "created_at": 1791178215.612948,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_THFYknEU9V5PmmrAFLlyVDktLzT4ABYj",
+       "file_ok": true,
+       "bytes": 736901,
+       "sha256": "4deecfd66ce8e074cbc257a63b9a076c520ba468f76c6dc59b21c66a5bd1b5df",
+       "seconds_returned": 5.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_84dbbfb8",
+       "aligned_workflow_node": false,
+       "is_first_candidate_of_run": false,
+       "selected_final": false,
+       "previous_submit_uncertain": false
+      },
+      {
+       "version_id": "vv_4497de8b",
+       "created_at": 1791182182.5327022,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_R8aOH6RYjTieOhMqU3enIKYurwWI7xMF",
+       "file_ok": true,
+       "bytes": 736901,
+       "sha256": "4deecfd66ce8e074cbc257a63b9a076c520ba468f76c6dc59b21c66a5bd1b5df",
+       "seconds_returned": 5.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_3a0509ed",
+       "aligned_workflow_node": true,
+       "is_first_candidate_of_run": true,
+       "selected_final": true,
+       "previous_submit_uncertain": false
+      }
+     ]
+    },
+    {
+     "shot": "s01_c02",
+     "final_video": "vv_a71c8473",
+     "n_versions": 2,
+     "versions": [
+      {
+       "version_id": "vv_00d17948",
+       "created_at": 1791178454.8280728,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_wKueJJZnuJuEHD4Yp95WqMwKCocXG8TI",
+       "file_ok": true,
+       "bytes": 1182415,
+       "sha256": "7816b4044d9a25622feb5258b33d2c0ddf31dbdfaf8326c270d60f771a0ce0a6",
+       "seconds_returned": 5.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_983f72ae",
+       "aligned_workflow_node": false,
+       "is_first_candidate_of_run": false,
+       "selected_final": false,
+       "previous_submit_uncertain": false
+      },
+      {
+       "version_id": "vv_a71c8473",
+       "created_at": 1791182382.522174,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_T0k0OusPC5PgMnQEaG7CKiESQ6tvg4Vu",
+       "file_ok": true,
+       "bytes": 1182415,
+       "sha256": "7816b4044d9a25622feb5258b33d2c0ddf31dbdfaf8326c270d60f771a0ce0a6",
+       "seconds_returned": 5.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_9d02855d",
+       "aligned_workflow_node": true,
+       "is_first_candidate_of_run": true,
+       "selected_final": true,
+       "previous_submit_uncertain": false
+      }
+     ]
+    },
+    {
+     "shot": "s02_c01",
+     "final_video": "vv_39003d86",
+     "n_versions": 2,
+     "versions": [
+      {
+       "version_id": "vv_ce92fa52",
+       "created_at": 1791178598.4050257,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_aY9Pu2oFoZ7sxl8Z8C79YeGHZnlbaac3",
+       "file_ok": true,
+       "bytes": 2643566,
+       "sha256": "f98a862d7e1fe13dd05fa3d009886843769ed9f336a1dbc83f71a7c79b76b06b",
+       "seconds_returned": 5.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_bad3b54f",
+       "aligned_workflow_node": false,
+       "is_first_candidate_of_run": false,
+       "selected_final": false,
+       "previous_submit_uncertain": false
+      },
+      {
+       "version_id": "vv_39003d86",
+       "created_at": 1791182671.7474682,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_PQDHMF89Bft5FnjHnj7jfTfLiZn3nOid",
+       "file_ok": true,
+       "bytes": 2643566,
+       "sha256": "f98a862d7e1fe13dd05fa3d009886843769ed9f336a1dbc83f71a7c79b76b06b",
+       "seconds_returned": 5.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_d807af9a",
+       "aligned_workflow_node": true,
+       "is_first_candidate_of_run": true,
+       "selected_final": true,
+       "previous_submit_uncertain": false
+      }
+     ]
+    },
+    {
+     "shot": "s02_c02",
+     "final_video": "vv_4090fb09",
+     "n_versions": 2,
+     "versions": [
+      {
+       "version_id": "vv_ed32d0b9",
+       "created_at": 1791178944.5824528,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_c57TDr7ixMFDIBNsJRxifyEwn6UDuaDF",
+       "file_ok": true,
+       "bytes": 1337713,
+       "sha256": "2a0005aed5860a1fb9fbdf9b2874509fe572f081de2697da94fed3619149886d",
+       "seconds_returned": 4.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_bb9872b7",
+       "aligned_workflow_node": false,
+       "is_first_candidate_of_run": false,
+       "selected_final": false,
+       "previous_submit_uncertain": false
+      },
+      {
+       "version_id": "vv_4090fb09",
+       "created_at": 1791182835.2322295,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_qjcRYPCUirugvgKE5sSSQqzJ3jo7SbPL",
+       "file_ok": true,
+       "bytes": 1337713,
+       "sha256": "2a0005aed5860a1fb9fbdf9b2874509fe572f081de2697da94fed3619149886d",
+       "seconds_returned": 5.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_c86bbccd",
+       "aligned_workflow_node": true,
+       "is_first_candidate_of_run": true,
+       "selected_final": true,
+       "previous_submit_uncertain": false
+      }
+     ]
+    },
+    {
+     "shot": "s03_c01",
+     "final_video": "vv_24089395",
+     "n_versions": 1,
+     "versions": [
+      {
+       "version_id": "vv_24089395",
+       "created_at": 1791183185.8053293,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_TlfmjvQwAQtTtp6akx1ULdsLYOHfPpv4",
+       "file_ok": true,
+       "bytes": 506930,
+       "sha256": "33a4a5179605a8ff774da846781fbd2b553affc13d2ad8ede57b0f8c70fa9e3c",
+       "seconds_returned": 5.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_681dce17",
+       "aligned_workflow_node": true,
+       "is_first_candidate_of_run": true,
+       "selected_final": true,
+       "previous_submit_uncertain": false
+      }
+     ]
+    },
+    {
+     "shot": "s03_c02",
+     "final_video": "vv_d5ebdd70",
+     "n_versions": 1,
+     "versions": [
+      {
+       "version_id": "vv_d5ebdd70",
+       "created_at": 1791183324.982389,
+       "model": "agnes-video-2.5-flash",
+       "provider_task_id": "task_wRr7wS9DKeehufklpiHXKMZsM28jtsQt",
+       "file_ok": true,
+       "bytes": 605427,
+       "sha256": "7cbb9f8ad780e4acfb38559715d4ba7713c593e7e20278fd1fa19e63c55404d7",
+       "seconds_returned": 5.0,
+       "size_returned": "720P",
+       "origin_agent_run": "dgv_99b4b8c1",
+       "aligned_workflow_node": true,
+       "is_first_candidate_of_run": true,
+       "selected_final": true,
+       "previous_submit_uncertain": false
+      }
+     ]
+    }
+   ],
+   "renders": [
+    {
+     "sequence": "seq_61c06362",
+     "version_id": "srender_8fb05fe6",
+     "status": "done",
+     "file_ok": true,
+     "bytes": 7737227,
+     "sha256": "c2bf45b844036ff813347847d3f7726b8f5131c9311dad59fefe98891ade052a",
+     "is_final": true
+    }
+   ]
+  }
+ ],
+ "c3_fixtures": [
+  {
+   "project": "P47_C_Templates",
+   "shot": "s01_c01",
+   "version_id": "vv_2855ff25",
+   "created_at": 1791095016.742357,
+   "model": "agnes-video-2.5-flash",
+   "provider_task_id": "task_cw59rarlfilhYJ1vaDWRSyFIpTKLxZfB",
+   "file_ok": true,
+   "bytes": 705461,
+   "origin_agent_run": "dgv_08500eda",
+   "selected_final": true
+  },
+  {
+   "project": "P47_C_Templates",
+   "shot": "s01_c01",
+   "version_id": "vv_47dd2ea1",
+   "created_at": 1791097420.989659,
+   "model": "agnes-video-2.5-flash",
+   "provider_task_id": "task_GLJnCL07rxfu2yzwnie1fwj4PcgBAxW1",
+   "file_ok": true,
+   "bytes": 705461,
+   "origin_agent_run": "dgv_91562455",
+   "selected_final": false
+  },
+  {
+   "project": "P47_C_Templates",
+   "shot": "s01_c02",
+   "version_id": "vv_53d832b2",
+   "created_at": 1791097793.75571,
+   "model": "agnes-video-2.5-flash",
+   "provider_task_id": "task_3QHER1jHRkWi4jGLPFO1nJRHWChVcIba",
+   "file_ok": true,
+   "bytes": 645021,
+   "origin_agent_run": "dgv_00da545e",
+   "selected_final": true
+  },
+  {
+   "project": "P47_C_Templates",
+   "shot": "s02_c01",
+   "version_id": "vv_3a5b0b95",
+   "created_at": 1791097944.9408925,
+   "model": "agnes-video-2.5-flash",
+   "provider_task_id": "task_9jH0duKfldFtbNGl9eXZTVAOrH24ehmr",
+   "file_ok": true,
+   "bytes": 1140259,
+   "origin_agent_run": "dgv_cc115143",
+   "selected_final": true
+  }
+ ],
+ "unknowns": [
+  "各版本逐条 visual.review_shot 明细回执未随版本持久化（在 attempt 事件流内）——逐版本合格判定标 unknown，仅 attempt 级 verdict 可重算",
+  "Phase47 早期（B/C 批）部分探针 run 无完整 attempt 记录——不计入首次合格率分母",
+  "用户对四部成片的审美验收未发生（成片审定 pending）——不写 PASS"
+ ],
+ "repair_targets": {
+  "W06_run_7f30add8a220": {
+   "problem_version": "vv_2855ff25",
+   "problem": "visual.sample_frames suspected=1（beginning→early_middle 纸张过渡压缩）",
+   "repair_candidate": "vv_47dd2ea1",
+   "attempt_verdicts": [
+    {
+     "node": "n_dir_fix",
+     "attempt": "att_fa1dc03568",
+     "status": "success",
+     "outputs_code": "outputs_verified",
+     "created": 2,
+     "reused": 0,
+     "error_head": null
+    }
+   ]
+  },
+  "W07_run_10e21ba7f1cb": {
+   "endpoints": [
+    "s01_c02",
+    "s02_c01"
+   ],
+   "bridge_candidate": "vv_53d832b2",
+   "attempt_verdicts": [
+    {
+     "node": "n_dir_bridge",
+     "attempt": "att_a14433c8d2",
+     "status": "success",
+     "outputs_code": "outputs_verified",
+     "created": 1,
+     "reused": 0,
+     "error_head": null
+    }
+   ]
+  }
+ }
+}

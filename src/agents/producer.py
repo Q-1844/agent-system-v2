@@ -957,8 +957,11 @@ async def _delegate_specialist(rt, project: str, agent_id: str,
     tr_status = task_result["status"]
 
     def _settle(t: AgentTask) -> None:
+        # Phase48 A06：用户停止导致的中断落 cancelled（仓库既有 cancellation 语义，
+        # stop reason 保留在 error/warning）；模型/工具真实错误仍 failed。
         t.status = (TaskStatus.COMPLETED.value if tr_status == "completed"
-                    else TaskStatus.FAILED.value)  # stopped/failed/not_configured → failed（带 warning）
+                    else TaskStatus.CANCELLED.value if tr_status == "stopped"
+                    else TaskStatus.FAILED.value)
         if tr_status not in ("completed",):
             t.warnings = list(t.warnings) + [f"task_result_status={tr_status}"]
         t.result_summary = (task_result["summary"] or "")[:200]
