@@ -1,0 +1,376 @@
+{
+ "char_run": "run_568c0be74063",
+ "looks": [
+  {
+   "look_id": "look_f21736a25ce8",
+   "name": "黄色雨衣日常 Look",
+   "cover": "ref_e61c4141c231"
+  },
+  {
+   "look_id": "look_9538a10ad935",
+   "name": "条纹T恤工装裤日常 Look",
+   "cover": "ref_d05f271be70e"
+  }
+ ],
+ "char_run_final": "waiting_human",
+ "shots": {
+  "s01_c01": {
+   "level": "L1_sameframe",
+   "desc": "小满、阿岩在木屋门口并肩站着，各自看向镜头方向",
+   "dialogue": "",
+   "dialogue_speaker": null,
+   "start_state": "小满、阿岩在木屋门口并肩站着，各自看向镜头方向",
+   "motion": "they stand still, the girl waves briefly",
+   "ff_receipt": {
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_D_Cast\\output\\frames\\s01_c01_ff_custom.png",
+    "sha16": "2f3c4fccd6f81796"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s01_c01_1791238449",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/2f3c4fccd6f81796.png"
+   },
+   "ff_ready": true,
+   "video_job": "2b39d38b7e9f",
+   "video_result": {
+    "status": "done",
+    "wall_s": 129.2
+   },
+   "video_version": "vv_a8cd58ab",
+   "video_local": "projects\\P48_D_Cast\\output\\videos\\s01_c01.mp4"
+  },
+  "s01_c02": {
+   "level": "L1_sameframe",
+   "desc": "小满、阿岩在院子里一起把一筐苹果抬上木桌",
+   "dialogue": "",
+   "dialogue_speaker": null,
+   "start_state": "小满、阿岩在院子里一起把一筐苹果抬上木桌",
+   "motion": "they lift the basket together and set it down",
+   "ff_receipt": {
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_D_Cast\\output\\frames\\s01_c02_ff_custom.png",
+    "sha16": "71abaf650648ed9c"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s01_c02_1791238518",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/71abaf650648ed9c.png"
+   },
+   "ff_ready": true,
+   "video_job": "c71345408e43",
+   "video_result": {
+    "status": "done",
+    "wall_s": 154.5
+   },
+   "video_version": "vv_03bf9a2a",
+   "video_local": "projects\\P48_D_Cast\\output\\videos\\s01_c02.mp4"
+  },
+  "s01_c03": {
+   "level": "L1_sameframe",
+   "desc": "小满、阿岩在篱笆边并肩向左走",
+   "dialogue": "",
+   "dialogue_speaker": null,
+   "start_state": "小满、阿岩在篱笆边并肩向左走",
+   "motion": "they walk a few steps together",
+   "ff_receipt": {
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_D_Cast\\output\\frames\\s01_c03_ff_custom.png",
+    "sha16": "9ecc1d9c42bffff7"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s01_c03_1791238593",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/9ecc1d9c42bffff7.png"
+   },
+   "ff_ready": true,
+   "video_job": "6ea615f8c5c2",
+   "video_result": {
+    "status": "done",
+    "wall_s": 166.6
+   },
+   "video_version": "vv_a5746924",
+   "video_local": "projects\\P48_D_Cast\\output\\videos\\s01_c03.mp4"
+  },
+  "s01_c04": {
+   "level": "L2_spatial",
+   "desc": "阿岩在小满身后半步，小满转身",
+   "dialogue": "",
+   "dialogue_speaker": null,
+   "start_state": "阿岩在小满身后半步，小满转身",
+   "motion": "she turns to face him, he steps aside slightly",
+   "ff_receipt": {
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_D_Cast\\output\\frames\\s01_c04_ff_custom.png",
+    "sha16": "c21148e2088b2260"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s01_c04_1791238673",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/c21148e2088b2260.png"
+   },
+   "ff_ready": true,
+   "video_job": "042943926d5b"
+  },
+  "s01_c05": {
+   "level": "L2_spatial",
+   "desc": "两人交错走过狭窄的小桥",
+   "dialogue": "",
+   "dialogue_speaker": null,
+   "start_state": "两人交错走过狭窄的小桥",
+   "motion": "they pass each other, momentarily occluding one another",
+   "ff_receipt": {
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_D_Cast\\output\\frames\\s01_c05_ff_custom.png",
+    "sha16": "2410283efc82f383"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s01_c05_1791238759",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/2410283efc82f383.png"
+   },
+   "ff_ready": true
+  },
+  "s01_c06": {
+   "level": "L2_spatial",
+   "desc": "阿岩弯腰钻到桌前，小满站在桌后被桌沿半遮",
+   "dialogue": "",
+   "dialogue_speaker": null,
+   "start_state": "阿岩弯腰钻到桌前，小满站在桌后被桌沿半遮",
+   "motion": "he picks up a flashlight from under the table, she leans slightly to see",
+   "ff_receipt": {
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_D_Cast\\output\\frames\\s01_c06_ff_custom.png",
+    "sha16": "dc34a00f99a82331"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s01_c06_1791238840",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/dc34a00f99a82331.png"
+   },
+   "ff_ready": true
+  },
+  "s01_c07": {
+   "level": "L3_handoff",
+   "desc": "小满把红色小手电筒递给阿岩，两人手部接触",
+   "dialogue": "",
+   "dialogue_speaker": null,
+   "start_state": "小满把红色小手电筒递给阿岩，两人手部接触",
+   "motion": "she passes the flashlight, he takes it, hands touch briefly",
+   "ff_receipt": {
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_D_Cast\\output\\frames\\s01_c07_ff_custom.png",
+    "sha16": "47edc28b388d1f58"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s01_c07_1791238912",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/47edc28b388d1f58.png"
+   },
+   "ff_ready": true
+  },
+  "s01_c08": {
+   "level": "L3_handoff",
+   "desc": "（交接后）阿岩持红色小手电筒照亮木箱内部",
+   "dialogue": "",
+   "dialogue_speaker": null,
+   "start_state": "（交接后）阿岩持红色小手电筒照亮木箱内部",
+   "motion": "he switches it on and sweeps the light inside the crate",
+   "ff_receipt": {
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_D_Cast\\output\\frames\\s01_c08_ff_custom.png",
+    "sha16": "96f441e4ea30ff62"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s01_c08_1791238987",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/96f441e4ea30ff62.png"
+   },
+   "ff_ready": true
+  },
+  "s01_c09": {
+   "level": "L3_handoff",
+   "desc": "（交接后）小满空手指向木箱，阿岩持手电筒在旁",
+   "dialogue": "",
+   "dialogue_speaker": null,
+   "start_state": "（交接后）小满空手指向木箱，阿岩持手电筒在旁",
+   "motion": "she points, he raises the flashlight to where she points",
+   "ff_receipt": {
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_D_Cast\\output\\frames\\s01_c09_ff_custom.png",
+    "sha16": "b771100a6148f3e0"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s01_c09_1791239062",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/b771100a6148f3e0.png"
+   },
+   "ff_ready": true
+  },
+  "s01_c10": {
+   "level": "L4_mono_dialogue",
+   "desc": "小满面对镜头说一句短句，阿岩在旁沉默",
+   "dialogue": "小满：我们要在天黑前找到出口。",
+   "dialogue_speaker": "小满",
+   "start_state": "小满面对镜头说一句短句，阿岩在旁沉默",
+   "motion": "she speaks to the camera, he stays quiet and still",
+   "ff_receipt": {
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_D_Cast\\output\\frames\\s01_c10_ff_custom.png",
+    "sha16": "15b7c3e85280f67c"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s01_c10_1791239151",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/15b7c3e85280f67c.png"
+   },
+   "ff_ready": true
+  },
+  "s01_c11": {
+   "level": "L4_mono_dialogue",
+   "desc": "阿岩摇头回应动作（不说话），小满等待",
+   "dialogue": "",
+   "dialogue_speaker": null,
+   "start_state": "阿岩摇头回应动作（不说话），小满等待",
+   "motion": "he shakes his head, she waits",
+   "ff_receipt": {
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_D_Cast\\output\\frames\\s01_c11_ff_custom.png",
+    "sha16": "ba06e6a2ad7ef9c1"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s01_c11_1791239220",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/ba06e6a2ad7ef9c1.png"
+   },
+   "ff_ready": true
+  },
+  "s01_c12": {
+   "level": "L4_mono_dialogue",
+   "desc": "小满再次开口补充一句，阿岩点头",
+   "dialogue": "小满：那就走左边的小路。",
+   "dialogue_speaker": "小满",
+   "start_state": "小满再次开口补充一句，阿岩点头",
+   "motion": "she speaks, he nods once",
+   "ff_receipt": {
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_D_Cast\\output\\frames\\s01_c12_ff_custom.png",
+    "sha16": "8150401c51f4d4ff"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s01_c12_1791239375",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/8150401c51f4d4ff.png"
+   },
+   "ff_ready": true
+  },
+  "s01_c13": {
+   "level": "L5_duo_dialogue",
+   "desc": "阿岩先开口一句，小满听",
+   "dialogue": "阿岩：左边有水声，可能是河。",
+   "dialogue_speaker": "阿岩",
+   "start_state": "阿岩先开口一句，小满听",
+   "motion": "he speaks, she listens attentively",
+   "ff_receipt": {
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_D_Cast\\output\\frames\\s01_c13_ff_custom.png",
+    "sha16": "d621f81466ff1501"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s01_c13_1791239483",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/d621f81466ff1501.png"
+   },
+   "ff_ready": true
+  },
+  "s01_c14": {
+   "level": "L5_duo_dialogue",
+   "desc": "小满回一句并做手势，阿岩看她的手势",
+   "dialogue": "小满：那就顺着水声走。",
+   "dialogue_speaker": "小满",
+   "start_state": "小满回一句并做手势，阿岩看她的手势",
+   "motion": "she replies and points left, he follows her gesture",
+   "ff_receipt": {
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_D_Cast\\output\\frames\\s01_c14_ff_custom.png",
+    "sha16": "536fb104f23a9b26"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s01_c14_1791239567",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/536fb104f23a9b26.png"
+   },
+   "ff_ready": true
+  },
+  "s01_c15": {
+   "level": "L5_duo_dialogue",
+   "desc": "阿岩结尾一句并举起手电筒",
+   "dialogue": "阿岩：好，天黑前出发。",
+   "dialogue_speaker": "阿岩",
+   "start_state": "阿岩结尾一句并举起手电筒",
+   "motion": "he speaks and lifts the flashlight",
+   "ff_receipt": {
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_D_Cast\\output\\frames\\s01_c15_ff_custom.png",
+    "sha16": "dfd601bb7adb2afe"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s01_c15_1791239653",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/dfd601bb7adb2afe.png"
+   },
+   "ff_ready": true
+  },
+  "s01_c16": {
+   "level": "L6_cross_shot",
+   "desc": "（跨镜A）小满近景：同一句台词在两个镜头中延续",
+   "dialogue": "小满：小心脚下，木板松了。",
+   "dialogue_speaker": "小满",
+   "start_state": "（跨镜A）小满近景：同一句台词在两个镜头中延续",
+   "motion": "she speaks the same line with the same voice",
+   "ff_receipt": {
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_D_Cast\\output\\frames\\s01_c16_ff_custom.png",
+    "sha16": "8fc67b084300260b"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s01_c16_1791239768",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/8fc67b084300260b.png"
+   },
+   "ff_ready": true
+  },
+  "s01_c17": {
+   "level": "L6_cross_shot",
+   "desc": "（跨镜B）同场景另一机位，小满继续说完同一句",
+   "dialogue": "小满：……踩外侧就不会断。",
+   "dialogue_speaker": "小满",
+   "start_state": "（跨镜B）同场景另一机位，小满继续说完同一句",
+   "motion": "she finishes the sentence, same voice and tone",
+   "ff_receipt": {
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_D_Cast\\output\\frames\\s01_c17_ff_custom.png",
+    "sha16": "17a8244dc93d1f28"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s01_c17_1791239849",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/17a8244dc93d1f28.png"
+   },
+   "ff_ready": true
+  },
+  "s01_c18": {
+   "level": "L6_cross_shot",
+   "desc": "（跨镜C）阿岩回应镜头，声线与前镜一致",
+   "dialogue": "阿岩：知道了，你先走。",
+   "dialogue_speaker": "阿岩",
+   "start_state": "（跨镜C）阿岩回应镜头，声线与前镜一致",
+   "motion": "he responds to her, steady voice",
+   "ff_receipt": {
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_D_Cast\\output\\frames\\s01_c18_ff_custom.png",
+    "sha16": "106429be3bc39a94"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s01_c18_1791239922",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/106429be3bc39a94.png"
+   },
+   "ff_ready": true
+  }
+ },
+ "fixture": {
+  "dialogue_lines": {
+   "s01_c01": "",
+   "s01_c02": "",
+   "s01_c03": "",
+   "s01_c04": "",
+   "s01_c05": "",
+   "s01_c06": "",
+   "s01_c07": "",
+   "s01_c08": "",
+   "s01_c09": "",
+   "s01_c10": "小满：我们要在天黑前找到出口。",
+   "s01_c11": "",
+   "s01_c12": "小满：那就走左边的小路。",
+   "s01_c13": "阿岩：左边有水声，可能是河。",
+   "s01_c14": "小满：那就顺着水声走。",
+   "s01_c15": "阿岩：好，天黑前出发。",
+   "s01_c16": "小满：小心脚下，木板松了。",
+   "s01_c17": "小满：……踩外侧就不会断。",
+   "s01_c18": "阿岩：知道了，你先走。"
+  },
+  "levels": [
+   "L1_sameframe",
+   "L2_spatial",
+   "L3_handoff",
+   "L4_mono_dialogue",
+   "L5_duo_dialogue",
+   "L6_cross_shot"
+  ]
+ }
+}

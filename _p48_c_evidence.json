@@ -1,0 +1,1551 @@
+{
+ "sources": {
+  "s01_c01": {
+   "ff_job": "a545dca43338",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 16.4,
+    "message": "s01_c01 已生成 1 个候选（批次 ff_5adfce2e），待选择"
+   },
+   "ff_chosen": {
+    "shot_id": "s01_c01",
+    "candidate_id": "ff_5adfce2e_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_h89EjLpNUbei4kHRuedkxgsG3qlJ1Wpn/output_65e608aa61a942e49ae84e260817c088.png"
+   },
+   "video_job": "f9ad29fc9961",
+   "video_result": {
+    "status": "done",
+    "wall_s": 369.9,
+    "message": "s01_c01 提取视频末帧"
+   },
+   "video_version": "vv_cf346929",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s01_c01.mp4",
+   "streams": {
+    "duration": 4.458333
+   },
+   "end_frame_local": "projects\\P48_C_Continuity\\output\\frames\\s01_c01_video_end_vv_cf346929.jpg",
+   "end_frame_url": "https://Q-1844.github.io/agnes-frame-host/objects/1e1eecbea87530fb.jpg",
+   "end_frame_sha16": "1e1eecbea87530fb"
+  },
+  "s01_c02": {
+   "ff_job": "d7897a06d645",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 13.4,
+    "message": "s01_c02 已生成 1 个候选（批次 ff_1b9ab0f5），待选择"
+   },
+   "ff_chosen": {
+    "shot_id": "s01_c02",
+    "candidate_id": "ff_1b9ab0f5_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_QWdCw5A0HuS90CYyNoSkCHIvnCq4MCEh/output_3c750bc002f64e5ab3de9c3615bf39a7.png"
+   },
+   "video_job": "6154514237e5",
+   "video_result": {
+    "status": "done",
+    "wall_s": 419.4,
+    "message": "s01_c02 提取视频末帧"
+   },
+   "video_version": "vv_78bf588c",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s01_c02.mp4",
+   "streams": {
+    "duration": 4.458333
+   },
+   "end_frame_local": "projects\\P48_C_Continuity\\output\\frames\\s01_c02_video_end_vv_78bf588c.jpg",
+   "end_frame_url": "https://Q-1844.github.io/agnes-frame-host/objects/baff6ccb2e724538.jpg",
+   "end_frame_sha16": "baff6ccb2e724538"
+  },
+  "s01_c03": {
+   "ff_job": "c7d5df1e5ca7",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 13.4,
+    "message": "s01_c03 已生成 1 个候选（批次 ff_0c38fa35），待选择"
+   },
+   "ff_chosen": {
+    "shot_id": "s01_c03",
+    "candidate_id": "ff_0c38fa35_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_yPN7ZwqcpPi3bwwJtHVD0rEjd0234ZvZ/output_fbb99bafbfef4c0cbdd1126b6363b823.png"
+   },
+   "video_job": "b906ea1cdfff",
+   "video_result": {
+    "status": "done",
+    "wall_s": 408.9,
+    "message": "s01_c03 提取视频末帧"
+   },
+   "video_version": "vv_9b229571",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s01_c03.mp4",
+   "streams": {
+    "duration": 4.458333
+   },
+   "end_frame_local": "projects\\P48_C_Continuity\\output\\frames\\s01_c03_video_end_vv_9b229571.jpg",
+   "end_frame_url": "https://Q-1844.github.io/agnes-frame-host/objects/4ab104dccf86f0b6.jpg",
+   "end_frame_sha16": "4ab104dccf86f0b6"
+  },
+  "s01_c04": {
+   "ff_job": "1b36a0d5950e",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 14.0,
+    "message": "s01_c04 已生成 1 个候选（批次 ff_9852ae64），待选择"
+   },
+   "ff_chosen": {
+    "shot_id": "s01_c04",
+    "candidate_id": "ff_9852ae64_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_CcRRXGHetVmd3RyzlSBStKeLE8JwvTLc/output_69e30584248947eeaf8f66ece635f268.png"
+   },
+   "video_job": "5f2ae1df003a",
+   "video_result": {
+    "status": "done",
+    "wall_s": 623.1,
+    "message": "s01_c04 视频末帧提取/托管未完全成功: 末帧托管失败: github_pages 上传成功但 Pages 未在 180.0s 内就绪: https://Q-1844.github.io/agnes-frame-host/objects/5f29040346ee1ce6.jpg（U"
+   },
+   "video_version": "vv_fa2b1b7c",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s01_c04.mp4",
+   "streams": {
+    "duration": 4.458333
+   },
+   "end_frame_local": "projects\\P48_C_Continuity\\output\\frames\\s01_c04_video_end_vv_fa2b1b7c.png",
+   "end_frame_url": null,
+   "end_frame_sha16": "7c9a8148ebc72c01"
+  },
+  "s01_c05": {
+   "ff_job": "5fabc82d03ef",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 14.1,
+    "message": "s01_c05 已生成 1 个候选（批次 ff_e423e3c7），待选择"
+   },
+   "ff_chosen": {
+    "shot_id": "s01_c05",
+    "candidate_id": "ff_e423e3c7_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_G1rAdsGCGM16xKRQX8gIxEpHboNTi1AU/output_9758ce886ef94140935bad6e6f501c7f.png"
+   },
+   "video_job": "0056f98bca14",
+   "video_result": {
+    "status": "done",
+    "wall_s": 484.1,
+    "message": "s01_c05 提取视频末帧"
+   },
+   "video_version": "vv_036917d5",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s01_c05.mp4",
+   "streams": {
+    "duration": 4.458333
+   },
+   "end_frame_local": "projects\\P48_C_Continuity\\output\\frames\\s01_c05_video_end_vv_036917d5.jpg",
+   "end_frame_url": "https://Q-1844.github.io/agnes-frame-host/objects/5e675e316f700f09.jpg",
+   "end_frame_sha16": "5e675e316f700f09"
+  },
+  "s01_c06": {
+   "ff_job": "6f2861dc4c9d",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 13.7,
+    "message": "s01_c06 已生成 1 个候选（批次 ff_159204b0），待选择"
+   },
+   "ff_chosen": {
+    "shot_id": "s01_c06",
+    "candidate_id": "ff_159204b0_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_dKZOoNNLEklE2yYXS8QviIo2PsDUigXp/output_66e48b0477e64c0184da728a74b6fa78.png"
+   },
+   "video_job": "7d423d2ae6ba",
+   "video_result": {
+    "status": "done",
+    "wall_s": 329.6,
+    "message": "s01_c06 提取视频末帧"
+   },
+   "video_version": "vv_9858c7a3",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s01_c06.mp4",
+   "streams": {
+    "duration": 4.458333
+   },
+   "end_frame_local": "projects\\P48_C_Continuity\\output\\frames\\s01_c06_video_end_vv_9858c7a3.jpg",
+   "end_frame_url": "https://Q-1844.github.io/agnes-frame-host/objects/7c0bef69c3d04e3f.jpg",
+   "end_frame_sha16": "7c0bef69c3d04e3f"
+  },
+  "s01_c07": {
+   "ff_job": "75e89fad5f77",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 13.5,
+    "message": "s01_c07 已生成 1 个候选（批次 ff_1e27a9db），待选择"
+   },
+   "ff_chosen": {
+    "shot_id": "s01_c07",
+    "candidate_id": "ff_1e27a9db_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_K3asdTGgckgfq0MSQ8b9FsCTtNgp55nn/output_1d748b9c66d9405eb2dc0f9d86ccaeb7.png"
+   },
+   "video_job": "9bb7ee447612",
+   "video_result": {
+    "status": "done",
+    "wall_s": 621.4,
+    "message": "s01_c07 视频末帧提取/托管未完全成功: 末帧托管失败: github_pages 上传成功但 Pages 未在 180.0s 内就绪: https://Q-1844.github.io/agnes-frame-host/objects/00d9a04e4a758651.jpg（U"
+   },
+   "video_version": "vv_3e0dc89d",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s01_c07.mp4",
+   "streams": {
+    "duration": 4.458333
+   },
+   "end_frame_local": "projects\\P48_C_Continuity\\output\\frames\\s01_c07_video_end_vv_3e0dc89d.png",
+   "end_frame_url": null,
+   "end_frame_sha16": "0159620f998d0743"
+  },
+  "s01_c08": {
+   "ff_job": "bc7bd8144f96",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 13.6,
+    "message": "s01_c08 已生成 1 个候选（批次 ff_73da0f67），待选择"
+   },
+   "ff_chosen": {
+    "shot_id": "s01_c08",
+    "candidate_id": "ff_73da0f67_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_sqWess78tCZCyZ03WsTA2bHKGt1B0EJT/output_167aade69d444a999b49031c7cd370d6.png"
+   },
+   "video_job": "be9f206dfc9e",
+   "video_result": {
+    "status": "done",
+    "wall_s": 442.7,
+    "message": "s01_c08 提取视频末帧"
+   },
+   "video_version": "vv_f1e5e6a1",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s01_c08.mp4",
+   "streams": {
+    "duration": 4.458333
+   },
+   "end_frame_local": "projects\\P48_C_Continuity\\output\\frames\\s01_c08_video_end_vv_f1e5e6a1.jpg",
+   "end_frame_url": "https://Q-1844.github.io/agnes-frame-host/objects/d1e173ce53234b6a.jpg",
+   "end_frame_sha16": "d1e173ce53234b6a"
+  },
+  "s01_c09": {
+   "ff_job": "ca6c4fc30028",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 12.6,
+    "message": "s01_c09 已生成 1 个候选（批次 ff_c3cc3da4），待选择"
+   },
+   "ff_chosen": {
+    "shot_id": "s01_c09",
+    "candidate_id": "ff_c3cc3da4_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_ybEjQkACv7LNLYenBT5ZgRgBmtFSX0Di/output_48daf8d096f14efcbbf599a344f1c327.png"
+   },
+   "video_job": "48577fb05953",
+   "video_result": {
+    "status": "done",
+    "wall_s": 302.1,
+    "message": "s01_c09 视频末帧提取/托管未完全成功: 末帧托管失败: github_pages 上传成功但 Pages 未在 180.0s 内就绪: https://Q-1844.github.io/agnes-frame-host/objects/c298c2f6fbe61be7.jpg（U"
+   },
+   "video_version": "vv_7434fd62",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s01_c09.mp4",
+   "streams": {
+    "duration": 4.458333
+   },
+   "end_frame_local": "projects\\P48_C_Continuity\\output\\frames\\s01_c09_video_end_vv_7434fd62.png",
+   "end_frame_url": null,
+   "end_frame_sha16": "6025b60e36b8baa2"
+  },
+  "s01_c10": {
+   "ff_job": "1e4e116d1d29",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 17.2,
+    "message": "s01_c10 已生成 1 个候选（批次 ff_38d4706b），待选择"
+   },
+   "ff_chosen": {
+    "shot_id": "s01_c10",
+    "candidate_id": "ff_38d4706b_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_jiO2lNEHIqznPPneglev0W0tgdjoh7QJ/output_39d0c0cb72dd4ac4999ab061877c514a.png"
+   },
+   "video_job": "293624018c71",
+   "video_result": {
+    "status": "done",
+    "wall_s": 698.9,
+    "message": "s01_c10 视频末帧提取/托管未完全成功: 末帧托管失败: github_pages 上传成功但 Pages 未在 180.0s 内就绪: https://Q-1844.github.io/agnes-frame-host/objects/e3f88664271612aa.jpg（U"
+   },
+   "video_version": "vv_ea9333b3",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s01_c10.mp4",
+   "streams": {
+    "duration": 4.458333
+   },
+   "end_frame_local": "projects\\P48_C_Continuity\\output\\frames\\s01_c10_video_end_vv_ea9333b3.png",
+   "end_frame_url": null,
+   "end_frame_sha16": "6d3e26bf1389f6b6"
+  },
+  "s01_c11": {
+   "ff_job": "011df45ec2ba",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 12.6,
+    "message": "s01_c11 已生成 1 个候选（批次 ff_1ecbae20），待选择"
+   },
+   "ff_chosen": {
+    "shot_id": "s01_c11",
+    "candidate_id": "ff_1ecbae20_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_BLpK5R9p0daJEUlsTxZxGPuzE5Ngv0kC/output_68dfa55da7914e8baf6f29a55e243438.png"
+   },
+   "video_job": "87edf2fbaa63",
+   "video_result": {
+    "status": "done",
+    "wall_s": 573.3,
+    "message": "s01_c11 视频末帧提取/托管未完全成功: 末帧托管失败: github_pages 上传成功但 Pages 未在 180.0s 内就绪: https://Q-1844.github.io/agnes-frame-host/objects/5cbd4d56eb4c9aa7.jpg（U"
+   },
+   "video_version": "vv_d8669ae2",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s01_c11.mp4",
+   "streams": {
+    "duration": 4.458333
+   },
+   "end_frame_local": "projects\\P48_C_Continuity\\output\\frames\\s01_c11_video_end_vv_d8669ae2.png",
+   "end_frame_url": null,
+   "end_frame_sha16": "8b25abfd0357bf3b"
+  },
+  "s01_c12": {
+   "ff_job": "cfed831714bf",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 13.2,
+    "message": "s01_c12 已生成 1 个候选（批次 ff_5f696937），待选择"
+   },
+   "ff_chosen": {
+    "shot_id": "s01_c12",
+    "candidate_id": "ff_5f696937_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_FDPrujhK3ZdaZcqWhjQ2mdv8z8fgQDlS/output_3da3aeb3120f44c6bcccc304b6cd7dbe.png"
+   },
+   "video_job": "1b18b161d8cd",
+   "video_result": {
+    "status": "done",
+    "wall_s": 256.4,
+    "message": "s01_c12 视频末帧提取/托管未完全成功: 末帧托管失败: github_pages 上传成功但 Pages 未在 180.0s 内就绪: https://Q-1844.github.io/agnes-frame-host/objects/ec36b1a78247ced1.jpg（U"
+   },
+   "video_version": "vv_c3112772",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s01_c12.mp4",
+   "streams": {
+    "duration": 4.458333
+   },
+   "end_frame_local": "projects\\P48_C_Continuity\\output\\frames\\s01_c12_video_end_vv_c3112772.png",
+   "end_frame_url": null,
+   "end_frame_sha16": "c826ccd2334306ce"
+  },
+  "s01_c13": {
+   "ff_job": "5067a610fc36",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 14.6,
+    "message": "s01_c13 已生成 1 个候选（批次 ff_7678e476），待选择"
+   },
+   "ff_chosen": {
+    "shot_id": "s01_c13",
+    "candidate_id": "ff_7678e476_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_IEFUEpMrPFrVWi4XAoPqtx33RYc3m7V3/output_21b087214baa4bd2a8c80a302b6a83e4.png"
+   },
+   "video_job": "bbdea8591afa",
+   "video_result": {
+    "status": "done",
+    "wall_s": 294.2,
+    "message": "s01_c13 视频末帧提取/托管未完全成功: 末帧托管失败: github_pages 上传成功但 Pages 未在 180.0s 内就绪: https://Q-1844.github.io/agnes-frame-host/objects/cc237ab2a6eeefe9.jpg（U"
+   },
+   "video_version": "vv_64b10644",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s01_c13.mp4",
+   "streams": {
+    "duration": 4.458333
+   },
+   "end_frame_local": "projects\\P48_C_Continuity\\output\\frames\\s01_c13_video_end_vv_64b10644.png",
+   "end_frame_url": null,
+   "end_frame_sha16": "39d2f22665bb2470"
+  },
+  "s01_c14": {
+   "ff_job": "9cdaa74baf4d",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 16.1,
+    "message": "s01_c14 已生成 1 个候选（批次 ff_41aa3e17），待选择"
+   },
+   "ff_chosen": {
+    "shot_id": "s01_c14",
+    "candidate_id": "ff_41aa3e17_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_oLi16WtcdaSBr6M8nyuewLoHNiFYmV7n/output_54287667fde14496827fd06b07cbbce8.png"
+   },
+   "video_job": "7bbb4bb9e481",
+   "video_result": {
+    "status": "done",
+    "wall_s": 254.5,
+    "message": "s01_c14 视频末帧提取/托管未完全成功: 末帧托管失败: github_pages 上传成功但 Pages 未在 180.0s 内就绪: https://Q-1844.github.io/agnes-frame-host/objects/f615f47a10f00c57.jpg（U"
+   },
+   "video_version": "vv_35d7f352",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s01_c14.mp4",
+   "streams": {
+    "duration": 4.458333
+   },
+   "end_frame_local": "projects\\P48_C_Continuity\\output\\frames\\s01_c14_video_end_vv_35d7f352.png",
+   "end_frame_url": null,
+   "end_frame_sha16": "a389e49112eb5e32"
+  },
+  "s01_c15": {
+   "ff_job": "53386cda9c6e",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 12.0,
+    "message": "s01_c15 已生成 1 个候选（批次 ff_bb0b99b7），待选择"
+   },
+   "ff_chosen": {
+    "shot_id": "s01_c15",
+    "candidate_id": "ff_bb0b99b7_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_4f9aYnFaNsuHMoYwTxhHLqm24ztilJT9/output_1d46a031be60498cbce8d49022fade22.png"
+   },
+   "video_job": "84c5fc9d5403",
+   "video_result": {
+    "status": "done",
+    "wall_s": 266.9,
+    "message": "s01_c15 视频末帧提取/托管未完全成功: 末帧托管失败: github_pages 上传成功但 Pages 未在 180.0s 内就绪: https://Q-1844.github.io/agnes-frame-host/objects/405352207da94780.jpg（U"
+   },
+   "video_version": "vv_37369e0f",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s01_c15.mp4",
+   "streams": {
+    "duration": 4.458333
+   },
+   "end_frame_local": "projects\\P48_C_Continuity\\output\\frames\\s01_c15_video_end_vv_37369e0f.png",
+   "end_frame_url": null,
+   "end_frame_sha16": "23217f1b9a020176"
+  },
+  "s01_c16": {
+   "ff_job": "24f73c619293",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 16.4,
+    "message": "s01_c16 已生成 1 个候选（批次 ff_8bdb9cc0），待选择"
+   },
+   "ff_chosen": {
+    "shot_id": "s01_c16",
+    "candidate_id": "ff_8bdb9cc0_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_xzYjYcRKIBvsrS3Oi3aWMt45jFR3dwQp/output_a4005b278d3b463687c4c613454334fc.png"
+   },
+   "video_job": "ad2c5c05153b",
+   "video_result": {
+    "status": "done",
+    "wall_s": 254.8,
+    "message": "s01_c16 视频末帧提取/托管未完全成功: 末帧托管失败: github_pages 上传成功但 Pages 未在 180.0s 内就绪: https://Q-1844.github.io/agnes-frame-host/objects/5316c4fcf0b318ed.jpg（U"
+   },
+   "video_version": "vv_55eee1d4",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s01_c16.mp4",
+   "streams": {
+    "duration": 4.458333
+   },
+   "end_frame_local": "projects\\P48_C_Continuity\\output\\frames\\s01_c16_video_end_vv_55eee1d4.png",
+   "end_frame_url": null,
+   "end_frame_sha16": "54f73e5fcadb660c"
+  },
+  "s01_c17": {
+   "ff_job": "d24570d66575",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 16.1,
+    "message": "s01_c17 已生成 1 个候选（批次 ff_961f00a9），待选择"
+   },
+   "ff_chosen": {
+    "shot_id": "s01_c17",
+    "candidate_id": "ff_961f00a9_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_sZVL52jZ9cm8kMemPngTZolz1TkxlpqM/output_5389f66c0a9b4d838b1a63e7ddff1ed3.png"
+   },
+   "video_job": "ba3ce01090d2",
+   "video_result": {
+    "status": "done",
+    "wall_s": 295.6,
+    "message": "s01_c17 视频末帧提取/托管未完全成功: 末帧托管失败: github_pages 上传成功但 Pages 未在 180.0s 内就绪: https://Q-1844.github.io/agnes-frame-host/objects/381d475c39e4e418.jpg（U"
+   },
+   "video_version": "vv_5bb03dfc",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s01_c17.mp4",
+   "streams": {
+    "duration": 4.458333
+   },
+   "end_frame_local": "projects\\P48_C_Continuity\\output\\frames\\s01_c17_video_end_vv_5bb03dfc.png",
+   "end_frame_url": null,
+   "end_frame_sha16": "15a2e3dc146d7477"
+  },
+  "s01_c18": {
+   "ff_job": "bd20857e40dd",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 12.7,
+    "message": "s01_c18 已生成 1 个候选（批次 ff_6ba3161c），待选择"
+   },
+   "ff_chosen": {
+    "shot_id": "s01_c18",
+    "candidate_id": "ff_6ba3161c_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_kEd23LRywTAzUK8L8nCR7hSzYuYz5l84/output_463d3f8c4aca4850be9790b0ed315886.png"
+   },
+   "video_job": "6877385b1416",
+   "video_result": {
+    "status": "done",
+    "wall_s": 289.3,
+    "message": "s01_c18 视频末帧提取/托管未完全成功: 末帧托管失败: github_pages 上传成功但 Pages 未在 180.0s 内就绪: https://Q-1844.github.io/agnes-frame-host/objects/fa2bb2a7f0a7556b.jpg（U"
+   },
+   "video_version": "vv_0eb42ff6",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s01_c18.mp4",
+   "streams": {
+    "duration": 4.458333
+   },
+   "end_frame_local": "projects\\P48_C_Continuity\\output\\frames\\s01_c18_video_end_vv_0eb42ff6.png",
+   "end_frame_url": null,
+   "end_frame_sha16": "eafd7ab63ebcde02"
+  }
+ },
+ "targets": {
+  "s02_c01": {
+   "cond": "A",
+   "rep": 1,
+   "method": "M1_independent",
+   "src": "s01_c13",
+   "ff_job": "8b7761ae4e14",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 13.2,
+    "message": "s02_c01 已生成 1 个候选（批次 ff_0e2768fa），待选择"
+   },
+   "ff_injection": {
+    "shot_id": "s02_c01",
+    "candidate_id": "ff_0e2768fa_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_SmYifPwqNZsTIFDJRFzkNGIEUHj8gsSC/output_b627dd7f395644eabeb20b6fed537774.png"
+   },
+   "ff_ready": true
+  },
+  "s02_c02": {
+   "cond": "A",
+   "rep": 2,
+   "method": "M1_independent",
+   "src": "s01_c14",
+   "ff_job": "5d513bbaf4a4",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 13.2,
+    "message": "s02_c02 已生成 1 个候选（批次 ff_c7bd9eb9），待选择"
+   },
+   "ff_injection": {
+    "shot_id": "s02_c02",
+    "candidate_id": "ff_c7bd9eb9_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_PIudIWW9U0HaQ1FebJejuZ36sMa99dEZ/output_e7c97d0f5beb4fe791e80ffbe4f4072c.png"
+   },
+   "ff_ready": true
+  },
+  "s02_c03": {
+   "cond": "A",
+   "rep": 3,
+   "method": "M1_independent",
+   "src": "s01_c15",
+   "ff_job": "64c93a34e894",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 13.5,
+    "message": "s02_c03 已生成 1 个候选（批次 ff_1ecae6da），待选择"
+   },
+   "ff_injection": {
+    "shot_id": "s02_c03",
+    "candidate_id": "ff_1ecae6da_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_8vAJltnRUPIP8tiFFo3qMNFN6TsS0MHJ/output_3ee64d0550914ed29008bc4d6ce83a02.png"
+   },
+   "ff_ready": true
+  },
+  "s02_c04": {
+   "cond": "B",
+   "rep": 1,
+   "method": "M1_independent",
+   "src": "s01_c04",
+   "ff_job": "b77946a3c64f",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 12.8,
+    "message": "s02_c04 已生成 1 个候选（批次 ff_74b74a7a），待选择"
+   },
+   "ff_injection": {
+    "shot_id": "s02_c04",
+    "candidate_id": "ff_74b74a7a_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_C91m6QzsUPzUVlT5fxeSI8OFIbkJTM0n/output_f33624ee6b9046e6b58e8b0a1aafcce7.png"
+   },
+   "ff_ready": true
+  },
+  "s02_c05": {
+   "cond": "B",
+   "rep": 2,
+   "method": "M1_independent",
+   "src": "s01_c05",
+   "ff_job": "3bbc956c7059",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 16.5,
+    "message": "s02_c05 已生成 1 个候选（批次 ff_786d1515），待选择"
+   },
+   "ff_injection": {
+    "shot_id": "s02_c05",
+    "candidate_id": "ff_786d1515_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_wBxRh0GU8ehT3PTTN1Rb7M1YPQeOqFib/output_84ac96e0bb4a4dffa90ebcd7bdfbc635.png"
+   },
+   "ff_ready": true
+  },
+  "s02_c06": {
+   "cond": "B",
+   "rep": 3,
+   "method": "M1_independent",
+   "src": "s01_c06",
+   "ff_job": "c10461ddbcd3",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 13.4,
+    "message": "s02_c06 已生成 1 个候选（批次 ff_3d0f9ef7），待选择"
+   },
+   "ff_injection": {
+    "shot_id": "s02_c06",
+    "candidate_id": "ff_3d0f9ef7_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_q8ydfnlqilEcfrE6H52c2ChNTBHrHxTM/output_4d6ce14221b240729f584e90f9af731e.png"
+   },
+   "ff_ready": true
+  },
+  "s02_c07": {
+   "cond": "C",
+   "rep": 1,
+   "method": "M1_independent",
+   "src": "s01_c16",
+   "ff_job": "98a6059c7074",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 16.3,
+    "message": "s02_c07 已生成 1 个候选（批次 ff_acf62c62），待选择"
+   },
+   "ff_injection": {
+    "shot_id": "s02_c07",
+    "candidate_id": "ff_acf62c62_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_td1obbaB7PRtVQ9IxlpsRnSVjP9fqp8A/output_777324c885534520b4577cd33f3dde59.png"
+   },
+   "ff_ready": true
+  },
+  "s02_c08": {
+   "cond": "C",
+   "rep": 2,
+   "method": "M1_independent",
+   "src": "s01_c17",
+   "ff_job": "8447830218b9",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 13.4,
+    "message": "s02_c08 已生成 1 个候选（批次 ff_ea36f85a），待选择"
+   },
+   "ff_injection": {
+    "shot_id": "s02_c08",
+    "candidate_id": "ff_ea36f85a_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_cZSxHfRbV4PDRISbn3dd4XbXfHpdMbrh/output_5fd5af9ccb0449448b0711a72e6010fc.png"
+   },
+   "ff_ready": true
+  },
+  "s02_c09": {
+   "cond": "C",
+   "rep": 3,
+   "method": "M1_independent",
+   "src": "s01_c18",
+   "ff_job": "7c9ba363560b",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 13.6,
+    "message": "s02_c09 已生成 1 个候选（批次 ff_6676f973），待选择"
+   },
+   "ff_injection": {
+    "shot_id": "s02_c09",
+    "candidate_id": "ff_6676f973_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_E1LAyIiALpeJZNz8PospK9cJmUrBUsiE/output_e9a58182be6f4afb818cc16f8ff581c5.png"
+   },
+   "ff_ready": true
+  },
+  "s02_c10": {
+   "cond": "D",
+   "rep": 1,
+   "method": "M1_independent",
+   "src": "s01_c10",
+   "ff_job": "3893f94ee789",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 12.9,
+    "message": "s02_c10 已生成 1 个候选（批次 ff_9eef3b80），待选择"
+   },
+   "ff_injection": {
+    "shot_id": "s02_c10",
+    "candidate_id": "ff_9eef3b80_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_nAXPpLXjOpLCWWS6h9XFjEvZBZgFxlK5/output_d0e7c33b0da6437d8fdfa7cc99d3ac62.png"
+   },
+   "ff_ready": true
+  },
+  "s02_c11": {
+   "cond": "D",
+   "rep": 2,
+   "method": "M1_independent",
+   "src": "s01_c11",
+   "ff_job": "30a8e65b5b80",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 13.2,
+    "message": "s02_c11 已生成 1 个候选（批次 ff_b563af9b），待选择"
+   },
+   "ff_injection": {
+    "shot_id": "s02_c11",
+    "candidate_id": "ff_b563af9b_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_iUBROTLwMPeBJCGN0gj7nMfApKm16g89/output_67705ea6e3634b7bac850cfac81c26cd.png"
+   },
+   "ff_ready": true
+  },
+  "s02_c12": {
+   "cond": "D",
+   "rep": 3,
+   "method": "M1_independent",
+   "src": "s01_c12",
+   "ff_job": "c0c26ea9b0a3",
+   "ff_result": {
+    "status": "done",
+    "wall_s": 16.4,
+    "message": "s02_c12 已生成 1 个候选（批次 ff_7af7d029），待选择"
+   },
+   "ff_injection": {
+    "shot_id": "s02_c12",
+    "candidate_id": "ff_7af7d029_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_INCyk20ARbon0i9omHnZHc7gGT2Tbm0y/output_5b7fe38409fd447793af77e87da0f4c5.png"
+   },
+   "ff_ready": true
+  },
+  "s02_c13": {
+   "cond": "A",
+   "rep": 1,
+   "method": "M2_direct_tail",
+   "src": "s01_c13",
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c13_1791239376",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/b777bee38bc21e15.jpg",
+    "local": "projects\\P48_C_Continuity\\output\\frames\\s01_c13_video_end_vv_64b10644.png",
+    "sha16": "39d2f22665bb2470",
+    "note": "M2 直接尾帧：源 s01_c13 实际末帧原样作首帧输入"
+   },
+   "ff_ready": true
+  },
+  "s02_c14": {
+   "cond": "A",
+   "rep": 2,
+   "method": "M2_direct_tail",
+   "src": "s01_c14",
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c14_1791239482",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/b88979cedee3bb65.jpg",
+    "local": "projects\\P48_C_Continuity\\output\\frames\\s01_c14_video_end_vv_35d7f352.png",
+    "sha16": "a389e49112eb5e32",
+    "note": "M2 直接尾帧：源 s01_c14 实际末帧原样作首帧输入"
+   },
+   "ff_ready": true
+  },
+  "s02_c15": {
+   "cond": "A",
+   "rep": 3,
+   "method": "M2_direct_tail",
+   "src": "s01_c15",
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c15_1791239566",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/3f495245f0e5f8ee.jpg",
+    "local": "projects\\P48_C_Continuity\\output\\frames\\s01_c15_video_end_vv_37369e0f.png",
+    "sha16": "23217f1b9a020176",
+    "note": "M2 直接尾帧：源 s01_c15 实际末帧原样作首帧输入"
+   },
+   "ff_ready": true
+  },
+  "s02_c16": {
+   "cond": "B",
+   "rep": 1,
+   "method": "M2_direct_tail",
+   "src": "s01_c04",
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c16_1791239657",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/3d237e578d56c625.jpg",
+    "local": "projects\\P48_C_Continuity\\output\\frames\\s01_c04_video_end_vv_fa2b1b7c.png",
+    "sha16": "7c9a8148ebc72c01",
+    "note": "M2 直接尾帧：源 s01_c04 实际末帧原样作首帧输入"
+   },
+   "ff_ready": true
+  },
+  "s02_c17": {
+   "cond": "B",
+   "rep": 2,
+   "method": "M2_direct_tail",
+   "src": "s01_c05",
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c17_1791239658",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/5e675e316f700f09.jpg",
+    "local": "projects\\P48_C_Continuity\\output\\frames\\s01_c05_video_end_vv_036917d5.jpg",
+    "sha16": "5e675e316f700f09",
+    "note": "M2 直接尾帧：源 s01_c05 实际末帧原样作首帧输入"
+   },
+   "ff_ready": true
+  },
+  "s02_c18": {
+   "cond": "B",
+   "rep": 3,
+   "method": "M2_direct_tail",
+   "src": "s01_c06",
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c18_1791239659",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/7c0bef69c3d04e3f.jpg",
+    "local": "projects\\P48_C_Continuity\\output\\frames\\s01_c06_video_end_vv_9858c7a3.jpg",
+    "sha16": "7c0bef69c3d04e3f",
+    "note": "M2 直接尾帧：源 s01_c06 实际末帧原样作首帧输入"
+   },
+   "ff_ready": true
+  },
+  "s02_c19": {
+   "cond": "C",
+   "rep": 1,
+   "method": "M2_direct_tail",
+   "src": "s01_c16",
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c19_1791239767",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/50c175ecb05d09db.jpg",
+    "local": "projects\\P48_C_Continuity\\output\\frames\\s01_c16_video_end_vv_55eee1d4.png",
+    "sha16": "54f73e5fcadb660c",
+    "note": "M2 直接尾帧：源 s01_c16 实际末帧原样作首帧输入"
+   },
+   "ff_ready": true
+  },
+  "s02_c20": {
+   "cond": "C",
+   "rep": 2,
+   "method": "M2_direct_tail",
+   "src": "s01_c17",
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c20_1791239847",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/39da409ba1a033cf.jpg",
+    "local": "projects\\P48_C_Continuity\\output\\frames\\s01_c17_video_end_vv_5bb03dfc.png",
+    "sha16": "15a2e3dc146d7477",
+    "note": "M2 直接尾帧：源 s01_c17 实际末帧原样作首帧输入"
+   },
+   "ff_ready": true
+  },
+  "s02_c21": {
+   "cond": "C",
+   "rep": 3,
+   "method": "M2_direct_tail",
+   "src": "s01_c18",
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c21_1791239922",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/a6feaaa742247285.jpg",
+    "local": "projects\\P48_C_Continuity\\output\\frames\\s01_c18_video_end_vv_0eb42ff6.png",
+    "sha16": "eafd7ab63ebcde02",
+    "note": "M2 直接尾帧：源 s01_c18 实际末帧原样作首帧输入"
+   },
+   "ff_ready": true
+  },
+  "s02_c22": {
+   "cond": "D",
+   "rep": 1,
+   "method": "M2_direct_tail",
+   "src": "s01_c10",
+   "decision_check": {
+    "raw": "```json\n{\n  \"same_identity\": false,\n  \"reason\": \"图1为扎双马尾、身穿黄色雨衣的女孩，图2为短发穿蓝外套的男性，性别与外貌均不一致。\"\n}\n```",
+    "same_identity": false,
+    "reject": true
+   },
+   "rule_rejected": true,
+   "ff_ready": false
+  },
+  "s02_c23": {
+   "cond": "D",
+   "rep": 2,
+   "method": "M2_direct_tail",
+   "src": "s01_c11",
+   "decision_check": {
+    "raw": "```json\n{\"same_identity\": false, \"reason\": \"图1为扎双马尾的女孩形象，图2为成年男性形象，性别、发型和服装均完全不同。\"}\n```",
+    "same_identity": false,
+    "reject": true
+   },
+   "rule_rejected": true,
+   "ff_ready": false
+  },
+  "s02_c24": {
+   "cond": "D",
+   "rep": 3,
+   "method": "M2_direct_tail",
+   "src": "s01_c12",
+   "decision_check": {
+    "raw": "{\"same_identity\": false, \"reason\": \"图1是穿黄色雨衣扎双马尾的女孩，图2是穿蓝色外套的成年男性，二者在性别、发型、服装和体型上均完全不同。\"}",
+    "same_identity": false,
+    "reject": true
+   },
+   "rule_rejected": true,
+   "ff_ready": false
+  },
+  "s02_c25": {
+   "cond": "A",
+   "rep": 1,
+   "method": "M3_rebuilt_first",
+   "src": "s01_c13",
+   "rebuild_receipt": {
+    "prompt": "Rebuild this exact frame as a new image: keep the same composition, camera angle and pose as the reference photo, but render the character strictly as: girl with twin braids, yellow raincoat (approved",
+    "refs_count": 2,
+    "url": "",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c25_rebuilt_first.png",
+    "sha16": "c271f0390a933ae0"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c25_1791240043",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/e1a8788e7a3ca3f4.jpg",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c25_rebuilt_first.png",
+    "sha16": "c271f0390a933ae0",
+    "note": "M3 重建首帧：尾帧+批准 Look 图生图重建（非原末帧）"
+   },
+   "ff_ready": true
+  },
+  "s02_c26": {
+   "cond": "A",
+   "rep": 2,
+   "method": "M3_rebuilt_first",
+   "src": "s01_c14",
+   "rebuild_receipt": {
+    "prompt": "Rebuild this exact frame as a new image: keep the same composition, camera angle and pose as the reference photo, but render the character strictly as: girl with twin braids, yellow raincoat (approved",
+    "refs_count": 2,
+    "url": "",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c26_rebuilt_first.png",
+    "sha16": "1b0b95670939ef40"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c26_1791240118",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/c09714a2bc38af3e.jpg",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c26_rebuilt_first.png",
+    "sha16": "1b0b95670939ef40",
+    "note": "M3 重建首帧：尾帧+批准 Look 图生图重建（非原末帧）"
+   },
+   "ff_ready": true
+  },
+  "s02_c27": {
+   "cond": "A",
+   "rep": 3,
+   "method": "M3_rebuilt_first",
+   "src": "s01_c15",
+   "rebuild_receipt": {
+    "prompt": "Rebuild this exact frame as a new image: keep the same composition, camera angle and pose as the reference photo, but render the character strictly as: girl with twin braids, yellow raincoat (approved",
+    "refs_count": 2,
+    "url": "",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c27_rebuilt_first.png",
+    "sha16": "dfd905114dbc7e84"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c27_1791240202",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/c8023c8f26ec0fe7.jpg",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c27_rebuilt_first.png",
+    "sha16": "dfd905114dbc7e84",
+    "note": "M3 重建首帧：尾帧+批准 Look 图生图重建（非原末帧）"
+   },
+   "ff_ready": true
+  },
+  "s02_c28": {
+   "cond": "B",
+   "rep": 1,
+   "method": "M3_rebuilt_first",
+   "src": "s01_c04",
+   "rebuild_receipt": {
+    "prompt": "Rebuild this exact frame as a new image: keep the same composition, camera angle and pose as the reference photo, but render the character strictly as: girl with twin braids, yellow raincoat (approved",
+    "refs_count": 2,
+    "url": "",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c28_rebuilt_first.png",
+    "sha16": "dc9fa7803204e8c8"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c28_1791240270",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/54bed9bfb685da69.jpg",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c28_rebuilt_first.png",
+    "sha16": "dc9fa7803204e8c8",
+    "note": "M3 重建首帧：尾帧+批准 Look 图生图重建（非原末帧）"
+   },
+   "ff_ready": true
+  },
+  "s02_c29": {
+   "cond": "B",
+   "rep": 2,
+   "method": "M3_rebuilt_first",
+   "src": "s01_c05",
+   "rebuild_receipt": {
+    "prompt": "Rebuild this exact frame as a new image: keep the same composition, camera angle and pose as the reference photo, but render the character strictly as: girl with twin braids, yellow raincoat (approved",
+    "refs_count": 2,
+    "url": "",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c29_rebuilt_first.png",
+    "sha16": "7c860234f3e2c5db"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c29_1791240343",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/53b96681081441f1.jpg",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c29_rebuilt_first.png",
+    "sha16": "7c860234f3e2c5db",
+    "note": "M3 重建首帧：尾帧+批准 Look 图生图重建（非原末帧）"
+   },
+   "ff_ready": true
+  },
+  "s02_c30": {
+   "cond": "B",
+   "rep": 3,
+   "method": "M3_rebuilt_first",
+   "src": "s01_c06",
+   "rebuild_receipt": {
+    "prompt": "Rebuild this exact frame as a new image: keep the same composition, camera angle and pose as the reference photo, but render the character strictly as: girl with twin braids, yellow raincoat (approved",
+    "refs_count": 2,
+    "url": "",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c30_rebuilt_first.png",
+    "sha16": "2d10a7b6e1d14e88"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c30_1791240442",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/9e9539bae8bfb0dd.jpg",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c30_rebuilt_first.png",
+    "sha16": "2d10a7b6e1d14e88",
+    "note": "M3 重建首帧：尾帧+批准 Look 图生图重建（非原末帧）"
+   },
+   "ff_ready": true
+  },
+  "s02_c31": {
+   "cond": "C",
+   "rep": 1,
+   "method": "M3_rebuilt_first",
+   "src": "s01_c16",
+   "rebuild_receipt": {
+    "prompt": "Rebuild this exact frame as a new image: keep the same composition, camera angle and pose as the reference photo, but render the character strictly as: girl with twin braids, yellow raincoat (approved",
+    "refs_count": 2,
+    "url": "",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c31_rebuilt_first.png",
+    "sha16": "02cfcf56dddb0d3d"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c31_1791240522",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/0092ecd0c012f409.jpg",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c31_rebuilt_first.png",
+    "sha16": "02cfcf56dddb0d3d",
+    "note": "M3 重建首帧：尾帧+批准 Look 图生图重建（非原末帧）"
+   },
+   "ff_ready": true
+  },
+  "s02_c32": {
+   "cond": "C",
+   "rep": 2,
+   "method": "M3_rebuilt_first",
+   "src": "s01_c17",
+   "rebuild_receipt": {
+    "prompt": "Rebuild this exact frame as a new image: keep the same composition, camera angle and pose as the reference photo, but render the character strictly as: girl with twin braids, yellow raincoat (approved",
+    "refs_count": 2,
+    "url": "",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c32_rebuilt_first.png",
+    "sha16": "c65ed1daa843971e"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c32_1791240592",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/183641ca376c1ac4.jpg",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c32_rebuilt_first.png",
+    "sha16": "c65ed1daa843971e",
+    "note": "M3 重建首帧：尾帧+批准 Look 图生图重建（非原末帧）"
+   },
+   "ff_ready": true
+  },
+  "s02_c33": {
+   "cond": "C",
+   "rep": 3,
+   "method": "M3_rebuilt_first",
+   "src": "s01_c18",
+   "rebuild_receipt": {
+    "prompt": "Rebuild this exact frame as a new image: keep the same composition, camera angle and pose as the reference photo, but render the character strictly as: girl with twin braids, yellow raincoat (approved",
+    "refs_count": 2,
+    "url": "",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c33_rebuilt_first.png",
+    "sha16": "3720be1dfdde4bc3"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c33_1791240661",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/fa67468d392295c4.jpg",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c33_rebuilt_first.png",
+    "sha16": "3720be1dfdde4bc3",
+    "note": "M3 重建首帧：尾帧+批准 Look 图生图重建（非原末帧）"
+   },
+   "ff_ready": true
+  },
+  "s02_c34": {
+   "cond": "D",
+   "rep": 1,
+   "method": "M3_rebuilt_first",
+   "src": "s01_c10",
+   "rebuild_receipt": {
+    "prompt": "Rebuild this exact frame as a new image: keep the same composition, camera angle and pose as the reference photo, but render the character strictly as: girl with twin braids, yellow raincoat (approved",
+    "refs_count": 2,
+    "url": "",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c34_rebuilt_first.png",
+    "sha16": "ac7cb7679e510d42"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c34_1791240763",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/3059558011a3ea8e.jpg",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c34_rebuilt_first.png",
+    "sha16": "ac7cb7679e510d42",
+    "note": "M3 重建首帧：尾帧+批准 Look 图生图重建（非原末帧）"
+   },
+   "ff_ready": true
+  },
+  "s02_c35": {
+   "cond": "D",
+   "rep": 2,
+   "method": "M3_rebuilt_first",
+   "src": "s01_c11",
+   "rebuild_receipt": {
+    "prompt": "Rebuild this exact frame as a new image: keep the same composition, camera angle and pose as the reference photo, but render the character strictly as: girl with twin braids, yellow raincoat (approved",
+    "refs_count": 2,
+    "url": "",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c35_rebuilt_first.png",
+    "sha16": "bc41ef29910e78b8"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c35_1791240842",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/ea08a35cf33b6110.jpg",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c35_rebuilt_first.png",
+    "sha16": "bc41ef29910e78b8",
+    "note": "M3 重建首帧：尾帧+批准 Look 图生图重建（非原末帧）"
+   },
+   "ff_ready": true
+  },
+  "s02_c36": {
+   "cond": "D",
+   "rep": 3,
+   "method": "M3_rebuilt_first",
+   "src": "s01_c12",
+   "rebuild_receipt": {
+    "prompt": "Rebuild this exact frame as a new image: keep the same composition, camera angle and pose as the reference photo, but render the character strictly as: girl with twin braids, yellow raincoat (approved",
+    "refs_count": 2,
+    "url": "",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c36_rebuilt_first.png",
+    "sha16": "aede481385aa2a0a"
+   },
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c36_1791240925",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/2d88e057af482693.jpg",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c36_rebuilt_first.png",
+    "sha16": "aede481385aa2a0a",
+    "note": "M3 重建首帧：尾帧+批准 Look 图生图重建（非原末帧）"
+   },
+   "ff_ready": true
+  },
+  "s02_c37": {
+   "cond": "A",
+   "rep": 1,
+   "method": "M4_rebuilt_plus_end",
+   "src": "s01_c13",
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c37_1791240925",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/e1a8788e7a3ca3f4.jpg",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c25_rebuilt_first.png",
+    "sha16": "c271f0390a933ae0",
+    "note": "M4 与 M3 共用同一重建首帧文件与同一次上传 URL（hash=c271f0390a933ae0）"
+   },
+   "lf_job": "c5cc771c1dfd"
+  }
+ },
+ "fixture": {
+  "char_run": {
+   "runId": "run_2df7ff5a87c3",
+   "workflowId": "wf_c_char",
+   "snapshot": {
+    "snapshotVersion": "workflow_snapshot_v1",
+    "definitionRevision": 1,
+    "definitionHash": "sha256:a00bd27b96435ae223c08747fc90bbc2d90b3710e9981ba5dfaf6abbc4ebca7a",
+    "definition": {
+     "schemaVersion": "workflow_def_v1",
+     "workflowId": "wf_c_char",
+     "name": "W02 角色资源",
+     "description": "角色资源生产（角色/Look 图像真实生成）→ 审核；按前置条件可重复角色节点。",
+     "notes": "必需输入：角色、Look、道具目标或已有批准资源。道具无参考图时由 Agent 如实列为缺项。",
+     "status": "draft",
+     "nodes": [
+      {
+       "id": "n_start",
+       "type": "boundary_start",
+       "refId": null,
+       "refVersion": null,
+       "label": null,
+       "config": {},
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      },
+      {
+       "id": "n_cd",
+       "type": "agent",
+       "refId": "character_designer",
+       "refVersion": null,
+       "label": null,
+       "config": {
+        "objective": "生产 1 名测试角色与 1 套 Look：名字「小满」，女孩，双马尾辫，明黄色雨衣，背带裤，圆脸雀斑——外观特征必须鲜明可辨。步骤：character.create → character.generate_views → resource.look.prepare 创建 Look「黄雨衣常服」并生成参考图。",
+        "completion": {
+         "strategy": "require_new",
+         "outputs": [
+          {
+           "kind": "character",
+           "minCount": 1
+          },
+          {
+           "kind": "look",
+           "withImage": true,
+           "minCount": 1
+          }
+         ]
+        }
+       },
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      },
+      {
+       "id": "n_rv1",
+       "type": "human_review",
+       "refId": null,
+       "refVersion": null,
+       "label": "角色资源审定",
+       "config": {
+        "instructions": "核对角色身份、Look 图与版本。",
+        "reviewer": "制作人",
+        "selection": {
+         "kind": "look_reference",
+         "entityId": "<运行期在审核卡片选择候选>"
+        }
+       },
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      },
+      {
+       "id": "n_end",
+       "type": "boundary_end",
+       "refId": null,
+       "refVersion": null,
+       "label": null,
+       "config": {},
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      }
+     ],
+     "edges": [
+      {
+       "id": "e_n_start_n_cd",
+       "type": "execution",
+       "source": "n_start",
+       "target": "n_cd",
+       "sourcePort": "out",
+       "targetPort": "in"
+      },
+      {
+       "id": "e_n_cd_n_rv1",
+       "type": "execution",
+       "source": "n_cd",
+       "target": "n_rv1",
+       "sourcePort": "out",
+       "targetPort": "in"
+      },
+      {
+       "id": "e_n_rv1_n_end",
+       "type": "execution",
+       "source": "n_rv1",
+       "target": "n_end",
+       "sourcePort": "out",
+       "targetPort": "in"
+      }
+     ],
+     "template": {
+      "templateId": "W02",
+      "templateVersion": "p48_templates_v1"
+     },
+     "projectId": "P48_C_Continuity",
+     "revision": 1,
+     "updatedAt": "2026-10-06T02:13:03.020Z",
+     "createdAt": "2026-10-06T02:13:03.020Z",
+     "contentHash": "sha256:a00bd27b96435ae223c08747fc90bbc2d90b3710e9981ba5dfaf6abbc4ebca7a"
+    },
+    "agentBaseline": {
+     "producer": {
+      "registryDigest": "sha256:61913bd272ec7820",
+      "enabled": true,
+      "modelProfile": {
+       "id": "producer_profile",
+       "name": "Producer 默认",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": null,
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     },
+     "script_writer": {
+      "registryDigest": "sha256:4e99956f40cf1545",
+      "enabled": true,
+      "modelProfile": {
+       "id": "text_default",
+       "name": "Agnes（默认）",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": null,
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     },
+     "character_designer": {
+      "registryDigest": "sha256:fb18cdd6034ee0fb",
+      "enabled": true,
+      "modelProfile": {
+       "id": "character_profile",
+       "name": "角色设计默认",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": "agnes-image-2.1-flash",
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     },
+     "scene_designer": {
+      "registryDigest": "sha256:42673f11e915c3d3",
+      "enabled": true,
+      "modelProfile": {
+       "id": "scene_profile",
+       "name": "场景设计默认",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": "agnes-image-2.1-flash",
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     },
+     "director": {
+      "registryDigest": "sha256:9c6e02b744f3c3e5",
+      "enabled": true,
+      "modelProfile": {
+       "id": "text_default",
+       "name": "Agnes（默认）",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": null,
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     },
+     "assembly": {
+      "registryDigest": "sha256:3b46fc0fd06b4970",
+      "enabled": true,
+      "modelProfile": {
+       "id": "text_default",
+       "name": "Agnes（默认）",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": null,
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     }
+    },
+    "skillVersions": {},
+    "textModel": "agnes-3.0-flash",
+    "thinking": true,
+    "toolPolicy": "core_tools_only",
+    "canonicalBaseline": {
+     "story_text": "sha256:12ae32cb1ec02d01",
+     "characters": "sha256:4f53cda18c2baa0c",
+     "scenes": "sha256:4f53cda18c2baa0c"
+    }
+   }
+  },
+  "look": {
+   "look_id": "look_3921cc1e24cb",
+   "asset_id": "ref_cb905855971e"
+  },
+  "sources": {
+   "s01_c01": {
+    "cond": "A",
+    "rep": 1
+   },
+   "s01_c02": {
+    "cond": "A",
+    "rep": 2
+   },
+   "s01_c03": {
+    "cond": "A",
+    "rep": 3
+   },
+   "s01_c04": {
+    "cond": "B",
+    "rep": 1
+   },
+   "s01_c05": {
+    "cond": "B",
+    "rep": 2
+   },
+   "s01_c06": {
+    "cond": "B",
+    "rep": 3
+   },
+   "s01_c07": {
+    "cond": "C",
+    "rep": 1
+   },
+   "s01_c08": {
+    "cond": "C",
+    "rep": 2
+   },
+   "s01_c09": {
+    "cond": "C",
+    "rep": 3
+   },
+   "s01_c10": {
+    "cond": "D",
+    "rep": 1
+   },
+   "s01_c11": {
+    "cond": "D",
+    "rep": 2
+   },
+   "s01_c12": {
+    "cond": "D",
+    "rep": 3
+   },
+   "s01_c13": {
+    "cond": "A",
+    "rep": 1
+   },
+   "s01_c14": {
+    "cond": "A",
+    "rep": 2
+   },
+   "s01_c15": {
+    "cond": "A",
+    "rep": 3
+   },
+   "s01_c16": {
+    "cond": "C",
+    "rep": 1
+   },
+   "s01_c17": {
+    "cond": "C",
+    "rep": 2
+   },
+   "s01_c18": {
+    "cond": "C",
+    "rep": 3
+   }
+  },
+  "superseded_sources": [
+   "s01_c01",
+   "s01_c02",
+   "s01_c03",
+   "s01_c07",
+   "s01_c08",
+   "s01_c09"
+  ],
+  "superseded_reason": "v1 条件A/C 源（男孩/厨师）与批准 Look 身份矛盾（M3 重建会换身份）——夹具缺陷修正，换为女孩版本"
+ },
+ "targets_reset": {
+  "removed_shots": [
+   "s02_c01",
+   "s02_c02",
+   "s02_c03",
+   "s02_c04",
+   "s02_c05",
+   "s02_c06",
+   "s02_c07",
+   "s02_c08",
+   "s02_c09",
+   "s02_c10",
+   "s02_c11",
+   "s02_c12",
+   "s02_c13",
+   "s02_c14",
+   "s02_c15",
+   "s02_c16",
+   "s02_c17",
+   "s02_c18",
+   "s02_c19",
+   "s02_c20",
+   "s02_c21",
+   "s02_c22",
+   "s02_c23",
+   "s02_c24",
+   "s02_c25",
+   "s02_c26",
+   "s02_c27",
+   "s02_c28",
+   "s02_c29",
+   "s02_c30",
+   "s02_c31",
+   "s02_c32",
+   "s02_c33",
+   "s02_c34",
+   "s02_c35",
+   "s02_c36",
+   "s02_c37",
+   "s02_c38",
+   "s02_c39",
+   "s02_c40",
+   "s02_c41",
+   "s02_c42",
+   "s02_c43",
+   "s02_c44",
+   "s02_c45",
+   "s02_c46",
+   "s02_c47",
+   "s02_c48"
+  ],
+  "cleared_evidence": [
+   "s02_c01",
+   "s02_c02",
+   "s02_c03",
+   "s02_c04",
+   "s02_c05",
+   "s02_c06",
+   "s02_c07",
+   "s02_c08",
+   "s02_c09",
+   "s02_c10",
+   "s02_c11",
+   "s02_c12",
+   "s02_c13",
+   "s02_c14",
+   "s02_c15",
+   "s02_c16",
+   "s02_c17",
+   "s02_c18",
+   "s02_c19",
+   "s02_c20",
+   "s02_c21",
+   "s02_c22",
+   "s02_c23",
+   "s02_c24",
+   "s02_c25",
+   "s02_c26",
+   "s02_c27",
+   "s02_c28",
+   "s02_c29",
+   "s02_c30",
+   "s02_c31",
+   "s02_c32",
+   "s02_c33",
+   "s02_c34",
+   "s02_c35",
+   "s02_c36",
+   "s02_c37",
+   "s02_c38",
+   "s02_c39",
+   "s02_c40",
+   "s02_c41",
+   "s02_c42",
+   "s02_c43",
+   "s02_c44",
+   "s02_c45",
+   "s02_c46",
+   "s02_c47",
+   "s02_c48"
+  ],
+  "reason": "v1 条件A/C 源（男孩/厨师）与批准 Look 身份矛盾（M3 重建会换身份）——夹具缺陷修正，换为女孩版本"
+ }
+}
