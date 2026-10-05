@@ -1,0 +1,9 @@
+{
+ "HEAD": "d98578312bda7a818849bb2f6ad5809bb00d9bae",
+ "skills": {
+  "full-story-relay-calibration": "sha256:4c529461af9e20ada9b8b80b",
+  "keyframes-bridge-repair": "sha256:eb23f971f4cadc1bd4968b23"
+ },
+ "text_model": "text: \"agnes-3.0-flash\"   # 2026-10-02 用户指令：全部 Agent 文本模型切 agnes-3.0-flash（较 2.5 更强）。",
+ "templates": "p47_templates_v1"
+}
