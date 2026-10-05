@@ -46,7 +46,8 @@ def api(method, path, **kw):
 
 
 def backend_pid():
-    out = subprocess.run(["netstat", "-ano"], capture_output=True, text=True).stdout
+    r = subprocess.run(["netstat", "-ano"], capture_output=True)
+    out = (r.stdout or b"").decode("utf-8", errors="replace")
     for line in out.splitlines():
         if ":8000" in line and "LISTENING" in line:
             return int(line.split()[-1])
@@ -64,7 +65,8 @@ def kill_backend():
 
 def start_backend():
     subprocess.run([PY, str(ROOT / "_launch_backend_detached.py")],
-                   capture_output=True, cwd=str(ROOT))
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                   cwd=str(ROOT))
     for _ in range(40):
         try:
             r = httpx.get(BASE + "/api/projects", timeout=3)

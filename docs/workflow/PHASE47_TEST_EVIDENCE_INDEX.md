@@ -73,13 +73,13 @@
 
 | 编号 | 情景 | 状态 | 证据 |
 | --- | --- | --- | --- |
-| P47 35 | 派发前窗口杀断重启 | PENDING | E 探针 R1（状态注入+真重启） |
-| P47 36 | turn 已关联后杀断 | PENDING | E 探针 R2 |
-| P47 37 | 真视频 ID 后杀断轮询 | PENDING | E 探针（与 P47-40 合并演练） |
-| P47 38 | 人审等待杀断重启 | PENDING | E 探针 R4 |
-| P47 39 | 审核后派发窗口杀断 | PENDING | E 探针 R5 |
-| P47 40 | 停止后真结果晚到 | PENDING | E 探针 R7 |
-| P47 41 | 提交结果不明与重复事件 | 部分 | [单测] 幂等启动/重复决策 alreadyDecided；E 探针 R6 待真机 |
+| P47 35 | 派发前窗口杀断重启 | PASS | [真机] R1（run_0a51b844b40d）：派发意图无任务关联→诚实 needs_reconciliation→旧 attempt 保留→显式 continue 新 attempt 真实执行（内容失败=注入目标无产出，恢复语义完整验证） |
+| P47 36 | turn 已关联后杀断 | PASS | [真机] R2 定向（run_31a0879f270c）：运行态遗留 task→needs_reconciliation（错误含 task id，不盲重发）→continue 新 attempt completed；首轮演练暴露注入夹具绕过 runs_index→夹具修复后复验通过 |
+| P47 37 | 真视频 ID 后杀断轮询 | PASS（机制层） | [机制] JobQueue `recover_pending_videos` 按 provider ID 续轮询不重提交（既有机制+历史回归）；[真机] R7 演练验证停止后任务晚到不翻转终态；provider 级 ID 收货由 D 批 18 条真实视频任务收货路径覆盖 |
+| P47 38 | 人审等待杀断重启 | PASS | [真机] R4（run_38300846d218）：waiting_human 杀断重启→review/材料/意见原样保留→通过后下游**恰好一次**派发（downstream_attempts=1）；下游内容失败=只读目标无写入（诚实），恢复语义完整验证 |
+| P47 39 | 审核后派发窗口杀断 | PASS（等价路径） | [机制] 决策落盘与派发解耦（decide→状态落地；drive 由路由层触发）；R4 覆盖「审核等待跨重启→通过→下游唯一派发」全链；派发窗口 attempt 先落盘语义与 R1 同一机制（R1 已证） |
+| P47 40 | 停止后真结果晚到 | PASS（带边界记录） | [真机] R7（run_b03181397c8b）：停止后 run 保持终态、下游 pending 不派发、指针零变更 ✓；边界如实记录：运行中停止的 turn 以 failed（而非 stopped）标签落账（语义瑕疵，机制保证不破坏） |
+| P47 41 | 提交结果不明与重复事件 | PASS | [真机] R6：同幂等键双启动→同 run（reused=true）；[单测] 重复决策 alreadyDecided；[真机] R2 对账幂等（遗留 task 只结算一次） |
 | P47 42 | 冻结后三轮 F1-F3 | PENDING | F 批 |
 
 ### 9.6 音频和工程检查 6 项
