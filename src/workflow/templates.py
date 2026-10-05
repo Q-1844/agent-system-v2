@@ -12,7 +12,7 @@
 from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
-TEMPLATE_VERSION = "p47_templates_v1"
+TEMPLATE_VERSION = "p48_templates_v1"
 
 RELAY_SKILL = "full-story-relay-calibration"
 BRIDGE_SKILL = "keyframes-bridge-repair"
@@ -291,8 +291,9 @@ def _w08(params: dict) -> dict:
                              target_artifact="视频候选"))
     nodes.append(_agent("n_asm", "assembly",
                         params.get("assemblyObjective") or
-                        "按选片范围装配 Sequence：旁白/音乐政策按节点目标执行，"
-                        "完成渲染并核验可播放。",
+                        "按选片范围装配 Sequence：默认保留合格原生环境声与动作声"
+                        "（逐镜先分类再决定：保留/控增益/如实标记不可用），"
+                        "禁止自动旁白；音乐仅按作品政策执行。完成渲染并核验可播放。",
                         scope=scope,
                         completion={"strategy": "require_new",
                                     "outputs": [{"kind": "sequence",
@@ -305,8 +306,9 @@ def _w08(params: dict) -> dict:
                          if params.get("selectRender") else None,
                          target_artifact="Sequence/成片候选"))
     return _def("W08 现有视频装配", nodes, "W08",
-                description="装配既有已选视频（合法复用；真实 Sequence + TTS + render）→ 审核。",
-                notes="必需输入：已选视频版本、旁白和音乐政策。显式复用走 scope.videoVersions。")
+                description="装配既有已选视频（合法复用；真实 Sequence + 原生音轨政策 + render）→ 审核。",
+                notes="必需输入：已选视频版本、音频政策（禁止自动旁白/默认保留合格原生音效/"
+                      "音乐按作品要求）。显式复用走 scope.videoVersions。")
 
 def _w09(params: dict) -> dict:
     """六员完整生产：默认链（§5.9）；节点实例可按前置条件细分。"""
@@ -372,8 +374,9 @@ def _w09(params: dict) -> dict:
                 target_artifact="视频候选"),
         _agent("n_asm", "assembly",
                params.get("assemblyObjective") or
-               "接收精确选片范围装配成片：外部旁白+连续音乐，原视频静音/控音；"
-               "完成渲染并核验可播放。",
+               "接收精确选片范围装配成片：禁止自动旁白；默认保留合格原生环境声与动作声"
+               "（逐镜先分类再决定：保留/控增益/如实标记不可用，不合格片段给修复选项"
+               "交政策裁定）；音乐仅按作品政策。完成渲染并核验可播放。",
                completion={"strategy": "require_new",
                            "outputs": [{"kind": "sequence",
                                         "withCompletedRender": True,
@@ -470,9 +473,9 @@ TEMPLATES: Dict[str, dict] = {
                        {"key": "excludeVersionIds", "label": "排除版本 ID 清单 JSON 数组",
                         "required": False}]},
     "W08": {"id": "W08", "name": "W08 现有视频装配",
-            "description": "装配已选视频（真实 Sequence/TTS/render）→ 审核。",
-            "requiredInputs": ["已选视频版本", "旁白和音乐政策"],
-            "expectedOutputs": ["Sequence、真实 TTS、音轨、完成 render"],
+            "description": "装配已选视频（真实 Sequence/原生音轨政策/render）→ 审核。",
+            "requiredInputs": ["已选视频版本", "音频政策（禁止自动旁白/默认保留合格原生音效/音乐按作品要求）"],
+            "expectedOutputs": ["Sequence、音轨（原生保留或按政策处理）、完成 render"],
             "build": _w08,
             "params": [{"key": "assemblyObjective", "label": "装配节点目标",
                         "required": False},

@@ -1,0 +1,315 @@
+{
+ "samples": {
+  "s01_c01": {
+   "first_frame_job": "29e7d791a4c0",
+   "first_frame_chosen": {
+    "shot_id": "s01_c01",
+    "candidate_id": "ff_8eee3b59_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_kLelOZPzDrDgtLueDN6xIEGlbzTqPOef/output_c63bf17594144b8d8d2b6d8b68526829.png"
+   },
+   "video_job": "3e4f8be9c215",
+   "video_result": {
+    "status": "done",
+    "wall_s": 341.6,
+    "message": "s01_c01 提取视频末帧"
+   },
+   "final_set": {
+    "shot_id": "s01_c01",
+    "final_video": "vv_636e19d6"
+   },
+   "video_version": "vv_636e19d6"
+  },
+  "s01_c02": {
+   "first_frame_job": "54b4d14f4595",
+   "first_frame_result": {
+    "status": "done",
+    "wall_s": 14.7,
+    "message": "s01_c02 已生成 1 个候选（批次 ff_f58bddc2），待选择"
+   },
+   "first_frame_chosen": {
+    "shot_id": "s01_c02",
+    "candidate_id": "ff_f58bddc2_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_QvItgwF7HmJzaTB5vrxcoZ1G2GvKzsSv/output_b416e926fa2a4e54959fc0e5e39afa16.png"
+   },
+   "video_job": "c3d2b56f721e",
+   "video_result": {
+    "status": "done",
+    "wall_s": 296.8,
+    "message": "s01_c02 提取视频末帧"
+   },
+   "final_set": {
+    "shot_id": "s01_c02",
+    "final_video": "vv_c8371da1"
+   },
+   "video_version": "vv_c8371da1"
+  },
+  "s02_c01": {
+   "first_frame_job": "5baf0fdca876",
+   "first_frame_result": {
+    "status": "done",
+    "wall_s": 13.9,
+    "message": "s02_c01 已生成 1 个候选（批次 ff_e43a2020），待选择"
+   },
+   "first_frame_chosen": {
+    "shot_id": "s02_c01",
+    "candidate_id": "ff_e43a2020_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_rBU38IEWCblJ1eSCnbjMud2Xp8oLeOpa/output_bf3638fa44c644e9962f1ce63b291d30.png"
+   },
+   "video_job": "9a850086f1c0",
+   "video_result": {
+    "status": "done",
+    "wall_s": 366.8,
+    "message": "s02_c01 提取视频末帧"
+   },
+   "final_set": {
+    "shot_id": "s02_c01",
+    "final_video": "vv_4e0affa5"
+   },
+   "video_version": "vv_4e0affa5"
+  },
+  "s02_c02": {
+   "first_frame_job": "490a0a972f84",
+   "first_frame_result": {
+    "status": "done",
+    "wall_s": 13.7,
+    "message": "s02_c02 已生成 1 个候选（批次 ff_46461024），待选择"
+   },
+   "first_frame_chosen": {
+    "shot_id": "s02_c02",
+    "candidate_id": "ff_46461024_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_AX1j9mkiYAQad6MT2lJZOWQD9fBU1cqa/output_3d53994fdb1047c8ba1db6eca8a8f847.png"
+   },
+   "video_job": "0c66eb22c4f8",
+   "video_result": {
+    "status": "done",
+    "wall_s": 357.9,
+    "message": "s02_c02 提取视频末帧"
+   },
+   "final_set": {
+    "shot_id": "s02_c02",
+    "final_video": "vv_3a767c1e"
+   },
+   "video_version": "vv_3a767c1e"
+  },
+  "s03_c01": {
+   "first_frame_job": "d29600cd902b",
+   "first_frame_result": {
+    "status": "done",
+    "wall_s": 14.5,
+    "message": "s03_c01 已生成 1 个候选（批次 ff_2b4178b6），待选择"
+   },
+   "first_frame_chosen": {
+    "shot_id": "s03_c01",
+    "candidate_id": "ff_2b4178b6_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_7F73BlazkWD73t1Fwt6iNSJNonumy1x5/output_90e441fe0cee4dffa2f2ebf921791a75.png"
+   },
+   "video_job": "763e2a19a5f8",
+   "video_result": {
+    "status": "done",
+    "wall_s": 616.1,
+    "message": "s03_c01 提取视频末帧"
+   },
+   "final_set": {
+    "shot_id": "s03_c01",
+    "final_video": "vv_3cbeb872"
+   },
+   "video_version": "vv_3cbeb872"
+  },
+  "s03_c02": {
+   "first_frame_job": "9a98b721e1c1",
+   "first_frame_result": {
+    "status": "done",
+    "wall_s": 14.3,
+    "message": "s03_c02 已生成 1 个候选（批次 ff_8d7ea6ee），待选择"
+   },
+   "first_frame_chosen": {
+    "shot_id": "s03_c02",
+    "candidate_id": "ff_8d7ea6ee_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_I5IznKFio1rr49eLeKfSoYLkdTPmMMsn/output_54ee99f4d6654d98971e3c21d90ec750.png"
+   },
+   "video_job": "8392718f56f3",
+   "video_result": {
+    "status": "done",
+    "wall_s": 379.1,
+    "message": "s03_c02 提取视频末帧"
+   },
+   "final_set": {
+    "shot_id": "s03_c02",
+    "final_video": "vv_d036c277"
+   },
+   "video_version": "vv_d036c277"
+  },
+  "s04_c01": {
+   "first_frame_job": "b3ac22855e24",
+   "first_frame_result": {
+    "status": "done",
+    "wall_s": 14.6,
+    "message": "s04_c01 已生成 1 个候选（批次 ff_a4c1f49f），待选择"
+   },
+   "first_frame_chosen": {
+    "shot_id": "s04_c01",
+    "candidate_id": "ff_a4c1f49f_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_UyBBzwSDDjKqfRZYGuRyY55jR8vmtC4a/output_40c0d2004cea4fa2b5c14a16f1e8b18c.png"
+   },
+   "video_job": "2dd76d0c0436",
+   "video_result": {
+    "status": "failed",
+    "wall_s": 175.8,
+    "error": "[ambiguous_speaker] 第 0 句（'你好，今天天气真好。'…）在多角色镜 [] 中无法唯一确定 speaker：无 dialogue_speaker_binding 裁决、无内联「角色名：」前缀（17.md §7.2：不猜，fail closed）"
+   },
+   "video_version": "vv_ac9d63f9",
+   "speaker_fix_attempts": 3
+  },
+  "s04_c02": {
+   "first_frame_job": "0a6d673acc84",
+   "first_frame_result": {
+    "status": "done",
+    "wall_s": 13.7,
+    "message": "s04_c02 已生成 1 个候选（批次 ff_20c9a172），待选择"
+   },
+   "first_frame_chosen": {
+    "shot_id": "s04_c02",
+    "candidate_id": "ff_20c9a172_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_K6WTYhSoHoaAyeQF74uqVXViPzyTvlSE/output_85fbeb9ab07044eebc90545b7af90159.png"
+   },
+   "video_job": "174a87de4531",
+   "video_result": {
+    "status": "failed",
+    "wall_s": 1.0,
+    "error": "[ambiguous_speaker] 第 0 句（'这把椅子，还要再修一天。'…）在多角色镜 [] 中无法唯一确定 speaker：无 dialogue_speaker_binding 裁决、无内联「角色名：」前缀（17.md §7.2：不猜，fail closed）"
+   },
+   "video_version": "vv_d3785b49"
+  },
+  "s05_c01": {
+   "first_frame_job": "47d1aea5bae5",
+   "first_frame_result": {
+    "status": "done",
+    "wall_s": 14.2,
+    "message": "s05_c01 已生成 1 个候选（批次 ff_a4fafea0），待选择"
+   },
+   "first_frame_chosen": {
+    "shot_id": "s05_c01",
+    "candidate_id": "ff_a4fafea0_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_onXw1eMKCFaBsAz1dxE2zbZPoQ3hGxPu/output_a30e7740176e41f0af6ea181c8ef3375.png"
+   },
+   "video_job": "2e795c66bdc0",
+   "video_result": {
+    "status": "done",
+    "wall_s": 302.6,
+    "message": "s05_c01 提取视频末帧"
+   },
+   "final_set": {
+    "shot_id": "s05_c01",
+    "final_video": "vv_564af8af"
+   },
+   "video_version": "vv_564af8af"
+  },
+  "s05_c02": {
+   "first_frame_job": "5e75669c3656",
+   "first_frame_result": {
+    "status": "done",
+    "wall_s": 14.2,
+    "message": "s05_c02 已生成 1 个候选（批次 ff_f2d07998），待选择"
+   },
+   "first_frame_chosen": {
+    "shot_id": "s05_c02",
+    "candidate_id": "ff_f2d07998_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_ceyYXg3N1oqsXUBb4fOE7FtuNfX6DI9f/output_f6b70520a98e4c8f8bf43585f69d31a6.png"
+   },
+   "video_job": "ef1071fce773",
+   "video_result": {
+    "status": "done",
+    "wall_s": 655.1,
+    "message": "s05_c02 提取视频末帧"
+   },
+   "final_set": {
+    "shot_id": "s05_c02",
+    "final_video": "vv_7a2b6a7a"
+   },
+   "video_version": "vv_7a2b6a7a"
+  },
+  "s06_c01": {
+   "first_frame_job": "e04baba12fff",
+   "first_frame_result": {
+    "status": "done",
+    "wall_s": 13.6,
+    "message": "s06_c01 已生成 1 个候选（批次 ff_e3831e73），待选择"
+   },
+   "first_frame_chosen": {
+    "shot_id": "s06_c01",
+    "candidate_id": "ff_e3831e73_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_GaJAfGfiCQrVORPZiGMuvKLWdvDCUjgz/output_de2881b69047437eaa2d372605530784.png"
+   },
+   "video_job": "d9eba2390aa2",
+   "video_result": {
+    "status": "done",
+    "wall_s": 366.3,
+    "message": "s06_c01 提取视频末帧"
+   },
+   "final_set": {
+    "shot_id": "s06_c01",
+    "final_video": "vv_0c7e1f7b"
+   },
+   "video_version": "vv_0c7e1f7b"
+  },
+  "s06_c02": {
+   "first_frame_job": "63c28855e167",
+   "first_frame_result": {
+    "status": "done",
+    "wall_s": 14.2,
+    "message": "s06_c02 已生成 1 个候选（批次 ff_c37d0e6f），待选择"
+   },
+   "first_frame_chosen": {
+    "shot_id": "s06_c02",
+    "candidate_id": "ff_c37d0e6f_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_W91o9M3TL6Tz3Bv9AVQFCvRCoBLZrlVW/output_305f379bdfe74a69ae6569dd1ee06545.png"
+   },
+   "video_job": "457fe0215021",
+   "video_result": {
+    "status": "done",
+    "wall_s": 341.2,
+    "message": "s06_c02 提取视频末帧"
+   },
+   "final_set": {
+    "shot_id": "s06_c02",
+    "final_video": "vv_57e7191f"
+   },
+   "video_version": "vv_57e7191f"
+  }
+ },
+ "fixture": {
+  "project": "P48_B_Audio",
+  "scene": "s01",
+  "shots": [
+   "s01_c01",
+   "s01_c02",
+   "s02_c01",
+   "s02_c02",
+   "s03_c01",
+   "s03_c02",
+   "s04_c01",
+   "s04_c02",
+   "s05_c01",
+   "s05_c02",
+   "s06_c01",
+   "s06_c02"
+  ],
+  "dialogue_lines": {
+   "s04_c01": "你好，今天天气真好。",
+   "s04_c02": "这把椅子，还要再修一天。"
+  },
+  "dialogue_speaker_fix": {
+   "s04_c01": "女子：你好，今天天气真好。",
+   "s04_c02": "木匠：这把椅子，还要再修一天。",
+   "reason": "ambiguous_speaker fail-closed（17.md §7.2）→ 内联角色名前缀",
+   "characters_added": {
+    "s04_c01": [
+     "女子"
+    ],
+    "s04_c02": [
+     "木匠"
+    ]
+   }
+  }
+ }
+}

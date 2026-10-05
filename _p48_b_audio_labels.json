@@ -1,0 +1,484 @@
+{
+ "s01_c01": {
+  "file": "projects\\P48_B_Audio\\output\\videos\\s01_c01.mp4",
+  "intent": "action_sfx",
+  "sha256": "86ece4c48cc00a32",
+  "bytes": 835338,
+  "streams": {
+   "video": {
+    "codec": "h264",
+    "w": 1280,
+    "h": 704,
+    "duration_s": 5.166667
+   },
+   "audio": {
+    "codec": "aac",
+    "sample_rate": "32000",
+    "channels": 2,
+    "duration_s": 5.175
+   }
+  },
+  "loudness": {
+   "integrated_lufs": -28.8,
+   "peak_dbfs": null
+  },
+  "astats": {
+   "rms_db": -42.517918,
+   "max_db": null
+  },
+  "asr": {
+   "segments": [],
+   "wall_s": 43.3
+  },
+  "category": "non_speech_sound",
+  "detail": {
+   "reason": "LUFS=-28.8，有非语音声音（动作/环境/音乐待人耳细分）"
+  }
+ },
+ "s01_c02": {
+  "file": "projects\\P48_B_Audio\\output\\videos\\s01_c02.mp4",
+  "intent": "action_sfx",
+  "sha256": "de95f3fe48ddaf62",
+  "bytes": 907935,
+  "streams": {
+   "video": {
+    "codec": "h264",
+    "w": 1280,
+    "h": 704,
+    "duration_s": 5.166667
+   },
+   "audio": {
+    "codec": "aac",
+    "sample_rate": "32000",
+    "channels": 2,
+    "duration_s": 5.175
+   }
+  },
+  "loudness": {
+   "integrated_lufs": -38.1,
+   "peak_dbfs": null
+  },
+  "astats": {
+   "rms_db": -43.049562,
+   "max_db": null
+  },
+  "asr": {
+   "segments": [],
+   "wall_s": 38.6
+  },
+  "category": "non_speech_sound",
+  "detail": {
+   "reason": "LUFS=-38.1，有非语音声音（动作/环境/音乐待人耳细分）"
+  }
+ },
+ "s02_c01": {
+  "file": "projects\\P48_B_Audio\\output\\videos\\s02_c01.mp4",
+  "intent": "ambience",
+  "sha256": "ac7ce17d6735b627",
+  "bytes": 1241432,
+  "streams": {
+   "video": {
+    "codec": "h264",
+    "w": 1280,
+    "h": 704,
+    "duration_s": 5.166667
+   },
+   "audio": {
+    "codec": "aac",
+    "sample_rate": "32000",
+    "channels": 2,
+    "duration_s": 5.175
+   }
+  },
+  "loudness": {
+   "integrated_lufs": -45.8,
+   "peak_dbfs": null
+  },
+  "astats": {
+   "rms_db": -50.898123,
+   "max_db": null
+  },
+  "asr": {
+   "segments": [
+    {
+     "start": 0.0,
+     "end": 2.0,
+     "text": "ouver",
+     "no_speech_prob": 0.454,
+     "avg_logprob": -2.88
+    }
+   ],
+   "wall_s": 41.6
+  },
+  "category": "near_silent",
+  "detail": {
+   "reason": "LUFS=-45.8 且无高置信语音段"
+  }
+ },
+ "s02_c02": {
+  "file": "projects\\P48_B_Audio\\output\\videos\\s02_c02.mp4",
+  "intent": "ambience",
+  "sha256": "e84b8e17978f0c35",
+  "bytes": 1186732,
+  "streams": {
+   "video": {
+    "codec": "h264",
+    "w": 1280,
+    "h": 704,
+    "duration_s": 5.166667
+   },
+   "audio": {
+    "codec": "aac",
+    "sample_rate": "32000",
+    "channels": 2,
+    "duration_s": 5.175
+   }
+  },
+  "loudness": {
+   "integrated_lufs": -40.6,
+   "peak_dbfs": null
+  },
+  "astats": {
+   "rms_db": -44.149024,
+   "max_db": null
+  },
+  "asr": {
+   "segments": [
+    {
+     "start": 0.0,
+     "end": 2.0,
+     "text": "You",
+     "no_speech_prob": 0.671,
+     "avg_logprob": -0.91
+    }
+   ],
+   "wall_s": 4.1
+  },
+  "category": "non_speech_sound",
+  "detail": {
+   "reason": "ASR 低置信片段（疑似噪声幻听，不计语音）：You logprob=-0.91"
+  }
+ },
+ "s03_c01": {
+  "file": "projects\\P48_B_Audio\\output\\videos\\s03_c01.mp4",
+  "intent": "music_mixed",
+  "sha256": "65334745eec82e02",
+  "bytes": 845491,
+  "streams": {
+   "video": {
+    "codec": "h264",
+    "w": 1280,
+    "h": 704,
+    "duration_s": 5.166667
+   },
+   "audio": {
+    "codec": "aac",
+    "sample_rate": "32000",
+    "channels": 2,
+    "duration_s": 5.175
+   }
+  },
+  "loudness": {
+   "integrated_lufs": -35.4,
+   "peak_dbfs": null
+  },
+  "astats": {
+   "rms_db": -38.7038,
+   "max_db": null
+  },
+  "asr": {
+   "segments": [],
+   "wall_s": 4.0
+  },
+  "category": "non_speech_sound",
+  "detail": {
+   "reason": "LUFS=-35.4，有非语音声音（动作/环境/音乐待人耳细分）"
+  }
+ },
+ "s03_c02": {
+  "file": "projects\\P48_B_Audio\\output\\videos\\s03_c02.mp4",
+  "intent": "music_mixed",
+  "sha256": "f1f149073c8d671c",
+  "bytes": 674817,
+  "streams": {
+   "video": {
+    "codec": "h264",
+    "w": 1280,
+    "h": 704,
+    "duration_s": 5.166667
+   },
+   "audio": {
+    "codec": "aac",
+    "sample_rate": "32000",
+    "channels": 2,
+    "duration_s": 5.175
+   }
+  },
+  "loudness": {
+   "integrated_lufs": -42.4,
+   "peak_dbfs": null
+  },
+  "astats": {
+   "rms_db": -45.349143,
+   "max_db": null
+  },
+  "asr": {
+   "segments": [],
+   "wall_s": 3.9
+  },
+  "category": "non_speech_sound",
+  "detail": {
+   "reason": "LUFS=-42.4，有非语音声音（动作/环境/音乐待人耳细分）"
+  }
+ },
+ "s04_c01": {
+  "file": "projects\\P48_B_Audio\\output\\videos\\s04_c01.mp4",
+  "intent": "dialogue",
+  "sha256": "8aac1271ac8102ee",
+  "bytes": 303587,
+  "streams": {
+   "video": {
+    "codec": "h264",
+    "w": 1280,
+    "h": 704,
+    "duration_s": 5.166667
+   },
+   "audio": {
+    "codec": "aac",
+    "sample_rate": "32000",
+    "channels": 2,
+    "duration_s": 5.175
+   }
+  },
+  "loudness": {
+   "integrated_lufs": -14.3,
+   "peak_dbfs": null
+  },
+  "astats": {
+   "rms_db": -20.509028,
+   "max_db": null
+  },
+  "asr": {
+   "segments": [
+    {
+     "start": 0.0,
+     "end": 3.0,
+     "text": "你好!今天天气真好!",
+     "no_speech_prob": 0.019,
+     "avg_logprob": -0.57
+    }
+   ],
+   "wall_s": 4.1
+  },
+  "category": "speech_dialogue_candidate",
+  "detail": {
+   "reason": "ASR 高置信语音段",
+   "transcript": "你好!今天天气真好!"
+  }
+ },
+ "s04_c02": {
+  "file": "projects\\P48_B_Audio\\output\\videos\\s04_c02.mp4",
+  "intent": "dialogue",
+  "sha256": "f7bbe29b81d855aa",
+  "bytes": 983146,
+  "streams": {
+   "video": {
+    "codec": "h264",
+    "w": 1280,
+    "h": 704,
+    "duration_s": 5.166667
+   },
+   "audio": {
+    "codec": "aac",
+    "sample_rate": "32000",
+    "channels": 2,
+    "duration_s": 5.175
+   }
+  },
+  "loudness": {
+   "integrated_lufs": -31.5,
+   "peak_dbfs": null
+  },
+  "astats": {
+   "rms_db": -36.319523,
+   "max_db": null
+  },
+  "asr": {
+   "segments": [
+    {
+     "start": 0.0,
+     "end": 3.6,
+     "text": "这把椅子还要再修一天",
+     "no_speech_prob": 0.019,
+     "avg_logprob": -0.31
+    }
+   ],
+   "wall_s": 4.4
+  },
+  "category": "speech_dialogue_candidate",
+  "detail": {
+   "reason": "ASR 高置信语音段",
+   "transcript": "这把椅子还要再修一天"
+  }
+ },
+ "s05_c01": {
+  "file": "projects\\P48_B_Audio\\output\\videos\\s05_c01.mp4",
+  "intent": "likely_silent",
+  "sha256": "52127a80a3889a81",
+  "bytes": 494196,
+  "streams": {
+   "video": {
+    "codec": "h264",
+    "w": 1280,
+    "h": 704,
+    "duration_s": 5.166667
+   },
+   "audio": {
+    "codec": "aac",
+    "sample_rate": "32000",
+    "channels": 2,
+    "duration_s": 5.175
+   }
+  },
+  "loudness": {
+   "integrated_lufs": -70.0,
+   "peak_dbfs": null
+  },
+  "astats": {
+   "rms_db": -74.11032,
+   "max_db": null
+  },
+  "asr": {
+   "segments": [],
+   "wall_s": 4.0
+  },
+  "category": "near_silent",
+  "detail": {
+   "reason": "LUFS=-70.0 且无高置信语音段"
+  }
+ },
+ "s05_c02": {
+  "file": "projects\\P48_B_Audio\\output\\videos\\s05_c02.mp4",
+  "intent": "likely_silent",
+  "sha256": "41b487bf4241434b",
+  "bytes": 205757,
+  "streams": {
+   "video": {
+    "codec": "h264",
+    "w": 1280,
+    "h": 704,
+    "duration_s": 5.166667
+   },
+   "audio": {
+    "codec": "aac",
+    "sample_rate": "32000",
+    "channels": 2,
+    "duration_s": 5.175
+   }
+  },
+  "loudness": {
+   "integrated_lufs": -63.4,
+   "peak_dbfs": null
+  },
+  "astats": {
+   "rms_db": -62.498217,
+   "max_db": null
+  },
+  "asr": {
+   "segments": [
+    {
+     "start": 0.0,
+     "end": 2.0,
+     "text": "You",
+     "no_speech_prob": 0.836,
+     "avg_logprob": -0.9
+    }
+   ],
+   "wall_s": 4.0
+  },
+  "category": "near_silent",
+  "detail": {
+   "reason": "LUFS=-63.4 且无高置信语音段"
+  }
+ },
+ "s06_c01": {
+  "file": "projects\\P48_B_Audio\\output\\videos\\s06_c01.mp4",
+  "intent": "narration_risk",
+  "sha256": "c0849061be1a6130",
+  "bytes": 2025598,
+  "streams": {
+   "video": {
+    "codec": "h264",
+    "w": 1280,
+    "h": 704,
+    "duration_s": 5.166667
+   },
+   "audio": {
+    "codec": "aac",
+    "sample_rate": "32000",
+    "channels": 2,
+    "duration_s": 5.175
+   }
+  },
+  "loudness": {
+   "integrated_lufs": -41.4,
+   "peak_dbfs": null
+  },
+  "astats": {
+   "rms_db": -42.861038,
+   "max_db": null
+  },
+  "asr": {
+   "segments": [],
+   "wall_s": 4.0
+  },
+  "category": "non_speech_sound",
+  "detail": {
+   "reason": "LUFS=-41.4，有非语音声音（动作/环境/音乐待人耳细分）"
+  }
+ },
+ "s06_c02": {
+  "file": "projects\\P48_B_Audio\\output\\videos\\s06_c02.mp4",
+  "intent": "narration_risk",
+  "sha256": "d87a0df488f15e12",
+  "bytes": 1258096,
+  "streams": {
+   "video": {
+    "codec": "h264",
+    "w": 1280,
+    "h": 704,
+    "duration_s": 5.166667
+   },
+   "audio": {
+    "codec": "aac",
+    "sample_rate": "32000",
+    "channels": 2,
+    "duration_s": 5.175
+   }
+  },
+  "loudness": {
+   "integrated_lufs": -34.7,
+   "peak_dbfs": null
+  },
+  "astats": {
+   "rms_db": -41.947909,
+   "max_db": null
+  },
+  "asr": {
+   "segments": [
+    {
+     "start": 0.0,
+     "end": 4.16,
+     "text": "ඕමානද් ඔබ෇ිට වස් ලන්",
+     "no_speech_prob": 0.437,
+     "avg_logprob": -1.77
+    }
+   ],
+   "wall_s": 42.7
+  },
+  "category": "non_speech_sound",
+  "detail": {
+   "reason": "ASR 低置信片段（疑似噪声幻听，不计语音）：ඕමානද් ඔබ෇ිට වස් ලන් logprob=-1.77"
+  }
+ }
+}

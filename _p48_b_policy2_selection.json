@@ -1,0 +1,52 @@
+{
+ "n_rv0_selection": [
+  {
+   "entityId": "s01_c01",
+   "versionId": "vv_636e19d6"
+  },
+  {
+   "entityId": "s01_c02",
+   "versionId": "vv_c8371da1"
+  },
+  {
+   "entityId": "s02_c01",
+   "versionId": "vv_4e0affa5"
+  },
+  {
+   "entityId": "s02_c02",
+   "versionId": "vv_3a767c1e"
+  },
+  {
+   "entityId": "s03_c01",
+   "versionId": "vv_3cbeb872"
+  },
+  {
+   "entityId": "s03_c02",
+   "versionId": "vv_d036c277"
+  },
+  {
+   "entityId": "s04_c01",
+   "versionId": "vv_ac9d63f9"
+  },
+  {
+   "entityId": "s04_c02",
+   "versionId": "vv_d3785b49"
+  },
+  {
+   "entityId": "s05_c01",
+   "versionId": "vv_564af8af"
+  },
+  {
+   "entityId": "s05_c02",
+   "versionId": "vv_7a2b6a7a"
+  },
+  {
+   "entityId": "s06_c01",
+   "versionId": "vv_0c7e1f7b"
+  },
+  {
+   "entityId": "s06_c02",
+   "versionId": "vv_57e7191f"
+  }
+ ]
+}

@@ -1,0 +1,778 @@
+{
+ "runs": {
+  "B-ASM-NATIVE": {
+   "workflowId": "wf_b_asm_native",
+   "runId": "run_11b02dd08639",
+   "started_at": 1791230095.6726542,
+   "snapshot": {
+    "snapshotVersion": "workflow_snapshot_v1",
+    "definitionRevision": 1,
+    "definitionHash": "sha256:c197460cb2cf9389496d98a37757952ae321dde056f82444aca33bae77b138ad",
+    "definition": {
+     "schemaVersion": "workflow_def_v1",
+     "workflowId": "wf_b_asm_native",
+     "name": "W08 现有视频装配",
+     "description": "装配既有已选视频（合法复用；真实 Sequence + 原生音轨政策 + render）→ 审核。",
+     "notes": "必需输入：已选视频版本、音频政策（禁止自动旁白/默认保留合格原生音效/音乐按作品要求）。显式复用走 scope.videoVersions。",
+     "status": "draft",
+     "nodes": [
+      {
+       "id": "n_start",
+       "type": "boundary_start",
+       "refId": null,
+       "refVersion": null,
+       "label": null,
+       "config": {},
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      },
+      {
+       "id": "n_asm",
+       "type": "agent",
+       "refId": "assembly",
+       "refVersion": null,
+       "label": null,
+       "config": {
+        "objective": "基线装配：按选片范围装配 Sequence，全部 12 镜原生音轨原样保留（render profile audio=native，不加任何音频层）。逐镜记录音频分类依据，完成渲染并核验可播放。",
+        "completion": {
+         "strategy": "require_new",
+         "outputs": [
+          {
+           "kind": "sequence",
+           "withCompletedRender": true,
+           "minCount": 1
+          }
+         ]
+        },
+        "scope": {
+         "videoVersions": [
+          {
+           "shotId": "s01_c01",
+           "versionId": "vv_636e19d6"
+          },
+          {
+           "shotId": "s01_c02",
+           "versionId": "vv_c8371da1"
+          },
+          {
+           "shotId": "s02_c01",
+           "versionId": "vv_4e0affa5"
+          },
+          {
+           "shotId": "s02_c02",
+           "versionId": "vv_3a767c1e"
+          },
+          {
+           "shotId": "s03_c01",
+           "versionId": "vv_3cbeb872"
+          },
+          {
+           "shotId": "s03_c02",
+           "versionId": "vv_d036c277"
+          },
+          {
+           "shotId": "s04_c01",
+           "versionId": "vv_ac9d63f9"
+          },
+          {
+           "shotId": "s04_c02",
+           "versionId": "vv_d3785b49"
+          },
+          {
+           "shotId": "s05_c01",
+           "versionId": "vv_564af8af"
+          },
+          {
+           "shotId": "s05_c02",
+           "versionId": "vv_7a2b6a7a"
+          },
+          {
+           "shotId": "s06_c01",
+           "versionId": "vv_0c7e1f7b"
+          },
+          {
+           "shotId": "s06_c02",
+           "versionId": "vv_57e7191f"
+          }
+         ]
+        }
+       },
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      },
+      {
+       "id": "n_rv1",
+       "type": "human_review",
+       "refId": null,
+       "refVersion": null,
+       "label": "成片审定（可选 render 选用）",
+       "config": {
+        "reviewer": "制作人"
+       },
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      },
+      {
+       "id": "n_end",
+       "type": "boundary_end",
+       "refId": null,
+       "refVersion": null,
+       "label": null,
+       "config": {},
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      }
+     ],
+     "edges": [
+      {
+       "id": "e_n_start_n_asm",
+       "type": "execution",
+       "source": "n_start",
+       "target": "n_asm",
+       "sourcePort": "out",
+       "targetPort": "in"
+      },
+      {
+       "id": "e_n_asm_n_rv1",
+       "type": "execution",
+       "source": "n_asm",
+       "target": "n_rv1",
+       "sourcePort": "out",
+       "targetPort": "in"
+      },
+      {
+       "id": "e_n_rv1_n_end",
+       "type": "execution",
+       "source": "n_rv1",
+       "target": "n_end",
+       "sourcePort": "out",
+       "targetPort": "in"
+      }
+     ],
+     "template": {
+      "templateId": "W08",
+      "templateVersion": "p48_templates_v1"
+     },
+     "projectId": "P48_B_Audio",
+     "revision": 1,
+     "updatedAt": "2026-10-06T03:54:54.150Z",
+     "createdAt": "2026-10-06T03:54:54.150Z",
+     "contentHash": "sha256:c197460cb2cf9389496d98a37757952ae321dde056f82444aca33bae77b138ad"
+    },
+    "agentBaseline": {
+     "producer": {
+      "registryDigest": "sha256:61913bd272ec7820",
+      "enabled": true,
+      "modelProfile": {
+       "id": "producer_profile",
+       "name": "Producer 默认",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": null,
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     },
+     "script_writer": {
+      "registryDigest": "sha256:4e99956f40cf1545",
+      "enabled": true,
+      "modelProfile": {
+       "id": "text_default",
+       "name": "Agnes（默认）",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": null,
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     },
+     "character_designer": {
+      "registryDigest": "sha256:fb18cdd6034ee0fb",
+      "enabled": true,
+      "modelProfile": {
+       "id": "character_profile",
+       "name": "角色设计默认",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": "agnes-image-2.1-flash",
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     },
+     "scene_designer": {
+      "registryDigest": "sha256:42673f11e915c3d3",
+      "enabled": true,
+      "modelProfile": {
+       "id": "scene_profile",
+       "name": "场景设计默认",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": "agnes-image-2.1-flash",
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     },
+     "director": {
+      "registryDigest": "sha256:9c6e02b744f3c3e5",
+      "enabled": true,
+      "modelProfile": {
+       "id": "text_default",
+       "name": "Agnes（默认）",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": null,
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     },
+     "assembly": {
+      "registryDigest": "sha256:3b46fc0fd06b4970",
+      "enabled": true,
+      "modelProfile": {
+       "id": "text_default",
+       "name": "Agnes（默认）",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": null,
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     }
+    },
+    "skillVersions": {},
+    "textModel": "agnes-3.0-flash",
+    "thinking": true,
+    "toolPolicy": "core_tools_only",
+    "canonicalBaseline": {
+     "story_text": "sha256:12ae32cb1ec02d01",
+     "characters": "sha256:4f53cda18c2baa0c",
+     "scenes": "sha256:e390deda28b080ce"
+    }
+   },
+   "last_status": "waiting_human",
+   "nodes": {}
+  },
+  "B-ASM-POLICY": {
+   "workflowId": "wf_b_asm_policy",
+   "runId": "run_d0f0b16d10d7",
+   "started_at": 1791230096.5458186,
+   "snapshot": {
+    "snapshotVersion": "workflow_snapshot_v1",
+    "definitionRevision": 1,
+    "definitionHash": "sha256:9800a6bf15e59d0506047d0fccaca445b7e2c05411e3def7f2d49b44b463665e",
+    "definition": {
+     "schemaVersion": "workflow_def_v1",
+     "workflowId": "wf_b_asm_policy",
+     "name": "W08 现有视频装配",
+     "description": "装配既有已选视频（合法复用；真实 Sequence + 原生音轨政策 + render）→ 审核。",
+     "notes": "必需输入：已选视频版本、音频政策（禁止自动旁白/默认保留合格原生音效/音乐按作品要求）。显式复用走 scope.videoVersions。",
+     "status": "draft",
+     "nodes": [
+      {
+       "id": "n_start",
+       "type": "boundary_start",
+       "refId": null,
+       "refVersion": null,
+       "label": null,
+       "config": {},
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      },
+      {
+       "id": "n_asm",
+       "type": "agent",
+       "refId": "assembly",
+       "refVersion": null,
+       "label": null,
+       "config": {
+        "objective": "按 Phase48 装配政策装配：全片禁止自动旁白；逐镜先分类后决定（保留/控增益/如实标记不可用），默认保留合格原生环境声与动作声；音乐仅按作品政策（本轮不加）。完成渲染并核验可播放。",
+        "completion": {
+         "strategy": "require_new",
+         "outputs": [
+          {
+           "kind": "sequence",
+           "withCompletedRender": true,
+           "minCount": 1
+          }
+         ]
+        },
+        "scope": {
+         "videoVersions": [
+          {
+           "shotId": "s01_c01",
+           "versionId": "vv_636e19d6"
+          },
+          {
+           "shotId": "s01_c02",
+           "versionId": "vv_c8371da1"
+          },
+          {
+           "shotId": "s02_c01",
+           "versionId": "vv_4e0affa5"
+          },
+          {
+           "shotId": "s02_c02",
+           "versionId": "vv_3a767c1e"
+          },
+          {
+           "shotId": "s03_c01",
+           "versionId": "vv_3cbeb872"
+          },
+          {
+           "shotId": "s03_c02",
+           "versionId": "vv_d036c277"
+          },
+          {
+           "shotId": "s04_c01",
+           "versionId": "vv_ac9d63f9"
+          },
+          {
+           "shotId": "s04_c02",
+           "versionId": "vv_d3785b49"
+          },
+          {
+           "shotId": "s05_c01",
+           "versionId": "vv_564af8af"
+          },
+          {
+           "shotId": "s05_c02",
+           "versionId": "vv_7a2b6a7a"
+          },
+          {
+           "shotId": "s06_c01",
+           "versionId": "vv_0c7e1f7b"
+          },
+          {
+           "shotId": "s06_c02",
+           "versionId": "vv_57e7191f"
+          }
+         ]
+        }
+       },
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      },
+      {
+       "id": "n_rv1",
+       "type": "human_review",
+       "refId": null,
+       "refVersion": null,
+       "label": "成片审定（可选 render 选用）",
+       "config": {
+        "reviewer": "制作人"
+       },
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      },
+      {
+       "id": "n_end",
+       "type": "boundary_end",
+       "refId": null,
+       "refVersion": null,
+       "label": null,
+       "config": {},
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      }
+     ],
+     "edges": [
+      {
+       "id": "e_n_start_n_asm",
+       "type": "execution",
+       "source": "n_start",
+       "target": "n_asm",
+       "sourcePort": "out",
+       "targetPort": "in"
+      },
+      {
+       "id": "e_n_asm_n_rv1",
+       "type": "execution",
+       "source": "n_asm",
+       "target": "n_rv1",
+       "sourcePort": "out",
+       "targetPort": "in"
+      },
+      {
+       "id": "e_n_rv1_n_end",
+       "type": "execution",
+       "source": "n_rv1",
+       "target": "n_end",
+       "sourcePort": "out",
+       "targetPort": "in"
+      }
+     ],
+     "template": {
+      "templateId": "W08",
+      "templateVersion": "p48_templates_v1"
+     },
+     "projectId": "P48_B_Audio",
+     "revision": 1,
+     "updatedAt": "2026-10-06T03:54:56.171Z",
+     "createdAt": "2026-10-06T03:54:56.171Z",
+     "contentHash": "sha256:9800a6bf15e59d0506047d0fccaca445b7e2c05411e3def7f2d49b44b463665e"
+    },
+    "agentBaseline": {
+     "producer": {
+      "registryDigest": "sha256:61913bd272ec7820",
+      "enabled": true,
+      "modelProfile": {
+       "id": "producer_profile",
+       "name": "Producer 默认",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": null,
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     },
+     "script_writer": {
+      "registryDigest": "sha256:4e99956f40cf1545",
+      "enabled": true,
+      "modelProfile": {
+       "id": "text_default",
+       "name": "Agnes（默认）",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": null,
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     },
+     "character_designer": {
+      "registryDigest": "sha256:fb18cdd6034ee0fb",
+      "enabled": true,
+      "modelProfile": {
+       "id": "character_profile",
+       "name": "角色设计默认",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": "agnes-image-2.1-flash",
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     },
+     "scene_designer": {
+      "registryDigest": "sha256:42673f11e915c3d3",
+      "enabled": true,
+      "modelProfile": {
+       "id": "scene_profile",
+       "name": "场景设计默认",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": "agnes-image-2.1-flash",
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     },
+     "director": {
+      "registryDigest": "sha256:9c6e02b744f3c3e5",
+      "enabled": true,
+      "modelProfile": {
+       "id": "text_default",
+       "name": "Agnes（默认）",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": null,
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     },
+     "assembly": {
+      "registryDigest": "sha256:3b46fc0fd06b4970",
+      "enabled": true,
+      "modelProfile": {
+       "id": "text_default",
+       "name": "Agnes（默认）",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": null,
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     }
+    },
+    "skillVersions": {},
+    "textModel": "agnes-3.0-flash",
+    "thinking": true,
+    "toolPolicy": "core_tools_only",
+    "canonicalBaseline": {
+     "story_text": "sha256:12ae32cb1ec02d01",
+     "characters": "sha256:4f53cda18c2baa0c",
+     "scenes": "sha256:e390deda28b080ce"
+    }
+   },
+   "last_status": "failed",
+   "nodes": {},
+   "first_failure": {
+    "runId": "run_d0f0b16d10d7",
+    "status": "failed",
+    "wall_s": 0.16,
+    "cause": "与 B-ASM-NATIVE 同时启动——同项目 assembly 会话互斥（A09 单一驱动者）使 turn 立即失败；非政策缺陷"
+   },
+   "workflowId2": "wf_b_asm_policy2",
+   "runId2": "run_9ca0c953571a",
+   "snapshot2": {
+    "snapshotVersion": "workflow_snapshot_v1",
+    "definitionRevision": 1,
+    "definitionHash": "sha256:45832234f55d8c3a825645110f2cdaca3e919a3d30dcc81b0d8dce41f28e8a67",
+    "definition": {
+     "schemaVersion": "workflow_def_v1",
+     "workflowId": "wf_b_asm_policy2",
+     "name": "W08 现有视频装配",
+     "description": "装配既有已选视频（合法复用；真实 Sequence + 原生音轨政策 + render）→ 审核。",
+     "notes": "必需输入：已选视频版本、音频政策（禁止自动旁白/默认保留合格原生音效/音乐按作品要求）。显式复用走 scope.videoVersions。",
+     "status": "draft",
+     "nodes": [
+      {
+       "id": "n_start",
+       "type": "boundary_start",
+       "refId": null,
+       "refVersion": null,
+       "label": null,
+       "config": {},
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      },
+      {
+       "id": "n_rv0",
+       "type": "human_review",
+       "refId": null,
+       "refVersion": null,
+       "label": "装配素材确认（选用视频版本）",
+       "config": {
+        "instructions": "从既有视频候选中正式选用用于本片装配的版本。",
+        "reviewer": "制作人",
+        "selection": {
+         "kind": "video_version",
+         "entityId": "<运行期在审核卡片选择候选>"
+        }
+       },
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      },
+      {
+       "id": "n_asm",
+       "type": "agent",
+       "refId": "assembly",
+       "refVersion": null,
+       "label": null,
+       "config": {
+        "objective": "按 Phase48 装配政策装配：全片禁止自动旁白；逐镜先分类后决定（保留/控增益/如实标记不可用），默认保留合格原生环境声与动作声；音乐仅按作品政策（本轮不加）。完成渲染并核验可播放。",
+        "completion": {
+         "strategy": "require_new",
+         "outputs": [
+          {
+           "kind": "sequence",
+           "withCompletedRender": true,
+           "minCount": 1
+          }
+         ]
+        }
+       },
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      },
+      {
+       "id": "n_rv1",
+       "type": "human_review",
+       "refId": null,
+       "refVersion": null,
+       "label": "成片审定（可选 render 选用）",
+       "config": {
+        "reviewer": "制作人"
+       },
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      },
+      {
+       "id": "n_end",
+       "type": "boundary_end",
+       "refId": null,
+       "refVersion": null,
+       "label": null,
+       "config": {},
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      }
+     ],
+     "edges": [
+      {
+       "id": "e_n_start_n_rv0",
+       "type": "execution",
+       "source": "n_start",
+       "target": "n_rv0",
+       "sourcePort": "out",
+       "targetPort": "in"
+      },
+      {
+       "id": "e_n_rv0_n_asm",
+       "type": "execution",
+       "source": "n_rv0",
+       "target": "n_asm",
+       "sourcePort": "out",
+       "targetPort": "in"
+      },
+      {
+       "id": "e_n_asm_n_rv1",
+       "type": "execution",
+       "source": "n_asm",
+       "target": "n_rv1",
+       "sourcePort": "out",
+       "targetPort": "in"
+      },
+      {
+       "id": "e_n_rv1_n_end",
+       "type": "execution",
+       "source": "n_rv1",
+       "target": "n_end",
+       "sourcePort": "out",
+       "targetPort": "in"
+      }
+     ],
+     "template": {
+      "templateId": "W08",
+      "templateVersion": "p48_templates_v1"
+     },
+     "projectId": "P48_B_Audio",
+     "revision": 1,
+     "updatedAt": "2026-10-06T04:03:45.138Z",
+     "createdAt": "2026-10-06T04:03:45.138Z",
+     "contentHash": "sha256:45832234f55d8c3a825645110f2cdaca3e919a3d30dcc81b0d8dce41f28e8a67"
+    },
+    "agentBaseline": {
+     "producer": {
+      "registryDigest": "sha256:61913bd272ec7820",
+      "enabled": true,
+      "modelProfile": {
+       "id": "producer_profile",
+       "name": "Producer 默认",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": null,
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     },
+     "script_writer": {
+      "registryDigest": "sha256:4e99956f40cf1545",
+      "enabled": true,
+      "modelProfile": {
+       "id": "text_default",
+       "name": "Agnes（默认）",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": null,
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     },
+     "character_designer": {
+      "registryDigest": "sha256:fb18cdd6034ee0fb",
+      "enabled": true,
+      "modelProfile": {
+       "id": "character_profile",
+       "name": "角色设计默认",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": "agnes-image-2.1-flash",
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     },
+     "scene_designer": {
+      "registryDigest": "sha256:42673f11e915c3d3",
+      "enabled": true,
+      "modelProfile": {
+       "id": "scene_profile",
+       "name": "场景设计默认",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": "agnes-image-2.1-flash",
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     },
+     "director": {
+      "registryDigest": "sha256:9c6e02b744f3c3e5",
+      "enabled": true,
+      "modelProfile": {
+       "id": "text_default",
+       "name": "Agnes（默认）",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": null,
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     },
+     "assembly": {
+      "registryDigest": "sha256:3b46fc0fd06b4970",
+      "enabled": true,
+      "modelProfile": {
+       "id": "text_default",
+       "name": "Agnes（默认）",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": null,
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     }
+    },
+    "skillVersions": {},
+    "textModel": "agnes-3.0-flash",
+    "thinking": true,
+    "toolPolicy": "core_tools_only",
+    "canonicalBaseline": {
+     "story_text": "sha256:12ae32cb1ec02d01",
+     "characters": "sha256:4f53cda18c2baa0c",
+     "scenes": "sha256:e390deda28b080ce"
+    }
+   }
+  }
+ }
+}
