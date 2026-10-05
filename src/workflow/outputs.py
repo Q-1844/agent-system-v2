@@ -91,15 +91,36 @@ def _content_hash(entity: Any) -> str:
 
 
 def _file_ok(pdir: Path, local: Optional[str]) -> bool:
+    """媒体文件可读判定。项目内 local 路径存在两种真实存储形态：
+    ①相对项目目录（legacy 部分）；②相对仓库根（frames/characters 等生成资产，
+    如 "projects\\{p}\\output\\frames\\x.png"）。两种都试，绝对路径直接判。"""
     if not local:
         return False
     try:
         p = Path(local)
-        if not p.is_absolute():
-            p = pdir / local
-        return p.is_file() and p.stat().st_size > 0
+        if p.is_absolute():
+            return p.is_file() and p.stat().st_size > 0
+        for base in (pdir, _repo_root()):
+            cand = base / local
+            if cand.is_file() and cand.stat().st_size > 0:
+                return True
+        return False
     except OSError:
         return False
+
+
+def _repo_root() -> Path:
+    global _REPO_ROOT_CACHE
+    if _REPO_ROOT_CACHE is None:
+        try:
+            from deps import BASE_DIR
+            _REPO_ROOT_CACHE = Path(BASE_DIR)
+        except Exception:
+            _REPO_ROOT_CACHE = Path(__file__).resolve().parents[2]
+    return _REPO_ROOT_CACHE
+
+
+_REPO_ROOT_CACHE: Optional[Path] = None
 
 
 def _resources_doc(pdir: Path):
@@ -203,7 +224,9 @@ def _resolve_kind(pdir: Path, project: str, spec: dict) -> List[dict]:
 
     if kind in ("location", "location_view", "scene_instance", "scene_instance_view"):
         doc = _scene_doc(pdir)
-        coll = {"location": doc.locations, "location_view": doc.location_views,
+        # SceneSystemDocument 字段：locations / views（LocationView）/ scene_instances /
+        # scene_instance_views（changed_refs 域键 location_views ≠ 文档字段名）
+        coll = {"location": doc.locations, "location_view": doc.views,
                 "scene_instance": doc.scene_instances,
                 "scene_instance_view": doc.scene_instance_views}[kind]
         for eid, e in (coll or {}).items():
@@ -245,10 +268,14 @@ def _resolve_kind(pdir: Path, project: str, spec: dict) -> List[dict]:
                 ff = getattr(sh, "first_frame", None)
                 cands = list(getattr(ff, "candidates", None) or [])
                 img_ok = any(c.local and _file_ok(pdir, c.local) for c in cands)
+                # hash 只覆盖分镜身份（首帧批次+选中首帧）——不含 n_video_versions
+                # （D 批真机：下游视频生成会改变镜头的视频版本数，属下游进度，
+                #   不是分镜内容变更；计入 hash 会把上游交接包误判为 stale。）
                 _rec(sh.shot_id, file_ok=img_ok,
                      hash_payload={"shot_id": sh.shot_id,
                                    "first_frame_batch": getattr(ff, "batch_id", None),
-                                   "n_video_versions": len(sh.video_versions or [])})
+                                   "selected_first_frame":
+                                       getattr(sh, "selected_first_frame", None)})
         return out
 
     if kind == "video_version":

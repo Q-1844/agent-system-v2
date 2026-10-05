@@ -12,6 +12,7 @@
 # - 选用指针变更只指向精确版本（entityId+versionId），拒绝模糊选择。
 from __future__ import annotations
 import asyncio
+import json
 import logging
 from pathlib import Path
 from typing import Optional
@@ -19,7 +20,8 @@ from typing import Optional
 log = logging.getLogger("workflow.selection")
 
 SUPPORTED_KINDS = ("video_version", "sequence_render", "look_reference",
-                   "prop_reference", "composition_candidate", "first_frame")
+                   "prop_reference", "composition_candidate", "first_frame",
+                   "scene_view")
 
 
 def resolve_selection_candidates(pdir: Path, project: str, spec: dict,
@@ -125,6 +127,8 @@ async def _perform_selection_impl_async(pdir: Path, project: str, spec: dict) ->
             return _select_video_version(pdir, entity_id, version_id)
         if kind == "sequence_render":
             return _select_sequence_render(pdir, project, entity_id, version_id)
+        if kind == "scene_view":
+            return await _approve_scene_instance_view(pdir, entity_id)
         if kind in ("look_reference", "prop_reference", "composition_candidate"):
             return await _approve_reference_async(pdir, project, kind, entity_id,
                                                   version_id)
@@ -136,6 +140,51 @@ async def _perform_selection_impl_async(pdir: Path, project: str, spec: dict) ->
                 "versionId": version_id,
                 "error": f"{type(e).__name__}: {str(e)[:200]}"}
     return {"ok": False, "kind": kind, "error": "未实现的选用类型"}
+
+
+async def _approve_scene_instance_view(pdir: Path, sciv_id: str) -> dict:
+    """SceneInstanceView 显式批准（工作流审核卡片的场景审定选用）：
+    ①七维度 Vision Review（真实审查，无 pass 不批）；②服务端读取 scene/resources
+    双 OCC revision 后 approve（与用户 REST 入口同一 visual service）。"""
+    from src.scene_system.visual_service import SceneVisualService
+    from src.scene_system.store import SceneSystemStore
+    from src.scene_system import instance_view_review
+    from src.resources.models import document_revision as res_doc_revision
+    from src.resources.store import ResourceStore
+    doc = SceneSystemStore(pdir).load()
+    sciv = (doc.scene_instance_views or {}).get(sciv_id)
+    if sciv is None:
+        return {"ok": False, "kind": "scene_view", "entityId": sciv_id,
+                "error": f"SceneInstanceView 不存在: {sciv_id}"}
+    if sciv.approval_status == "approved":
+        return {"ok": True, "kind": "scene_view", "entityId": sciv_id,
+                "pointer": "scene_instance_view.approved", "alreadySelected": True}
+    # ①真实审查（无 pass 证据时 approve 会被硬门槛拒绝——先跑机器审查）
+    rv = await instance_view_review.review_scene_instance_view_candidates(
+        pdir, sciv_id)
+    if not (isinstance(rv, dict) and rv.get("ok")):
+        return {"ok": False, "kind": "scene_view", "entityId": sciv_id,
+                "error": f"审查未通过/未完成：{json.dumps(rv, ensure_ascii=False)[:180]}"}
+    # ②OCC 依据服务端现读（expected_revision=sciv 实体 revision，非文档级；
+    # resources 文档级 revision 照旧）+ approve
+    svc = SceneVisualService(pdir, None)
+    from src.scene_system.models import scene_instance_view_revision
+    doc2 = SceneSystemStore(pdir).load()
+    rdoc = ResourceStore(pdir).load()
+    sciv2 = (doc2.scene_instance_views or {}).get(sciv_id)
+    if sciv2 is None:
+        return {"ok": False, "kind": "scene_view", "entityId": sciv_id,
+                "error": "approve 前实体消失"}
+    r = await svc.approve_scene_instance_view(
+        sciv_id, candidate_index=0,
+        expected_revision=scene_instance_view_revision(sciv2),
+        expected_resources_document_revision=res_doc_revision(rdoc))
+    ok = bool(r.get("ok")) if isinstance(r, dict) else False
+    out = {"ok": ok, "kind": "scene_view", "entityId": sciv_id,
+           "pointer": "scene_instance_view.approved"}
+    if isinstance(r, dict) and not ok:
+        out["error"] = str(r.get("detail") or r.get("error") or "approve 被拒绝")[:200]
+    return out
 
 
 def _perform_selection_impl(pdir: Path, project: str, spec: dict,
@@ -283,11 +332,19 @@ def _select_first_frame(pdir: Path, shot_id: str, candidate_id: Optional[str]) -
     if shot is None:
         return {"ok": False, "kind": "first_frame", "entityId": shot_id,
                 "error": f"镜头不存在: {shot_id}"}
+    # Phase 47（D 批真机）：管线生成分镜图后自动选中（selected_first_frame=ff_*，
+    # 候选 dict 未必携带 candidate_id）——审查确认已选版本=合法选用（幂等）。
+    if shot.selected_first_frame and shot.selected_first_frame == candidate_id:
+        return {"ok": True, "kind": "first_frame", "entityId": shot_id,
+                "versionId": candidate_id, "pointer": "selected_first_frame",
+                "alreadySelected": True}
     cand_ids = [c.candidate_id for c in
                 (shot.first_frame.candidates if shot.first_frame else [])]
     if candidate_id not in cand_ids:
         return {"ok": False, "kind": "first_frame", "entityId": shot_id,
-                "versionId": candidate_id, "error": "候选不存在于该镜头首帧批次"}
+                "versionId": candidate_id,
+                "error": "候选不存在于该镜头首帧批次（候选无 id 时请传"
+                         " shot.selected_first_frame 的精确版本）"}
     store.update_shot(shot_id, lambda s: setattr(s, "selected_first_frame", candidate_id))
     return {"ok": True, "kind": "first_frame", "entityId": shot_id,
             "versionId": candidate_id, "pointer": "selected_first_frame"}

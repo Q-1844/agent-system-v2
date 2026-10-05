@@ -744,44 +744,26 @@ class WorkflowEngine:
                 # §4.6：受本审核明确授权的选用变化成为后续依据——选用产物写入
                 # 本节点交接包 outputs（disposition=selected），下游逐节点冻结
                 # 即可解析到精确版本（assembly 守卫据此放行）。
+                # 多选用（items）：逐 item 展开为独立输出记录（真实 entityId+
+                # versionId；不能只写默认 spec 的占位符）。
                 spec_sel = ps_local.get("spec") or {}
-                # selection kind → 交接输出 kind（reference 批准落回资源域；
-                # versionId 仅对"实体带版本"的 kind 有意义，reference 批准记录
-                # approvedAssetId——与 outputs.py 的 versionId=None 记录保持
-                # freeze 一致性）
+                out_recs: List[dict] = []
+                if receipt.get("multi") and isinstance(receipt.get("items"), list):
+                    for it in receipt["items"]:
+                        if not isinstance(it, dict) or not it.get("ok"):
+                            continue
+                        out_recs.append({"entityId": it.get("entityId"),
+                                         "versionId": it.get("versionId")})
+                else:
+                    out_recs.append({"entityId": spec_sel.get("entityId"),
+                                     "versionId": spec_sel.get("versionId")})
                 _SEL_KIND_MAP = {"look_reference": "look",
                                  "prop_reference": "prop",
-                                 "composition_candidate": "composition"}
+                                 "composition_candidate": "composition",
+                                 "scene_view": "scene_instance_view"}
                 out_kind = _SEL_KIND_MAP.get(spec_sel.get("kind"),
                                              spec_sel.get("kind") or "unknown")
                 _VERSIONED_KINDS = ("video_version", "sequence_render", "first_frame")
-                out_rec = {"kind": out_kind,
-                           "entityId": spec_sel.get("entityId"),
-                           "versionId": (spec_sel.get("versionId")
-                                         if spec_sel.get("kind") in _VERSIONED_KINDS
-                                         else None),
-                           "approvedAssetId": (spec_sel.get("versionId")
-                                               if spec_sel.get("kind")
-                                               not in _VERSIONED_KINDS else None),
-                           "disposition": "selected",
-                           "reviewState": "selected",
-                           "contentHash": None, "fileOk": True}
-                try:
-                    from .outputs import _resolve_kind
-                    rspec = {"kind": out_kind}
-                    if out_kind == "video_version":
-                        rspec["shotId"] = spec_sel.get("entityId")
-                        rspec["id"] = spec_sel.get("versionId")
-                    else:
-                        rspec["id"] = spec_sel.get("entityId")
-                    matches = _resolve_kind(project_dir, project, rspec)
-                    m = next((x for x in matches
-                              if x["entityId"] == spec_sel.get("entityId")), None)
-                    if m is not None:
-                        out_rec["contentHash"] = m.get("contentHash")
-                        out_rec["fileOk"] = bool(m.get("fileOk"))
-                except Exception:
-                    pass
                 h = n.get("handoff") or {
                     "runId": r["runId"], "nodeId": nid,
                     "attemptId": n.get("currentAttemptId"),
@@ -790,7 +772,39 @@ class WorkflowEngine:
                     "missingRequirements": [],
                     "brief": "人工审核选用产物（selection）",
                 }
-                h.setdefault("outputs", []).append(out_rec)
+                h.setdefault("outputs", [])
+                for o in out_recs:
+                    out_rec = {"kind": out_kind,
+                               "entityId": o.get("entityId"),
+                               "versionId": (o.get("versionId")
+                                             if spec_sel.get("kind") in _VERSIONED_KINDS
+                                             else None),
+                               "approvedAssetId": (o.get("versionId")
+                                                   if spec_sel.get("kind")
+                                                   not in _VERSIONED_KINDS else None),
+                               "disposition": "selected",
+                               "reviewState": "selected",
+                               "contentHash": None, "fileOk": True}
+                    try:
+                        from .outputs import _resolve_kind
+                        rspec = {"kind": out_kind}
+                        if out_kind == "video_version":
+                            rspec["shotId"] = o.get("entityId")
+                            rspec["id"] = o.get("versionId")
+                        else:
+                            rspec["id"] = o.get("versionId") or o.get("entityId")
+                        matches = _resolve_kind(project_dir, project, rspec)
+                        m = next((x for x in matches
+                                  if x["entityId"] == o.get("entityId")
+                                  and (out_kind != "video_version"
+                                       or (x.get("versionId") or None)
+                                       == (o.get("versionId") or None))), None)
+                        if m is not None:
+                            out_rec["contentHash"] = m.get("contentHash")
+                            out_rec["fileOk"] = bool(m.get("fileOk"))
+                    except Exception:
+                        pass
+                    h["outputs"].append(out_rec)
                 n["handoff"] = h
                 _set_node(n, M.NODE_SUCCESS)
             else:
