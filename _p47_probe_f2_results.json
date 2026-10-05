@@ -1,0 +1,43 @@
+{
+ "round": "F2",
+ "project": "夜邮刺猬",
+ "runId": "run_13e741c1c934",
+ "finalStatus": "waiting_human",
+ "F3_interrupted": null,
+ "nodes": {
+  "n_producer": "success",
+  "n_sw": "success",
+  "n_rv_sw": "success",
+  "n_cd": "success",
+  "n_rv_cd": "success",
+  "n_sc": "success",
+  "n_rv_sc": "success",
+  "n_dir_board": "success",
+  "n_rv_board": "success",
+  "n_dir_video": "success",
+  "n_rv_v1": "success",
+  "n_rv_v2": "success",
+  "n_asm": "success",
+  "n_rv_final": "waiting_human"
+ },
+ "media": {
+  "frames": 6,
+  "videos": 6,
+  "renders": [
+   [
+    "seq_b1aaacd6",
+    "srender_29ccbf6b",
+    "failed",
+    false
+   ],
+   [
+    "seq_b1aaacd6",
+    "srender_c57fb8be",
+    "done",
+    true
+   ]
+  ],
+  "narration_wav": 6,
+  "final_render_pending": true
+ }
+}

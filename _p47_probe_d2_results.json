@@ -1,0 +1,105 @@
+{
+ "finalStatus": "waiting_human",
+ "nodes": {
+  "n_producer": {
+   "status": "success",
+   "error": ""
+  },
+  "n_sw": {
+   "status": "success",
+   "error": ""
+  },
+  "n_rv_sw": {
+   "status": "success",
+   "error": ""
+  },
+  "n_cd": {
+   "status": "success",
+   "error": ""
+  },
+  "n_rv_cd": {
+   "status": "success",
+   "error": ""
+  },
+  "n_sc": {
+   "status": "success",
+   "error": ""
+  },
+  "n_rv_sc": {
+   "status": "success",
+   "error": ""
+  },
+  "n_dir_board": {
+   "status": "success",
+   "error": ""
+  },
+  "n_rv_board": {
+   "status": "success",
+   "error": ""
+  },
+  "n_dir_video": {
+   "status": "success",
+   "error": ""
+  },
+  "n_rv_v1": {
+   "status": "success",
+   "error": ""
+  },
+  "n_rv_v2": {
+   "status": "success",
+   "error": ""
+  },
+  "n_asm": {
+   "status": "success",
+   "error": ""
+  },
+  "n_rv_final": {
+   "status": "waiting_human",
+   "error": ""
+  }
+ },
+ "reviews": [
+  {
+   "reviewIndex": 1,
+   "status": "decided",
+   "decision": "approve",
+   "selectionState": "none"
+  },
+  {
+   "reviewIndex": 2,
+   "status": "decided",
+   "decision": "approve",
+   "selectionState": "done"
+  },
+  {
+   "reviewIndex": 3,
+   "status": "decided",
+   "decision": "approve",
+   "selectionState": "done"
+  },
+  {
+   "reviewIndex": 4,
+   "status": "decided",
+   "decision": "approve",
+   "selectionState": "done"
+  },
+  {
+   "reviewIndex": 5,
+   "status": "decided",
+   "decision": "approve",
+   "selectionState": "none"
+  },
+  {
+   "reviewIndex": 6,
+   "status": "decided",
+   "decision": "approve",
+   "selectionState": "done"
+  },
+  {
+   "reviewIndex": 7,
+   "status": "pending",
+   "decision": null,
+   "selectionState": "none"
+  }
+ ]
+}

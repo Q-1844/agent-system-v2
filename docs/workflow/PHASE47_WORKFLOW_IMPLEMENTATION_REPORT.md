@@ -79,10 +79,43 @@ D 批期间真机定位并修复（第一处偏离逐层）：
 4. `scene_view` 选用类型新增（审查→实体级 OCC approve）。
 5. shot 内容 hash 去掉 n_video_versions（下游进度≠分镜内容变更）。
 6. 多选用 items 落交接包逐项展开（修占位符 bug）。
-## 6. E批：真机恢复（状态）
+## 6. E批：真机恢复——**完成（语义全部验证）**
 
-`_p47_probe_e.py`：R1 派发窗口/ R2 turn 遗留 / R4 人审等待 / R6 幂等 / R7 停止晚到——
-真杀进程+重启+持久化状态注入（状态见 `PHASE47_TEST_EVIDENCE_INDEX.md` §2.9.5）。
+`_p47_probe_e.py` + `_p47_probe_e_r2.py`（真实杀断后端进程 + 持久化状态注入）：
+
+| 场景 | 结果 | 证据 |
+| --- | --- | --- |
+| R1 派发前窗口 | PASS | 派发意图无任务关联→诚实 needs_reconciliation→旧 attempt 保留→显式 continue 新 attempt 真实执行 |
+| R2 turn 遗留 | PASS | run_31a0879f270c：运行态遗留 task→needs_reconciliation（错误含 task id）→continue 续跑完成；首轮暴露注入夹具绕过 runs_index→夹具修复后复验 |
+| R4 人审等待 | PASS | review/材料/意见跨重启原样保留；通过后下游**恰好一次**派发（attempts=1） |
+| R6 重复启动 | PASS | 同幂等键双启动→同 run（reused）；重复决策 alreadyDecided |
+| R7 停止晚到 | PASS（带边界） | 停止后终态保持、下游不派发、指针零变更；边界：运行中停止的 turn 以 failed 标签落账（不破坏机制保证，如实记录） |
+
+真实排障修复：探针 launcher 管道挂起（DEVNULL）、注入索引维护（save_run 同步 runs_index）。
+
+## 7. F批：冻结与三轮独立复验——**完成**
+
+冻结基线：`docs/workflow/PHASE47_FROZEN_BASELINE.json`（HEAD `d985783` + Skill hash
+relay=4c529461…/bridge=eb23f971… + agnes-3.0-flash + p47_templates_v1）。
+
+| 轮 | 项目/故事 | 结果 | 媒体核验 |
+| --- | --- | --- | --- |
+| F1 | 风铃山道《山铃回声》 | **run_181eff42300e 六员全 success**，停靠成片审定（用户定版待处理） | 6 帧 + 6 视频 + render done（seq_80326f20/srender_cf03b1ff 落盘）+ 6 句 TTS |
+| F2 | 夜邮刺猬《夜邮灯塔》 | **run_13e741c1c934 六员全 success**，停靠成片审定 | 6 帧 + 6 视频 + render done（srender_c57fb8be）+ 6 句 TTS |
+| F3 | 山雀夜航《山雀夜航》（**复用轮**） | **run_fb5e2c27eac8 六员全 success**（含真实中断），停靠成片审定 | 6 帧 + 8 视频 + render done（srender_8fb05fe6）+ 7 句 TTS |
+
+F3 复用与中断（§8.2 要求逐项）：
+- 合法既有资源复用：F1 已批准 Look 经共享库发布（look_7118f703805e）→ F3 角色
+  节点 `resource.library.import` 导入；**复用溯源写入 canonical**（look.origin=
+  shared_library/shared_resource_id）——不把复用冒充新建。
+- 真实中断：装配节点运行中硬杀后端→重启→诚实 needs_reconciliation（错误含
+  确切 task id）→显式 continue→装配重试成功。
+- 逐轮独立：每轮新项目/新会话/新故事（F3 复用资产如实标注）；不拼凑不同基线片段。
+
+F 轮过程真实记录（不从报告删除）：F2 场景 agent 两轮只建 LocationView（工具选择偏差）
+→ 目标点名 `scene.state_view.prepare` 后第三次正确；F2 首驱动被杀留下僵尸 run 与后续
+run 竞态（接管完成）；F3 首轮视频 4/6 诚实失败→复用续做。每轮第一候选可用率等量化
+口径见 evidence index §5。
 
 ## 7. F批：冻结与三轮复验（状态）
 
@@ -104,11 +137,45 @@ D 批期间真机定位并修复（第一处偏离逐层）：
 | （修复三连） | 选用 async/OCC/多选用+交接链 |
 | （assembly+settlement） | 快照项目作用域+snapshot_freeze+boot 守卫 |
 
-## 10. 未完成与边界（如实）
+## 10. 逐项回答（执行书 §12 主报告必答）
 
-- W09 整链/D 批成片、E 批真机演练、F 批三轮复验：见各节状态（本报告随批更新）。
-- W06/W07 的模板默认无 Skill 绑定（依名册：修复/桥接方法沉淀于 relay-calibration
-  的 references，director 可另绑；模板保持最小绑定面）。
-- 前端 vue-tsc 历史 61 类型错误（store/resources/scene-system 视图）非本轮引入，
-  workflow 组件 0 新增错误（如实保留不隐去）。
-- 工程探针的审核通过=机制验证，不等于用户审美通过；所有正式定版待用户。
+1. **六员正常职责生产**：全部通过。producer（计划+守卫）/script_writer（新写+复用核验）/
+   character_designer（三视图+Look 图像+共享库导入复用）/scene_designer（地点+实例视图+
+   needs_fix 重生成循环）/director（分镜图+视频+桥接+修复）/assembly（快照冻结+Sequence+
+   TTS+混音渲染）——各有真实职责内产物与回执。
+2. **十类工作流**：W00-W09 **全部正式可用**（模板创建→真机 run→真实产物）；
+   无"仅定义"项。W06/W07 在隔离夹具项目验证（C3），W09 经 D 批+F 批四轮全链验证。
+3. **两个 Skill**：均实际加载并完成任务（relay：W05/W09 视频链快照 hash+load 事件+
+   trace 落档；bridge：W07 真实桥接生成+双端验收）。
+4. **六员整链**：D 批《风后邮站》+ F1《山铃回声》+ F2《夜邮灯塔》+ F3《山雀夜航》
+   四轮全链——新媒体（图像/视频/TTS/音乐混音）与可审成片全部落盘；
+   **未完成的用户决定**：四部成片的 final 定版（成片审定关卡全部保留给用户）。
+5. **恢复**：自动完成=对账状态判定/审核等待保持/已完成节点不重做/幂等；
+   需显式动作=needs_reconciliation 后的页面「继续」（错误含确切 task id）；
+   运行中停止的 turn 以 failed 标签落账（边界如实记录）。
+6. **三轮复验**：全部执行（§7）；冻结基线 d985783；失败样本与过程记录保留（F2 场景
+   工具偏差两轮、僵尸 run 竞态、F3 视频 4/6）。
+7. **剩余阻塞**：无工程阻塞。**待用户**：四部成片的审美接受与 final 定版；
+   P47-42 的媒体待评不写 PASS。以后拓展：并行/条件分支/自动返工（按本轮真实
+   重复需求排序：场景视图质量的自动重生成循环最高频）。
+
+## 11. 未完成与边界（如实）
+
+- 四部成片可审未定版——工程验收通过，**媒体与定版待用户评审**。
+- 运行中停止的节点标签语义（failed vs stopped）——机制保证不破坏，语义修正留待后续。
+- `resource.library.publish_character` 视图文件校验路径缺口（Look 复用路径不受影响，
+  如实记录）。
+- 前端 vue-tsc 历史 61 类型错误（非本轮引入）；workflow 组件 0 新增。
+- 48 情景矩阵中 P47-42 的媒体验收=工程核验通过、用户审美待评。
+
+## 12. 交付物索引
+
+| 文件 | 内容 |
+| --- | --- |
+| 本报告 | 主报告与分别判定的完成结论 |
+| `PHASE47_A批_基线入口表与工作流账本.md` | 基线/入口表/账本初版 |
+| `PHASE47_WORKFLOW_CATALOG.md` | W00-W09 定义来源/参数/前置/run 索引 |
+| `PHASE47_TEST_EVIDENCE_INDEX.md` | 48 情景结果+环境事件+run 索引 |
+| `PHASE47_FROZEN_BASELINE.json` | F 批冻结基线 |
+| `_p47_probe_*.py`（已入库） | 全部真机探针/驱动/恢复演练脚本 |
+| `projects/{风后邮站,风铃山道,夜邮刺猬,山雀夜航,P47_*}` | 真实媒体资产与 run 记录 |
