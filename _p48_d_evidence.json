@@ -102,7 +102,13 @@
     "url": "https://Q-1844.github.io/agnes-frame-host/objects/c21148e2088b2260.png"
    },
    "ff_ready": true,
-   "video_job": "042943926d5b"
+   "video_job": "042943926d5b",
+   "video_result": {
+    "status": "done",
+    "wall_s": 229.2
+   },
+   "video_version": "vv_c3ee7c3f",
+   "video_local": "projects\\P48_D_Cast\\output\\videos\\s01_c04.mp4"
   },
   "s01_c05": {
    "level": "L2_spatial",
@@ -119,7 +125,14 @@
     "candidate_id": "c_inj_s01_c05_1791238759",
     "url": "https://Q-1844.github.io/agnes-frame-host/objects/2410283efc82f383.png"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "1216910a3166",
+   "video_result": {
+    "status": "done",
+    "wall_s": 145.2
+   },
+   "video_version": "vv_2effbf5b",
+   "video_local": "projects\\P48_D_Cast\\output\\videos\\s01_c05.mp4"
   },
   "s01_c06": {
    "level": "L2_spatial",
@@ -136,7 +149,14 @@
     "candidate_id": "c_inj_s01_c06_1791238840",
     "url": "https://Q-1844.github.io/agnes-frame-host/objects/dc34a00f99a82331.png"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "298115ebe015",
+   "video_result": {
+    "status": "done",
+    "wall_s": 214.3
+   },
+   "video_version": "vv_b4c1d589",
+   "video_local": "projects\\P48_D_Cast\\output\\videos\\s01_c06.mp4"
   },
   "s01_c07": {
    "level": "L3_handoff",
@@ -153,7 +173,14 @@
     "candidate_id": "c_inj_s01_c07_1791238912",
     "url": "https://Q-1844.github.io/agnes-frame-host/objects/47edc28b388d1f58.png"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "56b48f838f4b",
+   "video_result": {
+    "status": "done",
+    "wall_s": 219.7
+   },
+   "video_version": "vv_0e207472",
+   "video_local": "projects\\P48_D_Cast\\output\\videos\\s01_c07.mp4"
   },
   "s01_c08": {
    "level": "L3_handoff",
@@ -170,7 +197,14 @@
     "candidate_id": "c_inj_s01_c08_1791238987",
     "url": "https://Q-1844.github.io/agnes-frame-host/objects/96f441e4ea30ff62.png"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "363f6be9cd87",
+   "video_result": {
+    "status": "done",
+    "wall_s": 353.3
+   },
+   "video_version": "vv_71c2de57",
+   "video_local": "projects\\P48_D_Cast\\output\\videos\\s01_c08.mp4"
   },
   "s01_c09": {
    "level": "L3_handoff",
@@ -187,7 +221,14 @@
     "candidate_id": "c_inj_s01_c09_1791239062",
     "url": "https://Q-1844.github.io/agnes-frame-host/objects/b771100a6148f3e0.png"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "245956ec7000",
+   "video_result": {
+    "status": "done",
+    "wall_s": 248.1
+   },
+   "video_version": "vv_b4756987",
+   "video_local": "projects\\P48_D_Cast\\output\\videos\\s01_c09.mp4"
   },
   "s01_c10": {
    "level": "L4_mono_dialogue",
@@ -204,7 +245,14 @@
     "candidate_id": "c_inj_s01_c10_1791239151",
     "url": "https://Q-1844.github.io/agnes-frame-host/objects/15b7c3e85280f67c.png"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "2cc4aa6fc93c",
+   "video_result": {
+    "status": "done",
+    "wall_s": 298.0
+   },
+   "video_version": "vv_91a60fb7",
+   "video_local": "projects\\P48_D_Cast\\output\\videos\\s01_c10.mp4"
   },
   "s01_c11": {
    "level": "L4_mono_dialogue",
@@ -221,7 +269,14 @@
     "candidate_id": "c_inj_s01_c11_1791239220",
     "url": "https://Q-1844.github.io/agnes-frame-host/objects/ba06e6a2ad7ef9c1.png"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "f07594f55dd0",
+   "video_result": {
+    "status": "done",
+    "wall_s": 368.6
+   },
+   "video_version": "vv_7b1247ad",
+   "video_local": "projects\\P48_D_Cast\\output\\videos\\s01_c11.mp4"
   },
   "s01_c12": {
    "level": "L4_mono_dialogue",
@@ -238,7 +293,14 @@
     "candidate_id": "c_inj_s01_c12_1791239375",
     "url": "https://Q-1844.github.io/agnes-frame-host/objects/8150401c51f4d4ff.png"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "67ae8ea25d5e",
+   "video_result": {
+    "status": "done",
+    "wall_s": 315.6
+   },
+   "video_version": "vv_fca83178",
+   "video_local": "projects\\P48_D_Cast\\output\\videos\\s01_c12.mp4"
   },
   "s01_c13": {
    "level": "L5_duo_dialogue",
@@ -255,7 +317,14 @@
     "candidate_id": "c_inj_s01_c13_1791239483",
     "url": "https://Q-1844.github.io/agnes-frame-host/objects/d621f81466ff1501.png"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "059007af5413",
+   "video_result": {
+    "status": "done",
+    "wall_s": 309.4
+   },
+   "video_version": "vv_1d57bd32",
+   "video_local": "projects\\P48_D_Cast\\output\\videos\\s01_c13.mp4"
   },
   "s01_c14": {
    "level": "L5_duo_dialogue",
@@ -272,7 +341,14 @@
     "candidate_id": "c_inj_s01_c14_1791239567",
     "url": "https://Q-1844.github.io/agnes-frame-host/objects/536fb104f23a9b26.png"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "14181638f04e",
+   "video_result": {
+    "status": "done",
+    "wall_s": 342.7
+   },
+   "video_version": "vv_3fbdc10c",
+   "video_local": "projects\\P48_D_Cast\\output\\videos\\s01_c14.mp4"
   },
   "s01_c15": {
    "level": "L5_duo_dialogue",
@@ -289,7 +365,14 @@
     "candidate_id": "c_inj_s01_c15_1791239653",
     "url": "https://Q-1844.github.io/agnes-frame-host/objects/dfd601bb7adb2afe.png"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "ed2af0d14d74",
+   "video_result": {
+    "status": "done",
+    "wall_s": 276.0
+   },
+   "video_version": "vv_d40b948f",
+   "video_local": "projects\\P48_D_Cast\\output\\videos\\s01_c15.mp4"
   },
   "s01_c16": {
    "level": "L6_cross_shot",
@@ -306,7 +389,14 @@
     "candidate_id": "c_inj_s01_c16_1791239768",
     "url": "https://Q-1844.github.io/agnes-frame-host/objects/8fc67b084300260b.png"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "3294a2f358f5",
+   "video_result": {
+    "status": "done",
+    "wall_s": 252.0
+   },
+   "video_version": "vv_935d969e",
+   "video_local": "projects\\P48_D_Cast\\output\\videos\\s01_c16.mp4"
   },
   "s01_c17": {
    "level": "L6_cross_shot",
@@ -323,7 +413,14 @@
     "candidate_id": "c_inj_s01_c17_1791239849",
     "url": "https://Q-1844.github.io/agnes-frame-host/objects/17a8244dc93d1f28.png"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "49577c45b031",
+   "video_result": {
+    "status": "done",
+    "wall_s": 243.8
+   },
+   "video_version": "vv_f8e4152e",
+   "video_local": "projects\\P48_D_Cast\\output\\videos\\s01_c17.mp4"
   },
   "s01_c18": {
    "level": "L6_cross_shot",
@@ -340,7 +437,14 @@
     "candidate_id": "c_inj_s01_c18_1791239922",
     "url": "https://Q-1844.github.io/agnes-frame-host/objects/106429be3bc39a94.png"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "5c1ecb51a6cd",
+   "video_result": {
+    "status": "done",
+    "wall_s": 308.9
+   },
+   "video_version": "vv_72462e80",
+   "video_local": "projects\\P48_D_Cast\\output\\videos\\s01_c18.mp4"
   }
  },
  "fixture": {

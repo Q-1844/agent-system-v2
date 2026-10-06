@@ -1,0 +1,272 @@
+{
+ "s01_c01": {
+  "level": "L1_sameframe",
+  "expected_speaker": null,
+  "frozen_line": "",
+  "asr_strong": [],
+  "unexpected_speech": false
+ },
+ "s01_c02": {
+  "level": "L1_sameframe",
+  "expected_speaker": null,
+  "frozen_line": "",
+  "asr_strong": [],
+  "unexpected_speech": false,
+  "voice": {
+   "f0_median": 87.4,
+   "f0_n": 8
+  }
+ },
+ "s01_c03": {
+  "level": "L1_sameframe",
+  "expected_speaker": null,
+  "frozen_line": "",
+  "asr_strong": [],
+  "unexpected_speech": false
+ },
+ "s01_c04": {
+  "level": "L2_spatial",
+  "expected_speaker": null,
+  "frozen_line": "",
+  "asr_strong": [],
+  "unexpected_speech": false
+ },
+ "s01_c05": {
+  "level": "L2_spatial",
+  "expected_speaker": null,
+  "frozen_line": "",
+  "asr_strong": [],
+  "unexpected_speech": false,
+  "voice": {
+   "f0_median": 88.9,
+   "f0_n": 9
+  }
+ },
+ "s01_c06": {
+  "level": "L2_spatial",
+  "expected_speaker": null,
+  "frozen_line": "",
+  "asr_strong": [],
+  "unexpected_speech": false
+ },
+ "s01_c07": {
+  "level": "L3_handoff",
+  "expected_speaker": null,
+  "frozen_line": "",
+  "asr_strong": [],
+  "unexpected_speech": false
+ },
+ "s01_c08": {
+  "level": "L3_handoff",
+  "expected_speaker": null,
+  "frozen_line": "",
+  "asr_strong": [],
+  "unexpected_speech": false
+ },
+ "s01_c09": {
+  "level": "L3_handoff",
+  "expected_speaker": null,
+  "frozen_line": "",
+  "asr_strong": [],
+  "unexpected_speech": false
+ },
+ "s01_c10": {
+  "level": "L4_mono_dialogue",
+  "expected_speaker": "小满",
+  "frozen_line": "小满：我们要在天黑前找到出口。",
+  "asr_strong": [
+   {
+    "start": 0.0,
+    "end": 2.0,
+    "text": "我们要在天黑前找到出口",
+    "no_speech_prob": 0.293,
+    "avg_logprob": -0.31
+   }
+  ],
+  "match": {
+   "transcript": "我们要在天黑前找到出口",
+   "edit_distance": 0,
+   "len_frozen": 11,
+   "verdict": "match"
+  },
+  "voice": {
+   "f0_median": 296.3,
+   "f0_n": 57
+  }
+ },
+ "s01_c11": {
+  "level": "L4_mono_dialogue",
+  "expected_speaker": null,
+  "frozen_line": "",
+  "asr_strong": [],
+  "unexpected_speech": false
+ },
+ "s01_c12": {
+  "level": "L4_mono_dialogue",
+  "expected_speaker": "小满",
+  "frozen_line": "小满：那就走左边的小路。",
+  "asr_strong": [
+   {
+    "start": 0.0,
+    "end": 2.32,
+    "text": "那就走左边的小路",
+    "no_speech_prob": 0.09,
+    "avg_logprob": -0.47
+   }
+  ],
+  "match": {
+   "transcript": "那就走左边的小路",
+   "edit_distance": 0,
+   "len_frozen": 8,
+   "verdict": "match"
+  },
+  "voice": {
+   "f0_median": 313.7,
+   "f0_n": 44
+  }
+ },
+ "s01_c13": {
+  "level": "L5_duo_dialogue",
+  "expected_speaker": "阿岩",
+  "frozen_line": "阿岩：左边有水声，可能是河。",
+  "asr_strong": [
+   {
+    "start": 0.0,
+    "end": 3.16,
+    "text": "左边有水生 可能是河",
+    "no_speech_prob": 0.029,
+    "avg_logprob": -0.5
+   }
+  ],
+  "match": {
+   "transcript": "左边有水生 可能是河",
+   "edit_distance": 1,
+   "len_frozen": 9,
+   "verdict": "match"
+  },
+  "voice": {
+   "f0_median": 246.2,
+   "f0_n": 47
+  }
+ },
+ "s01_c14": {
+  "level": "L5_duo_dialogue",
+  "expected_speaker": "小满",
+  "frozen_line": "小满：那就顺着水声走。",
+  "asr_strong": [
+   {
+    "start": 0.0,
+    "end": 2.0,
+    "text": "那就順著水生走",
+    "no_speech_prob": 0.072,
+    "avg_logprob": -0.53
+   }
+  ],
+  "match": {
+   "transcript": "那就順著水生走",
+   "edit_distance": 3,
+   "len_frozen": 7,
+   "verdict": "partial"
+  },
+  "voice": {
+   "f0_median": 313.7,
+   "f0_n": 45
+  }
+ },
+ "s01_c15": {
+  "level": "L5_duo_dialogue",
+  "expected_speaker": "阿岩",
+  "frozen_line": "阿岩：好，天黑前出发。",
+  "asr_strong": [
+   {
+    "start": 0.0,
+    "end": 2.0,
+    "text": "好 天黑前出發",
+    "no_speech_prob": 0.013,
+    "avg_logprob": -0.47
+   }
+  ],
+  "match": {
+   "transcript": "好 天黑前出發",
+   "edit_distance": 1,
+   "len_frozen": 6,
+   "verdict": "match"
+  },
+  "voice": {
+   "f0_median": 135.6,
+   "f0_n": 26
+  }
+ },
+ "s01_c16": {
+  "level": "L6_cross_shot",
+  "expected_speaker": "小满",
+  "frozen_line": "小满：小心脚下，木板松了。",
+  "asr_strong": [
+   {
+    "start": 0.0,
+    "end": 4.0,
+    "text": "小心脚下 木板松了",
+    "no_speech_prob": 0.034,
+    "avg_logprob": -0.42
+   }
+  ],
+  "match": {
+   "transcript": "小心脚下 木板松了",
+   "edit_distance": 0,
+   "len_frozen": 8,
+   "verdict": "match"
+  },
+  "voice": {
+   "f0_median": 299.1,
+   "f0_n": 60
+  }
+ },
+ "s01_c17": {
+  "level": "L6_cross_shot",
+  "expected_speaker": "小满",
+  "frozen_line": "小满：……踩外侧就不会断。",
+  "asr_strong": [
+   {
+    "start": 0.0,
+    "end": 2.0,
+    "text": "彩外侧就不会断",
+    "no_speech_prob": 0.172,
+    "avg_logprob": -0.41
+   }
+  ],
+  "match": {
+   "transcript": "彩外侧就不会断",
+   "edit_distance": 3,
+   "len_frozen": 9,
+   "verdict": "partial"
+  },
+  "voice": {
+   "f0_median": 266.7,
+   "f0_n": 43
+  }
+ },
+ "s01_c18": {
+  "level": "L6_cross_shot",
+  "expected_speaker": "阿岩",
+  "frozen_line": "阿岩：知道了，你先走。",
+  "asr_strong": [
+   {
+    "start": 0.0,
+    "end": 2.0,
+    "text": "知道了 你先走",
+    "no_speech_prob": 0.045,
+    "avg_logprob": -0.63
+   }
+  ],
+  "match": {
+   "transcript": "知道了 你先走",
+   "edit_distance": 0,
+   "len_frozen": 6,
+   "verdict": "match"
+  },
+  "voice": {
+   "f0_median": 133.3,
+   "f0_n": 11
+  }
+ }
+}
