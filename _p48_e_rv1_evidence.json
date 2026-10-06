@@ -1,0 +1,23 @@
+{
+ "look": {
+  "sha16": "aedea93fd10ada69",
+  "task": ""
+ },
+ "look_png": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_E_RV1\\output\\frames\\look_ref.png",
+ "s01_c01": {
+  "ff_ready": true,
+  "receipt": {
+   "sha16": "8d07752548051d0a",
+   "task": "",
+   "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_E_RV1\\output\\frames\\s01_c01_ff_custom.png"
+  }
+ },
+ "s01_c02": {
+  "ff_ready": true,
+  "receipt": {
+   "sha16": "3522cc550b3bdbce",
+   "task": "",
+   "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_E_RV1\\output\\frames\\s01_c02_ff_custom.png"
+  }
+ }
+}
