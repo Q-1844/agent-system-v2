@@ -585,5 +585,46 @@
    }
   }
  },
- "brief": "《风筝与竹竿》：小女孩小满（双马尾辫，黄雨衣）的风筝挂在了村口老槐树的高枝上。她的朋友阿岩（乱翘短发，蓝白条纹T恤，深绿背带工装裤）想用长竹竿把风筝捅下来，第一次尝试失败（竹竿太短够不着）。小满面临选择：爬上摇摇晃晃的树杈（有跌落风险），或回家求助（放弃今天放飞）。她选择小心爬树，在树杈间意外发现阿岩前几天丢失的红色手电筒（回收此前道具伏笔）。她不动手电筒，改用手电筒玻璃反光引来路人的注意，借来长梯取下风筝。两人傍晚一起放飞风筝。"
+ "brief": "《风筝与竹竿》：小女孩小满（双马尾辫，黄雨衣）的风筝挂在了村口老槐树的高枝上。她的朋友阿岩（乱翘短发，蓝白条纹T恤，深绿背带工装裤）想用长竹竿把风筝捅下来，第一次尝试失败（竹竿太短够不着）。小满面临选择：爬上摇摇晃晃的树杈（有跌落风险），或回家求助（放弃今天放飞）。她选择小心爬树，在树杈间意外发现阿岩前几天丢失的红色手电筒（回收此前道具伏笔）。她不动手电筒，改用手电筒玻璃反光引来路人的注意，借来长梯取下风筝。两人傍晚一起放飞风筝。",
+ "resume_20261006": {
+  "run": "run_e9484ba7ad72",
+  "balance_probe": "1次1-token文本探针 HTTP200（.env AGNES_API_KEY，agnes统一额度）",
+  "engine_fixes": [
+   "continue failed-run 放行",
+   "重试信封失败事实反馈",
+   "live-turn 对账防御",
+   "测试隔离闸门 WF_STARTUP_RECOVERY_DISABLE"
+  ],
+  "n_sc": "attempt1 att_6cdd471c8d 真实工作17min后goal-check失败(1/2地点)；attempt2 att_52f1ca3697 零写入收工(无反馈机制)；attempt3 att_50e6782ff1 被测试进程settl误杀(interrupted_by_backend_restart,工作成果19:00结算自愈为诚实failed)；attempt4 att_ff17fe38b3 反馈到位后成功：3地点/4实例/2 approved LocationView/4 approved Sciv/0 stale",
+  "n_dir_board": "attempt1 3/6带图失败；attempt2 成功9镜6带图",
+  "n_rv_board_eyeball": "缺陷如实记录于审核注记：3/6首帧双小满分身、2镜多余第三儿童、阿岩Look服装6/6漂移白T、s04_c02风筝在树与剧情矛盾；批准+选用，交视频节点Skill缺陷端点处理",
+  "commit": "5a5f85c",
+  "film1_candidate": {
+   "render": "projects/P48_E_2D/output/sequences/seq_*/srender_05c8a13a.mp4",
+   "run": "run_e9484ba7ad72",
+   "gates_passed_by_executor": "n_rv_sc/n_rv_board(选用)/n_rv_v1/n_rv_v2(选用) 目检后通过+缺陷注记",
+   "user_gate_pending": "n_rv_final",
+   "videos": "9镜9版本，全部i2v独立首帧",
+   "known_defects": "见 n_rv_v1 注记（分身3镜/服装漂移/静音对白2镜/风筝位置矛盾）"
+  },
+  "film23_explainer": {
+   "watercolor": "run_36463ddeb487",
+   "realistic": "run_bbb7a89a480d",
+   "explainer_v1": "run_545cc965eab9 —— n_rv_cd 驳回（Operator Hand Look 两候选均为动漫全身男，规格=单手特写技术2D；角色三视图合格但 Look t2i 跑偏；不合格Look不选用防污染首帧）",
+   "explainer_v2": "run_a89dbfff6c95 —— 定义 rev2 锐化角色目标（单手特写/禁人脸全身/两次不合格如实列缺项）",
+   "look_gate_findings": "阿岩 Look 机器审查从严（写实片10候选全 needs_fix：要求晒黑/乱翘/无表情/村景背景逐字达标）；执行者两轮重生成+水彩新候选 pass；写实按主片人评先例记录 hr_1bc97b5279ef pass（附与机器分歧完整理由+风险兜底说明）"
+  },
+  "drill_20261006_2300": {
+   "type": "硬杀中断+重启刷新+诚实恢复",
+   "window": "水彩/写实 n_sc 场景turn在途 + 说明片 n_cd 角色turn在途时 taskkill 后端",
+   "result": "重启后对账3个在途attempt全部诚实落 needs_reconciliation（进程中断…请显式重试），无假成功无failed翻转；显式 continue×3 恢复生产",
+   "coverage": "中断+刷新+诚实恢复=本轮实证；晚到回执（provider任务重启后收货零重提交）=A10已实证+Phase48视频阶段窗口补充验证"
+  }
+ },
+ "runs": {
+  "P48_E_Watercolor": "run_36463ddeb487",
+  "P48_E_Realistic": "run_bbb7a89a480d",
+  "P48_E_Explainer": "run_545cc965eab9",
+  "P48_E_Explainer_v2": "run_a89dbfff6c95"
+ }
 }
