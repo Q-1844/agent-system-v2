@@ -670,10 +670,12 @@ def phase_review():
     rdir.mkdir(exist_ok=True)
     from dotenv import load_dotenv; load_dotenv(ROOT / ".env")
     from src.pipeline.controller import PipelineController
-    client = PipelineController().agnes_client
     import asyncio
 
     async def vis(content, mx=400):
+        # 每次新建 controller/client：共享 httpx AsyncClient 绑定首个事件循环，
+        # 跨 asyncio.run 复用会 "Event loop is closed"（2026-10-06 实测）
+        client = PipelineController().agnes_client
         return await client.chat_completion_vision(
             [{"role": "user", "content": content}],
             model="agnes-2.5-flash", max_tokens=mx)

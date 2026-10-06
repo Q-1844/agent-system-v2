@@ -504,7 +504,18 @@
     "candidate_id": "ff_0e2768fa_1",
     "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_SmYifPwqNZsTIFDJRFzkNGIEUHj8gsSC/output_b627dd7f395644eabeb20b6fed537774.png"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "52fc16e93c28",
+   "video_result": {
+    "status": "done",
+    "wall_s": 213.0,
+    "message": "s02_c01 提取视频末帧"
+   },
+   "video_version": "vv_cd2206bb",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c01.mp4",
+   "vision_review": {
+    "raw": "```json\n{\"identity_ok\": true, \"action_ok\": true, \"anomaly\": \"\", \"end_state\": \"人物双手端起茶杯，茶壶已放下，动作完整连贯\"}\n```"
+   }
   },
   "s02_c02": {
    "cond": "A",
@@ -522,7 +533,18 @@
     "candidate_id": "ff_c7bd9eb9_1",
     "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_PIudIWW9U0HaQ1FebJejuZ36sMa99dEZ/output_e7c97d0f5beb4fe791e80ffbe4f4072c.png"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "ccc43d70f463",
+   "video_result": {
+    "status": "done",
+    "wall_s": 281.2,
+    "message": "s02_c02 提取视频末帧"
+   },
+   "video_version": "vv_b37667ed",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c02.mp4",
+   "vision_review": {
+    "raw": "```json\n{\"identity_ok\":true,\"action_ok\":true,\"anomaly\":\"\",end_state\":\"tea served and cup held\"}\n```"
+   }
   },
   "s02_c03": {
    "cond": "A",
@@ -540,7 +562,18 @@
     "candidate_id": "ff_1ecae6da_1",
     "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_8vAJltnRUPIP8tiFFo3qMNFN6TsS0MHJ/output_3ee64d0550914ed29008bc4d6ce83a02.png"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "cde8ebc0f90e",
+   "video_result": {
+    "status": "done",
+    "wall_s": 240.2,
+    "message": "s02_c03 提取视频末帧"
+   },
+   "video_version": "vv_a4309733",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c03.mp4",
+   "vision_review": {
+    "raw": "```json\n{\n\"identity_ok\": true,\n\"action_ok\": true,\n\"anomaly\": \"\",\n\"end_state\": \"茶壶已放回桌面，女孩双手端起茶杯\"\n}\n```"
+   }
   },
   "s02_c04": {
    "cond": "B",
@@ -558,7 +591,18 @@
     "candidate_id": "ff_74b74a7a_1",
     "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_C91m6QzsUPzUVlT5fxeSI8OFIbkJTM0n/output_f33624ee6b9046e6b58e8b0a1aafcce7.png"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "a436d2793304",
+   "video_result": {
+    "status": "done",
+    "wall_s": 384.7,
+    "message": "s02_c04 提取视频末帧"
+   },
+   "video_version": "vv_1f0b0e18",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c04.mp4",
+   "vision_review": {
+    "raw": "{\"identity_ok\":true,\"action_ok\":true,\"anomaly\":\"\",\"end_state\":\"近景镜头，女孩抬头微笑，灯笼稳定悬于头顶，背景无变化\"}"
+   }
   },
   "s02_c05": {
    "cond": "B",
@@ -576,7 +620,18 @@
     "candidate_id": "ff_786d1515_1",
     "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_wBxRh0GU8ehT3PTTN1Rb7M1YPQeOqFib/output_84ac96e0bb4a4dffa90ebcd7bdfbc635.png"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "0bab8c176fdd",
+   "video_result": {
+    "status": "done",
+    "wall_s": 334.3,
+    "message": "s02_c05 提取视频末帧"
+   },
+   "video_version": "vv_7fd5d1f3",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c05.mp4",
+   "vision_review": {
+    "raw": "```json\n{\"identity_ok\": true, \"action_ok\": true, \"anomaly\": \"\", \"end_state\": \"女孩在灯笼下保持微笑，画面稳定无异常\"}\n```"
+   }
   },
   "s02_c06": {
    "cond": "B",
@@ -594,7 +649,18 @@
     "candidate_id": "ff_3d0f9ef7_1",
     "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_q8ydfnlqilEcfrE6H52c2ChNTBHrHxTM/output_4d6ce14221b240729f584e90f9af731e.png"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "2c0715ea8622",
+   "video_result": {
+    "status": "done",
+    "wall_s": 270.5,
+    "message": "s02_c06 提取视频末帧"
+   },
+   "video_version": "vv_d3f2594f",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c06.mp4",
+   "vision_review": {
+    "raw": "{\"identity_ok\": true, \"action_ok\": true, \"anomaly\": \"\", \"end_state\": \"保持微笑，灯笼稳定在头顶\"}"
+   }
   },
   "s02_c07": {
    "cond": "C",
@@ -612,7 +678,18 @@
     "candidate_id": "ff_acf62c62_1",
     "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_td1obbaB7PRtVQ9IxlpsRnSVjP9fqp8A/output_777324c885534520b4577cd33f3dde59.png"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "b2488403efd5",
+   "video_result": {
+    "status": "done",
+    "wall_s": 375.4,
+    "message": "s02_c07 提取视频末帧"
+   },
+   "video_version": "vv_45dbbcc9",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c07.mp4",
+   "vision_review": {
+    "raw": "```json\n{\n  \"identity_ok\": true,\n  \"action_ok\": false,\n  \"anomaly\": \"镜头方向错误\",\n  \"end_state\": \"女孩正向画面移动\"\n}\n```"
+   }
   },
   "s02_c08": {
    "cond": "C",
@@ -630,7 +707,18 @@
     "candidate_id": "ff_ea36f85a_1",
     "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_cZSxHfRbV4PDRISbn3dd4XbXfHpdMbrh/output_5fd5af9ccb0449448b0711a72e6010fc.png"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "52033300f550",
+   "video_result": {
+    "status": "done",
+    "wall_s": 332.2,
+    "message": "s02_c08 提取视频末帧"
+   },
+   "video_version": "vv_6c0cdb35",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c08.mp4",
+   "vision_review": {
+    "raw": "```json\n{\"identity_ok\":true,\"action_ok\":true,\"anomaly\":\"\",\"end_state\":\"女孩双手举起画纸，正向镜头展示完成的画作（水彩晕染与人物线稿结合）\"}\n```"
+   }
   },
   "s02_c09": {
    "cond": "C",
@@ -648,7 +736,18 @@
     "candidate_id": "ff_6676f973_1",
     "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_E1LAyIiALpeJZNz8PospK9cJmUrBUsiE/output_e9a58182be6f4afb818cc16f8ff581c5.png"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "9e21c085fe11",
+   "video_result": {
+    "status": "done",
+    "wall_s": 236.7,
+    "message": "s02_c09 提取视频末帧"
+   },
+   "video_version": "vv_10b0ed40",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c09.mp4",
+   "vision_review": {
+    "raw": "```json\n{\n  \"identity_ok\": true,\n  \"action_ok\": true,\n  \"anomaly\": \"\",\n  \"end_state\": \"女孩双手扶住画纸两端，画面已呈现绿色与粉红两团水彩，视角稳定为后侧反越肩机位，符合\\\"从身后看画纸与完成的画\\\"计划\"\n}\n```"
+   }
   },
   "s02_c10": {
    "cond": "D",
@@ -666,7 +765,18 @@
     "candidate_id": "ff_9eef3b80_1",
     "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_nAXPpLXjOpLCWWS6h9XFjEvZBZgFxlK5/output_d0e7c33b0da6437d8fdfa7cc99d3ac62.png"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "334650b5cdd0",
+   "video_result": {
+    "status": "done",
+    "wall_s": 252.4,
+    "message": "s02_c10 提取视频末帧"
+   },
+   "video_version": "vv_65f63113",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c10.mp4",
+   "vision_review": {
+    "raw": "{\"identity_ok\": true, \"action_ok\": false, \"anomaly\": \"缺少切近景的镜头运动过程，五帧均为固定中景；末帧张嘴状态与计划描述的平静表情不符\", \"end_state\": \"女孩张嘴微笑，非静默近景\"}"
+   }
   },
   "s02_c11": {
    "cond": "D",
@@ -684,7 +794,18 @@
     "candidate_id": "ff_b563af9b_1",
     "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_iUBROTLwMPeBJCGN0gj7nMfApKm16g89/output_67705ea6e3634b7bac850cfac81c26cd.png"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "007f6fab4178",
+   "video_result": {
+    "status": "done",
+    "wall_s": 304.6,
+    "message": "s02_c11 提取视频末帧"
+   },
+   "video_version": "vv_e00e8fce",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c11.mp4",
+   "vision_review": {
+    "raw": "```json\n{\"identity_ok\": true, \"action_ok\": true, \"anomaly\": \"\", \"end_state\": \"女孩身穿双辫黄雨衣，灯笼已放下置于身侧，面带微笑直视镜头，动作连贯无变形\"}\n```"
+   }
   },
   "s02_c12": {
    "cond": "D",
@@ -702,7 +823,18 @@
     "candidate_id": "ff_7af7d029_1",
     "url": "https://cos-platform-outputs.agnes-ai.cn/images/t2i/task_INCyk20ARbon0i9omHnZHc7gGT2Tbm0y/output_5b7fe38409fd447793af77e87da0f4c5.png"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "0fbc7bef719d",
+   "video_result": {
+    "status": "done",
+    "wall_s": 252.0,
+    "message": "s02_c12 提取视频末帧"
+   },
+   "video_version": "vv_549209b1",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c12.mp4",
+   "vision_review": {
+    "raw": "{\"identity_ok\":true,\"action_ok\":true,\"anomaly\":\"\",\"end_state\":\"女孩正面近景，双辫黄雨衣，背景为木墙与红灯笼，姿态稳定无异常\"}"
+   }
   },
   "s02_c13": {
    "cond": "A",
@@ -716,7 +848,18 @@
     "sha16": "39d2f22665bb2470",
     "note": "M2 直接尾帧：源 s01_c13 实际末帧原样作首帧输入"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "cc53b8eba29e",
+   "video_result": {
+    "status": "done",
+    "wall_s": 144.0,
+    "message": "s02_c13 提取视频末帧"
+   },
+   "video_version": "vv_b06ab851",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c13.mp4",
+   "vision_review": {
+    "raw": "```json\n{\"identity_ok\":true,\"action_ok\":true,\"anomaly\":\"\",\"end_state\":\"人物双手稳稳端起茶杯，面带微笑，姿态自然\"}\n```"
+   }
   },
   "s02_c14": {
    "cond": "A",
@@ -730,7 +873,18 @@
     "sha16": "a389e49112eb5e32",
     "note": "M2 直接尾帧：源 s01_c14 实际末帧原样作首帧输入"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "a20101b88153",
+   "video_result": {
+    "status": "done",
+    "wall_s": 149.0,
+    "message": "s02_c14 提取视频末帧"
+   },
+   "video_version": "vv_6158ff37",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c14.mp4",
+   "vision_review": {
+    "raw": "```json\n{\"identity_ok\":true,\"action_ok\":true,\"anomaly\":\"\",\"end_state\":\"茶壶已放下，女孩双手端起茶杯\"}\n```"
+   }
   },
   "s02_c15": {
    "cond": "A",
@@ -744,7 +898,18 @@
     "sha16": "23217f1b9a020176",
     "note": "M2 直接尾帧：源 s01_c15 实际末帧原样作首帧输入"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "d6043bf4978d",
+   "video_result": {
+    "status": "done",
+    "wall_s": 176.0,
+    "message": "s02_c15 提取视频末帧"
+   },
+   "video_version": "vv_116cfa93",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c15.mp4",
+   "vision_review": {
+    "raw": "```json\n{\"identity_ok\":true,\"action_ok\":true,\"anomaly\":\"\",\"end_state\":\"右手端起茶杯，茶杯已离开托盘\"}\n```"
+   }
   },
   "s02_c16": {
    "cond": "B",
@@ -758,7 +923,18 @@
     "sha16": "7c9a8148ebc72c01",
     "note": "M2 直接尾帧：源 s01_c04 实际末帧原样作首帧输入"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "6acb867d4077",
+   "video_result": {
+    "status": "done",
+    "wall_s": 264.7,
+    "message": "s02_c16 提取视频末帧"
+   },
+   "video_version": "vv_60896be4",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c16.mp4",
+   "vision_review": {
+    "raw": "```json\n{\"identity_ok\":true,\"action_ok\":true,\"anomaly\":\"\",\"end_state\":\"女孩在灯笼下抬头微笑，画面稳定\"}\n```"
+   }
   },
   "s02_c17": {
    "cond": "B",
@@ -772,7 +948,18 @@
     "sha16": "5e675e316f700f09",
     "note": "M2 直接尾帧：源 s01_c05 实际末帧原样作首帧输入"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "7518f570f6da",
+   "video_result": {
+    "status": "done",
+    "wall_s": 143.0,
+    "message": "s02_c17 提取视频末帧"
+   },
+   "video_version": "vv_c282b6da",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c17.mp4",
+   "vision_review": {
+    "raw": "{\"identity_ok\":true,\"action_ok\":false,\"anomaly\":\"未切近景，末帧仰头而非笑脸\",\"end_state\":\"女孩仰头望灯笼\"}"
+   }
   },
   "s02_c18": {
    "cond": "B",
@@ -786,7 +973,18 @@
     "sha16": "7c0bef69c3d04e3f",
     "note": "M2 直接尾帧：源 s01_c06 实际末帧原样作首帧输入"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "1df844235eea",
+   "video_result": {
+    "status": "done",
+    "wall_s": 213.4,
+    "message": "s02_c18 提取视频末帧"
+   },
+   "video_version": "vv_41a91a48",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c18.mp4",
+   "vision_review": {
+    "raw": "```json\n{\n\"identity_ok\": true,\n\"action_ok\": false,\n\"anomaly\": \"女孩全程表情平静或向上仰望，并未出现'笑脸'，与计划动作不符\",\n\"end_state\": \"女孩仰头看向灯笼，背景为雨夜巷弄\"\n}\n```"
+   }
   },
   "s02_c19": {
    "cond": "C",
@@ -800,7 +998,18 @@
     "sha16": "54f73e5fcadb660c",
     "note": "M2 直接尾帧：源 s01_c16 实际末帧原样作首帧输入"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "ef69712d5aef",
+   "video_result": {
+    "status": "done",
+    "wall_s": 218.3,
+    "message": "s02_c19 提取视频末帧"
+   },
+   "video_version": "vv_01e77609",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c19.mp4",
+   "vision_review": {
+    "raw": "```json\n{\n  \"identity_ok\": true,\n  \"action_ok\": true,\n  \"anomaly\": \"\",\n  \"end_state\": \"女孩双手捧起画纸，从反向越肩机位完整呈现画面：画中为绿色波浪线条与蓝绿水彩晕染，构图与第一帧一致无错乱。\"\n}\n```"
+   }
   },
   "s02_c20": {
    "cond": "C",
@@ -814,7 +1023,18 @@
     "sha16": "15a2e3dc146d7477",
     "note": "M2 直接尾帧：源 s01_c17 实际末帧原样作首帧输入"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "3c413e62475d",
+   "video_result": {
+    "status": "done",
+    "wall_s": 196.2,
+    "message": "s02_c20 提取视频末帧"
+   },
+   "video_version": "vv_1ddc6594",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c20.mp4",
+   "vision_review": {
+    "raw": "```json\n{\n  \"identity_ok\": true,\n  \"action_ok\": true,\n  \"anomaly\": \"\",\n  \"end_state\": \"女孩双手举起画纸，画面清晰展示出完成的画作（绿色、蓝色和红色色块），完全达成从背后视角看画与看画纸的运镜目标\"\n}\n```"
+   }
   },
   "s02_c21": {
    "cond": "C",
@@ -828,7 +1048,18 @@
     "sha16": "eafd7ab63ebcde02",
     "note": "M2 直接尾帧：源 s01_c18 实际末帧原样作首帧输入"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "d4359b93493e",
+   "video_result": {
+    "status": "done",
+    "wall_s": 202.5,
+    "message": "s02_c21 提取视频末帧"
+   },
+   "video_version": "vv_5bff2f9a",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c21.mp4",
+   "vision_review": {
+    "raw": "```json\n{\"identity_ok\": true, \"action_ok\": true, \"anomaly\": \"\", \"end_state\": \"女孩双手举起完成的水彩画，画面清晰展示一只灰白色的小动物（类似小猴子/猫猫），镜头稳定停留于画作细节\"}\n```"
+   }
   },
   "s02_c22": {
    "cond": "D",
@@ -888,7 +1119,18 @@
     "sha16": "c271f0390a933ae0",
     "note": "M3 重建首帧：尾帧+批准 Look 图生图重建（非原末帧）"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "2ea8b63cb888",
+   "video_result": {
+    "status": "done",
+    "wall_s": 144.0,
+    "message": "s02_c25 提取视频末帧"
+   },
+   "video_version": "vv_a68e5428",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c25.mp4",
+   "vision_review": {
+    "raw": "```json\n{\"identity_ok\":true,\"action_ok\":true,\"anomaly\":\"\",\"end_state\":\"女孩放下茶壶，单手端起茶杯\"}\n```"
+   }
   },
   "s02_c26": {
    "cond": "A",
@@ -909,7 +1151,18 @@
     "sha16": "1b0b95670939ef40",
     "note": "M3 重建首帧：尾帧+批准 Look 图生图重建（非原末帧）"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "6930509e9ab5",
+   "video_result": {
+    "status": "done",
+    "wall_s": 144.1,
+    "message": "s02_c26 提取视频末帧"
+   },
+   "video_version": "vv_b9b7ce07",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c26.mp4",
+   "vision_review": {
+    "raw": "```json\n{\"identity_ok\":true,\"action_ok\":true,\"anomaly\":\"\",\"end_state\":\"她将茶壶放下，端起茶杯\"}\n```"
+   }
   },
   "s02_c27": {
    "cond": "A",
@@ -930,7 +1183,18 @@
     "sha16": "dfd905114dbc7e84",
     "note": "M3 重建首帧：尾帧+批准 Look 图生图重建（非原末帧）"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "0ed113be7d0a",
+   "video_result": {
+    "status": "done",
+    "wall_s": 171.3,
+    "message": "s02_c27 提取视频末帧"
+   },
+   "video_version": "vv_fb9b33d8",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c27.mp4",
+   "vision_review": {
+    "raw": "```json\n{\"identity_ok\":true,\"action_ok\":true,\"anomaly\":\"\",\"end_state\":\"女孩双手端茶杯，壶已放下\"}\n```"
+   }
   },
   "s02_c28": {
    "cond": "B",
@@ -951,7 +1215,18 @@
     "sha16": "dc9fa7803204e8c8",
     "note": "M3 重建首帧：尾帧+批准 Look 图生图重建（非原末帧）"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "7eeb24d662ea",
+   "video_result": {
+    "status": "done",
+    "wall_s": 154.0,
+    "message": "s02_c28 提取视频末帧"
+   },
+   "video_version": "vv_e1397243",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c28.mp4",
+   "vision_review": {
+    "raw": "```json\n{\n  \"identity_ok\": true,\n  \"action_ok\": true,\n  \"anomaly\": \"\",\n  \"end_state\": \"双辫黄雨衣女孩抬头望灯笼，面带微笑，画面温暖安宁\"\n}\n```"
+   }
   },
   "s02_c29": {
    "cond": "B",
@@ -972,7 +1247,18 @@
     "sha16": "7c860234f3e2c5db",
     "note": "M3 重建首帧：尾帧+批准 Look 图生图重建（非原末帧）"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "203c218d95de",
+   "video_result": {
+    "status": "done",
+    "wall_s": 130.6,
+    "message": "s02_c29 提取视频末帧"
+   },
+   "video_version": "vv_60ce3b44",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c29.mp4",
+   "vision_review": {
+    "raw": "```json\n{\"identity_ok\":true,\"action_ok\":false,\"anomaly\":\"动作未完成计划，女孩全程未转身，头部微抬但未见‘笑脸’表情\",\"end_state\":\"女孩侧脸仰视灯笼，站立姿态\"}\n```"
+   }
   },
   "s02_c30": {
    "cond": "B",
@@ -993,7 +1279,18 @@
     "sha16": "2d10a7b6e1d14e88",
     "note": "M3 重建首帧：尾帧+批准 Look 图生图重建（非原末帧）"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "6f7065c93a7e",
+   "video_result": {
+    "status": "done",
+    "wall_s": 150.5,
+    "message": "s02_c30 提取视频末帧"
+   },
+   "video_version": "vv_e2c0875c",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c30.mp4",
+   "vision_review": {
+    "raw": "```json\n{\n  \"identity_ok\": true,\n  \"action_ok\": true,\n  \"anomaly\": \"\",\n  \"end_state\": \"女孩抬头望灯笼，双辫黄雨衣，表情期待微笑\"\n}\n```"
+   }
   },
   "s02_c31": {
    "cond": "C",
@@ -1014,7 +1311,18 @@
     "sha16": "02cfcf56dddb0d3d",
     "note": "M3 重建首帧：尾帧+批准 Look 图生图重建（非原末帧）"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "f43674e629df",
+   "video_result": {
+    "status": "done",
+    "wall_s": 182.0,
+    "message": "s02_c31 提取视频末帧"
+   },
+   "video_version": "vv_fbef45e0",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c31.mp4",
+   "vision_review": {
+    "raw": "{\"identity_ok\": true, \"action_ok\": true, \"anomaly\": \"\", \"end_state\": \"女孩双手举起画作，从反向越肩视角展示完成的彩色水彩画\"}"
+   }
   },
   "s02_c32": {
    "cond": "C",
@@ -1035,7 +1343,18 @@
     "sha16": "c65ed1daa843971e",
     "note": "M3 重建首帧：尾帧+批准 Look 图生图重建（非原末帧）"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "d67531bf5700",
+   "video_result": {
+    "status": "done",
+    "wall_s": 202.7,
+    "message": "s02_c32 提取视频末帧"
+   },
+   "video_version": "vv_74469f40",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c32.mp4",
+   "vision_review": {
+    "raw": "```json\n{\"identity_ok\":true,\"action_ok\":true,\"anomaly\":\"\",\"end_state\":\"女孩双手举起画作，视线欣赏画纸上的水彩花朵\"}\n```"
+   }
   },
   "s02_c33": {
    "cond": "C",
@@ -1056,7 +1375,18 @@
     "sha16": "3720be1dfdde4bc3",
     "note": "M3 重建首帧：尾帧+批准 Look 图生图重建（非原末帧）"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "5fb5a1821730",
+   "video_result": {
+    "status": "done",
+    "wall_s": 131.6,
+    "message": "s02_c33 提取视频末帧"
+   },
+   "video_version": "vv_98fa2f87",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c33.mp4",
+   "vision_review": {
+    "raw": "{\"identity_ok\":true,\"action_ok\":true,\"anomaly\":\"\",\"end_state\":\"女孩双手举起画作，镜头保持过肩视角，展示完成的水彩猫画\"}"
+   }
   },
   "s02_c34": {
    "cond": "D",
@@ -1077,7 +1407,18 @@
     "sha16": "ac7cb7679e510d42",
     "note": "M3 重建首帧：尾帧+批准 Look 图生图重建（非原末帧）"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "c8123d0bcb59",
+   "video_result": {
+    "status": "done",
+    "wall_s": 300.1,
+    "message": "s02_c34 提取视频末帧"
+   },
+   "video_version": "vv_35714ea9",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c34.mp4",
+   "vision_review": {
+    "raw": "{\"identity_ok\":true,\"action_ok\":true,\"anomaly\":\"\",\"end_state\":\"近景微笑双辫黄雨衣女孩\"}"
+   }
   },
   "s02_c35": {
    "cond": "D",
@@ -1098,7 +1439,18 @@
     "sha16": "bc41ef29910e78b8",
     "note": "M3 重建首帧：尾帧+批准 Look 图生图重建（非原末帧）"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "ebb5b87fcc48",
+   "video_result": {
+    "status": "done",
+    "wall_s": 161.1,
+    "message": "s02_c35 提取视频末帧"
+   },
+   "video_version": "vv_4ee168f6",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c35.mp4",
+   "vision_review": {
+    "raw": "```json\n{\n  \"identity_ok\": true,\n  \"action_ok\": false,\n  \"anomaly\": \"动作未执行，全程为静态摆拍，未呈现切近景的动态过程\",\n  \"end_state\": \"静止近景，女孩正视镜头微笑，画面无运动轨迹\"\n}\n```"
+   }
   },
   "s02_c36": {
    "cond": "D",
@@ -1119,7 +1471,18 @@
     "sha16": "aede481385aa2a0a",
     "note": "M3 重建首帧：尾帧+批准 Look 图生图重建（非原末帧）"
    },
-   "ff_ready": true
+   "ff_ready": true,
+   "video_job": "73df1338597d",
+   "video_result": {
+    "status": "done",
+    "wall_s": 260.7,
+    "message": "s02_c36 提取视频末帧"
+   },
+   "video_version": "vv_86d40363",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c36.mp4",
+   "vision_review": {
+    "raw": "```json\n{\"identity_ok\": true, \"action_ok\": true, \"anomaly\": \"\", \"end_state\": \"双辫黄雨衣女孩正面微笑，动作完成\"}\n```"
+   }
   },
   "s02_c37": {
    "cond": "A",
@@ -1133,7 +1496,425 @@
     "sha16": "c271f0390a933ae0",
     "note": "M4 与 M3 共用同一重建首帧文件与同一次上传 URL（hash=c271f0390a933ae0）"
    },
-   "lf_job": "c5cc771c1dfd"
+   "lf_job": "c5cc771c1dfd",
+   "lf_result": {
+    "status": "done",
+    "wall_s": 23.6,
+    "message": "s02_c37 尾帧完成"
+   },
+   "lf_chosen": {
+    "shot_id": "s02_c37",
+    "candidate_id": "lf_20f33459_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_5aSX6ICjWkR0BrtlH6AWa9Iqq4n9iRdJ/output.png"
+   },
+   "ff_ready": true,
+   "video_job": "8dd35a326571",
+   "video_result": {
+    "status": "done",
+    "wall_s": 147.5,
+    "message": "s02_c37 提取视频末帧"
+   },
+   "video_version": "vv_78ab57fc",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c37.mp4",
+   "vision_review": {
+    "raw": "```json\n{\"identity_ok\":true,\"action_ok\":true,\"anomaly\":\"\",\"end_state\":\"女孩茶壶已放下，双手端起茶杯\"}\n```"
+   }
+  },
+  "s02_c38": {
+   "cond": "A",
+   "rep": 2,
+   "method": "M4_rebuilt_plus_end",
+   "src": "s01_c14",
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c38_1791240951",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/c09714a2bc38af3e.jpg",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c26_rebuilt_first.png",
+    "sha16": "1b0b95670939ef40",
+    "note": "M4 与 M3 共用同一重建首帧文件与同一次上传 URL（hash=1b0b95670939ef40）"
+   },
+   "lf_job": "f02a810d385d",
+   "lf_result": {
+    "status": "done",
+    "wall_s": 18.2,
+    "message": "s02_c38 尾帧完成"
+   },
+   "lf_chosen": {
+    "shot_id": "s02_c38",
+    "candidate_id": "lf_3d6eb032_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_vbPKY6m95bqXwhq2mDWFdUs4RpfurkCi/output.png"
+   },
+   "ff_ready": true,
+   "video_job": "5e4182130956",
+   "video_result": {
+    "status": "done",
+    "wall_s": 161.0,
+    "message": "s02_c38 提取视频末帧"
+   },
+   "video_version": "vv_cd1f965e",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c38.mp4",
+   "vision_review": {
+    "raw": "```json\n{\"identity_ok\": true, \"action_ok\": true, \"anomaly\": \"\", \"end_state\": \"茶壶已放下，茶杯已端起，准备饮用。\"}\n```"
+   }
+  },
+  "s02_c39": {
+   "cond": "A",
+   "rep": 3,
+   "method": "M4_rebuilt_plus_end",
+   "src": "s01_c15",
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c39_1791240971",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/c8023c8f26ec0fe7.jpg",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c27_rebuilt_first.png",
+    "sha16": "dfd905114dbc7e84",
+    "note": "M4 与 M3 共用同一重建首帧文件与同一次上传 URL（hash=dfd905114dbc7e84）"
+   },
+   "lf_job": "55ee59d5f88d",
+   "lf_result": {
+    "status": "done",
+    "wall_s": 18.2,
+    "message": "s02_c39 尾帧完成"
+   },
+   "lf_chosen": {
+    "shot_id": "s02_c39",
+    "candidate_id": "lf_e8000193_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_fzjhZYJT8dRglDJZ75U26SUp3fA5L5Lw/output.png"
+   },
+   "ff_ready": true,
+   "video_job": "d84948665940",
+   "video_result": {
+    "status": "done",
+    "wall_s": 253.0,
+    "message": "s02_c39 提取视频末帧"
+   },
+   "video_version": "vv_9e57d108",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c39.mp4",
+   "vision_review": {
+    "raw": "```json\n{\"identity_ok\":true,\"action_ok\":true,\"anomaly\":\"\",\"end_state\":\"已倒满茶，放下茶壶，端起茶杯\"}\n```"
+   }
+  },
+  "s02_c40": {
+   "cond": "B",
+   "rep": 1,
+   "method": "M4_rebuilt_plus_end",
+   "src": "s01_c04",
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c40_1791240990",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/54bed9bfb685da69.jpg",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c28_rebuilt_first.png",
+    "sha16": "dc9fa7803204e8c8",
+    "note": "M4 与 M3 共用同一重建首帧文件与同一次上传 URL（hash=dc9fa7803204e8c8）"
+   },
+   "lf_job": "1e6121554c14",
+   "lf_result": {
+    "status": "done",
+    "wall_s": 28.9,
+    "message": "s02_c40 尾帧完成"
+   },
+   "lf_chosen": {
+    "shot_id": "s02_c40",
+    "candidate_id": "lf_165173ab_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_qXrftW0ACEU2kTk3nxNnfeTFRscdPNfp/output.png"
+   },
+   "ff_ready": true,
+   "video_job": "f83b415bc044",
+   "video_result": {
+    "status": "done",
+    "wall_s": 309.8,
+    "message": "s02_c40 提取视频末帧"
+   },
+   "video_version": "vv_07e8f8e3",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c40.mp4",
+   "vision_review": {
+    "raw": "```json\n{\"identity_ok\":true,\"action_ok\":true,\"anomaly\":\"\",\"end_state\":\"女孩在灯笼下露出灿烂笑容\"}\n```"
+   }
+  },
+  "s02_c41": {
+   "cond": "B",
+   "rep": 2,
+   "method": "M4_rebuilt_plus_end",
+   "src": "s01_c05",
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c41_1791241021",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/53b96681081441f1.jpg",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c29_rebuilt_first.png",
+    "sha16": "7c860234f3e2c5db",
+    "note": "M4 与 M3 共用同一重建首帧文件与同一次上传 URL（hash=7c860234f3e2c5db）"
+   },
+   "lf_job": "ac27b7ae0cb5",
+   "lf_result": {
+    "status": "done",
+    "wall_s": 18.9,
+    "message": "s02_c41 尾帧完成"
+   },
+   "lf_chosen": {
+    "shot_id": "s02_c41",
+    "candidate_id": "lf_0de9e7c5_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_vOQzxWp5CXeXU9Ds9oxkivF1MKKHo7fo/output.png"
+   },
+   "ff_ready": true,
+   "video_job": "06d380695014",
+   "video_result": {
+    "status": "done",
+    "wall_s": 215.9,
+    "message": "s02_c41 提取视频末帧"
+   },
+   "video_version": "vv_6d6491e7",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c41.mp4",
+   "vision_review": {
+    "raw": "```json\n{\n  \"identity_ok\": true,\n  \"action_ok\": true,\n  \"anomaly\": \"\",\n  \"end_state\": \"女孩站在灯笼下，侧脸微笑，露出牙齿，双辫黄雨衣造型保持不变\"\n}\n```"
+   }
+  },
+  "s02_c42": {
+   "cond": "B",
+   "rep": 3,
+   "method": "M4_rebuilt_plus_end",
+   "src": "s01_c06",
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c42_1791241042",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/9e9539bae8bfb0dd.jpg",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c30_rebuilt_first.png",
+    "sha16": "2d10a7b6e1d14e88",
+    "note": "M4 与 M3 共用同一重建首帧文件与同一次上传 URL（hash=2d10a7b6e1d14e88）"
+   },
+   "lf_job": "9b14f135a866",
+   "lf_result": {
+    "status": "done",
+    "wall_s": 18.1,
+    "message": "s02_c42 尾帧完成"
+   },
+   "lf_chosen": {
+    "shot_id": "s02_c42",
+    "candidate_id": "lf_be6852cf_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_e1MVrOp5FaEZiBYtTP9IR72DNVcojiX4/output.png"
+   },
+   "ff_ready": true,
+   "video_job": "db4c03b6c7ba",
+   "video_result": {
+    "status": "done",
+    "wall_s": 166.8,
+    "message": "s02_c42 提取视频末帧"
+   },
+   "video_version": "vv_513187fa",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c42.mp4",
+   "vision_review": {
+    "raw": "```json\n{\"identity_ok\":true,\"action_ok\":true,\"anomaly\":\"\",\"end_state\":\"女孩在灯笼下展现灿烂笑脸，画面稳定清晰\"}\n```"
+   }
+  },
+  "s02_c43": {
+   "cond": "C",
+   "rep": 1,
+   "method": "M4_rebuilt_plus_end",
+   "src": "s01_c16",
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c43_1791241061",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/0092ecd0c012f409.jpg",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c31_rebuilt_first.png",
+    "sha16": "02cfcf56dddb0d3d",
+    "note": "M4 与 M3 共用同一重建首帧文件与同一次上传 URL（hash=02cfcf56dddb0d3d）"
+   },
+   "lf_job": "32e5c3932cd8",
+   "lf_result": {
+    "status": "done",
+    "wall_s": 22.6,
+    "message": "s02_c43 尾帧完成"
+   },
+   "lf_chosen": {
+    "shot_id": "s02_c43",
+    "candidate_id": "lf_a543ed1f_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_Uu5k8DV6PhENn1NMaghkFQoo3CjskUHq/output.png"
+   },
+   "ff_ready": true,
+   "video_job": "b2dcd50a2800",
+   "video_result": {
+    "status": "done",
+    "wall_s": 175.4,
+    "message": "s02_c43 提取视频末帧"
+   },
+   "video_version": "vv_4b84dace",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c43.mp4",
+   "vision_review": {
+    "raw": "```json\n{\"identity_ok\":true,\"action_ok\":false,\"anomaly\":\"场景与机位突变：视频后半段从书桌视角切换至床上仰卧视角，未遵循计划的反向越肩机位\",\"end_state\":\"女孩平躺于床上，手持画架欣赏完成的画作\"}\n```"
+   }
+  },
+  "s02_c44": {
+   "cond": "C",
+   "rep": 2,
+   "method": "M4_rebuilt_plus_end",
+   "src": "s01_c17",
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c44_1791241086",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/183641ca376c1ac4.jpg",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c32_rebuilt_first.png",
+    "sha16": "c65ed1daa843971e",
+    "note": "M4 与 M3 共用同一重建首帧文件与同一次上传 URL（hash=c65ed1daa843971e）"
+   },
+   "lf_job": "ed46e8d0d942",
+   "lf_result": {
+    "status": "done",
+    "wall_s": 33.8,
+    "message": "s02_c44 尾帧完成"
+   },
+   "lf_chosen": {
+    "shot_id": "s02_c44",
+    "candidate_id": "lf_02a98271_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_pF5IeewxTSqxlrvd4fKVEKW9dDf15WBy/output.png"
+   },
+   "ff_ready": true,
+   "video_job": "16d699c18ee3",
+   "video_result": {
+    "status": "done",
+    "wall_s": 169.4,
+    "message": "s02_c44 提取视频末帧"
+   },
+   "video_version": "vv_a2a0775c",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c44.mp4",
+   "vision_review": {
+    "raw": "```json\n{\"identity_ok\": false, \"action_ok\": false, \"anomaly\": \"第3/4帧出现突兀的双人头/分身现象，且镜头偏离越肩视角改为正面展示画作\", \"end_state\": \"女孩双手举起画作正向镜头展示，身旁出现一个漂浮的双马尾头颅\"}\n```"
+   }
+  },
+  "s02_c45": {
+   "cond": "C",
+   "rep": 3,
+   "method": "M4_rebuilt_plus_end",
+   "src": "s01_c18",
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c45_1791241121",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/fa67468d392295c4.jpg",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c33_rebuilt_first.png",
+    "sha16": "3720be1dfdde4bc3",
+    "note": "M4 与 M3 共用同一重建首帧文件与同一次上传 URL（hash=3720be1dfdde4bc3）"
+   },
+   "lf_job": "c8e61be05c8b",
+   "lf_result": {
+    "status": "done",
+    "wall_s": 19.1,
+    "message": "s02_c45 尾帧完成"
+   },
+   "lf_chosen": {
+    "shot_id": "s02_c45",
+    "candidate_id": "lf_35db1531_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_cj1H8kz6dXbEmzDBLACmsWvOLg0k3bzN/output.png"
+   },
+   "ff_ready": true,
+   "video_job": "c6d64de5688a",
+   "video_result": {
+    "status": "done",
+    "wall_s": 174.8,
+    "message": "s02_c45 提取视频末帧"
+   },
+   "video_version": "vv_e5736224",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c45.mp4",
+   "vision_review": {
+    "raw": "{\"identity_ok\":false,\"action_ok\":false,\"anomaly\":\"第3帧起出现另一个小女孩趴在桌边，且未画出完成画作\",\"end_state\":\"\"}"
+   }
+  },
+  "s02_c46": {
+   "cond": "D",
+   "rep": 1,
+   "method": "M4_rebuilt_plus_end",
+   "src": "s01_c10",
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c46_1791241142",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/3059558011a3ea8e.jpg",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c34_rebuilt_first.png",
+    "sha16": "ac7cb7679e510d42",
+    "note": "M4 与 M3 共用同一重建首帧文件与同一次上传 URL（hash=ac7cb7679e510d42）"
+   },
+   "lf_job": "184d0d044892",
+   "lf_result": {
+    "status": "done",
+    "wall_s": 18.9,
+    "message": "s02_c46 尾帧完成"
+   },
+   "lf_chosen": {
+    "shot_id": "s02_c46",
+    "candidate_id": "lf_cb529370_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_pRN6GsKh6kKbbppanwvBlpxYGhqGUWQ1/output.png"
+   },
+   "ff_ready": true,
+   "video_job": "b5d2c5ef8ed0",
+   "video_result": {
+    "status": "done",
+    "wall_s": 233.1,
+    "message": "s02_c46 提取视频末帧"
+   },
+   "video_version": "vv_c47b239b",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c46.mp4",
+   "vision_review": {
+    "raw": "```json\n{\"identity_ok\":true,\"action_ok\":false,\"anomaly\":\"人物为双辫但发色为棕色而非黄色，未完全符合批准 Look\",\"end_state\":\"人物站在巷道中，面带微笑，灯笼亮起\"}\n```"
+   }
+  },
+  "s02_c47": {
+   "cond": "D",
+   "rep": 2,
+   "method": "M4_rebuilt_plus_end",
+   "src": "s01_c11",
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c47_1791241162",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/ea08a35cf33b6110.jpg",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c35_rebuilt_first.png",
+    "sha16": "bc41ef29910e78b8",
+    "note": "M4 与 M3 共用同一重建首帧文件与同一次上传 URL（hash=bc41ef29910e78b8）"
+   },
+   "lf_job": "efa7c4d87455",
+   "lf_result": {
+    "status": "done",
+    "wall_s": 18.4,
+    "message": "s02_c47 尾帧完成"
+   },
+   "lf_chosen": {
+    "shot_id": "s02_c47",
+    "candidate_id": "lf_8d973fc4_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_eBxpKIADcx2YdkMq62dmYrWbSWNBOtHe/output.png"
+   },
+   "ff_ready": true,
+   "video_job": "03b7ddd6654c",
+   "video_result": {
+    "status": "done",
+    "wall_s": 210.3,
+    "message": "s02_c47 提取视频末帧"
+   },
+   "video_version": "vv_03dd6e49",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c47.mp4",
+   "vision_review": {
+    "raw": "```json\n{\"identity_ok\":true,\"action_ok\":true,\"anomaly\":\"\",\"end_state\":\"女孩穿着黄色雨衣和黄色雨靴，梳着双麻花辫，正沿着灯笼照亮的湿石板巷面向镜头行走。\"}\n```"
+   }
+  },
+  "s02_c48": {
+   "cond": "D",
+   "rep": 3,
+   "method": "M4_rebuilt_plus_end",
+   "src": "s01_c12",
+   "ff_injection": {
+    "candidate_id": "c_inj_s02_c48_1791241182",
+    "url": "https://Q-1844.github.io/agnes-frame-host/objects/2d88e057af482693.jpg",
+    "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_C_Continuity\\output\\frames\\s02_c36_rebuilt_first.png",
+    "sha16": "aede481385aa2a0a",
+    "note": "M4 与 M3 共用同一重建首帧文件与同一次上传 URL（hash=aede481385aa2a0a）"
+   },
+   "lf_job": "727213275183",
+   "lf_result": {
+    "status": "done",
+    "wall_s": 24.0,
+    "message": "s02_c48 尾帧完成"
+   },
+   "lf_chosen": {
+    "shot_id": "s02_c48",
+    "candidate_id": "lf_2f14fd82_1",
+    "url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_G7gcUZvPplWGDvPOnULYYN4O2tvcOEWw/output.png"
+   },
+   "ff_ready": true,
+   "video_job": "9c899c5b9a9a",
+   "video_result": {
+    "status": "done",
+    "wall_s": 207.4,
+    "message": "s02_c48 提取视频末帧"
+   },
+   "video_version": "vv_6d4fee36",
+   "video_local": "projects\\P48_C_Continuity\\output\\videos\\s02_c48.mp4",
+   "vision_review": {
+    "raw": "{\n  \"identity_ok\": true,\n  \"action_ok\": false,\n  \"anomaly\": \"镜头未切近景，从全身/中景逐步拉远而非推近\",\n  \"end_state\": \"女孩全身站立雨巷中，画面最远\"\n}"
+   }
   }
  },
  "fixture": {
