@@ -1,0 +1,589 @@
+{
+ "styles": {
+  "P48_E_2D": {
+   "render_family": "2d_animation",
+   "art_direction": "clean flat 2D animation, crisp outlines, flat colors, theatrical anime feature look"
+  },
+  "P48_E_Watercolor": {
+   "render_family": "2d_animation",
+   "art_direction": "soft watercolor storybook illustration, visible paper grain, gentle wash edges, hand-painted feel"
+  },
+  "P48_E_Realistic": {
+   "render_family": "photorealistic",
+   "art_direction": "cinematic photorealistic rendering, natural lighting, shallow depth of field, filmic grade"
+  }
+ },
+ "explainer": {
+  "theme": "手摇式手电筒的组装与工作（无旁白，靠动作与音效表达）"
+ },
+ "films": {
+  "P48_E_2D": {
+   "runId": "run_e9484ba7ad72",
+   "workflowId": "wf_e_film_2d",
+   "snapshot": {
+    "snapshotVersion": "workflow_snapshot_v1",
+    "definitionRevision": 1,
+    "definitionHash": "sha256:5f47e4776e0ec910ff769d99a764dc44900bf37291f8ef1c24cd3406b4b2f9ca",
+    "definition": {
+     "schemaVersion": "workflow_def_v1",
+     "workflowId": "wf_e_film_2d",
+     "name": "W09 六员完整生产",
+     "description": "六员完整生产及独立双审核：新故事 → 可审成片的完整证据链。",
+     "notes": "必需输入：新故事目标、本轮合法资产审批。桥接 Skill 仅在真实接缝需要时使用。",
+     "status": "draft",
+     "nodes": [
+      {
+       "id": "n_start",
+       "type": "boundary_start",
+       "refId": null,
+       "refVersion": null,
+       "label": null,
+       "config": {},
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      },
+      {
+       "id": "n_producer",
+       "type": "agent",
+       "refId": "producer",
+       "refVersion": null,
+       "label": null,
+       "config": {
+        "objective": "拆解生产目标为制作计划（不委派 Specialist）。"
+       },
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      },
+      {
+       "id": "n_sw",
+       "type": "agent",
+       "refId": "script_writer",
+       "refVersion": null,
+       "label": null,
+       "config": {
+        "objective": "按以下故事骨架真实新写全片故事段（3-4 个场景段落，不扩写流水账）：《风筝与竹竿》：小女孩小满（双马尾辫，黄雨衣）的风筝挂在了村口老槐树的高枝上。她的朋友阿岩（乱翘短发，蓝白条纹T恤，深绿背带工装裤）想用长竹竿把风筝捅下来，第一次尝试失败（竹竿太短够不着）。小满面临选择：爬上摇摇晃晃的树杈（有跌落风险），或回家求助（放弃今天放飞）。她选择小心爬树，在树杈间意外发现阿岩前几天丢失的红色手电筒（回收此前道具伏笔）。她不动手电筒，改用手电筒玻璃反光引来路人的注意，借来长梯取下风筝。两人傍晚一起放飞风筝。",
+        "completion": {
+         "strategy": "require_new",
+         "outputs": [
+          {
+           "kind": "scene",
+           "minCount": 3
+          }
+         ]
+        }
+       },
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      },
+      {
+       "id": "n_rv_sw",
+       "type": "human_review",
+       "refId": null,
+       "refVersion": null,
+       "label": "故事审定",
+       "config": {
+        "reviewer": "制作人"
+       },
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      },
+      {
+       "id": "n_cd",
+       "type": "agent",
+       "refId": "character_designer",
+       "refVersion": null,
+       "label": null,
+       "config": {
+        "objective": "生产小满与阿岩两名角色及各自 1 套 Look（外观：小满=双马尾辫/明黄色雨衣/蓝背带裤；阿岩=乱翘短发/蓝白条纹T恤/深绿背带工装裤），红色手电筒作为道具如实生产参考。",
+        "completion": {
+         "strategy": "require_new",
+         "outputs": [
+          {
+           "kind": "character",
+           "minCount": 1
+          },
+          {
+           "kind": "look",
+           "withImage": true,
+           "minCount": 1
+          }
+         ]
+        }
+       },
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      },
+      {
+       "id": "n_rv_cd",
+       "type": "human_review",
+       "refId": null,
+       "refVersion": null,
+       "label": "资源审定（批准 Look）",
+       "config": {
+        "reviewer": "制作人",
+        "selection": {
+         "kind": "look_reference",
+         "entityId": "<运行期在审核卡片选择候选>"
+        }
+       },
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      },
+      {
+       "id": "n_sc",
+       "type": "agent",
+       "refId": "scene_designer",
+       "refVersion": null,
+       "label": null,
+       "config": {
+        "objective": "建立全部场景 Location/SceneInstance；每个故事段涉及的具体状态（时段/天气/门已开等）用 scene.state_view.prepare 生成 SceneInstanceView 状态图并绑定正确 SceneInstance——后续分镜的首帧与视频以状态图为空间依据；仅补地点资料时才用 LocationView。",
+        "completion": {
+         "strategy": "require_new",
+         "outputs": [
+          {
+           "kind": "location",
+           "minCount": 2
+          }
+         ]
+        }
+       },
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      },
+      {
+       "id": "n_rv_sc",
+       "type": "human_review",
+       "refId": null,
+       "refVersion": null,
+       "label": "场景审定",
+       "config": {
+        "reviewer": "制作人"
+       },
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      },
+      {
+       "id": "n_dir_board",
+       "type": "agent",
+       "refId": "director",
+       "refVersion": null,
+       "label": null,
+       "config": {
+        "objective": "形成镜头清单、资源绑定与分镜图候选（≥6 镜，含同地点连续动作、一次换场与一次中近景身份检查——由你按故事判断）。",
+        "completion": {
+         "strategy": "require_new",
+         "outputs": [
+          {
+           "kind": "shot",
+           "withImage": true,
+           "minCount": 6
+          }
+         ]
+        }
+       },
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      },
+      {
+       "id": "n_rv_board",
+       "type": "human_review",
+       "refId": null,
+       "refVersion": null,
+       "label": "分镜审定（首帧选用）",
+       "config": {
+        "reviewer": "制作人",
+        "selection": {
+         "kind": "first_frame",
+         "entityId": "<运行期在审核卡片选择候选>"
+        }
+       },
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      },
+      {
+       "id": "n_dir_video",
+       "type": "agent",
+       "refId": "director",
+       "refVersion": null,
+       "label": null,
+       "config": {
+        "objective": "按批准首帧与镜头清单真实生成全部视频候选：逐镜决定接续方式（按 relay skill v1.4.0 路径表与 Phase48 受控对照结论选择），完成后核对首中尾帧与剧情尾态。全片无旁白。",
+        "completion": {
+         "strategy": "require_new",
+         "outputs": [
+          {
+           "kind": "video_version",
+           "playable": true,
+           "minCount": 4
+          }
+         ]
+        }
+       },
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      },
+      {
+       "id": "n_rv_v1",
+       "type": "human_review",
+       "refId": null,
+       "refVersion": null,
+       "label": "视频一审",
+       "config": {
+        "instructions": "第一轮独立审核：叙事、身份、动作、空间与候选技术状态。",
+        "reviewer": "制作人"
+       },
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      },
+      {
+       "id": "n_rv_v2",
+       "type": "human_review",
+       "refId": null,
+       "refVersion": null,
+       "label": "视频二审（选用装配版本）",
+       "config": {
+        "instructions": "第二轮独立审核：保留一审意见，完成用于装配的具体版本选用。",
+        "reviewer": "制作人",
+        "selection": {
+         "kind": "video_version",
+         "entityId": "<运行期在审核卡片选择候选>"
+        }
+       },
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      },
+      {
+       "id": "n_asm",
+       "type": "agent",
+       "refId": "assembly",
+       "refVersion": null,
+       "label": null,
+       "config": {
+        "objective": "接收精确选片范围装配成片：禁止自动旁白；默认保留合格原生环境声与动作声（逐镜先分类再决定）；音乐仅按作品政策（本片不加）。完成渲染并核验可播放。",
+        "completion": {
+         "strategy": "require_new",
+         "outputs": [
+          {
+           "kind": "sequence",
+           "withCompletedRender": true,
+           "minCount": 1
+          }
+         ]
+        }
+       },
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      },
+      {
+       "id": "n_rv_final",
+       "type": "human_review",
+       "refId": null,
+       "refVersion": null,
+       "label": "成片审定",
+       "config": {
+        "reviewer": "制作人"
+       },
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      },
+      {
+       "id": "n_end",
+       "type": "boundary_end",
+       "refId": null,
+       "refVersion": null,
+       "label": null,
+       "config": {},
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      },
+      {
+       "id": "n_skill_0",
+       "type": "skill",
+       "refId": "full-story-relay-calibration",
+       "refVersion": null,
+       "label": "full-story-relay-calibration",
+       "config": {},
+       "position": {
+        "x": 0,
+        "y": 0
+       }
+      }
+     ],
+     "edges": [
+      {
+       "id": "e_n_start_n_producer",
+       "type": "execution",
+       "source": "n_start",
+       "target": "n_producer",
+       "sourcePort": "out",
+       "targetPort": "in"
+      },
+      {
+       "id": "e_n_producer_n_sw",
+       "type": "execution",
+       "source": "n_producer",
+       "target": "n_sw",
+       "sourcePort": "out",
+       "targetPort": "in"
+      },
+      {
+       "id": "e_n_sw_n_rv_sw",
+       "type": "execution",
+       "source": "n_sw",
+       "target": "n_rv_sw",
+       "sourcePort": "out",
+       "targetPort": "in"
+      },
+      {
+       "id": "e_n_rv_sw_n_cd",
+       "type": "execution",
+       "source": "n_rv_sw",
+       "target": "n_cd",
+       "sourcePort": "out",
+       "targetPort": "in"
+      },
+      {
+       "id": "e_n_cd_n_rv_cd",
+       "type": "execution",
+       "source": "n_cd",
+       "target": "n_rv_cd",
+       "sourcePort": "out",
+       "targetPort": "in"
+      },
+      {
+       "id": "e_n_rv_cd_n_sc",
+       "type": "execution",
+       "source": "n_rv_cd",
+       "target": "n_sc",
+       "sourcePort": "out",
+       "targetPort": "in"
+      },
+      {
+       "id": "e_n_sc_n_rv_sc",
+       "type": "execution",
+       "source": "n_sc",
+       "target": "n_rv_sc",
+       "sourcePort": "out",
+       "targetPort": "in"
+      },
+      {
+       "id": "e_n_rv_sc_n_dir_board",
+       "type": "execution",
+       "source": "n_rv_sc",
+       "target": "n_dir_board",
+       "sourcePort": "out",
+       "targetPort": "in"
+      },
+      {
+       "id": "e_n_dir_board_n_rv_board",
+       "type": "execution",
+       "source": "n_dir_board",
+       "target": "n_rv_board",
+       "sourcePort": "out",
+       "targetPort": "in"
+      },
+      {
+       "id": "e_n_rv_board_n_dir_video",
+       "type": "execution",
+       "source": "n_rv_board",
+       "target": "n_dir_video",
+       "sourcePort": "out",
+       "targetPort": "in"
+      },
+      {
+       "id": "e_n_dir_video_n_rv_v1",
+       "type": "execution",
+       "source": "n_dir_video",
+       "target": "n_rv_v1",
+       "sourcePort": "out",
+       "targetPort": "in"
+      },
+      {
+       "id": "e_n_rv_v1_n_rv_v2",
+       "type": "execution",
+       "source": "n_rv_v1",
+       "target": "n_rv_v2",
+       "sourcePort": "out",
+       "targetPort": "in"
+      },
+      {
+       "id": "e_n_rv_v2_n_asm",
+       "type": "execution",
+       "source": "n_rv_v2",
+       "target": "n_asm",
+       "sourcePort": "out",
+       "targetPort": "in"
+      },
+      {
+       "id": "e_n_asm_n_rv_final",
+       "type": "execution",
+       "source": "n_asm",
+       "target": "n_rv_final",
+       "sourcePort": "out",
+       "targetPort": "in"
+      },
+      {
+       "id": "e_n_rv_final_n_end",
+       "type": "execution",
+       "source": "n_rv_final",
+       "target": "n_end",
+       "sourcePort": "out",
+       "targetPort": "in"
+      },
+      {
+       "id": "eb_n_skill_0_n_dir_video",
+       "type": "skill_binding",
+       "source": "n_skill_0",
+       "target": "n_dir_video",
+       "skillVersion": "1.3.1",
+       "sourcePort": "out",
+       "targetPort": "in"
+      }
+     ],
+     "template": {
+      "templateId": "W09",
+      "templateVersion": "p48_templates_v1"
+     },
+     "projectId": "P48_E_2D",
+     "revision": 1,
+     "updatedAt": "2026-10-06T10:20:35.807Z",
+     "createdAt": "2026-10-06T10:20:35.807Z",
+     "contentHash": "sha256:5f47e4776e0ec910ff769d99a764dc44900bf37291f8ef1c24cd3406b4b2f9ca"
+    },
+    "agentBaseline": {
+     "producer": {
+      "registryDigest": "sha256:61913bd272ec7820",
+      "enabled": true,
+      "modelProfile": {
+       "id": "producer_profile",
+       "name": "Producer 默认",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": null,
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     },
+     "script_writer": {
+      "registryDigest": "sha256:4e99956f40cf1545",
+      "enabled": true,
+      "modelProfile": {
+       "id": "text_default",
+       "name": "Agnes（默认）",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": null,
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     },
+     "character_designer": {
+      "registryDigest": "sha256:fb18cdd6034ee0fb",
+      "enabled": true,
+      "modelProfile": {
+       "id": "character_profile",
+       "name": "角色设计默认",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": "agnes-image-2.1-flash",
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     },
+     "scene_designer": {
+      "registryDigest": "sha256:42673f11e915c3d3",
+      "enabled": true,
+      "modelProfile": {
+       "id": "scene_profile",
+       "name": "场景设计默认",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": "agnes-image-2.1-flash",
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     },
+     "director": {
+      "registryDigest": "sha256:9c6e02b744f3c3e5",
+      "enabled": true,
+      "modelProfile": {
+       "id": "text_default",
+       "name": "Agnes（默认）",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": null,
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     },
+     "assembly": {
+      "registryDigest": "sha256:3b46fc0fd06b4970",
+      "enabled": true,
+      "modelProfile": {
+       "id": "text_default",
+       "name": "Agnes（默认）",
+       "reasoning_model": "agnes-3.0-flash",
+       "fallback_reasoning_model": null,
+       "image_model": null,
+       "video_model": null,
+       "account_policy": "auto",
+       "text_provider": "agnes"
+      }
+     }
+    },
+    "skillVersions": {
+     "full-story-relay-calibration": {
+      "version": "1.3.1",
+      "contentHash": "sha256:30a4d8e88e3b8edd71f3eafe"
+     }
+    },
+    "textModel": "agnes-3.0-flash",
+    "thinking": true,
+    "toolPolicy": "core_tools_only",
+    "canonicalBaseline": {
+     "story_text": "sha256:12ae32cb1ec02d01",
+     "characters": "sha256:4f53cda18c2baa0c",
+     "scenes": "sha256:4f53cda18c2baa0c"
+    }
+   }
+  }
+ },
+ "brief": "《风筝与竹竿》：小女孩小满（双马尾辫，黄雨衣）的风筝挂在了村口老槐树的高枝上。她的朋友阿岩（乱翘短发，蓝白条纹T恤，深绿背带工装裤）想用长竹竿把风筝捅下来，第一次尝试失败（竹竿太短够不着）。小满面临选择：爬上摇摇晃晃的树杈（有跌落风险），或回家求助（放弃今天放飞）。她选择小心爬树，在树杈间意外发现阿岩前几天丢失的红色手电筒（回收此前道具伏笔）。她不动手电筒，改用手电筒玻璃反光引来路人的注意，借来长梯取下风筝。两人傍晚一起放飞风筝。"
+}

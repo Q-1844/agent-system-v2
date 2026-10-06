@@ -36,8 +36,8 @@ def test_w09_default_no_longer_mutes_native_audio():
 
 def test_template_version_bumped():
     """政策为实质变更：模板版本必须升级，新定义可追溯到 p48。"""
-    assert T.TEMPLATE_VERSION == "p48_templates_v1"
-    assert _w08_def()["template"]["templateVersion"] == "p48_templates_v1"
+    assert T.TEMPLATE_VERSION == "p48_e_templates_v1"
+    assert _w08_def()["template"]["templateVersion"] == "p48_e_templates_v1"
 
 
 def test_w08_metadata_audio_policy():

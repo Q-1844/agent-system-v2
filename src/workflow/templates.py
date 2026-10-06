@@ -7,12 +7,12 @@
 # - 复制产生新工作流身份（新 workflowId），definition.template 记录来源模板与
 #   版本（可追溯）；用户可改目标/节点顺序/Skill 绑定/审核次数后再保存。
 # - Skill 绑定来自真实目录（full-story-relay-calibration / keyframes-bridge-repair
-#   v1.3.1，binding 名册允许 director）；assembly 不绑 Skill（名册事实）。
+#   v1.4.0（Phase48 E 收口），binding 名册允许 director）；assembly 不绑 Skill（名册事实）。
 # - 模板中的 completion/selection 使用 Phase 47 B批契约（outputs.py/selection.py）。
 from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
-TEMPLATE_VERSION = "p48_templates_v1"
+TEMPLATE_VERSION = "p48_e_templates_v1"
 
 RELAY_SKILL = "full-story-relay-calibration"
 BRIDGE_SKILL = "keyframes-bridge-repair"
@@ -75,7 +75,7 @@ def _def(name: str, nodes: List[dict], template_id: str, description: str = "",
         edges.append({"id": f"eb_{skid}_{sb['targetNodeId']}",
                       "type": "skill_binding", "source": skid,
                       "target": sb["targetNodeId"], "skillVersion":
-                          sb.get("skillVersion") or "1.3.1",
+                          sb.get("skillVersion") or "1.4.0",
                       "sourcePort": "out", "targetPort": "in"})
     return {"schemaVersion": "workflow_draft_v1",
             "workflowId": None,   # 由创建方填写（新身份）
@@ -206,7 +206,7 @@ def _w05(params: dict) -> dict:
                     "outputs": [{"kind": "video_version", "playable": True,
                                  "minCount": int(params.get("videoCount") or 1)}]}))
     if bind_skill:
-        skill_bindings.append({"skillId": RELAY_SKILL, "skillVersion": "1.3.1",
+        skill_bindings.append({"skillId": RELAY_SKILL, "skillVersion": "1.4.0",
                                "targetNodeId": "n_dir_video"})
     nodes.append(_review("n_rv1", "视频审定（选用）",
                          instructions="检查叙事、身份、动作、空间与候选技术状态，"
@@ -251,7 +251,7 @@ def _w06(params: dict) -> dict:
 
 def _w07(params: dict) -> dict:
     bind_skill = bool(params.get("bindBridgeSkill", True))
-    skill_bindings = [{"skillId": BRIDGE_SKILL, "skillVersion": "1.3.1",
+    skill_bindings = [{"skillId": BRIDGE_SKILL, "skillVersion": "1.4.0",
                        "targetNodeId": "n_dir_bridge"}] if bind_skill else []
     # Phase48 A08：桥接候选同样默认 require_new；excludeVersionIds 可显式排除
     # 不得充当桥接候选的版本（如两端点本身）。
@@ -313,7 +313,7 @@ def _w08(params: dict) -> dict:
 def _w09(params: dict) -> dict:
     """六员完整生产：默认链（§5.9）；节点实例可按前置条件细分。"""
     relay_skill = bool(params.get("bindRelaySkill", True))
-    skill_bindings = [{"skillId": RELAY_SKILL, "skillVersion": "1.3.1",
+    skill_bindings = [{"skillId": RELAY_SKILL, "skillVersion": "1.4.0",
                        "targetNodeId": "n_dir_video"}] if relay_skill else []
     video_node = _agent(
         "n_dir_video", "director",
