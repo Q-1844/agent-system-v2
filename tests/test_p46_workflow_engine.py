@@ -476,6 +476,63 @@ def test_continue_after_reconciliation_creates_new_attempt(tmp_path, monkeypatch
     assert r["nodes"]["n_sw"]["attempts"][0]["attemptId"] == "att_z"
 
 
+def test_continue_failed_run_resets_failed_node(tmp_path, monkeypatch):
+    """Phase48 E：节点 failed 使 run 推导为 failed（终态），但 docstring 契约是
+    failed 节点可显式重试开新 attempt——此前 run_terminal 检查把 failed run 一律
+    拒绝，该分支不可达（真机 P48_E_2D n_sc continue 409 实证）。修复后：failed
+    run + failed 节点 continue 放行，旧 attempt 保留；stopped/completed 仍拒绝。"""
+    bad = {"task_id": "task_y", "agent": "script_writer", "status": "completed",
+           "summary": "我说完成了", "verified": False, "n_tool_calls": 0,
+           "changed_refs": {"scenes": []}, "warnings": [], "session_id": "s"}
+    eng, run, _ = _start_engine(tmp_path, monkeypatch, {"script_writer": bad})
+    runs = RunStore(tmp_path, "p46t")
+    _drive_sync(eng, tmp_path, run["runId"])
+    r = runs.load(run["runId"])
+    assert r["status"] == M.RUN_FAILED
+    assert r["nodes"]["n_sw"]["status"] == M.NODE_FAILED
+    first_att = r["nodes"]["n_sw"]["attempts"][0]["attemptId"]
+    # failed run 显式继续：开新 attempt（不再 run_terminal 409）
+    calls = _make_dispatch(monkeypatch, {
+        "script_writer": _ok_task_result("script_writer"),
+        "assembly": _ok_task_result("assembly", ("seq_1",))})
+    eng.continue_run(tmp_path, "p46t", run["runId"], "n_sw")
+    _drive_sync(eng, tmp_path, run["runId"])
+    r = runs.load(run["runId"])
+    assert r["nodes"]["n_sw"]["status"] == M.NODE_SUCCESS
+    assert calls == ["script_writer"]   # 停靠中间审核，装配未派发
+    # 审核通过 → 装配派发 → completed
+    eng.decide_review(tmp_path, "p46t", run["runId"],
+                      r["reviews"][0]["requestId"], "approve", "通过")
+    _drive_sync(eng, tmp_path, run["runId"])
+    r = runs.load(run["runId"])
+    assert r["status"] == M.RUN_COMPLETED
+    assert calls == ["script_writer", "assembly"]
+    # 旧 failed attempt 保留为真实历史
+    atts = r["nodes"]["n_sw"]["attempts"]
+    assert len(atts) == 2
+    assert atts[0]["attemptId"] == first_att
+    assert atts[0]["status"] == "failed"
+
+
+def test_continue_still_rejects_stopped_and_completed(tmp_path, monkeypatch):
+    """A06 停止语义不受 Phase48 E failed-run 放行影响：stopped/completed 仍拒绝。"""
+    outcomes = {"script_writer": _ok_task_result("script_writer"),
+                "assembly": _ok_task_result("assembly", ("seq_1",))}
+    eng, run, _ = _start_engine(tmp_path, monkeypatch, outcomes)
+    runs = RunStore(tmp_path, "p46t")
+    _drive_sync(eng, tmp_path, run["runId"])
+    r = runs.load(run["runId"])
+    assert r["status"] == M.RUN_WAITING_HUMAN
+    eng.decide_review(tmp_path, "p46t", run["runId"],
+                      r["reviews"][0]["requestId"], "approve", "通过")
+    _drive_sync(eng, tmp_path, run["runId"])
+    r = runs.load(run["runId"])
+    assert r["status"] == M.RUN_COMPLETED
+    with pytest.raises(WorkflowError) as ei:
+        eng.continue_run(tmp_path, "p46t", run["runId"], "n_sw")
+    assert ei.value.code == "run_terminal"
+
+
 # ============ Producer 派发守卫（服务端限制） ============
 def test_producer_guard_blocks_out_of_scope_delegate(tmp_path):
     """工作流上下文中 _delegate_specialist 直接拒绝越权目标：不建任务、不进 turn。"""
@@ -520,3 +577,71 @@ def test_envelope_contains_upstream_handoff_and_skills(tmp_path):
     assert "s01" in env["situation"]
     assert any("full-story-relay-calibration" in c for c in env["constraints"])
     assert any("不要委派" not in c for c in env["constraints"][:1])
+
+
+def test_envelope_retry_feedback_includes_failed_attempt_error(tmp_path):
+    """Phase48 E：重试 attempt 的委派信封必须带上一轮 failed attempt 的校验错误
+    （只给事实不指定做法）——否则会话复用下 Agent 以"已做过"为由不动手
+    （真机 P48_E_2D n_sc attempt2 实证：无反馈 → 零写入收工）。"""
+    run = {"runId": "run_r", "snapshot": {"definition": {"name": "链"}}}
+    run["nodes"] = {
+        "n_sc": {"nodeId": "n_sc", "refId": "scene_designer", "status": "failed",
+                 "currentAttemptId": "att2",
+                 "attempts": [
+                     {"attemptId": "att1", "status": "failed",
+                      "error": "目标级输出缺项：要求 location ×2（需 2）仅 1 个"},
+                     {"attemptId": "att2", "status": "failed",
+                      "error": "任务结束但未见预期产物域的已验证回执"},
+                 ],
+                 "handoff": None},
+    }
+    pn = {"nodeId": "n_sc", "refId": "scene_designer", "objective": "建立全部场景"}
+    env = build_envelope(None, "p", run, pn)
+    assert "重试提示" in env["situation"]
+    assert "已验证回执" in env["situation"]                 # 最近一次失败的原文
+    assert "要求 location ×2" not in env["situation"]       # 只带最近一次，不堆历史
+    # 无失败 attempt 的节点不带重试提示
+    run2 = {"runId": "run_r2", "snapshot": {"definition": {"name": "链"}},
+            "nodes": {"n_sc": {"nodeId": "n_sc", "refId": "scene_designer",
+                               "status": "pending", "attempts": [], "handoff": None}}}
+    env2 = build_envelope(None, "p", run2, pn)
+    assert "重试提示" not in env2["situation"]
+
+
+def test_reconcile_spares_live_turn_in_process(tmp_path, monkeypatch):
+    """Phase48 E 防御：task 仍 running 但其 turn 在本进程 turn_registry 中存活
+    （live 委派）→ 对账不得判"进程死亡"停靠（真机 18:53 误判实证：活 turn
+    被第二路对账误标 needs_reconciliation）。registry 未占用 → 仍诚实停靠。"""
+    eng, run, calls = _start_engine(tmp_path, monkeypatch, {})
+    runs = RunStore(tmp_path, "p46t")
+    att = {"attemptId": "att_live", "status": "dispatching", "startedAt": 0.0,
+           "endedAt": None, "taskRefs": [], "result": None, "error": None,
+           "inputs": {}, "outputs": None, "skillEvidence": None, "thinking": True}
+
+    def _seed(r):
+        n = r["nodes"]["n_sw"]
+        n["status"] = M.NODE_DISPATCHING
+        n["attempts"].append(att)
+        n["currentAttemptId"] = "att_live"
+
+    runs.update(run["runId"], _seed)
+    tasks = AgentTaskStore(tmp_path, "p46t")
+    from src.agents.models import AgentTask
+    t = AgentTask(task_id="task_live", project="p46t", requester_agent="workflow",
+                  target_agent="script_writer", capability_id="script_writer.delegate",
+                  status="running", session_id="sess_live",
+                  workflow_ref={"runId": run["runId"], "nodeId": "n_sw",
+                                "attemptId": "att_live"})
+    tasks.create(t)
+    # turn 在本进程存活（占用 registry）
+    from src.agents import turn_registry
+    turn_registry.acquire("p46t", "sess_live", None)
+    _drive_sync(eng, tmp_path, run["runId"])
+    r = runs.load(run["runId"])
+    assert r["nodes"]["n_sw"]["status"] == M.NODE_DISPATCHING   # 未被停靠
+    assert calls == []                                          # 也未重发
+    # registry 释放后（turn 真死）→ 对账诚实 needs_reconciliation
+    turn_registry.pop("p46t", "sess_live")
+    _drive_sync(eng, tmp_path, run["runId"])
+    r = runs.load(run["runId"])
+    assert r["nodes"]["n_sw"]["status"] == M.NODE_NEEDS_RECONCILIATION

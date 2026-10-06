@@ -129,10 +129,10 @@ def test_bridge_skill_p25_status_and_positioning():
     assert "端点质量与桥无关" in b
 
 
-# ---- 5. 注册表加载 v1.3.1 ----
+# ---- 5. 注册表加载 v1.4.0 ----
 
 def test_p44a_findings_anchored():
-    """44A 终选沉淀（v1.3.1）：凭空元素揭露路线二选一（镜头跟随·盲区揭露默认求稳 /
+    """44A 终选沉淀（v1.4.0）：凭空元素揭露路线二选一（镜头跟随·盲区揭露默认求稳 /
     融合首帧·全景按需）+ 音轨注记 + multi 不消费硬首帧配方坑。"""
     s = _t(f"{_RELAY}/SKILL.md")
     assert "元素出现方式二选一" in s
@@ -156,5 +156,5 @@ def test_registry_loads_v131():
     assert not errs, f"注册错误: {errs}"
     relay = reg.skills().get(_RELAY)
     bridge = reg.skills().get(_BRIDGE)
-    assert relay is not None and relay.version == "1.3.1"
-    assert bridge is not None and bridge.version == "1.3.1"
+    assert relay is not None and relay.version == "1.4.0"
+    assert bridge is not None and bridge.version == "1.4.0"

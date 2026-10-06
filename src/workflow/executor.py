@@ -438,8 +438,9 @@ class WorkflowEngine:
     def _reconcile_attempt(self, project_dir: Path, run: dict, nid: str,
                            att: dict, runs: RunStore, el: EventLog) -> bool:
         """在途 attempt 对账：按 workflow_ref 找回 AgentTask——
-        已结算 → 收养其结果继续校验；仍在 running → turn 已随进程死亡 →
-        needs_reconciliation（不盲重发）。返回 False=停靠。"""
+        已结算 → 收养其结果继续校验；仍在 running → 先查本进程 turn_registry
+        （占用中 = live 委派，不动，Phase48 E 防御）；未占用 → turn 已随进程
+        死亡 → needs_reconciliation（不盲重发）。返回 False=停靠。"""
         from src.agents.tasks import AgentTaskStore
         run_id = run["runId"]
         tasks = AgentTaskStore(project_dir, run.get("project") or "unknown")
@@ -532,7 +533,18 @@ class WorkflowEngine:
                       attemptId=att["attemptId"], outcome="failed",
                       taskId=task.task_id)
             return False
-        # running/pending：turn 随进程死亡，任务卡在运行态——诚实进入需要核对
+        # running/pending：先核对本进程 turn 是否仍存活（Phase48 E 防御：
+        # 真机实证 18:53 一例——worker 仍在 await 派发时另一路对账进入，把活 turn
+        # 误判为"随进程死亡"）。turn_registry 占用中 = live 委派，不动（与
+        # settlement._reconcile_sync_delegate 同判据）；registry 未占用 = 真
+        # 中断遗留，诚实进入需要核对。
+        try:
+            from src.agents import turn_registry
+            _proj = run.get("project") or "unknown"
+            if task.session_id and turn_registry.is_active(_proj, task.session_id):
+                return False
+        except Exception:
+            pass
         def _rec(r):
             a = _get_attempt(r, nid, att["attemptId"])
             a["status"] = "needs_reconciliation"
@@ -840,7 +852,10 @@ class WorkflowEngine:
     def continue_run(self, project_dir: Path, project: str, run_id: str,
                      node_id: Optional[str] = None) -> dict:
         """显式继续：needs_reconciliation / failed 节点开新 attempt（旧 attempt 保留为
-        真实历史）；等待审核状态不允许 continue（须走决策）。"""
+        真实历史）；等待审核状态不允许 continue（须走决策）。
+        Phase48 E：节点 failed 使 run 状态推导为 failed（终态），但按本契约 failed
+        节点必须可显式重试——run=failed 且目标节点可重试时放行；stopped/rejected/
+        completed 仍拒绝（停止语义见 A06：已停止请另起新 run）。"""
         runs = RunStore(project_dir, project)
         run = runs.load(run_id)
         if run is None:
@@ -848,8 +863,9 @@ class WorkflowEngine:
         if run.get("status") == M.RUN_WAITING_HUMAN:
             raise WorkflowError("waiting_human",
                                 "run 等待人工审核，请通过审核决策继续")
-        if run.get("status") in M.RUN_TERMINAL:
-            raise WorkflowError("run_terminal", f"run 已终态（{run.get('status')}）")
+        _status = run.get("status")
+        if _status in M.RUN_TERMINAL and _status != M.RUN_FAILED:
+            raise WorkflowError("run_terminal", f"run 已终态（{_status}）")
         if run.get("stopRequested"):
             raise WorkflowError("stopping", "run 已请求停止；请另起新 run")
         target = node_id or run["plan"]["order"][int(run.get("cursor") or 0)]

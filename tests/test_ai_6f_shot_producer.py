@@ -547,8 +547,14 @@ def test_api_shot_capabilities_wired_and_settler_ready(client):
     caps = {c["id"]: c for c in r.json()["capabilities"]}
     for cid in ("shot.first_frame", "shot.last_frame", "shot.video"):
         assert caps[cid]["implemented"] is True, f"{cid} 应已接通（AI-6F.0 fake durable）"
-    # startup 已启动 settlement bridge（api_server.py: get_settler().start()）
+    # settlement bridge 单例存在。Phase48 E 测试隔离闸门：测试进程禁用启动恢复
+    # （WF_STARTUP_RECOVERY_DISABLE=1，防测试进程杀真机活任务），poll loop 不在
+    # startup 启动——lifecycle 就绪语义改由显式构造覆盖（§18 集成测试）。
     from src.agents.settlement import get_settler
     settler = get_settler()
     assert settler is not None
-    assert settler._loop_task is not None   # poll loop 已在 startup 启动
+    import os as _os
+    if _os.environ.get("WF_STARTUP_RECOVERY_DISABLE") == "1":
+        assert settler._loop_task is None      # 闸门生效：测试进程不启动轮询
+    else:
+        assert settler._loop_task is not None  # 生产路径：poll loop 已在 startup 启动

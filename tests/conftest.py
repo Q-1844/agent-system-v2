@@ -14,6 +14,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import os as _os
+# Phase48 E 测试隔离闸门：client fixture 以真实 projects 目录启动 api_server app，
+# 其启动恢复（recover_workflows + settler.recover_tasks/轮询）会把开发机上活着的
+# 真机 run/在途任务误判为"重启遗留"并杀掉（真机实证 2026-10-06 18:53 假停靠/
+# 19:13 杀活任务）。测试进程禁用启动恢复；恢复语义测试自建引擎/夹具
+# （test_p46_workflow_engine 恢复对账路径不受影响——那是显式调用，非启动钩子）。
+_os.environ.setdefault("WF_STARTUP_RECOVERY_DISABLE", "1")
+
 import pytest
 from fastapi.testclient import TestClient
 

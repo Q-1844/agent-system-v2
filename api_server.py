@@ -208,14 +208,22 @@ async def startup():
     # AgentTask，据 linked Job（已被 JobQueue._load 恢复）状态 reattach/settle，不重复 submit。
     # 先一次性 recover_tasks（startup 对账），再启后台 poll loop（§12 polling fallback——
     # 正确性不依赖内存 SSE，持久态是真相）。
-    try:
-        from src.agents.settlement import get_settler
-        settler = get_settler()
-        asyncio.create_task(settler.recover_tasks())
-        await settler.start()
-        logger.info("AgentTask settlement bridge 已就绪")
-    except Exception as e:
-        logger.error(f"AgentTask settlement 恢复失败: {e}")
+    # Phase48 E：WF_STARTUP_RECOVERY_DISABLE=1 时跳过（测试进程隔离闸门——conftest
+    # 的 session 级 client 会以真实 projects 目录启动本 app，其启动恢复/结算轮询
+    # 会把开发机上活着的真机 run/任务误判为"重启遗留"并杀掉，真机实证两次：
+    # 2026-10-06 18:53 假停靠、19:13 杀活任务）。
+    _wf_rec_off = os.environ.get("WF_STARTUP_RECOVERY_DISABLE") == "1"
+    if not _wf_rec_off:
+        try:
+            from src.agents.settlement import get_settler
+            settler = get_settler()
+            asyncio.create_task(settler.recover_tasks())
+            await settler.start()
+            logger.info("AgentTask settlement bridge 已就绪")
+        except Exception as e:
+            logger.error(f"AgentTask settlement 恢复失败: {e}")
+    else:
+        logger.info("AgentTask settlement bridge 已按 WF_STARTUP_RECOVERY_DISABLE 跳过")
 
     # 阶段 AI-7A：Team Chat 持久化恢复（§54/§57）。扫各项目 team thread 的 pending user
     # 消息，标中断、不重跑 LLM（§57 no infinite loop）。persistence 即真相，polling-first。
@@ -284,16 +292,20 @@ async def startup():
 
     # Phase 46：工作流 run 启动恢复——对账在途 attempt（不自动派发新节点；等待显式
     # 继续/审核决策）。诚实语义见 routers/workflow.recover_workflows。
-    try:
-        from routers.workflow import recover_workflows
-        rec = recover_workflows()
-        if rec.get("scanned") or rec.get("errors"):
-            logger.info(f"Workflow 恢复：扫描 {rec.get('scanned')} 个活跃 run，"
-                        f"对账 {rec.get('reconciled')} 个在途 attempt"
-                        + (f"，错误 {rec['errors']}" if rec.get("errors") else ""))
-        logger.info("Workflow 恢复已就绪")
-    except Exception as e:
-        logger.error(f"Workflow 恢复失败: {e}")
+    # WF_STARTUP_RECOVERY_DISABLE=1 时跳过（测试隔离，见上方 settler 块注释）。
+    if not _wf_rec_off:
+        try:
+            from routers.workflow import recover_workflows
+            rec = recover_workflows()
+            if rec.get("scanned") or rec.get("errors"):
+                logger.info(f"Workflow 恢复：扫描 {rec.get('scanned')} 个活跃 run，"
+                            f"对账 {rec.get('reconciled')} 个在途 attempt"
+                            + (f"，错误 {rec['errors']}" if rec.get("errors") else ""))
+            logger.info("Workflow 恢复已就绪")
+        except Exception as e:
+            logger.error(f"Workflow 恢复失败: {e}")
+    else:
+        logger.info("Workflow 恢复已按 WF_STARTUP_RECOVERY_DISABLE 跳过")
 
 
 if __name__ == "__main__":

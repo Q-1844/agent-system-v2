@@ -140,6 +140,15 @@ def build_envelope(rt, project: str, run: dict, node_plan: dict,
         if frozen_inputs.get("stale"):
             sit_parts.append("注意：下列上游产物在派发前核验时已失效（不得采用）："
                              + json.dumps(frozen_inputs["stale"], ensure_ascii=False)[:600])
+    # Phase48 E：重试 attempt 的失败事实反馈——引擎 continue 开新 attempt 后，
+    # 会话复用会让 Agent 以"已做过"为由不动手；而服务端完成标准（completion）
+    # 不出现在 objective 里。把上次失败原因如实告诉它（只给事实，不指定做法）。
+    prev_err = _last_failed_attempt_error(run, node_plan.get("nodeId"))
+    if prev_err:
+        sit_parts.append(
+            "重试提示：本节点此前 attempt 未通过服务端完成校验：" + prev_err[:300]
+            + " —— 请先用读工具核对项目内真实状态（不要凭会话记忆认定已完成），"
+              "再补齐缺失产物；完成判定仍以真实工具回执为准。")
     constraints = [
         "只在本节点职责与任务范围内工作；完成判定以真实工具回执为准，不是对话回复。",
         "完成本节点后用一段话总结你实际写入/产出的内容（含 ID），不要声称未执行的操作。",
@@ -177,6 +186,17 @@ def build_envelope(rt, project: str, run: dict, node_plan: dict,
         "workflow_ctx": {"runId": ctx["runId"], "nodeId": node_plan.get("nodeId")},
     }
     return envelope
+
+
+def _last_failed_attempt_error(run: dict, node_id: Optional[str]) -> str:
+    """节点最近一次 failed attempt 的校验错误（无则空串）。用于重试反馈。"""
+    if not node_id:
+        return ""
+    node = (run.get("nodes") or {}).get(node_id) or {}
+    for att in reversed(node.get("attempts") or []):
+        if att.get("status") == "failed" and att.get("error"):
+            return str(att["error"])
+    return ""
 
 
 # ============ 收货校验（§5.3 节点成功条件 + Phase 47 §4.2 目标级核对）============
