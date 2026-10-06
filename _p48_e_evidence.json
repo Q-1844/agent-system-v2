@@ -619,12 +619,59 @@
    "window": "水彩/写实 n_sc 场景turn在途 + 说明片 n_cd 角色turn在途时 taskkill 后端",
    "result": "重启后对账3个在途attempt全部诚实落 needs_reconciliation（进程中断…请显式重试），无假成功无failed翻转；显式 continue×3 恢复生产",
    "coverage": "中断+刷新+诚实恢复=本轮实证；晚到回执（provider任务重启后收货零重提交）=A10已实证+Phase48视频阶段窗口补充验证"
+  },
+  "explainer_v3": {
+   "run": "run_ab45eb82c812",
+   "def_rev": 3,
+   "design_change": "纯物件说明片：去人物角色（v2失败根因=角色三视图2/3被画成完整动漫男，与单手Look结构性冲突+Look t2i两轮跑偏+prop登记需用户参考图）",
+   "prop_reference": "input/prop_reference_flashlight.png（主持会话以 agnes-image-2.1-flash t2i 生成作为资产批准行为，task_suLvo8Ehyi1LfmifJHb0Op82trTVg938，sha256 d5d7e1d728c6abab…）",
+   "cd_completion": "prop×1(withImage)+location×1",
+   "agent_behavior_positive": "v2 CD 第三次attempt按锐化目标拒绝第三次生成并如实列缺项（reference_conflict/reference_required双fail-closed）——诚实停机范式"
+  },
+  "explainer_v4": {
+   "run": "run_9e704c8e5643",
+   "def_rev": 4,
+   "v3_failure": "n_cd honest fail：prop登记+批准成功（prop_ee73e1c69ed3 全四维度pass，封面ref_37d7d3abcb9d），但 Location 超出 CD 工具域（主持人定义设计错误把场景任务配给角色节点）",
+   "v4_fix": "CD completion=prop×1 allow_verified_reuse（合法复用已批准prop）；n_sc objective=工作台场景 require_new location×1"
+  },
+  "explainer_v5": {
+   "run": "run_1f8898ce81b7",
+   "def_rev": 5,
+   "v4_failure": "n_sw require_new×3 vs 已存在的完整8段故事：第二轮补写2段仍差1——同项目跨 run 的 require_new 对续作型项目是翻搅",
+   "v5_fix": "n_sw completion=allow_verified_reuse（故事已核验即复用，有真实缺口才补写）——A08 设计内路径"
   }
  },
  "runs": {
   "P48_E_Watercolor": "run_36463ddeb487",
   "P48_E_Realistic": "run_bbb7a89a480d",
   "P48_E_Explainer": "run_545cc965eab9",
-  "P48_E_Explainer_v2": "run_a89dbfff6c95"
+  "P48_E_Explainer_v2": "run_a89dbfff6c95",
+  "P48_E_Explainer_v3": "run_ab45eb82c812",
+  "P48_E_Explainer_v4": "run_9e704c8e5643",
+  "P48_E_Explainer_v5": "run_1f8898ce81b7"
+ },
+ "reverify_plan": {
+  "round1_continuous_action_identity": {
+   "story": "《水碗与石阶》：少女（单一Look，双马尾+水蓝布裙）端一碗水走下村口石阶。镜头1：下阶中段，碗水平稳，脚步轻缓；镜头2：末阶小跳落地，身体下沉缓冲，碗里的水晃了一圈没有洒出。两镜同地点同装同角色，动作跨镜连续。",
+   "chain": "W05（批准首帧+镜头范围→视频）",
+   "shots": 2,
+   "checks": "跨镜动作衔接（路径选择是否符合 skill v1.4.0 权重）、两镜身份一致性（f0区隔/服装/发型）、碗与水道具跨镜状态连续",
+   "skill_fingerprint": "catalog 实测 contentHash + attempt.skillEvidence + 出站 thinking 抽查"
+  },
+  "round2_multi_character_prop_dialogue": {
+   "story": "《剪刀与红绳》：奶奶（灰髻+深布衫）把剪刀刀柄朝对方递给孙女（红头绳+粉布衫），孙女双手接过说：谢谢奶奶。镜头1=递接瞬间（柄朝对方）；镜头2=孙女握剪开口道谢。",
+   "chain": "W09或D批六级路径（native对白）",
+   "shots": 2,
+   "checks": "道具交接方向（柄朝对方）、跨镜声线区分（老年女声vs少女声）、对白ASR逐字命中、无旁白",
+   "skill_fingerprint": "同上"
+  },
+  "round3_style_transfer_visual_causality": {
+   "story": "《第一块骨牌》：指尖推倒第一块骨牌，其余依次倒下，最后一块压住纸条弹起。在两种 render_family（watercolor 项目 vs photoreal 项目）各生成同内容镜头。",
+   "chain": "W05×2（跨项目同内容）",
+   "shots": "2项目×1-2镜",
+   "checks": "风格是否随项目 profile 稳定（非同词换皮）、因果链是否可见（推→倒→压→弹）、无风格内途径漂移",
+   "skill_fingerprint": "同上"
+  },
+  "independence": "三轮各自独立 run/项目/会话（backend Agent 会话每节点新建），不与 films 共用资产"
  }
 }

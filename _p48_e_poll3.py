@@ -10,7 +10,8 @@ BASE = "http://localhost:8000"
 WATCH = [
     ("P48_E_Watercolor", "run_36463ddeb487"),
     ("P48_E_Realistic", "run_bbb7a89a480d"),
-    ("P48_E_Explainer", "run_a89dbfff6c95"),
+    ("P48_E_Explainer", "run_1f8898ce81b7"),
+    ("P48_E_Watercolor", "run_3acbba944ea2"),
 ]
 
 
