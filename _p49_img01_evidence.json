@@ -1,0 +1,78 @@
+{
+ "long_prompt_chars": 1972,
+ "images": [
+  {
+   "tag": "A_short_1",
+   "group": "A_prompt_len",
+   "file": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P49_IMG_01\\output\\img_tests\\A_short_1.png",
+   "sha16": "439d245e69e61616",
+   "prompt_chars": 70
+  },
+  {
+   "tag": "A_short_2",
+   "group": "A_prompt_len",
+   "file": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P49_IMG_01\\output\\img_tests\\A_short_2.png",
+   "sha16": "88c7404ec3a5724e",
+   "prompt_chars": 70
+  },
+  {
+   "tag": "A_long_1",
+   "group": "A_prompt_len",
+   "file": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P49_IMG_01\\output\\img_tests\\A_long_1.png",
+   "sha16": "ef7f517b77db6f54",
+   "prompt_chars": 1972
+  },
+  {
+   "tag": "A_long_2",
+   "group": "A_prompt_len",
+   "file": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P49_IMG_01\\output\\img_tests\\A_long_2.png",
+   "sha16": "cb62620305e4041b",
+   "prompt_chars": 1972
+  },
+  {
+   "tag": "B_handover_1",
+   "group": "B_multi_interact",
+   "prompt": "雨夜巷口，两个中国孩子：左边十岁男孩（乱翘短发，蓝白条纹T恤，深绿背带裤）把手持的暖黄纸灯笼递向右边八岁女孩（双马尾，明黄色雨衣），女孩双手来接，两人对视，青石板反光，2D 动画风格，高细节",
+   "file": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P49_IMG_01\\output\\img_tests\\B_handover_1.png",
+   "sha16": "d19479854e73b61b",
+   "prompt_chars": 95
+  },
+  {
+   "tag": "B_handover_2",
+   "group": "B_multi_interact",
+   "prompt": "两个中国孩子在雨夜巷口共撑一把油纸伞：十岁男孩（乱翘短发，条纹T恤背带裤）与八岁女孩（双马尾，黄雨衣）并肩同行，女孩提灯笼照亮脚下水洼，2D 动画风格，高细节",
+   "file": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P49_IMG_01\\output\\img_tests\\B_handover_2.png",
+   "sha16": "aca6aecafbe79bb7",
+   "prompt_chars": 79
+  },
+  {
+   "tag": "B_look_1",
+   "group": "B_multi_interact",
+   "prompt": "两个中国孩子在巷口对视大笑：女孩双马尾黄雨衣提灯笼举高，男孩乱翘短发条纹T恤背带裤拍手，雨丝斜织，青石板水洼映出两张笑脸，2D 动画风格，高细节",
+   "file": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P49_IMG_01\\output\\img_tests\\B_look_1.png",
+   "sha16": "6d6fac3871a0880b",
+   "prompt_chars": 72
+  },
+  {
+   "tag": "B2_char_sheet",
+   "group": "B2_i2i_lock",
+   "prompt": "(character sheet)",
+   "file": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P49_IMG_01\\output\\img_tests\\B2_char_sheet.png",
+   "sha16": "07b9ee62e1ec5dbb"
+  },
+  {
+   "tag": "B2_handover_i2i_1",
+   "group": "B2_i2i_lock",
+   "prompt": "Same two children as the reference sheet keeping EXACTLY their hairstyles and clothes (boy: messy short hair, striped tee, dark green overalls; girl: twin tails with red ties, yellow raincoat), night alley in the rain, the boy hands the glowing paper lantern to the girl, girl reaches with both hands, wet cobblestones reflecting light, same clean flat 2D animation style, no text",
+   "file": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P49_IMG_01\\output\\img_tests\\B2_handover_i2i_1.png",
+   "sha16": "d647ff053dc5b8b9"
+  },
+  {
+   "tag": "B2_handover_i2i_2",
+   "group": "B2_i2i_lock",
+   "prompt": "Same two children as the reference sheet keeping EXACTLY their hairstyles and clothes (boy: messy short hair, striped tee, dark green overalls; girl: twin tails with red ties, yellow raincoat), night alley in the rain, the boy hands the glowing paper lantern to the girl, girl reaches with both hands, wet cobblestones reflecting light, same clean flat 2D animation style, no text",
+   "file": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P49_IMG_01\\output\\img_tests\\B2_handover_i2i_2.png",
+   "sha16": "75d9f1df6bf4ba66"
+  }
+ ]
+}
