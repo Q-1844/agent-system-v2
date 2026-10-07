@@ -121,9 +121,22 @@ Skill 可达性：候选包在 director 视图 priority=100、producer 视图 pr
 
 1. W05 首跑（run_b5e7134993cc）：**发现触发词混杂缺陷**——hint 机制按任务文本 triggers 匹配，与节点绑定无关；任务文本"分镜图候选"的"候选"命中候选包触发词，导致**旧组项目里 director 加载了候选 Skill**（meta.skills 证据：hint→load agnes-production-craft 0.9.0，SKILL.md+director.md，capability ok——这同时是候选包真实加载成功的直接证据）。修正：两组 objective 加排他 skill.load 指令。
 2. W05 二跑（run_02d91250cae2）：Agent 尝试 shot.create(s01) 失败"故事段不存在"——W05 假设上游故事已完成，直接建 shot 缺父级。改用 W09 完整链（编剧先建故事）。
-3. 同时发现 W09 create 的 params 键名若与模板 build 函数不匹配会静默落回默认 objective——修复后逐键核对进定义。
+3. W09 create 的 params 键名与模板 build 函数不匹配时静默落回默认 objective——修复后逐键核对进定义。
+4. 复用型节点（n_cd）objective 要求"只复用不新建"与 completion.strategy=require_new 矛盾，Agent 正确零写入被完成判定判死（no_expected_artifacts/outputs_missing）——修正为 allow_verified_reuse。另：continue 端点用启动时冻结的定义快照，PUT 新 revision 对已启动 run 无效——修正定义后必须停旧起新。
 
-（当前运行：旧组 W09 run_5cd02e8218a9 进行中，监控见 `projects/P49_C_OLD/output/workflows/runs/`）
+### 4.3 对照评估表（待两组素材齐后逐项填写）
+
+评价维度（执行书 C3）：工作流运行 / Skill 实际加载与遵循 / 首帧与原片质感 / 身份人数道具空间 / 动作因果关键接触 / 完整合格区间 / 剪后可用与衔接 / 原生音效 / 用户接受。三档结论：原片整体合格 / 原片有错但可裁切 / 裁切仍不能完成剧情任务。
+
+| 探针 | 验收点 | 旧组结果 | 候选组结果 |
+| --- | --- | --- | --- |
+| P01 单主体写实首帧质感 | s01 首帧质感/光线/材质/构图 | 待填 | 待填 |
+| P02 同一角色多镜身份 | 小满跨镜身份+质感 | 待填 | 待填 |
+| P03 双人道具交接 | s02 人数/站位/接触/持有者转移 | 待填 | 待填 |
+| P04 写实手部物件操作 | s03 主动作不跳步/接触清楚 | 待填 | 待填 |
+| P05 同一动作跨镜继续 | 端点选择/方向状态衔接 | 待填 | 待填 |
+| P06 同一空间换机位 | 机位合理/空间关系保持 | 待填 | 待填 |
+| P07 正常电影切镜 | s06 不强行接力/身份清楚 | 待填 | 待填 |
 
 ## 5. D 批：新会话完整故事与修复闭环
 
