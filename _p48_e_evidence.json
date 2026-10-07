@@ -639,6 +639,33 @@
    "def_rev": 5,
    "v4_failure": "n_sw require_new×3 vs 已存在的完整8段故事：第二轮补写2段仍差1——同项目跨 run 的 require_new 对续作型项目是翻搅",
    "v5_fix": "n_sw completion=allow_verified_reuse（故事已核验即复用，有真实缺口才补写）——A08 设计内路径"
+  },
+  "film23_candidates": {
+   "watercolor": {
+    "render": "srender_e3cd7569.mp4",
+    "duration_s": 51.3,
+    "codecs": "h264+aac",
+    "user_gate": "n_rv_final (rev_1f6d13abd1) pending",
+    "coverage": "8/8（W06修复链补3镜，spoken_language=zh 后带原生对白）"
+   },
+   "realistic": {
+    "render": "projects/P48_E_Realistic/output/sequences/seq_*/srender_*.mp4",
+    "user_gate": "n_rv_final (rev_6541edb45d) pending",
+    "coverage": "8/8 无缺口"
+   }
+  },
+  "explainer_candidate": {
+   "render": "srender_92459c92.mp4",
+   "user_gate": "n_rv_final (rev_029ac502bf) pending",
+   "chain": "W09 v5（run_1f8898ce81b7）：sw复用8段/CD prop复用+场景工作台/7镜（纯手部+物件）/W06修复negative_prompt死锁后主链自产候选"
+  },
+  "blind_test": {
+   "run": "run_240a4e34419e",
+   "film": "projects/P48_E_Blind/output/sequences/seq_c02c1d94/srender_a9727fd2.mp4 (45.7s aac)",
+   "mode": "4轮子代理会话（每轮冷读盘上状态+日志续推），无本会话上下文/无每镜答案",
+   "fingerprint": "Agent 自验 catalog relay v1.4.0 sha256:30a4d8e8…/bridge c7f8e313…（与冻结值一致）",
+   "gates": "全部中间关口目检后通过+缺陷逐条落账（红头巾形态/道具缺参考/假汉字/分身/双铃等），n_rv_final 未代办",
+   "log": "docs/workflow/PHASE48_E_BLIND_LOG.md"
   }
  },
  "runs": {

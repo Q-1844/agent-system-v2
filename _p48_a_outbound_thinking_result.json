@@ -11,10 +11,10 @@
    "stream": null,
    "response_model": "agnes-3.0-flash",
    "has_reasoning_content": true,
-   "reasoning_head": "用户要求用一句话回答\"1+1等于几\"，并且要求先在心里算一遍再答。\n\n1+1=2，这是基本算术。\n\n用户要求用一句话回答，我直接简洁回答即可。\n",
-   "content_head": "\n\n1+1 等于 2。"
+   "reasoning_head": "用户要求用一句话回答\"1+1等于几\"，并说\"先在心里算一遍再答\"。这是一个简单的数学问题，1+1=2。我需要用一句话简洁回答。\n",
+   "content_head": "\n\n1 加 1 等于 2。"
   }
  ],
  "returned_role": "assistant",
- "returned_content_head": "\n\n1+1 等于 2。"
+ "returned_content_head": "\n\n1 加 1 等于 2。"
 }
