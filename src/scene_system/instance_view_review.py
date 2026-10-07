@@ -443,7 +443,8 @@ async def review_scene_instance_view_candidates(project_dir, scene_instance_view
                    *content_static]
         msgs = [{"role": "user", "content": content}]
         try:
-            res = await vision_json_call(agnes_client, msgs, model=VISION_MODEL)
+            res = await vision_json_call(agnes_client, msgs, model=VISION_MODEL,
+                                         max_tokens=6000)
         except Exception as e:
             return {"candidate_index": candidate_index, "candidate_file": candidate_file,
                     "status": "provider_error", "overall": "uncertain",

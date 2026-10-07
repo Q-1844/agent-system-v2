@@ -134,13 +134,16 @@ def _normalize_dim(v: Any) -> Optional[str]:
 
 
 async def vision_json_call(agnes_client, msgs: list, *, model: str,
-                           max_attempts: int = 2) -> dict:
+                           max_attempts: int = 2, max_tokens: int = 1600) -> dict:
     """Vision 调用 + 宽容 JSON 解析稳定性 wrapper（P1 修复，2026-09-18）。
     首次回复无法解析为 JSON 时，追加『只输出 JSON』硬提醒重试一次；
     两次都失败返回首次结果（调用方按 uncertain 诚实记录，不伪造）。
     实测背景：偶发 vision 回复夹带散文导致 parse_failed → uncertain，
-    重试即可恢复（验收轮 A hero sensenova 首轮即此情形）。"""
-    res = await agnes_client.chat_completion_vision(msgs, model=model)
+    重试即可恢复（验收轮 A hero sensenova 首轮即此情形）。
+    Phase49：max_tokens 可透传——长维度 JSON（如 scene_instance_view 七维审查）
+    在默认 1600 处被截断导致 JSON 不平衡 → parse_failed（真机 2026-10-08 实证）。"""
+    res = await agnes_client.chat_completion_vision(msgs, model=model,
+                                                    max_tokens=max_tokens)
     if _extract_json((res or {}).get("content")) is not None:
         return res
     import copy as _copy
@@ -155,7 +158,8 @@ async def vision_json_call(agnes_client, msgs: list, *, model: str,
     except Exception:
         pass
     try:
-        res2 = await agnes_client.chat_completion_vision(retry_msgs, model=model)
+        res2 = await agnes_client.chat_completion_vision(retry_msgs, model=model,
+                                                         max_tokens=max_tokens)
         if _extract_json((res2 or {}).get("content")) is not None:
             return res2
     except Exception:

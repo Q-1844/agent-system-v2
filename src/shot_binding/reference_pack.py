@@ -277,7 +277,12 @@ def build_pack(*, shot: Any, binding: Any, rdoc: Any, sdoc: Any,
         # validity gate 已保证 READY；此处 None = compile race → fail closed（§8）
         raise PackBlockedError("project_visual_profile_unspecified",
                                {"hint": "compile 期间 profile 变为 unspecified"})
-    if siv is None:
+    # Phase49 修复（真机 2026-10-08 实证）：scene_binding=None 的合法 READY 绑定
+    # （纯 Look 参考、场景事实以文字进提示词）在此前被无条件 raise 挡死——
+    # 而 build_pack 内所有 siv 使用点均已条件化。改为仅当「绑定了 scene 却解析
+    # 不到 SIV」（compile race / 依赖失效）时 fail closed；无场景绑定的镜头
+    # siv=None 合法通过，构建纯角色参考 pack。
+    if siv is None and binding.scene_binding is not None:
         raise PackBlockedError("reference_asset_unresolvable",
                                {"hint": "resolved SceneInstanceView 在 compile 期间消失"})
 
