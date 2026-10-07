@@ -148,6 +148,11 @@ class WorkflowEngine:
             run = runs.load(run_id)
             if run is None:
                 return
+            # Phase48 E：终态 run 不得被 drive 推进——驳回后路由层仍会调用 drive，
+            # 缺此守卫会把 rejected 翻回 waiting_human（重开新审核，静默撤销用户
+            # 驳回；真机 P48_E_Explainer run_545cc965eab9 22:52:21 实证）。
+            if run.get("status") in M.RUN_TERMINAL:
+                return
             if run.get("stopRequested"):
                 self._finalize_stop(project_dir, run, runs, el)
                 return

@@ -645,3 +645,26 @@ def test_reconcile_spares_live_turn_in_process(tmp_path, monkeypatch):
     _drive_sync(eng, tmp_path, run["runId"])
     r = runs.load(run["runId"])
     assert r["nodes"]["n_sw"]["status"] == M.NODE_NEEDS_RECONCILIATION
+
+
+def test_drive_does_not_reopen_rejected_run(tmp_path, monkeypatch):
+    """Phase48 E：驳回（rejected=终态）后路由层仍会调用 engine.drive()——缺终态守卫
+    时 _drive_inner 会对 human_review 节点重开新审核，把 rejected 翻回 waiting_human
+    （静默撤销用户驳回；真机 P48_E_Explainer run_545cc965eab9 22:52:21 实证）。
+    修复后：终态 run 的 drive 必须为 no-op。"""
+    outcomes = {"script_writer": _ok_task_result("script_writer")}
+    eng, run, calls = _start_engine(tmp_path, monkeypatch, outcomes)
+    runs = RunStore(tmp_path, "p46t")
+    _drive_sync(eng, tmp_path, run["runId"])
+    r = runs.load(run["runId"])
+    eng.decide_review(tmp_path, "p46t", run["runId"],
+                      r["reviews"][0]["requestId"], "reject", "驳回")
+    r = runs.load(run["runId"])
+    assert r["status"] == M.RUN_REJECTED
+    n_reviews = len(r["reviews"])
+    # 驳回后再次 drive（路由层真实行为）：不得重开审核/不得翻转状态
+    _drive_sync(eng, tmp_path, run["runId"])
+    r = runs.load(run["runId"])
+    assert r["status"] == M.RUN_REJECTED
+    assert len(r["reviews"]) == n_reviews          # 无新审核被创建
+    assert all(x["status"] != "pending" for x in r["reviews"])
