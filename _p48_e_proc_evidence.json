@@ -1,0 +1,20 @@
+{
+ "ref_png": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_E_Proc\\output\\frames\\scene_ref.png",
+ "ref": {
+  "sha16": "2f27311b35aa58ad"
+ },
+ "s01_c02": {
+  "ff_ready": true,
+  "receipt": {
+   "sha16": "971927e246d0dd2b",
+   "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_E_Proc\\output\\frames\\s01_c02_ff_custom.png"
+  }
+ },
+ "s01_c01": {
+  "ff_ready": true,
+  "receipt": {
+   "sha16": "92cb1e28c4adf4ff",
+   "local": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\animation-storyboard\\projects\\P48_E_Proc\\output\\frames\\s01_c01_ff_custom.png"
+  }
+ }
+}
