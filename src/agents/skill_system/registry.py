@@ -20,12 +20,20 @@ from .models import AgentSkillBinding, SkillPackage, SkillValidationError
 log = logging.getLogger("agents.skills.registry")
 
 BUILTIN_DIR = Path(__file__).parent / "builtin"
+# 候选包目录（Phase49）：与 builtin 并列的第二 source；候选身份独立（source=builtin
+# + 版本独立），不覆盖、不替换任何 builtin 正式包。目录不存在时行为与旧版完全一致。
+CANDIDATE_DIR = Path(__file__).parent / "candidate"
 
 
 class SkillRegistry:
     def __init__(self, source_dirs: Optional[List[Path]] = None):
-        # 显式传入 source_dirs（测试用临时目录）；缺省扫描 builtin/
-        self._source_dirs = [Path(p) for p in (source_dirs or [BUILTIN_DIR])]
+        # 显式传入 source_dirs（测试用临时目录）；缺省扫描 builtin/。
+        # 缺省时若存在 candidate/ 则并入扫描（Phase49 候选接入点）；显式注入
+        # source_dirs 的调用方（测试隔离）不自动并入，保持沙盒纯净。
+        dirs = [Path(p) for p in (source_dirs or [BUILTIN_DIR])]
+        if not source_dirs and CANDIDATE_DIR.is_dir() and CANDIDATE_DIR not in dirs:
+            dirs.append(CANDIDATE_DIR)
+        self._source_dirs = dirs
         self._skills: Dict[str, SkillPackage] = {}
         self._errors: Dict[str, str] = {}
         self._loaded_sig: Optional[tuple] = None

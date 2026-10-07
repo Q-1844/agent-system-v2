@@ -7,6 +7,7 @@ job handlers：first_frame/last_frame/video/audio（注册到 deps.JOB_HANDLERS�
 import asyncio
 import hashlib
 import json
+import os
 import uuid
 import base64 as _base64
 from pathlib import Path
@@ -1357,7 +1358,10 @@ def _video_preflight(shot, quota, seconds, eff_ff_ready):
     """视频前置硬校验（缺一不可，不通过就不提交，省 60s）。
     仅检查「硬失败」；keyframes 尾帧 in-progress 的有界等待在 handler 里做。
     eff_ff_ready：effective 首帧是否就绪（inherit_previous 用来源末帧 url，其余用本镜已选首帧 url）。
-    multi（34.md §13）：视觉输入=BOUND 参考而非首帧——首帧就绪不是本镜硬前置。"""
+    multi（34.md §13）：视觉输入=BOUND 参考而非首帧——首帧就绪不是本镜硬前置。
+    Phase49 素材时长政策（T21）：min_video_seconds>0 时拒绝低于下限的请求——
+    口径=环境变量 AGNES_MIN_VIDEO_SECONDS 优先，其次 config policy.min_video_seconds，
+    都未设置则不启用（既有行为零变化）。"""
     from src.core.models import ShotStatus
     if shot.locked:
         return False, "镜头已锁定"
@@ -1368,6 +1372,17 @@ def _video_preflight(shot, quota, seconds, eff_ff_ready):
     if shot.link_mode == "keyframes":
         if shot.last_frame.status == ShotStatus.FAILED.value:
             return False, "尾帧生成失败，请重新生成尾帧"
+    min_s = 0
+    try:
+        min_s = int(os.environ.get("AGNES_MIN_VIDEO_SECONDS")
+                    or ((_APP_CFG.get("policy") or {}).get("min_video_seconds")
+                        or 0))
+    except (TypeError, ValueError):
+        min_s = 0
+    if min_s > 0 and seconds < min_s:
+        return False, (f"素材时长政策：本轮源素材至少 {min_s} 秒"
+                       f"（当前 {round(seconds, 1)} 秒）——请把镜头 target_duration_s "
+                       f"调到 {min_s}-{12} 秒后重试（成片保留时长另行决定）")
     if quota:
         ok, why = quota.can("video_seconds", seconds)
         if not ok:

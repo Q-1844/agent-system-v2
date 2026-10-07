@@ -1,0 +1,66 @@
+{
+  "skill_id": "agnes-production-craft",
+  "version": "0.9.0",
+  "name": "Agnes 制作工艺候选包（首帧·动作因果·衔接·修复）",
+  "description": "Phase49 候选制作方法：规划与最终提示词分开；首帧只写可见关键信息；按需最小参考；动作按起态/步骤/接触/结果规划；区分动作连续/空间连续/身份保持/正常切镜；按最早偏差定位根因；完整审片后先判断裁切保留再修根因；接力依据实际保留片段的最后保留帧。素材时长生产政策：至少 8 秒、默认 10 秒、可选 8-12 秒。",
+  "category": "workflow",
+  "source": "builtin",
+  "status": "active",
+  "applicability": "按镜头生成视频素材的制作任务（首帧、动作因果、跨镜衔接、审片与裁切决策）；候选 Skill 对照试验工作流中绑定本包的视频制作节点。",
+  "triggers": [
+    "候选",
+    "制作工艺",
+    "素材时长",
+    "至少8秒",
+    "至少 8 秒",
+    "剪辑余量",
+    "裁切",
+    "可剪",
+    "保留区间",
+    "剪辑建议",
+    "保留帧",
+    "接力端点",
+    "换机位",
+    "重建构图",
+    "动作因果",
+    "首帧质感",
+    "完整审片",
+    "craft",
+    "candidate"
+  ],
+  "required_capabilities": {
+    "producer": [
+      "project.quota",
+      "director.delegate",
+      "script_writer.delegate",
+      "scene_designer.delegate",
+      "character_designer.delegate"
+    ],
+    "director": [
+      "shot.generate_videos",
+      "shot.update",
+      "visual.review_shot",
+      "visual.review_image",
+      "video.extract_frame"
+    ]
+  },
+  "depends_on": [],
+  "bindings": [
+    {
+      "agent_id": "director",
+      "role": "primary_executor",
+      "routing_priority": 100,
+      "authority_tier": "builtin",
+      "activation_mode": "hinted",
+      "role_resource": "references/director.md"
+    },
+    {
+      "agent_id": "producer",
+      "role": "coordinator",
+      "routing_priority": 70,
+      "authority_tier": "builtin",
+      "activation_mode": "hinted",
+      "role_resource": "references/producer.md"
+    }
+  ]
+}

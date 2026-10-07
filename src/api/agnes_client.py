@@ -378,7 +378,8 @@ class AgnesClient:
         }
 
     async def chat_completion_vision(self, messages: List[dict], *, model: str,
-                                     temperature=0.2, max_tokens=1600) -> dict:
+                                     temperature=0.2, max_tokens=1600,
+                                     thinking: bool = True) -> dict:
         """Vision 请求（Visual Review Tool V1，2026-09-06 probe 定案）。
 
         与 chat_completion 的三点差异：
@@ -390,12 +391,17 @@ class AgnesClient:
         messages[].content 允许数组形态（text / image_url）；image_url 支持
         公网 URL 与 base64 data URI（probe C3：data URI 5/5 成功；imgbb 公网
         URL 恒 500"loading IMAGE data"——勿用 imgbb 承载审查图）。
-        复用 _request（限流/重试/退避/配额），不新造 retry。"""
+        复用 _request（限流/重试/退避/配额），不新造 retry。
+        Phase49：视觉审查调用也开 thinking（真机探针 2026-10-07 实证：视觉端点
+        接受 chat_template_kwargs.enable_thinking 且回包含 reasoning_content）；
+        thinking=False 不传字段（回归旧行为）。"""
         if self.quota:
             ok, why = self.quota.can("text_calls", 1)
             if not ok: raise AgnesError(why)
         body: Dict[str, Any] = {"model": model, "messages": messages,
                                 "temperature": temperature, "max_tokens": max_tokens}
+        if thinking:
+            body.update(self._thinking_body(True, "agnes"))
         r = await self._request("POST", "/v1/chat/completions", "text",
                                 text_ep=False, json=body)
         if self.quota: self.quota.consume("text_calls", 1)
@@ -645,6 +651,23 @@ class AgnesClient:
                 "2.5 契约无 negative_prompt 字段（官方参数表 2026-09-28 核读）——"
                 "绝不静默丢参：请把负面约束并入 prompt 文本后重试")
         seconds_25 = max(4, min(12, int(duration_s or 5)))
+        # Phase49 T17：模式互斥出站前拦截。2.5 契约 text/keyframe/reference
+        # 三模式互斥；与模式不符的图片参数一律显式拒绝，绝不静默忽略——
+        # 静默吞参数会让调用方误以为参考图已生效（B 批 T17 情景）。
+        _extra_imgs: List[str] = [u for u in (image_urls or []) if u]
+        if mode == "t2v" and (image_url or _extra_imgs):
+            raise AgnesError("t2v→text 模式不接受任何图片参数"
+                             f"（收到 image_url={bool(image_url)}，"
+                             f"image_urls={len(_extra_imgs)} 张）——keyframe/"
+                             "reference 输入请改用对应 mode")
+        if mode == "i2v" and _extra_imgs:
+            raise AgnesError("i2v→keyframe 单帧模式不接受 image_urls"
+                             f"（收到 {len(_extra_imgs)} 张）——多图参考请用"
+                             " mode=multi；两端钉住请用 mode=keyframes")
+        if mode in ("keyframes", "multi") and image_url:
+            raise AgnesError(f"{mode} 模式不接受单帧 image_url（顶层 image 是"
+                             " i2v 专用）——keyframes 用 image_urls 两帧；"
+                             "multi 用 image_urls 1-5 张")
         body: Dict[str, Any] = {"model": model_id, "prompt": prompt,
                                 "mode": self._video25_mode(mode),
                                 "seconds": str(seconds_25)}
