@@ -1,0 +1,115 @@
+# PHASE48 E 批报告——多风格、完整剧情与正式 Skill 验收
+
+日期：2026-10-06 ~ 2026-10-07（本会话续跑完成）
+前置阅读：`PHASE48_E_STYLE_STORY_AND_SKILL_ACCEPTANCE.md`（验收标准）、`PHASE48_E_STATE_AND_RESUME.md`（续跑与勘误）。
+
+---
+
+## 1. 全批状态总览
+
+| 项 | 状态 |
+| --- | --- |
+| A-D 批 | 已完成并提交（e42910b / 6bd4d8e / fd69010+c5ea112 / fd69010+18cf2f3） |
+| E 批 Skill 收口 v1.4.0 | 已提交（3bf3fb1，本会话核验 staged 内容后提交） |
+| E 批续跑引擎修复×4 | 5a5f85c / 037e914（含测试） |
+| 风格片 1（2D《风筝与竹竿》） | **成片候选落盘**，n_rv_final 留用户 |
+| 风格片 2（水彩） | **成片候选落盘**，n_rv_final 留用户 |
+| 风格片 3（写实） | **成片候选落盘**，n_rv_final 留用户 |
+| 说明片（手摇手电筒，无旁白） | **成片候选落盘**，n_rv_final 留用户 |
+| 新窗口盲测 | **成片候选落盘**，n_rv_final 留用户 |
+| 三轮独立复验 | 全部完成（独立 run/项目/故事） |
+| 刷新/中断/晚到回执演练 | 完成（诚实恢复实证） |
+| 最终全量回归 | 2679 过（守卫前代码全量）+ 守卫后目标套件 57 过 + 守卫后全量重跑 **2680 过**（`_p48_e_final_regression2.txt`） |
+
+## 2. 可审成片（5 部，全部 n_rv_final 待用户，未代办）
+
+| 片 | 项目 / run | 成片 | 时长 | 音轨 | 覆盖 |
+| --- | --- | --- | --- | --- | --- |
+| 2D 主片 | P48_E_2D / run_e9484ba7ad72 | `srender_05c8a13a.mp4` | 62.1s | h264+aac | 9 镜 9 版本 |
+| 水彩片 | P48_E_Watercolor / run_36463ddeb487 | `srender_e3cd7569.mp4` | 51.3s | h264+aac | 8/8（W06 补 3 镜） |
+| 写实片 | P48_E_Realistic / run_bbb7a89a480d | `srender_13029438.mp4` | 49.2s | h264+aac | 8/8 无缺口 |
+| 说明片 | P48_E_Explainer / run_1f8898ce81b7 | `srender_92459c92.mp4` | 35.5s | h264+aac | 7/7（纯手部+物件） |
+| 盲测片 | P48_E_Blind / run_240a4e34419e | `srender_a9727fd2.mp4` | 45.7s | h264+aac | 8/8 |
+
+全部成片走 W09 六员链（说明片 v5 同链），渲染均 h264+aac。用户关口的审核要点与已记录缺陷见 §8。
+
+## 3. 正式 Skill v1.4.0（冻结与指纹）
+
+- 两 Skill 版本 1.3.1→1.4.0（skill.json + 模板绑定 + TEMPLATE_VERSION=p48_e_templates_v1）。
+- 内容增量：full-story-relay-calibration 增 Phase48 C 批受控对照结论（48 格实证路径选择权重）；keyframes-bridge-repair 增"双帧端点图必须先过 Vision 伪影检查"硬前置。
+- catalog 端点实测指纹（`_p48_e_catalog_fingerprint_20261006.json`）：
+  - full-story-relay-calibration v1.4.0 `sha256:30a4d8e88e3b8edd71f3eafe`
+  - keyframes-bridge-repair v1.4.0 `sha256:c7f8e313abdab60a42a94993`
+- 盲测 Agent 独立实测指纹与冻结值一致（PHASE48_E_BLIND_LOG.md 轮 1）。
+- 冻结后零改动：v1.4.0 内容在 E 批全程未再修改（引擎修复均不触及 Skill 文件）。
+
+## 4. 出站 thinking 核查
+
+- A 批抓包范式复跑（`_p48_a_outbound_thinking_probe.py`，2026-10-07）：出站请求体实测含 `chat_template_kwargs.enable_thinking=true`，响应含 `reasoning_content`（`_p48_e_thinking_capture_20261007.json`）。
+- 全部工作流 attempt `thinking=true`（run JSON 可核）；会话存储不落 reasoning 正文（A 批已定性：抓包级证据为准）。
+
+## 5. 续跑期间的引擎与测试修复（全部真机实证驱动）
+
+| # | 修复 | 实证 |
+| --- | --- | --- |
+| 1 | `continue_run` 放行 failed run（docstring 契约自 Phase46 起被 run_terminal 前置挡死） | P48_E_2D n_sc continue 409 |
+| 2 | 重试 attempt 委派信封带上次失败事实反馈（只给事实不指定做法） | 反馈到位后 n_sc 第 4 次 attempt 真实补齐第 2 地点成功 |
+| 3 | `_reconcile_attempt` 增本进程 turn_registry 存活防御（活 turn 不误判死亡） | 18:53 假停靠实证 |
+| 4 | 测试隔离闸门 `WF_STARTUP_RECOVERY_DISABLE`（conftest 真实 app 启动恢复伤真机活任务） | 18:53 假停靠 + 19:13 杀活任务两次实证 |
+| 5 | `_drive_inner` 终态守卫（驳回后 drive 重开审核把 rejected 翻回 waiting_human） | run_545cc965eab9 22:52:21 实证 |
+
+连带修正：Skill 版本钉死测试 4 项同步 v1.4.0；W06/W05 驱动脚本入库；状态文档勘误（n_sc 实为 1 个 attempt 而非 2 个）。
+
+## 6. 独立复验三轮（独立 run/项目/故事；指纹+thinking 逐轮可查）
+
+| 轮 | 项目/run | 故事 | 判定 |
+| --- | --- | --- | --- |
+| ① 连续动作与身份 | P48_E_RV1 / run_736f96b6d1f1（W05） | 《水碗与石阶》端碗下阶 | **身份跨镜一致性通过**（双髻红绳/蓝褂/黑裤两镜全一致；同一 Look i2i 锚定）；动作细节漂移如实记录（s01_c02 筷子+洒水强化） |
+| ② 多人物道具与对白 | P48_E_RV2 / run_0ea1488ced25（W05） | 《剪刀与红绳》递剪刀道谢 | **交接方向正确**（夹具两轮迭代后柄朝对方）；**对白 ASR 逐字命中**（s01_c01 以繁体变体转写、归一后命中；s01_c02 精确）；**声线区隔 f0 95.2 vs 121.2 Hz**；无旁白（`_p48_e_rv2_check.json`） |
+| ③ 风格迁移与视觉因果 | P48_E_RV3W / run_aecbe092d608 + P48_E_RV3P / run_69965fe3a877（W05×2） | 《第一块骨牌》同内容双风格 | **两风格均稳定且强对照**（水彩纸纹绘本 vs photoreal 自然光景深）；**因果链可见**（推→倒→压（待）弹帧级证据） |
+
+每轮指纹：catalog 实测 v1.4.0（同 §3 值）；attempt thinking=true；出站抓包见 §4。
+
+## 7. 新窗口盲测（全新 Agent 会话 + 冻结 Skill + 新故事）
+
+- 输入：仅 `PHASE48_E_BLIND_BRIEF.md`（作品目标/约束/批准资产/允许审核点；无每镜答案、无 C 批结论细节）。执行：子代理会话（无主持会话上下文），4 次推进（每轮冷读盘上状态+自写日志续推），累计 ~2.9h。
+- 结果：run_240a4e34419e 全链 producer→…→n_rv_final pending，**全程无 failed 节点、无 continue**；成片 45.7s 含原生音轨。
+- 核对清单达成（详见 `PHASE48_E_BLIND_LOG.md` 8 轮）：
+  1. ✅ 自行读取项目事实（visual profile/canonical/catalog）
+  2. ✅ W09 建定义真实启动（REST 正式路径，自写驱动脚本）
+  3. ✅ 失败处理：本轮无节点失败；关口目检发现的内容缺陷逐条落账而非无脑通过
+  4. ✅ 中间关口逐次目检（直读 PNG/ffmpeg 抽帧 24 张）后通过，缺陷如实记录（红头巾形态偏差、道具无参考图如实列缺、假汉字、分身、双铃、井口漂移等）
+  5. ✅ n_rv_final 未代办（出现即停）
+  6. ✅ Skill 指纹自验（v1.4.0 双 hash 与冻结值一致）
+  7. ✅ thinking=true（attempt 可核）；出站抓包见 §4
+  8. ✅ 无旁白约束显式传导（videoObjective/assemblyObjective 写明，成片 AAC 音轨=原生环境声）
+  9. ✅ 失败保留（本轮无 failed；历史 attempt 全保留）
+  10. ✅ 生产日志与 events.jsonl 一致（逐轮回执 ID）
+- 盲测重要观察：**视频阶段自愈了多数分镜缺陷**（分身消失、伪汉字消失、空间恢复、双铃变单铃）——首帧缺陷在运动中部分消化，但非全部（发饰漂移、体量比例等残留），逐条见日志轮 7。
+
+## 8. 内容缺陷总账（如实；均在关口注记与证据中留档）
+
+- 2D 主片：3/6 首帧双小满分身（视频如实继承）；阿岩 Look 服装 9 镜全漂移（白 T）；2 镜对白被 fail-closed 拦截成静音版（台词字段已恢复，成片需配音或补配置——本轮已为三项目配置 spoken_language=zh）；s04_c02 风筝位置与剧情矛盾。
+- 水彩片：2/8 首帧分身（双阿岩/双小满，视频继承）；s03_c01 因果小偏。Look 锚定 6/8 全符——显著优于 2D 主片（0/6），风格相关观察不作结论。
+- 写实片：2/8 首帧缺陷（多余第三童/双小满）；阿岩服装全镜正确（机器审查 10 候选全 needs_fix 逐字从严，执行者两轮重生成 + 按主片人评先例 hr_1bc97b5279ef 如实记录分歧）。
+- 说明片：无人物红线的实现路径迭代 3 版定义（v1 Look 跑偏驳回 → v3 去角色纯物件 → v5 复用语义）；W06 修复 negative_prompt 死锁（根因=shot.read 投影不含该字段致导演两次误诊）。
+- 盲测片：缺陷总账见盲测日志（轮 5/7/8），含视频自愈与残留两类。
+
+## 9. 演练（刷新/中断/晚到回执）
+
+- 23:00 硬杀后端（3 个在途 turn：水彩 n_sc/写实 n_sc/说明片 n_cd）→ 重启 → 启动对账 3/3 诚实落 needs_reconciliation（"进程中断…请显式重试"）→ 显式 continue×3 恢复，无假成功无 failed 翻转。
+- 晚到回执（provider 任务重启后收货零重提交）：A 批 A10 已实证 + 水彩 W06 修复与写实视频阶段在本轮跨重启窗口正常运行。
+- 附带发现并修复：测试进程启动恢复会杀真机活任务（见 §5-4）。
+
+## 10. 计数与分母
+
+- E 批工作流 run 总数 15：completed 6（含 3 条 W06 修复链+复验 3 轮中 2 条……精确清单见各项目 runs_index）、waiting_human 6（5 部片 n_rv_final + 说明片 v1 僵尸，见下）、failed 3（说明片 v2/v3/v4 迭代轮，全部诚实失败保留）、rejected 0（v1 曾 rejected 但被 §5-5 缺陷翻回 waiting_human——修复后不会再发生；其残留 pending 审核为僵尸件，建议用户忽略或手动处理）。
+- 视频生成：42 条镜头视频（9+8+8+7+8+2+2+1+1，含复验）+ 5 条成片渲染；图像生成（本项目本地配额账本）：78 张、视频 245s、文本 859 次（2026-10-07 日账；06 日账见 cache/quota.json 轮转）。
+- 排除项：说明片 v1（驳回+缺陷翻转僵尸）、v2/v3/v4（定义迭代失败轮）不计入成片分母；复验 4 项目不计入作品分母。
+- 用户关口清单（5 项，全部 n_rv_final）：§2 五部片。
+
+## 11. 后续工作定性
+
+- 模型专项优化：分镜首帧的分身/服装漂移（i2i 锚定强度随风格变化）；Look 机器审查对写实风格的逐字从严（人评通道已验证为必要补丁）。
+- 内容迭代：2D 主片对白镜的配音/重生成（spoken_language 已配置，重跑即带原声）；水彩 s03_c01 因果小偏。
+- 基础缺陷：已修 4 项（§5）；"completion 只设数字 minCount 不查逐镜覆盖"为定义表达层缺口（W06 修复链已验证为有效补位路径），建议后续在 completion schema 增加 per-entity 覆盖语义。

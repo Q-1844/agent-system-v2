@@ -1,0 +1,20 @@
+{
+ "probe": "p48_a_outbound_thinking",
+ "captured_outbound_requests": [
+  {
+   "url": "https://api.agnes-ai.cn/v1/chat/completions",
+   "model": "agnes-3.0-flash",
+   "thinking_kwargs": {
+    "enable_thinking": true
+   },
+   "messages_n": 1,
+   "stream": null,
+   "response_model": "agnes-3.0-flash",
+   "has_reasoning_content": true,
+   "reasoning_head": "用户要求用一句话回答\"1+1等于几\"，并说\"先在心里算一遍再答\"。这是一个简单的数学问题，1+1=2。我需要用一句话简洁回答。\n",
+   "content_head": "\n\n1 加 1 等于 2。"
+  }
+ ],
+ "returned_role": "assistant",
+ "returned_content_head": "\n\n1 加 1 等于 2。"
+}
