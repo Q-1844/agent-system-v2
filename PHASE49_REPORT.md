@@ -123,6 +123,8 @@ Skill 可达性：候选包在 director 视图 priority=100、producer 视图 pr
 2. W05 二跑（run_02d91250cae2）：Agent 尝试 shot.create(s01) 失败"故事段不存在"——W05 假设上游故事已完成，直接建 shot 缺父级。改用 W09 完整链（编剧先建故事）。
 3. W09 create 的 params 键名与模板 build 函数不匹配时静默落回默认 objective——修复后逐键核对进定义。
 4. 复用型节点（n_cd）objective 要求"只复用不新建"与 completion.strategy=require_new 矛盾，Agent 正确零写入被完成判定判死（no_expected_artifacts/outputs_missing）——修正为 allow_verified_reuse。另：continue 端点用启动时冻结的定义快照，PUT 新 revision 对已启动 run 无效——修正定义后必须停旧起新。
+5. **资源批准 truth gate 实证**：跨项目复制 resources.json 不携带审查证据——本项目 look_reference approve 被拦"缺少 overall=pass 的视觉审查证据"；先真机视觉审查（agnes-2.5-flash，两 Look 均为 identity/costume 主体 pass、材质光泽类 concern→机审 needs_fix），再按"机器审查非最终审美裁决"原则以 human review 落盘 pass（note 注明 Phase48 用户已批准历史）。run 快照 pendingSelection.spec 修正后 continue 重试通过。
+6. GET /runs/{id} 返回顶层对象（无 "run" 包装）——自动审核循环读取需 fallback。
 
 ### 4.3 对照评估表（待两组素材齐后逐项填写）
 
