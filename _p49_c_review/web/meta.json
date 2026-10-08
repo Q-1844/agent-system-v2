@@ -1,0 +1,72 @@
+{
+ "old": {
+  "final": "final.mp4",
+  "shots": [
+   {
+    "shot": "s01_c01",
+    "video": "s01_c01.mp4",
+    "ff": "s01_c01_ff.png"
+   },
+   {
+    "shot": "s02_c01",
+    "video": "s02_c01.mp4",
+    "ff": "s02_c01_ff.png"
+   },
+   {
+    "shot": "s03_c01",
+    "video": "s03_c01.mp4",
+    "ff": "s03_c01_ff.png"
+   },
+   {
+    "shot": "s04_c01",
+    "video": "s04_c01.mp4",
+    "ff": "s04_c01_ff.png"
+   },
+   {
+    "shot": "s05_c01",
+    "video": "s05_c01.mp4",
+    "ff": "s05_c01_ff.png"
+   },
+   {
+    "shot": "s06_c01",
+    "video": "s06_c01.mp4",
+    "ff": "s06_c01_ff.png"
+   }
+  ]
+ },
+ "new": {
+  "final": "final.mp4",
+  "shots": [
+   {
+    "shot": "s01_c01",
+    "video": "s01_c01.mp4",
+    "ff": "s01_c01_ff.png"
+   },
+   {
+    "shot": "s02_c01",
+    "video": "s02_c01.mp4",
+    "ff": "s02_c01_ff.png"
+   },
+   {
+    "shot": "s03_c01",
+    "video": "s03_c01.mp4",
+    "ff": "s03_c01_ff.png"
+   },
+   {
+    "shot": "s04_c01",
+    "video": "s04_c01.mp4",
+    "ff": "s04_c01_ff.png"
+   },
+   {
+    "shot": "s05_c01",
+    "video": "s05_c01.mp4",
+    "ff": "s05_c01_ff.png"
+   },
+   {
+    "shot": "s06_c01",
+    "video": "s06_c01.mp4",
+    "ff": "s06_c01_ff.png"
+   }
+  ]
+ }
+}

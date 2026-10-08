@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Phase49 C 批审片——旧 Skill vs 候选 Skill</title>
+<style>
+  body { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; background:#14161a; color:#e8e6e1; margin:0; padding:24px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:#9a968e; font-size:13px; margin-bottom:20px; }
+  .cols { display:flex; gap:24px; flex-wrap:wrap; }
+  .col { flex:1 1 460px; min-width:420px; }
+  .col h2 { font-size:16px; padding:8px 12px; border-radius:6px; }
+  .old h2 { background:#2b3a55; } .new h2 { background:#3d3550; }
+  .card { background:#1d2025; border-radius:8px; padding:12px; margin-bottom:16px; }
+  .card h3 { font-size:13px; margin:0 0 8px; color:#c9c5bd; font-weight:600; }
+  video, img { width:100%; border-radius:6px; background:#000; display:block; }
+  .pair { display:flex; gap:10px; align-items:flex-start; }
+  .pair > div { flex:1; }
+  .lbl { font-size:11px; color:#8d8a83; margin:4px 0 2px; }
+  table { width:100%; border-collapse:collapse; font-size:12px; margin-top:8px; }
+  td, th { border:1px solid #2a2d33; padding:5px 8px; text-align:left; }
+  th { color:#9a968e; font-weight:600; }
+</style>
+</head>
+<body>
+<h1>Phase49 C 批审片 ——《雨夜手电筒》同题对照</h1>
+<div class="sub">同一 brief · 同一资源（小满/阿岩 approved Look）· 同一模型 agnes-video-2.5-flash · 素材全部 ≥8s（ffprobe 实测）。最终选用由您决定。</div>
+
+<div class="cols">
+  <div class="col old">
+    <h2>旧组（full-story-relay-calibration v1.4.0）</h2>
+    <div class="card"><h3>成片 65.09s（6 镜装配，含原生音轨）</h3><video controls src="old/final.mp4"></video></div>
+    <div id="oldShots"></div>
+  </div>
+  <div class="col new">
+    <h2>候选组（agnes-production-craft v0.9.0）</h2>
+    <div class="card"><h3>成片 58.27s（6 镜装配，含原生音轨）</h3><video controls src="new/final.mp4"></video></div>
+    <div id="newShots"></div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:20px">
+  <h3>实测时长与音轨（ffprobe）</h3>
+  <table>
+    <tr><th>镜</th><th>旧组</th><th>候选组</th><th>剧情节点</th></tr>
+    <tr><td>s01</td><td>10.14s aac</td><td>10.13s aac</td><td>单主体·首帧质感重点</td></tr>
+    <tr><td>s02</td><td>12.26s aac</td><td>12.25s aac</td><td>双人交接（关键接触，导演选 12s）</td></tr>
+    <tr><td>s03</td><td>10.14s aac</td><td>10.13s aac</td><td>手部特写</td></tr>
+    <tr><td>s04</td><td>12.26s aac</td><td>10.13s aac</td><td>发现小猫</td></tr>
+    <tr><td>s05</td><td>10.14s aac</td><td>10.13s aac</td><td>收尾</td></tr>
+    <tr><td>s06</td><td>10.13s aac</td><td>8.00s aac</td><td>独立切镜（候选组导演选 8s 下限）</td></tr>
+  </table>
+</div>
+
+<script>
+const SHOT_DESC = {
+  s01_c01: "s01 小满独自庭院举手电筒（单主体）",
+  s02_c01: "s02 阿岩递手电筒→小满接过（双人交接）",
+  s03_c01: "s03 小满握两支手电筒查看（手部特写）",
+  s04_c01: "s04 蹲墙角手电照出湿透小猫",
+  s05_c01: "s05 两道光圈重叠·对视一笑",
+  s06_c01: "s06 屋檐雨滴特写（独立 hard cut）",
+};
+function fill(tag, mount) {
+  const m = JSON.parse(JSON.stringify(META[tag]));
+  const el = document.getElementById(mount);
+  m.shots.forEach(s => {
+    const d = document.createElement("div");
+    d.className = "card";
+    let h = `<h3>${SHOT_DESC[s.shot] || s.shot}</h3>`;
+    h += '<div class="pair">';
+    if (s.video) h += `<div><div class="lbl">视频</div><video controls preload="metadata" src="${tag}/${s.video}"></video></div>`;
+    if (s.ff) h += `<div><div class="lbl">首帧（生成时选定）</div><img src="${tag}/${s.ff}"></div>`;
+    h += "</div>";
+    d.innerHTML = h;
+    el.appendChild(d);
+  });
+}
+const META = {"old": null, "new": null};
+fetch("meta.json").then(r => r.json()).then(m => {
+  META.old = m.old; META.new = m.new;
+  fill("old", "oldShots");
+  fill("new", "newShots");
+});
+</script>
+</body>
+</html>
