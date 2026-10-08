@@ -52,6 +52,13 @@
   </table>
 </div>
 
+<div class="card" style="margin-top:20px; border:1px solid #3d3550">
+  <h3 style="color:#c5b3e8">D 批——《追风筝》候选 Skill 全自主制作（18 镜成片 97.02s 含音轨）</h3>
+  <div class="sub">Agent 只拿到目标级 brief（放飞→挂树→修补→重新放飞），自主设计 18 镜+时长规划（8–12s 混合）+首帧 18 张+视频 18 条（全部 ffprobe 达标 aac）</div>
+  <video controls src="d/final.mp4"></video>
+  <div id="dShots" style="margin-top:12px"></div>
+</div>
+
 <script>
 const SHOT_DESC = {
   s01_c01: "s01 小满独自庭院举手电筒（单主体）",
@@ -81,6 +88,15 @@ fetch("meta.json").then(r => r.json()).then(m => {
   META.old = m.old; META.new = m.new;
   fill("old", "oldShots");
   fill("new", "newShots");
+  if (m.d) {
+    const el = document.getElementById("dShots");
+    (m.d.shots || []).forEach(s => {
+      const dd = document.createElement("div");
+      dd.className = "card";
+      dd.innerHTML = `<h3>${s.shot} — ${s.desc}</h3><video controls preload="metadata" src="d/${s.video}"></video>`;
+      el.appendChild(dd);
+    });
+  }
 });
 </script>
 </body>
