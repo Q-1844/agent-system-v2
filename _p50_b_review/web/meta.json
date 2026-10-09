@@ -1,0 +1,148 @@
+{
+ "project": "P50_B",
+ "title": "深水惊魂",
+ "final": "final.mp4",
+ "final_dur": 56.56,
+ "shots": [
+  {
+   "shot": "s01_c01",
+   "video": "s01_c01.mp4",
+   "ff": "s01_c01_ff.png",
+   "scene": "s01",
+   "dur": 10.0
+  },
+  {
+   "shot": "s01_c02",
+   "video": "s01_c02.mp4",
+   "ff": "s01_c02_ff.png",
+   "scene": "s01",
+   "dur": 10.0
+  },
+  {
+   "shot": "s01_c03",
+   "video": "s01_c03.mp4",
+   "ff": "s01_c03_ff.png",
+   "scene": "s01",
+   "dur": 8.0
+  },
+  {
+   "shot": "s01_c04",
+   "video": "s01_c04.mp4",
+   "ff": "s01_c04_ff.png",
+   "scene": "s01",
+   "dur": 8.0
+  },
+  {
+   "shot": "s01_c05",
+   "video": "s01_c05.mp4",
+   "ff": "s01_c05_ff.png",
+   "scene": "s01",
+   "dur": 10.0
+  },
+  {
+   "shot": "s02_c01",
+   "video": "s02_c01.mp4",
+   "ff": "s02_c01_ff.png",
+   "scene": "s02",
+   "dur": 10.0
+  },
+  {
+   "shot": "s02_c02",
+   "video": "s02_c02.mp4",
+   "ff": "s02_c02_ff.png",
+   "scene": "s02",
+   "dur": 8.0
+  },
+  {
+   "shot": "s02_c03",
+   "video": "s02_c03.mp4",
+   "ff": "s02_c03_ff.png",
+   "scene": "s02",
+   "dur": 10.0
+  },
+  {
+   "shot": "s02_c04",
+   "video": "s02_c04.mp4",
+   "ff": "s02_c04_ff.png",
+   "scene": "s02",
+   "dur": 10.0
+  },
+  {
+   "shot": "s03_c01",
+   "video": "s03_c01.mp4",
+   "ff": "s03_c01_ff.png",
+   "scene": "s03",
+   "dur": 10.0
+  },
+  {
+   "shot": "s03_c02",
+   "video": "s03_c02.mp4",
+   "ff": "s03_c02_ff.png",
+   "scene": "s03",
+   "dur": 10.0
+  },
+  {
+   "shot": "s03_c03",
+   "video": "s03_c03.mp4",
+   "ff": "s03_c03_ff.png",
+   "scene": "s03",
+   "dur": 8.0
+  },
+  {
+   "shot": "s03_c04",
+   "video": "s03_c04.mp4",
+   "ff": "s03_c04_ff.png",
+   "scene": "s03",
+   "dur": 8.0
+  },
+  {
+   "shot": "s04_c01",
+   "video": "s04_c01.mp4",
+   "ff": "s04_c01_ff.png",
+   "scene": "s04",
+   "dur": 10.0
+  },
+  {
+   "shot": "s04_c02",
+   "video": "s04_c02.mp4",
+   "ff": "s04_c02_ff.png",
+   "scene": "s04",
+   "dur": 10.0
+  },
+  {
+   "shot": "s04_c03",
+   "video": "s04_c03.mp4",
+   "ff": "s04_c03_ff.png",
+   "scene": "s04",
+   "dur": 10.0
+  },
+  {
+   "shot": "s04_c04",
+   "video": "s04_c04.mp4",
+   "ff": "s04_c04_ff.png",
+   "scene": "s04",
+   "dur": 10.0
+  },
+  {
+   "shot": "s05_c01",
+   "video": "s05_c01.mp4",
+   "ff": "s05_c01_ff.png",
+   "scene": "s05",
+   "dur": 10.0
+  },
+  {
+   "shot": "s05_c02",
+   "video": "s05_c02.mp4",
+   "ff": "s05_c02_ff.png",
+   "scene": "s05",
+   "dur": 10.0
+  },
+  {
+   "shot": "s05_c03",
+   "video": "s05_c03.mp4",
+   "ff": "s05_c03_ff.png",
+   "scene": "s05",
+   "dur": 10.0
+  }
+ ]
+}

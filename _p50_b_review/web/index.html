@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Phase50 B 批审片——《深水惊魂》写实克苏鲁追船</title>
+<style>
+  body { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; background:#14161a; color:#e8e6e1; margin:0; padding:24px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:#9a968e; font-size:13px; margin-bottom:20px; }
+  .final { background:#1d2430; border:1px solid #35507a; border-radius:10px; padding:16px; margin-bottom:24px; }
+  .final h2 { margin:0 0 10px; font-size:16px; color:#bcd2f5; }
+  video, img { width:100%; border-radius:6px; background:#000; display:block; }
+  .scene { margin:26px 0 10px; font-size:15px; color:#d8d4cc; border-left:3px solid #4a6b9a; padding-left:10px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(420px, 1fr)); gap:16px; }
+  .card { background:#1d2025; border-radius:8px; padding:12px; }
+  .card h3 { font-size:13px; margin:0 0 8px; color:#c9c5bd; font-weight:600; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .badge { font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  .pass { background:#23402a; color:#8ee6a0; }
+  .crop { background:#453a14; color:#f2d479; }
+  .weak { background:#3d3550; color:#c5b3e8; }
+  .drop { background:#4a2020; color:#f09696; }
+  .note { font-size:12px; color:#a5a19a; margin-top:8px; line-height:1.55; }
+  .note b { color:#d0ccc4; }
+  .lbl { font-size:11px; color:#8d8a83; margin:6px 0 2px; }
+  details { margin-top:18px; }
+  summary { cursor:pointer; color:#c9a86a; font-size:14px; }
+  .dropcard { opacity:.75; border:1px solid #4a2020; }
+  table { width:100%; border-collapse:collapse; font-size:12px; margin-top:8px; }
+  td, th { border:1px solid #2a2d33; padding:5px 8px; text-align:left; }
+  th { color:#9a968e; font-weight:600; }
+</style>
+</head>
+<body>
+<h1>Phase50 B 批审片 ——《深水惊魂》（写实克苏鲁追船 · 20 镜自主制作）</h1>
+<div class="sub">photorealistic 16:9 · agnes-video-2.5-flash · 素材 8–10.1s（ffprobe 实测，全部原生 AAC）· 目标成片 50–70s · 审定结论见各卡片徽标；最终审美与剧情由您裁决。</div>
+
+<div class="final">
+  <h2>🎬 成片 56.56s（18 镜装配 · 含原生环境声/引擎声 · 无对白无旁白）</h2>
+  <video controls src="final.mp4"></video>
+  <div class="note"><b>看片重点：</b>①跨镜天气/光线漂移（黄昏→阴→夜，i2v 无全局时间约束）②怪物镜头（追击揭示/触须群/拍击）偏 CGI 质感，作为 VFX 怪物镜头是否接受 ③s04_c02 两人身份与 Look 有漂移 ④"怪物被浅滩阻挡"的因果镜头因叙事矛盾被排除，现由 s04_c01/c03 + 回望镜隐性承担——若觉得因果不清，可返工该镜。</div>
+</div>
+
+<div id="scenes"></div>
+
+<details>
+<summary>▼ 被排除的 2 条原片（未进成片，附原因）</summary>
+<div class="grid" style="margin-top:12px">
+  <div class="card dropcard">
+    <h3>s04_c04 <span class="badge drop">排除</span></h3>
+    <img src="s04_c04_ff.png"><video controls src="s04_c04.mp4" style="margin-top:6px"></video>
+    <div class="note"><b>排除原因：</b>本镜关键事件="怪物被浅水阻挡，够不到船"，但视频里怪物仍在深水追赶（且双足直立形态+时代错误帆船入画）——因果断裂，会破坏 s05 回望的合理性。修复需重建该镜（先修首帧构图：水下触须拍打浅滩+船已在浅水航道内）。</div>
+  </div>
+  <div class="card dropcard">
+    <h3>s05_c03 <span class="badge drop">排除</span></h3>
+    <img src="s05_c03_ff.png"><video controls src="s05_c03.mp4" style="margin-top:6px"></video>
+    <div class="note"><b>排除原因：</b>剧本结尾="两人带伤继续在海上驶向远处灯火"，视频却虚构了到港码头+两人上岸+另一条船，且天空有撕裂伪影。若您喜欢"靠岸"结尾，可改为接受此镜并调整剧本认知；按原剧本则保持排除。</div>
+  </div>
+</div>
+</details>
+
+<div class="card" style="margin-top:20px">
+  <h3>逐镜实测（ffprobe / 审定处置）</h3>
+  <table id="tbl"></table>
+</div>
+
+<script>
+const VERDICTS = {
+  "s01_c01": ["pass","通过","开场建立镜：落日渔船。i2v 自行升起为俯视全景——运镜有意外之喜。"],
+  "s01_c02": ["crop","裁切 [0,4.9s)","两人同框镜（船长+大副）。4.9–6.0s 人物凭空消失+跳变外景（ffmpeg 逐帧定位），成片只保留前 4.9s——动作完整。"],
+  "s01_c03": ["pass","通过","水下异动：阴影+气泡带（暗色阴影在浅层移动）。"],
+  "s01_c04": ["pass","通过","大副停手抬头，困惑转警觉。"],
+  "s01_c05": ["pass","通过","船长猛拉舵盘转向（执行侧重建帧：原帧两名船长+幻觉码头）。"],
+  "s02_c01": ["pass","通过","全速逃亡：黑烟+白尾迹。"],
+  "s02_c02": ["pass","通过","船长油门推满（执行侧重建帧：原帧三人=大副分身）。"],
+  "s02_c03": ["pass","通过","大副固定渔网/绑桅杆。"],
+  "s02_c04": ["pass","通过","怪物揭示：头颅出水逼近（执行侧重建帧：原帧怪物站上甲板+帆船）。⚠️ 质感偏 CGI，请裁定是否接受。"],
+  "s03_c01": ["pass","通过","触须群自水下升起围拢（执行侧重建帧：原帧怪物直立出水+降雨漂移）。"],
+  "s03_c02": ["pass","通过","触须拍击右舷，船体打横。⚠️ 质感偏 CGI。"],
+  "s03_c03": ["weak","降级可用","大副撑桅。身份/人数干净，但人物过镇定（剧本是被甩倒后的惊魂未定），节拍弱。"],
+  "s03_c04": ["pass","通过","船长死握舵盘对抗倾斜。"],
+  "s04_c01": ["pass","通过","转进暗礁水道，触须在船后扬起。"],
+  "s04_c02": ["weak","降级可用","抛索缠礁。人数正确（两人），但两人服装/长相与 Look 有漂移。"],
+  "s04_c03": ["pass","通过","船长操舵擦礁而过（执行侧重建帧：原帧为公海无礁石）。脸上带伤细节。"],
+  "s05_c01": ["pass","通过","大副舀水修整，甲板积水+刮痕。"],
+  "s05_c02": ["pass","通过","船长回望——阴影已消失，落日+远处灯火。"]
+};
+const DROP = {"s04_c04":"怪物仍在追赶（应被浅滩阻挡）+帆船","s05_c03":"虚构到港码头+上岸"};
+fetch("meta.json").then(r=>r.json()).then(meta=>{
+  const byScene = {};
+  meta.shots.forEach(s=>{ (byScene[s.scene]=byScene[s.scene]||[]).push(s); });
+  const sceneNames = {s01:"第一幕 · 平静与异常", s02:"第二幕 · 全速逃亡", s03:"第三幕 · 触须拍击", s04:"第四幕 · 浅滩摆脱（两人配合）", s05:"第五幕 · 带伤撤离"};
+  const host = document.getElementById("scenes");
+  for (const sc of Object.keys(byScene)) {
+    const h = document.createElement("div"); h.className="scene"; h.textContent=sceneNames[sc]||sc; host.appendChild(h);
+    const g = document.createElement("div"); g.className="grid"; host.appendChild(g);
+    byScene[sc].forEach(s=>{
+      const v = VERDICTS[s.shot] || ["pass","通过",""];
+      const card = document.createElement("div"); card.className="card";
+      card.innerHTML = `<h3>${s.shot} <span class="badge ${v[0]}">${v[1]}</span> <span style="color:#8d8a83;font-weight:400">${s.dur}s</span></h3>
+        <img src="${s.ff}"><div class="lbl">▲ 选定首帧 / ▼ 视频（含原生音轨）</div>
+        <video controls src="${s.video}"></video><div class="note">${v[2]}</div>`;
+      g.appendChild(card);
+    });
+  }
+  const tbl = document.getElementById("tbl");
+  let rows = "<tr><th>镜</th><th>时长</th><th>审定</th></tr>";
+  meta.shots.forEach(s=>{
+    const v = VERDICTS[s.shot];
+    const d = DROP[s.shot];
+    rows += `<tr><td>${s.shot}</td><td>${s.dur}s</td><td>${d? "❌ 排除："+d : (v? v[1] : "")}</td></tr>`;
+  });
+  tbl.innerHTML = rows;
+});
+</script>
+</body>
+</html>
