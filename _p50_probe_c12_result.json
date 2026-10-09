@@ -1,0 +1,41 @@
+{
+ "report": {
+  "sc01_c01": {
+   "ready_epoch": 1791530710.305,
+   "submitted_epoch": 1791530712.588,
+   "video_id": "task_EJbHxfh8f4VQc0Uh1uTrtm9szJnoKbsK",
+   "completed_epoch": 1791531146.544,
+   "remote_wait_s": 434.0,
+   "download_s": 1.9,
+   "seconds_returned": 10.0,
+   "ffprobe_duration_s": 10.12
+  },
+  "sc02_c01": {
+   "ready_epoch": 1791530729.317,
+   "submitted_epoch": 1791530748.363,
+   "video_id": "task_FZLFm0Bs7usnxWrTIbhqlJHFyOxaHnGk",
+   "completed_epoch": 1791531118.52,
+   "remote_wait_s": 370.2,
+   "download_s": 2.1,
+   "seconds_returned": 10.0,
+   "ffprobe_duration_s": 10.12
+  }
+ },
+ "inflight_overlap_s": 370.2,
+ "jobs": {
+  "92234df47126": {
+   "state": "done",
+   "created_at": 1791530709.1402578,
+   "started_at": 1791530709.7092004,
+   "finished_at": 1791531213.0485559,
+   "shot": "sc01_c01"
+  },
+  "eae21084d95a": {
+   "state": "done",
+   "created_at": 1791530728.2984698,
+   "started_at": 1791530728.7873187,
+   "finished_at": 1791531214.415433,
+   "shot": "sc02_c01"
+  }
+ }
+}
