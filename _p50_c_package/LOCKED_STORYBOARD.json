@@ -1,0 +1,446 @@
+{
+ "project": "P50_B",
+ "frozen_from": "P50_B project.json（run_b25f5b900c3b 分镜审定通过版本）",
+ "rules": "源素材默认 10s（8-12s 区间）；关键事件必须完整；人数纪律=仅船长与大副；接力镜必须使用实际保留区间最后一张真实解码帧；正常切镜不强制接力",
+ "shots": [
+  {
+   "shot_id": "s01_c01",
+   "scene_id": "s01",
+   "beat": "平静与威胁浮现",
+   "description": "黄昏平静的开阔海面。太阳低垂，海面泛着金紫光泽。一艘小型机动渔船缓慢向画面右侧航行，船体在画面中很小，拖出细白尾迹；远处海平线平直安静，没有其他船只。船占画面不超过六分之一，环境为主体，建立「这是哪里」的空间身份。",
+   "start_state": "船已在缓慢航行中，航向画面右方，画面中无可见人物",
+   "end_state": "",
+   "camera": {
+    "shot_size": "extreme wide shot",
+    "angle": "low angle（机位贴近水面，船体略高于水面线）",
+    "movement": "static"
+   },
+   "characters_expected": [
+    "渔船"
+   ],
+   "source_duration_target_s": 10.0,
+   "link_mode": "i2v",
+   "opening_source": "independent",
+   "first_frame_reference": null,
+   "video_version_selected": "vv_213cb1ef"
+  },
+  {
+   "shot_id": "s01_c02",
+   "scene_id": "s01",
+   "beat": "平静与威胁浮现",
+   "description": "中近景取景：机位贴近船尾舵轮，画面只框入操舵船长的上半身到大副蹲姿的全长，两人合计占画面垂直高度约一半，船体只露出舵位与前甲板一角的局部，船头与整艘船全貌不入画；背景是开阔黄昏海面与天光，画面无海岸、陆地、树木或第三人。",
+   "start_state": "船缓慢航行中，船长站立舵位双手扶舵，大副蹲在前甲板收网中",
+   "end_state": "",
+   "camera": {
+    "shot_size": "medium shot",
+    "angle": "eye level",
+    "movement": "static"
+   },
+   "characters_expected": [
+    "船长",
+    "大副",
+    "渔船"
+   ],
+   "source_duration_target_s": 10.0,
+   "link_mode": "multi",
+   "opening_source": "independent",
+   "first_frame_reference": null,
+   "video_version_selected": "vv_39c741a4"
+  },
+  {
+   "shot_id": "s01_c03",
+   "scene_id": "s01",
+   "beat": "平静与威胁浮现",
+   "description": "远处海面特写插入：海平线下方海水颜色骤然变深，一个巨大暗色阴影在浅层缓慢移动，海面不规则翻涌，密集气泡升起连成串。画面中无船只，只有变深的水、阴影与气泡。",
+   "start_state": "海水刚开始变深，阴影尚在极远处边缘",
+   "end_state": "",
+   "camera": {
+    "shot_size": "close-up",
+    "angle": "low angle（贴近水面）",
+    "movement": "static"
+   },
+   "characters_expected": [],
+   "source_duration_target_s": 8.0,
+   "link_mode": "i2v",
+   "opening_source": "independent",
+   "first_frame_reference": null,
+   "video_version_selected": null
+  },
+  {
+   "shot_id": "s01_c04",
+   "scene_id": "s01",
+   "beat": "平静与威胁浮现",
+   "description": "前甲板上，大副停下收网动作，缓缓抬头望向远方，表情从困惑转为警觉，嘴唇微张；脚边是盘起的渔网，背景是远处翻涌的水面与气泡群。画面中无第三人，只有大副一人。",
+   "start_state": "大副正蹲着收网，背对/侧对镜头",
+   "end_state": "",
+   "camera": {
+    "shot_size": "medium close-up",
+    "angle": "eye level",
+    "movement": "slow push in"
+   },
+   "characters_expected": [
+    "大副",
+    "渔船"
+   ],
+   "source_duration_target_s": 8.0,
+   "link_mode": "i2v",
+   "opening_source": "independent",
+   "first_frame_reference": null,
+   "video_version_selected": null
+  },
+  {
+   "shot_id": "s01_c05",
+   "scene_id": "s01",
+   "beat": "平静与威胁浮现",
+   "description": "船尾操控区，船长双手突然离开舵盘猛拉，身体转向左侧，船体明显向左侧偏转，船首对海平线的角度变化，水花飞溅；结尾他回头望向前甲板，与远处的大副目光交汇。",
+   "start_state": "船长在舵位，船尚未转向，航向仍是原方向",
+   "end_state": "",
+   "camera": {
+    "shot_size": "medium shot",
+    "angle": "low angle（略仰）",
+    "movement": "pan left（跟随船体转向）"
+   },
+   "characters_expected": [
+    "船长",
+    "大副",
+    "渔船"
+   ],
+   "source_duration_target_s": 10.0,
+   "link_mode": "i2v",
+   "opening_source": "independent",
+   "first_frame_reference": null,
+   "video_version_selected": null
+  },
+  {
+   "shot_id": "s02_c01",
+   "scene_id": "s02",
+   "beat": "全速追逐",
+   "description": "船已转向远离异常区域。引擎轰鸣，排气口喷出浓重黑烟，船体前倾加速，白色尾迹在船后拉成一道长线；海面被船速撕开。以船体侧面为主，突出「正在逃离」的动态。",
+   "start_state": "船转向刚完成、开始加速，黑烟初起",
+   "end_state": "",
+   "camera": {
+    "shot_size": "wide shot",
+    "angle": "low angle（贴近水面）",
+    "movement": "handheld follow（跟随船体侧向滑动）"
+   },
+   "characters_expected": [
+    "渔船"
+   ],
+   "source_duration_target_s": 10.0,
+   "link_mode": "multi",
+   "opening_source": "independent",
+   "first_frame_reference": null,
+   "video_version_selected": null
+  },
+  {
+   "shot_id": "s02_c02",
+   "scene_id": "s02",
+   "beat": "全速追逐",
+   "description": "船尾操控区，船长将油门推至最大，握紧舵盘，身体前倾对抗船速带来的震动，额头上有汗水，双眼紧盯前方；他侧头对前甲板喊话。",
+   "start_state": "船已全速航行，船长在舵位",
+   "end_state": "",
+   "camera": {
+    "shot_size": "medium close-up",
+    "angle": "low angle（略仰，突出船长紧张）",
+    "movement": "handheld shake（手持微晃）"
+   },
+   "characters_expected": [
+    "船长",
+    "大副",
+    "渔船"
+   ],
+   "source_duration_target_s": 8.0,
+   "link_mode": "multi",
+   "opening_source": "independent",
+   "first_frame_reference": null,
+   "video_version_selected": null
+  },
+  {
+   "shot_id": "s02_c03",
+   "scene_id": "s02",
+   "beat": "全速追逐",
+   "description": "前甲板上，大副快速固定松散渔网、用绳索绑紧桅杆、盖上舱口盖，所有动作服务于高速航行；他身体压住船体倾斜，汗水与海风混合。",
+   "start_state": "大副站在桅杆旁，身上有松散的绳",
+   "end_state": "",
+   "camera": {
+    "shot_size": "medium shot",
+    "angle": "eye level",
+    "movement": "handheld follow（跟大副动作方向）"
+   },
+   "characters_expected": [
+    "大副",
+    "渔船"
+   ],
+   "source_duration_target_s": 10.0,
+   "link_mode": "multi",
+   "opening_source": "independent",
+   "first_frame_reference": null,
+   "video_version_selected": null
+  },
+  {
+   "shot_id": "s02_c04",
+   "scene_id": "s02",
+   "beat": "全速追逐",
+   "description": "远景：水下巨大阴影正在追上渔船，两者之间的视觉距离正在缩短，阴影在水下缓慢上浮、触须隐约可辨，船体在阴影前方加速离开；压迫感建立。",
+   "start_state": "船在加速、阴影在更远处",
+   "end_state": "",
+   "camera": {
+    "shot_size": "extreme wide shot",
+    "angle": "low angle（贴近水面）",
+    "movement": "slow push in（向阴影缓慢推进）"
+   },
+   "characters_expected": [
+    "渔船",
+    "海怪"
+   ],
+   "source_duration_target_s": 10.0,
+   "link_mode": "multi",
+   "opening_source": "independent",
+   "first_frame_reference": null,
+   "video_version_selected": null
+  },
+  {
+   "shot_id": "s03_c01",
+   "scene_id": "s03",
+   "beat": "触须拍船·压力顶峰",
+   "description": "全速前进的渔船，前方数十米内水下轮廓可辨——多条粗壮触须覆盖吸盘与珊瑚碎屑，在昏暗水色中缓慢摆动，阴影比之前近得多、大得多，压迫感顶点。",
+   "start_state": "船全速航行中，阴影在数十米外",
+   "end_state": "",
+   "camera": {
+    "shot_size": "extreme wide shot",
+    "angle": "low angle（贴近水面）",
+    "movement": "slow push in（向阴影逼近）"
+   },
+   "characters_expected": [
+    "渔船",
+    "海怪"
+   ],
+   "source_duration_target_s": 10.0,
+   "link_mode": "multi",
+   "opening_source": "independent",
+   "first_frame_reference": null,
+   "video_version_selected": null
+  },
+  {
+   "shot_id": "s03_c02",
+   "scene_id": "s03",
+   "beat": "触须拍船·压力顶峰",
+   "description": "一条巨大触须从船体右舷旁的水下猛然甩出，拍击船体右舷，掀起巨浪将船体打侧，水花与碎壳飞散，船体向左倾斜近三十度，右舷被击点水柱冲天而起。",
+   "start_state": "触须尚未甩出，阴影紧贴船体右舷",
+   "end_state": "",
+   "camera": {
+    "shot_size": "wide shot",
+    "angle": "low angle（贴近水面，捕捉触须入水与击船瞬间）",
+    "movement": "static（固定机位，让画面自己震动）"
+   },
+   "characters_expected": [
+    "渔船",
+    "海怪"
+   ],
+   "source_duration_target_s": 10.0,
+   "link_mode": "multi",
+   "opening_source": "independent",
+   "first_frame_reference": null,
+   "video_version_selected": null
+  },
+  {
+   "shot_id": "s03_c03",
+   "scene_id": "s03",
+   "beat": "触须拍船·压力顶峰",
+   "description": "前甲板上，大副被巨浪冲击甩倒在甲板上，右手单手撑住桅杆，左手撑地，身体在倾斜的甲板上滑动，渔网散开；他脸上是震惊与恐惧。",
+   "start_state": "大副站在前甲板，被巨浪冲击前",
+   "end_state": "",
+   "camera": {
+    "shot_size": "medium shot",
+    "angle": "low angle（低机位，强化船体倾斜与甩倒的动感）",
+    "movement": "handheld shake（手持微晃，与船体摇晃同步）"
+   },
+   "characters_expected": [
+    "大副",
+    "渔船"
+   ],
+   "source_duration_target_s": 8.0,
+   "link_mode": "multi",
+   "opening_source": "independent",
+   "first_frame_reference": null,
+   "video_version_selected": null
+  },
+  {
+   "shot_id": "s03_c04",
+   "scene_id": "s03",
+   "beat": "触须拍船·压力顶峰",
+   "description": "船尾操控区，船长死死握住舵盘，身体前倾对抗船体左倾，双眼紧盯前方，牙关紧咬，额头上汗珠在暮色反光；船体剧烈震动，舵盘晃动。",
+   "start_state": "船长在舵位，船体左倾",
+   "end_state": "",
+   "camera": {
+    "shot_size": "medium close-up",
+    "angle": "low angle（略仰，强化船长坚毅）",
+    "movement": "handheld shake（与船体震动同步）"
+   },
+   "characters_expected": [
+    "船长",
+    "渔船"
+   ],
+   "source_duration_target_s": 8.0,
+   "link_mode": "multi",
+   "opening_source": "independent",
+   "first_frame_reference": null,
+   "video_version_selected": null
+  },
+  {
+   "shot_id": "s04_c01",
+   "scene_id": "s04",
+   "beat": "暗礁机动",
+   "description": "船受创后右舷甲板积水、一道浅刮痕渗水，但船仍可操控。前方出现一片暗礁浅水区，礁石露出水面、水流湍急。船长猛打舵头对准暗礁入口，船体转向对准暗礁。",
+   "start_state": "船全速航行，转向暗礁入口前",
+   "end_state": "",
+   "camera": {
+    "shot_size": "wide shot",
+    "angle": "low angle（贴近水面）",
+    "movement": "slow push in（向暗礁推进）"
+   },
+   "characters_expected": [
+    "船长",
+    "渔船"
+   ],
+   "source_duration_target_s": 10.0,
+   "link_mode": "multi",
+   "opening_source": "independent",
+   "first_frame_reference": null,
+   "video_version_selected": null
+  },
+  {
+   "shot_id": "s04_c02",
+   "scene_id": "s04",
+   "beat": "暗礁机动",
+   "description": "前甲板上，大副瞬间领会转向意图，冲向前方将一根锚索抛向附近礁石，绳索缠绕在礁石上，船在浅水区突然减速偏转，轨迹变得不可预测。",
+   "start_state": "大副站在前甲板，船已对准暗礁入口",
+   "end_state": "",
+   "camera": {
+    "shot_size": "medium shot",
+    "angle": "eye level",
+    "movement": "handheld follow（跟大副动作）"
+   },
+   "characters_expected": [
+    "大副",
+    "渔船"
+   ],
+   "source_duration_target_s": 10.0,
+   "link_mode": "multi",
+   "opening_source": "independent",
+   "first_frame_reference": null,
+   "video_version_selected": null
+  },
+  {
+   "shot_id": "s04_c03",
+   "scene_id": "s04",
+   "beat": "暗礁机动",
+   "description": "船尾操控区，船长配合前甲板的抛索动作调整油门与舵角，让船擦过礁石而非卡死，舵盘猛打，船体在浅水区剧烈颠簸。",
+   "start_state": "船长在舵位，船体减速偏转中",
+   "end_state": "",
+   "camera": {
+    "shot_size": "medium close-up",
+    "angle": "low angle（略仰）",
+    "movement": "handheld shake（与船体颠簸同步）"
+   },
+   "characters_expected": [
+    "船长",
+    "渔船"
+   ],
+   "source_duration_target_s": 10.0,
+   "link_mode": "multi",
+   "opening_source": "independent",
+   "first_frame_reference": null,
+   "video_version_selected": null
+  },
+  {
+   "shot_id": "s04_c04",
+   "scene_id": "s04",
+   "beat": "暗礁机动",
+   "description": "暗礁浅水区远景：水下怪物的触须在浅水处受阻，拍打浅水但够不到船，被迫留在后方。船擦过两块礁石后冲出浅水区。",
+   "start_state": "船在暗礁浅水区减速偏转中",
+   "end_state": "",
+   "camera": {
+    "shot_size": "extreme wide shot",
+    "angle": "low angle（贴近水面）",
+    "movement": "pan right（跟随船体冲出浅水区）"
+   },
+   "characters_expected": [
+    "渔船",
+    "海怪"
+   ],
+   "source_duration_target_s": 10.0,
+   "link_mode": "multi",
+   "opening_source": "independent",
+   "first_frame_reference": null,
+   "video_version_selected": null
+  },
+  {
+   "shot_id": "s05_c01",
+   "scene_id": "s05",
+   "beat": "代价与收束",
+   "description": "船已驶出暗礁区回到深水，怪物被甩在浅水后方，不再可见。右舷可见一道深深的刮痕，刮痕处持续渗出海水，甲板上一片积水。大副从舱内拖出一只破桶和抹布，蹲在刮痕旁舀甲板上的积水，动作缓慢而疲惫。",
+   "start_state": "船缓缓航行中，大副从舱内拖着桶出来",
+   "end_state": "",
+   "camera": {
+    "shot_size": "medium shot",
+    "angle": "eye level",
+    "movement": "static"
+   },
+   "characters_expected": [
+    "大副",
+    "渔船"
+   ],
+   "source_duration_target_s": 10.0,
+   "link_mode": "multi",
+   "opening_source": "independent",
+   "first_frame_reference": null,
+   "video_version_selected": null
+  },
+  {
+   "shot_id": "s05_c02",
+   "scene_id": "s05",
+   "beat": "代价与收束",
+   "description": "船尾，船长站在舵位回望——水面下阴影已消失在海平线后，海面恢复平静但带着细密涟漪；他脸上紧张慢慢松开，但依旧没有完全放松。远处港口灯光与地平线清晰。",
+   "start_state": "船长站在舵位回望",
+   "end_state": "",
+   "camera": {
+    "shot_size": "medium close-up",
+    "angle": "eye level",
+    "movement": "slow pan（从船长脸缓缓摇到平静海面与远处灯光）"
+   },
+   "characters_expected": [
+    "船长",
+    "渔船"
+   ],
+   "source_duration_target_s": 10.0,
+   "link_mode": "multi",
+   "opening_source": "independent",
+   "first_frame_reference": null,
+   "video_version_selected": null
+  },
+  {
+   "shot_id": "s05_c03",
+   "scene_id": "s05",
+   "beat": "代价与收束",
+   "description": "大远景。机位在地面高度贴近海面。海面与天空占画面九成。一艘很小很小的机动渔船（只占画面宽度十分之一）在画面中左偏，朝远处地平线缓慢驶去，身后拖着一条细长白色尾迹向右后延伸。船上有两个小小黑色人影。远处海平线处几盏暖色港口灯光。没有海岸，没有陆地，没有沙滩，只有开阔海面。",
+   "start_state": "船在深夜暮色中缓缓航行，吃水略深但仍在浮起，尾迹刚拉长",
+   "end_state": "",
+   "camera": {
+    "shot_size": "extreme wide shot",
+    "angle": "low angle（贴近水面）",
+    "movement": "static"
+   },
+   "characters_expected": [
+    "船长",
+    "大副",
+    "渔船"
+   ],
+   "source_duration_target_s": 10.0,
+   "link_mode": "multi",
+   "opening_source": "independent",
+   "first_frame_reference": null,
+   "video_version_selected": null
+  }
+ ]
+}

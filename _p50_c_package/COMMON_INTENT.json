@@ -1,0 +1,91 @@
+{
+ "project": "P50_B",
+ "title_working": "深水惊魂（系统编剧可改名）",
+ "format": {
+  "aspect_ratio": "16:9",
+  "target_duration_s": "50-70（完整叙事）",
+  "style": "写实电影（photorealistic；幻想怪物允许，但人物/船/材质/光照须像真实拍摄+VFX 电影）"
+ },
+ "audio_policy": "无旁白、无主动 TTS、首版无人物对白；保留合格原生环境声与同步音效",
+ "cast_rule": "全片只有船长与大副两名人类；其余画面不得出现人形（含背景路人/分身）",
+ "characters": {
+  "captain": {
+   "function": "操舵/决策",
+   "identity": {
+    "look_id": "look_f171aea96f3e",
+    "label": "Captain Default Look - Crinkled Oilskin",
+    "approved_reference_asset_id": "ref_e5e8b8e0a54c",
+    "reference_url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_aF380vb3j2t9Y0f1ozdDKzDjL7d9XSNT/output.png",
+    "reference_sha256_16": "sha256:2c93228cb665fa30",
+    "appearance_description": "Photorealistic middle-aged fisherman standing on a small wooden fishing boat deck at dusk. Weathered tanned skin with deep wrinkles and visible pores, short grey-brown hair slicked back, trimmed salt-and-pepper stubble, strong jawline, small faded scar on left cheekbone, sun-weathered red patches on nose and ears. Solid compact build, broad shoulders. Wears a plain dark navy oilskin jacket with a simple stand-collar standing open at the neck (fabric collar only, not a foldable hood), the crinkled creased waxed-cotton fabric showing natural folds, white salt-streak residue and lighter tan elbow patches; a thick braided hemp rope belt with a small brass buckle at the waist (no fob, no pendant); dark oil-stained work trousers; worn brown leather boots. Wind-blown, golden-hour sea light, cinem"
+   }
+  },
+  "first_mate": {
+   "function": "配合/执行（甲板作业/缆绳/了望）",
+   "identity": {
+    "look_id": "look_be5b0b5014fa",
+    "label": "First Mate Maritime Work Attire",
+    "approved_reference_asset_id": "ref_e8858d5baf12",
+    "reference_url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_8idQeQTKxQCk9eyWKh5D2hWTmWwtyDP1/output.png",
+    "reference_sha256_16": "sha256:9409ec7139e9cb2d",
+    "appearance_description": "A single young man in his early twenties standing alone on the weathered deck of a small fishing boat at golden-hour dusk, full body visible from head to toe in a single vertical three-quarter view, one person only, no other people anywhere in frame. Light-medium sun-tanned skin with visible pores, short dark brown messy wind-blown hair, sharp jawline, bright vivid green eyes, lean athletic build. Distinguishing marks clearly visible: small dark mole just below the left ear, faded blue-grey wave-pattern tattoo on the right inner forearm. Wears a storm-grey heavy waxed-canvas maritime work jacket with large round brass snap buttons down the front, sleeves rolled to the elbows; a plain white cotton crew-neck T-shirt underneath; dark canvas cargo work pants with cuffs pushed up; sturdy brown "
+   }
+  }
+ },
+ "vessel": {
+  "function": "两人活动的唯一空间；外景与甲板同一艘",
+  "identity": {
+   "look_id": "look_96e67a3354c3",
+   "label": "Fishing Boat Exterior - Empty Crew-Free",
+   "approved_reference_asset_id": "ref_87639e9db8d5",
+   "reference_url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_Y7K4sqXAL6RWaNdBxMmZwGe18QNhwcNH/output.png",
+   "reference_sha256_16": "sha256:7d70123750809bfc",
+   "appearance_description": "Completely empty, crew-free, unmanned small weathered motorized fishing boat, sitting ALONE on a calm open sea at golden-hour dusk. ABSOLUTELY NO PEOPLE IN THIS ENTIRE IMAGE. No human, no person, no man, no woman, no captain, no crew member, no fisherman, no standing figure, no silhouette on the horizon, no one at the wheel, no one on the deck, no one in the water, zero living beings. Only the boat, the water, and the air. Hull: deeply faded, dulled, desaturated navy blue on the lower half, heavy rust-brown gunwale with rust patches, pale grey deck with chipped paint, salt-stain streaks and rope abrasion. Low freeboard, pointed bow, flat raked stern. Fixed layout: the pointed BOW (front) holds coiled fishing net, wooden crates and a small winch; the flat raked STERN (rear) holds the open, "
+  }
+ },
+ "monster": {
+  "definition": "克苏鲁式海怪：头部触须/鳞甲体表/巨大体量；以水下阴影+触须拍击呈现；不能退化为泛化章鱼；不能上岸双足行走",
+  "identity": {
+   "look_id": "look_79ad00fa0ae5",
+   "label": "Sea Monster Submerged Mass",
+   "approved_reference_asset_id": "ref_9c0ba4bed38c",
+   "reference_url": "https://cos-platform-outputs.agnes-ai.cn/images/i2i/task_yZxgsIJDHGIjLEy9pzgvluSBOzVFb1jE/output.png",
+   "reference_sha256_16": "sha256:556c85046e8366b6",
+   "appearance_description": "A single colossal limbless non-humanoid Cthulhu-style sea leviathan, ONE identifiable entity, PARTLY SUBMERGED in a dark stormy open sea at night, breaking the waterline as a vast swollen BLOB of wet glossy leathery rubbery skin in deep umber, dark rust and ink-black tones, studded with mottled ridged scales and folded ridges, water streaming off. From the top of the mass a dense crown of thick tapering fleshy tentacles radiates outward like fronds, each studded with large round suckers encrusted with barnacles and broken coral; two wide dark lightless eyes set in wrinkled flesh under the head arch. CRITICAL FORM RULES: the creature has NO legs, NO feet, NO arms, NO bipedal upright posture, NO humanoid body, NO human face — it is a limbless organic blob coiling in the water, NOT standing o"
+  }
+ },
+ "story_arc_required": [
+  "威胁被发现",
+  "追赶压力上升",
+  "两人有联系的行动（互相影响）",
+  "行动带来可观察结果（不能靠怪物突然消失/无原因跳场收尾）"
+ ],
+ "story_segments_as_written": [
+  {
+   "segment_id": "s01",
+   "title": "平静与威胁浮现",
+   "plot_task_summary": "剧情任务：建立平静日常，引入威胁。起始状态：黄昏，平静海面，一艘小型机动渔船缓慢航行。船长（中年男性，油布外套）站在船尾专注操舵；大副（年轻男性，水手服）在前甲板收拢渔网。主动作：远处海平线下方海水颜色骤然变深，一个巨大阴影在浅层缓慢移动；海面开始不规则翻涌、泛起密集气泡。大副停手，望向远方，表情从困惑转为警觉；船长注意到异常，手离开舵盘。结果状态：两人目光交汇，船长猛拉舵盘转向，船开始偏离原航向。"
+  },
+  {
+   "segment_id": "s02",
+   "title": "全速追逐",
+   "plot_task_summary": "剧情任务：建立追逐紧迫感。起始状态：船已转向，远离异常区域，但距离仍近。主动作：船长将油门推至最大，排气口喷出浓重黑烟，船体前倾加速，尾迹拉出白线；大副冲上前甲板，快速固定松散渔网、用绳索绑紧桅杆、关闭舱口盖——所有动作服务于高速航行。结果状态：船全速航行，但远处水下阴影也在加速移动，两者之间的视觉距离正在缩短，压迫感逐步建立。"
+  },
+  {
+   "segment_id": "s03",
+   "title": "触须拍船·压力顶峰",
+   "plot_task_summary": "剧情任务：展现威胁规模，压力顶峰。起始状态：船全速前进，阴影已近至数十米内，水下轮廓可辨——多条粗壮触须覆盖吸盘与珊瑚碎屑。主动作：一条触须从水下猛然甩出，拍击船体右舷，掀起巨浪将船掀歪近三十度；触须上滴落海水与碎壳。结果状态：船体剧烈摇晃，大副被甩倒在甲板上、单手撑住桅杆；船向左倾斜，舵盘剧烈震动；船长死死握住舵盘，双眼紧盯前方，身体前倾对抗倾斜。"
+  },
+  {
+   "segment_id": "s04",
+   "title": "暗礁机动",
+   "plot_task_summary": "剧情任务：两人有联系的行动，动作互相影响结果。起始状态：船受创，右舷甲板积水、一道浅刮痕渗水，但船仍可操控。前方出现一片暗礁浅水区，礁石露出水面，水流湍急。主动作：船长判断浅水可阻止水下怪物跟进，猛打舵头对准暗礁入口；大副瞬间理解意图，冲向前方抛出一根锚索缠绕在附近礁石上，使船在浅水区突然减速偏转、轨迹变得不可预测；船长配合调整油门与舵角，让船擦过礁石而非卡死。结果状态：船在暗礁区剧烈颠簸、擦过两块礁石后冲出浅水；水下怪物的触须在浅水处受阻，拍打浅水但够不到船，被迫留在后方。"
+  },
+  {
+   "segment_id": "s05",
+   "title": "代价与收束",
+   "plot_task_summary": "剧情任务：可观察结果与收束，付出代价。起始状态：船已驶出暗礁区回到深水，怪物被甩在浅水后方，不再可见。主动作：大副从舱内拖出一只破桶和抹布，蹲在右舷刮痕旁舀甲板上的积水；船体右舷可见一道深深的刮痕与持续渗水。船长在船尾回望——水下阴影已消失在海平线后，海面恢复平静但带着细密涟漪。结果状态：两人一前一后继续清理与操船，船缓缓向远处灯光与地平线驶去，尾迹在水中拉长，船体缓慢下沉一点但仍在浮起。"
+  }
+ ],
+ "usage_note": "本包为共同故事意图（原生方案对照用）。豆包/Grok 据此独立规划分镜；不要求采用 Agnes 系统的逐镜方法。"
+}
