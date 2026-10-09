@@ -1588,7 +1588,7 @@ async def _handler_video(job, emit):
     # Phase50 A5 计时：ready（preflight 通过，即将进入提交/续轮询路径）——观测件 fail-open。
     from src.core.timing_ledger import record as _tl_record
     _tl_record("video_ready", project=job.project, shot_id=job.shot_id,
-               job_id=job.job_id, model=video_model, mode=mode,
+               job_id=getattr(job, "job_id", None), model=video_model, mode=mode,
                seconds_requested=round(seconds, 2))
 
     # C1 §11（21.md）：provider 事实——两条路径共用的 options 集合，指纹进
@@ -1738,7 +1738,7 @@ async def _handler_video(job, emit):
         ))
         await emit("submit", f"{shot.shot_id} 已提交 video_id={vid}", 15)
         _tl_record("video_submitted", project=job.project, shot_id=job.shot_id,
-                   job_id=job.job_id, video_id=vid, model=video_model, mode=mode,
+                   job_id=getattr(job, "job_id", None), video_id=vid, model=video_model, mode=mode,
                    seconds_requested=round(seconds, 2),
                    previous_submit_uncertain=previous_submit_uncertain or None)
 
@@ -1760,11 +1760,11 @@ async def _handler_video(job, emit):
         store.update_shot(job.shot_id,
                           lambda s: setattr(s.video, "status", ShotStatus.FAILED.value))
         _tl_record("video_failed", project=job.project, shot_id=job.shot_id,
-                   job_id=job.job_id, video_id=vid, model=video_model,
+                   job_id=getattr(job, "job_id", None), video_id=vid, model=video_model,
                    error=str(e)[:200])
         raise
     _tl_record("video_completed", project=job.project, shot_id=job.shot_id,
-               job_id=job.job_id, video_id=vid, model=video_model,
+               job_id=getattr(job, "job_id", None), video_id=vid, model=video_model,
                seconds_returned=res.get("seconds"),
                size=res.get("size"))
 
@@ -1815,7 +1815,7 @@ async def _handler_video(job, emit):
     store.update_shot(job.shot_id, mut)
     await emit("done", f"{shot.shot_id} 完成（版本 {vvid}），实际 {res['seconds']}s / {res['size']}", 100)
     _tl_record("video_downloaded", project=job.project, shot_id=job.shot_id,
-               job_id=job.job_id, video_id=vid, version_id=vvid,
+               job_id=getattr(job, "job_id", None), video_id=vid, version_id=vvid,
                local=str(dest), seconds_returned=res.get("seconds"),
                attempts=getattr(shot.video, "attempts", None))
 
