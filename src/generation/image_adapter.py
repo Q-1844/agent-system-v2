@@ -787,6 +787,19 @@ def _population_constraint_clause(shot: Any) -> str:
             f"characters described above; no other people, no background crowd.")
 
 
+def apply_population_clause(prompt: str, shot: Any, *, enabled: bool) -> str:
+    """Phase51 B：把确定性人数排除子句追加到生成 prompt tail（首帧/视频层对称）。
+    enabled=False 或镜头无角色（子句为空）→ 原样返回（不做无意义拼接）。
+    子句语义见 _population_constraint_clause（31.md C5；E2 对照实验实证宽景缺员
+    由该子句改善：无条款 0/2 vs 有条款 2/2）。"""
+    if not enabled:
+        return prompt
+    clause = _population_constraint_clause(shot)
+    if not clause:
+        return prompt
+    return (prompt or "").rstrip() + " " + clause
+
+
 def build_bound_first_frame_input(project_dir, project: Any, shot: Any, *,
                                   scene_reference_mode: Optional[str] = None,
                                   human_reference_mode: Optional[str] = None,

@@ -1571,6 +1571,13 @@ async def _handler_video(job, emit):
         shot = store.load().get_shot(job.shot_id)   # 取最新
 
     prompt = build_video_prompt(shot, mode)
+    # Phase51 B（E2 实证 + P50 用户观察）：视频层人数纪律——job.params 开启时按
+    # shot.characters 确定性人数排除子句进 prompt tail（防 i2v 过程船员缺员/
+    # 意外第三人；首帧层同参数对称）。默认开启（导演工具显式传 false 可关）。
+    from src.generation.image_adapter import apply_population_clause
+    prompt = apply_population_clause(
+        prompt, shot,
+        enabled=bool((job.params or {}).get("population_constraint", True)))
     # boundary frames：i2v 用 effective 首帧；keyframes 用 [首帧, 已选尾帧]。
     # legacy 求值保持原位置（恢复路径不触碰；BOUND 路径由 Adapter 以 selection
     # truth + freshness 解析后覆盖）。

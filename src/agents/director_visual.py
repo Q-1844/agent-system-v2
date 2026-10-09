@@ -240,12 +240,19 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
             raise AgentError("bad_arguments",
                              f"human_reference_mode 必须是 keep | drop | auto，"
                              f"得到: {human_reference_mode}")
+        # Phase51 B（E2 实证）：人数纪律——默认 true（确定性人数排除子句进
+        # prompt tail，按 shot.characters 计数；E2 对照：无条款 0/2 vs 有条款 2/2）。
+        # 创作意图含额外人物时导演显式传 false（schema 已写明默认）。
+        population_constraint = bool(args.get("population_constraint", True))
         total_timeout = IMAGES_TOTAL_TIMEOUT_S
         asset_noun = "分镜图"
     else:
         targets = _parse_video_targets(args)
         total_timeout = VIDEOS_TOTAL_TIMEOUT_S
         asset_noun = "视频"
+        # Phase51 B：视频层人数纪律（与首帧层同参数对称；E2 实证 + P50 用户观察
+        # 「宽/中景 i2v 船员消失」）。默认 true，创作意图含额外人物时显式 false。
+        population_constraint = bool(args.get("population_constraint", True))
         # 视频模型（2026-09-28：v2.0 已删除，agnes-video-2.5-flash 为唯一模型——
         # config 默认，无需显式选择。对 config 实际配置校验（client 不可用时退回
         # 已知默认集合，保证拒绝语义确定）。
@@ -380,8 +387,10 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
                 extra["scene_reference_mode"] = scene_reference_mode
             if human_reference_mode:
                 extra["human_reference_mode"] = human_reference_mode
+            extra["population_constraint"] = population_constraint
         elif video_model:
             extra["video_model"] = video_model
+        extra["population_constraint"] = population_constraint
         job = q.submit(project, kind, t["shot_id"], **extra)
         jobs.append((t, job, marker))
 
@@ -629,6 +638,13 @@ SHOT_GENERATE_IMAGES_TOOL = {
                                                         "拉宽）；auto=按景别确定性映射（EWS/WS→full，"
                                                         "MCU/CU/ECU/OTS/insert/MS→context_only）。"
                                                         "省略=full（Phase D 行为）。"},
+                "population_constraint": {"type": "boolean",
+                                          "description": "人数纪律（Phase51 B，E2 实证）：true=按"
+                                                         " shot.characters 确定性人数排除子句进生成"
+                                                         " prompt tail（宽/中景防船员缺员/防意外第三人；"
+                                                         "对照实验：无条款 0/2 双人齐全 vs 有条款 2/2）。"
+                                                         "默认 true；镜头确需路人/人群等额外人物时"
+                                                         "显式传 false（创作意图由你判断）。"},
             },
             "required": ["targets"],
         },
@@ -663,6 +679,13 @@ SHOT_GENERATE_VIDEOS_TOOL = {
                         "视频模型（可选，缺省 = 项目默认 agnes-video-2.5-flash——"
                         "2026-09-28 起 v2.0 已删除，本参数通常无需传）。"
                         "4-12 秒 720P，Token Plan 500 秒/天。"),
+                },
+                "population_constraint": {
+                    "type": "boolean",
+                    "description": (
+                        "人数纪律（Phase51 B，E2 实证）：true=按 shot.characters 确定性"
+                        "人数排除子句进视频 prompt tail（防 i2v 过程中船员缺员/意外第三人；"
+                        "首帧层同参数对称）。默认 true；镜头确需路人/人群时显式传 false。"),
                 },
             },
             "required": ["shot_ids"],
