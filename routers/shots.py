@@ -1561,12 +1561,6 @@ async def _handler_video(job, emit):
     if not ok:
         raise RuntimeError(why)   # 不发起 API 请求
 
-    # Phase50 A5 计时：ready（preflight 通过，即将进入提交路径）——观测件，fail-open。
-    from src.core.timing_ledger import record as _tl_record
-    _tl_record("video_ready", project=job.project, shot_id=job.shot_id,
-               job_id=job.job_id, model=video_model, mode=mode,
-               seconds_requested=round(seconds, 2))
-
     mode = ("keyframes" if shot.link_mode == "keyframes"
             else "multi" if shot.link_mode == "multi" else "i2v")
     # keyframes 尾帧 in-progress 有界等待
@@ -1590,6 +1584,12 @@ async def _handler_video(job, emit):
     video_model = (((job.params or {}).get("video_model") or None)
                    or (getattr(get_agnes_client(), "models", None) or {}).get("video")
                    or "agnes-video-2.5-flash")
+
+    # Phase50 A5 计时：ready（preflight 通过，即将进入提交/续轮询路径）——观测件 fail-open。
+    from src.core.timing_ledger import record as _tl_record
+    _tl_record("video_ready", project=job.project, shot_id=job.shot_id,
+               job_id=job.job_id, model=video_model, mode=mode,
+               seconds_requested=round(seconds, 2))
 
     # C1 §11（21.md）：provider 事实——两条路径共用的 options 集合，指纹进
     # NativeAVGenerationPack.generation_basis（21.md §14：参与 freshness 对比，
