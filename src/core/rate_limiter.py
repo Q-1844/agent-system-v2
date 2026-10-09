@@ -59,6 +59,11 @@ class RateLimiter:
 
     def __init__(self, rpm_map: Dict[str, int] | None = None):
         cfg = {**DEFAULT_RPM, **(rpm_map or {})}
+        # Phase50 A（PHASE50_A §4）：AGNES_VIDEO_RPM 显式环境变量优先于 config rpm 映射
+        # ——探针/运行期调整不必改冻结的 config.yaml；未设置时零变化（用 config/默认值）。
+        _env_video = _env_rpm("AGNES_VIDEO_RPM", -1)
+        if _env_video > 0:
+            cfg["video"] = _env_video
         now = time.monotonic()
         self._buckets = {
             k: _Bucket(rpm=max(v * SAFETY, 0.1), tokens=1.0, last=now)
