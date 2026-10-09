@@ -209,7 +209,8 @@ class WorkflowEngine:
         attempts = node_run.get("attempts") or []
         cur_att = next((a for a in attempts if a.get("attemptId") == cur), None)
         if cur_att is not None and cur_att.get("status") in ("dispatching", "running"):
-            ok = self._reconcile_attempt(project_dir, run, nid, cur_att, runs, el)
+            ok = await self._reconcile_attempt(project_dir, run, nid, cur_att,
+                                               runs, el)
             if not ok:
                 return False   # needs_reconciliation 停靠
             run = runs.load(run_id)   # 收养成功则用最新状态继续
@@ -371,8 +372,27 @@ class WorkflowEngine:
                   taskId=task_id, agent=pn.get("refId"))
 
         # ---- 收货校验（§5.3 + Phase 47 §4.2 目标级核对）----
+        # Phase51 A：域命中与目标级判定按「本 attempt ∪ 本 run 本节点此前 attempts
+        # 的真实写入」累计（require_new 重试判死修复；P50 实证 4 次整轮重启根因）。
+        run = runs.load(run_id)
+        prior_refs = self._prior_changed_refs(run, nid, attempt_id)
         verdict = adapter.verify_completion(pn, task_result,
-                                            pdir=project_dir, project=project)
+                                            pdir=project_dir, project=project,
+                                            prior_changed_refs=prior_refs)
+        if not verdict.get("ok"):
+            # Phase51 A：完成判定缺项但本 attempt 已提交的视频仍在本地队列在途
+            # （批量提交/回合结束早于结算）→ 服务端等待结算后重判，不触发模型回合，
+            # 不把「在途未收货」误判为节点失败。
+            # 仅 completed 任务值得等待——status=failed/stopped 的重判不可能通过
+            # （其真实成果由重试 attempt 按跨 attempt 累计收养，见 _prior_changed_refs）。
+            if (task_result.get("status") or "").lower() == "completed" and \
+                    await self._await_inflight_videos(project, task_result,
+                                                      cancel_event=cancel_event):
+                run = runs.load(run_id)
+                prior_refs = self._prior_changed_refs(run, nid, attempt_id)
+                verdict = adapter.verify_completion(pn, task_result,
+                                                    pdir=project_dir, project=project,
+                                                    prior_changed_refs=prior_refs)
         status = outcome.get("status")
         if status == "stopped" or verdict.get("code") == "stopped":
             def _stop(r):
@@ -439,13 +459,97 @@ class WorkflowEngine:
         el.append(run_id, M.EV_NODE_SUCCESS, node_id=nid, attemptId=attempt_id)
         return True
 
+    # ---------- Phase51 A：跨 attempt 真实写入汇总（require_new 重试判死修复） ----------
+    @staticmethod
+    def _prior_changed_refs(run: dict, nid: str,
+                            current_attempt_id: Optional[str]) -> Dict[str, List[str]]:
+        """本节点在本 run 此前 attempts 的真实写入汇总（来自各 attempt 收货摘要
+        的 changed_refs——均为真实工具回执留档）。跨 attempt 累计的依据：
+        重试/修复 attempt 的合理行为是延续+补缺；此前 attempt（含因上游错误、
+        完成判定缺项而 failed 的）已真实写入的产物继续有效。只认本 run 本节点
+        的任务回执；跨 run 复用仍走 allow_verified_reuse 显式语义，不在此放宽。"""
+        merged: Dict[str, List[str]] = {}
+        for a in ((run.get("nodes") or {}).get(nid) or {}).get("attempts") or []:
+            if current_attempt_id and a.get("attemptId") == current_attempt_id:
+                continue
+            cr = ((a.get("result") or {}).get("changed_refs") or {})
+            if not isinstance(cr, dict):
+                continue
+            for k, ids in cr.items():
+                if not ids:
+                    continue
+                dst = merged.setdefault(k, [])
+                for i in ids:
+                    if i not in dst:
+                        dst.append(i)
+        return merged
+
+    # ---------- Phase51 A：在途视频服务端等待（零 LLM 收货等待） ----------
+    @staticmethod
+    async def _await_inflight_videos(project: str, task_result: dict, *,
+                                     poll_s: float = 5.0, max_wait_s: float = 7200.0,
+                                     stall_s: float = 1500.0,
+                                     cancel_event: Optional[asyncio.Event] = None) -> bool:
+        """节点完成判定失败时：若本节点本 attempt 已提交镜头的视频 job 仍在本地
+        队列在途（queued/running），服务端等待其终态后供调用方重判。
+        P50 实证背景：导演回合可能在部分视频未结算时结束（批量提交纪律）——
+        此时完成判定缺项≠节点失败，等待结算后再判，不触发任何模型回合。
+        返回 True=等待期间有 job 终态化（应重判）；False=无在途或超时/停顿。
+        超时与停顿上限独立：上游等待依据真实完成分布（P50 实测 150-753s/条），
+        不因短时无进展杀正常 job；JobQueue 看门狗另有 10min 卡死判定。
+        必须 await（asyncio.sleep）——与 JobQueue worker 同一事件循环，
+        阻塞 sleep 会卡死全部视频收货。"""
+        shots = set((task_result.get("changed_refs") or {}).get("shots") or [])
+        if not shots:
+            return False
+        try:
+            from deps import get_job_queue
+            q = get_job_queue()
+        except Exception:
+            q = None
+        if q is None:
+            return False
+
+        def _inflight():
+            out = {}
+            for j in list(getattr(q, "jobs", {}).values()):
+                if (getattr(j, "project", None) != project
+                        or getattr(j, "kind", None) != "video"
+                        or getattr(j, "shot_id", None) not in shots):
+                    continue
+                if getattr(j, "state", None) in ("queued", "running"):
+                    out[j.job_id] = (j.state, j.progress)
+            return out
+
+        if not _inflight():
+            return False
+        deadline = time.monotonic() + max_wait_s
+        last_sig: Optional[list] = None
+        last_change = time.monotonic()
+        while time.monotonic() < deadline:
+            await asyncio.sleep(poll_s)
+            if cancel_event is not None and cancel_event.is_set():
+                return False   # 用户停止：放弃等待，按停止语义收尾
+            cur = _inflight()
+            sig = sorted((jid, st, pr) for jid, (st, pr) in cur.items())
+            if sig != last_sig:
+                last_sig = sig
+                last_change = time.monotonic()
+            elif time.monotonic() - last_change > stall_s:
+                return False   # 停顿守卫：状态长期无变化（诚实超时，不无限等）
+            if not cur:
+                return True
+        return False
+
     # ---------- 恢复对账（§7.4 / R03/R04） ----------
-    def _reconcile_attempt(self, project_dir: Path, run: dict, nid: str,
-                           att: dict, runs: RunStore, el: EventLog) -> bool:
+    async def _reconcile_attempt(self, project_dir: Path, run: dict, nid: str,
+                                 att: dict, runs: RunStore, el: EventLog) -> bool:
         """在途 attempt 对账：按 workflow_ref 找回 AgentTask——
         已结算 → 收养其结果继续校验；仍在 running → 先查本进程 turn_registry
         （占用中 = live 委派，不动，Phase48 E 防御）；未占用 → turn 已随进程
-        死亡 → needs_reconciliation（不盲重发）。返回 False=停靠。"""
+        死亡 → needs_reconciliation（不盲重发）。返回 False=停靠。
+        Phase51 A：async 化——收养校验缺项但视频仍在本地队列在途时，服务端
+        等待结算后重判（零 LLM），不把「在途未收货」判成 settled_but_invalid。"""
         from src.agents.tasks import AgentTaskStore
         run_id = run["runId"]
         tasks = AgentTaskStore(project_dir, run.get("project") or "unknown")
@@ -472,8 +576,15 @@ class WorkflowEngine:
             # R04：正式任务已结算但本地状态未写完 → 收养继续
             tr = task.to_dict().get("structured_result") or {}
             pn = run["plan"]["nodes"][nid]
+            prior_refs = self._prior_changed_refs(run, nid, att.get("attemptId"))
             verdict = adapter.verify_completion(pn, tr, pdir=project_dir,
-                                                project=run.get("project"))
+                                                project=run.get("project"),
+                                                prior_changed_refs=prior_refs)
+            if not verdict.get("ok") and await self._await_inflight_videos(
+                    run.get("project") or "", tr):
+                verdict = adapter.verify_completion(pn, tr, pdir=project_dir,
+                                                    project=run.get("project"),
+                                                    prior_changed_refs=prior_refs)
             if verdict.get("ok"):
                 handoff = adapter.build_handoff(run, nid, att, tr, tr.get("summary") or "",
                                                 verify_outputs=verdict.get("outputsVerdict"),
@@ -859,8 +970,13 @@ class WorkflowEngine:
         """显式继续：needs_reconciliation / failed 节点开新 attempt（旧 attempt 保留为
         真实历史）；等待审核状态不允许 continue（须走决策）。
         Phase48 E：节点 failed 使 run 状态推导为 failed（终态），但按本契约 failed
-        节点必须可显式重试——run=failed 且目标节点可重试时放行；stopped/rejected/
-        completed 仍拒绝（停止语义见 A06：已停止请另起新 run）。"""
+        节点必须可显式重试——run=failed 且目标节点可重试时放行；stopped/completed
+        仍拒绝（停止语义见 A06：已停止请另起新 run）。
+        Phase51 A：rejected（审核驳回）增加显式修复路径——驳回语义保持「停止下游、
+        无自动返工」，但提供受约束的正式 resume：目标=被驳回审核的上游产物节点，
+        重开其 attempt 并把驳回记录注入修复提示（保留合格部分、定点修复）；
+        下游被停止的节点复位为待推进（其旧 attempt 从未派发，无历史损失）。
+        该动作必须显式调用（不会被 drive 自动触发——Phase48 E 守卫保持）。"""
         runs = RunStore(project_dir, project)
         run = runs.load(run_id)
         if run is None:
@@ -869,6 +985,8 @@ class WorkflowEngine:
             raise WorkflowError("waiting_human",
                                 "run 等待人工审核，请通过审核决策继续")
         _status = run.get("status")
+        if _status == M.RUN_REJECTED:
+            return self._repair_rejected_run(project_dir, run_id, runs, node_id)
         if _status in M.RUN_TERMINAL and _status != M.RUN_FAILED:
             raise WorkflowError("run_terminal", f"run 已终态（{_status}）")
         if run.get("stopRequested"):
@@ -908,6 +1026,53 @@ class WorkflowEngine:
                                              from_=node["status"], to=M.NODE_PENDING,
                                              reason="explicit_retry")
         # 驱动由 async 路由层调用 engine.drive()（与本文件 decide_review 同理）。
+        return runs.load(run_id)
+
+    def _repair_rejected_run(self, project_dir: Path, run_id: str, runs: RunStore,
+                             node_id: Optional[str]) -> dict:
+        """Phase51 A：驳回后显式修复（P50 实证：run2 驳回→9 节点停止→整 run 报废
+        →被迫新建 definition 重跑 5 轮）。驳回停止语义不变；本方法是唯一合法的
+        驳回后续作入口。"""
+        run = runs.load(run_id)
+        rejects = [x for x in (run.get("reviews") or [])
+                   if x.get("status") == "decided" and x.get("decision") == "reject"]
+        if not rejects:
+            raise WorkflowError("no_rejection",
+                                "run 为 rejected 但未找到驳回审核记录，无法定位修复目标")
+        rv = rejects[-1]
+        target = node_id or rv.get("targetNodeId")
+        if not target:
+            raise WorkflowError("unknown_node",
+                                "驳回审核未记录目标节点，请显式指定 node_id")
+        if node_id and node_id != rv.get("targetNodeId"):
+            raise WorkflowError(
+                "not_retryable",
+                f"rejected run 的显式重试目标必须是驳回审核的目标节点"
+                f"（{rv.get('targetNodeId')}）——上游未过审时不得跳过派发下游")
+        node = (run.get("nodes") or {}).get(target)
+        if node is None:
+            raise WorkflowError("unknown_node", f"节点不存在: {target}")
+
+        def _repair(r):
+            note = (f"审核驳回（{rv.get('label') or rv.get('nodeId') or '审核'}）："
+                    f"{(rv.get('decisionNote') or '')[:300]}")
+            t = r["nodes"][target]
+            t["repairNote"] = note
+            _set_node(t, M.NODE_PENDING)
+            for nid2, n2 in r["nodes"].items():
+                if nid2 != target and n2["status"] == M.NODE_STOPPED:
+                    _set_node(n2, M.NODE_PENDING)
+            order = r["plan"]["order"]
+            r["cursor"] = order.index(target) if target in order else \
+                int(r.get("cursor") or 0)
+            _set_run_state(r, None, None)
+        runs.update(run_id, _repair)
+        EventLog(project_dir, run_id).append(
+            run_id, M.EV_NODE_STATE, node_id=target,
+            from_=node.get("status") or M.NODE_SUCCESS, to=M.NODE_PENDING,
+            reason="repair_after_reject",
+            note=(f"驳回后显式修复：{rv.get('label') or rv.get('nodeId')}"
+                  f" → 重开 {target}；下游复位待推进"))
         return runs.load(run_id)
 
     # ---------- 停止终局 ----------

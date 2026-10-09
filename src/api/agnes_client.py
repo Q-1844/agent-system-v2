@@ -690,14 +690,22 @@ class AgnesClient:
     async def poll_video(self, video_id: str, *,
                          interval: float = 5.0, max_wait: float = 3600,
                          on_progress=None, max_consecutive_failures: int = 5,
-                         model_name: Optional[str] = None) -> dict:
+                         model_name: Optional[str] = None,
+                         slow_interval: float = 20.0, slow_after_s: float = 60.0) -> dict:
         """轮询直到 completed / failed。官方建议间隔 5s（AGNES_API_FACTS §3.5）。
         model_name：提交 2.5 系模型时必须传同一模型名（None = config 默认，legacy 行为）。
-        注意：轮询走 text 桶，不占视频桶——否则第二个任务永远提交不了。"""
+        注意：轮询走 text 桶，不占视频桶——否则第二个任务永远提交不了。
+
+        Phase51 A 自适应退避（P50 实证：视频真实完成分布 150-753s/条，固定 5s
+        轮询在 2 任务并发时达 24 req/min，超过 text 桶有效预算（20×0.85≈17），
+        与文本调用竞争产生 429）。前 slow_after_s 秒保持 interval（捕捉快速完成），
+        之后放慢到 slow_interval：完成检测延迟 ≤20s（相对分钟级生成时长可忽略），
+        轮询量降 4-6 倍，给正常文本调用让出额度。429 仍由 _request 重试吸收。"""
         waited = 0.0
         consecutive = 0
         while waited < max_wait:
-            await asyncio.sleep(interval); waited += interval
+            step = interval if waited < slow_after_s else max(slow_interval, interval)
+            await asyncio.sleep(step); waited += step
             try:
                 r = await self._request("GET", "/agnesapi", "text",
                                         params={"video_id": video_id,

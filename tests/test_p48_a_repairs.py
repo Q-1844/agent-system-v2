@@ -115,8 +115,8 @@ def test_reconcile_cancelled_task_yields_stopped_node(tmp_path, monkeypatch):
     _seed_agent_task(tmp_path, "p48t", run["runId"], "n_sw", att["attemptId"],
                      "task_cancelled", "cancelled", error="stopped")
     from src.workflow.store import EventLog
-    eng._reconcile_attempt(tmp_path, runs.load(run["runId"]), "n_sw", att,
-                           runs, EventLog(tmp_path, run["runId"]))
+    asyncio.run(eng._reconcile_attempt(tmp_path, runs.load(run["runId"]), "n_sw", att,
+                                       runs, EventLog(tmp_path, run["runId"])))
     r = runs.load(run["runId"])
     node = r["nodes"]["n_sw"]
     assert node["status"] == M.NODE_STOPPED
@@ -135,8 +135,8 @@ def test_reconcile_failed_task_yields_failed_node(tmp_path, monkeypatch):
     _seed_agent_task(tmp_path, "p48t", run["runId"], "n_sw", att["attemptId"],
                      "task_failed", "failed", error="provider 500")
     from src.workflow.store import EventLog
-    eng._reconcile_attempt(tmp_path, runs.load(run["runId"]), "n_sw", att,
-                           runs, EventLog(tmp_path, run["runId"]))
+    asyncio.run(eng._reconcile_attempt(tmp_path, runs.load(run["runId"]), "n_sw", att,
+                                       runs, EventLog(tmp_path, run["runId"])))
     r = runs.load(run["runId"])
     node = r["nodes"]["n_sw"]
     assert node["status"] == M.NODE_FAILED

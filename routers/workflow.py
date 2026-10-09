@@ -366,7 +366,7 @@ async def stop_run(project_name: str, run_id: str):
 
 
 # ============ 启动恢复（api_server startup 调用） ============
-def recover_workflows() -> dict:
+async def recover_workflows() -> dict:
     """启动恢复（§7.4）：扫描各项目 workflow runs，运行中/需要核对的 run
     重新对账（不自动派发新节点——需要显式继续；审核等待保持等待）。"""
     pm = get_project_manager()
@@ -394,7 +394,7 @@ def recover_workflows() -> dict:
                     att = next((a for a in node.get("attempts") or []
                                 if a.get("attemptId") == cur), None)
                     if att and att.get("status") in ("dispatching", "running"):
-                        engine._reconcile_attempt(pdir, run, nid, att, runs, el)
+                        await engine._reconcile_attempt(pdir, run, nid, att, runs, el)
                         out["reconciled"] += 1
                 runs.save(runs.load(rid) or run)
         except Exception as e:

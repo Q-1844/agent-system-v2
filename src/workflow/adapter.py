@@ -149,6 +149,15 @@ def build_envelope(rt, project: str, run: dict, node_plan: dict,
             "重试提示：本节点此前 attempt 未通过服务端完成校验：" + prev_err[:300]
             + " —— 请先用读工具核对项目内真实状态（不要凭会话记忆认定已完成），"
               "再补齐缺失产物；完成判定仍以真实工具回执为准。")
+    # Phase51 A：审核驳回后的显式修复（continue_run rejected 路径落 repairNote）——
+    # 修复目标=驳回指出的问题；合格部分保留，不做无差别重做。
+    repair_note = str(((run.get("nodes") or {}).get(node_plan.get("nodeId")) or {})
+                      .get("repairNote") or "")
+    if repair_note:
+        sit_parts.append(
+            "修复提示：本节点此前交付曾被审核驳回：" + repair_note[:300]
+            + " —— 请针对驳回指出的问题定点修复，保留合格部分（不要无差别重做"
+              "全部产物）；完成后正常交付，完成判定仍以真实工具回执为准。")
     constraints = [
         "只在本节点职责与任务范围内工作；完成判定以真实工具回执为准，不是对话回复。",
         "完成本节点后用一段话总结你实际写入/产出的内容（含 ID），不要声称未执行的操作。",
@@ -169,6 +178,17 @@ def build_envelope(rt, project: str, run: dict, node_plan: dict,
         constraints.append(
             "工作流上下文：本节点只做制作计划/交接准备，不要委派任何 Specialist"
             "——后续专业节点由工作流顺序执行层派发（系统将在服务端拦截越权委派）。")
+    comp_cfg = node_plan.get("completion") or {}
+    _spec_kinds = {o.get("kind") for o in (comp_cfg.get("outputs") or [])}
+    if ref_id == "director" and "video_version" in _spec_kinds:
+        # Phase51 A（P50 实证：委派间隙空闲 2765s——导演"提交→等结算→再委派"的
+        # 回合节拍把并发收益吃回）。运行层收货与排队已就绪：独立镜头立即连续提交。
+        constraints.append(
+            "视频提交纪律（运行层已就绪）：彼此独立（无接力端点依赖）的镜头请立即"
+            "连续提交，不必等待此前提交结算——本地队列按在途上限自动排队、按 RPM "
+            "自动节流；仅当下游镜头以上游真实保留端点为输入（接力依赖）时才等待"
+            "上游完成。当前可提交的镜头全部提交完毕并总结后再结束回合；服务端会在"
+            "回合结束后等待在途视频结算并重判完成，不会因提前结束而误判失败。")
     if ref_id == "character_designer":
         # Phase 47 §4.1：目标与工具约束错配的最小引导（不是放宽 OCC）——
         # 道具没有参考图时如实列为缺项，不要让它阻塞角色/Look 主目标。
@@ -201,13 +221,19 @@ def _last_failed_attempt_error(run: dict, node_id: Optional[str]) -> str:
 
 # ============ 收货校验（§5.3 节点成功条件 + Phase 47 §4.2 目标级核对）============
 def verify_completion(node_plan: dict, task_result: dict, *,
-                      pdir=None, project: Optional[str] = None) -> dict:
+                      pdir=None, project: Optional[str] = None,
+                      prior_changed_refs: Optional[Dict[str, List[str]]] = None) -> dict:
     """节点成功校验：turn 真实结果 + 必要 receipt + 产物在预期域。返回
     {ok, reason, code}。工具 accepted/LLM 结束/任务已提交都不单独算成功。
 
     Phase 47 §4.2：节点配置了 completion.outputs 时，域命中只算底线——再按目标
     逐项核对真实项目事实（存在/图像/审批/可播放），缺项如实返回（不假成功）；
-    §4.3：completion.strategy=allow_verified_reuse 时允许服务端核验过的复用。"""
+    §4.3：completion.strategy=allow_verified_reuse 时允许服务端核验过的复用。
+
+    Phase51 A（require_new 重试判死修复）：prior_changed_refs = 本节点本 run 此前
+    attempts 的真实写入汇总（服务端收货留档）。域命中底线与目标级判定均按
+    「本 attempt ∪ 此前 attempts」累计——重试 attempt 延续既有真实成果+补缺项；
+    回执之外的旧素材仍不算（诚实性不变）。"""
     status = (task_result.get("status") or "").lower()
     if status == "stopped":
         return {"ok": False, "code": "stopped", "reason": "任务被停止"}
@@ -220,7 +246,9 @@ def verify_completion(node_plan: dict, task_result: dict, *,
     ref_id = node_plan.get("refId")
     expected = set(node_plan.get("expectedDomains") or [])
     changed = task_result.get("changed_refs") or {}
+    prior = prior_changed_refs or {}
     got = {k for k, v in changed.items() if v}
+    prior_got = {k for k, v in prior.items() if v}
     comp = node_plan.get("completion") or {}
     strategy = comp.get("strategy") or "require_new"
     if ref_id == "producer":
@@ -228,12 +256,15 @@ def verify_completion(node_plan: dict, task_result: dict, *,
         return {"ok": True, "code": "planning_node", "reason": "计划节点完成（无 canonical 写入要求）"}
     if not expected & got:
         # §4.3：allow_verified_reuse 节点允许零新写入（纯核验复用）——由目标级
-        # 输出核对决定成败；require_new 仍以域命中为底线。
-        if not (comp.get("outputs") and strategy == "allow_verified_reuse"):
-            return {"ok": False, "code": "no_expected_artifacts",
-                    "reason": (f"任务结束但未见预期产物域的已验证回执"
-                               f"（预期 {sorted(expected)}，实际变更 {sorted(got) or '无'}）——"
-                               f"节点不能算成功")}
+        # 输出核对决定成败；require_new 以域命中为底线，但按「本 attempt ∪
+        # 此前 attempts」累计（Phase51 A：重试 attempt 延续既有真实写入）。
+        if not (expected & prior_got):
+            if not (comp.get("outputs") and strategy == "allow_verified_reuse"):
+                return {"ok": False, "code": "no_expected_artifacts",
+                        "reason": (f"任务结束但未见预期产物域的已验证回执"
+                                   f"（预期 {sorted(expected)}，本 attempt 实际变更 "
+                                   f"{sorted(got) or '无'}，此前 attempts 变更 "
+                                   f"{sorted(prior_got) or '无'}）——节点不能算成功")}
     # ---- Phase 47 §4.2：目标级输出核对（completion.outputs 存在时）----
     if comp.get("outputs"):
         if pdir is None or project is None:
@@ -243,7 +274,8 @@ def verify_completion(node_plan: dict, task_result: dict, *,
                     "reason": "域命中（目标级核对跳过：无项目事实上下文）"}
         from . import outputs as _outputs
         try:
-            ov = _outputs.verify_node_outputs(Path(pdir), project, node_plan, changed)
+            ov = _outputs.verify_node_outputs(Path(pdir), project, node_plan, changed,
+                                              prior_changed=prior)
         except Exception as e:
             log.exception("目标级输出核对异常 node=%s", node_plan.get("nodeId"))
             return {"ok": False, "code": "outputs_verify_error",

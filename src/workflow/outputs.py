@@ -7,8 +7,11 @@
 #   文件、审批状态，并产出带 disposition（created/reused）/contentHash/reviewState 的
 #   输出记录，供交接包与下游逐节点输入冻结使用。
 #
-# 复用语义（§4.3）：
-#   - require_new（默认）：目标要求本 attempt 产生所指定的新产物（id ∈ changed_refs）。
+# 复用语义（§4.3 + Phase51 A 跨 attempt 修正）：
+#   - require_new（默认）：目标要求本节点产生所指定的新产物——按「本 run 本节点
+#     全部 attempts 的真实写入」（changed_refs 收货留档）累计判定；重试/修复
+#     attempt 延续此前写入+补缺项，不再因"本 attempt 零新写入"被整轮判死。
+#     诚实性底线不变：只承认本节点任务回执覆盖的写入，项目里的旧素材不因此合格。
 #   - allow_verified_reuse：节点级允许复用；服务端独立核验（项目归属=本 project、
 #     对象存在、内容 hash、文件可读、必要审批），产出 reusedRefs；不是"无写入就放行"。
 #   - 单条 spec 可用 allowReuse=true 局部放行（如混合任务补缺图、如实复用已合格图）。
@@ -344,19 +347,29 @@ def _resolve_kind(pdir: Path, project: str, spec: dict) -> List[dict]:
 
 # ============ 完成校验（§4.2/§4.3 主入口） ============
 def verify_node_outputs(pdir: Path, project: str, node_plan: dict,
-                        changed_refs: Dict[str, List[str]]) -> dict:
+                        changed: Dict[str, List[str]],
+                        prior_changed: Optional[Dict[str, List[str]]] = None) -> dict:
     """目标级完成校验。返回：
     {ok, code, reason, missing: [...], outputs: [...created...], reused: [...]}。
-    无 completion 配置 → {ok: True, code: "domain_hit_only"}（沿用域命中语义，不重复判定）。"""
+    无 completion 配置 → {ok: True, code: "domain_hit_only"}（沿用域命中语义，不重复判定）。
+
+    Phase51 A（修复 require_new 重试判死）：prior_changed = 本节点在本 run 此前
+    attempts 的真实写入汇总（来自各 attempt 收货摘要的 changed_refs，服务端留档）。
+    重试/修复 attempt 的合理行为是「延续+补缺」——此前 attempt 已真实写入并满足
+    质量标记的实体继续有效（writeSource=prior_attempt，逐条可溯），attempt 只需
+    补齐缺项；require_new 的诚实性底线不变：仍然只承认本节点任务回执覆盖的写入，
+    项目里更早的/别的节点的旧素材不因此合格。"""
     comp = (node_plan.get("completion") or {}) if node_plan else {}
     specs = comp.get("outputs") or []
     if not specs:
         return {"ok": True, "code": "domain_hit_only", "reason": "无目标级输出要求",
                 "missing": [], "outputs": [], "reused": []}
     strategy = comp.get("strategy") or "require_new"
+    prior_changed = prior_changed or {}
     created: List[dict] = []
     reused: List[dict] = []
     missing: List[dict] = []
+    n_prior_credited = 0
 
     for i, spec in enumerate(specs):
         kind = spec["kind"]
@@ -380,16 +393,21 @@ def verify_node_outputs(pdir: Path, project: str, node_plan: dict,
                        if (m.get("versionId") or "") not in exclude_ids]
         else:
             excluded_hits = []
-        changed_ids = set(changed_refs.get(domain) or [])
+        changed_ids = set(changed.get(domain) or [])
+        prior_ids = set(prior_changed.get(domain) or [])
 
-        def _is_changed(m: dict) -> bool:
-            """实体是否属于本 attempt 真实写入：versionId 或 entityId 命中
-            changed_refs（video_version 的 changed 域记的是 shotId=entityId）。"""
-            if m.get("versionId") and m.get("versionId") in changed_ids:
-                return True
-            return m["entityId"] in changed_ids
+        def _write_source(m: dict) -> Optional[str]:
+            """实体写入来源：current=本 attempt；prior=本节点此前 attempt（同 run）；
+            None=与本节点任务回执无关（旧素材，不计）。versionId 或 entityId 命中
+            均算（video_version 的 changed 域记的是 shotId=entityId）。"""
+            vid, eid = m.get("versionId"), m["entityId"]
+            if (vid and vid in changed_ids) or eid in changed_ids:
+                return "current"
+            if (vid and vid in prior_ids) or eid in prior_ids:
+                return "prior"
+            return None
 
-        changed_created = [m for m in matches if _is_changed(m)]
+        changed_created = [m for m in matches if _write_source(m) is not None]
         # 硬性质量标记（withImage/withApprovedRef/playable/withCompletedRender）
         def _flag_ok(m: dict) -> bool:
             if spec.get("withImage") and not m.get("fileOk"):
@@ -404,9 +422,17 @@ def verify_node_outputs(pdir: Path, project: str, node_plan: dict,
                 return False
             return True
 
-        quality_created = [m for m in changed_created if _flag_ok(m)]
+        quality_created = []
+        for m in changed_created:
+            if not _flag_ok(m):
+                continue
+            m = dict(m)
+            m["writeSource"] = _write_source(m)
+            quality_created.append(m)
         if len(quality_created) >= min_count:
-            created.extend(quality_created[:min_count])
+            taken = quality_created[:min_count]
+            n_prior_credited += sum(1 for m in taken if m.get("writeSource") == "prior")
+            created.extend(taken)
             continue
         # 新产物不足 → 复用路径（节点级或 spec 级明确允许才可）
         if spec_allow_reuse:
@@ -432,9 +458,11 @@ def verify_node_outputs(pdir: Path, project: str, node_plan: dict,
                       + (f"；已被目标排除的问题版本 {sorted(exclude_ids)} 不计入"
                          f"（命中 {len(excluded_hits)} 项）" if exclude_ids else "")})
     ok = not missing
+    prior_note = (f"（其中 {n_prior_credited} 项由本节点此前 attempt 的真实写入计入，"
+                  "逐条 writeSource=prior_attempt 可溯）") if n_prior_credited else ""
     return {"ok": ok, "code": "outputs_verified" if ok else "outputs_missing",
-            "reason": ("目标级输出核对通过（created=%d, reused=%d）"
-                       % (len(created), len(reused))) if ok else
+            "reason": ("目标级输出核对通过（created=%d, reused=%d）%s"
+                       % (len(created), len(reused), prior_note)) if ok else
                       f"目标级输出缺项 {len(missing)} 项",
             "missing": missing, "outputs": created, "reused": reused}
 
@@ -452,11 +480,11 @@ def _missing_reason(spec: dict, matches: List[dict], quality_created: int,
     if not matches:
         return base + "：项目内不存在匹配实体"
     if quality_created < min_count and not allow_reuse:
-        return (base + f"：找到 {len(matches)} 个既有实体，但本 attempt 新写入且满足"
-                f"质量标记（{flags or '存在性'}）的仅 {quality_created} 个（需 "
+        return (base + f"：找到 {len(matches)} 个既有实体，但本节点各 attempt 真实写入"
+                f"且满足质量标记（{flags or '存在性'}）的仅 {quality_created} 个（需 "
                 f"{min_count}）——节点未启用 allow_verified_reuse，"
-                "不得以旧素材冒充新产物")
-    return (base + f"：匹配 {len(matches)} 个、其中本 attempt 新写入且满足质量标记 "
+                "不得以任务回执之外的旧素材冒充新产物")
+    return (base + f"：匹配 {len(matches)} 个、其中本节点各 attempt 真实写入且满足质量标记 "
             f"{quality_created} 个（需 {min_count}）")
 
 

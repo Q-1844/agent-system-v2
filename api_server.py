@@ -296,7 +296,7 @@ async def startup():
     if not _wf_rec_off:
         try:
             from routers.workflow import recover_workflows
-            rec = recover_workflows()
+            rec = await recover_workflows()
             if rec.get("scanned") or rec.get("errors"):
                 logger.info(f"Workflow 恢复：扫描 {rec.get('scanned')} 个活跃 run，"
                             f"对账 {rec.get('reconciled')} 个在途 attempt"
