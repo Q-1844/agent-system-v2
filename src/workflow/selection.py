@@ -52,12 +52,24 @@ def resolve_selection_candidates(pdir: Path, project: str, spec: dict,
         if kind == "first_frame":
             from src.core.store import ProjectStore
             shot = ProjectStore(pdir).load().get_shot(entity_id)
-            if shot is None or not shot.first_frame:
+            if shot is None:
                 return []
-            return [{"versionId": c.candidate_id, "status": c.status,
-                     "createdAt": c.created_at,
-                     "selected": bool(shot.selected_first_frame == c.candidate_id)}
-                    for c in shot.first_frame.candidates][:limit]
+            # Phase51 B 修复：候选身份在 first_frame_batches（含 candidate_id 的
+            # 真实候选对象）——shot.first_frame.candidates 是 Asset 聚合（无 id），
+            # 此前在这里取 candidate_id 必然 AttributeError→被上方 except 吞成空清单
+            #（真机实证：审核卡 0 候选）。
+            out = []
+            for b in (shot.first_frame_batches or []):
+                for c in (b.candidates or []):
+                    cid = getattr(c, "candidate_id", None)
+                    if not cid:
+                        continue
+                    out.append({"versionId": cid, "status": getattr(c, "status", ""),
+                                "createdAt": getattr(c, "created_at", 0),
+                                "batchId": getattr(b, "batch_id", None),
+                                "selected": bool(shot.selected_first_frame == cid)})
+            out.sort(key=lambda x: x.get("createdAt") or 0, reverse=True)
+            return out[:limit]
         if kind in ("look_reference", "prop_reference", "composition_candidate"):
             from src.resources.store import ResourceStore
             doc = ResourceStore(pdir).load()
@@ -338,8 +350,15 @@ def _select_first_frame(pdir: Path, shot_id: str, candidate_id: Optional[str]) -
         return {"ok": True, "kind": "first_frame", "entityId": shot_id,
                 "versionId": candidate_id, "pointer": "selected_first_frame",
                 "alreadySelected": True}
-    cand_ids = [c.candidate_id for c in
-                (shot.first_frame.candidates if shot.first_frame else [])]
+    # Phase51 B 修复：合法性核对的权威来源=first_frame_batches（真实候选对象，
+    # 含 candidate_id）；Asset 聚合（shot.first_frame.candidates）无 id，
+    # 此前在这里取 candidate_id 直接 AttributeError（真机 run_36919eb5a073 实证）。
+    cand_ids = []
+    for b in (shot.first_frame_batches or []):
+        for c in (b.candidates or []):
+            cid = getattr(c, "candidate_id", None)
+            if cid:
+                cand_ids.append(cid)
     if candidate_id not in cand_ids:
         return {"ok": False, "kind": "first_frame", "entityId": shot_id,
                 "versionId": candidate_id,
