@@ -1561,6 +1561,12 @@ async def _handler_video(job, emit):
     if not ok:
         raise RuntimeError(why)   # 不发起 API 请求
 
+    # Phase50 A5 计时：ready（preflight 通过，即将进入提交路径）——观测件，fail-open。
+    from src.core.timing_ledger import record as _tl_record
+    _tl_record("video_ready", project=job.project, shot_id=job.shot_id,
+               job_id=job.job_id, model=video_model, mode=mode,
+               seconds_requested=round(seconds, 2))
+
     mode = ("keyframes" if shot.link_mode == "keyframes"
             else "multi" if shot.link_mode == "multi" else "i2v")
     # keyframes 尾帧 in-progress 有界等待
@@ -1731,6 +1737,10 @@ async def _handler_video(job, emit):
             setattr(s.video, "model", m),
         ))
         await emit("submit", f"{shot.shot_id} 已提交 video_id={vid}", 15)
+        _tl_record("video_submitted", project=job.project, shot_id=job.shot_id,
+                   job_id=job.job_id, video_id=vid, model=video_model, mode=mode,
+                   seconds_requested=round(seconds, 2),
+                   previous_submit_uncertain=previous_submit_uncertain or None)
 
     # 轮询（5s，走 text 桶不占视频桶）。model_name：2.5 任务必须用提交时同一模型名
     # （job 显式指定 > 落库值 > None=config 默认）。
@@ -1745,11 +1755,18 @@ async def _handler_video(job, emit):
         # retry/recover 续轮询（不重提交、不丢已生成视频）
         await emit("warn", f"{shot.shot_id} 轮询暂歇（网络/超时，video_id 保留，重试续轮询）: {str(e)[:150]}", None)
         raise
-    except AgnesError:
+    except AgnesError as e:
         # 服务端明确失败 / video_id 不存在：标 failed，retry 时走 else 重新提交
         store.update_shot(job.shot_id,
                           lambda s: setattr(s.video, "status", ShotStatus.FAILED.value))
+        _tl_record("video_failed", project=job.project, shot_id=job.shot_id,
+                   job_id=job.job_id, video_id=vid, model=video_model,
+                   error=str(e)[:200])
         raise
+    _tl_record("video_completed", project=job.project, shot_id=job.shot_id,
+               job_id=job.job_id, video_id=vid, model=video_model,
+               seconds_returned=res.get("seconds"),
+               size=res.get("size"))
 
     # C1 §16 pre-commit（21.md）：provider 完成后、attach 前重算 Native AV 依赖键——
     # 生成窗口内 dialogue/speaker/language/visual/provider 事实已变 → 拒绝
@@ -1797,6 +1814,10 @@ async def _handler_video(job, emit):
         setattr(s.video, "size_returned", r["size"])
     store.update_shot(job.shot_id, mut)
     await emit("done", f"{shot.shot_id} 完成（版本 {vvid}），实际 {res['seconds']}s / {res['size']}", 100)
+    _tl_record("video_downloaded", project=job.project, shot_id=job.shot_id,
+               job_id=job.job_id, video_id=vid, version_id=vvid,
+               local=str(dest), seconds_returned=res.get("seconds"),
+               attempts=getattr(shot.video, "attempts", None))
 
     # Phase 39E（用户定版）：首帧槽如实同步为生成该视频实际用的开场输入——
     # 接续=上镜尾帧（接力边界标记）；上镜尾帧作参考=同步并带参考标记；

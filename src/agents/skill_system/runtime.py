@@ -120,8 +120,18 @@ class SkillRuntime:
                         project_dir: Optional[Path] = None) -> Optional[str]:
         """manifest triggers 关键词匹配 → 命中的 hinted 技能给出加载提示。
         多技能命中时按 routing_priority 降序列出（最多 2 个，避免淹没任务）。
-        返回 None = 不注入。"""
+        返回 None = 不注入。
+
+        Phase50 A0（PHASE50_A §2 线索②）：工作流节点已显式绑定 Skill 时（envelope
+        constraints 含「本节点已绑定正式 Skill：」标记），本轮不再注入 trigger 词提示
+        ——Phase49 W05 实证 trigger 词匹配与节点绑定无关，任务文本偶含他包触发词
+        （如「候选」）会提示加载错误 Skill，覆盖已指定包。绑定节点的加载指令已由
+        envelope constraint 给出，hint 只对自由轮次有意义。确定性判定，fail-safe。"""
         if not task_text:
+            return None
+        if "本节点已绑定正式 Skill" in task_text:
+            self._note(agent_id, None, "hint_suppressed", True, project_dir,
+                       detail={"reason": "workflow_explicit_binding"})
             return None
         text = task_text.lower()
         hits = []

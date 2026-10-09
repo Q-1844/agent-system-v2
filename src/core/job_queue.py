@@ -205,16 +205,25 @@ class JobQueue:
         if self._started:
             return
         self._started = True
+        # Phase50 A（PHASE50_A §3/A2）：视频 worker 数可由环境变量提升（默认 1 = 既有串行行为
+        # 逐字节不变）。串行是 AI-4B 时代"1 RPM 硬约束"下的保守决策；真机探针已实证 Agnes
+        # 允许 ≥3 outstanding / 约 2 路并行（详细流程文件/提示词.md「真实视频并发 Probe」）。
+        # 提交频率仍由 RateLimiter video 桶独立约束（AGNES_VIDEO_RPM）——限流与在途是两个维度。
+        video_workers = max(1, int(os.environ.get("AGNES_VIDEO_INFLIGHT", "1") or 1))
+        self.video_worker_count = video_workers   # A_REPORT 观测用
         self._tasks = [
-            asyncio.create_task(self._worker(self._video_q, "video-worker")),
-            *[asyncio.create_task(self._worker(self._light_q, f"light-worker-{i}"))
-              for i in range(3)],
+            asyncio.create_task(self._worker(self._video_q, f"video-worker-{i}"))
+            for i in range(video_workers)
+        ]
+        self._tasks += [
+            asyncio.create_task(self._worker(self._light_q, f"light-worker-{i}"))
+              for i in range(3)
         ]
         # 重启后把残留的 queued 任务重新推进队列
         for j in self.jobs.values():
             if j.state == JobState.QUEUED.value:
                 self._route(j.job_id, j.kind)
-        log.info("JobQueue 已启动：1 视频串行 worker + 3 轻任务 worker")
+        log.info("JobQueue 已启动：%d 视频 worker + 3 轻任务 worker", video_workers)
 
     async def _worker(self, q: asyncio.Queue, name: str):
         while True:
