@@ -302,6 +302,12 @@ class SequenceService:
                     source_duration_ms=probe["duration_ms"],          # §14 文件实测
                     has_audio=bool(probe["has_audio"])))
             timeline = build_timeline_plan(resolved)                  # §13 + §12 验证
+            # Phase51 B（B4）：接力端点 vs 实际保留端点审计（只报告不阻断）
+            try:
+                from .relay_audit import audit_relay_endpoints
+                relay_warning = audit_relay_endpoints(project, resolved)
+            except Exception:   # 审计自身异常不阻断 prepare（fail-open 观测件）
+                relay_warning = None
             resolved_audio: List[ResolvedAudioSource] = []
             if has_layers:
                 # 混音输出规格硬编码 aac 48k stereo（audio_mix 方案 A）——profile
@@ -349,6 +355,7 @@ class SequenceService:
                                     f"render version 不存在: {version_id}")
             rv.sequence_revision = block.revision
             rv.generation_basis = basis
+            rv.relay_endpoint_warning = relay_warning
             rv.source_video_versions = [
                 {"shot_id": rc.shot_id, "version_id": rc.version_id} for rc in resolved]
             rv.planned_duration_ms = timeline.total_duration_ms

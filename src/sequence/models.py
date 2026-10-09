@@ -325,6 +325,11 @@ class SequenceRenderVersion:
     # ---- S2（25.md）----
     # §21 clipping advisory（混音峰值；None=未混音或未检出）。只报告不自动改 gain。
     audio_peak_warning: Optional[Dict[str, Any]] = None
+    # ---- Phase51 B（B4）----
+    # 接力端点 vs 实际保留端点一致性 advisory（relay_audit.audit_relay_endpoints；
+    # None=无风险未检出）。只报告不阻断——处理选项（复核切点/重提取端点/保留并
+    # 记录）由装配复核人工决定，不自动改 trim 或重生成。
+    relay_endpoint_warning: Optional[Dict[str, Any]] = None
     # 方案 A 溯源：混音所用的 base render version（video stream copy 来源）；
     # None = 本 render 自行重建视频（无可用 base 或无 AudioPlan）。provenance 非
     # freshness 依赖（base 换了但 S1 键相同 → 视频比特一致 → 仍 CURRENT）。
