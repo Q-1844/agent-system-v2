@@ -378,6 +378,7 @@ class _FakeJobQueue:
 
 
 def _add_video_version(tmp_path: Path, shot_id: str, version_id: str):
+    import time as _time
     from src.core.models import VideoVersion
     from src.core.store import ProjectStore
     store = ProjectStore(tmp_path)
@@ -390,7 +391,8 @@ def _add_video_version(tmp_path: Path, shot_id: str, version_id: str):
         for sh in sc.shots:
             if sh.shot_id == shot_id:
                 sh.video_versions = [VideoVersion(version_id=version_id,
-                                                  status="done", local=str(f))]
+                                                  status="done", local=str(f),
+                                                  created_at=_time.time())]
     store.save(p)
 
 

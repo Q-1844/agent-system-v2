@@ -222,7 +222,8 @@ def _last_failed_attempt_error(run: dict, node_id: Optional[str]) -> str:
 # ============ 收货校验（§5.3 节点成功条件 + Phase 47 §4.2 目标级核对）============
 def verify_completion(node_plan: dict, task_result: dict, *,
                       pdir=None, project: Optional[str] = None,
-                      prior_changed_refs: Optional[Dict[str, List[str]]] = None) -> dict:
+                      prior_changed_refs: Optional[Dict[str, List[str]]] = None,
+                      window_start: Optional[float] = None) -> dict:
     """节点成功校验：turn 真实结果 + 必要 receipt + 产物在预期域。返回
     {ok, reason, code}。工具 accepted/LLM 结束/任务已提交都不单独算成功。
 
@@ -275,7 +276,8 @@ def verify_completion(node_plan: dict, task_result: dict, *,
         from . import outputs as _outputs
         try:
             ov = _outputs.verify_node_outputs(Path(pdir), project, node_plan, changed,
-                                              prior_changed=prior)
+                                              prior_changed=prior,
+                                              window_start=window_start)
         except Exception as e:
             log.exception("目标级输出核对异常 node=%s", node_plan.get("nodeId"))
             return {"ok": False, "code": "outputs_verify_error",

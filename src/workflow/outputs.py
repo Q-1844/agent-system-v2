@@ -299,13 +299,16 @@ def _resolve_kind(pdir: Path, project: str, spec: dict) -> List[dict]:
                         continue
                     playable = bool(vv.local and _file_ok(pdir, vv.local)) or bool(vv.url)
                     selected = bool(sh.final_video and sh.final_video == vv.version_id)
-                    _rec(sh.shot_id, version_id=vv.version_id,
-                         review_state=("selected" if selected else "candidate"),
-                         file_ok=playable,
-                         hash_payload={"version_id": vv.version_id,
-                                       "video_id": vv.video_id,
-                                       "status": vv.status,
-                                       "local": vv.local, "url": vv.url})
+                    r = _rec(sh.shot_id, version_id=vv.version_id,
+                             review_state=("selected" if selected else "candidate"),
+                             file_ok=playable,
+                             hash_payload={"version_id": vv.version_id,
+                                           "video_id": vv.video_id,
+                                           "status": vv.status,
+                                           "local": vv.local, "url": vv.url})
+                    # Phase51 C：createdAt 供计入窗口判定（文本更新污染 changed_refs
+                    # 时，旧版本不得借 shot 成员资格冒充本 run 产出）
+                    r["createdAt"] = float(getattr(vv, "created_at", 0) or 0)
         return out
 
     if kind == "sequence":
@@ -348,7 +351,8 @@ def _resolve_kind(pdir: Path, project: str, spec: dict) -> List[dict]:
 # ============ 完成校验（§4.2/§4.3 主入口） ============
 def verify_node_outputs(pdir: Path, project: str, node_plan: dict,
                         changed: Dict[str, List[str]],
-                        prior_changed: Optional[Dict[str, List[str]]] = None) -> dict:
+                        prior_changed: Optional[Dict[str, List[str]]] = None,
+                        window_start: Optional[float] = None) -> dict:
     """目标级完成校验。返回：
     {ok, code, reason, missing: [...], outputs: [...created...], reused: [...]}。
     无 completion 配置 → {ok: True, code: "domain_hit_only"}（沿用域命中语义，不重复判定）。
@@ -358,7 +362,14 @@ def verify_node_outputs(pdir: Path, project: str, node_plan: dict,
     重试/修复 attempt 的合理行为是「延续+补缺」——此前 attempt 已真实写入并满足
     质量标记的实体继续有效（writeSource=prior_attempt，逐条可溯），attempt 只需
     补齐缺项；require_new 的诚实性底线不变：仍然只承认本节点任务回执覆盖的写入，
-    项目里更早的/别的节点的旧素材不因此合格。"""
+    项目里更早的/别的节点的旧素材不因此合格。
+
+    Phase51 C（video_version 计入窗口）：window_start（epoch，通常=run 创建时刻）
+    非空时，video_version 仅凭 shot 成员资格计入还须其 createdAt ≥ window_start——
+    文本更新（negative_prompt 清理等）会把 shot 写进 changed_refs，旧视频版本
+    不得借成员资格冒充本 run 产出（run_36919eb5a073 实证：14 镜文本更新被计入
+    视频写入；若污染满 minCount 会假通过）。versionId 精确命中不受窗口限制
+    （显式指名=真实写入凭据）。"""
     comp = (node_plan.get("completion") or {}) if node_plan else {}
     specs = comp.get("outputs") or []
     if not specs:
@@ -399,8 +410,15 @@ def verify_node_outputs(pdir: Path, project: str, node_plan: dict,
         def _write_source(m: dict) -> Optional[str]:
             """实体写入来源：current=本 attempt；prior=本节点此前 attempt（同 run）；
             None=与本节点任务回执无关（旧素材，不计）。versionId 或 entityId 命中
-            均算（video_version 的 changed 域记的是 shotId=entityId）。"""
+            均算（video_version 的 changed 域记的是 shotId=entityId）。
+            video_version + 窗口判定：仅凭 shot 成员资格计入时要求版本 createdAt ≥
+            window_start（文本更新污染防护，Phase51 C）；versionId 精确命中不受
+            窗口限制（显式指名=真实写入凭据）。"""
             vid, eid = m.get("versionId"), m["entityId"]
+            exact = bool(vid and (vid in changed_ids or vid in prior_ids))
+            if (not exact) and kind == "video_version" and window_start and \
+                    float(m.get("createdAt") or 0) < float(window_start):
+                return None   # 旧版本：shot 只是文本更新，媒体非本 run 产出
             if (vid and vid in changed_ids) or eid in changed_ids:
                 return "current"
             if (vid and vid in prior_ids) or eid in prior_ids:

@@ -378,7 +378,8 @@ class WorkflowEngine:
         prior_refs = self._prior_changed_refs(run, nid, attempt_id)
         verdict = adapter.verify_completion(pn, task_result,
                                             pdir=project_dir, project=project,
-                                            prior_changed_refs=prior_refs)
+                                            prior_changed_refs=prior_refs,
+                                            window_start=self._run_window_start(run, nid))
         if not verdict.get("ok"):
             # Phase51 A：完成判定缺项但本 attempt 已提交的视频仍在本地队列在途
             # （批量提交/回合结束早于结算）→ 服务端等待结算后重判，不触发模型回合，
@@ -392,7 +393,8 @@ class WorkflowEngine:
                 prior_refs = self._prior_changed_refs(run, nid, attempt_id)
                 verdict = adapter.verify_completion(pn, task_result,
                                                     pdir=project_dir, project=project,
-                                                    prior_changed_refs=prior_refs)
+                                                    prior_changed_refs=prior_refs,
+                                                    window_start=self._run_window_start(run, nid))
         status = outcome.get("status")
         if status == "stopped" or verdict.get("code") == "stopped":
             def _stop(r):
@@ -460,6 +462,18 @@ class WorkflowEngine:
         return True
 
     # ---------- Phase51 A：跨 attempt 真实写入汇总（require_new 重试判死修复） ----------
+    @staticmethod
+    def _run_window_start(run: dict, nid: str) -> Optional[float]:
+        """计入窗口起点（epoch）=本节点在本 run 最早 attempt 的 startedAt——
+        video_version 等媒体产物凭 shot 成员资格计入的时界。
+        🔴 不用 run.createdAt：run 存储的时间戳是本地时间误标 Z 后缀（A 报告 §1
+        实证），按 UTC 解析会把窗口推到未来、拒绝一切真实产出。attempt.startedAt
+        为同机 epoch（time.time()），无时区歧义。"""
+        sts = [a.get("startedAt")
+               for a in ((run.get("nodes") or {}).get(nid) or {}).get("attempts") or []
+               if isinstance(a.get("startedAt"), (int, float))]
+        return min(sts) if sts else None
+
     @staticmethod
     def _prior_changed_refs(run: dict, nid: str,
                             current_attempt_id: Optional[str]) -> Dict[str, List[str]]:
@@ -579,12 +593,14 @@ class WorkflowEngine:
             prior_refs = self._prior_changed_refs(run, nid, att.get("attemptId"))
             verdict = adapter.verify_completion(pn, tr, pdir=project_dir,
                                                 project=run.get("project"),
-                                                prior_changed_refs=prior_refs)
+                                                prior_changed_refs=prior_refs,
+                                                window_start=self._run_window_start(run, nid))
             if not verdict.get("ok") and await self._await_inflight_videos(
                     run.get("project") or "", tr):
                 verdict = adapter.verify_completion(pn, tr, pdir=project_dir,
                                                     project=run.get("project"),
-                                                    prior_changed_refs=prior_refs)
+                                                    prior_changed_refs=prior_refs,
+                                                    window_start=self._run_window_start(run, nid))
             if verdict.get("ok"):
                 handoff = adapter.build_handoff(run, nid, att, tr, tr.get("summary") or "",
                                                 verify_outputs=verdict.get("outputsVerdict"),
