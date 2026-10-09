@@ -119,9 +119,15 @@ A 通过：本轮能可靠制作（B 正在运行验证）、计时真实、并�
 - 全量回归：`tests/` 213 passed 后在 `test_ai_6f_real_pipeline` 一处**因本轮代码缺陷**（video_ready 计时点引用未定义变量）停下——**已修复并复证 28/28**；修复后全量重跑见 §8.1。
 - 行为不变性证据：env 未设时 video RPM=1（/api/system/limits rpm=0.85×1 实测）+ inflight=1（测试断言）。
 
-### 8.1 全量回归（修复后重跑）
+### 8.1 全量回归（基线对照，三轮）
 
-`_p50_full_regression.log`：见文件尾部（后台跑完后回填本节）。预存失败基线以 Phase49 报告为准（test_api.py 两项 404 预存）。
+| 轮 | 分支 | 结果 |
+| --- | --- | --- |
+| 基线 e05f8cf（Phase49 FINAL） | 修复前 | 76 failed / 2399 passed / 205 errors（两次复跑一致） |
+| Phase50 A（含计时挂点初版） | 修复后 | 110 failed / 2375 passed / 205 errors——**+34 failed 为本轮缺陷**：ledger 挂点 `job.job_id` 假定 Job 形状，测试用 SimpleNamespace fake job 触发 AttributeError 级联（native_av/c1_director/scene 系） |
+| Phase50 A（getattr 容错修复后） | 最终 | **76 failed / 2409 passed / 205 errors——与基线完全一致（+10 为本轮新增测试）；零回归** |
+
+预存失败/错误清单与基线相同（s3b2 SCIV review 'uncertain' 级联 + test_api 两项 404 等，均非本轮引入）。日志：`_p50_baseline_regression2.log`（基线失败名单）、`_p50_cur_regression3.log`（最终）。
 
 ## 9. 遗留与未知
 
