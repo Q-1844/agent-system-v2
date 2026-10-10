@@ -41,9 +41,11 @@ def dry_run(pdir: Path, project: str, plan: dict) -> dict:
                     row["status"] = "selection_ok" if n else "selection_empty"
                     row["detail"] = f"选用候选 {n} 个"
                     if n == 0:
-                        row["detail"] += ("——审核卡将无候选可选（检查 selection "
-                                          "kind 与项目事实是否匹配）")
-                        blockers.append({"nodeId": nid, "reason": "selection_empty"})
+                        # 已知模式（P50/P51 实证）：selection spec 的 entityId 是
+                        # 运行期占位符，开卡时按此解析必为空——选用实际经决策 API
+                        # 的 selectionOverride 完成。降级为提示，不是 blocker。
+                        row["detail"] += ("——占位符 spec 开卡即空（正常）；选用经"
+                                          "决策 API selectionOverride 完成")
                 except Exception as e:
                     row["status"] = "selection_error"
                     row["detail"] = f"选用候选解析异常: {type(e).__name__}: {str(e)[:120]}"

@@ -140,6 +140,15 @@ class WorkflowEngine:
                 pass
         finally:
             self._workers.pop(run_id, None)
+            # Phase51 E：worker 会话结束即解除生成范围闸（start_scope/repair_scope
+            # 统一生命周期）——repair 轮 scope 原先在 worker 结束后残留进程态，
+            # 会错误拦截同项目后续 run 的提交；修复轮再次 continue 时由
+            # _repair_rejected_run 重新设置，语义不受影响。
+            try:
+                from .repair_scope import clear_scope
+                clear_scope(project, run_id)
+            except Exception:
+                pass
 
     async def _drive_inner(self, project_dir: Path, project: str, run_id: str,
                            cancel_event: asyncio.Event, runs: RunStore) -> None:

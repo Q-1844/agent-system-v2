@@ -139,6 +139,58 @@ def test_f1_restore_from_run_record():
     assert restore_from_run("p51f2", run) == 0
 
 
+def test_e1_start_scope_set_and_restore():
+    """Phase51 E：启动级生成范围闸——run.startScope 持久化 + 重启恢复 +
+    活性 repairScope 优先。"""
+    # 1) start scope（模拟 start 路由设置：进程注册表 + run 记录）
+    set_scope("p51e", ["s01_c01", "s01_c02"], "n_dir_video", "run_e1",
+              "start_scope")
+    assert check_submission("p51e", "s01_c01")[0] is True
+    ok, why = check_submission("p51e", "s03_c01")
+    assert not ok and "repair_scope_excluded" in why and "start_scope" in why
+    # 2) 重启恢复：run.startScope → 注册表重注册
+    clear_scope("p51e")
+    run = {"runId": "run_e1", "status": "running", "startScope": {
+        "allowedShotIds": ["s01_c01", "s01_c02"], "nodeId": "n_dir_video",
+        "reason": "start_scope"}, "nodes": {}}
+    assert restore_from_run("p51e", run) == 1
+    assert check_submission("p51e", "s01_c01")[0] is True
+    assert check_submission("p51e", "s03_c01")[0] is False
+    clear_scope("p51e")
+    # 3) 活性 repairScope 优先于 startScope（修复轮更严清单胜出）
+    run2 = {"runId": "run_e1", "status": "running", "startScope": {
+        "allowedShotIds": ["s01_c01", "s01_c02"], "nodeId": "n_dir_video",
+        "reason": "start_scope"},
+        "nodes": {"n_dir_video": {"status": "pending", "repairScope": {
+            "allowedShotIds": ["s04_c04"], "reason": "repair_after_reject"}}}}
+    assert restore_from_run("p51e", run2) == 1
+    assert check_submission("p51e", "s04_c04")[0] is True
+    assert check_submission("p51e", "s01_c01")[0] is False
+    clear_scope("p51e")
+    # 4) 终态 run 不恢复
+    run["status"] = "completed"
+    assert restore_from_run("p51e", run) == 0
+    assert check_submission("p51e", "s01_c01")[0] is True
+
+
+def test_e1_drive_finally_clears_scope(monkeypatch):
+    """worker 会话结束（含异常路径）解除 scope——不残留进程态拦截后续 run。"""
+    set_scope("p51e", ["s01_c01"], "n_dir_video", "run_e2", "start_scope")
+    assert get_scope("p51e") is not None
+    import src.workflow.executor as EX
+
+    class _Boom(Exception):
+        pass
+
+    engine = WorkflowEngine.__new__(WorkflowEngine)   # 不走完整 __init__
+    engine._workers = {}
+    async def _inner(*a, **k):
+        raise _Boom("worker 崩溃")
+    monkeypatch.setattr(WorkflowEngine, "_drive_inner", _inner)
+    asyncio.run(engine._drive(Path("nowhere"), "p51e", "run_e2", None))
+    assert get_scope("p51e") is None
+
+
 # ============ F3：DNS 熔断 ============
 def test_f3_dns_breaker_trips_and_resets(monkeypatch):
     RS._dns_fail_state.update({"n": 0, "last": 0.0})

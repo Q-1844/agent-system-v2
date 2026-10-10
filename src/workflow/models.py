@@ -75,6 +75,7 @@ EV_RUN_STATE = "run.state"
 EV_STOP_REQUESTED = "run.stop_requested"
 EV_RECONCILE = "run.reconciled"
 EV_HANDOFF = "node.handoff"
+EV_SCOPE_SET = "run.scope_set"              # 生成范围闸激活（start/repair；清单外提交预检拒绝）
 
 
 def new_state_transition(node_id: str, frm: str, to: str, **data) -> Dict[str, Any]:

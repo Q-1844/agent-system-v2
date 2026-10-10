@@ -10,8 +10,13 @@
 # 生命周期：
 #   set   = continue_run(rejected 修复) 时（显式 allowedShotIds），落 run 节点
 #           repairScope（持久化，重启可恢复）+ 进程内注册表；
+#           或 run 启动时（Phase51 E start_scope：显式 allowedShotIds 防导演
+#           越界重生成，C-T03 att3/att4 两次实证提示词范围约束无效）——落
+#           run.startScope（持久化）+ 进程内注册表；
 #   check = director_visual 提交预检（任何生成 kind，按 shot_id 判定）；
-#   clear = 该 run 任一审核 approve（修复通过闸门）或 run 到终态。
+#   clear = 该 run 任一审核 approve（修复通过闸门）、或 run worker 会话结束
+#           （executor._drive finally——含终态/异常/停止；修复轮再次 continue
+#           时由 _repair_rejected_run 重新设置）。
 # 清单为空列表 = 不限制（未传 allowedShotIds 的修复不启用闸）。
 from __future__ import annotations
 import logging
@@ -58,18 +63,21 @@ def check_submission(project: str, shot_id: Optional[str]) -> Tuple[bool, str]:
     allowed = set(scope.get("allowedShotIds") or [])
     if shot_id in allowed:
         return True, ""
+    reason = str(scope.get("reason") or "")
     return False, (
-        f"repair_scope_excluded: 本 run 处于驳回修复轮（节点 {scope.get('nodeId')}），"
-        f"服务端只允许提交修复清单内镜头（{sorted(allowed)}）；镜头 {shot_id} 在清单外。"
-        "既有合格候选已计入完成判定，无需重新生成。")
+        f"repair_scope_excluded: 本 run 处于生成范围闸约束下（{reason or '驳回修复轮'}，"
+        f"节点 {scope.get('nodeId')}），服务端只允许提交清单内镜头（{sorted(allowed)}）；"
+        f"镜头 {shot_id} 在清单外。既有合格候选已计入完成判定，无需重新生成。")
 
 
 def restore_from_run(project: str, run: dict) -> int:
-    """后端启动恢复：扫 run 节点的 repairScope（pending/dispatching 修复节点），
-    重新注册进程内 scope。返回恢复的 scope 数（0/1）。"""
+    """后端启动恢复：扫 run 的 startScope（run 级生成范围闸，Phase51 E）与
+    run 节点的 repairScope（pending/dispatching 修复节点），重新注册进程内
+    scope。返回恢复的 scope 数（0/1）。"""
     if run is None or run.get("status") in ("completed", "stopped", "rejected",
                                             "failed"):
         return 0
+    # 修复轮 repairScope（更严格的活性清单）优先于 run 级 startScope
     for nid, n in (run.get("nodes") or {}).items():
         rs = n.get("repairScope") or {}
         allowed = rs.get("allowedShotIds") or []
@@ -78,4 +86,9 @@ def restore_from_run(project: str, run: dict) -> int:
             set_scope(project, allowed, nid, run.get("runId") or "",
                       str(rs.get("reason") or ""))
             return 1
+    ss = run.get("startScope") or {}
+    if ss.get("allowedShotIds"):
+        set_scope(project, ss["allowedShotIds"], str(ss.get("nodeId") or ""),
+                  run.get("runId") or "", str(ss.get("reason") or "start_scope"))
+        return 1
     return 0

@@ -61,6 +61,7 @@ class StartRunReq(BaseModel):
     idempotencyKey: str
     expectedRevision: Optional[int] = None
     saveIfChanged: bool = True                 # 带定义时先保存（走 revision 冲突保护）
+    allowedShotIds: Optional[List[str]] = None  # Phase51 E：生成范围闸（run 全程清单外视频提交预检拒绝；语义同 repair_scope，防导演越界重生成烧配额）
 
 
 class ReviewDecisionReq(BaseModel):
@@ -287,6 +288,29 @@ async def start_run(project_name: str, workflow_id: str, req: StartRunReq):
         out = engine.start_run(pdir, project_name, definition, v, plan, snapshot,
                                req.idempotencyKey)
         run = out["run"]
+        # Phase51 E：启动级生成范围闸——同 repair_scope 硬闸代码路径（导演提交
+        # 预检 check_submission），run 全程约束生成只落在清单内镜头（C-T03 att3/att4
+        # 两次实证提示词范围约束对导演无效）。worker 退出时由 executor 统一解除。
+        if req.allowedShotIds and not out["reused"]:
+            from src.workflow.repair_scope import set_scope
+            video_node = next((n["id"] for n in definition.get("nodes") or []
+                               if n.get("type") == "agent" and n.get("refId") == "director"
+                               and (n.get("config") or {}).get("completion", {})
+                               .get("strategy") == "require_new"), None)
+            set_scope(project_name, req.allowedShotIds, video_node or "n_dir_video",
+                      run["runId"], reason="start_scope")
+            # 持久化到 run 记录（服务重启后 restore_from_run 重注册）
+            RunStore(pdir, project_name).update(
+                run["runId"],
+                lambda r: r.__setitem__("startScope", {
+                    "allowedShotIds": [str(x) for x in req.allowedShotIds],
+                    "nodeId": video_node, "reason": "start_scope"}))
+            EventLog(pdir, run["runId"]).append(
+                run["runId"], M.EV_SCOPE_SET, nodeId=video_node,
+                allowedShotIds=[str(x) for x in req.allowedShotIds],
+                reason="start_scope")
+            log.info("start_run scope SET run=%s n_allowed=%d",
+                     run["runId"], len(req.allowedShotIds))
         # 尽快返回已持久化 run；执行由后台 worker 推进（启动响应不等模型）
         engine.drive(pdir, project_name, run["runId"])
         return {"run": _project_run(run), "reused": out["reused"]}
