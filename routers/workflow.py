@@ -5,7 +5,7 @@
 from __future__ import annotations
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -75,6 +75,9 @@ class ReviewDecisionReq(BaseModel):
 
 class ContinueReq(BaseModel):
     nodeId: Optional[str] = None
+    # Phase51 C：修复范围服务端硬闸——rejected 修复时传入允许生成的镜头清单，
+    # 清单外镜头的生成提交在 director_visual 预检被拒（不进队列不耗配额）。
+    allowedShotIds: Optional[List[str]] = None
 
 
 # ============ A批：动态组件目录 ============
@@ -177,6 +180,35 @@ async def save_definition(project_name: str, workflow_id: str, req: SaveDefiniti
 
 
 # ============ B批：校验 / 编译（无执行副作用） ============
+@router.post("/api/project/{project_name}/workflow/definitions/{workflow_id}/dry_run")
+async def dry_run_definition(project_name: str, workflow_id: str):
+    """Phase51 C：启动前干跑（零 LLM / 零生成 / 只读）——逐节点回答
+    「若现在派发会发生什么」：完成规格现状核对、选用候选解析、装配素材可用性。
+    把 run_36919eb5a073 类的"开跑后才撞"问题（审核卡 0 候选/规格脱节）前置暴露。"""
+    try:
+        pdir = _pdir(project_name)
+        definition = DefinitionStore(pdir, project_name).load(workflow_id)
+        if definition is None:
+            raise HTTPException(404, f"工作流定义不存在: {workflow_id}")
+        definition = dict(definition)
+        definition["projectId"] = project_name
+        definition["workflowId"] = workflow_id
+        rt = get_agent_runtime()
+        v = validate_definition(definition, rt, project_name)
+        if not v.get("ok"):
+            return {"ok": False, "stage": "validate",
+                    "errors": v.get("errors", []), "nodes": []}
+        from src.workflow.plan import compile_plan
+        plan = compile_plan(definition, v, v["catalog"])
+        from src.workflow.dry_run import dry_run
+        out = dry_run(pdir, project_name, plan)
+        return out
+    except HTTPException:
+        raise
+    except Exception as e:
+        _err(e)
+
+
 @router.post("/api/project/{project_name}/workflow/definitions/{workflow_id}/validate")
 async def validate_workflow(project_name: str, workflow_id: str,
                             req: SaveDefinitionReq):
@@ -344,7 +376,8 @@ async def continue_run(project_name: str, run_id: str, req: ContinueReq):
     try:
         engine = get_engine()
         pdir = _pdir(project_name)
-        run = engine.continue_run(pdir, project_name, run_id, req.nodeId)
+        run = engine.continue_run(pdir, project_name, run_id, req.nodeId,
+                                  allowed_shot_ids=req.allowedShotIds)
         engine.drive(pdir, project_name, run_id)
         return {"run": run}
     except HTTPException:
@@ -396,6 +429,10 @@ async def recover_workflows() -> dict:
                     if att and att.get("status") in ("dispatching", "running"):
                         await engine._reconcile_attempt(pdir, run, nid, att, runs, el)
                         out["reconciled"] += 1
+                # Phase51 C：修复范围硬闸的进程内注册表恢复（节点 repairScope）
+                from src.workflow.repair_scope import restore_from_run
+                out["repair_scope_restored"] = out.get("repair_scope_restored", 0) + \
+                    restore_from_run(name, runs.load(rid))
                 runs.save(runs.load(rid) or run)
         except Exception as e:
             out["errors"].append(f"{name}: {type(e).__name__}: {e}")

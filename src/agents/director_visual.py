@@ -284,6 +284,32 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
                                              kind="image" if is_image else "video",
                                              force=force)
 
+    # ---- Phase51 C：修复范围服务端硬闸（run_36919eb5a073 实证：提示词范围约束
+    #      对导演无效，授权 4 镜实际提交 20 镜）——清单外镜头在预检直接拒绝，
+    #      不进队列不耗配额。scope 由 continue_run(rejected, allowedShotIds) 设置。----
+    if submittable:
+        from src.workflow.repair_scope import check_submission
+        scope_blocked: list = []
+        scope_ok: list = []
+        for t in submittable:
+            ok, why = check_submission(project, t.get("shot_id"))
+            (scope_ok if ok else scope_blocked).append(
+                t if ok else {**t, "status": "repair_scope_excluded", "ok": False,
+                              "verified": False, "error": "repair_scope_excluded",
+                              "fix_hint": why})
+        if scope_blocked:
+            blocked = blocked + scope_blocked
+            submittable = scope_ok
+            if not submittable:
+                return _base_receipt(
+                    op, ok=False, target=",".join(t["shot_id"] for t in scope_blocked),
+                    revision=None, verified=False, results=scope_blocked,
+                    count=len(scope_blocked), done=0, failed=len(scope_blocked),
+                    cancelled=False, timed_out=False,
+                    note="全部目标被修复范围硬闸拒绝（repair_scope_excluded）——"
+                         "本轮修复只允许提交清单内镜头；清单外既有合格候选已计入"
+                         "完成判定，无需重新生成。")
+
     # ---- Phase C1（27.md §11.3）：bound_required 参考策略——提交前绑定门槛 ----
     # UNBOUND → binding_required（绝不静默 legacy）；NOT_READY → 结构化 issues（§13：
     # 回执必须携带 production_state/issue codes/hints，Agent 能据此行动）；READY → 放行。

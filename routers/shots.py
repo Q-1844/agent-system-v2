@@ -1498,13 +1498,47 @@ def _build_input_visuals(*, mode: str, first_url: str, last_url,
     return out
 
 
+# ---- Phase51 C：DNS 熔断（run_36919eb5a073 实证：DNS 间歇故障连杀 7 job，
+#      每个 job 烧 2-4 分钟 attempts 才失败——连续解析失败应暂停等待网络恢复，
+#      而非把队列里的 attempts 烧完）----
+_dns_fail_state = {"n": 0, "last": 0.0}
+DNS_BREAK_THRESHOLD = 3
+DNS_BREAK_WINDOW_S = 600.0
+DNS_BREAK_COOLDOWN_S = 60.0
+
+
+def _dns_classify(err_text: str) -> None:
+    """分类最近一次错误：解析类失败累计（10min 窗口内连续），其他错误清零。"""
+    t = str(err_text or "")
+    now = _time.time()
+    if "getaddrinfo" in t or "ConnectError" in t or "NameResolutionError" in t:
+        st = _dns_fail_state
+        st["n"] = st["n"] + 1 if (now - st["last"]) < DNS_BREAK_WINDOW_S else 1
+        st["last"] = now
+    else:
+        _dns_fail_state["n"] = 0
+
+
+async def _dns_maybe_break(emit, shot_label: str) -> None:
+    """熔断检查：连续失败达阈值 → 暂停一个冷却周期（等待网络恢复），
+    然后清零重计。挂在视频/首帧 handler 入口。"""
+    if _dns_fail_state["n"] >= DNS_BREAK_THRESHOLD:
+        await emit("warn", f"{shot_label} DNS 熔断：连续 {_dns_fail_state['n']} 次"
+                           f"域名解析失败，暂停 {DNS_BREAK_COOLDOWN_S:.0f}s 等待网络恢复"
+                           "（不烧 attempts）", None)
+        await asyncio.sleep(DNS_BREAK_COOLDOWN_S)
+        _dns_fail_state["n"] = 0
+
+
 async def _handler_video(job, emit):
     """镜头视频生成（PHASE_3 §3.4）。
     preflight -> keyframes 等尾帧 -> 提交立刻落库 video_id -> 轮询 -> 下载 -> 回读秒数/尺寸。
-    🔴 已有 video_id 且 generating 时直接续轮询，不重提交、不重扣配额。"""
+    🔴 已有 video_id 且 generating 时直接续轮询，不重提交、不重扣配额。
+    Phase51 C：入口挂 DNS 熔断检查（连续解析失败→冷却等待，不烧 attempts）。"""
     from src.core.store import ProjectStore
     from src.core.prompt_builder import build_video_prompt
     from src.core.models import ShotStatus, OpeningSource
+    await _dns_maybe_break(emit, job.shot_id)
     # 37.md §1.2：失败可观测——provider/model 归档在 job（model 由 submit 时 params 带入）
     job.params.setdefault("provider", "agnes")
     project_dir = get_project_manager().get_project_dir(job.project)
@@ -1731,7 +1765,12 @@ async def _handler_video(job, emit):
                                          native_generation_basis,
                                          language_override=ndc_lang,
                                          provider_options=dict(provider_options))
-        created = await get_agnes_client().create_video(prompt, mode=mode, **kwargs)
+        try:
+            created = await get_agnes_client().create_video(prompt, mode=mode, **kwargs)
+        except Exception as _sub_err:
+            _dns_classify(str(_sub_err))   # DNS 熔断计数（提交阶段失败）
+            raise
+        _dns_classify("")   # 提交成功 → 清零连续失败计数
         vid = created.get("video_id") or created.get("task_id") or created.get("id")
         if not vid:
             raise RuntimeError(f"视频任务创建无 video_id: {created}")
@@ -1760,16 +1799,19 @@ async def _handler_video(job, emit):
     except PollTransientError as e:
         # 网络/超时（连续 5 次）：不标 failed，保留 video_id+generating，
         # retry/recover 续轮询（不重提交、不丢已生成视频）
+        _dns_classify(str(e))
         await emit("warn", f"{shot.shot_id} 轮询暂歇（网络/超时，video_id 保留，重试续轮询）: {str(e)[:150]}", None)
         raise
     except AgnesError as e:
         # 服务端明确失败 / video_id 不存在：标 failed，retry 时走 else 重新提交
+        _dns_classify(str(e))
         store.update_shot(job.shot_id,
                           lambda s: setattr(s.video, "status", ShotStatus.FAILED.value))
         _tl_record("video_failed", project=job.project, shot_id=job.shot_id,
                    job_id=getattr(job, "job_id", None), video_id=vid, model=video_model,
                    error=str(e)[:200])
         raise
+    _dns_classify("")   # 成功 → 清零连续失败计数
     _tl_record("video_completed", project=job.project, shot_id=job.shot_id,
                job_id=getattr(job, "job_id", None), video_id=vid, model=video_model,
                seconds_returned=res.get("seconds"),

@@ -816,6 +816,10 @@ class WorkflowEngine:
                    "fingerprint": rv.get("artifactFingerprint"),
                    "withSelection": bool(with_selection and rv.get("selectionRequired"))}
         nid = rv["nodeId"]
+        if decision == "approve":
+            # Phase51 C：修复范围硬闸随修复通过闸门解除（下一节点不再受限）
+            from .repair_scope import clear_scope
+            clear_scope(project, run_id)
 
         def _decide(r):
             for x in r.get("reviews") or []:
@@ -982,7 +986,8 @@ class WorkflowEngine:
 
     # ---------- 显式继续 / 重试 ----------
     def continue_run(self, project_dir: Path, project: str, run_id: str,
-                     node_id: Optional[str] = None) -> dict:
+                     node_id: Optional[str] = None,
+                     allowed_shot_ids: Optional[List[str]] = None) -> dict:
         """显式继续：needs_reconciliation / failed 节点开新 attempt（旧 attempt 保留为
         真实历史）；等待审核状态不允许 continue（须走决策）。
         Phase48 E：节点 failed 使 run 状态推导为 failed（终态），但按本契约 failed
@@ -992,7 +997,10 @@ class WorkflowEngine:
         无自动返工」，但提供受约束的正式 resume：目标=被驳回审核的上游产物节点，
         重开其 attempt 并把驳回记录注入修复提示（保留合格部分、定点修复）；
         下游被停止的节点复位为待推进（其旧 attempt 从未派发，无历史损失）。
-        该动作必须显式调用（不会被 drive 自动触发——Phase48 E 守卫保持）。"""
+        该动作必须显式调用（不会被 drive 自动触发——Phase48 E 守卫保持）。
+        Phase51 C：allowed_shot_ids 非空时启用修复范围服务端硬闸（repair_scope）——
+        修复 attempt 期间清单外镜头的生成提交在预检被拒（run_36919eb5a073 实证：
+        提示词范围约束对导演无效，授权 4 镜实际提交 20 镜）。"""
         runs = RunStore(project_dir, project)
         run = runs.load(run_id)
         if run is None:
@@ -1002,7 +1010,8 @@ class WorkflowEngine:
                                 "run 等待人工审核，请通过审核决策继续")
         _status = run.get("status")
         if _status == M.RUN_REJECTED:
-            return self._repair_rejected_run(project_dir, run_id, runs, node_id)
+            return self._repair_rejected_run(project_dir, run_id, runs, node_id,
+                                             allowed_shot_ids)
         if _status in M.RUN_TERMINAL and _status != M.RUN_FAILED:
             raise WorkflowError("run_terminal", f"run 已终态（{_status}）")
         if run.get("stopRequested"):
@@ -1045,7 +1054,8 @@ class WorkflowEngine:
         return runs.load(run_id)
 
     def _repair_rejected_run(self, project_dir: Path, run_id: str, runs: RunStore,
-                             node_id: Optional[str]) -> dict:
+                             node_id: Optional[str],
+                             allowed_shot_ids: Optional[List[str]] = None) -> dict:
         """Phase51 A：驳回后显式修复（P50 实证：run2 驳回→9 节点停止→整 run 报废
         →被迫新建 definition 重跑 5 轮）。驳回停止语义不变；本方法是唯一合法的
         驳回后续作入口。"""
@@ -1074,6 +1084,12 @@ class WorkflowEngine:
                     f"{(rv.get('decisionNote') or '')[:300]}")
             t = r["nodes"][target]
             t["repairNote"] = note
+            if allowed_shot_ids:
+                # Phase51 C：修复范围服务端硬闸——持久化到节点（重启可恢复）+
+                # 进程内注册表（director_visual 提交预检查询）。清单外镜头的
+                # 生成提交会被直接拒绝（不进队列不耗配额）。
+                t["repairScope"] = {"allowedShotIds": [str(x) for x in allowed_shot_ids],
+                                    "reason": note[:200]}
             _set_node(t, M.NODE_PENDING)
             for nid2, n2 in r["nodes"].items():
                 if nid2 != target and n2["status"] == M.NODE_STOPPED:
@@ -1083,6 +1099,11 @@ class WorkflowEngine:
                 int(r.get("cursor") or 0)
             _set_run_state(r, None, None)
         runs.update(run_id, _repair)
+        if allowed_shot_ids:
+            from .repair_scope import set_scope
+            set_scope(str(run.get("project") or project_dir.name), allowed_shot_ids,
+                      target, run_id,
+                      f"repair_after_reject: {rv.get('label') or rv.get('nodeId')}")
         EventLog(project_dir, run_id).append(
             run_id, M.EV_NODE_STATE, node_id=target,
             from_=node.get("status") or M.NODE_SUCCESS, to=M.NODE_PENDING,
