@@ -156,5 +156,5 @@ def test_registry_loads_v131():
     assert not errs, f"注册错误: {errs}"
     relay = reg.skills().get(_RELAY)
     bridge = reg.skills().get(_BRIDGE)
-    assert relay is not None and relay.version == "1.5.0"
+    assert relay is not None and relay.version == "1.6.0"
     assert bridge is not None and bridge.version == "1.4.0"

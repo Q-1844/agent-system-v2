@@ -199,6 +199,11 @@ class WorkflowEngine:
                 continue
             if pn["type"] == "human_review":
                 self._open_review(project_dir, run, pn, runs, el)
+                # 协作流程 v2：autoApprove 卡在 _open_review 内已自动放行并置
+                # success——worker 继续推进下一节点，不停靠等审核。
+                run = runs.load(run_id)
+                if run["nodes"][nid]["status"] == M.NODE_SUCCESS:
+                    continue
                 return   # worker 停靠等审核
             # 未知类型（编译已排除；防御）
             runs.update(run_id, lambda r: r["nodes"][nid].__setitem__(
@@ -762,6 +767,52 @@ class WorkflowEngine:
                                          "spec": selection_cfg, "state": "pending"}
             _set_node(n, M.NODE_WAITING_HUMAN)
             _set_run_state(r, el, runs)
+
+        # ---------- 协作流程 v2（用户 2026-10-11 定版）：autoApprove 前置卡自动放行 ----------
+        # 资产冻结复用场景下，系统核验通过即继续，不停等人工；决策与选用全程事件留痕。
+        # 带 selection 的卡「沿用现有选用指针」（不执行新 selection——指针已是现状）。
+        if pn.get("autoApprove"):
+            request["status"] = "decided"
+            request["decision"] = "approve"
+            request["decidedAt"] = _now()
+            request["decisionNote"] = ("auto_approve: 资产冻结复用核验通过自动放行"
+                                       "（协作流程 v2，三查一致性判据由终审统一执行）")
+            request["decisionReceipt"] = {
+                "receiptId": "rcp_" + secrets.token_hex(4),
+                "requestId": request["requestId"], "decision": "approve",
+                "decidedAt": request["decidedAt"], "note": request["decisionNote"],
+                "auto": True}
+            if selection_cfg:
+                request["selectionState"] = "done"
+                request["selectionReceipt"] = {
+                    "ok": True, "kind": selection_cfg.get("kind"), "auto": True,
+                    "note": "沿用现有选用指针（auto_approve 不执行新选用）"}
+
+            def _auto(r):
+                r.setdefault("reviews", []).append(request)
+                n = r["nodes"][nid]
+                n["currentReviewId"] = request["requestId"]
+                n["lastReviewDecision"] = "approve"
+                if selection_cfg:
+                    n["pendingSelection"] = {"reviewId": request["requestId"],
+                                             "spec": selection_cfg, "state": "done",
+                                             "receipt": request["selectionReceipt"]}
+                _set_node(n, M.NODE_SUCCESS)
+                _set_run_state(r, el, runs)
+            runs.update(run_id, _auto)
+            el.append(run_id, M.EV_REVIEW_CREATED, node_id=nid,
+                      requestId=request["requestId"],
+                      targetNodeId=upstream_id, targetAttemptId=request["targetAttemptId"],
+                      fingerprint=request["artifactFingerprint"],
+                      selectionRequired=request["selectionRequired"],
+                      autoApprove=True)
+            el.append(run_id, M.EV_REVIEW_DECIDED, node_id=nid,
+                      requestId=request["requestId"], decision="approve",
+                      receiptId=request["decisionReceipt"]["receiptId"],
+                      withSelection=bool(selection_cfg), auto=True)
+            log.info("auto_approve: %s (%s) 自动放行 run=%s", nid,
+                     pn.get("label"), run_id)
+            return
         runs.update(run_id, _open)
         el.append(run_id, M.EV_REVIEW_CREATED, node_id=nid,
                   requestId=request["requestId"],
@@ -1075,6 +1126,71 @@ class WorkflowEngine:
             raise WorkflowError("no_rejection",
                                 "run 为 rejected 但未找到驳回审核记录，无法定位修复目标")
         rv = rejects[-1]
+        # ---------- 协作流程 v2（用户 2026-10-11 定版）：修复 3 次自动豁免跳过 ----------
+        # 同一驳回审核的修复决策数（reject 计数）达上限时不再开修复 attempt：
+        # 追加一张「修复豁免」审核卡并自动 approve（保留合格部分推进，事件留痕）——
+        # 三查一致性由豁免 note 声明交终审/用户最终裁决，防止无限修复烧配额。
+        REPAIR_LIMIT = 3
+        target_node_id = node_id or rv.get("targetNodeId")
+        reject_count = sum(
+            1 for x in (run.get("reviews") or [])
+            if x.get("status") == "decided" and x.get("decision") == "reject"
+            and (x.get("targetNodeId") == target_node_id
+                 or (target_node_id and x.get("nodeId") == target_node_id)))
+        if reject_count >= REPAIR_LIMIT:
+            el = EventLog(project_dir, run_id)
+            exempt = {
+                "requestId": "rev_" + secrets.token_hex(5),
+                "nodeId": rv.get("nodeId") or target_node_id,
+                "label": (rv.get("label") or "审核") + "（修复豁免）",
+                "targetNodeId": rv.get("targetNodeId"),
+                "targetAttemptId": rv.get("targetAttemptId"),
+                "artifactRefs": rv.get("artifactRefs") or [],
+                "artifactFingerprint": rv.get("artifactFingerprint"),
+                "contentSnapshot": rv.get("contentSnapshot"),
+                "selectionRequired": bool(rv.get("selectionRequired")),
+                "selectionSpec": rv.get("selectionSpec"),
+                "selectionCandidates": [],
+                "selectionState": ("done" if rv.get("selectionRequired") else "none"),
+                "selectionReceipt": ({"ok": True, "auto": True,
+                                      "note": "豁免沿用既有选用"} if rv.get("selectionRequired") else None),
+                "status": "decided", "decision": "approve",
+                "decidedAt": _now(),
+                "decisionNote": (f"repair_limit_exhausted: 修复 {reject_count} 次仍未通过，"
+                                 f"自动豁免跳过（协作流程 v2）——保留合格部分推进；"
+                                 f"三查一致性与最终取舍由用户裁决"),
+                "decisionReceipt": {"receiptId": "rcp_" + secrets.token_hex(4),
+                                    "requestId": None, "decision": "approve",
+                                    "decidedAt": _now(), "auto": True,
+                                    "note": "repair_limit_exhausted 豁免"},
+                "createdAt": _now(), "reviewerLabel": "system",
+            }
+            exempt["decisionReceipt"]["requestId"] = exempt["requestId"]
+
+            def _exempt(r):
+                r.setdefault("reviews", []).append(exempt)
+                n = r["nodes"][rv.get("nodeId") or target_node_id]
+                n["lastReviewDecision"] = "approve"
+                n["error"] = None
+                if n.get("pendingSelection"):
+                    n["pendingSelection"]["state"] = "done"
+                    n["pendingSelection"]["receipt"] = exempt["selectionReceipt"]
+                _set_node(n, M.NODE_SUCCESS)
+                # 下游被停的节点复位（驳回时曾置 STOPPED）
+                for other in r["nodes"].values():
+                    if other["status"] == M.NODE_STOPPED and other is not n:
+                        other["status"] = M.NODE_PENDING
+                        other["error"] = None
+                r["status"] = M.RUN_RUNNING
+                _set_run_state(r, el, runs)
+            runs.update(run_id, _exempt)
+            el.append(run_id, M.EV_REVIEW_DECIDED, node_id=exempt["nodeId"],
+                      requestId=exempt["requestId"], decision="approve",
+                      receiptId=exempt["decisionReceipt"]["receiptId"], auto=True,
+                      reason="repair_limit_exhausted")
+            log.info("repair_limit_exhausted: run=%s node=%s reject_count=%d → 豁免跳过",
+                     run_id, target_node_id, reject_count)
+            return runs.load(run_id)
         target = node_id or rv.get("targetNodeId")
         if not target:
             raise WorkflowError("unknown_node",

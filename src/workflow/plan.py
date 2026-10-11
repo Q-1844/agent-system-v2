@@ -99,6 +99,9 @@ def compile_plan(definition: dict, v: dict, cat: dict) -> dict:
                 # Phase 47 §4.6：审核可携带「批准并选用」目标（kind/entityId[/versionId]）；
                 # 用户在审核卡片确认后由服务端走既有用户选片服务完成指针变更。
                 "selection": cfg.get("selection") or None,
+                # 协作流程 v2（用户 2026-10-11 定版）：前置审核卡自动放行——资产冻结
+                # 复用场景下系统核验通过即继续，不再停等人工（事件全程留痕）。
+                "autoApprove": bool(cfg.get("autoApprove")),
                 "upstreamNodeId": up,
             }
     return {
