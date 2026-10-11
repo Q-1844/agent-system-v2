@@ -259,4 +259,10 @@ def _tail_lines(f, n: int):
 
 
 def _now_iso() -> str:
-    return time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime()) + f".{int(time.time()*1000)%1000:03d}Z"
+    # Phase52 修复：原实现用 time.localtime() 却拼 "Z"（UTC 后缀），把本地时间误标成
+    # UTC（+08:00 差 8 小时），与 timing_ledger 的真 UTC（+00:00）口径冲突，污染跨源
+    # 时间线对账。改为真 UTC，保持 "Z" 后缀与既有数据形态一致。历史事件（修复前落盘）
+    # 为 local-as-Z，报告里单独注明 8 小时偏移。
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S") + \
+        f".{int(time.time()*1000)%1000:03d}Z"
