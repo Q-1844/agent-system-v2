@@ -284,12 +284,20 @@ class GithubPagesHost(ImageHost):
     async def _remote_matches(self, path: str, data: bytes) -> bool:
         try:
             async with self._client() as c:
-                r = await c.get(self._api(path), headers=self._headers(),
+                # Phase52 修复（10-12 P5a/P5b 实证）：contents API 对 >1MB 文件
+                # content=null（base64 仅支持 <1MB）→ 旧实现误判"真冲突"，同图
+                # 二次托管必炸。改用 raw media type（Accept: vnd.github.raw）：
+                # 同域名（api.github.com，本机可达；download_url 的
+                # raw.githubusercontent.com 被 SNI 阻断不可用）、直接返回原始
+                # 字节、官方支持到 100MB，<1MB 与 >1MB 行为统一。
+                r = await c.get(self._api(path),
+                                headers={**self._headers(),
+                                         "Accept": "application/vnd.github.raw"},
                                 params={"ref": self.branch})
             if r.status_code != 200:
                 return False
-            remote = base64.b64decode(r.json().get("content") or "")
-            return hashlib.sha256(remote).hexdigest() == hashlib.sha256(data).hexdigest()
+            return hashlib.sha256(r.content).hexdigest() == \
+                hashlib.sha256(data).hexdigest()
         except httpx.HTTPError:
             return False   # 网络错 → 视为未命中，走 PUT 路径（PUT 内还有重试）
 

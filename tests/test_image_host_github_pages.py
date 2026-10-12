@@ -52,6 +52,9 @@ def make_host(script, **kw):
             status, body = host._script.pop(0) if host._script else (404, {})
             if method == "PUT":
                 await asyncio.sleep(0.02)   # 放大窗口，让并发违规可测
+            # Phase52：bytes body = raw 响应（download_url 大文件比对用）
+            if isinstance(body, bytes):
+                return httpx.Response(status, content=body)
             return httpx.Response(status, json=body)
         finally:
             if is_api:
@@ -83,7 +86,7 @@ def test_put_201_success_returns_pages_url_with_sha256_16(tmp_path):
 def test_get_first_idempotent_hit_skips_put(tmp_path):
     png = b"\x89PNG same" * 10
     f = tmp_path / "a.png"; f.write_bytes(png)
-    host = make_host([(200, b64(png))])                    # GET 命中 → 不 PUT 不烧 build
+    host = make_host([(200, png)])                    # GET 命中(raw media type 字节一致) → 不 PUT 不烧 build
     url = asyncio.run(host.upload(str(f)))
     assert url.endswith(".png")
     assert [m for m, _ in host._calls] == ["GET"]          # 只有 GET-first，无 PUT
@@ -93,7 +96,7 @@ def test_put_409_remote_matches_is_idempotent(tmp_path):
     png = b"\x89PNG c" * 7
     f = tmp_path / "a.png"; f.write_bytes(png)
     # PUT 撞 409（并发窗口）→ GET 核对字节一致 → 幂等成功 → Pages 就绪
-    host = make_host([(404, {}), (409, {}), (200, b64(png)), pages_ok()])
+    host = make_host([(404, {}), (409, {}), (200, png), pages_ok()])
     url = asyncio.run(host.upload(str(f)))
     assert url.endswith(".png")
 
