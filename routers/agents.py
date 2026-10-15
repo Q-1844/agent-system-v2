@@ -1110,3 +1110,54 @@ async def director_test_session(project_name: str):
     except AgentError as e:
         _raise(e)
 
+
+
+# ============ Phase 54 A1：scoped grant（项目级可撤销授权）============
+class ScopedGrantReq(BaseModel):
+    families: List[str]
+    reason: str = ""
+    granted_by: str = "operator"
+    ttl_s: Optional[float] = None
+
+
+class ScopedGrantRevokeReq(BaseModel):
+    reason: str = ""
+    revoked_by: str = "operator"
+
+
+def _pdir_of(project_name: str):
+    from pathlib import Path
+    return Path(get_project_manager().get_project_dir(project_name))
+
+
+@router.post("/api/project/{project_name}/agents/{agent_id}/grant")
+async def agent_scoped_grant(project_name: str, agent_id: str, req: ScopedGrantReq):
+    """新授权：把工具族（=Specialist 模块工具面）的直接执行权授予 agent（当前生产者消费）。
+    审计落 output/agents/grants_audit.jsonl；owner/OCC 语义不变。"""
+    from src.agents import grant as grant_mod
+    try:
+        g = grant_mod.grant(_pdir_of(project_name), agent_id, req.families,
+                            req.reason, req.granted_by, req.ttl_s)
+        return {"grant": g, "active": grant_mod.active(_pdir_of(project_name), agent_id)}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/project/{project_name}/agents/{agent_id}/grant/{grant_id}/revoke")
+async def agent_scoped_grant_revoke(project_name: str, agent_id: str, grant_id: str,
+                                    req: ScopedGrantRevokeReq):
+    from src.agents import grant as grant_mod
+    ok = grant_mod.revoke(_pdir_of(project_name), grant_id, req.reason, req.revoked_by)
+    if not ok:
+        raise HTTPException(status_code=404, detail=f"grant 不存在或已撤销: {grant_id}")
+    return {"revoked": grant_id,
+            "active": grant_mod.active(_pdir_of(project_name), agent_id)}
+
+
+@router.get("/api/project/{project_name}/agents/{agent_id}/grant")
+async def agent_scoped_grant_list(project_name: str, agent_id: str):
+    from src.agents import grant as grant_mod
+    return {"active": grant_mod.active(_pdir_of(project_name), agent_id),
+            "families": sorted(grant_mod.GRANT_FAMILIES.keys())}

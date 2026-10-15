@@ -194,6 +194,15 @@ def _build_producer_system(rt, project: str) -> str:
             project_name=project, scenes_count="?", shots_count="?", characters_count="?")
     # Skill System V1（40.md §七）：L1 catalog 常驻尾部（只看到自己的 Skill view）
     base += _get_skill_runtime().catalog_block("producer")
+    # Phase 54 A1：scoped grant——有生效授权时追加工具族授权通知（owner 纪律→自审纪律）
+    try:
+        from . import grant as _grant_mod
+        _g = _grant_mod.active(pdir, "producer")
+        if _g:
+            _fams = sorted({f for g in _g for f in (g.get("families") or [])})
+            base += _grant_mod.grant_notice(_fams, [g["grantId"] for g in _g])
+    except Exception:
+        pass
     return base
 
 
@@ -1033,7 +1042,8 @@ async def _producer_tool_loop(rt, client, project: str, messages: list,
                               thinking: bool = False, event_cb=None,
                               cancel_event=None, state: Optional[dict] = None,
                               tool_executors: Optional[dict] = None,
-                              offered_tools: Optional[list] = None) -> dict:
+                              offered_tools: Optional[list] = None,
+                              grant_state: Optional[dict] = None) -> dict:
     """Producer 专用 tool-loop。镜像 director._run_tool_loop 的【结构】（while-True +
     renewable window / cancel / 流式 event_cb / trace / receipts），但【去掉】写域真相
     闸门 / zero-read-zero-write nudge / 搜索预算 / 批量降级（理由见文件头 §5.2）。
@@ -1153,13 +1163,17 @@ async def _producer_tool_loop(rt, client, project: str, messages: list,
                     log.warning("producer 零工具谎报闸门触发（project=%s）："
                                 "回复声称完成写动作但本轮零工具调用，打纠正 nudge", project)
                     messages.append({"role": "assistant", "content": content or ""})
-                    messages.append({"role": "user", "content":
+                    _base_nudge = (
                         "[系统提示] 你本轮没有调用任何工具或 *.delegate，但你上面的回复声称"
                         "完成了具体工作（批准/登记/删除/清理/生成等）。你的工具面里没有写"
                         "工具——未委派即未发生，canonical 没有变化。请二选一："
                         "(1) 现在实际调用对应的 *.delegate 完成这些工作；"
                         "(2) 如实说明本轮尚未执行任何修改，只基于真实读取给出当前状态与计划。"
-                        "不要声称未发生的事情。"})
+                        "不要声称未发生的事情。")
+                    if grant_state and grant_state.get("has_grants"):
+                        from . import grant as _grant_mod
+                        _base_nudge = _grant_mod.wrap_zero_tool_nudge(_base_nudge, True)
+                    messages.append({"role": "user", "content": _base_nudge})
                     _refresh_producer_system(messages, rt, project)
                     continue
             zero_tool_claim = bool(
@@ -1350,12 +1364,65 @@ async def producer_turn(rt, project: str, session_id: str, content: str, *,
                     "director", "assembly"):
             tool_executors[f"{aid}.delegate"] = _make_delegate_executor(aid)
 
+        # Phase 54 A1：scoped grant——合并被授权族的工具面（每次执行落授权审计）。
+        grant_state: dict = {"has_grants": False, "grantIds": []}
+        try:
+            from . import grant as _grant_mod
+            _face = _grant_mod.granted_tool_face(pdir, "producer")
+            if _face["tools"]:
+                grant_state = {"has_grants": True, "grantIds": _face["grantIds"]}
+
+                def _audit_wrap(fn, _name):
+                    if asyncio.iscoroutinefunction(fn):
+                        async def _exec(rt, project, args, instruction, message_id):
+                            _ok = True
+                            try:
+                                return await fn(rt, project, args, instruction, message_id)
+                            except _TurnStopped:
+                                raise
+                            except Exception:
+                                _ok = False
+                                raise
+                            finally:
+                                try:
+                                    _grant_mod.audit_execution(pdir, "producer",
+                                                               _face["grantIds"], _name, _ok)
+                                except Exception:
+                                    pass
+                        return _exec
+
+                    def _exec(rt, project, args, instruction, message_id):
+                        _ok = True
+                        try:
+                            return fn(rt, project, args, instruction, message_id)
+                        except _TurnStopped:
+                            raise
+                        except Exception:
+                            _ok = False
+                            raise
+                        finally:
+                            try:
+                                _grant_mod.audit_execution(pdir, "producer",
+                                                           _face["grantIds"], _name, _ok)
+                            except Exception:
+                                pass
+                    return _exec
+
+                for _tname, _texe in _face["executors"].items():
+                    tool_executors[_tname] = _audit_wrap(_texe, _tname)
+                offered = list(offered) + list(_face["tools"])
+                log.info("producer scoped grant 合并：families=%s tools=%d grants=%s",
+                         _face["families"], len(_face["tools"]), _face["grantIds"])
+        except Exception:
+            log.exception("producer scoped grant 合并失败（按无授权继续）")
+
         loop_state: dict = {}
         try:
             final = await _producer_tool_loop(
                 rt, client, project, messages, content, user_msg.message_id,
                 thinking=thinking, event_cb=event_cb, cancel_event=cancel_event,
-                state=loop_state, tool_executors=tool_executors, offered_tools=offered)
+                state=loop_state, tool_executors=tool_executors, offered_tools=offered,
+                grant_state=grant_state)
             assistant_text = final["text"]
             events = final["events"]
             receipts = final["receipts"]

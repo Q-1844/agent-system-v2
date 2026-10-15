@@ -461,3 +461,67 @@ async def recover_workflows() -> dict:
         except Exception as e:
             out["errors"].append(f"{name}: {type(e).__name__}: {e}")
     return out
+
+
+# ============ Phase 54 A3：审核卡重开（对象变更后的合法重审路径）============
+class ReviewRefreshReq(BaseModel):
+    reason: str
+
+
+@router.post("/api/project/{project_name}/workflow/runs/{run_id}/reviews/{request_id}/refresh")
+async def refresh_review(project_name: str, run_id: str, request_id: str,
+                         req: ReviewRefreshReq):
+    """重开待审卡：重算产物内容快照+指纹（INT-M03 实证缺口——409 防篡改闸拒绝旧
+    快照决策是正确设计，但对象合法变更后无官方重审入口）。仅在卡 pending 时允许；
+    reason 必填并落事件留痕；已决策卡不可刷新（决策不可改写）。"""
+    try:
+        engine = get_engine()
+        pdir = _pdir(project_name)
+        from src.workflow.store import RunStore, _now_iso
+        from src.workflow.executor import _artifact_content_snapshot
+        from src.workflow.store import content_hash
+        rs = RunStore(pdir, project_name)
+        run = rs.load(run_id)
+        if run is None:
+            raise HTTPException(404, f"run 不存在: {run_id}")
+        rv = next((x for x in (run.get("reviews") or [])
+                   if x.get("requestId") == request_id), None)
+        if rv is None:
+            raise HTTPException(404, f"审核申请不存在: {request_id}")
+        if rv.get("status") != "pending":
+            raise HTTPException(409, f"审核卡状态 {rv.get('status')} 不可刷新"
+                                     "（已决策卡不可改写）")
+        if not (req.reason or "").strip():
+            raise HTTPException(422, "refresh 必须附 reason（留痕）")
+        refs = rv.get("artifactRefs") or []
+        cur = _artifact_content_snapshot(pdir, project_name, refs)
+        old_hashes = ((rv.get("contentSnapshot") or {}).get("hashes") or {})
+        new_fp = content_hash({"refs": refs,
+                               "attempt": rv.get("targetAttemptId")})
+
+        def _mut(r):
+            for x in r.get("reviews") or []:
+                if x.get("requestId") == request_id and x.get("status") == "pending":
+                    x["contentSnapshot"] = cur
+                    x["artifactFingerprint"] = new_fp
+                    x["refreshedAt"] = _now_iso()
+                    x["refreshReason"] = (req.reason or "")[:300]
+        rs.update(run_id, _mut)
+        from src.workflow.store import EventLog
+        EventLog(pdir, run_id).append(
+            run_id, "review.refreshed", nodeId=rv.get("nodeId"),
+            requestId=request_id, reason=(req.reason or "")[:200],
+            oldHashes=sorted(old_hashes.values())[:2],
+            newHashes=sorted((cur or {}).get("hashes", {}).values())[:2])
+        out = rs.load(run_id)
+        rv2 = next((x for x in (out.get("reviews") or [])
+                    if x.get("requestId") == request_id), {})
+        return {"requestId": request_id, "refreshed": True,
+                "contentSnapshot": rv2.get("contentSnapshot"),
+                "artifactFingerprint": rv2.get("artifactFingerprint")}
+    except HTTPException:
+        raise
+    except WorkflowError as e:
+        _err(e)
+    except Exception as e:
+        _err(e)

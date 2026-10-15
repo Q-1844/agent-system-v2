@@ -1210,6 +1210,14 @@ class WorkflowEngine:
             t = r["nodes"][target]
             t["repairNote"] = note
             if allowed_shot_ids:
+                # Phase54 A2：修复目标钉定——目标镜在修复 attempt 必须产出新版本
+                # （outputs 检查：writeSource=prior 不计入目标镜 spec）。
+                pn = ((r.get("plan") or {}).get("nodes") or {}).get(target)
+                if pn is not None:
+                    prev = ((pn.get("repairRequireNew") or {}).get("shotIds")) or []
+                    pn["repairRequireNew"] = {
+                        "shotIds": sorted({str(x) for x in allowed_shot_ids} | {str(x) for x in prev}),
+                        "reason": note[:160]}
                 # Phase51 C：修复范围服务端硬闸——持久化到节点（重启可恢复）+
                 # 进程内注册表（director_visual 提交预检查询）。清单外镜头的
                 # 生成提交会被直接拒绝（不进队列不耗配额）。

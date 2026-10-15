@@ -426,6 +426,18 @@ def verify_node_outputs(pdir: Path, project: str, node_plan: dict,
             return None
 
         changed_created = [m for m in matches if _write_source(m) is not None]
+        # Phase54 A2（P53-M 实证豁口）：修复目标镜必须本 attempt 真实写入——
+        # reject 修复 attempt 对目标镜零重生成时，旧版本（writeSource=prior，本节点
+        # 此前 attempt 写入）不再计入（旧版本冒充修复成果直达审核的豁口封堵）。
+        _rrn = (node_plan or {}).get("repairRequireNew") or {}
+        _rrn_shots = {str(x) for x in (_rrn.get("shotIds") or [])}
+        if _rrn_shots and kind == "video_version":
+            changed_created = [
+                m for m in changed_created
+                if _write_source(m) == "current"
+                or (str(m.get("shotId") or m.get("entityId") or "")
+                    not in _rrn_shots
+                    and str(spec.get("shotId") or "") not in _rrn_shots)]
         # 硬性质量标记（withImage/withApprovedRef/playable/withCompletedRender）
         def _flag_ok(m: dict) -> bool:
             if spec.get("withImage") and not m.get("fileOk"):
