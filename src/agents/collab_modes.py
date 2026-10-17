@@ -74,6 +74,25 @@ _ESCALATE_LINE = (
     "资产措辞过审困难、场景锚连续失败）按职责上交对应 Specialist，"
     "上交时写明任务、输入版本、所需产物与完成判定。")
 
+# Phase56 B：批准工作包变体——项目已含冻结的剧本/资产/绑定/首帧（批准快照克隆），
+# 被测变量=视频生成并发。①-④不重做（防六组各造一套素材破坏对照公平性）；
+# producer 从核实批准资产开始，直接进入视频生成与装配。
+_APPROVED_PACKAGE_PREAMBLE = (
+    "【批准工作包模式】本项目为批准快照的克隆：剧本、分镜、角色 Look、场景视图、"
+    "镜头绑定与首帧均已冻结批准——【不要】重做/新建/改写任何剧本与资产（重做会"
+    "破坏对照实验的负荷一致性）。第一步 project.inspect 核实资产与镜头清单在位，"
+    "发现缺失项如实上报 blocker（不擅自补做）；然后直接从视频生成开始。")
+
+_APPROVED_PACKAGE_STEPS = """【任务】{grant_line}请在批准工作包上完成视频生产：
+① 视频：逐镜真实生成视频（静态 5s/动态 8s/高运动 10s；镜间连续性按 Skill 判定：
+同一动作真实继续用尾帧接续（inherit_previous/reference_previous）；确属 intentional cut
+必须显式声明依据——shot.update 写 opening_cut_reason=（same_scene_recam/scene_change/
+time_jump 三选一）；v2 接续链契约下未声明的独立首帧会在提交前被拒绝）。
+每镜收货后核对回执与首中尾帧，不合格先修再交。
+② 装配：各段选 1 镜组成 sequence 并渲染成片候选（目标成片 {duration_hint}，横屏 16:9）。
+③ 汇报：全部完成后给出总结——各步骤引用真实工具回执（changed_refs）、跳过项与原因、
+遗留问题；不要声称未发生的操作。"""
+
 _SOLO_LINE = (
     "你被项目级 scoped grant 授权直接执行全部生产工具族"
     "（script_writer/character_designer/scene_designer/director/assembly），"
@@ -792,8 +811,9 @@ async def _run_producer_lead(rt, pdir: Path, project: str, run: dict, *,
     mode = run["snapshot"]["mode"]
     params = run["snapshot"]["params"]
 
-    # 1. 预铺（可选；依赖允许时并行）
-    if mode.get("preflight"):
+    # 1. 预铺（可选；依赖允许时并行）。Phase56 B：approved_package 批准工作包
+    # 克隆跳过预铺（资产已冻结——六组对照不重做素材，步骤账本如实记 skipped）。
+    if mode.get("preflight") and not params.get("approved_package"):
         _begin_step(run, "preflight",
                     roles=mode["preflight"].get("roles"),
                     parallel=mode["preflight"].get("parallel", True))
@@ -804,6 +824,11 @@ async def _run_producer_lead(rt, pdir: Path, project: str, run: dict, *,
         except Exception as e:   # noqa: BLE001 —— 预铺失败如实记档并中止（不静默跳过）
             _finish_step(run, "preflight", ok=False, error=str(e)[:300])
             raise
+        save_run(pdir, run)
+    elif mode.get("preflight") and params.get("approved_package"):
+        _begin_step(run, "preflight", skipped=True,
+                    reason="approved_package：批准快照克隆——资产已冻结，不重做")
+        _finish_step(run, "preflight", ok=True, skipped=True)
         save_run(pdir, run)
 
     # 2. scoped grant（模式配置的族；TTL 12h 与 Phase54 实证一致）
@@ -830,10 +855,19 @@ async def _run_producer_lead(rt, pdir: Path, project: str, run: dict, *,
     sid = s["session_id"] if isinstance(s, dict) else getattr(s, "session_id", None)
     run["session_ids"]["producer"] = sid
     save_run(pdir, run)
-    content = mode["producer_objective_template"].format(
-        story_goal=params.get("story_goal", ""),
-        segment_count=params.get("segment_count", "六"),
-        duration_hint=params.get("duration_hint", "30-42 秒"))
+    if params.get("approved_package"):
+        # Phase56 B：批准工作包变体目标（①-④不重做；从视频生成开始）
+        gl = _ESCALATE_LINE if mode.get("delegates_enabled") else _SOLO_LINE
+        content = "\n\n".join([
+            _PRODUCER_METHOD_PREAMBLE,
+            _APPROVED_PACKAGE_PREAMBLE,
+            _APPROVED_PACKAGE_STEPS.replace("{grant_line}", gl),
+            f"【故事目标】{params.get('story_goal', '')}"])
+    else:
+        content = mode["producer_objective_template"].format(
+            story_goal=params.get("story_goal", ""),
+            segment_count=params.get("segment_count", "六"),
+            duration_hint=params.get("duration_hint", "30-42 秒"))
     res = await _producer_turn_with_relays(rt, pdir, project, run, sid, content,
                                            thinking=thinking)
     if run.get("status") == "awaiting_relay":

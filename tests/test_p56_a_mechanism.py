@@ -239,7 +239,7 @@ class _RelayFakeRt:
         return {"session_id": f"sess_{agent_id}"}
 
     async def unified_turn(self, project, sid, content, thinking=False):
-        self.turns.append(sid)
+        self.turns.append((sid, content))
         return self.turn_results.pop(0) if self.turn_results else {
             "assistant_message": "ok", "events": [], "receipts": []}
 
@@ -429,6 +429,29 @@ def test_default_mode_start_and_authorization(tmp_path):
     run2 = asyncio.run(cm.start_collab_run(rt, PROJECT, "producer_lead",
                                            {"story_goal": "显式"}))
     assert run2["authorization"]["scope"] == "phase56_explicit_mode_start"
+
+
+def test_approved_package_variant_skips_preflight(tmp_path):
+    """Phase56 B：批准工作包变体——预铺跳过（步骤账本如实记 skipped）、producer
+    目标不要求重做资产（无「新建角色」指令、含「不要重做」护栏）。"""
+    rt = _RelayFakeRt(tmp_path, [{"assistant_message": "done", "events": [],
+                                  "receipts": []}])
+    run = asyncio.run(cm.start_collab_run(
+        rt, PROJECT, "combo_recommended",
+        {"story_goal": "批准包测试", "approved_package": True}))
+    for _ in range(200):
+        cur = cm.load_run(rt.tmp, run["run_id"])
+        if cur["status"] in ("completed", "failed", "cancelled", "awaiting_relay"):
+            break
+        asyncio.run(asyncio.sleep(0.01))
+    cur = cm.load_run(rt.tmp, run["run_id"])
+    steps = {s["step_id"]: s for s in cur["steps"]}
+    assert steps["preflight"]["detail"].get("skipped") is True   # 预铺不重做
+    assert [sid for sid, _c in rt.turns] == ["sess_producer"]   # CD/SC 预铺 turn 未发生
+    content = rt.turns[0][1]
+    assert "不要】重做" in content or "不要重做" in content
+    assert "opening_cut_reason" in content   # v2 声明指令在批准包目标内
+    assert cur["snapshot"]["params"]["approved_package"] is True
 
 
 def test_rest_default_mode_and_resume_endpoint(tmp_path, monkeypatch):
