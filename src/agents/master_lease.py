@@ -82,15 +82,22 @@ def transfer(pdir: Path, from_session: str, to_session: str, *,
 
 
 def verify(pdir: Path, session_id: str, *, now: Optional[float] = None) -> dict:
-    """执行点检查：session 是否为当前未过期 holder。损坏文件按无租约处理
-    （fail-open，返回 verified=True + note）。"""
+    """执行点检查：session 是否仍为主控写入者。
+    语义（Phase55 冒烟实证修正）：holder 匹配即通过——【自身租约过期≠失去主控】
+    （长 turn 超过 TTL 是常态；过期只意味着他人可以接管，而接管会改变 holder/
+    推 generation，届时本会话自然验不过）。过期只 gate 他人 acquire。
+    损坏文件按无租约处理（fail-open，返回 verified=True + note）。"""
     now = time.time() if now is None else now
     cur = _load(pdir)
     if cur is None:
         return {"verified": True, "note": "无租约文件（fail-open；同会话互斥由 "
                                           "turn_registry 承担）"}
-    if cur.get("holder") == session_id and (cur.get("expires_at") or 0) >= now:
-        return {"verified": True, "generation": cur.get("generation")}
+    if cur.get("holder") == session_id:
+        return {"verified": True, "generation": cur.get("generation"),
+                **({"note": "租约已过期但无接管者——holder 连续性保持"}
+                   if (cur.get("expires_at") or 0) < now else {})}
     return {"verified": False,
             "holder": cur.get("holder"), "generation": cur.get("generation"),
-            "reason": "主控租约已转移/过期——本会话不再是主控写入者"}
+            "reason": (f"主控租约已被会话 {cur.get('holder')} 持有"
+                       f"（generation={cur.get('generation')}）——本会话不再是"
+                       "主控写入者（经 relay 移交或被接管）")}

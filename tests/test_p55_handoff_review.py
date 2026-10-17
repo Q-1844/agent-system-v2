@@ -72,6 +72,19 @@ def test_lease_lifecycle(tmp_path):
     assert ml.verify(tmp_path, "sess_c")["verified"]
 
 
+def test_lease_expired_holder_continuity(tmp_path):
+    """冒烟实证回归：自身租约过期≠失去主控（长 turn 超 TTL 常态）——
+    holder 连续性保持；他人接管（generation+1）后才验不过。"""
+    a = ml.acquire(tmp_path, "sess_long", ttl_s=50)
+    assert a["ok"]
+    # 过期后：同 holder 仍 verified（连续性）；他人可接管
+    future = a["expires_at"] + 10
+    assert ml.verify(tmp_path, "sess_long", now=future)["verified"]
+    b = ml.acquire(tmp_path, "sess_other", now=future)
+    assert b["ok"] and b["generation"] == 2
+    assert not ml.verify(tmp_path, "sess_long", now=future)["verified"]
+
+
 def test_lease_corrupt_file_fail_open(tmp_path):
     p = tmp_path / "output" / "agents" / "master_lease.json"
     p.parent.mkdir(parents=True)

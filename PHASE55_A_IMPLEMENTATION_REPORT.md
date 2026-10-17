@@ -195,8 +195,22 @@
 - **`src/api/index.ts`**：collabModes/collabRunStart/collabRuns/collabRunGet/collabRunCancel 五方法。
 - vue-tsc 类型检查通过；不新增画布节点类型（沿用 Production Room 组件）。
 
-## E.2 真机验证计划（受额度约束，跨配额日执行）
+## E.2 真机验证（进行中）
 
-- 今日（10-17）video 额度 402/500s 已被 Phase54 收尾消耗（M5/M6 跨日提交）——**并发主试验（§11.2-2：同输入仅改在途上限 1/2/3）须跨配额日**。
-- 次序：①后端重启加载新代码 → ②接线冒烟（每个预设经正常产品入口完成最小任务；被测请求/模式/actor/产物真实）→ ③并发主试验（含独立分支+一条真实接续链）→ ④恢复实战（任务取得 ID 后中断客户端，核对仅收货不重复生成）→ ⑤中长片压力（2-4min，先算总源素材需求 vs 当日额度）。
-- 全部运行独立会话+项目输出，输入快照只读复制；被测新生成阶段不继承基线视频。
+### E.2.1 接线冒烟 ② producer_lead（2026-10-17 完成，真实全流程）
+
+- **入口**：产品 REST（POST /api/project/{p}/collab-runs，与前端 CollabRunPanel 同一端点）；项目 P55_SMOKE2B（微型 2 镜故事《雨夜递伞》，segment_count=两/duration_hint=8-12 秒——模板段数/时长参数化以适配冒烟额度）。
+- **过程**：三次运行接力完成（run_eb818c54da 断网中断图像生成→诚实 blocker；run_67314129eb 租约 TTL 缺陷暴露→修复；run_51744a53ce 续跑完成）。canonical 状态跨 run 接续（run2/run3 复用 run1 的剧本/角色/三视图/Look）。
+- **成片**：`projects/P55_SMOKE2B/output/sequences/seq_163beda6/srender_f5abfec2.mp4`——12.2s（计划 12.175s 误差 21ms），1280×720，native 音轨；结构=s01_c02（店内隔门 5s）+s02_c01（递伞收尾）；trace 裁定字段落档、收尾自检通过。**待用户看片**。
+- **消耗**：video 402→415（+13s），images 176，text 1052；run3 墙钟 ~68min（含 Look/场景视图审批迭代——微型片资产阶段占比高于预期，记入后续效率观察）。
+- **机制验证**：契约闸（BOUND 基线等价——producer 实际执行了 shot.production.bind）、scoped grant、run 快照、步骤账本、跨 run canonical 接续、诚实 blocker/汇报（两次中断均如实上报零伪造）。
+
+### E.2.2 冒烟暴露缺陷与修复（已落地）
+
+- **主控租约 TTL 缺陷（run_67314129eb 实证）**：lease TTL 30min < 长 turn 时长（39min）→ turn 自身租约过期 → 自身工具被拒（denial 消息误报"已转移"）。**修复**：verify 语义改为 holder 匹配即通过（自身过期≠失去主控——过期只 gate 他人 acquire，接管会推 generation 届时自然验不过）+ 消息如实化；回归测试 `test_lease_expired_holder_continuity`。修复后 run_51744a53ce 全程 68min 无自身拒绝（生产验证）。
+- **模板参数化**：segment_count/duration_hint 占位符（replace 烘焙 grant_line，不动运行期占位符）。
+
+### E.2.3 后续真机（待额度/后续会话）
+
+- ①六员链冒烟（W09 最小 6 镜——额度充足日）；③④⑤冒烟；并发主试验 1/2/3 档（同输入仅改 `concurrency.video_inflight`，含独立分支+真实接续链）；恢复实战（取得 ID 后中断客户端核对仅收货）；中长片压力（2-4min）。
+- 观察项：微型片资产阶段（Look/场景视图审批迭代）占墙钟比例显著——与 §12 指标「就绪到提交延迟」对齐后量化。

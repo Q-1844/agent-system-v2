@@ -44,14 +44,14 @@ _PRODUCER_METHOD_PREAMBLE = (
     "（三查判据/时长配方/尾帧接续链策略均以该 Skill 正文为准）。" % _SKILL_RELAY)
 
 _PRODUCER_STEPS = """【任务】{grant_line}请独自完成以下短片全流程生产：
-① 剧本：按【故事目标】写 story 六段（每段写清：剧情任务/起始状态/主动作/结果状态）。
+① 剧本：按【故事目标】写 story {segment_count} 段（每段写清：剧情任务/起始状态/主动作/结果状态）。
 ② 资源：按故事新建角色，用 resource.look.prepare 完成造型参考生产（真实生成与审批）。
 ③ 场景：建立故事涉及的地点与各段实例状态图（SceneInstanceView）。若某视图生成反复不合格
 （连续多次仍不过审），如实跳过场景锚并把决定写进最终汇报，不得悄悄跳过。
 ④ 分镜：逐镜绑定角色 look 与场景资源（shot.production.bind），生成首帧候选并按三查判据选定。
 ⑤ 视频：逐镜真实生成视频（静态 5s/动态 8s/高运动 10s；镜间用尾帧接续或 intentional cut，
 由你按 Skill 判定）；每镜收货后核对回执与首中尾帧，不合格先修再交。
-⑥ 装配：各段选 1 镜组成 sequence 并渲染成片候选（目标成片 30-42 秒，横屏 16:9）。
+⑥ 装配：各段选 1 镜组成 sequence 并渲染成片候选（目标成片 {duration_hint}，横屏 16:9）。
 ⑦ 汇报：全部完成后给出总结——各步骤引用真实工具回执（changed_refs）、跳过项与原因、
 遗留问题；不要声称未发生的操作。"""
 
@@ -100,7 +100,8 @@ def _producer_mode(mode_id: str, preset_label: str, name: str, description: str,
         "context_policy": {"profile": "single_session_monitored"},
         "producer_objective_template": "\n\n".join([
             _PRODUCER_METHOD_PREAMBLE,
-            _PRODUCER_STEPS.format(grant_line=grant_line),
+            # grant_line 定义期烘焙（replace，不动其它运行期占位符）
+            _PRODUCER_STEPS.replace("{grant_line}", grant_line),
             "【故事目标】{story_goal}"]),
         "preflight_objective_templates": {
             "character_designer": _CD_PREFLIGHT_TEMPLATE,
@@ -500,7 +501,9 @@ async def _run_producer_lead(rt, pdir: Path, project: str, run: dict, *,
     run["session_ids"]["producer"] = sid
     save_run(pdir, run)
     content = mode["producer_objective_template"].format(
-        story_goal=params.get("story_goal", ""))
+        story_goal=params.get("story_goal", ""),
+        segment_count=params.get("segment_count", "六"),
+        duration_hint=params.get("duration_hint", "30-42 秒"))
     res = await rt.unified_turn(project, sid, content, thinking=thinking)
     relays = 0
     while (res or {}).get("handoff") and relays < 3:
