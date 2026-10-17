@@ -228,6 +228,12 @@ SHOT_UPDATABLE_FIELDS = (
     "link_mode",   # Phase D §25.C：i2v | keyframes（尾帧生产前置）；34.md §13 增 multi
     "video_reference_asset_id",   # 34.md Human Gate：multi 按镜参考（须 ∈ look approved）
     "source_shot_id",
+    # Phase56 B/A2：接力声明通道——opening_source（independent/reference_previous/
+    # inherit_previous；independent 同时解除锚）与 opening_cut_reason（independent
+    # 的显式切镜依据 same_scene_recam/scene_change/time_jump；v2 接续链契约必填）。
+    # 值校验在 update_shot_fields（非法=显式 StructureError，不静默忽略）。
+    "opening_source",
+    "opening_cut_reason",
 )
 _LIST_FIELDS = ("characters", "required_elements", "preserve_elements",
                 "video_preserve_elements")
@@ -326,7 +332,7 @@ DIRECTOR_SYSTEM = """你是 AGNES 的 Director（导演/分镜设计者），负
 【写（必须一个一个来，每次用返回的最新指纹）】
 - shot.create(scene_id, description, …, after_shot_id?, expected_shots_revision)：给故事段补 1 个镜头（after_shot_id 省略则追加段尾）。只补 1 镜时用本工具。
 - shot.create_many(scene_id, shots[], after_shot_id?, expected_shots_revision)：一次创建一组镜头（≥2 镜；只补 1 镜用 shot.create）。【给一个故事段从无到有设计整组分镜，用本工具一次提交】；shots 数组顺序即镜头顺序。整批一次校验+一次原子写入，任一非法整批不写。
-- shot.update(shot_id, expected_revision, …)：精准修改一个镜头的任意拍摄字段（只传要改的）。用户说「第3镜改成近景」这类单镜要求时用本工具，不要重建整组。改锚/解除接力也用它：传 source_shot_id=新来源（须先 move 到来源之后）或 null 解除。
+- shot.update(shot_id, expected_revision, …)：精准修改一个镜头的任意拍摄字段（只传要改的）。用户说「第3镜改成近景」这类单镜要求时用本工具，不要重建整组。改锚/解除接力也用它：传 source_shot_id=新来源（须先 move 到来源之后）或 null 解除；接力声明传 opening_source=inherit_previous/reference_previous（配合 source_shot_id），解除传 independent；independent 切镜须显式传 opening_cut_reason（same_scene_recam/scene_change/time_jump）。
 - shot.update_many(updates[], expected_revision)：一次修改 ≥{max_update_batch_prev} 个互相独立的镜头（「这组镜头整体重新设计得更有张力」）。每项 shot_id + 要改的字段；同镜多字段合并到一项。整批一次校验+一次原子写入。
 - shot.delete(shot_id)：删除一个镜头（系统会级联删除接力依赖它的下游镜头，并保留已生成文件）。用户明确要求删除时直接调用。
 - shot.move(shot_id, before_shot_id?/after_shot_id?, expected_shots_revision)：把一个镜头在同段内移到某镜之前/之后（都省略则移到段尾）。镜头顺序是状态依赖操作：多个移动必须一步一步来，每步用最新指纹，不要试图一次重排整组。

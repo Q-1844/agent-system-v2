@@ -357,6 +357,8 @@ _SHOT_WRITABLE_FIELDS = (
     "video_preserve_elements", "video_preserve_custom",
     "note",
     "link_mode",   # Phase D §25.C：尾帧生产需 keyframes 模式（值校验见 update_shot_fields）
+    "opening_source",   # Phase56 B：agent 接力声明通道（值校验见 update_shot_fields；
+                        # 生成侧「opening_source==inherit 且 source_shot_id 非空」双条件+preflight 依赖闸兜底）
     "opening_cut_reason",   # Phase56 A2 v2：independent 切镜显式依据（值校验见 update_shot_fields）
 )
 
@@ -512,6 +514,23 @@ def update_shot_fields(project: Project, shot_id: str, fields: Optional[dict] = 
             if str(val) in ("i2v", "keyframes", "multi"):
                 setattr(shot, key, str(val))
                 changed.append(key)
+            continue
+        elif key == "opening_source":
+            # Phase56 B：接力声明通道——合法值白名单（非法值=显式 StructureError）。
+            # independent 同时解除接力锚（与 REST opening-source 同口径）；
+            # reference/inherit 的锚由 source_shot_id（update_shot_relay）管理，
+            # 生成侧双条件+preflight dependency_ready 兜底（来源未就绪=提交前拦截）。
+            from src.core.models import OpeningSource
+            vals = {m.value for m in OpeningSource}
+            if str(val) not in vals:
+                raise StructureError(
+                    "invalid_opening_source",
+                    f"非法 opening_source: {val}（合法值：{sorted(vals)}）")
+            setattr(shot, key, str(val))
+            changed.append(key)
+            if str(val) == OpeningSource.INDEPENDENT.value:
+                shot.source_shot_id = None
+                shot.source_version = None
             continue
         elif key == "opening_cut_reason":
             # Phase56 A2 v2：independent 切镜依据——合法值白名单（非法值=显式

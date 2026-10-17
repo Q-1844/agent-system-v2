@@ -488,6 +488,148 @@ def test_rest_default_mode_and_resume_endpoint(tmp_path, monkeypatch):
     assert ei.value.status_code == 400
 
 
+def test_agent_declaration_channel_opening_fields(tmp_path):
+    """Phase56 B：agent shot.update 的接力/切镜声明通道——opening_source 白名单值
+    校验（independent 解除锚）、opening_cut_reason 白名单校验（非法=显式错误）。"""
+    from src.storyboard.structure_service import update_shot_fields, StructureError
+    s1 = _mk_shot("s01_c01", index=1)
+    s2 = _mk_shot("s01_c02", index=2)
+    proj = _mk_project([s1, s2])
+    # 合法声明：inherit + 锚
+    proj.get_shot("s01_c02").source_shot_id = "s01_c01"
+    r = update_shot_fields(proj, "s01_c02",
+                           {"opening_source": "inherit_previous"})
+    assert "opening_source" in r["changed"]
+    assert proj.get_shot("s01_c02").opening_source == "inherit_previous"
+    assert proj.get_shot("s01_c02").source_shot_id == "s01_c01"
+    # independent 同时解除锚
+    update_shot_fields(proj, "s01_c02", {"opening_source": "independent"})
+    assert proj.get_shot("s01_c02").source_shot_id is None
+    # cut_reason 合法/非法
+    update_shot_fields(proj, "s01_c02", {"opening_cut_reason": "time_jump"})
+    assert proj.get_shot("s01_c02").opening_cut_reason == "time_jump"
+    with pytest.raises(StructureError):
+        update_shot_fields(proj, "s01_c02", {"opening_cut_reason": "随便写"})
+    with pytest.raises(StructureError):
+        update_shot_fields(proj, "s01_c02", {"opening_source": "teleport"})
+
+
+# ==================================================================
+# D1（Phase56 04 文件）：终审→有界局部修复→复审 闭环（无媒体夹具）
+# ==================================================================
+class _FakeRepairQueue:
+    """假队列：submit 即 done（不调 Provider）；记录全部提交参数。"""
+
+    def __init__(self):
+        self.submitted = []
+
+    def submit(self, project, kind, shot_id, **params):
+        self.submitted.append({"project": project, "kind": kind,
+                               "shot_id": shot_id, **params})
+        return SimpleNamespace(job_id=f"j{len(self.submitted)}",
+                               state="done", params=params)
+
+    def get(self, job_id):
+        return SimpleNamespace(state="done")   # submit 即终态（_wait_job_terminal 用）
+
+
+def test_auto_repair_loop_new_artifact_and_rereview(tmp_path, monkeypatch):
+    """④D1：独立终审硬错→确定性重生成（repair_of_review 溯源随 job 落档）→
+    同政策复审→通过；复审仍硬错→达上限如实 still_hard（不冒充通过）。"""
+    from src.agents import review_pipeline
+
+    rt = _RelayFakeRt(tmp_path, [])
+    fq = _FakeRepairQueue()
+    rt._resolve_job_queue_or_none = lambda: fq
+    rt._resolve_client_or_none = lambda agent_id=None: SimpleNamespace()
+    run = {"run_id": "run_fix", "project": PROJECT, "mode_id": "combo_recommended",
+           "mode_version": "2.0.0", "status": "running", "created_at": 1.0,
+           "granted_by": "t", "snapshot_hash": "h",
+           "snapshot": {"mode": cm.COLLAB_MODES["combo_recommended"],
+                        "params": {"story_goal": "s"}},
+           "steps": [], "session_ids": {}, "grant_ids": [],
+           "workflow_run_id": None, "result": None, "relay_count": 0,
+           "authorization": {"scope": "phase56_experimental_default",
+                             "machine_review": True, "bounded_repair": True,
+                             "granted_by": "t",
+                             "user_acceptance": "pending_user_review"}}
+    calls = {"n": 0}
+
+    async def fake_review(rt_, pdir_, project_, *, reason="", shot_ids=None,
+                          positions=None):
+        calls["n"] += 1
+        if shot_ids:   # 复审：第 1 次仍硬错（驱动第二次 attempt），之后通过
+            if calls["n"] == 2:
+                return {"batch_id": f"rvw_r{calls['n']}", "results": [
+                    {"shot_id": shot_ids[0], "overall": "hard_error",
+                     "hard_errors": ["unexpected_people"]}],
+                    "hard_error_shots": list(shot_ids), "minor_shots": []}
+            return {"batch_id": f"rvw_r{calls['n']}", "results": [
+                {"shot_id": shot_ids[0], "overall": "pass", "hard_errors": []}],
+                "hard_error_shots": [], "minor_shots": []}
+        return {"batch_id": f"rvw_{calls['n']}", "shots_reviewed": 1,
+                "hard_error_shots": ["s01_c02"], "minor_shots": [],
+                "report_path": "x", "results": []}
+
+    monkeypatch.setattr(review_pipeline, "run_independent_review", fake_review)
+    asyncio.run(cm._final_review_and_repair(rt, tmp_path, PROJECT, run))
+    steps = {s["step_id"]: s for s in run["steps"]}
+    assert steps["independent_final_review"]["detail"]["hard_error_shots"] == ["s01_c02"]
+    rep = steps["auto_repair"]["detail"]
+    assert steps["auto_repair"]["status"] == "done"   # ok 落在 step.status
+    assert rep["still_hard"] == []
+    # 修复=同一硬错镜两次 attempt（复审第一次仍硬错→第二次通过）；溯源字段在位
+    submits = fq.submitted
+    assert [s["shot_id"] for s in submits] == ["s01_c02", "s01_c02"]
+    assert submits[0]["repair_of_review"] == "rvw_1" and submits[0]["repair_attempt"] == 1
+    assert submits[1]["repair_attempt"] == 2
+    assert run["repair"]["still_hard"] == []
+    # 授权来源落账（actor=mode_run_executor）
+    assert rep["actor"] == "mode_run_executor"
+
+
+def test_auto_repair_limit_exhausted_honest(tmp_path, monkeypatch):
+    """④D1：复审恒硬错→达每镜上限如实 still_hard（不无限重试、不冒充通过）。"""
+    from src.agents import review_pipeline
+
+    rt = _RelayFakeRt(tmp_path, [])
+    fq = _FakeRepairQueue()
+    rt._resolve_job_queue_or_none = lambda: fq
+    rt._resolve_client_or_none = lambda agent_id=None: SimpleNamespace()
+    run = {"run_id": "run_fix2", "project": PROJECT, "mode_id": "combo_recommended",
+           "mode_version": "2.0.0", "status": "running", "created_at": 1.0,
+           "granted_by": "t", "snapshot_hash": "h",
+           "snapshot": {"mode": cm.COLLAB_MODES["combo_recommended"],
+                        "params": {"story_goal": "s"}},
+           "steps": [], "session_ids": {}, "grant_ids": [],
+           "workflow_run_id": None, "result": None, "relay_count": 0,
+           "authorization": {"scope": "x", "user_acceptance": "pending_user_review"}}
+    calls = {"n": 0}
+
+    async def fake_review(rt_, pdir_, project_, *, reason="", shot_ids=None,
+                          positions=None):
+        calls["n"] += 1
+        if shot_ids:
+            return {"batch_id": f"rvw_r{calls['n']}", "results": [
+                {"shot_id": shot_ids[0], "overall": "hard_error",
+                 "hard_errors": ["missing_character"]}],
+                "hard_error_shots": list(shot_ids), "minor_shots": []}
+        return {"batch_id": f"rvw_{calls['n']}", "shots_reviewed": 1,
+                "hard_error_shots": ["s01_c02"], "minor_shots": [],
+                "report_path": "x", "results": []}
+
+    monkeypatch.setattr(review_pipeline, "run_independent_review", fake_review)
+    asyncio.run(cm._final_review_and_repair(rt, tmp_path, PROJECT, run))
+    steps = {s["step_id"]: s for s in run["steps"]}
+    rep = steps["auto_repair"]["detail"]
+    assert steps["auto_repair"]["status"] == "failed"   # 仍有硬错=未全通过
+    assert rep["still_hard"] == [{"shot_id": "s01_c02",
+                                  "attempts": cm.REPAIR_LIMIT_PER_SHOT}]
+    submits = fq.submitted
+    assert len(submits) == cm.REPAIR_LIMIT_PER_SHOT   # 恰好上限次，不无限
+    assert run["repair"]["still_hard"][0]["shot_id"] == "s01_c02"
+
+
 # ==================================================================
 # A3：UNKNOWN 提交暂停（handler 层待核验）
 # ==================================================================
