@@ -104,11 +104,16 @@ def build_handoff_package(rt, project: str, session_id: str, *, reason: str,
                                    grant_mod.active(pdir, "producer")]
     except Exception as e:   # noqa: BLE001
         pkg["grants"]["error"] = str(e)[:160]
-    # 主控租约状态
+    # 主控租约状态（Phase56 A3：损坏经 diagnose 如实落包，不冒充无租约）
     try:
-        cur = master_lease._load(pdir)
-        pkg["lease"] = {"holder": (cur or {}).get("holder"),
-                        "generation": (cur or {}).get("generation")}
+        _diag = master_lease.diagnose(pdir)
+        if _diag.get("state") == "ok":
+            pkg["lease"] = {"holder": _diag.get("holder"),
+                            "generation": _diag.get("generation"),
+                            "expired": _diag.get("expired")}
+        else:
+            pkg["lease"] = {"state": _diag.get("state"),
+                            "note": _diag.get("note", "")}
     except Exception:
         pkg["lease"] = {}
     # 最近用户目标摘录（索引；新会话回读 canonical，不把摘要当真相）

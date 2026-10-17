@@ -370,12 +370,13 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
     if not is_image and submittable:
         from src.generation.video_contract import (
             build_input_manifest,
+            policy_requires_binding,
             scene_reference_consumed as _scene_ref_consumed,
             validate_video_submission,
         )
         from src.shot_binding.service import ShotBindingService
         _vc_svc = ShotBindingService(pdir, project)
-        _vc_require_binding = reference_policy == "bound_required"
+        _vc_require_binding = policy_requires_binding(reference_policy)
         _vc_allowed: list = []
         for t in submittable:
             _vc_shot = proj.get_shot(t["shot_id"])
@@ -385,7 +386,8 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
             _vc_validity = _vc_svc.read_validity(t["shot_id"])
             _vc_chk = validate_video_submission(
                 _vc_shot, require_binding=_vc_require_binding,
-                validity=_vc_validity)
+                validity=_vc_validity,
+                policy=reference_policy, project=proj, pdir=pdir)
             if not _vc_chk["ok"]:
                 for _viol in _vc_chk["violations"]:
                     blocked.append({
@@ -399,7 +401,9 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
                 continue
             _vc_mode = ("keyframes" if _vc_shot.link_mode == "keyframes"
                         else "multi" if _vc_shot.link_mode == "multi" else "i2v")
-            _vc_sref = _scene_ref_consumed(proj, _vc_shot, pdir, validity=_vc_validity)
+            # v2 路径 validate 内已算 scene_ref——复用，不重复判定（v1 路径回退原逻辑）
+            _vc_sref = _vc_chk.get("scene_reference_consumed") or \
+                _scene_ref_consumed(proj, _vc_shot, pdir, validity=_vc_validity)
             from src.generation.video_contract import planned_video_seconds
             video_contract_state[t["shot_id"]] = {
                 "manifest": build_input_manifest(

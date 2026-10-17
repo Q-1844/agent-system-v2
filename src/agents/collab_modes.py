@@ -30,7 +30,16 @@ from typing import Any, Dict, List, Optional
 
 COLLAB_MODE_SCHEMA = "collab_mode_v1"
 COLLAB_RUN_SCHEMA = "collab_run_v1"
-MODE_REGISTRY_VERSION = "p55_b_modes_v1"
+MODE_REGISTRY_VERSION = "p56_a_modes_v2"
+
+# Phase56 A1：实验默认——既有组合预设的新版本（combo_recommended v2）。
+# 用户本轮选择固定：优先缩短单片等待并减少手工推动；六员等旧预设保留为显式
+# 对照与回退。默认只作用于未显式指定 mode_id 的新启动 run；在途 run 使用其
+# 启动快照（不受注册表后续变化影响）。
+DEFAULT_EXPERIMENTAL_MODE_ID = "combo_recommended"
+
+RELAY_LIMIT = 3             # 自动接力上限（超限 → awaiting_relay，可显式 resume 续跑）
+REPAIR_LIMIT_PER_SHOT = 3   # 每镜返工上限（沿用既有 workflow REPAIR_LIMIT 口径）
 
 # Phase54 实证的生产工具族（grant.py GRANT_FAMILIES 的五族全名）。
 ALL_FAMILIES = ["assembly", "character_designer", "director",
@@ -49,8 +58,11 @@ _PRODUCER_STEPS = """【任务】{grant_line}请独自完成以下短片全流�
 ③ 场景：建立故事涉及的地点与各段实例状态图（SceneInstanceView）。若某视图生成反复不合格
 （连续多次仍不过审），如实跳过场景锚并把决定写进最终汇报，不得悄悄跳过。
 ④ 分镜：逐镜绑定角色 look 与场景资源（shot.production.bind），生成首帧候选并按三查判据选定。
-⑤ 视频：逐镜真实生成视频（静态 5s/动态 8s/高运动 10s；镜间用尾帧接续或 intentional cut，
-由你按 Skill 判定）；每镜收货后核对回执与首中尾帧，不合格先修再交。
+⑤ 视频：逐镜真实生成视频（静态 5s/动态 8s/高运动 10s）。镜间连续性按 Skill 判定：
+同一动作真实继续用尾帧接续（inherit_previous/reference_previous）；确属 intentional cut
+（换机位/换场/时间跳跃）必须显式声明依据——shot.update 写 opening_cut_reason=
+（same_scene_recam/scene_change/time_jump 三选一）；v2 接续链契约下未声明的独立首帧
+会在提交前被拒绝（不要静默独立出帧）。每镜收货后核对回执与首中尾帧，不合格先修再交。
 ⑥ 装配：各段选 1 镜组成 sequence 并渲染成片候选（目标成片 {duration_hint}，横屏 16:9）。
 ⑦ 汇报：全部完成后给出总结——各步骤引用真实工具回执（changed_refs）、跳过项与原因、
 遗留问题；不要声称未发生的操作。"""
@@ -165,6 +177,26 @@ COLLAB_MODES: Dict[str, dict] = {
         notes="Phase54 §8.3/§10 推荐组合的速度优势为观察证据；质量以六员链为锚"
               "（用户 10-16/10-17 两轮评审：四种新模式均未达基线）。"),
 }
+# ---- Phase56 A1：combo_recommended v2（本轮实验默认）----
+# 在 v1（预铺+主执行+上交+独立终审）之上补齐：①reference_policy v2
+#（baseline_equiv_chain——接续链强制/context_only 不冒充消费）；②有界局部修复
+# → 复审闭环（repair_policy）；③机器审核授权落档（authorization，启动时写入
+# run）。六员等旧预设显式回退路径不变；在途 run 快照不受影响。
+COLLAB_MODES["combo_recommended"] = {
+    **COLLAB_MODES["combo_recommended"],
+    "mode_version": "2.0.0",
+    "description": "【Phase56 实验默认 v2】预铺+主执行+上交+独立机器审查+上限内"
+                   "局部修复→复审（闭环）+固定选版清单装配；reference_policy v2"
+                   "（接续链强制）",
+    "reference_policy": "baseline_equiv_chain",
+    "repair_policy": {"repair_limit_per_shot": REPAIR_LIMIT_PER_SHOT,
+                      "actor": "mode_run_executor",
+                      "note": "确定性执行器重生成+同政策复审；达上限如实保留失败"},
+    "experimental": True,
+    "notes": "v1 基线：Phase54 §8.3/§10 推荐组合；v2 增量=参考接续链契约+终审到"
+             "局部修复复审闭环（Phase55 冒烟看片不通过[衔接]的针对性修复）。"
+             "六员/旧模式保留为显式对照与回退。",
+}
 
 
 # ============ 注册表读取与校验 ============
@@ -204,8 +236,10 @@ def validate_start(mode_id: str, params: dict) -> List[str]:
                         "scene_designer）——避免泛做其它专业素材")
             if preflight.get("roles") and not (params.get("story_goal") or "").strip():
                 errors.append("预铺模式必须提供 story_goal")
-    # 参考策略：非基线策略必须显式声明为实验（本注册表暂不注册实验预设）
-    if mode.get("reference_policy") not in ("bound_required", "legacy_allowed"):
+    # 参考策略：legacy 必须显式声明为实验（基线等价家族 bound_required/
+    # baseline_equiv_chain 均为合法默认；v2=Phase56 A2 接续链契约）
+    if mode.get("reference_policy") not in ("bound_required", "legacy_allowed",
+                                            "baseline_equiv_chain"):
         errors.append("mode 配置错误：reference_policy 非法")
     if mode.get("reference_policy") == "legacy_allowed" and not mode.get("experimental"):
         errors.append("非实验预设不得默认 legacy 参考策略（基线等价）")
@@ -318,13 +352,17 @@ def snapshot_hash(snapshot: dict) -> str:
 
 
 # ============ 启动 ============
-async def start_collab_run(rt, project: str, mode_id: str, params: dict,
+async def start_collab_run(rt, project: str, mode_id: Optional[str], params: dict,
                            *, granted_by: str = "operator",
                            thinking: bool = False) -> dict:
     """启动一次协作模式 run：校验 → 快照 → 参考策略落盘 → grant → 后台执行。
+    mode_id=None 时用实验默认（DEFAULT_EXPERIMENTAL_MODE_ID，Phase56 A1 用户
+    选择；显式传 mode_id 的旧路径不变——六员等预设仍是合法显式选择/回退）。
     立即返回 run 记录（status=running）；进度经 GET /collab-runs/{id} 查询。"""
     pdir = rt._resolve_project_dir(project)
     params = dict(params or {})
+    using_default = not (mode_id or "").strip()
+    mode_id = mode_id if not using_default else DEFAULT_EXPERIMENTAL_MODE_ID
     errors = validate_start(mode_id, params)
     if errors:
         raise ValueError("；".join(errors))
@@ -347,6 +385,17 @@ async def start_collab_run(rt, project: str, mode_id: str, params: dict,
         "grant_ids": [],
         "workflow_run_id": None,
         "result": None,
+        # Phase56 A1：机器审核/有界修复的授权来源落 run（可审计；「用户接受」
+        # 不在此填写——始终等待用户看片反馈回填）。
+        "authorization": {
+            "scope": ("phase56_experimental_default"
+                      if using_default else "phase56_explicit_mode_start"),
+            "machine_review": mode.get("review_policy", {}).get(
+                "profile") == "independent_final_review",
+            "bounded_repair": bool(mode.get("repair_policy")),
+            "granted_by": granted_by,
+            "user_acceptance": "pending_user_review",
+        },
     }
     # 参考策略：活动 run 层（video_contract 三级解析）——producer 模式与六员链
     # 共享 BOUND 基线等价；run 结束不自动清除（策略属于项目当前生产契约，
@@ -361,18 +410,56 @@ async def start_collab_run(rt, project: str, mode_id: str, params: dict,
 
 
 # ============ 执行 ============
+async def _apply_run_concurrency(rt, pdir: Path, project: str, run: dict) -> None:
+    """Phase56 A4：run 的 media_inflight → 真实队列容量（结算后热重配）。
+    只保留一个明确的最终解析结果并落 run（concurrency_effect：请求值/是否生效/
+    实际 worker 数/覆盖来源）——不把快照里的数字当作已生效。"""
+    mode = run["snapshot"]["mode"]
+    params = run["snapshot"]["params"]
+    requested = params.get("media_inflight") \
+        or (mode.get("concurrency") or {}).get("media_inflight")
+    eff: dict = {"requested_media_inflight": requested}
+    run["concurrency_effect"] = eff
+    save_run(pdir, run)
+    if requested is None:
+        return
+    q = None
+    if hasattr(rt, "_resolve_job_queue_or_none"):
+        q = rt._resolve_job_queue_or_none()
+    if q is None:
+        eff.update({"applied": False, "reason": "JobQueue 不可用"})
+        save_run(pdir, run)
+        return
+    try:
+        res = await q.reconfigure_video_workers(int(requested))
+        eff.update({"applied": bool(res.get("applied")),
+                    "workers": res.get("workers", getattr(q, "video_worker_count", None)),
+                    "source": res.get("reason") or res.get("source")
+                    or getattr(q, "video_inflight_source", ""),
+                    "changed": res.get("changed")})
+    except Exception as e:   # noqa: BLE001 —— 重配失败如实落档（不阻塞 run）
+        eff.update({"applied": False, "error": str(e)[:200]})
+    save_run(pdir, run)
+
+
 async def _execute_run(rt, pdir: Path, project: str, run: dict, *,
                        thinking: bool = False) -> None:
     mode = run["snapshot"]["mode"]
     params = run["snapshot"]["params"]
     strategy = mode["execution"]["strategy"]
     try:
+        # Phase56 A4：并发档位实际生效（先于任何媒体派发；后台执行不阻塞启动响应）
+        await _apply_run_concurrency(rt, pdir, project, run)
         if strategy == "workflow_template":
             await _run_workflow_template(rt, pdir, project, run)
         elif strategy == "producer_lead":
             await _run_producer_lead(rt, pdir, project, run, thinking=thinking)
         else:
             raise ValueError(f"unknown execution strategy: {strategy}")
+        # Phase56 A3：awaiting_relay（待接力/未完成）不覆盖为 completed——
+        # 恢复走 resume_collab_run（同一逻辑 run 续跑）。
+        if run.get("status") == "awaiting_relay":
+            return
         run["status"] = "completed"
         run["finished_at"] = time.time()
         save_run(pdir, run)
@@ -456,6 +543,247 @@ async def _run_specialist_preflight(rt, pdir: Path, project: str, run: dict,
     return results
 
 
+def _quota_can_video(rt, seconds: float) -> tuple:
+    """修复前的额度检查（QuotaLedger 口径；取不到 client = 不阻塞，由提交层把关）。"""
+    try:
+        client = rt._resolve_client_or_none(agent_id="producer")
+        if client is None or getattr(client, "quota", None) is None:
+            return True, "quota_unavailable_skip_check"
+        return client.quota.can("video_seconds", seconds)
+    except Exception as e:   # noqa: BLE001
+        return True, f"quota_check_error: {str(e)[:80]}"
+
+
+async def _wait_job_terminal(q, job_id: str, *, timeout_s: int = 1200,
+                             poll_s: float = 2.0) -> bool:
+    """等待 job 到终态（确定性推进——不占用 LLM 推理）。超时返回 False。"""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout_s
+    while loop.time() < deadline:
+        j = q.get(job_id)
+        if j is not None and getattr(j, "state", "") in (
+                "done", "failed", "cancelled"):
+            return True
+        await asyncio.sleep(poll_s)
+    return False
+
+
+async def _final_review_and_repair(rt, pdir: Path, project: str, run: dict, *,
+                                   thinking: bool = False) -> None:
+    """⑤组合 v2 闭环（Phase56 A1/D1，用户授权的机器路径）：
+    独立终审 → 硬错镜有界局部修复（确定性执行器直接重生成——策略选择不进 LLM）
+    → 绑定复审（同政策重跑该镜）→ 结果落账（装配 gate 状态如实保留）。
+    actor=mode_run_executor；授权来源=run.authorization（启动时落档）。
+    达返工上限/额度不足 → still_hard 如实保留，不无限重试、不冒充通过；
+    最终「用户接受」始终等待用户看片（本函数不填写任何接受状态）。"""
+    mode = run["snapshot"]["mode"]
+    if (mode.get("review_policy") or {}).get("profile") != "independent_final_review":
+        return
+    from .review_pipeline import run_independent_review
+    _begin_step(run, "independent_final_review")
+    save_run(pdir, run)
+    try:
+        rv = await run_independent_review(rt, pdir, project,
+                                          reason=f"collab run {run['run_id']}")
+        _finish_step(run, "independent_final_review", ok=True, **{
+            k: rv.get(k) for k in ("batch_id", "shots_reviewed",
+                                   "hard_error_shots", "report_path")})
+        run["review"] = {k: rv.get(k) for k in
+                         ("batch_id", "shots_reviewed", "hard_error_shots",
+                          "minor_shots", "report_path")}
+    except Exception as e:   # noqa: BLE001 —— 审核失败如实落档（不冒充通过）
+        _finish_step(run, "independent_final_review", ok=False,
+                     error=str(e)[:300])
+        save_run(pdir, run)
+        return
+    save_run(pdir, run)
+    hard = list(rv.get("hard_error_shots") or [])
+    if not hard:
+        return
+    # ---- 有界局部修复（D1）----
+    limit = int(((mode.get("repair_policy") or {}).get("repair_limit_per_shot"))
+                or REPAIR_LIMIT_PER_SHOT)
+    q = None
+    if hasattr(rt, "_resolve_job_queue_or_none"):
+        q = rt._resolve_job_queue_or_none()
+    if q is None:
+        _begin_step(run, "auto_repair")
+        _finish_step(run, "auto_repair", ok=False,
+                     error="JobQueue 不可用——修复未执行（硬错镜如实保留）")
+        run["repair"] = {"still_hard": [{"shot_id": s, "attempts": 0} for s in hard]}
+        save_run(pdir, run)
+        return
+    _begin_step(run, "auto_repair", shots=hard, limit_per_shot=limit,
+                actor="mode_run_executor",
+                authorization=(run.get("authorization") or {}).get("scope", ""))
+    save_run(pdir, run)
+    repair_log: list = []
+    still_hard: list = []
+    for shot_id in hard:
+        cur_hard = True
+        attempts = 0
+        while cur_hard and attempts < limit:
+            attempts += 1
+            okq, whyq = _quota_can_video(rt, 12.0)   # 上界预留；实际按规划时长
+            if not okq:
+                repair_log.append({"shot_id": shot_id, "attempt": attempts,
+                                   "skipped": f"quota: {whyq}"})
+                break
+            job = q.submit(project, "video", shot_id,
+                           origin_run_id=run["run_id"],
+                           repair_of_review=rv.get("batch_id"),
+                           repair_attempt=attempts)
+            done = await _wait_job_terminal(q, job.job_id)
+            if not done:
+                repair_log.append({"shot_id": shot_id, "attempt": attempts,
+                                   "job_id": job.job_id, "timeout": True})
+                break
+            try:
+                rv2 = await run_independent_review(
+                    rt, pdir, project, shot_ids=[shot_id],
+                    reason=f"repair复审 run {run['run_id']} attempt {attempts}")
+                entry = (rv2.get("results") or [{}])[0]
+                cur_hard = entry.get("overall") == "hard_error"
+                repair_log.append({
+                    "shot_id": shot_id, "attempt": attempts,
+                    "job_id": job.job_id, "state": job.state,
+                    "review_overall": entry.get("overall"),
+                    "hard_errors": entry.get("hard_errors"),
+                    "review_batch": rv2.get("batch_id")})
+            except Exception as e:   # noqa: BLE001 —— 复审失败如实落账
+                repair_log.append({"shot_id": shot_id, "attempt": attempts,
+                                   "job_id": job.job_id, "state": job.state,
+                                   "review_error": str(e)[:160]})
+                break
+        if cur_hard:
+            still_hard.append({"shot_id": shot_id, "attempts": attempts})
+    _finish_step(run, "auto_repair", ok=not still_hard,
+                 repairs=repair_log, still_hard=still_hard,
+                 **({"note": "达上限/额度不足镜如实保留失败——不冒充通过"}
+                    if still_hard else {}))
+    run["repair"] = {"attempts": repair_log, "still_hard": still_hard,
+                     "limit_per_shot": limit}
+    save_run(pdir, run)
+
+
+async def _producer_turn_with_relays(rt, pdir: Path, project: str, run: dict,
+                                     sid: str, content: str, *,
+                                     thinking: bool = False,
+                                     relay_limit: int = RELAY_LIMIT) -> Optional[dict]:
+    """producer turn + 预算自动接力循环（start/resume 共用——同一逻辑 run）。
+    达 relay_limit 仍 handoff：run 置 awaiting_relay（未完成），最后 handoff 落
+    relay_pending；返回 None（调用方按状态分支）。"""
+    from . import handoff as handoff_mod
+    res = await rt.unified_turn(project, sid, content, thinking=thinking)
+    relays = int(run.get("relay_count") or 0)
+    while (res or {}).get("handoff") and relays < relay_limit:
+        relays += 1
+        _begin_step(run, f"relay_{relays}", from_session=sid,
+                    handoff_id=(res.get("handoff") or {}).get("handoff_id"))
+        save_run(pdir, run)
+        relayed = handoff_mod.relay_producer_session(
+            rt, project, sid, reason="下一请求预算接近 provider 上限（自动接力）",
+            run_id=run["run_id"])
+        sid = relayed["new_session_id"]
+        run["session_ids"][f"producer_relay_{relays}"] = sid
+        run["session_ids"]["producer_last"] = sid
+        _finish_step(run, f"relay_{relays}", ok=True,
+                     to_session=sid, generation=(relayed.get("lease") or {}).get("generation"))
+        _begin_step(run, f"producer_turn_relay_{relays}", session_id=sid)
+        save_run(pdir, run)
+        res = await rt.unified_turn(project, sid, content, thinking=thinking)
+        _finish_step(run, f"producer_turn_relay_{relays}", ok=True,
+                     assistant=(res.get("assistant_message") or "")[:400])
+        run["relay_count"] = relays
+        save_run(pdir, run)
+    run["relay_count"] = relays
+    if (res or {}).get("handoff"):
+        # Phase56 A3：达上限仍有工作——待接力/未完成，不标 completed
+        run["status"] = "awaiting_relay"
+        run["relay_pending"] = {
+            "note": (f"自动接力 {relays} 次后仍触发预算交接——run 待接力（未完成）；"
+                     "恢复走 POST /collab-runs/{id}/resume"),
+            **(res.get("handoff") or {})}
+        save_run(pdir, run)
+        return None
+    return res
+
+
+async def resume_collab_run(rt, project: str, run_id: str, *,
+                            thinking: bool = False) -> dict:
+    """续跑 awaiting_relay 的 run（同一逻辑 collab run；Phase56 A3/D2）：
+    授权续接（活跃 grant 检查，过期按原快照重建）→ 从 producer_last 会话
+    relay 新会话（交接包回读真实状态）→ 继续 producer turn + 接力循环。
+    新 run 记录步骤 resume_N 落账；非 awaiting_relay 的 run 拒绝续跑。"""
+    pdir = rt._resolve_project_dir(project)
+    run = load_run(pdir, run_id)
+    if run is None:
+        raise ValueError(f"unknown collab run: {run_id}")
+    if run.get("status") != "awaiting_relay":
+        raise ValueError(f"run 状态为 {run.get('status')}——仅 awaiting_relay 可续跑"
+                         "（未完成的接力状态才需要恢复）")
+    mode = run["snapshot"]["mode"]
+    params = run["snapshot"]["params"]
+    n_resume = 1 + sum(1 for s_ in (run.get("steps") or [])
+                       if str(s_.get("step_id", "")).startswith("resume_"))
+    _begin_step(run, f"resume_{n_resume}",
+                from_status="awaiting_relay",
+                pending_handoff_id=(run.get("relay_pending") or {}).get("handoff_id"))
+    save_run(pdir, run)
+    # 授权续接：活跃 grant 有效即沿用；过期/缺失按原快照重建（授权来源同 run）
+    from . import grant as grant_mod
+    if mode.get("grant_families") and not grant_mod.active(pdir, "producer"):
+        g = grant_mod.grant(pdir, "producer", mode["grant_families"],
+                            reason=f"collab run {run_id} resume_{n_resume}",
+                            granted_by=run.get("granted_by") or "operator",
+                            ttl_s=43200)
+        run["grant_ids"].append(g["grantId"])
+        _finish_step(run, f"resume_{n_resume}", ok=True,
+                     grant_renewed=g["grantId"])
+    # 接力恢复：从 producer_last（持有交接包的会话）relay 新会话
+    last_sid = run["session_ids"].get("producer_last") \
+        or run["session_ids"].get("producer")
+    if not last_sid:
+        raise ValueError("run 无 producer 会话记录——无法接力恢复")
+    from . import handoff as handoff_mod
+    relayed = handoff_mod.relay_producer_session(
+        rt, project, last_sid,
+        reason=f"awaiting_relay 恢复（resume_{n_resume}）", run_id=run_id)
+    sid = relayed["new_session_id"]
+    run["session_ids"][f"producer_resume_{n_resume}"] = sid
+    run["session_ids"]["producer_last"] = sid
+    _begin_step(run, f"producer_turn_resume_{n_resume}", session_id=sid)
+    run["status"] = "running"   # 恢复推进中（终态仍由执行结果决定）
+    save_run(pdir, run)
+    content = mode["producer_objective_template"].format(
+        story_goal=params.get("story_goal", ""),
+        segment_count=params.get("segment_count", "六"),
+        duration_hint=params.get("duration_hint", "30-42 秒"))
+    res = await _producer_turn_with_relays(rt, pdir, project, run, sid, content,
+                                           thinking=thinking)
+    if run.get("status") == "awaiting_relay":
+        return run
+    _finish_step(run, f"producer_turn_resume_{n_resume}", ok=True,
+                 assistant=(res.get("assistant_message") or "")[:800],
+                 receipts=len(res.get("receipts") or []),
+                 changed_refs=(res.get("changed_refs") or [])[:20],
+                 usage_totals=res.get("usage_totals"))
+    _finish_step(run, f"resume_{n_resume}", ok=True, to_session=sid)
+    # 独立终审 + 修复闭环（与首次执行同一 review/repair 政策，不因恢复而豁免）
+    await _final_review_and_repair(rt, pdir, project, run, thinking=thinking)
+    run["status"] = "completed"
+    run["finished_at"] = time.time()
+    run["result"] = {
+        "producer_session_id": sid,
+        "assistant_excerpt": (res.get("assistant_message") or "")[:2000],
+        "events": len(res.get("events") or []),
+        "usage_totals": res.get("usage_totals"),
+        "resumed": n_resume,
+    }
+    save_run(pdir, run)
+    return run
+
+
 async def _run_producer_lead(rt, pdir: Path, project: str, run: dict, *,
                              thinking: bool = False) -> None:
     """②③④⑤ 共用执行体：预铺（可选，可并行）→ scoped grant → producer 主执行 turn。
@@ -493,7 +821,9 @@ async def _run_producer_lead(rt, pdir: Path, project: str, run: dict, *,
 
     # 3. producer 主执行（单 turn 全载荷；D-12 教训：完整目标一次下发）。
     # Phase55 D：预算接力自动化——turn 返回 handoff 时自动 relay 新会话续跑
-    #（把 Phase54 人工 session-split 变成机制；上限 3 次，超限如实完成并留提示）。
+    #（把 Phase54 人工 session-split 变成机制；上限 3 次）。
+    # Phase56 A3：达上限仍有工作 → run 状态=awaiting_relay（待接力/未完成），
+    # 不再仅加字段后标 completed；恢复走 resume_collab_run。
     _begin_step(run, "producer_turn", delegates_enabled=mode.get("delegates_enabled"))
     save_run(pdir, run)
     s = rt.get_or_create_session(project, "producer", "project", None)
@@ -504,35 +834,15 @@ async def _run_producer_lead(rt, pdir: Path, project: str, run: dict, *,
         story_goal=params.get("story_goal", ""),
         segment_count=params.get("segment_count", "六"),
         duration_hint=params.get("duration_hint", "30-42 秒"))
-    res = await rt.unified_turn(project, sid, content, thinking=thinking)
-    relays = 0
-    while (res or {}).get("handoff") and relays < 3:
-        relays += 1
-        from . import handoff as handoff_mod
-        _begin_step(run, f"relay_{relays}", from_session=sid,
-                    handoff_id=(res.get("handoff") or {}).get("handoff_id"))
-        save_run(pdir, run)
-        relayed = handoff_mod.relay_producer_session(
-            rt, project, sid, reason="下一请求预算接近 provider 上限（自动接力）",
-            run_id=run["run_id"])
-        sid = relayed["new_session_id"]
-        run["session_ids"][f"producer_relay_{relays}"] = sid
-        _finish_step(run, f"relay_{relays}", ok=True,
-                     to_session=sid, generation=(relayed.get("lease") or {}).get("generation"))
-        _begin_step(run, f"producer_turn_relay_{relays}", session_id=sid)
-        save_run(pdir, run)
-        res = await rt.unified_turn(project, sid, content, thinking=thinking)
-        _finish_step(run, f"producer_turn_relay_{relays}", ok=True,
-                     assistant=(res.get("assistant_message") or "")[:400])
-    if (res or {}).get("handoff"):
-        run["result_handoff_pending"] = {
-            "note": "接力 3 次后仍触发预算交接——run 如实完成并留待续跑",
-            **(res.get("handoff") or {})}
+    res = await _producer_turn_with_relays(rt, pdir, project, run, sid, content,
+                                           thinking=thinking)
+    if run.get("status") == "awaiting_relay":
+        return   # 待接力/未完成——_execute_run 不覆盖此状态；恢复走 resume
     _finish_step(run, "producer_turn", ok=True,
                  assistant=(res.get("assistant_message") or "")[:800],
                  receipts=len(res.get("receipts") or []),
                  changed_refs=(res.get("changed_refs") or [])[:20],
-                 relays=relays,
+                 relays=run.get("relay_count") or 0,
                  usage_totals=res.get("usage_totals"))
     run["result"] = {
         "producer_session_id": sid,
@@ -542,22 +852,10 @@ async def _run_producer_lead(rt, pdir: Path, project: str, run: dict, *,
     }
     save_run(pdir, run)
 
-    # 4. 独立终审（review_policy.independent_final_review；Phase55 D 审核流水化）
-    if (mode.get("review_policy") or {}).get("profile") == "independent_final_review":
-        from .review_pipeline import run_independent_review
-        _begin_step(run, "independent_final_review")
-        save_run(pdir, run)
-        try:
-            rv = await run_independent_review(rt, pdir, project,
-                                              reason=f"collab run {run['run_id']}")
-            _finish_step(run, "independent_final_review", ok=True, **{
-                k: rv.get(k) for k in ("batch_id", "shots_reviewed",
-                                       "hard_error_shots", "report_path")})
-            run["review"] = rv
-        except Exception as e:   # noqa: BLE001 —— 审核失败如实落档（不冒充通过）
-            _finish_step(run, "independent_final_review", ok=False,
-                         error=str(e)[:300])
-        save_run(pdir, run)
+    # 4. 独立终审 → 有界局部修复 → 复审 → 装配 gate（Phase56 A1/D1 闭环；
+    # Phase55 D 审核流水化是基础）。profile 非 independent_final_review 的模式
+    # 维持旧行为（无终审步）。
+    await _final_review_and_repair(rt, pdir, project, run, thinking=thinking)
 
 
 # ============ 查询与停止 ============

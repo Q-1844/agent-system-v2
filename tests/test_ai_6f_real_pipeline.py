@@ -951,25 +951,39 @@ def test_C42_recover_submit_uncertain_left_untouched(tmp_path, real_deps):
 
 
 def test_C42_video_handler_marks_previous_submit_uncertain(tmp_path, real_deps):
-    """42.md 缺陷④：上次提交结果不明（generating 无 video_id）→ 重提交成功后
+    """42.md 缺陷④ + Phase56 A3 收口：上次提交结果不明（generating 无 video_id）
+    → ①自动路径（delegate 无确认）新提交被拒绝（待核验——previous_submit_uncertain
+    只是标记，不是自动重发许可）；②显式确认（confirm_uncertain_resubmit）放行后
     VideoVersion.previous_submit_uncertain=True（重复生成风险如实落库）。"""
     agnes = real_deps
     _seed_video_ready(tmp_path)
     from src.core.models import ShotStatus
-    ProjectStore(tmp_path).update_shot(
-        "s01_c01", lambda s: setattr(s.video, "status", ShotStatus.GENERATING.value))
+    from src.core.models import VideoVersion
 
     async def scenario():
         q = _new_queue(tmp_path); await q.start()
         rt = _runtime(tmp_path, q)
+        ProjectStore(tmp_path).update_shot(
+            "s01_c01", lambda s: setattr(s.video, "status", ShotStatus.GENERATING.value))
+        # ① 自动路径：无显式确认 → 拒绝新提交（待核验）
         task = await rt.delegate(PROJECT, "producer", "shot_producer", "shot",
                                  "s01_c01", "x", "shot.video", "execute")
         await _wait_job_terminal(q, task["execution_ref"]["job_id"])
-        return task["task_id"]
+        job1 = q.get(task["execution_ref"]["job_id"])
+        assert job1.state == "failed", job1
+        assert "待核验" in (job1.error or ""), job1.error
+        # ② 显式确认放行（operator 人工对账后的合法重发通道）
+        job2 = q.submit(PROJECT, "video", "s01_c01",
+                        confirm_uncertain_resubmit=True,
+                        origin_run_id="explicit_confirm_test")
+        await _wait_job_terminal(q, job2.job_id)
+        return job2
 
-    tid = asyncio.run(scenario())
+    job2 = asyncio.run(scenario())
+    assert job2.state == "done", job2.error
     sh = ProjectStore(tmp_path).load().get_shot("s01_c01")
-    own = [v for v in sh.video_versions if v.origin_run_id == tid]
+    own = [v for v in sh.video_versions
+           if v.origin_run_id == "explicit_confirm_test"]
     assert own and own[0].previous_submit_uncertain is True
     # 对照：正常 fresh 提交（无历史不明）应为 False
     _seed_video_ready(tmp_path)
@@ -977,7 +991,6 @@ def test_C42_video_handler_marks_previous_submit_uncertain(tmp_path, real_deps):
         "s01_c01", lambda s: (setattr(s.video, "status", ShotStatus.PENDING.value),
                               setattr(s.video, "video_id", None)))
     # 已 DONE 的旧字段不重置（本对照只验字段缺省）：直接构造版本级默认断言
-    from src.core.models import VideoVersion
     assert VideoVersion(version_id="vv_x").previous_submit_uncertain is False
 
 

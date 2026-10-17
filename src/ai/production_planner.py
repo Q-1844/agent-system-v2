@@ -51,6 +51,10 @@ class PlannedShot(BaseModel):
     requires_previous_video_end: bool
     auto_select_policy: str = "seeded_random"
     reason: str = ""
+    # Phase56 A2（reference_policy v2）：independent opening 的显式切镜依据
+    # （same_scene_recam/scene_change/time_jump）——activate 时随 opening_source
+    # 落 shot.opening_cut_reason；v2 策略下未声明的独立首帧在提交前被拒绝。
+    cut_reason: Optional[str] = None
 
 
 class SceneProductionPlan(BaseModel):

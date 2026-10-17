@@ -357,6 +357,7 @@ _SHOT_WRITABLE_FIELDS = (
     "video_preserve_elements", "video_preserve_custom",
     "note",
     "link_mode",   # Phase D §25.C：尾帧生产需 keyframes 模式（值校验见 update_shot_fields）
+    "opening_cut_reason",   # Phase56 A2 v2：independent 切镜显式依据（值校验见 update_shot_fields）
 )
 
 # 哪些结构化字段影响哪个生成 prompt（与 prompt_builder 消费的字段对齐）。
@@ -511,6 +512,18 @@ def update_shot_fields(project: Project, shot_id: str, fields: Optional[dict] = 
             if str(val) in ("i2v", "keyframes", "multi"):
                 setattr(shot, key, str(val))
                 changed.append(key)
+            continue
+        elif key == "opening_cut_reason":
+            # Phase56 A2 v2：independent 切镜依据——合法值白名单（非法值=显式
+            # StructureError，不静默忽略：v2 提交闸拒绝未声明镜，错误值必须
+            # 在声明时即暴露）。
+            from src.generation.video_contract import OPENING_CUT_REASONS
+            if str(val) not in OPENING_CUT_REASONS:
+                raise StructureError(
+                    "invalid_cut_reason",
+                    f"非法 opening_cut_reason: {val}（合法值：{OPENING_CUT_REASONS}）")
+            setattr(shot, key, str(val))
+            changed.append(key)
             continue
         elif key in ("characters", "required_elements", "preserve_elements",
                      "video_preserve_elements"):

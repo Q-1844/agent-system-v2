@@ -85,12 +85,16 @@ def test_lease_expired_holder_continuity(tmp_path):
     assert not ml.verify(tmp_path, "sess_long", now=future)["verified"]
 
 
-def test_lease_corrupt_file_fail_open(tmp_path):
+def test_lease_corrupt_file_fail_closed(tmp_path):
+    """Phase56 A3 语义变更（原 P55 fail-open → fail-closed）：损坏租约=权限
+    未核明——verify 拒写、acquire 拒接管；恢复走 diagnose/recover 独立路径。
+    详测见 tests/test_p56_a_mechanism.py::test_lease_corrupt_fail_closed_and_recover。"""
     p = tmp_path / "output" / "agents" / "master_lease.json"
     p.parent.mkdir(parents=True)
     p.write_text("{broken", encoding="utf-8")
     v = ml.verify(tmp_path, "sess_a")
-    assert v["verified"] and "fail-open" in v["note"]
+    assert not v["verified"] and v.get("corrupt") is True
+    assert ml.acquire(tmp_path, "sess_b")["ok"] is False
 
 
 # ============ 3. handoff / relay ============

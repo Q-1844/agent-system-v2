@@ -1699,22 +1699,29 @@ async def _handler_video(job, emit):
         job.params["provider_task_id"] = vid
         await emit("recover", f"{shot.shot_id} 续轮询 video_id={vid}（不重提交）", 10)
     else:
-        # 42.md §二缺陷④：提交结果不明可见化——generating 且无 video_id = 早前
-        # 一次提交的响应未及落库（进程被杀/断连），provider 侧任务可能已存在。
-        # 无 provider 幂等键无法查询 → 允许重提交，但必须如实标注重复风险
-        # （emit + VideoVersion.previous_submit_uncertain），不得当作全新提交
-        # 声称「不会重复生成」。recover 对此状态只告警不处置（lifecycle）。
+        # 42.md §二缺陷④：提交结果不明——generating 且无 video_id = 早前一次
+        # 提交的响应未及落库（进程被杀/断连），provider 侧任务可能已存在。
+        # Phase56 A3 收口：无可靠查询/幂等能力时【暂停该项新提交】（待核验）——
+        # previous_submit_uncertain 只是标记，不是自动重发许可。人工对账确认后，
+        # 经显式参数 confirm_uncertain_resubmit=true 放行（放行仍标注，重复风险
+        # 如实落库）。其余已就绪工作不受影响（JobQueue 继续推进其它任务）。
         _prev_submit_uncertain = (
             shot.video.status == ShotStatus.GENERATING.value
             and not shot.video.video_id)
         if _prev_submit_uncertain:
+            if not (job.params or {}).get("confirm_uncertain_resubmit"):
+                raise RuntimeError(
+                    f"{job.shot_id} 早前一次提交结果不明（generating 无 video_id）"
+                    "——待核验：新提交已暂停（previous_submit_uncertain 不是自动"
+                    "重发许可）。人工对账确认后显式传 confirm_uncertain_resubmit="
+                    "true 重发；同项目其它已就绪任务可继续")
             previous_submit_uncertain = True
             await emit(
                 "warn",
-                f"{shot.shot_id} 早前一次提交结果不明（无 video_id）——重提交存在"
-                "重复生成可能，已标注 previous_submit_uncertain", 5)
+                f"{shot.shot_id} 早前一次提交结果不明（无 video_id）——已由显式确认"
+                "放行重发（存在重复生成可能），标注 previous_submit_uncertain", 5)
             logger.warning(
-                "%s 重新提交时发现上次提交结果不明（generating 无 video_id）——"
+                "%s 显式确认重发（上次提交结果不明 generating 无 video_id）——"
                 "已标注 previous_submit_uncertain", job.shot_id)
         # 37.md §1.1：multi 生成前自动重建过期 video prompt（36.md §1.2.3 缺口闭环）。
         # 仅 fresh-submit 且 BOUND（multi 生成走 BOUND path；unbound multi 本就
@@ -2002,13 +2009,22 @@ async def shot_video(project_name: str, shot_id: str,
         # 旧项目/UI 手动流程），但场景参考消费状态随 manifest 如实落档。
         from src.generation.video_contract import (
             build_input_manifest, planned_video_seconds,
+            resolve_reference_policy, policy_requires_binding,
             scene_reference_consumed as _scene_ref_consumed,
             validate_video_submission,
         )
         from src.shot_binding.service import ShotBindingService
         _validity = ShotBindingService(project_dir, project_name).read_validity(shot_id)
-        _chk = validate_video_submission(_shot, require_binding=False,
-                                         validity=_validity)
+        # Phase56 A2：项目活动策略为 baseline_equiv_chain（v2）时 REST 同受契约约束
+        #（显式 run 策略=项目当前生产契约）；无策略文件/旧策略维持 REST legacy 行为
+        #（require_binding=False，兼容旧项目/UI 手动流程）。
+        _rest_policy = resolve_reference_policy(project_dir)
+        _rest_v2 = _rest_policy == "baseline_equiv_chain"
+        _chk = validate_video_submission(_shot,
+                                         require_binding=policy_requires_binding(_rest_policy) if _rest_v2 else False,
+                                         validity=_validity,
+                                         policy=_rest_policy if _rest_v2 else None,
+                                         project=_proj, pdir=project_dir)
         if not _chk["ok"]:
             raise HTTPException(422, detail={
                 "error": "video_contract_violation",
@@ -2091,6 +2107,10 @@ async def set_final_video(project_name: str, shot_id: str, req: SetFinalVideoReq
 # ==================== Phase 6A：镜头接力 / 开场来源 接口 ====================
 class OpeningSourceRequest(BaseModel):
     source: str   # independent | reference_previous | inherit_previous
+    # Phase56 A2（reference_policy v2）：independent 的显式切镜依据
+    #（same_scene_recam/scene_change/time_jump）——v2 策略下未声明的独立首帧
+    # 会在视频提交前被拒绝；提供但非法 → 400。
+    cut_reason: Optional[str] = None
 
 
 @router.post("/api/project/{project_name}/shot/{shot_id}/opening-source")
@@ -2108,11 +2128,18 @@ async def set_opening_source(project_name: str, shot_id: str, req: OpeningSource
             raise HTTPException(404, f"镜头 {shot_id} 不存在")
         if req.source not in {m.value for m in OpeningSource}:
             raise HTTPException(400, f"非法 opening_source: {req.source}")
+        from src.generation.video_contract import OPENING_CUT_REASONS
+        if req.cut_reason is not None and req.cut_reason not in OPENING_CUT_REASONS:
+            raise HTTPException(
+                400, f"非法 cut_reason: {req.cut_reason}（合法值：{OPENING_CUT_REASONS}）")
         if req.source == OpeningSource.INDEPENDENT.value:
-            store.update_shot(shot_id, lambda s: (setattr(s, "opening_source", req.source),
-                                                  setattr(s, "source_shot_id", None),
-                                                  setattr(s, "source_version", None)))
+            store.update_shot(shot_id, lambda s, cr=req.cut_reason: (
+                setattr(s, "opening_source", req.source),
+                setattr(s, "source_shot_id", None),
+                setattr(s, "source_version", None),
+                setattr(s, "opening_cut_reason", cr)))
             return {"opening_source": req.source, "source_shot_id": None, "source_version": None,
+                    "cut_reason": req.cut_reason,
                     "status": "independent", "message": ""}
         # reference/inherit：取同场景上一镜
         scene = next((s for s in project.scenes if s.scene_id == shot.scene_id), None)
@@ -2683,14 +2710,23 @@ def activate_planned_shot(store, project, shot_id, planned) -> dict:
         raise RuntimeError(f"镜头 {shot_id} 不存在")
     opening = planned.opening_source
     link_mode = planned.link_mode
+    # Phase56 A2：Plan 的显式切镜依据随 activate 落 shot.opening_cut_reason
+    #（提供但非法 → activate 即报错，不静默丢弃——v2 提交闸会拒绝未声明镜）。
+    from src.generation.video_contract import OPENING_CUT_REASONS
+    cut_reason = getattr(planned, "cut_reason", None)
+    if cut_reason is not None and cut_reason not in OPENING_CUT_REASONS:
+        raise RuntimeError(
+            f"非法 cut_reason: {cut_reason}（合法值：{OPENING_CUT_REASONS}）")
     if opening == OpeningSource.INDEPENDENT.value:
-        store.update_shot(shot_id, lambda s, o=opening, lm=link_mode: (
+        store.update_shot(shot_id, lambda s, o=opening, lm=link_mode, cr=cut_reason: (
             setattr(s, "opening_source", o),
             setattr(s, "source_shot_id", None),
             setattr(s, "source_version", None),
-            setattr(s, "link_mode", lm)))
+            setattr(s, "link_mode", lm),
+            setattr(s, "opening_cut_reason", cr)))
         return {"opening_source": opening, "source_shot_id": None, "source_version": None,
-                "link_mode": link_mode, "status": "independent", "message": ""}
+                "link_mode": link_mode, "cut_reason": cut_reason,
+                "status": "independent", "message": ""}
     # reference / inherit
     prev_id = planned.source_shot_id
     prev = project.get_shot(prev_id) if prev_id else None

@@ -1165,7 +1165,10 @@ async def agent_scoped_grant_list(project_name: str, agent_id: str):
 
 # ==================== Phase55 B：协作模式注册表 ====================
 class CollabRunStartReq(BaseModel):
-    mode_id: str
+    # Phase56 A1：mode_id 可选——缺省=实验默认（combo_recommended v2，
+    # DEFAULT_EXPERIMENTAL_MODE_ID）；显式传 ID 的旧路径不变（六员等仍是
+    # 合法显式选择/回退）。
+    mode_id: Optional[str] = None
     params: dict = {}
     granted_by: str = "operator"
     thinking: bool = False
@@ -1228,14 +1231,16 @@ async def collab_modes_list(project_name: str):
 @router.post("/api/project/{project_name}/collab-runs")
 async def collab_run_start(project_name: str, req: CollabRunStartReq):
     """启动协作模式 run（快照固定配置→参考策略→grant→后台执行）。
-    立即返回 run 记录；非法组合 400（具体原因）。"""
+    mode_id 缺省=实验默认（Phase56 A1）。立即返回 run 记录；非法组合 400（具体原因）。"""
     rt = get_agent_runtime()
     from src.agents import collab_modes as cm
     try:
         run = await cm.start_collab_run(rt, project_name, req.mode_id, req.params,
                                         granted_by=req.granted_by,
                                         thinking=req.thinking)
-        return {"run": run}
+        return {"run": run,
+                **({"used_default_mode": cm.DEFAULT_EXPERIMENTAL_MODE_ID}
+                   if not (req.mode_id or "").strip() else {})}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:
@@ -1265,6 +1270,24 @@ async def collab_run_cancel(project_name: str, run_id: str, req: CollabRunCancel
                              run_id, req.reason)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+class CollabRunResumeReq(BaseModel):
+    thinking: bool = False
+
+
+@router.post("/api/project/{project_name}/collab-runs/{run_id}/resume")
+async def collab_run_resume(project_name: str, run_id: str,
+                            req: CollabRunResumeReq):
+    """续跑 awaiting_relay 的 run（Phase56 A3/D2：自动接力上限后待接力的
+    未完成 run；同一逻辑 run 授权续接+交接包恢复，非新建 run）。"""
+    from src.agents import collab_modes as cm
+    try:
+        run = await cm.resume_collab_run(get_agent_runtime(), project_name,
+                                         run_id, thinking=req.thinking)
+        return {"run": run}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # ==================== Phase55 D：会话接力（手动触发） ====================

@@ -33,8 +33,25 @@ MANIFEST_VERSION = "input_manifest_v1"
 # 项目级参考策略（Phase55 A→B 的接缝）：显式参数 > 项目级活动 run 策略 > 默认
 # bound_required（基线等价）。Batch B 协作模式 run 启动时写入本文件并随 run 快照
 # 版本化；无 run 时默认基线。文件缺失/损坏一律回落默认（fail closed 到基线）。
+#
+# Phase56 A2（reference_policy v2 = baseline_equiv_chain）：在 bound_required 全部
+# 要求之上补齐上轮看片定性缺口（bind 已强制/接续链未强制）：
+#   - 同场景相邻镜 independent opening 必须显式声明切镜语义（cut_reason），
+#     不允许「未声明依据」的静默独立首帧；
+#   - 场景参考消费基线只认 provider_reference / via_first_frame(full)；
+#     context_only = 显式豁免（须登记项目级豁免清单），不再冒充已消费。
+# 显式保留 bound_required（旧语义，在途 run 快照不受影响）与 legacy_allowed。
 REFERENCE_POLICY_FILE = "reference_policy.json"
-REFERENCE_POLICIES = ("bound_required", "legacy_allowed")
+REFERENCE_POLICIES = ("bound_required", "legacy_allowed", "baseline_equiv_chain")
+
+# 切镜语义（Phase56 A2 接续三分）——opening_source=independent 时的显式依据值：
+#   same_scene_recam：同场景换机位/正反打（可重建首帧，相邻镜不因此成为媒体硬依赖）
+#   scene_change    ：换场
+#   time_jump       ：时间跳跃
+# 同一动作真实继续不在此列——那应该用 opening_source=inherit_previous /
+# reference_previous（真实依赖声明），而不是 independent+理由。
+OPENING_CUT_REASONS = ("same_scene_recam", "scene_change", "time_jump")
+SHOT_OPENING_CUT_REASON_FIELD = "opening_cut_reason"
 
 # 2.5 视频契约时长边界（官方参数表 2026-09-28 核读；client 内也夹取——这里
 # 提前显式报错，不做静默夹取）。
@@ -51,6 +68,13 @@ VIDEO_JOB_PARAM_KEYS = {
     "native_dialogue_language",
     "input_manifest",          # Phase55 A：统一输入依据清单（随 job 落盘）
     "input_manifest_error",    # Phase55 A：清单构建失败原因（诚实缺失，不阻断提交）
+    # Phase56 A3：提交结果不明（generating 无 video_id）待核验后的显式人工
+    # 确认重发标记——handler 拒绝无此标记的新提交；有标记仍标注
+    # previous_submit_uncertain（重复风险如实落库）。
+    "confirm_uncertain_resubmit",
+    # Phase56 D1 修复闭环（combo v2 auto_repair）：修复溯源（复审批次/第几次
+    # 修复 attempt）——随 job 落档，新候选不冒充首次结果。
+    "repair_of_review", "repair_attempt",
     # 测试/fake 通道（AI-6F fake durable bridge，real=False 才使用）
     "_fake_outcome", "_fake_steps", "_fake_step_sleep",
 }
@@ -74,18 +98,85 @@ def resolve_reference_policy(pdir, explicit: Optional[str] = None) -> str:
 
 
 def set_project_reference_policy(pdir, policy: str, *, source: str = "manual",
-                                 run_id: Optional[str] = None) -> dict:
+                                 run_id: Optional[str] = None,
+                                 exemptions: Optional[dict] = None) -> dict:
     """写项目级参考策略（Batch B 模式 run 启动时调用；测试可直接用）。
-    非法值抛 ValueError（策略写入必须显式合法，不静默纠正）。"""
+    非法值抛 ValueError（策略写入必须显式合法，不静默纠正）。
+    exemptions（Phase56 A2）：{shot_id: reason}——context_only/absent 场景参考的
+    显式豁免登记（v2 策略下未登记的未消费场景 = 提交拒绝）。"""
     if policy not in REFERENCE_POLICIES:
         raise ValueError(f"unknown reference policy: {policy}")
     doc = {"policy": policy, "source": source, "run_id": run_id}
+    if exemptions:
+        doc["exemptions"] = {str(k): str(v)[:200] for k, v in exemptions.items()}
     p = Path(pdir) / "output" / "agents" / REFERENCE_POLICY_FILE
     p.parent.mkdir(parents=True, exist_ok=True)
     tmp = p.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(doc, ensure_ascii=False, indent=1), encoding="utf-8")
     tmp.replace(p)
     return doc
+
+
+def read_policy_exemptions(pdir) -> dict:
+    """读项目级豁免清单（{shot_id: reason}；文件缺失/损坏/无字段 = 空豁免）。"""
+    try:
+        p = Path(pdir) / "output" / "agents" / REFERENCE_POLICY_FILE
+        if p.exists():
+            d = json.loads(p.read_text(encoding="utf-8"))
+            ex = d.get("exemptions")
+            if isinstance(ex, dict):
+                return ex
+    except Exception:   # noqa: BLE001 —— 读失败如实空（豁免必须显式登记才生效）
+        pass
+    return {}
+
+
+def continuity_semantics(shot: Any, prev_shot: Any) -> dict:
+    """接续语义三分判定（Phase56 A2；只读不写）：
+    - same_action_continuation：opening_source ∈ (inherit_previous, reference_previous)
+      ——声明对上游实际裁切末帧的硬依赖（等必要审查/选版/端点就绪由既有机制保证）；
+    - declared_cut：independent + 显式 cut_reason ∈ OPENING_CUT_REASONS；
+    - undeclared_independent：independent 无 cut_reason——v2 策略下违规
+      （「未声明依据」的静默独立首帧 = Phase55 冒烟衔接缺陷的契约根源）。
+    prev_shot=None（本镜是开场镜/无同场景前驱）时 independent 视为 scene_change
+    天然依据——不违规（依赖的增加必须来自真实制作需要，不给开场镜强加链条）。"""
+    opening_source = str(getattr(shot, "opening_source", "") or "")
+    if opening_source in ("inherit_previous", "reference_previous"):
+        return {"semantics": "same_action_continuation",
+                "opening_source": opening_source,
+                "source_shot_id": getattr(shot, "source_shot_id", None),
+                "detail": "真实接续：声明对上游裁切末帧的媒体硬依赖"}
+    if opening_source == "independent":
+        reason = str(getattr(shot, SHOT_OPENING_CUT_REASON_FIELD, "") or "").strip()
+        if reason in OPENING_CUT_REASONS:
+            return {"semantics": "declared_cut", "cut_reason": reason,
+                    "detail": f"显式切镜依据：{reason}"}
+        if prev_shot is None:
+            return {"semantics": "declared_cut", "cut_reason": "scene_change",
+                    "auto": True,
+                    "detail": "开场镜/无同场景前驱——independent 即换场天然依据（自动记录）"}
+        return {"semantics": "undeclared_independent",
+                "detail": ("independent opening 未声明切镜依据——同场景相邻镜默认要求"
+                           "接续链（inherit_previous/reference_previous）或显式声明 "
+                           f"cut_reason ∈ {OPENING_CUT_REASONS}")}
+    return {"semantics": "unknown_opening_source", "opening_source": opening_source,
+            "detail": f"未知 opening_source: {opening_source}"}
+
+
+def find_prev_scene_shot(project: Any, shot: Any) -> Any:
+    """同场景、播放顺序在本镜之前的最近邻镜头（None=开场镜/无前驱）。
+    播放顺序 = canonical shots 列表顺序（scene 内相对序）；不新造第二份排序。"""
+    scene_id = getattr(shot, "scene_id", "")
+    if not scene_id:
+        return None
+    prev = None
+    for s in (getattr(project, "shots", None) or []) or \
+             (project.all_shots() if hasattr(project, "all_shots") else []):
+        if getattr(s, "shot_id", "") == getattr(shot, "shot_id", ""):
+            return prev
+        if getattr(s, "scene_id", "") == scene_id:
+            prev = s
+    return prev
 
 
 def planned_video_seconds(shot: Any) -> Optional[float]:
@@ -125,7 +216,11 @@ def scene_reference_consumed(project: Any, shot: Any, project_dir, validity: Opt
     """场景参考真实消费判定（可审计口径，不猜）：
     - provider_reference：multi + BOUND pack 含 sciv（第三参考槽真实发图）；
     - via_first_frame：i2v/keyframes 且已选首帧的 ImageBatch.generation_basis
-      记录 scene_reference_mode（BOUND 首帧生成时场景图进了首帧制作）；
+      记录 scene_reference_mode=full（BOUND 首帧生成时场景图真实进了首帧制作）；
+    - exempted_context_only：首帧批次 scene_reference_mode=context_only——场景图
+      **未**作为视觉输入（仅语义上下文）。Phase55 冒烟看片定性：此态冒充
+      「已消费」是衔接缺陷根因之一；Phase56 A2 起显式豁免态（不算已消费，
+      baseline_equiv_chain 策略下须登记豁免才可提交）；
     - absent：两者皆无——场景只存在于 prompt 文本（=Phase54 新模式场景漂移根因）。
     只读，任何读取异常如实标注 unknown（不静默当成 absent/有场景）。"""
     shot_id = getattr(shot, "shot_id", "")
@@ -142,9 +237,13 @@ def scene_reference_consumed(project: Any, shot: Any, project_dir, validity: Opt
             # BOUND i2v/keyframes：看已选首帧的批次 basis 是否带场景参考
             batch = _selected_first_frame_batch(shot)
             srm = ((batch or {}).get("generation_basis") or {}).get("scene_reference_mode")
-            if srm in ("full", "context_only"):
+            if srm == "full":
                 return {"state": "via_first_frame",
-                        "detail": f"场景经 BOUND 首帧制作进入（scene_reference_mode={srm}）"}
+                        "detail": "场景经 BOUND 首帧制作真实进入（scene_reference_mode=full）"}
+            if srm == "context_only":
+                return {"state": "exempted_context_only",
+                        "detail": ("场景仅语义上下文（context_only）——未进入视觉输入；"
+                                   "baseline_equiv_chain 下须登记显式豁免才可提交")}
             return {"state": "absent",
                     "detail": "BOUND 但首帧批次无场景参考记录（场景未进任何视觉输入）"}
         return {"state": "absent",
@@ -203,6 +302,12 @@ def build_input_manifest(project: Any, shot: Any, *, stage: str, mode: str,
             "source_shot_id": getattr(shot, "source_shot_id", None),
             "source_version": getattr(shot, "source_version", None),
             "video_reference_asset_id": getattr(shot, "video_reference_asset_id", None),
+            # Phase56 A2：接续语义三分落档（same_action_continuation/declared_cut/
+            # undeclared_independent）+ 显式切镜依据——「依赖的增加必须来自真实
+            # 制作需要」的可审计记录。
+            "continuity": continuity_semantics(
+                shot, find_prev_scene_shot(project, shot)
+                if project is not None else None),
         },
         "population": {"enabled": bool(population_constraint)},
         "reference_consumption": scene_ref or {"state": "unknown", "detail": "未判定"},
@@ -259,10 +364,23 @@ def _asset_inventory(shot: Any, project_dir, validity: Optional[dict]) -> dict:
     return {"characters": characters, "scene": scene, "props": props}
 
 
+def policy_requires_binding(policy: Optional[str]) -> bool:
+    """参考策略是否要求 BOUND 参考链（基线等价家族=v2 与旧基线都要求；
+    仅 legacy_allowed 豁免）。"""
+    return policy != "legacy_allowed"
+
+
 def validate_video_submission(shot: Any, *, require_binding: bool = False,
                               validity: Optional[dict] = None,
-                              params: Optional[dict] = None) -> dict:
+                              params: Optional[dict] = None,
+                              policy: Optional[str] = None,
+                              project: Any = None,
+                              pdir=None) -> dict:
     """视频提交前统一校验（三条入口共用；入队前明确报错）。
+    policy=baseline_equiv_chain（Phase56 A2 v2）时追加接续链校验：
+      - 场景参考消费须为 provider_reference / via_first_frame(full)；
+        context_only/absent 须在项目级豁免清单登记，否则拒绝；
+      - independent opening 须显式声明切镜依据（continuity_semantics）。
     返回 {ok, violations: [{code, detail, fix_hint}], compiled_negative_prompt,
     scene_reference_consumed}——ok=False 时调用方必须拒绝提交。"""
     violations: List[dict] = []
@@ -310,10 +428,38 @@ def validate_video_submission(shot: Any, *, require_binding: bool = False,
             "detail": f"未知 video 任务参数（handler 不消费，静默忽略=谎报生效）: {unknown}",
             "fix_hint": "移除未知参数；如需新开关先扩展契约（VIDEO_JOB_PARAM_KEYS）",
         })
+    # ---- Phase56 A2：reference_policy v2（baseline_equiv_chain）接续链校验 ----
+    _scene_ref: Optional[dict] = None
+    if policy == "baseline_equiv_chain" and pdir is not None:
+        _scene_ref = scene_reference_consumed(project, shot, pdir, validity)
+        _state = _scene_ref.get("state")
+        if _state in ("exempted_context_only", "absent"):
+            _exemptions = read_policy_exemptions(pdir)
+            if shot.shot_id not in _exemptions:
+                violations.append({
+                    "code": "scene_reference_not_consumed",
+                    "detail": (f"v2 接续链策略：场景参考未进入合法视觉输入"
+                               f"（state={_state}）——{_scene_ref.get('detail', '')[:160]}"
+                               "；context_only 不再冒充已消费"),
+                    "fix_hint": ("用 scene_reference_mode=full 重新制作首帧，或改为 "
+                                 "multi+BOUND 让场景图进参考槽；确属豁免场景时在项目级"
+                                 " reference_policy 豁免清单显式登记（写明原因）"),
+                })
+        _prev = find_prev_scene_shot(project, shot) if project is not None else None
+        _cont = continuity_semantics(shot, _prev)
+        if _cont.get("semantics") == "undeclared_independent":
+            violations.append({
+                "code": "opening_cut_undeclared",
+                "detail": f"v2 接续链策略：{_cont.get('detail', '')[:200]}",
+                "fix_hint": ("同一动作真实继续→改 opening_source=inherit_previous/"
+                             "reference_previous；同场景换机位/换场/时间跳跃→显式设置 "
+                             "opening_cut_reason（same_scene_recam/scene_change/"
+                             "time_jump）"),
+            })
     neg = (getattr(shot, "negative_prompt", "") or "").strip()
     return {
         "ok": not violations,
         "violations": violations,
         "compiled_negative_prompt": compile_negative_prompt(neg) if neg else "",
-        "scene_reference_consumed": None,   # 由调用方以 scene_reference_consumed() 回填
+        "scene_reference_consumed": _scene_ref,   # v2 路径已算；其余由调用方回填
     }

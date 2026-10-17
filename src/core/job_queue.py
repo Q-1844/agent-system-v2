@@ -71,6 +71,7 @@ class JobQueue:
         self.state_path = Path(state_path)
         self.handlers = handlers                      # 外部可变 dict，注册 handler 即增
         self._video_worker_count_override = video_worker_count   # Phase55 C：config 档位（env 仍可覆盖）
+        self.video_inflight_source = "not_started"   # Phase56 A4：实际生效档位的覆盖来源
         self.jobs: Dict[str, Job] = {}
         self._video_q: asyncio.Queue = asyncio.Queue()
         self._light_q: asyncio.Queue = asyncio.Queue()
@@ -79,6 +80,80 @@ class JobQueue:
         self._running_tasks: Dict[str, asyncio.Task] = {}   # job_id -> 执行 task（force cancel/看门狗中断用）
         self._started = False
         self._load()
+
+    # ---------- Phase56 A4：并发档位单一解析与结算后重配 ----------
+    @staticmethod
+    def resolve_video_inflight(env_val: Optional[str] = None,
+                               config_val: Optional[int] = None) -> tuple:
+        """并发档位唯一最终解析（A4：只保留一个明确结果，并带覆盖来源）。
+        优先序：env AGNES_VIDEO_INFLIGHT（运维逃生口）> config
+        concurrency.video_inflight > 默认 1（既有串行基线）。
+        返回 (workers, source)；非法值跳过该层（不静默夹取后谎报来源）。"""
+        v = env_val if env_val is not None else os.environ.get("AGNES_VIDEO_INFLIGHT")
+        if v not in (None, ""):
+            try:
+                return max(1, int(v)), f"env:AGNES_VIDEO_INFLIGHT={v}"
+            except (TypeError, ValueError):
+                pass
+        if config_val not in (None, ""):
+            try:
+                return max(1, int(config_val)), \
+                    f"config:concurrency.video_inflight={config_val}"
+            except (TypeError, ValueError):
+                pass
+        return 1, "default:1"
+
+    def _video_running_count(self) -> int:
+        return sum(1 for j in self.jobs.values()
+                   if j.kind == JobKind.VIDEO.value
+                   and j.state == JobState.RUNNING.value)
+
+    async def reconfigure_video_workers(self, target: int, *,
+                                        wait_settle: bool = True,
+                                        timeout_s: float = 7200.0) -> dict:
+        """结算后重配视频 worker 数（Phase56 A4：run 级档位生效的唯一合法路径；
+        不把快照/配置里记录的数字当作热重配已完成）。
+        - target 与当前一致 → 幂等返回（changed=False）；
+        - wait_settle=True：等在途视频结算（running=0）后应用；超时如实
+          applied=False（不放弃在途任务）；
+        - wait_settle=False 且在途>0 → 拒绝（结算后重配的可靠方案优先）。
+        缩容经 cancel 空闲 worker 实现；在途任务由独立 inner task 承载不受影响
+        （结算等待下正常无在途，竞态窗口=worker 刚领取未置态——inner task 仍会
+        完成，无任务丢失）。"""
+        target = max(1, int(target))
+        if not self._started:
+            return {"applied": False, "reason": "queue_not_started"}
+        if target == self.video_worker_count:
+            return {"applied": True, "workers": target, "changed": False,
+                    "source": self.video_inflight_source}
+        if wait_settle:
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + timeout_s
+            while loop.time() < deadline:
+                if self._video_running_count() == 0:
+                    break
+                await asyncio.sleep(1.0)
+            else:
+                return {"applied": False,
+                        "reason": (f"settle_timeout（仍有 {self._video_running_count()} "
+                                   "在途视频——重配未应用，在途任务不受影响）")}
+        elif self._video_running_count() > 0:
+            return {"applied": False,
+                    "reason": "video_jobs_in_flight（结算后重配——先等在途结算）"}
+        # 重建视频 worker 池（light worker 不动）
+        for t in list(self._tasks):
+            if t.get_name().startswith("video-worker-"):
+                t.cancel()
+                self._tasks.remove(t)
+        for i in range(target):
+            self._tasks.append(asyncio.create_task(
+                self._worker(self._video_q, f"video-worker-{i}"),
+                name=f"video-worker-{i}"))
+        self.video_worker_count = target
+        self.video_inflight_source = f"run_reconfigure:{target}"
+        log.info("JobQueue 视频并发重配 -> %d（结算后热重配）", target)
+        return {"applied": True, "workers": target, "changed": True,
+                "source": self.video_inflight_source}
 
     # ---------- 持久化（原子写）----------
     def _load(self):
@@ -212,26 +287,27 @@ class JobQueue:
         # 逐字节不变）。串行是 AI-4B 时代"1 RPM 硬约束"下的保守决策；真机探针已实证 Agnes
         # 允许 ≥3 outstanding / 约 2 路并行（详细流程文件/提示词.md「真实视频并发 Probe」）。
         # 提交频率仍由 RateLimiter video 桶独立约束（AGNES_VIDEO_RPM）——限流与在途是两个维度。
-        video_workers = max(1, int(os.environ.get("AGNES_VIDEO_INFLIGHT", "1") or 1))
-        if not os.environ.get("AGNES_VIDEO_INFLIGHT") \
-                and self._video_worker_count_override:
-            # Phase55 C：未设 env 时回落 config 档位（concurrency.video_inflight）——
-            # env 保持最高优先（运维逃生口），默认 1 = 既有串行行为不变。
-            video_workers = max(1, int(self._video_worker_count_override))
+        # Phase56 A4：档位统一走 resolve_video_inflight 单一解析（env > config > 默认 1），
+        # 覆盖来源随实例记录（run 启动时读取并落档实际生效值）。
+        video_workers, self.video_inflight_source = self.resolve_video_inflight(
+            config_val=self._video_worker_count_override)
         self.video_worker_count = video_workers   # A_REPORT 观测用
         self._tasks = [
-            asyncio.create_task(self._worker(self._video_q, f"video-worker-{i}"))
+            asyncio.create_task(self._worker(self._video_q, f"video-worker-{i}"),
+                                name=f"video-worker-{i}")
             for i in range(video_workers)
         ]
         self._tasks += [
-            asyncio.create_task(self._worker(self._light_q, f"light-worker-{i}"))
+            asyncio.create_task(self._worker(self._light_q, f"light-worker-{i}"),
+                                name=f"light-worker-{i}")
               for i in range(3)
         ]
         # 重启后把残留的 queued 任务重新推进队列
         for j in self.jobs.values():
             if j.state == JobState.QUEUED.value:
                 self._route(j.job_id, j.kind)
-        log.info("JobQueue 已启动：%d 视频 worker + 3 轻任务 worker", video_workers)
+        log.info("JobQueue 已启动：%d 视频 worker（%s）+ 3 轻任务 worker",
+                 video_workers, self.video_inflight_source)
 
     async def _worker(self, q: asyncio.Queue, name: str):
         while True:

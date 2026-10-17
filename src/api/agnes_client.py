@@ -25,6 +25,18 @@ log = setup_logger("agnes_client")
 
 RETRYABLE = {408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524}
 
+
+def _parse_retry_after(r) -> Optional[float]:
+    """429 响应的 Retry-After 解析（秒；HTTP-date 形态不支持——Agnes 未实证使用，
+    不可解析=回落指数退避，不猜）。"""
+    try:
+        v = r.headers.get("Retry-After") or r.headers.get("retry-after")
+        if not v:
+            return None
+        return float(str(v).strip())
+    except Exception:   # noqa: BLE001
+        return None
+
 # 唯一视频模型（2026-09-28：v2.0 官方下线+用户指令删除；config 缺失/测试 fake
 # 无 models 时的确定兜底——dispatch 与 freshness 重算投影必须同源）。
 DEFAULT_VIDEO_MODEL = "agnes-video-2.5-flash"
@@ -288,6 +300,7 @@ class AgnesClient:
         label = "SenseNova" if text_ep else "Agnes"
         last = None
         for attempt in range(max_attempts):
+            retry_after_s = None
             async with self.limiter.slot(bucket):
                 try:
                     c = await (self._text_http() if text_ep else self.client())
@@ -309,12 +322,19 @@ class AgnesClient:
                             f"{label} API 错误 {r.status_code}: {r.text[:400]}",
                             r.status_code, r.text)
                     last = AgnesError(f"{r.status_code}: {r.text[:200]}", r.status_code, r.text)
+                    if r.status_code == 429:
+                        retry_after_s = _parse_retry_after(r)
                     log.warning("[%s] 可重试错误 %d（第 %d/%d 次）", bucket,
                                 r.status_code, attempt + 1, max_attempts)
             # 退避在限流槽之外做，避免占着令牌睡觉。
             # Phase D 校准：基值 3→6（429 风暴下 10 并发各自短退避会互相顶住服务端
             # 速率窗口；更长退避让窗口排空，总耐心 6+12+24+48+60≈150s）。
+            # Phase56 A4：服务端 Retry-After 优先（真实限流窗口），无头/不可解析
+            # 时回落既有指数退避；有界（≤120s），不因并发调大制造重试风暴。
             backoff = min(60, (2 ** attempt) * 6) + random.uniform(0, 2)
+            if retry_after_s is not None:
+                backoff = min(120, max(1.0, retry_after_s))
+                log.info("[%s] 429 Retry-After=%ss（服务端窗口优先）", bucket, backoff)
             await asyncio.sleep(backoff)
         # 保留末次错误的 status/body：上层（如 producer loop 的瞬态恢复）需要区分
         # 「可重试错误耗尽」（429/5xx，值得再等一轮）与「配置/配额类永久失败」。

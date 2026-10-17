@@ -195,7 +195,8 @@ def _phase_prereq_check(capability_id: str, project, shot, client, scope_id: str
         #（与 director 工具同一条合法请求路径；缺绑定/时长越界在提交前明确 blocker，
         # 不再排队后逐个失败）。
         if project_dir is not None:
-            from src.generation.video_contract import validate_video_submission
+            from src.generation.video_contract import (validate_video_submission,
+                                                       policy_requires_binding)
             from src.shot_binding.service import ShotBindingService
             try:
                 _validity = ShotBindingService(project_dir, project_dir.name).read_validity(scope_id)
@@ -205,8 +206,9 @@ def _phase_prereq_check(capability_id: str, project, shot, client, scope_id: str
                              "issues": [{"reason": "validity_unreadable",
                                          "detail": str(e)[:160]}]}
             _chk = validate_video_submission(
-                shot, require_binding=(reference_policy == "bound_required"),
-                validity=_validity)
+                shot, require_binding=policy_requires_binding(reference_policy),
+                validity=_validity,
+                policy=reference_policy, project=project, pdir=project_dir)
             if not _chk["ok"]:
                 _v0 = _chk["violations"][0]
                 return _blocker(

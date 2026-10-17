@@ -386,6 +386,10 @@ class Shot:
     opening_source: str = OpeningSource.INDEPENDENT.value
     source_shot_id: Optional[str] = None
     source_version: Optional[str] = None
+    # Phase56 A2（reference_policy v2）：independent opening 的显式切镜依据
+    # （same_scene_recam/scene_change/time_jump）——baseline_equiv_chain 策略下
+    # 未声明依据的独立首帧被拒绝；本字段即「intentional cut 须显式声明」的落点。
+    opening_cut_reason: Optional[str] = None
     video_end_frame: Asset = field(default_factory=Asset)
     video_end_source_version: Optional[str] = None
 
