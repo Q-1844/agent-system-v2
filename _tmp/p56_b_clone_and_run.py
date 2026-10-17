@@ -63,7 +63,9 @@ def clone_project(dst_name: str) -> Path:
         if p.exists():
             shutil.rmtree(p)
     for f in ("reference_policy.json", "P56_freeze_manifest.json", "work_memory.json",
-              "direct_edit_audit.jsonl", "creative_brief.json"):
+              "direct_edit_audit.jsonl", "creative_brief.json",
+              "master_lease.json",   # Phase56 B1 实证：源项目租约不清 → 新会话 lease_denied
+              "grants.json"):        # 授权状态属源 run——克隆 run 启动时重新 grant
         p = ag / f
         if p.exists():
             p.unlink()

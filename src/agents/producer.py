@@ -1342,16 +1342,18 @@ async def producer_turn(rt, project: str, session_id: str, content: str, *,
     director_turn 同族契约）。thinking/event_cb 仅流式端点传入；cancel_event 协作式停止。
     Producer 始终持有用户对话控制权；Specialist turn 在 Bridge 内嵌套执行，不接管对话。"""
     from .director import _TurnStopped  # 确保与 loop 同一异常类
+    from .runtime import AgentError   # Phase56 B：函数顶统一 import——原代码在三个
+                                     # 死分支里 from .models import AgentError（models
+                                     # 根本没有该类=真触发会 ImportError）+ 无条件 raise
+                                     # 同作用域 → lease_denied 路径 UnboundLocalError
+                                     #（B1 基准 run 实证，掩盖真实拒绝原因）
     store = rt._session_store(project)
     session = store.load(session_id)
     if session is None:
-        from .models import AgentError
         raise AgentError("unknown_scope", f"session 不存在: {session_id}")
     if session.agent_id != "producer":
-        from .models import AgentError
         raise AgentError("permission_denied", "该会话仅限 Producer")
     if not rt._is_enabled("producer"):
-        from .models import AgentError
         raise AgentError("disabled_agent", "Producer 已禁用")
 
     # 持久化 user 消息（ Specialists 自己持久化其会话；Producer 持久化自己的）

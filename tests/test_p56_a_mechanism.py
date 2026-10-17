@@ -206,6 +206,47 @@ def test_lease_corrupt_fail_closed_and_recover(tmp_path):
     assert v2["verified"] is True
 
 
+def test_producer_turn_lease_denied_structured(tmp_path):
+    """Phase56 B1 实证回归：lease_denied 路径必须返回结构化 AgentError（code=
+    lease_denied）——原代码死分支 `from .models import AgentError`（models 无此类）
+    + 同作用域无条件 raise → UnboundLocalError 掩盖真实拒绝原因。"""
+    from src.agents import producer as prod_mod
+    from src.agents.runtime import AgentError
+    from src.agents import master_lease as ml
+
+    class _Store:
+        def load(self, sid):
+            return SimpleNamespace(session_id=sid, agent_id="producer",
+                                   messages=[SimpleNamespace(role="user",
+                                                             content="x")])
+
+        def append_message(self, sid, msg):
+            pass
+
+    class _Rt:
+        def __init__(self, p):
+            self.p = Path(p)
+
+        def _session_store(self, project):
+            return _Store()
+
+        def _is_enabled(self, aid):
+            return True
+
+        def _maybe_capture_preference(self, project, content, message_id):
+            pass
+
+        def _resolve_project_dir(self, project):
+            return self.p
+
+    rt = _Rt(tmp_path)
+    ml.acquire(tmp_path, "sess_other_holder")   # 他人未过期持有租约
+    with pytest.raises(AgentError) as ei:
+        asyncio.run(prod_mod.producer_turn(rt, "p", "sess_mine", "内容"))
+    assert ei.value.code == "lease_denied"   # 结构化 code（router 可映射 HTTP）
+    assert "sess_other_holder" in ei.value.message
+
+
 def test_lease_healthy_paths_unchanged(tmp_path):
     """Phase55 语义保持：holder 匹配即过（自身过期≠失去主控）+ 他人未过期拒绝。"""
     from src.agents import master_lease as ml
