@@ -84,11 +84,14 @@ _APPROVED_PACKAGE_PREAMBLE = (
     "发现缺失项如实上报 blocker（不擅自补做）；然后直接从视频生成开始。")
 
 _APPROVED_PACKAGE_STEPS = """【任务】{grant_line}请在批准工作包上完成视频生产：
-① 视频：逐镜真实生成视频（静态 5s/动态 8s/高运动 10s；镜间连续性按 Skill 判定：
-同一动作真实继续用尾帧接续（inherit_previous/reference_previous）；确属 intentional cut
-必须显式声明依据——shot.update 写 opening_cut_reason=（same_scene_recam/scene_change/
-time_jump 三选一）；v2 接续链契约下未声明的独立首帧会在提交前被拒绝）。
-每镜收货后核对回执与首中尾帧，不合格先修再交。
+① 视频：先 project.inspect 确定全部镜头与就绪状态，然后【把相互无真实媒体依赖的就绪镜
+用一次 shot.generate_videos 批量提交（一次调用传多个目标镜）】——不要逐镜提交后逐个等待
+（B2 实证：逐镜串行提交使在途并发上限形同虚设）。有真实媒体依赖的镜（尾帧承接镜等，
+其上游视频未收货）在依赖镜收货后单独提交。镜间连续性按 Skill 判定：同一动作真实继续用
+尾帧接续（inherit_previous/reference_previous）；确属 intentional cut 必须显式声明依据
+——shot.update 写 opening_cut_reason=（same_scene_recam/scene_change/time_jump 三选一）；
+v2 接续链契约下未声明的独立首帧会在提交前被拒绝。每镜收货后核对回执与首中尾帧，
+不合格先修再交。
 ② 装配：各段选 1 镜组成 sequence 并渲染成片候选（目标成片 {duration_hint}，横屏 16:9）。
 ③ 汇报：全部完成后给出总结——各步骤引用真实工具回执（changed_refs）、跳过项与原因、
 遗留问题；不要声称未发生的操作。"""
