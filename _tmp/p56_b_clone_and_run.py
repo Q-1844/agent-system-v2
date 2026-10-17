@@ -45,8 +45,9 @@ def clone_project(dst_name: str) -> Path:
             sh["selected_last_frame"] = None
             v = sh.get("video") or {}
             v.update({"status": "pending", "video_id": None, "task_id": None,
-                      "local": None, "url": None, "error": None, "progress": 0,
+                      "local": None, "url": None, "error": None,
                       "seconds_returned": None, "size_returned": None})
+            v.pop("progress", None)   # VideoAsset 无此字段——B1 实证：多余键=全 canonical 读炸
             sh["video"] = v
             sh["video_end_frame"] = {"status": "pending"}
             sh["video_end_source_version"] = None
