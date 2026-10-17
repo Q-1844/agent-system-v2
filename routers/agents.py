@@ -1161,3 +1161,128 @@ async def agent_scoped_grant_list(project_name: str, agent_id: str):
     from src.agents import grant as grant_mod
     return {"active": grant_mod.active(_pdir_of(project_name), agent_id),
             "families": sorted(grant_mod.GRANT_FAMILIES.keys())}
+
+
+# ==================== Phase55 B：协作模式注册表 ====================
+class CollabRunStartReq(BaseModel):
+    mode_id: str
+    params: dict = {}
+    granted_by: str = "operator"
+    thinking: bool = False
+
+
+class CollabRunCancelReq(BaseModel):
+    reason: str = ""
+
+
+def _collab_availability(rt, project_name: str, mode: dict) -> tuple:
+    """可用性与具体缺因（任务书 §4：尚未具备能力的预设标记不可用并给具体原因）。"""
+    reasons: list = []
+    try:
+        rt._resolve_agent("producer")
+        if not rt._is_enabled("producer"):
+            reasons.append("producer 已禁用")
+    except Exception:
+        reasons.append("producer 不在注册表")
+    if mode["execution"]["strategy"] == "producer_lead":
+        client = rt._resolve_client_or_none(agent_id="producer")
+        if client is None or not hasattr(client, "chat_completion"):
+            reasons.append("文本模型不可用（chat_completion 未配置）")
+        for aid in mode.get("grant_families") or []:
+            try:
+                if not rt._is_enabled(aid):
+                    reasons.append(f"{aid} 已禁用（grant 族含其工具面）")
+            except Exception:
+                reasons.append(f"{aid} 不在注册表")
+        for role in ((mode.get("preflight") or {}).get("roles") or []):
+            try:
+                if not rt._is_enabled(role):
+                    reasons.append(f"预铺角色 {role} 已禁用")
+            except Exception:
+                reasons.append(f"预铺角色 {role} 不在注册表")
+    else:
+        tid = mode["execution"].get("template_id")
+        try:
+            from src.workflow.templates import create_from_template
+            create_from_template(tid, "__avail_probe__", {})
+        except Exception as e:
+            reasons.append(f"模板 {tid} 不可用: {str(e)[:120]}")
+    return (len(reasons) == 0, reasons)
+
+
+@router.get("/api/project/{project_name}/collab-modes")
+async def collab_modes_list(project_name: str):
+    """协作模式注册表 + 可用性（含具体缺因）。"""
+    rt = get_agent_runtime()
+    from src.agents.collab_modes import list_modes
+    from src.generation.video_contract import resolve_reference_policy
+    pdir = _pdir_of(project_name)
+    out = []
+    for m in list_modes():
+        ok, reasons = _collab_availability(rt, project_name, m)
+        out.append({**m, "available": ok, "unavailable_reasons": reasons,
+                    "active_reference_policy": resolve_reference_policy(pdir)})
+    return {"modes": out}
+
+
+@router.post("/api/project/{project_name}/collab-runs")
+async def collab_run_start(project_name: str, req: CollabRunStartReq):
+    """启动协作模式 run（快照固定配置→参考策略→grant→后台执行）。
+    立即返回 run 记录；非法组合 400（具体原因）。"""
+    rt = get_agent_runtime()
+    from src.agents import collab_modes as cm
+    try:
+        run = await cm.start_collab_run(rt, project_name, req.mode_id, req.params,
+                                        granted_by=req.granted_by,
+                                        thinking=req.thinking)
+        return {"run": run}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/api/project/{project_name}/collab-runs")
+async def collab_runs_list(project_name: str):
+    from src.agents import collab_modes as cm
+    return {"runs": cm.list_runs(_pdir_of(project_name))}
+
+
+@router.get("/api/project/{project_name}/collab-runs/{run_id}")
+async def collab_run_get(project_name: str, run_id: str):
+    from src.agents import collab_modes as cm
+    run = cm.load_run(_pdir_of(project_name), run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"collab run 不存在: {run_id}")
+    return {"run": run}
+
+
+@router.post("/api/project/{project_name}/collab-runs/{run_id}/cancel")
+async def collab_run_cancel(project_name: str, run_id: str, req: CollabRunCancelReq):
+    from src.agents import collab_modes as cm
+    try:
+        return cm.cancel_run(get_agent_runtime(), _pdir_of(project_name),
+                             run_id, req.reason)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+# ==================== Phase55 D：会话接力（手动触发） ====================
+class RelayReq(BaseModel):
+    reason: str = "手动会话接力"
+
+
+@router.post("/api/project/{project_name}/agents/sessions/{sid}/relay")
+async def relay_producer_session(project_name: str, sid: str, req: RelayReq):
+    """Producer 会话手动接力：交接包落盘 → 新会话 → 主控租约移交。
+    在途媒体由任务系统继续管理（不重发）；旧会话写路径被租约拒绝。"""
+    rt = get_agent_runtime()
+    from src.agents import handoff as handoff_mod
+    try:
+        out = handoff_mod.relay_producer_session(rt, project_name, sid,
+                                                 reason=req.reason)
+        return out
+    except AgentError as e:
+        _raise(e)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

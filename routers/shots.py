@@ -1367,6 +1367,21 @@ def _video_preflight(shot, quota, seconds, eff_ff_ready):
         return False, "镜头已锁定"
     if not shot.video.num_frames:
         return False, "未设置视频时长"
+    # Phase55 A（任务书 §3）：时长契约——2.5 契约 4-12s，系统不做静默夹取
+    # （夹取会产生与目标不符的素材）。target_duration_s 显式越界直接拒绝；
+    # num_frames-only 的历史长镜头同样拒绝（此前会被 client 静默夹到 12s）。
+    from src.generation.video_contract import MAX_VIDEO_SECONDS, MIN_VIDEO_SECONDS
+    _tds = getattr(shot, "target_duration_s", None)
+    if _tds is not None and not (MIN_VIDEO_SECONDS <= float(_tds) <= MAX_VIDEO_SECONDS):
+        return False, (f"视频时长契约：目标时长 {round(float(_tds), 1)}s 超出 2.5 契约 "
+                       f"{MIN_VIDEO_SECONDS}-{MAX_VIDEO_SECONDS}s（系统不做静默夹取）——"
+                       f"请把 target_duration_s 调到 {MIN_VIDEO_SECONDS}-{MAX_VIDEO_SECONDS}s 后重试")
+    _plan_secs = shot.video.num_frames / max(shot.video.frame_rate, 1)
+    if not (MIN_VIDEO_SECONDS <= _plan_secs <= MAX_VIDEO_SECONDS):
+        return False, (f"视频时长契约：帧规划时长 {round(_plan_secs, 1)}s 超出 2.5 契约 "
+                       f"{MIN_VIDEO_SECONDS}-{MAX_VIDEO_SECONDS}s（num_frames="
+                       f"{shot.video.num_frames}@{shot.video.frame_rate}fps）——"
+                       "请调整时长后重试（此前该请求会被静默夹取到 12s）")
     if shot.link_mode != "multi" and not eff_ff_ready:
         return False, "开场画面未就绪：请先生成并选择首帧，或来源镜头末帧未就绪"
     if shot.link_mode == "keyframes":
@@ -1574,14 +1589,17 @@ async def _handler_video(job, emit):
         w, h = map(int, _resolve_size(project.style.size_tier or "1K", ratio).split("x"))
 
     # 用户目标时长（提示词.md §12.1.5）：target_duration_s 非空 -> 转 8n+1 帧数；None -> 跟随配音。
-    #  配音退出主流程后：None 且无配音（num_frames=0）-> 默认 3 秒反推，不让视频因无配音被阻止。
+    #  配音退出主流程后：None 且无配音（num_frames=0）-> 默认反推，不让视频因无配音被阻止。
+    #  Phase55 A：默认从 3s 改为 4s（2.5 契约下限）——原 3s 规划会被 client 静默
+    #  夹到 4s（规划与实际不符）；契约化后默认值=实际值，时长契约校验（preflight）
+    #  也因此能对全部路径成立。
     #  写回 shot.video.num_frames，后续 preflight/提交/VideoVersion 都读它，保持一致。
     from src.api.agnes_client import snap_num_frames
     fps0 = max(shot.video.frame_rate, 1)
     if shot.target_duration_s is not None:
         planned = snap_num_frames(int(round(shot.target_duration_s * fps0)), w, h)
     elif not shot.video.num_frames:
-        planned = snap_num_frames(int(round(3 * fps0)), w, h)
+        planned = snap_num_frames(int(round(4 * fps0)), w, h)
     else:
         planned = shot.video.num_frames
     if planned != shot.video.num_frames:
@@ -1612,6 +1630,17 @@ async def _handler_video(job, emit):
     prompt = apply_population_clause(
         prompt, shot,
         enabled=bool((job.params or {}).get("population_constraint", True)))
+    # Phase55 A（任务书 §3）：negative_prompt 项目层意图 → 合法正文约束（M5 事故
+    # 编译化——2.5 契约无该字段；此前 kwargs 直通 client 才抛错=排队后逐个失败）。
+    # 编译事实随 input_manifest.compiled_negative_prompt 落档；kwargs 停传原字段。
+    negative_compiled = False
+    if (shot.negative_prompt or "").strip():
+        from src.generation.video_contract import compile_negative_prompt
+        prompt = prompt + "\n" + compile_negative_prompt(shot.negative_prompt)
+        negative_compiled = True
+        await emit("contract",
+                   f"{shot.shot_id} negative_prompt 已编译为正文约束（2.5 契约无该字段，"
+                   "不静默丢参）", 3)
     # boundary frames：i2v 用 effective 首帧；keyframes 用 [首帧, 已选尾帧]。
     # legacy 求值保持原位置（恢复路径不触碰；BOUND 路径由 Adapter 以 selection
     # truth + freshness 解析后覆盖）。
@@ -1665,6 +1694,9 @@ async def _handler_video(job, emit):
     if shot.video.video_id and shot.video.status not in (
             ShotStatus.DONE.value, ShotStatus.FAILED.value):
         vid = shot.video.video_id
+        # Phase55 C：provider task ID 随 job 落档——watchdog 据此识别「本地失联≠
+        # provider 失败」（休眠/断网不作废不补交，M5 事故路径修复）。
+        job.params["provider_task_id"] = vid
         await emit("recover", f"{shot.shot_id} 续轮询 video_id={vid}（不重提交）", 10)
     else:
         # 42.md §二缺陷④：提交结果不明可见化——generating 且无 video_id = 早前
@@ -1744,7 +1776,8 @@ async def _handler_video(job, emit):
             native_generation_basis = dict(nav_pack.generation_basis)
         await emit("submit", f"{shot.shot_id} 提交中（视频 1 RPM，可能等约 60s）", 10)
         kwargs = dict(num_frames=shot.video.num_frames, frame_rate=shot.video.frame_rate,
-                      width=w, height=h, seed=shot.seed, negative_prompt=shot.negative_prompt)
+                      width=w, height=h, seed=shot.seed,
+                      negative_prompt=("" if negative_compiled else shot.negative_prompt))
         if mode == "keyframes":
             kwargs["image_urls"] = [first_url, last_url]
         elif mode == "multi":
@@ -1774,6 +1807,8 @@ async def _handler_video(job, emit):
         vid = created.get("video_id") or created.get("task_id") or created.get("id")
         if not vid:
             raise RuntimeError(f"视频任务创建无 video_id: {created}")
+        # Phase55 C：provider task ID 随 job 落档（同恢复分支；watchdog 休眠保护）
+        job.params["provider_task_id"] = vid
         # 🔴 提交成功立刻落库 video_id（崩了重启能接着轮询，不重提交、不重扣配额）
         store.update_shot(job.shot_id, lambda s, v=vid, c=created, m=video_model: (
             setattr(s.video, "video_id", v),
@@ -1850,18 +1885,38 @@ async def _handler_video(job, emit):
                           num_frames=shot.video.num_frames, frame_rate=shot.video.frame_rate,
                           origin_run_id=job.params.get("origin_run_id"),
                           model=poll_model or getattr(shot.video, "model", None),
-                          generation_basis=dict(native_generation_basis),
+                          generation_basis={
+                              **dict(native_generation_basis),
+                              # Phase55 A：统一输入依据清单随版本落档（additive，
+                              # 不参与 Native AV freshness 依赖键比对）。
+                              **({"input_manifest": job.params.get("input_manifest")}
+                                 if (job.params or {}).get("input_manifest") else {})},
                           input_visuals=_build_input_visuals(
                               mode=mode, first_url=first_url, last_url=last_url,
                               bound_video=bound_video),
                           previous_submit_uncertain=previous_submit_uncertain)
     def mut(s, vv=new_vv, d=str(dest), r=res):
-        s.video_versions.append(vv)
-        s.final_video = vv.version_id
+        # Phase55 C：收货幂等——同一 provider video_id 只正式收货一次（重复通知/
+        # 双路径完成/晚到回执不再落重复版本；历史结果与费用保留）。指针指向
+        # 实际保留的版本（去重时=既有版本，绝不留悬空指针）。
+        s.existing = next((x for x in s.video_versions if x.video_id == vid), None)
+        if s.existing is None:
+            s.video_versions.append(vv)
+            s.final_video = vv.version_id
+        else:
+            s.final_video = s.existing.version_id
         s.video.mark_done(d, r["url"])           # 同步旧字段（管线/导出读旧）
         setattr(s.video, "seconds_returned", r["seconds"])
         setattr(s.video, "size_returned", r["size"])
     store.update_shot(job.shot_id, mut)
+    shot = store.load().get_shot(job.shot_id)
+    dup = next((x for x in shot.video_versions if x.video_id == vid
+                and x.version_id != vvid), None)
+    if dup is not None:
+        await emit("warn", f"{shot.shot_id} 检测到重复收货（video_id={vid} 已有版本 "
+                           f"{dup.version_id}）——本次仅刷新指针，不落重复版本", None)
+        logger.warning("%s 重复收货 video_id=%s：已存在版本 %s（幂等去重）",
+                       job.shot_id, vid, dup.version_id)
     await emit("done", f"{shot.shot_id} 完成（版本 {vvid}），实际 {res['seconds']}s / {res['size']}", 100)
     _tl_record("video_downloaded", project=job.project, shot_id=job.shot_id,
                job_id=getattr(job, "job_id", None), video_id=vid, version_id=vvid,
@@ -1937,13 +1992,42 @@ async def shot_video(project_name: str, shot_id: str,
     try:
         project_dir = get_project_manager().get_project_dir(project_name)
         from src.core.store import ProjectStore
-        if ProjectStore(project_dir).load().get_shot(shot_id) is None:
+        _store = ProjectStore(project_dir)
+        _proj = _store.load()
+        _shot = _proj.get_shot(shot_id)
+        if _shot is None:
             raise HTTPException(404, f"镜头 {shot_id} 不存在")
+        # Phase55 A（任务书 §3）：入队前统一契约校验（时长/multi 需绑定/未知参数）——
+        # 不让非法请求排队后逐个失败。REST 保留 legacy 路径（不强制 BOUND，兼容
+        # 旧项目/UI 手动流程），但场景参考消费状态随 manifest 如实落档。
+        from src.generation.video_contract import (
+            build_input_manifest, planned_video_seconds,
+            scene_reference_consumed as _scene_ref_consumed,
+            validate_video_submission,
+        )
+        from src.shot_binding.service import ShotBindingService
+        _validity = ShotBindingService(project_dir, project_name).read_validity(shot_id)
+        _chk = validate_video_submission(_shot, require_binding=False,
+                                         validity=_validity)
+        if not _chk["ok"]:
+            raise HTTPException(422, detail={
+                "error": "video_contract_violation",
+                "violations": _chk["violations"]})
         extra = {"video_model": video_model} if video_model else {}
         if native_dialogue_control is not None:
             extra["native_dialogue_control"] = bool(native_dialogue_control)
         if native_dialogue_language:
             extra["native_dialogue_language"] = native_dialogue_language
+        _mode = ("keyframes" if _shot.link_mode == "keyframes"
+                 else "multi" if _shot.link_mode == "multi" else "i2v")
+        extra["input_manifest"] = build_input_manifest(
+            _proj, _shot, stage="video", mode=_mode, video_model=video_model,
+            seconds=planned_video_seconds(_shot),
+            project_dir=project_dir, validity=_validity,
+            population_constraint=True,
+            scene_ref=_scene_ref_consumed(_proj, _shot, project_dir,
+                                          validity=_validity),
+            compiled_negative_prompt=bool((_shot.negative_prompt or "").strip()))
         q = get_job_queue()
         job = q.submit(project_name, "video", shot_id, **extra)
         return {"job_id": job.job_id, "shot_id": shot_id}

@@ -176,7 +176,8 @@ def _apply_activate(project_loader: Callable[[], Any], project_dir: Path,
     return None
 
 
-def _phase_prereq_check(capability_id: str, project, shot, client, scope_id: str
+def _phase_prereq_check(capability_id: str, project, shot, client, scope_id: str,
+                        project_dir=None, reference_policy: str = "bound_required"
                         ) -> Optional[AgentStructuredResult]:
     """§16/§22：phase 特定生成前置（read-only）。缺 → blocker，不提交 Job、不调 Agnes。
     复用 routers/shots 的 _effective_first_frame_url/_video_preflight（§17：不重写）。"""
@@ -190,6 +191,30 @@ def _phase_prereq_check(capability_id: str, project, shot, client, scope_id: str
         # §22：Agent 侧仅 preflight 「明显浪费提交」的条件（eff 首帧就绪 + 未锁定）。
         # duration/frame_count/quota/keyframes-尾帧 等交由 _handler_video 内置 _video_preflight
         #（在 create_video 之前 raise → Job failed，0 真实 submissions，§22）。不在此重复 handler 逻辑（§17）。
+        # Phase55 A（任务书 §3）：生产执行器走统一视频提交契约——BOUND 基线等价
+        #（与 director 工具同一条合法请求路径；缺绑定/时长越界在提交前明确 blocker，
+        # 不再排队后逐个失败）。
+        if project_dir is not None:
+            from src.generation.video_contract import validate_video_submission
+            from src.shot_binding.service import ShotBindingService
+            try:
+                _validity = ShotBindingService(project_dir, project_dir.name).read_validity(scope_id)
+            except Exception as e:   # noqa: BLE001 —— 读取失败按 UNBOUND 拒绝（fail closed）
+                _validity = {"readiness": "UNBOUND",
+                             "binding_state": "unbound",
+                             "issues": [{"reason": "validity_unreadable",
+                                         "detail": str(e)[:160]}]}
+            _chk = validate_video_submission(
+                shot, require_binding=(reference_policy == "bound_required"),
+                validity=_validity)
+            if not _chk["ok"]:
+                _v0 = _chk["violations"][0]
+                return _blocker(
+                    "PREFLIGHT_DEPENDENCY",
+                    f"{_v0['code']}: {_v0['detail']}",
+                    scope_id=scope_id, upstream="shot_producer",
+                    extra={"contract_violations": _chk["violations"],
+                           "fix_hint": _v0.get("fix_hint", "")})
         from routers.shots import _effective_first_frame_url
         from src.core.models import ShotStatus
         eff = _effective_first_frame_url(project, shot)
@@ -222,6 +247,7 @@ async def execute_shot_production(
     fake_job_params: Optional[Dict[str, Any]] = None,
     real: bool = False,                          # AI-6F：True=真实 JOB_HANDLERS+preflight+origin；False=fake（默认，测试）
     origin_task_id: Optional[str] = None,        # AI-6F §11：origin_run_id=task_id 作 artifact traceability
+    reference_policy: Optional[str] = None,      # Phase55 A：视频参考链契约（None=按项目解析：显式 > 活动run策略 > bound_required 基线）
 ) -> AgentStructuredResult:
     """shot.first_frame/last_frame/video 执行器。
 
@@ -291,6 +317,11 @@ async def execute_shot_production(
     plan_warning = None
     if real:
         # ---- real: §4 Plan + §16/§22 prereq preflight（不调 Agnes）----
+        # Phase55 A：参考策略解析（显式参数 > 项目级活动 run 策略 > 基线 bound_required）
+        if capability_id == "shot.video":
+            from src.generation.video_contract import resolve_reference_policy
+            reference_policy = resolve_reference_policy(project_dir,
+                                                        explicit=reference_policy)
         try:
             project = project_loader()
         except Exception as e:
@@ -317,7 +348,9 @@ async def execute_shot_production(
         # reload post-activate（activate 写了 opening_source/link_mode/source_version）
         project = project_loader()
         shot = _find_shot(project, scope_id)
-        blk = _phase_prereq_check(capability_id, project, shot, client, scope_id)
+        blk = _phase_prereq_check(capability_id, project, shot, client, scope_id,
+                                  project_dir=project_dir,
+                                  reference_policy=reference_policy)
         if blk is not None:
             blk.data["phase"] = phase
             return blk
@@ -356,6 +389,27 @@ async def execute_shot_production(
         if capability_id == "shot.first_frame":
             params["variants"] = 2
             params["force"] = False
+        if capability_id == "shot.video" and project_dir is not None:
+            # Phase55 A：统一输入依据清单随 job 落盘（与 director 工具同一 manifest）。
+            try:
+                from src.generation.video_contract import (
+                    build_input_manifest, planned_video_seconds,
+                    scene_reference_consumed as _scene_ref_consumed,
+                )
+                from src.shot_binding.service import ShotBindingService
+                _validity = ShotBindingService(project_dir, project_dir.name).read_validity(scope_id)
+                _mode = ("keyframes" if shot.link_mode == "keyframes"
+                         else "multi" if shot.link_mode == "multi" else "i2v")
+                params["input_manifest"] = build_input_manifest(
+                    project, shot, stage="video", mode=_mode, video_model=None,
+                    seconds=planned_video_seconds(shot),
+                    project_dir=project_dir, validity=_validity,
+                    population_constraint=True,
+                    scene_ref=_scene_ref_consumed(project, shot, project_dir,
+                                                  validity=_validity),
+                    compiled_negative_prompt=bool((shot.negative_prompt or "").strip()))
+            except Exception as e:   # noqa: BLE001 —— manifest 失败不阻断提交（诚实缺失）
+                params.setdefault("input_manifest_error", str(e)[:160])
     else:
         params = {"_fake_outcome": "done", "_fake_steps": 3, "_fake_step_sleep": 0.05}
         if fake_job_params:

@@ -1077,6 +1077,53 @@ async def _producer_tool_loop(rt, client, project: str, messages: list,
         if cancel_event is not None and cancel_event.is_set():
             raise _TurnStopped()
 
+        # ---- Phase55 D（任务书 §7）：下一请求预算监控——接近上限停止发起新推理，
+        # 持久化交接点（在途媒体由 JobQueue 继续管理，不重发）。估算失败 fail-open
+        #（继续本轮；真实 usage 账本仍落，供对账）。----
+        _ledger = state.get("usage_ledger")
+        if _ledger is not None:
+            try:
+                from .context_budget import (estimate_request_tokens,
+                                             UsageLedger as _UL)
+                _sys_chars = sum(len(m.get("content") or "") for m in messages
+                                 if m.get("role") == "system")
+                _tools_chars = sum(len(json.dumps(t, ensure_ascii=False))
+                                   for t in (offered or []))
+                _hist_chars = sum(len(str(m.get("content") or "")) for m in messages
+                                  if m.get("role") != "system")
+                _est = estimate_request_tokens(system_chars=_sys_chars,
+                                               tools_chars=_tools_chars,
+                                               history_chars=_hist_chars)
+                if _est["handoff"]:
+                    from . import handoff as _handoff
+                    _sid = state.get("session_id") or ""
+                    _pkg = _handoff.build_handoff_package(
+                        rt, project, _sid,
+                        reason="下一请求预算接近 provider 上限（自动接力）",
+                        budget=_est)
+                    _path = _handoff.save_handoff_package(rt._resolve_project_dir(project), _pkg)
+                    state["handoff"] = {"handoff_id": _pkg["handoff_id"],
+                                        "path": str(_path),
+                                        "est_input_tokens": _est["est_input_tokens"],
+                                        "limit": _est["limit"]}
+                    log.warning("producer 预算交接触发（project=%s session=%s est=%s "
+                                "limit=%s handoff=%s）", project, _sid,
+                                _est["est_input_tokens"], _est["limit"],
+                                _pkg["handoff_id"])
+                    return {"text": (
+                        f"[会话已自动接力] 下一请求预算（估算 input≈"
+                        f"{_est['est_input_tokens']} tokens + 输出预留 "
+                        f"{_est['output_reserve']}）接近 provider 上限 {_est['limit']}。"
+                        f"已停止发起新推理并持久化交接点（handoff_id="
+                        f"{_pkg['handoff_id']}）。在途媒体任务由任务系统继续管理，"
+                        "不重发；新会话将回读 canonical 真实状态后继续未完成步骤。"),
+                        "events": events, "receipts": receipts, "trace": trace,
+                        "reasonings": reasonings,
+                        "window_renewals": window_renewals,
+                        "zero_tool_claim": False}
+            except Exception:
+                log.exception("producer 预算检查失败（fail-open 继续本轮）")
+
         content = None
         tool_calls = None
         try:
@@ -1104,6 +1151,13 @@ async def _producer_tool_loop(rt, client, project: str, messages: list,
                     elif k == "finish":
                         content = ev["content"]
                         tool_calls = ev["tool_calls"]
+                        # Phase55 D：真实 usage 落账（预算锚点+成本口径）
+                        if ev.get("usage") and _ledger is not None:
+                            try:
+                                _ledger.record(kind="chat_stream",
+                                               usage=ev.get("usage"), step=step)
+                            except Exception:
+                                pass
                 if step_reasoning_started:
                     rtext = "".join(step_reasoning_buf)
                     rdur = int((time.perf_counter() - step_reason_t0) * 1000)
@@ -1119,6 +1173,12 @@ async def _producer_tool_loop(rt, client, project: str, messages: list,
                     tools=offered, tool_choice="auto")
                 tool_calls = resp.get("tool_calls")
                 content = resp.get("content")
+                if resp.get("usage") and _ledger is not None:
+                    try:
+                        _ledger.record(kind="chat", usage=resp.get("usage"),
+                                       step=step)
+                    except Exception:
+                        pass
         except httpx.ReadTimeout:
             # 不做批量降级（Producer 无批量生成）。给一次恢复 nudge，继续。
             messages.append({"role": "user", "content":
@@ -1301,6 +1361,21 @@ async def producer_turn(rt, project: str, session_id: str, content: str, *,
     session = store.load(session_id)
 
     pdir = rt._resolve_project_dir(project)
+    # Phase55 D：主控写入租约——一个项目一个主控写入者（任务书 §5/§7）。
+    # 同会话续期；他人未过期持有 → 诚实拒绝（等待过期或经 relay 接管）；
+    # 租约文件异常 fail-open（同会话互斥仍由 turn_registry 承担）。
+    try:
+        from . import master_lease as _master_lease
+        _lease = _master_lease.acquire(pdir, session_id)
+    except Exception:
+        log.exception("master lease acquire 异常（fail-open）")
+        _lease = {"ok": True}
+    if not _lease.get("ok"):
+        raise AgentError(
+            "lease_denied",
+            f"主控写入租约被拒：{_lease.get('reason')}（holder="
+            f"{_lease.get('holder')}，generation={_lease.get('generation')}）——"
+            "等待租约过期，或对本会话发起 relay 接管")
     history = [{"role": m.role, "content": m.content}
                for m in session.messages[:-1]
                if m.role in ("user", "assistant") and m.content and m.status is None]
@@ -1341,6 +1416,13 @@ async def producer_turn(rt, project: str, session_id: str, content: str, *,
         def _make_delegate_executor(agent_id: str):
             async def _exec(rt, project, arguments, instruction, message_id, *,
                             event_cb=None, cancel_event=None):
+                # Phase55 D：主控租约执行点检查（接力后旧会话晚返回的委派写被拒）
+                from . import master_lease as _ml
+                _lv = _ml.verify(pdir, session_id)
+                if not _lv.get("verified"):
+                    return {"ok": False, "error": "lease_denied",
+                            "summary": f"委派被拒：{_lv.get('reason')}",
+                            "holder": _lv.get("holder")}
                 envelope = _parse_envelope(arguments)
                 envelope.setdefault("user_intent", instruction)  # 兜底用户原话
                 if wf_ref[0] is None:
@@ -1375,6 +1457,13 @@ async def producer_turn(rt, project: str, session_id: str, content: str, *,
                 def _audit_wrap(fn, _name):
                     if asyncio.iscoroutinefunction(fn):
                         async def _exec(rt, project, args, instruction, message_id):
+                            # Phase55 D：主控租约执行点检查（写路径统一守卫）
+                            from . import master_lease as _ml
+                            _lv = _ml.verify(pdir, session_id)
+                            if not _lv.get("verified"):
+                                return {"ok": False, "error": "lease_denied",
+                                        "summary": f"工具 {_name} 被拒：{_lv.get('reason')}",
+                                        "holder": _lv.get("holder")}
                             _ok = True
                             try:
                                 return await fn(rt, project, args, instruction, message_id)
@@ -1392,6 +1481,12 @@ async def producer_turn(rt, project: str, session_id: str, content: str, *,
                         return _exec
 
                     def _exec(rt, project, args, instruction, message_id):
+                        from . import master_lease as _ml
+                        _lv = _ml.verify(pdir, session_id)
+                        if not _lv.get("verified"):
+                            return {"ok": False, "error": "lease_denied",
+                                    "summary": f"工具 {_name} 被拒：{_lv.get('reason')}",
+                                    "holder": _lv.get("holder")}
                         _ok = True
                         try:
                             return fn(rt, project, args, instruction, message_id)
@@ -1417,6 +1512,10 @@ async def producer_turn(rt, project: str, session_id: str, content: str, *,
             log.exception("producer scoped grant 合并失败（按无授权继续）")
 
         loop_state: dict = {}
+        # Phase55 D：会话用量账本 + 下一请求预算监控（真实 usage 锚点）
+        from .context_budget import UsageLedger
+        loop_state["usage_ledger"] = UsageLedger(pdir, session_id)
+        loop_state["session_id"] = session_id
         try:
             final = await _producer_tool_loop(
                 rt, client, project, messages, content, user_msg.message_id,
@@ -1513,6 +1612,10 @@ async def producer_turn(rt, project: str, session_id: str, content: str, *,
         "trace": trace,
         "window_renewals": window_renewals,
         "zero_tool_claim": zero_tool_claim,
+        # Phase55 D：预算接力信息（collab run 执行器据此自动 relay 续跑）
+        "handoff": loop_state.get("handoff"),
+        "usage_totals": (loop_state.get("usage_ledger").totals()
+                         if loop_state.get("usage_ledger") else None),
         "session_id": session_id,
         "agent_id": "producer",
         "linked_task_ids": linked_task_ids,

@@ -237,7 +237,7 @@ def _seed_last_frame(pdir, shot_id="s01_c01", *, basis=None, url=LF_URL,
     ProjectStore(pdir).update_shot(shot_id, mut)
 
 
-def _set_video_ready(pdir, shot_id="s01_c01", *, num_frames=73, link_mode=None):
+def _set_video_ready(pdir, shot_id="s01_c01", *, num_frames=97, link_mode=None):
     def mut(s):
         s.video.num_frames = num_frames
         s.video.frame_rate = 24

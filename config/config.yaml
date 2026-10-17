@@ -87,6 +87,13 @@ quota:
   images: 4000
   text_calls: 7200
 
+# 并发档位（Phase55 C）：媒体在途上限——默认 1 = 既有串行基线，逐级试 2/3 须以
+# 真机验证推进（探针已实证 Agnes 允许 ≥3 outstanding/约 2 路并行，但非所有账户/
+# 端点均可无限并发）。AGNES_VIDEO_INFLIGHT env 为最高优先逃生口；提交频率仍由
+# rpm.video 桶独立约束（限流与在途是两个维度，不得混同）。
+concurrency:
+  video_inflight: 1
+
 mimo:
   base_url: "https://token-plan-cn.xiaomimimo.com/v1/chat/completions"
   api_key: ${MIMO_API_KEY}

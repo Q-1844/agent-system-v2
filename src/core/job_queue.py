@@ -64,10 +64,13 @@ class JobQueue:
 
     WATCHDOG_TIMEOUT = 600     # 看门狗：running 无 progress 超时秒数（生产 600=10min，测试可调小）
     WATCHDOG_INTERVAL = 30     # 看门狗检查间隔秒数
+    video_worker_count = 1     # start() 后为实际 worker 数（观测/测试用）
 
-    def __init__(self, state_path: Path, handlers: Dict[str, HandlerFn]):
+    def __init__(self, state_path: Path, handlers: Dict[str, HandlerFn],
+                 video_worker_count: Optional[int] = None):
         self.state_path = Path(state_path)
         self.handlers = handlers                      # 外部可变 dict，注册 handler 即增
+        self._video_worker_count_override = video_worker_count   # Phase55 C：config 档位（env 仍可覆盖）
         self.jobs: Dict[str, Job] = {}
         self._video_q: asyncio.Queue = asyncio.Queue()
         self._light_q: asyncio.Queue = asyncio.Queue()
@@ -210,6 +213,11 @@ class JobQueue:
         # 允许 ≥3 outstanding / 约 2 路并行（详细流程文件/提示词.md「真实视频并发 Probe」）。
         # 提交频率仍由 RateLimiter video 桶独立约束（AGNES_VIDEO_RPM）——限流与在途是两个维度。
         video_workers = max(1, int(os.environ.get("AGNES_VIDEO_INFLIGHT", "1") or 1))
+        if not os.environ.get("AGNES_VIDEO_INFLIGHT") \
+                and self._video_worker_count_override:
+            # Phase55 C：未设 env 时回落 config 档位（concurrency.video_inflight）——
+            # env 保持最高优先（运维逃生口），默认 1 = 既有串行行为不变。
+            video_workers = max(1, int(self._video_worker_count_override))
         self.video_worker_count = video_workers   # A_REPORT 观测用
         self._tasks = [
             asyncio.create_task(self._worker(self._video_q, f"video-worker-{i}"))
@@ -319,7 +327,15 @@ class JobQueue:
     async def _watchdog(self, job: Job):
         """🔴 看门狗（用户要求3）：running 超 10min 且 progress 无变化 -> 标 failed + 中断 handler 释放 worker。
         progress 值变化时 emit 刷新 last_progress_at；poll 卡死/无 video_id 提交超 10min 触发。
-        轻任务一般快，10min 足够；video 正常约 90s 完成，10min 无变化判定卡死。"""
+        轻任务一般快，10min 足够；video 正常约 90s 完成，10min 无变化判定卡死。
+
+        Phase55 C（任务书 §6）：本地机器休眠/心跳失联/轮询超时 ≠ Provider 任务失败——
+        已知 provider task ID 的视频 job 不再被看门狗作废（M5 事故路径：休眠 3.45h →
+        watchdog FAILED → 恢复后重新提交=重复生成）。改为延长观察窗（刷新
+        last_progress_at + 计数留痕）：唤醒后轮询循环自动恢复，真实网络失败由
+        PollTransientError（连续 5 次）诚实上报。延长有上限（48 次 ≈ 8h），超限如实
+        FAILED——不产生无限等待。无 provider task ID 的 job 维持原行为（提交确实
+        可能未完成，FAILED 后重试带 previous_submit_uncertain 标注）。"""
         timeout = self.WATCHDOG_TIMEOUT
         while True:
             await asyncio.sleep(self.WATCHDOG_INTERVAL)
@@ -328,6 +344,23 @@ class JobQueue:
             base = getattr(job, "last_progress_at", None) or job.started_at or time.time()
             idle = time.time() - base
             if idle > timeout:
+                if (job.kind == JobKind.VIDEO.value
+                        and (job.params or {}).get("provider_task_id")):
+                    ext = int((job.params or {}).get("watchdog_extensions") or 0)
+                    if ext < 48:
+                        job.params["watchdog_extensions"] = ext + 1
+                        job.last_progress_at = time.time()
+                        job.message = (f"疑似本地失联/休眠（idle {int(idle)}s）——provider "
+                                       f"任务在途（{job.params.get('provider_task_id')}），"
+                                       "继续轮询不补交")
+                        log.warning(
+                            "[watchdog] job %s (video) idle %ds 但 provider task 在途"
+                            " —— 延长观察窗（第 %d 次），不作废不补交",
+                            job.job_id, int(idle), ext + 1)
+                        self._save()
+                        continue
+                    log.warning("[watchdog] job %s 观察窗延长达上限（48 次），如实判定失败",
+                                job.job_id)
                 log.warning("[watchdog] job %s (%s) running %ds 无 progress 变化，判定卡死 -> failed",
                             job.job_id, job.kind, int(idle))
                 job.state = JobState.FAILED.value

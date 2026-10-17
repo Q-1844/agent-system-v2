@@ -92,6 +92,19 @@ class AgentSessionStore:
         self._save(s)
         return s
 
+    def create_fresh_conversation(self, agent_id: str) -> AgentSession:
+        """Phase55 D 会话接力：强制新建 project 级长存会话（干净上下文 + 新
+        conversation_id）。此后 get_or_create_conversation 复用本会话（接力点成为
+        新历史起点）；旧会话文件保留归档（不删除、不归档移动）。"""
+        sid = _new_id("sess")
+        conv_id = "conv_" + secrets.token_hex(6)
+        s = AgentSession(
+            session_id=sid, project=self.project_name, agent_id=agent_id,
+            scope_type=ScopeType.PROJECT.value, scope_id=self.project_name,
+            conversation_id=conv_id)
+        self._save(s)
+        return s
+
     def create_ephemeral(self, agent_id: str, scope_type: str, scope_id: str) -> AgentSession:
         """一次性会话（会话治理：Clean Review 审查实例等）：每次调用必新建、不复用、
         用完即弃。scope_type 用调用方给的专用值（如 "review"），不进入

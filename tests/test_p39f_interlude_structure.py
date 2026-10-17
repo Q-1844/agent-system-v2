@@ -91,7 +91,7 @@ def _config_multi_relay(pdir, shot_id):
     _set_video_num_frames(pdir, shot_id)
 
 
-def _set_video_num_frames(pdir, shot_id, num_frames=73):
+def _set_video_num_frames(pdir, shot_id, num_frames=97):
     def mut(s):
         s.video.num_frames = num_frames
         s.video.frame_rate = 24

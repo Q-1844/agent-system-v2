@@ -54,7 +54,7 @@ def _build(pname):
                first_frame=ff2,
                audio=AudioAsset(local=str(pdir/"output"/"audio"/"s02_c01.mp3"),
                                 status="done", duration_ms=2000),
-               video=VideoAsset(num_frames=81, frame_rate=24))
+               video=VideoAsset(num_frames=97, frame_rate=24))
     # s03: keyframes 已选首帧 + 角色 Alan -> 测尾帧 refs 顺序
     ff3 = ImageAsset(candidates=[Asset(local=str(pdir/"output"/"frames"/"s03_first.png"),
                                        url="https://mock.agnes/s03.png", status="done")],

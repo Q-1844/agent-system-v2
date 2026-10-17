@@ -167,7 +167,16 @@ async def startup():
     # 阶段 3：启动全局任务队列 + 崩溃恢复（恢复在后台跑，不阻塞服务就绪）
     try:
         from src.core.job_queue import JobQueue
-        deps.job_queue = JobQueue(BASE_DIR / "cache" / "jobs.json", JOB_HANDLERS)
+        _video_inflight = None
+        try:
+            # Phase55 C：并发档位进 config（concurrency.video_inflight，默认 1=串行
+            # 基线不变；AGNES_VIDEO_INFLIGHT env 仍为最高优先逃生口）。
+            _video_inflight = int(((_APP_CFG or {}).get("concurrency") or {})
+                                  .get("video_inflight") or 0) or None
+        except Exception:
+            _video_inflight = None
+        deps.job_queue = JobQueue(BASE_DIR / "cache" / "jobs.json", JOB_HANDLERS,
+                                  video_worker_count=_video_inflight)
         # 🔴 清理孤儿 job（project/shot 已删除的 running/queued）--在 start route 前，孤儿不进 worker
         purged = deps.job_queue.purge_orphans(lifecycle.job_target_exists)
         if purged:

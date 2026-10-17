@@ -31,6 +31,9 @@
       </div>
     </div>
 
+    <!-- Phase55 E：协作模式选择与 run 状态（运行级配置入口；状态来自真实 run 账本） -->
+    <CollabRunPanel :project="projectName" />
+
     <!-- 消息时间线 -->
     <div class="proom-messages" ref="messagesEl">
       <div v-if="!room.timeline.length && !room.loading" class="pr-empty">
@@ -213,6 +216,7 @@ import { useProductionRoomStore } from '@/store/productionRoom';
 import { useStickToBottom } from '@/composables/useStickToBottom';
 import { identityOf, statusLabel, changedRefsText } from './roomIdentity';
 import type { ProcessItem } from '@/store/agentTurn';
+import CollabRunPanel from './CollabRunPanel.vue';
 
 const store = useProjectStore();
 const projectName = computed(() => store.projectName);

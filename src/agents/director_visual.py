@@ -253,6 +253,12 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
         # Phase51 B：视频层人数纪律（与首帧层同参数对称；E2 实证 + P50 用户观察
         # 「宽/中景 i2v 船员消失」）。默认 true，创作意图含额外人物时显式 false。
         population_constraint = bool(args.get("population_constraint", True))
+        # Phase55 A（任务书 §3）：视频统一提交契约——参考策略解析（显式参数 >
+        # 项目级活动 run 策略 > 默认 bound_required 基线等价：六员链连续性=BOUND
+        # 参考链；无绑定视频退化为首帧单图 i2v，场景/Look 不进参考链=Phase54
+        # 场景漂移根因，不静默降级）。legacy_allowed 为显式逃生口（回执/manifest
+        # 记录，不与基线对照混算）。
+        raw_reference_policy = (str(args.get("reference_policy") or "").strip() or None)
         # 视频模型（2026-09-28：v2.0 已删除，agnes-video-2.5-flash 为唯一模型——
         # config 默认，无需显式选择。对 config 实际配置校验（client 不可用时退回
         # 已知默认集合，保证拒绝语义确定）。
@@ -279,6 +285,9 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
                          "任务队列不可用（服务未就绪），无法生成视觉资产")
 
     pdir = rt._resolve_project_dir(project)
+    if not is_image:
+        from src.generation.video_contract import resolve_reference_policy
+        reference_policy = resolve_reference_policy(pdir, explicit=raw_reference_policy)
     proj = ProjectStore(pdir).load()
     submittable, blocked = _precheck_targets(proj, targets,
                                              kind="image" if is_image else "video",
@@ -352,6 +361,60 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
         submittable = allowed
         blocked = blocked + policy_blocked
 
+    # ---- Phase55 A（任务书 §3）：视频统一提交契约——入队前合法性编译与校验 ----
+    # 三个入口（director 工具/producer capability/REST）共用 src/generation/
+    # video_contract.py：时长契约、multi 需 binding、BOUND 基线等价（默认）、
+    # negative_prompt 编译、未知参数拒绝；每个放行目标生成统一输入依据清单
+    # （input_manifest，随 job.params 落盘并并入 VideoVersion.generation_basis）。
+    video_contract_state: dict = {}   # shot_id -> {manifest, scene_reference}
+    if not is_image and submittable:
+        from src.generation.video_contract import (
+            build_input_manifest,
+            scene_reference_consumed as _scene_ref_consumed,
+            validate_video_submission,
+        )
+        from src.shot_binding.service import ShotBindingService
+        _vc_svc = ShotBindingService(pdir, project)
+        _vc_require_binding = reference_policy == "bound_required"
+        _vc_allowed: list = []
+        for t in submittable:
+            _vc_shot = proj.get_shot(t["shot_id"])
+            if _vc_shot is None:   # _precheck_targets 已拦，防御性放行
+                _vc_allowed.append(t)
+                continue
+            _vc_validity = _vc_svc.read_validity(t["shot_id"])
+            _vc_chk = validate_video_submission(
+                _vc_shot, require_binding=_vc_require_binding,
+                validity=_vc_validity)
+            if not _vc_chk["ok"]:
+                for _viol in _vc_chk["violations"]:
+                    blocked.append({
+                        **t, "status": _viol["code"], "ok": False, "verified": False,
+                        "error": _viol["code"],
+                        "detail": _viol["detail"], "fix_hint": _viol["fix_hint"],
+                        **({"issues": _viol["issues"]} if "issues" in _viol else {}),
+                        "reference_policy": reference_policy,
+                        "binding_revision": _vc_validity.get("binding_revision"),
+                    })
+                continue
+            _vc_mode = ("keyframes" if _vc_shot.link_mode == "keyframes"
+                        else "multi" if _vc_shot.link_mode == "multi" else "i2v")
+            _vc_sref = _scene_ref_consumed(proj, _vc_shot, pdir, validity=_vc_validity)
+            from src.generation.video_contract import planned_video_seconds
+            video_contract_state[t["shot_id"]] = {
+                "manifest": build_input_manifest(
+                    proj, _vc_shot, stage="video", mode=_vc_mode,
+                    video_model=video_model,
+                    seconds=planned_video_seconds(_vc_shot),
+                    project_dir=pdir, validity=_vc_validity,
+                    population_constraint=population_constraint,
+                    scene_ref=_vc_sref,
+                    compiled_negative_prompt=bool(_vc_chk["compiled_negative_prompt"])),
+                "scene_reference": _vc_sref,
+            }
+            _vc_allowed.append(t)
+        submittable = _vc_allowed
+
     # ---- Phase 39D 修正（用户定版）：输入语义分类 + 分角色检查口径 ----
     # reference_only（multi 参考槽 / 分镜图 refs）：姿态命中只记 soft 诊断
     # （pose_reference_mismatch_soft）——绝不阻断/不要求补参考/不升级 major/
@@ -417,6 +480,8 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
         elif video_model:
             extra["video_model"] = video_model
         extra["population_constraint"] = population_constraint
+        if not is_image and t["shot_id"] in video_contract_state:
+            extra["input_manifest"] = video_contract_state[t["shot_id"]]["manifest"]
         job = q.submit(project, kind, t["shot_id"], **extra)
         jobs.append((t, job, marker))
 
@@ -712,6 +777,15 @@ SHOT_GENERATE_VIDEOS_TOOL = {
                         "人数纪律（Phase51 B，E2 实证）：true=按 shot.characters 确定性"
                         "人数排除子句进视频 prompt tail（防 i2v 过程中船员缺员/意外第三人；"
                         "首帧层同参数对称）。默认 true；镜头确需路人/人群时显式传 false。"),
+                },
+                "reference_policy": {
+                    "type": "string",
+                    "enum": ["bound_required", "legacy_allowed"],
+                    "description": (
+                        "参考链契约（Phase55 A）：bound_required（默认）=要求本镜已建立"
+                        "生产绑定（BOUND）——场景/角色参考真实进入视频参考链，基线等价"
+                        "策略；legacy_allowed=显式放弃参考链（退化为首帧单图 i2v，"
+                        "场景漂移风险自负，回执与 manifest 如实标注）。"),
                 },
             },
             "required": ["shot_ids"],

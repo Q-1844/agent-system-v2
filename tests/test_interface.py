@@ -46,7 +46,7 @@ def _build_project(pname: str) -> Path:
                first_frame=ff2,
                audio=AudioAsset(local=str(pdir / "output" / "audio" / "s02_c01.mp3"),
                                 status="done", duration_ms=2000),
-               video=VideoAsset(num_frames=81, frame_rate=24))
+               video=VideoAsset(num_frames=97, frame_rate=24))
     from src.core.models import NativeAVSettings
     proj = Project(name=pname, style=StyleAnchor(aspect_ratio="16:9", size_tier="1K"),
                    native_av=NativeAVSettings(spoken_language="Mandarin Chinese"),

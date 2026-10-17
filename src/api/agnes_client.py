@@ -371,10 +371,15 @@ class AgnesClient:
                                 text_ep=bool(self._text_ep), json=body)
         if self.quota: self.quota.consume("text_calls", 1)
         msg = r.json()["choices"][0]["message"]
+        # Phase55 D：usage 透传（此前被丢弃）——会话级 token 预算监控的数据基础
+        #（P54-B1 实证 467k input 撞 524k 上限；监控需真实 usage 而非字符近似）。
+        # provider 不回 usage 时键缺省（诚实缺失，不做估算冒充）。
+        _usage = r.json().get("usage") or None
         return {
             "content": msg.get("content"),
             "tool_calls": msg.get("tool_calls"),
             "role": msg.get("role", "assistant"),
+            **({"usage": _usage} if _usage else {}),
         }
 
     async def chat_completion_vision(self, messages: List[dict], *, model: str,

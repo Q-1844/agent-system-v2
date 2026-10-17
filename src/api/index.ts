@@ -2693,6 +2693,40 @@ class ApiClient {
     return this.sceneRequest(`/api/project/${encodeURIComponent(projectName)}/shot-bindings/${encodeURIComponent(shotId)}/refresh`,
       { method: 'POST', body: JSON.stringify({ expected_binding_revision: expectedBindingRevision }) });
   }
+  // ============ Phase55：协作模式注册表与 run（批次 E 产品入口） ============
+
+  async collabModes(project: string): Promise<{ modes: any[] }> {
+    return this.request(`/api/project/${encodeURIComponent(project)}/collab-modes`);
+  }
+
+  async collabRunStart(
+    project: string,
+    body: { mode_id: string; params: Record<string, unknown>; granted_by?: string; thinking?: boolean },
+  ): Promise<{ run: any }> {
+    return this.request(`/api/project/${encodeURIComponent(project)}/collab-runs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  async collabRuns(project: string): Promise<{ runs: any[] }> {
+    return this.request(`/api/project/${encodeURIComponent(project)}/collab-runs`);
+  }
+
+  async collabRunGet(project: string, runId: string): Promise<{ run: any }> {
+    return this.request(`/api/project/${encodeURIComponent(project)}/collab-runs/${encodeURIComponent(runId)}`);
+  }
+
+  async collabRunCancel(project: string, runId: string, reason = ''): Promise<{ stopped: boolean; status: string }> {
+    return this.request(`/api/project/${encodeURIComponent(project)}/collab-runs/${encodeURIComponent(runId)}/cancel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    });
+  }
+
 }
 
 export const apiClient = new ApiClient();
+

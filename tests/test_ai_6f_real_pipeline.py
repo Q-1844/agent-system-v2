@@ -69,6 +69,11 @@ class FakeAgnes:
                            seed=None, negative_prompt="",
                            model=None, duration_s=None):
         self.calls.append("create_video")
+        # Phase55 C：provider 每次提交返回新 video_id（现实语义）——收货幂等按
+        # video_id 去重，恒同 id 会让新任务被误判为重复收货。
+        seq = int(self._next_video_id.rsplit("_", 1)[1]) + 1 \
+            if self._next_video_id.startswith("vid_fake_") else 1
+        self._next_video_id = f"vid_fake_{seq}"
         vid = self._next_video_id
         return {"video_id": vid, "task_id": "t_1", "seconds": "5.0", "size": "1280x704"}
 
@@ -128,6 +133,11 @@ def _save_proj(tmp_path, shots=None, chars=None):
                                  characters=[c.name for c in (chars or [Character(name="阿派")])],
                                  shots=shots)])
     ProjectStore(tmp_path).save(proj)
+    # Phase55 A：本文件测的是 AgentTask 生命周期（reattach/settle/幂等），非参考链
+    # 契约——显式声明 legacy 参考策略（默认 bound_required 闸的覆盖在
+    # test_p55_video_contract.py）。
+    from src.generation.video_contract import set_project_reference_policy
+    set_project_reference_policy(tmp_path, "legacy_allowed", source="test")
     return tmp_path
 
 

@@ -84,9 +84,10 @@ class _FakePM:
 
 
 def _shot(sid, chars=("船长", "大副"), link_mode="i2v"):
+    # Phase55 A：默认时长 3.0→5.0（2.5 契约 4-12s，3s 会在 preflight 被时长契约拒绝）
     s = Shot(shot_id=sid, scene_id=sid.rsplit("_c", 1)[0], index=1,
              description="黄昏甲板双人镜头", characters=list(chars),
-             target_duration_s=3.0)
+             target_duration_s=5.0)
     s.link_mode = link_mode
     return s
 
@@ -188,8 +189,10 @@ def test_b_w3_videos_default_population_on(pop_env):
 
     async def scenario():
         await q.start()
+        # Phase55 A：本测试对象=人数纪律默认值接线，非参考链契约——显式 legacy
         return await _execute_shot_generate_videos(
-            rt, PROJECT, json.dumps({"shot_ids": ["s01_c01"]}), "instr", "m1")
+            rt, PROJECT, json.dumps({"shot_ids": ["s01_c01"],
+                                     "reference_policy": "legacy_allowed"}), "instr", "m1")
 
     obs = asyncio.run(scenario())
     assert obs["ok"], obs

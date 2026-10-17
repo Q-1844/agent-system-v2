@@ -106,7 +106,7 @@ class _FakePM:
 
 
 # ============ 装置 ============
-def _shot(sid, idx=1, desc="机甲启动", chars=("阿派",), dur=3.0, link_mode="i2v"):
+def _shot(sid, idx=1, desc="机甲启动", chars=("阿派",), dur=5.0, link_mode="i2v"):
     s = Shot(shot_id=sid, scene_id=sid.rsplit("_c", 1)[0], index=idx,
              description=desc, characters=list(chars), target_duration_s=dur)
     s.link_mode = link_mode
@@ -275,7 +275,9 @@ def test_generate_videos_ok(visual_env):
     async def scenario():
         await q.start()
         return await _execute_shot_generate_videos(
-            rt, PROJECT, json.dumps({"shot_ids": ["s01_c01"]}), "instr", "m1")
+            rt, PROJECT,
+            json.dumps({"shot_ids": ["s01_c01"],
+                        "reference_policy": "legacy_allowed"}), "instr", "m1")
 
     obs = asyncio.run(scenario())
     assert obs["ok"] and obs["verified"] and obs["done"] == 1
@@ -289,6 +291,11 @@ def test_generate_videos_ok(visual_env):
     assert len(mine) == 1
     assert shot.final_video == mine[0].version_id
     assert mine[0].local == r["local"]
+    # Phase55 A：统一输入依据清单随版本落档（legacy 显式标注场景未进视觉输入）
+    im = mine[0].generation_basis.get("input_manifest")
+    assert im and im["schema"] == "input_manifest_v1"
+    assert im["reference_consumption"]["state"] == "absent"
+    assert im["method"]["mode"] == "i2v"
 
 
 # ============ 视频模型选择（2026-09-06 新契约接入）============
@@ -304,7 +311,8 @@ def test_generate_videos_with_25_model_threads_model_through_chain(visual_env):
         return await _execute_shot_generate_videos(
             rt, PROJECT,
             json.dumps({"shot_ids": ["s01_c01"],
-                        "video_model": "agnes-video-2.5-flash"}),
+                        "video_model": "agnes-video-2.5-flash",
+                        "reference_policy": "legacy_allowed"}),
             "instr", "m1")
 
     obs = asyncio.run(scenario())
@@ -329,7 +337,9 @@ def test_generate_videos_default_model_resolved_to_25_flash(visual_env):
     async def scenario():
         await q.start()
         return await _execute_shot_generate_videos(
-            rt, PROJECT, json.dumps({"shot_ids": ["s01_c01"]}), "instr", "m1")
+            rt, PROJECT,
+            json.dumps({"shot_ids": ["s01_c01"],
+                        "reference_policy": "legacy_allowed"}), "instr", "m1")
 
     obs = asyncio.run(scenario())
     assert obs["ok"] and obs["verified"]
