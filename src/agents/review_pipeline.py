@@ -18,10 +18,47 @@ from typing import Any, Dict, List, Optional
 # 抽帧位：首帧（开场）/中点/末帧（收尾）——固定清单，随批次落档（§8 固定裁切区间）。
 FRAME_POSITIONS = ("first", "middle", "end")
 
+# ============ Phase56 审查政策 v2（video_review_v2；B1 实证驱动） ============
+# B1 发现（run_fba9de2066/rvw_d4421b7e）：P55 硬维清单为静帧设计，直接套视频
+# 三帧位=结构性误报——中帧动作位移→missing_character；景别（预存模型边界）
+# →shot_size_correctness 硬错→修复轮对 never-win 问题烧额度（违反 04「不增加
+# 无休止修复」）。v2 分类：
+#   - 视频硬维（故事事实，任一状态帧[首/末] fail → 硬错）：人数/身份/缺人/伪影；
+#   - 视频次维（记录不自动修复）：景别/构图（模型能力边界+运动自然变量）；
+#   - 聚合：硬维仅在首/末帧 fail 才算硬错；仅中帧 fail=动作位移，记录为
+#     motion_minor（开场/终态仍是状态闸，运动不被惩罚）。
+REVIEW_POLICY_VERSION = "video_review_v2"
+VIDEO_HARD_DIMS = ("duplicate_identity", "unexpected_people", "missing_character",
+                   "anatomy_artifact")
+VIDEO_MINOR_DIMS = ("shot_size_correctness", "framing_and_composition")
+STATE_FRAME_POSITIONS = ("first", "end")   # 状态闸帧位（中帧=运动帧）
+
 # 模块级 import（测试可替换；单帧判定器/硬维清单/机械抽帧复用既有实现）
 from .shot_review import review_shot_core, SHOT_REVIEW_HARD_DIMS  # noqa: E402
 from src.storyboard.continuity_service import (  # noqa: E402
     extract_shot_frame_local, ContinuityError)
+
+
+def _classify_shot_frames(frames: List[Dict[str, Any]]) -> dict:
+    """审查政策 v2 聚合：视频硬维只在状态帧（首/末）fail 才构成硬错；
+    次维（景别/构图）与仅中帧硬维=记录（motion_minor），不触发自动修复。"""
+    hard_state: set = set()
+    hard_motion_only: set = set()
+    minor_all: set = set()
+    for f in frames:
+        fired = set(f.get("hard_dims_fired") or [])
+        minor_here = fired & set(VIDEO_MINOR_DIMS)
+        minor_all |= minor_here
+        hard_here = fired & set(VIDEO_HARD_DIMS)
+        if f.get("position") in STATE_FRAME_POSITIONS:
+            hard_state |= hard_here
+        else:
+            hard_motion_only |= hard_here
+    return {
+        "hard_errors": sorted(hard_state),
+        "motion_minor": sorted(hard_motion_only - hard_state),
+        "minor": sorted(minor_all),
+    }
 
 
 def _pick_client(rt):
@@ -88,10 +125,11 @@ async def run_independent_review(rt, pdir: Path, project: str, *,
                                 or "")[:300],
                 })
             overs = [f["overall"] for f in entry["frames"]]
-            hard = sorted({d for f in entry["frames"]
-                           for d in f["hard_dims_fired"]})
-            entry["hard_errors"] = hard
-            entry["overall"] = ("hard_error" if hard
+            cls = _classify_shot_frames(entry["frames"])
+            entry["hard_errors"] = cls["hard_errors"]
+            entry["motion_minor"] = cls["motion_minor"]
+            entry["minor"] = cls["minor"]
+            entry["overall"] = ("hard_error" if cls["hard_errors"]
                                 else "uncertain" if "uncertain" in overs
                                 else "pass")
         except ContinuityError as e:
@@ -102,7 +140,11 @@ async def run_independent_review(rt, pdir: Path, project: str, *,
     hard_shots = [r["shot_id"] for r in results if r["overall"] == "hard_error"]
     minor_shots = [r["shot_id"] for r in results if r["overall"] == "uncertain"]
     report = {
-        "schema": "independent_review_v1",
+        "schema": "independent_review_v2",
+        "review_policy_version": REVIEW_POLICY_VERSION,
+        "video_hard_dims": list(VIDEO_HARD_DIMS),
+        "video_minor_dims": list(VIDEO_MINOR_DIMS),
+        "state_frame_positions": list(STATE_FRAME_POSITIONS),
         "batch_id": batch_id, "project": project, "created_at": time.time(),
         "reason": (reason or "")[:200],
         "frame_positions": list(positions),

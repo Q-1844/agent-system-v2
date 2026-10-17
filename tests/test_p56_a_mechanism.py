@@ -671,6 +671,34 @@ def test_auto_repair_limit_exhausted_honest(tmp_path, monkeypatch):
     assert run["repair"]["still_hard"][0]["shot_id"] == "s01_c02"
 
 
+def test_video_review_policy_v2_aggregation():
+    """Phase56 审查政策 v2（B1 实证）：景别/构图=次维记录不修复；硬维仅状态帧
+    （首/末）构成硬错；中帧位移=motion_minor。"""
+    from src.agents.review_pipeline import _classify_shot_frames, REVIEW_POLICY_VERSION
+    assert REVIEW_POLICY_VERSION == "video_review_v2"
+    frames = [
+        {"position": "first", "hard_dims_fired": [], "overall": "pass"},
+        {"position": "middle", "hard_dims_fired": ["missing_character",
+                                                   "shot_size_correctness"],
+         "overall": "hard_error"},   # 中帧动作位移+景别——不构成硬错
+        {"position": "end", "hard_dims_fired": ["framing_and_composition"],
+         "overall": "hard_error"},   # 末帧构图=次维记录
+    ]
+    cls = _classify_shot_frames(frames)
+    assert cls["hard_errors"] == []
+    assert "missing_character" in cls["motion_minor"]
+    assert "shot_size_correctness" in cls["minor"]
+    assert "framing_and_composition" in cls["minor"]
+    # 状态帧硬错仍拦截
+    frames2 = [
+        {"position": "first", "hard_dims_fired": ["unexpected_people"]},
+        {"position": "middle", "hard_dims_fired": []},
+        {"position": "end", "hard_dims_fired": []},
+    ]
+    cls2 = _classify_shot_frames(frames2)
+    assert cls2["hard_errors"] == ["unexpected_people"]
+
+
 # ==================================================================
 # A3：UNKNOWN 提交暂停（handler 层待核验）
 # ==================================================================
