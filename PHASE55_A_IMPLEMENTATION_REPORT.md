@@ -210,7 +210,17 @@
 - **主控租约 TTL 缺陷（run_67314129eb 实证）**：lease TTL 30min < 长 turn 时长（39min）→ turn 自身租约过期 → 自身工具被拒（denial 消息误报"已转移"）。**修复**：verify 语义改为 holder 匹配即通过（自身过期≠失去主控——过期只 gate 他人 acquire，接管会推 generation 届时自然验不过）+ 消息如实化；回归测试 `test_lease_expired_holder_continuity`。修复后 run_51744a53ce 全程 68min 无自身拒绝（生产验证）。
 - **模板参数化**：segment_count/duration_hint 占位符（replace 烘焙 grant_line，不动运行期占位符）。
 
-### E.2.3 后续真机（待额度/后续会话）
+### E.2.3 用户看片判定（2026-10-17）：**不通过——原因=衔接**
 
-- ①六员链冒烟（W09 最小 6 镜——额度充足日）；③④⑤冒烟；并发主试验 1/2/3 档（同输入仅改 `concurrency.video_inflight`，含独立分支+真实接续链）；恢复实战（取得 ID 后中断客户端核对仅收货）；中长片压力（2-4min）。
+- 用户原话：「我认为不能通过的原因就是因为它的衔接，虽然说看着还行，但是如果将片加长，场景衔接性一定会变差。」（页面 POST 因 review 目录缺失写盘失败——bug 已修复；口头评价为准，已落 FEEDBACK_P55.json）
+- **执行侧帧验亲证**（seam_s01_tail/seam_s02_head.jpg，测试5/review/）：
+  - **一致性成立项**：门店物理身份跨镜锚定成功（绿色胶带条/空调外机/橱窗结构两镜可对上——LocationView+sciv 锚定有效）；店员黄雨衣/顾客灰风衣与 approved Look 一致。
+  - **衔接弱判定成立项**：①两镜 `opening_source=independent`——**没有建立尾帧接续链**（六员链基线配方=接续链优先，intentional cut 须有依据）；两镜各自独立首帧，只靠同 Location 两张不同 sciv 间接锚定。②s01 场景参考 mode=**context_only**——场景图未作为视觉输入进首帧（仅语义上下文），比六员链的 full 弱一档。③空间/状态跳变：s01 尾=顾客门内侧微笑特写→s02 头=街对面大全景两人在雨中递伞（动作已进行中）——无终态/初态对齐。
+  - 用户「加长一定变差」假设与本证据方向一致：每镜独立首帧的漂移随镜数复合放大（P54 §10.2 场景漂移根因的同型）。
+- **契约缺口定性（本轮最重要产出）**：Phase55 契约强制了 **bind（场景绑定）** 但未强制 **接续链策略**（六员链基线的另一半）——`reference_policy=bound_required` 下 producer 合法地选择了 independent+intentional cut，且 context_only 被计为「已消费」。**修复方向=reference_policy v2（baseline_equiv_chain）**：同场景相邻镜默认要求接续链（inherit_previous 或 multi+relay 哨兵），intentional cut 须显式声明依据并落 manifest；scene_reference_consumed 基线只认 provider_reference 或 via_first_frame(full)，context_only=显式豁免标注。随中长片测试实施与验证。
+
+### E.2.4 后续真机（待额度/后续会话）
+
+- **中长片压力测试升为决定性验收**（用户假设的直接检验）：《雨夜递伞》扩写为 2-3min（12-16 镜），同 ② 模式+reference_policy v2（接续链强制），额度刷新日执行（500s 全新；2-3min 源素材需求约 150-250s）。目标：检验「加长后场景衔接性是否变差」与 v2 修复是否钉住。
+- ①六员链冒烟（W09 最小 6 镜）；③④⑤冒烟；并发主试验 1/2/3 档；恢复实战。
 - 观察项：微型片资产阶段（Look/场景视图审批迭代）占墙钟比例显著——与 §12 指标「就绪到提交延迟」对齐后量化。
