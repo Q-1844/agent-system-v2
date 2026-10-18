@@ -164,11 +164,14 @@ class JobQueue:
             self.jobs = {k: Job(**v) for k, v in data.items()}
             # 🔴 重启后 running 的任务重置为 queued（视频交给 recover 处理，不在此重排）
             for j in self.jobs.values():
-                if j.state == JobState.RUNNING.value and j.kind != JobKind.VIDEO.value:
+                if j.state == JobState.RUNNING.value and (
+                    j.kind != JobKind.VIDEO.value or
+                    ("handler_started" in j.params and not j.params.get("submission_intent_id")
+                     and not j.params.get("provider_task_id"))):
                     j.state = JobState.QUEUED.value
         except Exception as e:
-            log.warning("队列状态读取失败，从空开始: %s", e)
-            self.jobs = {}
+            log.error("队列状态读取失败，保留原文件并停止恢复: %s", e)
+            raise RuntimeError("JobQueue state corrupt; recovery required (original file preserved)") from e
 
     def _save(self):
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
@@ -319,10 +322,12 @@ class JobQueue:
             job.started_at = time.time(); job.attempts += 1
             job.message = job.message or "开始处理"
             job.last_progress_at = time.time()
-            self._save(); await self._broadcast(job)
+            job.params["handler_started"] = False
+            self._save()
             task = asyncio.create_task(self._run_job(job, name))
             self._running_tasks[job_id] = task
             try:
+                await self._broadcast(job)
                 await task
             except asyncio.CancelledError:
                 # 区分 worker 自身被 shutdown cancel vs inner job task 被 force-cancel/watchdog cancel。
@@ -331,6 +336,14 @@ class JobQueue:
                 # cancelling()==0 = CancelledError 来自 inner task（force cancel/watchdog，state 已在 _run_job 设好）
                 #   → 既有语义：worker 存活继续处理后续 job（cancel 一个 Job 不杀死 worker）。
                 if asyncio.current_task().cancelling() > 0:
+                    task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
+                    if job.state == JobState.RUNNING.value and not job.params.get("handler_started"):
+                        job.state = JobState.QUEUED.value
+                        job.started_at = None
+                        job.attempts = max(0, job.attempts - 1)
+                        self._save()
+                        q.put_nowait(job_id)
                     raise
             except Exception as e:
                 log.exception("[%s] worker 意外错误 %s", name, job_id)
@@ -340,6 +353,8 @@ class JobQueue:
 
     async def _run_job(self, job: Job, name: str):
         """执行单个 job 的 handler，带看门狗。force cancel / 看门狗通过 task.cancel() 中断。"""
+        job.params["handler_started"] = True
+        self._save()
         watchdog = asyncio.create_task(self._watchdog(job))
         try:
             handler = self.handlers.get(job.kind)

@@ -293,6 +293,20 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
                                              kind="image" if is_image else "video",
                                              force=force)
 
+    if not is_image and submittable:
+        from src.generation.dialogue_control import diagnose_dialogue_batch
+        dialogue_errors = diagnose_dialogue_batch(pdir, proj, [t["shot_id"] for t in submittable])
+        valid = []
+        for target in submittable:
+            error = dialogue_errors.get(target["shot_id"])
+            if error is None:
+                valid.append(target)
+            else:
+                blocked.append({**target, "status": error["code"], "error": error["code"],
+                                "detail": error["detail"], "ok": False, "verified": False,
+                                "fix_hint": "一次修正本批次全部对白编译错误后重试；未调用Provider"})
+        submittable = valid
+
     # ---- Phase51 C：修复范围服务端硬闸（run_36919eb5a073 实证：提示词范围约束
     #      对导演无效，授权 4 镜实际提交 20 镜）——清单外镜头在预检直接拒绝，
     #      不进队列不耗配额。scope 由 continue_run(rejected, allowedShotIds) 设置。----

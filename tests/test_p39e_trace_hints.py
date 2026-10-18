@@ -213,7 +213,7 @@ def test_first_frame_slot_sync_by_role(tmp_path):
                video_end_frame=Asset(local="e.jpg", url="https://h/tail.jpg",
                                      status=ShotStatus.DONE.value))
     c02 = Shot(shot_id="s01_c02", scene_id="s01", index=2, description="B",
-               final_video="vv_b")
+               final_video="vv_x")
     ProjectStore(pdir).save(Project(name="p", style=StyleAnchor(),
                                     scenes=[Scene(scene_id="s01", shots=[c01, c02])]))
     store = ProjectStore(pdir)
@@ -239,6 +239,8 @@ def test_first_frame_slot_sync_by_role(tmp_path):
                          "url": "https://h/tail2.jpg",
                          "source_type": "prev_tail_reference",
                          "source_shot_id": "s01_c01"}]
+    vv.version_id = "vv_y"
+    store.update_shot("s01_c02", lambda shot: setattr(shot, "final_video", "vv_y"))
     asyncio.run(_sync_first_frame_slot(store, "s01_c02", vv, "vv_y", None))
     sh = store.load().get_shot("s01_c02")
     assert "[参考]" in sh.first_frame_batches[-1].prompt_snapshot

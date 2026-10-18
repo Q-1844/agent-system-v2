@@ -89,6 +89,8 @@ def resolve_final_video_file(shot: Any) -> Optional[Path]:
                 p = Path(vv.local)
                 if p.exists():
                     return p
+        # An explicit version pointer must never fall back to another artifact.
+        return None
     old = getattr(getattr(shot, "video", None), "local", None)
     if old:
         p = Path(old)

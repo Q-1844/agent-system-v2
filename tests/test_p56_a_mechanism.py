@@ -431,7 +431,7 @@ def test_run_start_applies_concurrency_effect(tmp_path, monkeypatch):
 # ==================================================================
 def test_combo_v2_registry():
     m = cm.COLLAB_MODES["combo_recommended"]
-    assert m["mode_version"] == "2.0.0"
+    assert m["mode_version"] == "2.1.0"
     assert m["reference_policy"] == "baseline_equiv_chain"
     assert m["experimental"] is True
     assert m["repair_policy"]["repair_limit_per_shot"] == cm.REPAIR_LIMIT_PER_SHOT
@@ -452,7 +452,7 @@ def test_default_mode_start_and_authorization(tmp_path):
     run = asyncio.run(cm.start_collab_run(rt, PROJECT, None,
                                           {"story_goal": "默认模式测试"}))
     assert run["mode_id"] == "combo_recommended"
-    assert run["mode_version"] == "2.0.0"
+    assert run["mode_version"] == "2.1.0"
     auth = run["authorization"]
     assert auth["machine_review"] is True
     assert auth["bounded_repair"] is True
@@ -515,7 +515,7 @@ def test_rest_default_mode_and_resume_endpoint(tmp_path, monkeypatch):
     out = asyncio.run(ra.collab_run_start(PROJECT, ra.CollabRunStartReq(
         mode_id=None, params={"story_goal": "s"})))
     assert out["used_default_mode"] == "combo_recommended"
-    assert out["run"]["mode_version"] == "2.0.0"
+    assert out["run"]["mode_version"] == "2.1.0"
     # resume：非 awaiting_relay → 400
     rid = out["run"]["run_id"]
     for _ in range(200):
@@ -561,10 +561,19 @@ def test_agent_declaration_channel_opening_fields(tmp_path):
 class _FakeRepairQueue:
     """假队列：submit 即 done（不调 Provider）；记录全部提交参数。"""
 
-    def __init__(self):
+    def __init__(self, pdir):
         self.submitted = []
+        self.pdir = pdir
 
     def submit(self, project, kind, shot_id, **params):
+        from src.core.store import ProjectStore
+        from src.core.models import VideoVersion
+        version = VideoVersion(version_id=f"repaired_{len(self.submitted)}", status="done",
+                               local="fake.mp4", origin_run_id=params["origin_run_id"])
+        def attach(shot):
+            shot.video_versions.append(version)
+            shot.final_video = version.version_id
+        ProjectStore(self.pdir).update_shot(shot_id, attach)
         self.submitted.append({"project": project, "kind": kind,
                                "shot_id": shot_id, **params})
         return SimpleNamespace(job_id=f"j{len(self.submitted)}",
@@ -580,7 +589,13 @@ def test_auto_repair_loop_new_artifact_and_rereview(tmp_path, monkeypatch):
     from src.agents import review_pipeline
 
     rt = _RelayFakeRt(tmp_path, [])
-    fq = _FakeRepairQueue()
+    from src.core.store import ProjectStore
+    from src.core.models import VideoVersion
+    fixture_project = _mk_project([_mk_shot("s01_c02")])
+    fixture_project.get_shot("s01_c02").final_video = "original"
+    fixture_project.get_shot("s01_c02").video_versions = [VideoVersion(version_id="original", status="done", local="old.mp4")]
+    ProjectStore(tmp_path).save(fixture_project)
+    fq = _FakeRepairQueue(tmp_path)
     rt._resolve_job_queue_or_none = lambda: fq
     rt._resolve_client_or_none = lambda agent_id=None: SimpleNamespace()
     run = {"run_id": "run_fix", "project": PROJECT, "mode_id": "combo_recommended",
@@ -597,20 +612,16 @@ def test_auto_repair_loop_new_artifact_and_rereview(tmp_path, monkeypatch):
     calls = {"n": 0}
 
     async def fake_review(rt_, pdir_, project_, *, reason="", shot_ids=None,
-                          positions=None):
+                          positions=None, version_ids=None):
         calls["n"] += 1
-        if shot_ids:   # 复审：第 1 次仍硬错（驱动第二次 attempt），之后通过
-            if calls["n"] == 2:
-                return {"batch_id": f"rvw_r{calls['n']}", "results": [
-                    {"shot_id": shot_ids[0], "overall": "hard_error",
-                     "hard_errors": ["unexpected_people"]}],
-                    "hard_error_shots": list(shot_ids), "minor_shots": []}
-            return {"batch_id": f"rvw_r{calls['n']}", "results": [
-                {"shot_id": shot_ids[0], "overall": "pass", "hard_errors": []}],
-                "hard_error_shots": [], "minor_shots": []}
+        selected = ProjectStore(tmp_path).load().get_shot("s01_c02").final_video
+        entry = {"shot_id": "s01_c02", "version_id": selected,
+                 "overall": "pass" if shot_ids else "hard_error",
+                 "hard_errors": [] if shot_ids else ["anatomy_artifact"]}
         return {"batch_id": f"rvw_{calls['n']}", "shots_reviewed": 1,
-                "hard_error_shots": ["s01_c02"], "minor_shots": [],
-                "report_path": "x", "results": []}
+                "hard_error_shots": [] if shot_ids else ["s01_c02"],
+                "minor_shots": [], "incomplete_shots": [], "report_path": "x",
+                "results": [entry]}
 
     monkeypatch.setattr(review_pipeline, "run_independent_review", fake_review)
     asyncio.run(cm._final_review_and_repair(rt, tmp_path, PROJECT, run))
@@ -621,9 +632,8 @@ def test_auto_repair_loop_new_artifact_and_rereview(tmp_path, monkeypatch):
     assert rep["still_hard"] == []
     # 修复=同一硬错镜两次 attempt（复审第一次仍硬错→第二次通过）；溯源字段在位
     submits = fq.submitted
-    assert [s["shot_id"] for s in submits] == ["s01_c02", "s01_c02"]
+    assert [s["shot_id"] for s in submits] == ["s01_c02"]
     assert submits[0]["repair_of_review"] == "rvw_1" and submits[0]["repair_attempt"] == 1
-    assert submits[1]["repair_attempt"] == 2
     assert run["repair"]["still_hard"] == []
     # 授权来源落账（actor=mode_run_executor）
     assert rep["actor"] == "mode_run_executor"
@@ -634,7 +644,13 @@ def test_auto_repair_limit_exhausted_honest(tmp_path, monkeypatch):
     from src.agents import review_pipeline
 
     rt = _RelayFakeRt(tmp_path, [])
-    fq = _FakeRepairQueue()
+    from src.core.store import ProjectStore
+    from src.core.models import VideoVersion
+    fixture_project = _mk_project([_mk_shot("s01_c02")])
+    fixture_project.get_shot("s01_c02").final_video = "original"
+    fixture_project.get_shot("s01_c02").video_versions = [VideoVersion(version_id="original", status="done", local="old.mp4")]
+    ProjectStore(tmp_path).save(fixture_project)
+    fq = _FakeRepairQueue(tmp_path)
     rt._resolve_job_queue_or_none = lambda: fq
     rt._resolve_client_or_none = lambda agent_id=None: SimpleNamespace()
     run = {"run_id": "run_fix2", "project": PROJECT, "mode_id": "combo_recommended",
@@ -648,16 +664,13 @@ def test_auto_repair_limit_exhausted_honest(tmp_path, monkeypatch):
     calls = {"n": 0}
 
     async def fake_review(rt_, pdir_, project_, *, reason="", shot_ids=None,
-                          positions=None):
+                          positions=None, version_ids=None):
         calls["n"] += 1
-        if shot_ids:
-            return {"batch_id": f"rvw_r{calls['n']}", "results": [
-                {"shot_id": shot_ids[0], "overall": "hard_error",
-                 "hard_errors": ["missing_character"]}],
-                "hard_error_shots": list(shot_ids), "minor_shots": []}
+        selected = ProjectStore(tmp_path).load().get_shot("s01_c02").final_video
         return {"batch_id": f"rvw_{calls['n']}", "shots_reviewed": 1,
-                "hard_error_shots": ["s01_c02"], "minor_shots": [],
-                "report_path": "x", "results": []}
+                "results": [{"shot_id": "s01_c02", "version_id": selected,
+                             "overall": "hard_error", "hard_errors": ["anatomy_artifact"]}],
+                "hard_error_shots": ["s01_c02"], "minor_shots": [], "report_path": "x"}
 
     monkeypatch.setattr(review_pipeline, "run_independent_review", fake_review)
     asyncio.run(cm._final_review_and_repair(rt, tmp_path, PROJECT, run))
@@ -665,9 +678,9 @@ def test_auto_repair_limit_exhausted_honest(tmp_path, monkeypatch):
     rep = steps["auto_repair"]["detail"]
     assert steps["auto_repair"]["status"] == "failed"   # 仍有硬错=未全通过
     assert rep["still_hard"] == [{"shot_id": "s01_c02",
-                                  "attempts": cm.REPAIR_LIMIT_PER_SHOT}]
+                                  "attempts": 1}]
     submits = fq.submitted
-    assert len(submits) == cm.REPAIR_LIMIT_PER_SHOT   # 恰好上限次，不无限
+    assert len(submits) == 1   # 相同硬错不盲重掷，升级策略判断
     assert run["repair"]["still_hard"][0]["shot_id"] == "s01_c02"
 
 

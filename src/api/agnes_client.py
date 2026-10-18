@@ -190,6 +190,10 @@ class AgnesError(Exception):
         super().__init__(msg); self.status, self.body = status, body
 
 
+class VideoSubmissionUncertain(AgnesError):
+    """The provider may have accepted a non-idempotent video submission."""
+
+
 class PollTransientError(AgnesError):
     """轮询的暂时性失败（网络/超时/5xx 耗尽）。调用方不应标 video.status=failed，
     应保留 video_id 让 retry/recover 续轮询，避免重提交丢掉已生成的视频。
@@ -296,6 +300,7 @@ class AgnesClient:
     # ---------- 带退避的请求 ----------
     async def _request(self, method: str, url: str, bucket: str,
                        max_attempts: int = 5, *, text_ep: bool = False,
+                       retry_ambiguous: bool = True,
                        **kw) -> httpx.Response:
         label = "SenseNova" if text_ep else "Agnes"
         last = None
@@ -311,6 +316,8 @@ class AgnesClient:
                                          "Authorization": f"Bearer {key}"}
                     r = await c.request(method, url, **kw)
                 except (httpx.TimeoutException, httpx.TransportError) as e:
+                    if not retry_ambiguous:
+                        raise
                     last = e
                     log.warning("[%s] 网络异常 %s（第 %d/%d 次）", bucket, e,
                                 attempt + 1, max_attempts)
@@ -321,6 +328,8 @@ class AgnesClient:
                         raise AgnesError(
                             f"{label} API 错误 {r.status_code}: {r.text[:400]}",
                             r.status_code, r.text)
+                    if not retry_ambiguous and r.status_code != 429:
+                        raise AgnesError(f"{r.status_code}: {r.text[:200]}", r.status_code, r.text)
                     last = AgnesError(f"{r.status_code}: {r.text[:200]}", r.status_code, r.text)
                     if r.status_code == 429:
                         retry_after_s = _parse_retry_after(r)
@@ -335,7 +344,8 @@ class AgnesClient:
             if retry_after_s is not None:
                 backoff = min(120, max(1.0, retry_after_s))
                 log.info("[%s] 429 Retry-After=%ss（服务端窗口优先）", bucket, backoff)
-            await asyncio.sleep(backoff)
+            if attempt + 1 < max_attempts:
+                await asyncio.sleep(backoff)
         # 保留末次错误的 status/body：上层（如 producer loop 的瞬态恢复）需要区分
         # 「可重试错误耗尽」（429/5xx，值得再等一轮）与「配置/配额类永久失败」。
         raise AgnesError(f"重试 {max_attempts} 次仍失败: {last}",
@@ -704,9 +714,21 @@ class AgnesClient:
         if self.quota:
             ok, why = self.quota.can("video_seconds", seconds_25)
             if not ok: raise AgnesError(why)
-        r = await self._request("POST", "/v1/videos", "video", json=body)
+        try:
+            r = await self._request("POST", "/v1/videos", "video", json=body,
+                                    retry_ambiguous=False)
+        except (httpx.TransportError, AgnesError) as exc:
+            status = getattr(exc, "status", None)
+            if status is not None and 400 <= status < 500 and status != 408:
+                raise
+            raise VideoSubmissionUncertain(
+                "video submission outcome unknown; reconcile before any new POST",
+                status=status) from exc
         if self.quota: self.quota.consume("video_seconds", seconds_25)
-        data = r.json()
+        try:
+            data = r.json()
+        except Exception as exc:
+            raise VideoSubmissionUncertain("video submission returned an unreadable receipt") from exc
         log.info("视频任务已提交（2.5 契约）model=%s mode=%s seconds=%s id=%s",
                  model_id, body.get("mode"), seconds_25,
                  data.get("video_id") or data.get("task_id"))

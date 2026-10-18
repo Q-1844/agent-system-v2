@@ -1370,8 +1370,8 @@ async def producer_turn(rt, project: str, session_id: str, content: str, *,
         from . import master_lease as _master_lease
         _lease = _master_lease.acquire(pdir, session_id)
     except Exception:
-        log.exception("master lease acquire 异常（fail-open）")
-        _lease = {"ok": True}
+        log.exception("master lease acquire 异常（fail-closed）")
+        _lease = {"ok": False, "reason": "主控租约获取异常；写入已阻止"}
     if not _lease.get("ok"):
         raise AgentError(
             "lease_denied",
@@ -1420,7 +1420,7 @@ async def producer_turn(rt, project: str, session_id: str, content: str, *,
                             event_cb=None, cancel_event=None):
                 # Phase55 D：主控租约执行点检查（接力后旧会话晚返回的委派写被拒）
                 from . import master_lease as _ml
-                _lv = _ml.verify(pdir, session_id)
+                _lv = _ml.verify(pdir, session_id, expected_generation=_lease.get("generation"))
                 if not _lv.get("verified"):
                     return {"ok": False, "error": "lease_denied",
                             "summary": f"委派被拒：{_lv.get('reason')}",
@@ -1461,7 +1461,7 @@ async def producer_turn(rt, project: str, session_id: str, content: str, *,
                         async def _exec(rt, project, args, instruction, message_id):
                             # Phase55 D：主控租约执行点检查（写路径统一守卫）
                             from . import master_lease as _ml
-                            _lv = _ml.verify(pdir, session_id)
+                            _lv = _ml.verify(pdir, session_id, expected_generation=_lease.get("generation"))
                             if not _lv.get("verified"):
                                 return {"ok": False, "error": "lease_denied",
                                         "summary": f"工具 {_name} 被拒：{_lv.get('reason')}",
@@ -1484,7 +1484,7 @@ async def producer_turn(rt, project: str, session_id: str, content: str, *,
 
                     def _exec(rt, project, args, instruction, message_id):
                         from . import master_lease as _ml
-                        _lv = _ml.verify(pdir, session_id)
+                        _lv = _ml.verify(pdir, session_id, expected_generation=_lease.get("generation"))
                         if not _lv.get("verified"):
                             return {"ok": False, "error": "lease_denied",
                                     "summary": f"工具 {_name} 被拒：{_lv.get('reason')}",

@@ -73,7 +73,7 @@ function schedulePoll() {
   pollTimer.value = window.setInterval(async () => {
     await loadRuns();
     if (activeRun.value &&
-        ['completed', 'failed', 'cancelled'].includes(activeRun.value.status)) {
+        ['completed', 'completed_with_issues', 'failed', 'cancelled'].includes(activeRun.value.status)) {
       if (pollTimer.value) window.clearInterval(pollTimer.value);
       pollTimer.value = null;
     }
@@ -112,14 +112,14 @@ onBeforeUnmount(() => { if (pollTimer.value) window.clearInterval(pollTimer.valu
       <button class="btn btn-primary" :disabled="starting" @click="startRun">
         {{ starting ? '启动中…' : '启动 run' }}
       </button>
-      <button v-if="activeRun && !['completed', 'failed', 'cancelled'].includes(activeRun.status)"
+      <button v-if="activeRun && !['completed', 'completed_with_issues', 'failed', 'cancelled'].includes(activeRun.status)"
               class="btn btn-ghost" @click="cancelRun">停止</button>
       <span v-if="startError" class="crp-err">{{ startError }}</span>
     </div>
     <div v-if="activeRun" class="crp-run">
       <div class="crp-run-head">
         <span class="crp-run-id">{{ activeRun.run_id }}</span>
-        <span class="crp-run-status" :class="activeRun.status">{{ activeRun.status }}</span>
+        <span class="crp-run-status" :class="activeRun.status">{{ activeRun.status === 'completed_with_issues' ? '执行结束，仍有问题' : activeRun.status }}</span>
         <span class="crp-run-hash" v-if="showAdvanced" :title="activeRun.snapshot_hash">
           {{ activeRun.snapshot_hash }}</span>
       </div>
@@ -168,6 +168,7 @@ onBeforeUnmount(() => { if (pollTimer.value) window.clearInterval(pollTimer.valu
 .crp-run { margin-top: 10px; border: 1px solid var(--border, #2a2a35); border-radius: 6px; padding: 8px; }
 .crp-run-head { display: flex; gap: 8px; align-items: baseline; }
 .crp-run-id { font-family: monospace; }
+.crp-run-status.completed_with_issues { color: #e9aa55; }
 .crp-run-status.completed { color: #6c6; }
 .crp-run-status.failed { color: #e66; }
 .crp-run-status.cancelled { color: #e6a23c; }

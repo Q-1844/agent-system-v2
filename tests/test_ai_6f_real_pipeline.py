@@ -919,7 +919,7 @@ def test_C42_recover_parameterized_queue_isolated_driver(tmp_path, real_deps):
         lifecycle.projects_dir = saved_pd
     assert agnes.create_video_count() == 0, "recover 不重提交 create_video"
     sh = ProjectStore(pdir).load().get_shot("s01_c01")
-    assert sh.video.status == "queued", "poll 未完成 → 标 queued 续轮询"
+    assert sh.video.status == "generating", "恢复复用统一handler；保留远端在途状态，不先走旁路轮询"
     assert len(driver_q.jobs) == 1, "重排队必须进【传入的驱动器队列】（不是 deps 全局）"
     _j = next(iter(driver_q.jobs.values()))
     assert _j.kind == "video"

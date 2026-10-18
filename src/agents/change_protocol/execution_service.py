@@ -611,7 +611,18 @@ async def commit_canonical(rt: AgentRuntime, project: str,
         ex.status = "running"; ex.stage = "canonical_commit"
         store.save_execution(ex)
         # §31 原子 canonical save（latest + exact approved creative ops）
-        pstore.save(projected)
+        from src.core.store import ProjectConflictError
+        try:
+            pstore.save(projected, expected_signature=getattr(current, "_store_signature", None))
+        except ProjectConflictError:
+            ex.status = "blocked"; ex.stage = "canonical_commit"
+            ex.blocker = {"code": "PROJECT_CHANGED_AFTER_APPROVAL",
+                          "message": "canonical 在最终提交前变化；请重新校验"}
+            cc_rec.status = "conflict"
+            ex.canonical_commit = cc_rec.to_dict()
+            store.save_execution(ex)
+            return {"execution": ex.to_dict(), "blocked": True,
+                    "blocker_code": "PROJECT_CHANGED_AFTER_APPROVAL"}
         # §34 COMMIT_DONE
         cc_rec.status = "committed"; cc_rec.committed_at = _now()
         ex.canonical_commit = cc_rec.to_dict()

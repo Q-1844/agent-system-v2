@@ -115,6 +115,6 @@ def test_S3_shutdown_while_mid_job_terminates(tmp_path):
     assert entered, "handler never entered"
     q2 = _new_queue(tmp_path, {"video": _blocking})
     j1 = q2.get(entered[0])
-    assert j1 is not None and j1.state == "running", \
-        "shutdown 应保留 video Job 为 RUNNING（fix#2），restart reattach + recover_pending_videos 续 poll"
+    assert j1 is not None and j1.state == "queued", \
+        "新协议尚无提交意图/任务ID的任务可重排队；handler必须在POST前持久化意图"
     assert j1.finished_at is None, "RUNNING（shutdown 中断）Job 不应记 finished_at"

@@ -145,7 +145,7 @@ def test_video_interface(client, v2_project, mock_agnes_swap):
     assert v["size_returned"] == "1280x704"
     assert v["status"] == "done"
     pdir = get_project_manager().get_project_dir(v2_project)
-    assert (pdir / "output" / "videos" / "s02_c01.mp4").exists()
+    assert Path(v["local"]).exists()
 
 
 # ---------- audio ----------

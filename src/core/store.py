@@ -1,13 +1,18 @@
 # src/core/store.py
 # 项目数据读写：原子写、v1->v2 迁移、读-改-写单个 shot。
 # 🔴 硬性规则：所有生成任务写回结果必须走 store.update_shot()，禁止只改内存字典。
-import json, shutil, subprocess, time
+import json, shutil, subprocess, time, hashlib
 from dataclasses import asdict
 from pathlib import Path
 from typing import Optional, Callable
 
 from .models import Project, Scene, Character, StyleAnchor, Asset, Shot
 from .atomic import atomic_write_json as _atomic_write_json  # 共享原子写；store 调用点不变（AI-6A §十四）
+from .file_lock import file_transaction
+
+
+class ProjectConflictError(RuntimeError):
+    """A loaded project changed before its proposed write could be committed."""
 
 
 # _atomic_write_json 已迁移到 src/core/atomic.py（上方 import 提供同名别名，调用点不变）
@@ -106,6 +111,20 @@ class ProjectStore:
         self.legacy = self.dir / "output" / "parsed_script.json"
 
     def load(self) -> Project:
+        if not self.path.exists() and not self.legacy.exists():
+            raise FileNotFoundError(f"项目数据不存在: {self.dir}")
+        with self.transaction():
+            project = self._load_unlocked()
+            project._store_signature = self.signature()
+            return project
+
+    def transaction(self):
+        return file_transaction(self.dir / ".project.write.lock")
+
+    def signature(self) -> Optional[str]:
+        return hashlib.sha256(self.path.read_bytes()).hexdigest() if self.path.exists() else None
+
+    def _load_unlocked(self) -> Project:
         raw = None
         if self.path.exists():
             raw = json.loads(self.path.read_text(encoding="utf-8"))
@@ -131,19 +150,33 @@ class ProjectStore:
             _atomic_write_json(self.path, raw)
         return self._from_dict(raw)
 
-    def save(self, project: Project):
-        project.updated_at = time.time()
-        _atomic_write_json(self.path, self._to_dict(project))
+    def save(self, project: Project, *, expected_signature: Optional[str] = None):
+        with self.transaction():
+            expected = expected_signature or getattr(project, "_store_signature", None)
+            if expected is not None and self.signature() != expected:
+                raise ProjectConflictError("project changed before commit; reload and rebase")
+            project.updated_at = time.time()
+            _atomic_write_json(self.path, self._to_dict(project))
+            project._store_signature = self.signature()
 
-    def update_shot(self, shot_id: str, mutator: Callable[[Shot], None]):
+    def update_shot(self, shot_id: str, mutator: Callable[[Shot], None], *,
+                    guard: Optional[Callable[[Project, Shot], None]] = None,
+                    expected_signature: Optional[str] = None):
         """读-改-写单个 shot。所有生成任务写回都必须走这个方法，禁止直接改内存对象。"""
-        p = self.load()
-        shot = p.get_shot(shot_id)
-        if shot is None:
-            raise KeyError(shot_id)
-        mutator(shot)
-        self.save(p)
-        return shot
+        if not self.path.exists() and not self.legacy.exists():
+            raise FileNotFoundError(f"项目数据不存在: {self.dir}")
+        with self.transaction():
+            p = self.load()
+            if expected_signature is not None and self.signature() != expected_signature:
+                raise ProjectConflictError("project changed before shot commit")
+            shot = p.get_shot(shot_id)
+            if shot is None:
+                raise KeyError(shot_id)
+            if guard is not None:
+                guard(p, shot)
+            mutator(shot)
+            self.save(p)
+            return shot
 
     # ---- 序列化 / 反序列化 ----
     def _to_dict(self, project: Project) -> dict:

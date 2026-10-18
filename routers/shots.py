@@ -11,7 +11,7 @@ import os
 import uuid
 import base64 as _base64
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Literal
 
 from fastapi import APIRouter, Body, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel
@@ -599,6 +599,8 @@ async def _sync_first_frame_slot(store, shot_id: str, version, version_id: str,
         candidates=[Candidate(candidate_id=cand_id, local=local, url=url,
                               status=ShotStatus.DONE.value, created_at=now)])
     def _mut(s):
+        if s.final_video != version_id:
+            return
         s.first_frame_batches.append(batch)
         s.selected_first_frame = cand_id
         s.first_frame.mark_done(local=local or "", url=url)
@@ -894,6 +896,12 @@ class FirstFrameRequest(BaseModel):
     force: bool = False
     # 2026-09-17 验收轮：image provider 覆盖（sensenova = 商汤 u1.5-lite；默认 agnes 不变）
     image_provider: str = "agnes"
+    # Phase56 B：BOUND 首帧参考模式显式传入（handler 本就消费 job.params——
+    # REST 面补齐；缺省 auto=确定性导演映射不变）。v2 接续链契约下批准包统一
+    # 用 full（场景图真实进首帧）。
+    scene_reference_mode: Optional[Literal["full", "context_only", "auto"]] = None
+    human_reference_mode: Optional[Literal["keep", "drop", "auto"]] = None
+    population_constraint: Optional[bool] = None
 
 
 class ChooseFrameRequest(BaseModel):
@@ -913,9 +921,15 @@ async def shot_first_frame(project_name: str, shot_id: str, req: FirstFrameReque
         if ProjectStore(project_dir).load().get_shot(shot_id) is None:
             raise HTTPException(404, f"镜头 {shot_id} 不存在")
         q = get_job_queue()
-        job = q.submit(project_name, "first_frame", shot_id,
-                       variants=req.variants, force=req.force,
-                       image_provider=req.image_provider)
+        extra = {"variants": req.variants, "force": req.force,
+                 "image_provider": req.image_provider}
+        if req.scene_reference_mode is not None:
+            extra["scene_reference_mode"] = req.scene_reference_mode
+        if req.human_reference_mode is not None:
+            extra["human_reference_mode"] = req.human_reference_mode
+        if req.population_constraint is not None:
+            extra["population_constraint"] = req.population_constraint
+        job = q.submit(project_name, "first_frame", shot_id, **extra)
         return {"job_id": job.job_id, "shot_id": shot_id}
     except FileNotFoundError:
         raise HTTPException(404, "项目不存在")
@@ -1563,10 +1577,11 @@ async def _handler_video(job, emit):
     if shot is None:
         raise RuntimeError(f"镜头 {job.shot_id} 不存在")
 
+    recovering_video = bool(shot.video.video_id and shot.video.status not in ("done", "failed"))
     # 🔴 自动重新托管：首帧 local 有 / url 空（v1 迁移数据）-> imgbb 补公网 URL（100% 保真，不丢画面）。
     #  inherit_previous 不使用本镜 first_frame（开场来自来源镜头末帧），跳过。
     sel_ff = shot.first_frame.selected
-    if (shot.opening_source != OpeningSource.INHERIT_PREVIOUS.value
+    if (not recovering_video and shot.opening_source != OpeningSource.INHERIT_PREVIOUS.value
             and shot.first_frame.status == "done" and sel_ff and sel_ff.local
             and not sel_ff.url):
         await emit("rehost", f"{shot.shot_id} 首帧重新托管中（补公网 URL）", 3)
@@ -1602,25 +1617,60 @@ async def _handler_video(job, emit):
         planned = snap_num_frames(int(round(4 * fps0)), w, h)
     else:
         planned = shot.video.num_frames
-    if planned != shot.video.num_frames:
+    if not recovering_video and planned != shot.video.num_frames:
         store.update_shot(job.shot_id, lambda s, nf=planned: setattr(s.video, "num_frames", nf))
         shot = store.load().get_shot(job.shot_id)
 
     # effective 首帧（inherit_previous -> 来源末帧；其余 -> 本镜已选首帧）。preflight/提交统一用此，避免前后端不一致。
-    eff_ff_url = _effective_first_frame_url(project, shot)
+    eff_ff_url = None if recovering_video else _effective_first_frame_url(project, shot)
     seconds = shot.video.num_frames / max(shot.video.frame_rate, 1)
-    ok, why = _video_preflight(shot, get_agnes_client().quota, seconds, bool(eff_ff_url))
-    if not ok:
+    ok, why = ((True, "recover existing task") if recovering_video else
+               _video_preflight(shot, get_agnes_client().quota, seconds, bool(eff_ff_url)))
+    if not ok and not recovering_video:
         raise RuntimeError(why)   # 不发起 API 请求
 
     mode = ("keyframes" if shot.link_mode == "keyframes"
             else "multi" if shot.link_mode == "multi" else "i2v")
     # keyframes 尾帧 in-progress 有界等待
-    if mode == "keyframes" and not shot.last_frame.url_ready:
+    if not recovering_video and mode == "keyframes" and not shot.last_frame.url_ready:
         await emit("wait", f"{shot.shot_id} 等待尾帧就绪", 5)
         if not await _await_last_frame_url(store, job.shot_id, emit):
             raise RuntimeError("等待尾帧超时（尾帧尚未生成完成），请重试")
         shot = store.load().get_shot(job.shot_id)   # 取最新
+
+    if not recovering_video:
+        # Finish asynchronous input preparation before taking the single snapshot
+        # used for prompt, dimensions, timing, references and dispatch signature.
+        preparation = store.load().get_shot(job.shot_id)
+        if (preparation.link_mode == "multi" and
+                shot_has_visual_production_binding(project_dir, preparation.shot_id)):
+            await _ensure_multi_video_prompt(job.project, job.shot_id, emit)
+        project = store.load()
+        shot = project.get_shot(job.shot_id)
+        if shot is None:
+            raise RuntimeError(f"镜头 {job.shot_id} 不存在")
+        ratio = project.style.aspect_ratio or "16:9"
+        w, h = ((1280, 704) if ratio == "16:9" else
+                tuple(map(int, _resolve_size(project.style.size_tier or "1K", ratio).split("x"))))
+        fps0 = max(shot.video.frame_rate, 1)
+        if shot.target_duration_s is not None:
+            planned = snap_num_frames(int(round(shot.target_duration_s * fps0)), w, h)
+        elif not shot.video.num_frames:
+            planned = snap_num_frames(int(round(4 * fps0)), w, h)
+        else:
+            planned = shot.video.num_frames
+        if planned != shot.video.num_frames:
+            store.update_shot(job.shot_id,
+                lambda s, nf=planned: setattr(s.video, "num_frames", nf),
+                expected_signature=project._store_signature)
+            shot.video.num_frames = planned
+        mode = ("keyframes" if shot.link_mode == "keyframes" else
+                "multi" if shot.link_mode == "multi" else "i2v")
+        eff_ff_url = _effective_first_frame_url(project, shot)
+        seconds = shot.video.num_frames / max(shot.video.frame_rate, 1)
+        ok, why = _video_preflight(shot, get_agnes_client().quota, seconds, bool(eff_ff_url))
+        if not ok:
+            raise RuntimeError(why)
 
     prompt = build_video_prompt(shot, mode)
     # Phase51 B（E2 实证 + P50 用户观察）：视频层人数纪律——job.params 开启时按
@@ -1652,6 +1702,7 @@ async def _handler_video(job, emit):
     # 模型随 shot.video.model 落库，恢复/续轮询必须用同一 model_name 轮询，
     # 否则 2.5 任务查不到。
     video_model = (((job.params or {}).get("video_model") or None)
+                   or (getattr(shot.video, "model", None) if recovering_video else None)
                    or (getattr(get_agnes_client(), "models", None) or {}).get("video")
                    or "agnes-video-2.5-flash")
 
@@ -1697,6 +1748,9 @@ async def _handler_video(job, emit):
         # Phase55 C：provider task ID 随 job 落档——watchdog 据此识别「本地失联≠
         # provider 失败」（休眠/断网不作废不补交，M5 事故路径修复）。
         job.params["provider_task_id"] = vid
+        native_generation_basis = dict(job.params.get("dispatch_native_basis") or {})
+        provider_options = dict(job.params.get("dispatch_provider_options") or provider_options)
+        prompt = job.params.get("dispatch_prompt") or "[recovered: original prompt not recorded]"
         await emit("recover", f"{shot.shot_id} 续轮询 video_id={vid}（不重提交）", 10)
     else:
         # 42.md §二缺陷④：提交结果不明——generating 且无 video_id = 早前一次
@@ -1723,13 +1777,6 @@ async def _handler_video(job, emit):
             logger.warning(
                 "%s 显式确认重发（上次提交结果不明 generating 无 video_id）——"
                 "已标注 previous_submit_uncertain", job.shot_id)
-        # 37.md §1.1：multi 生成前自动重建过期 video prompt（36.md §1.2.3 缺口闭环）。
-        # 仅 fresh-submit 且 BOUND（multi 生成走 BOUND path；unbound multi 本就
-        # fail closed，不白烧 LLM）。恢复/续轮询不重建（无新生成输入）。
-        if mode == "multi" and shot_has_visual_production_binding(project_dir, shot.shot_id):
-            _rebuild_receipt = await _ensure_multi_video_prompt(job.project, job.shot_id, emit)
-            if _rebuild_receipt["rebuilt"]:
-                shot = store.load().get_shot(job.shot_id)   # 重建后取最新
         # S3C.2 双路径（§21）：BOUND 视频重提交走 Binding-aware path（READY→Pack→
         # Adapter：boundary selection truth + generation_basis freshness + pre-dispatch
         # race guard；NOT_READY→BLOCK，绝不 fallback legacy）；UNBOUND 保持 legacy 行为
@@ -1781,6 +1828,9 @@ async def _handler_video(job, emit):
                 language_override=ndc_lang)
             prompt = compile_native_av_prompt(nav_pack, prompt)
             native_generation_basis = dict(nav_pack.generation_basis)
+        from src.generation.video_commit import video_input_signature
+        compiled_signature = video_input_signature(project, shot)
+        compiled_final_video = shot.final_video
         await emit("submit", f"{shot.shot_id} 提交中（视频 1 RPM，可能等约 60s）", 10)
         kwargs = dict(num_frames=shot.video.num_frames, frame_rate=shot.video.frame_rate,
                       width=w, height=h, seed=shot.seed,
@@ -1805,10 +1855,49 @@ async def _handler_video(job, emit):
                                          native_generation_basis,
                                          language_override=ndc_lang,
                                          provider_options=dict(provider_options))
+        job.params["dispatch_input_signature"] = compiled_signature
+        job.params["dispatch_final_video"] = compiled_final_video
+        job.params["dispatch_native_basis"] = dict(native_generation_basis)
+        job.params["dispatch_provider_options"] = dict(provider_options)
+        job.params["dispatch_prompt"] = prompt
+        job.params["submission_intent_id"] = uuid.uuid4().hex
+        job.params["provider_submit_state"] = "submitting"
+        def _claim_submit(current):
+            if current.video.status == ShotStatus.GENERATING.value:
+                if current.video.video_id or not (job.params or {}).get("confirm_uncertain_resubmit"):
+                    raise RuntimeError("video submit already active or uncertain; reconcile before resubmitting")
+            current.video.status = ShotStatus.GENERATING.value
+            current.video.video_id = None
+            current.video.task_id = None
+        def _guard_submit(current_project, current):
+            if (video_input_signature(current_project, current) != compiled_signature or
+                    current.final_video != compiled_final_video):
+                raise RuntimeError("video inputs/selection changed before submit; recompile before retry")
+            if native_generation_basis:
+                native_av_pre_dispatch_check(project_dir, current_project, current,
+                    native_generation_basis, language_override=ndc_lang,
+                    provider_options=dict(provider_options))
+        store.update_shot(job.shot_id, _claim_submit, guard=_guard_submit)
+        await emit("submit_intent", f"{shot.shot_id} 提交意图已持久化", 10)
         try:
             created = await get_agnes_client().create_video(prompt, mode=mode, **kwargs)
         except Exception as _sub_err:
-            _dns_classify(str(_sub_err))   # DNS 熔断计数（提交阶段失败）
+            from src.api.agnes_client import VideoSubmissionUncertain
+            status = getattr(_sub_err, "status", None)
+            known_rejection = (isinstance(_sub_err, AgnesError)
+                               and not isinstance(_sub_err, VideoSubmissionUncertain)
+                               and status is not None and 400 <= status < 500 and status != 408)
+            job.params["provider_submit_state"] = "rejected" if known_rejection else "unknown"
+            if known_rejection:
+                def _reject_if_current(current):
+                    if (current.final_video == compiled_final_video and
+                            current.video.status == ShotStatus.GENERATING.value and
+                            not current.video.video_id):
+                        current.video.status = ShotStatus.FAILED.value
+                store.update_shot(job.shot_id, _reject_if_current)
+            await emit("submit_rejected" if known_rejection else "submit_unknown",
+                       f"{shot.shot_id} 提交失败；" + ("远端明确拒绝" if known_rejection else "结果待核验，禁止自动补交"), None)
+            _dns_classify(str(_sub_err))
             raise
         _dns_classify("")   # 提交成功 → 清零连续失败计数
         vid = created.get("video_id") or created.get("task_id") or created.get("id")
@@ -1816,14 +1905,28 @@ async def _handler_video(job, emit):
             raise RuntimeError(f"视频任务创建无 video_id: {created}")
         # Phase55 C：provider task ID 随 job 落档（同恢复分支；watchdog 休眠保护）
         job.params["provider_task_id"] = vid
-        # 🔴 提交成功立刻落库 video_id（崩了重启能接着轮询，不重提交、不重扣配额）
-        store.update_shot(job.shot_id, lambda s, v=vid, c=created, m=video_model: (
-            setattr(s.video, "video_id", v),
-            setattr(s.video, "task_id", c.get("task_id")),
-            setattr(s.video, "status", ShotStatus.GENERATING.value),
-            setattr(s.video, "attempts", s.video.attempts + 1),
-            setattr(s.video, "model", m),
-        ))
+        job.params["provider_submit_state"] = "accepted"
+        # Persist the known Provider ID even if a user changed selection while
+        # the submission request was in flight; never overwrite that selection.
+        await emit("provider_receipt", f"{shot.shot_id} Provider 回执已持久化", 12)
+        def _guard_receipt(current_project, current):
+            if (current.final_video != compiled_final_video or
+                    current.video.status != ShotStatus.GENERATING.value or
+                    current.video.video_id not in (None, vid)):
+                raise RuntimeError("video selection/active task changed during submit; Provider receipt retained unattached")
+        try:
+            store.update_shot(job.shot_id, lambda s, v=vid, c=created, m=video_model: (
+                setattr(s.video, "video_id", v),
+                setattr(s.video, "task_id", c.get("task_id")),
+                setattr(s.video, "status", ShotStatus.GENERATING.value),
+                setattr(s.video, "attempts", s.video.attempts + 1),
+                setattr(s.video, "model", m),
+            ), guard=_guard_receipt)
+        except Exception as exc:
+            job.params["unattached_provider_receipt"] = {"provider_task_id": vid,
+                "model": video_model, "reason": str(exc)[:300]}
+            await emit("detached_receipt", "已保留 Provider 回执，未覆盖当前选版；需要按 ID 核对", None)
+            raise
         await emit("submit", f"{shot.shot_id} 已提交 video_id={vid}", 15)
         _tl_record("video_submitted", project=job.project, shot_id=job.shot_id,
                    job_id=getattr(job, "job_id", None), video_id=vid, model=video_model, mode=mode,
@@ -1847,8 +1950,11 @@ async def _handler_video(job, emit):
     except AgnesError as e:
         # 服务端明确失败 / video_id 不存在：标 failed，retry 时走 else 重新提交
         _dns_classify(str(e))
-        store.update_shot(job.shot_id,
-                          lambda s: setattr(s.video, "status", ShotStatus.FAILED.value))
+        def _fail_if_current(current):
+            if (current.video.video_id == vid and current.final_video ==
+                    job.params.get("dispatch_final_video", shot.final_video)):
+                current.video.status = ShotStatus.FAILED.value
+        store.update_shot(job.shot_id, _fail_if_current)
         _tl_record("video_failed", project=job.project, shot_id=job.shot_id,
                    job_id=getattr(job, "job_id", None), video_id=vid, model=video_model,
                    error=str(e)[:200])
@@ -1859,26 +1965,12 @@ async def _handler_video(job, emit):
                seconds_returned=res.get("seconds"),
                size=res.get("size"))
 
-    # C1 §16 pre-commit（21.md）：provider 完成后、attach 前重算 Native AV 依赖键——
-    # 生成窗口内 dialogue/speaker/language/visual/provider 事实已变 → 拒绝
-    # attach（不建 VideoVersion、不设 final_video、不冒充 CURRENT）。
-    if native_generation_basis:
-        from src.generation.native_av_pack import native_av_pre_commit_check
-        shot = store.load().get_shot(job.shot_id)
-        project = store.load()
-        native_av_pre_commit_check(project_dir, project, shot,
-                                   native_generation_basis,
-                                   language_override=ndc_lang,
-                                   provider_options=dict(provider_options))
-
-    # 下载
-    dest = project_dir / "output" / "videos" / f"{shot.shot_id}.mp4"
-    await get_agnes_client().download(res["url"], dest)
-
-    # 取最新 shot（含 submit 写入的 video_id/task_id），写视频版本 + 设 final_video + 同步旧 video
-    shot = store.load().get_shot(job.shot_id)
+    # Every receipt gets its own immutable artifact, including rejected/stale results.
     from src.core.models import VideoVersion
-    vvid = f"vv_{uuid.uuid4().hex[:8]}"
+    from src.generation.video_commit import video_input_signature
+    vvid = f"vv_{uuid.uuid4().hex[:12]}"
+    dest = project_dir / "output" / "videos" / f"{shot.shot_id}_{vvid}.mp4"
+    await get_agnes_client().download(res["url"], dest)
     now = _time.time()
     char_snap = {name: {"url": project.get_character(name).ref_url()}
                  for name in shot.characters if project.get_character(name)}
@@ -1892,38 +1984,55 @@ async def _handler_video(job, emit):
                           num_frames=shot.video.num_frames, frame_rate=shot.video.frame_rate,
                           origin_run_id=job.params.get("origin_run_id"),
                           model=poll_model or getattr(shot.video, "model", None),
-                          generation_basis={
-                              **dict(native_generation_basis),
-                              # Phase55 A：统一输入依据清单随版本落档（additive，
-                              # 不参与 Native AV freshness 依赖键比对）。
-                              **({"input_manifest": job.params.get("input_manifest")}
+                          generation_basis={**dict(native_generation_basis),
+                              **({"input_manifest": job.params["input_manifest"]}
                                  if (job.params or {}).get("input_manifest") else {})},
-                          input_visuals=_build_input_visuals(
-                              mode=mode, first_url=first_url, last_url=last_url,
-                              bound_video=bound_video),
+                          input_visuals=_build_input_visuals(mode=mode, first_url=first_url,
+                              last_url=last_url, bound_video=bound_video),
                           previous_submit_uncertain=previous_submit_uncertain)
-    def mut(s, vv=new_vv, d=str(dest), r=res):
-        # Phase55 C：收货幂等——同一 provider video_id 只正式收货一次（重复通知/
-        # 双路径完成/晚到回执不再落重复版本；历史结果与费用保留）。指针指向
-        # 实际保留的版本（去重时=既有版本，绝不留悬空指针）。
-        s.existing = next((x for x in s.video_versions if x.video_id == vid), None)
-        if s.existing is None:
-            s.video_versions.append(vv)
-            s.final_video = vv.version_id
-        else:
-            s.final_video = s.existing.version_id
-        s.video.mark_done(d, r["url"])           # 同步旧字段（管线/导出读旧）
-        setattr(s.video, "seconds_returned", r["seconds"])
-        setattr(s.video, "size_returned", r["size"])
-    store.update_shot(job.shot_id, mut)
-    shot = store.load().get_shot(job.shot_id)
-    dup = next((x for x in shot.video_versions if x.video_id == vid
-                and x.version_id != vvid), None)
-    if dup is not None:
-        await emit("warn", f"{shot.shot_id} 检测到重复收货（video_id={vid} 已有版本 "
-                           f"{dup.version_id}）——本次仅刷新指针，不落重复版本", None)
-        logger.warning("%s 重复收货 video_id=%s：已存在版本 %s（幂等去重）",
-                       job.shot_id, vid, dup.version_id)
+    retained = {}
+    def guard(current_project, current_shot):
+        # Validate at the actual commit point, after every asynchronous download.
+        if ("dispatch_final_video" in job.params and
+                current_shot.final_video != job.params["dispatch_final_video"]):
+            raise RuntimeError("video selection changed during generation/download; result retained unattached")
+        if native_generation_basis:
+            from src.generation.native_av_pack import native_av_pre_commit_check
+            native_av_pre_commit_check(project_dir, current_project, current_shot,
+                native_generation_basis, language_override=ndc_lang,
+                provider_options=dict(provider_options))
+        expected = job.params.get("dispatch_input_signature")
+        if expected and video_input_signature(current_project, current_shot) != expected:
+            raise RuntimeError("video inputs changed during generation/download; result retained unattached")
+    def mut(current):
+        existing = next((v for v in current.video_versions if v.video_id == vid), None)
+        if existing is not None:
+            retained["version"] = existing
+            retained["duplicate"] = True
+            selected = next((v for v in current.video_versions if v.version_id == current.final_video), None)
+            if selected is not None:
+                current.video.mark_done(selected.local, selected.url)
+                current.video.video_id = selected.video_id
+                current.video.task_id = selected.task_id
+                current.video.seconds_returned = selected.seconds_returned
+                current.video.size_returned = selected.size_returned
+            return  # A duplicate receipt never changes an already-selected version.
+        current.video_versions.append(new_vv)
+        current.final_video = new_vv.version_id
+        current.video.mark_done(str(dest), res["url"])
+        current.video.seconds_returned = res["seconds"]
+        current.video.size_returned = res["size"]
+        retained["version"] = new_vv
+    try:
+        store.update_shot(job.shot_id, mut, guard=guard)
+    except Exception as exc:
+        job.params["unattached_artifact"] = {"local": str(dest), "version_id": vvid,
+                                             "provider_task_id": vid, "reason": str(exc)[:300]}
+        await emit("stale_result", "视频保留为未附加候选；当前输入/版本已变化", None)
+        raise
+    if retained.get("duplicate"):
+        await emit("done", f"{shot.shot_id} 重复收货已忽略（保留选版与原文件）", 100)
+        return
     await emit("done", f"{shot.shot_id} 完成（版本 {vvid}），实际 {res['seconds']}s / {res['size']}", 100)
     _tl_record("video_downloaded", project=job.project, shot_id=job.shot_id,
                job_id=getattr(job, "job_id", None), video_id=vid, version_id=vvid,
@@ -1942,8 +2051,9 @@ async def _handler_video(job, emit):
     try:
         end_asset, _ok = await _extract_video_end_frame(project_dir, job.shot_id, str(dest), vvid, emit)
         def _mut_end(s, ea=end_asset, sv=vvid):
-            s.video_end_frame = ea
-            s.video_end_source_version = sv
+            if s.final_video == sv:
+                s.video_end_frame = ea
+                s.video_end_source_version = sv
         store.update_shot(job.shot_id, _mut_end)
         if end_asset.error:
             await emit("warn", f"{shot.shot_id} 视频末帧提取/托管未完全成功: {end_asset.error[:120]}", None)

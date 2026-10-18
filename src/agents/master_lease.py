@@ -18,6 +18,8 @@ import json
 import time
 from pathlib import Path
 from typing import Optional
+from functools import wraps
+from src.core.file_lock import file_transaction
 
 DEFAULT_TTL_S = 1800   # 30min：覆盖单 turn 上限（窗口续期多次的情形由 renew 维持）
 
@@ -28,12 +30,26 @@ def _lease_path(pdir: Path) -> Path:
     return Path(pdir) / "output" / "agents" / "master_lease.json"
 
 
+def _serialized(fn):
+    @wraps(fn)
+    def locked(pdir, *args, **kwargs):
+        with file_transaction(_lease_path(pdir).with_suffix(".lock")):
+            return fn(pdir, *args, **kwargs)
+    return locked
+
+
 def _load(pdir: Path) -> Optional[dict]:
     p = _lease_path(pdir)
     if not p.exists():
         return None
     try:
-        return json.loads(p.read_text(encoding="utf-8"))
+        doc = json.loads(p.read_text(encoding="utf-8"))
+        if (not isinstance(doc, dict) or not isinstance(doc.get("holder"), str)
+                or not doc["holder"] or type(doc.get("generation")) is not int
+                or doc["generation"] < 1
+                or not isinstance(doc.get("expires_at"), (int, float))):
+            return dict(_CORRUPT)
+        return doc
     except Exception:
         # Phase56 A3：损坏≠无租约。返回损坏标记——调用方按「权限未核明」拒写，
         # 不 fail-open（否则损坏时任何会话都能接管=双主写入敞口）。
@@ -48,6 +64,7 @@ def _save(pdir: Path, doc: dict) -> None:
     tmp.replace(p)
 
 
+@_serialized
 def acquire(pdir: Path, session_id: str, *, ttl_s: int = DEFAULT_TTL_S,
             now: Optional[float] = None) -> dict:
     """获取/续期主控租约。返回 {ok, generation, holder, reason}。
@@ -79,6 +96,7 @@ def acquire(pdir: Path, session_id: str, *, ttl_s: int = DEFAULT_TTL_S,
             "reason": "另一会话持有主控租约（未过期）——先 relay 或等待过期"}
 
 
+@_serialized
 def transfer(pdir: Path, from_session: str, to_session: str, *,
              ttl_s: int = DEFAULT_TTL_S, now: Optional[float] = None) -> dict:
     """接力移交：generation+1、holder 换新会话。仅当前 holder 可移交。
@@ -97,7 +115,9 @@ def transfer(pdir: Path, from_session: str, to_session: str, *,
     return {"ok": True, **doc}
 
 
-def verify(pdir: Path, session_id: str, *, now: Optional[float] = None) -> dict:
+@_serialized
+def verify(pdir: Path, session_id: str, *, now: Optional[float] = None,
+           expected_generation: Optional[int] = None) -> dict:
     """执行点检查：session 是否仍为主控写入者。
     语义（Phase55 冒烟实证修正）：holder 匹配即通过——【自身租约过期≠失去主控】
     （长 turn 超过 TTL 是常态；过期只意味着他人可以接管，而接管会改变 holder/
@@ -107,12 +127,13 @@ def verify(pdir: Path, session_id: str, *, now: Optional[float] = None) -> dict:
     now = time.time() if now is None else now
     cur = _load(pdir)
     if cur is None:
-        return {"verified": True, "note": "无租约文件（fail-open；同会话互斥由 "
-                                          "turn_registry 承担）"}
+        return {"verified": False, "reason": "主控租约缺失；必须重新获取后才能写入"}
     if cur.get("corrupt"):
         return {"verified": False, "corrupt": True,
                 "reason": ("主控租约文件损坏——holder 无法核明，拒绝新写入"
                            "（fail-closed；用 diagnose() 查看、确认后 recover() 重建）")}
+    if expected_generation is not None and cur.get("generation") != expected_generation:
+        return {"verified": False, "reason": "主控租约代次已变化", "generation": cur.get("generation")}
     if cur.get("holder") == session_id:
         return {"verified": True, "generation": cur.get("generation"),
                 **({"note": "租约已过期但无接管者——holder 连续性保持"}
@@ -144,6 +165,7 @@ def diagnose(pdir: Path) -> dict:
             "expired": (cur.get("expires_at") or 0) < time.time()}
 
 
+@_serialized
 def recover(pdir: Path, session_id: str, *, ttl_s: int = DEFAULT_TTL_S,
             now: Optional[float] = None) -> dict:
     """显式重建（损坏租约的唯一恢复路径）：generation 从损坏前最后已知值之上

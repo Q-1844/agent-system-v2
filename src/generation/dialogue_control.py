@@ -80,7 +80,7 @@ class NativeDialogueControl:
 # ============ 确定性 dialogue parser（§7 + C1 §7 stage directions）============
 # 「角色名：台词」前缀（全角/半角冒号）。name=\S{1,20}? 非贪婪到第一个冒号——
 # 与 Director 既有约定一致（director.py:291「可带说话人，例如：小铃：…」）。
-_SPEAKER_PREFIX_RE = re.compile(r"^(?P<name>\S{1,20}?)[：:]\s*(?P<rest>\S.*)$", re.DOTALL)
+_SPEAKER_PREFIX_RE = re.compile(r"^(?P<name>\S{1,100}?)[：:]\s*(?P<rest>\S.*)$", re.DOTALL)
 
 # §7 舞台指示（确定性规则，不用 LLM 解释字符串）：
 #   - 括号组：全角（…）或半角 (...)，内容不含任何括号字符（嵌套 → 无法唯一解析）；
@@ -254,7 +254,17 @@ def resolve_native_dialogue(project_dir, shot, *,
     used_prefix = False
     for idx, raw in enumerate(raw_lines):
         name, body = split_speaker_prefix(raw)
-        kind, hints, text = classify_dialogue_body(body, line_ref=f"#{idx}")
+        # Deterministic metadata normalization: exact cast name plus trailing
+        # parenthesized delivery hints. Never fuzzy-match or rewrite dialogue.
+        if name is not None and name not in characters:
+            annotated = re.fullmatch(r"(?P<speaker>[^（）()]+?)(?P<hints>(?:（[^（）()]*）|\([^()]*\))+)", name)
+            if annotated and annotated.group("speaker").strip() in characters:
+                name = annotated.group("speaker").strip()
+                body = annotated.group("hints") + body
+        if name is None and re.fullmatch(r"本镜(?:无对白|无台词)(?:（[^（）()]*）|\([^()]*\))?[。.]?", body):
+            kind, hints, text = "direction", (), body
+        else:
+            kind, hints, text = classify_dialogue_body(body, line_ref=f"#{idx}")
         if kind == "direction":
             # §7：整行舞台指示——绝不放进 spoken dialogue。binding 裁决指向
             # 指示行 = 索引空间错位（binding index 按 raw 非空行计），fail closed。
@@ -369,3 +379,22 @@ def compile_prompt_with_native_dialogue(prompt: str, project_dir, project, shot,
     if control is None:
         return prompt
     return append_dialogue_block(prompt, control)
+
+
+def diagnose_dialogue_batch(project_dir, project, shot_ids):
+    """Return every deterministic dialogue error before enqueuing any media.
+
+    Compiles ephemeral prompts only; canonical dialogue and cast are unchanged.
+    """
+    errors = {}
+    for sid in dict.fromkeys(shot_ids):
+        shot = project.get_shot(sid)
+        if shot is None:
+            continue
+        try:
+            compile_prompt_with_native_dialogue("", project_dir, project, shot)
+        except DialogueControlError as exc:
+            errors[sid] = exc.to_dict()
+        except Exception as exc:
+            errors[sid] = {"code": "dialogue_compile_failed", "detail": str(exc)[:400]}
+    return errors

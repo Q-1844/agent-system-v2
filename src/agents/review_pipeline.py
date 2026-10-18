@@ -12,6 +12,7 @@
 from __future__ import annotations
 import secrets
 import time
+import asyncio
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -81,39 +82,71 @@ def _hard_dims_fired(dims: dict) -> List[str]:
 async def run_independent_review(rt, pdir: Path, project: str, *,
                                  reason: str = "",
                                  shot_ids: Optional[List[str]] = None,
-                                 positions: tuple = FRAME_POSITIONS) -> dict:
+                                 positions: tuple = FRAME_POSITIONS,
+                                 version_ids: Optional[Dict[str, str]] = None,
+                                 max_concurrency: int = 2,
+                                 cached_results: Optional[Dict[str, dict]] = None) -> dict:
     """对项目已完成视频（或指定镜头）跑一轮独立帧验。
     返回 {batch_id, shots_reviewed, hard_error_shots, minor_shots, report_path,
-    results:[...]}。单镜失败不阻断整批（fail-open per-shot，逐镜如实标注）。"""
+    results:[...]}。单镜失败隔离为 incomplete；不取消其它镜头，不当作通过。
+    审核绑定调用时的具体版本，异步视觉调用期间选版改变将使结果 stale。"""
     from src.core.store import ProjectStore
 
     client = _pick_client(rt)
     if client is None:
         raise RuntimeError("视觉审查 client 不可用（Agnes 未配置）")
     proj = ProjectStore(pdir).load()
-    if shot_ids:
+    if shot_ids is not None:
         shots = [proj.get_shot(s) for s in shot_ids]
-        shots = [s for s in shots if s is not None]
     else:
-        shots = [s for s in proj.all_shots() if s.final_video]
+        shots = list(proj.all_shots())
     batch_id = f"rvw_{secrets.token_hex(4)}"
-    results: List[Dict[str, Any]] = []
-    for shot in shots:
-        entry: Dict[str, Any] = {"shot_id": shot.shot_id, "frames": [],
-                                 "overall": "not_reviewed", "hard_errors": [],
+    semaphore = asyncio.Semaphore(max(1, int(max_concurrency)))
+
+    async def _one(index, shot):
+        sid = shot.shot_id if shot is not None else shot_ids[index]
+        entry: Dict[str, Any] = {"shot_id": sid, "frames": [],
+                                 "overall": "incomplete", "hard_errors": [],
                                  "error": None}
         try:
-            seconds = getattr(shot.video, "seconds_returned", None) or 5.0
+            if shot is None:
+                raise ValueError("requested shot missing")
+            selected = (version_ids or {}).get(sid) or shot.final_video
+            version = next((v for v in shot.video_versions if v.version_id == selected), None)
+            if not selected or version is None or version.status != "done" or not version.local:
+                raise ValueError("review requires a completed, explicit video version")
+            if not positions or not set(STATE_FRAME_POSITIONS).issubset(positions):
+                raise ValueError("review must include first/end state frames")
+            entry["version_id"] = selected
+            from src.generation.video_commit import video_input_signature
+            input_signature = video_input_signature(proj, shot)
+            entry["input_signature"] = input_signature
+            cached = (cached_results or {}).get(sid) or {}
+            if (cached.get("version_id") == selected and
+                    cached.get("input_signature") == input_signature and
+                    cached.get("review_policy_version") == REVIEW_POLICY_VERSION and
+                    cached.get("overall") in ("pass", "hard_error", "uncertain")):
+                return {**cached, "cache_reused": True}
+            # Work on the loaded snapshot. Never switch files mid-review.
+            shot.final_video = selected
+            seconds = version.seconds_returned or getattr(shot.video, "seconds_returned", None) or 5.0
             pos_map = {"first": "first", "middle": max(0.0, seconds * 0.5),
                        "end": "end"}
             for pos in positions:
                 p = pos_map.get(pos, pos)
-                fr = extract_shot_frame_local(pdir, proj, shot, position=p,
-                                              tag=f"rvw_{batch_id}")
-                verdict = await review_shot_core(
-                    client, project_dir=pdir, proj=proj, shot=shot,
-                    frame="first", image_local=fr["local"], persist=False)
+                async with semaphore:
+                    fr = await asyncio.to_thread(
+                        extract_shot_frame_local, pdir, proj, shot, position=p,
+                        tag=f"rvw_{batch_id}")
+                    if (fr.get("source") or {}).get("version_id") != selected:
+                        raise ValueError("extracted frame version mismatch")
+                    verdict = await review_shot_core(
+                        client, project_dir=pdir, proj=proj, shot=shot,
+                        frame="first", image_local=fr["local"], persist=False)
                 _dims = (verdict.get("review") or {}).get("dimensions") or {}
+                if any(_dim_status(_dims.get(d)) not in ("pass", "fail", "uncertain")
+                       for d in VIDEO_HARD_DIMS):
+                    raise ValueError("review response missing valid hard dimensions")
                 _fired = _hard_dims_fired(_dims)
                 entry["frames"].append({
                     "position": pos,
@@ -121,6 +154,7 @@ async def run_independent_review(rt, pdir: Path, project: str, *,
                     "source_version": (fr.get("source") or {}).get("version_id"),
                     "overall": (verdict.get("derived") or {}).get("overall"),
                     "hard_dims_fired": _fired,
+                    "hard_dims_uncertain": [d for d in VIDEO_HARD_DIMS if _dim_status(_dims.get(d)) == "uncertain"],
                     "summary": ((verdict.get("review") or {}).get("summary")
                                 or "")[:300],
                 })
@@ -130,15 +164,40 @@ async def run_independent_review(rt, pdir: Path, project: str, *,
             entry["motion_minor"] = cls["motion_minor"]
             entry["minor"] = cls["minor"]
             entry["overall"] = ("hard_error" if cls["hard_errors"]
-                                else "uncertain" if "uncertain" in overs
+                                else "uncertain" if any(
+                                    f.get("hard_dims_uncertain") and f.get("position") in STATE_FRAME_POSITIONS
+                                    for f in entry["frames"])
                                 else "pass")
         except ContinuityError as e:
+            entry["overall"] = "incomplete"
             entry["error"] = f"frame_extract: {str(e)[:160]}"
         except Exception as e:   # noqa: BLE001 —— 单镜失败不阻断整批
+            entry["overall"] = "incomplete"
             entry["error"] = f"{type(e).__name__}: {str(e)[:160]}"
-        results.append(entry)
+        return entry
+
+    results = await asyncio.gather(*[_one(i, s) for i, s in enumerate(shots)])
+    # Validate the entire batch at its final read boundary, including cache hits
+    # and shots that finished before another shot's asynchronous review.
+    try:
+        latest_project = ProjectStore(pdir).load()
+        from src.generation.video_commit import video_input_signature
+        for entry in results:
+            if entry["overall"] not in ("pass", "hard_error", "uncertain"):
+                continue
+            latest = latest_project.get_shot(entry["shot_id"])
+            if (latest is None or latest.final_video != entry.get("version_id") or
+                    video_input_signature(latest_project, latest) != entry.get("input_signature")):
+                entry["overall"] = "stale"
+                entry["error"] = "selected version or inputs changed during review"
+    except Exception as e:
+        for entry in results:
+            entry["overall"] = "incomplete"
+            entry["error"] = f"final_validation: {type(e).__name__}: {str(e)[:160]}"
     hard_shots = [r["shot_id"] for r in results if r["overall"] == "hard_error"]
     minor_shots = [r["shot_id"] for r in results if r["overall"] == "uncertain"]
+    incomplete_shots = [r["shot_id"] for r in results
+                        if r["overall"] in ("incomplete", "stale")]
     report = {
         "schema": "independent_review_v2",
         "review_policy_version": REVIEW_POLICY_VERSION,
@@ -153,6 +212,8 @@ async def run_independent_review(rt, pdir: Path, project: str, *,
         "shots_reviewed": len(results),
         "hard_error_shots": hard_shots,
         "minor_shots": minor_shots,
+        "incomplete_shots": incomplete_shots,
+        "machine_passed": bool(results) and not (hard_shots or minor_shots or incomplete_shots),
         "results": results,
     }
     out_dir = Path(pdir) / "output" / "agents" / "review_pipeline"
@@ -164,3 +225,81 @@ async def run_independent_review(rt, pdir: Path, project: str, *,
     tmp.replace(out)
     report["report_path"] = str(out)
     return report
+
+
+class LiveReviewSession:
+    """Bounded review alongside an active Producer; receipts stay version-scoped.
+
+    No canonical writes, generation or repair is triggered by this observer.
+    Final review reuses only matching completed receipts, never pending checks.
+    """
+    def __init__(self, rt, pdir, project, *, concurrency=2, interval_s=1.0):
+        self.rt, self.pdir, self.project = rt, Path(pdir), project
+        self.interval_s = interval_s
+        self.stop_event = asyncio.Event()
+        self.slots = asyncio.Semaphore(max(1, int(concurrency)))
+        self.seen = set()
+        self.tasks = []
+        self.cache = {}
+        self.reports = []
+        self.monitor = None
+
+    def start(self):
+        self.monitor = asyncio.create_task(self._watch())
+
+    async def scan_once(self):
+        from src.core.store import ProjectStore
+        from src.generation.video_commit import video_input_signature
+        try:
+            proj = ProjectStore(self.pdir).load()
+        except (FileNotFoundError, ValueError):
+            return
+        queue = (self.rt._resolve_job_queue_or_none()
+                 if hasattr(self.rt, "_resolve_job_queue_or_none") else None)
+        busy = {j.shot_id for j in getattr(queue, "jobs", {}).values()
+                if j.project == self.project and j.kind == "video"
+                and j.state in ("queued", "running")}
+        for shot in proj.all_shots():
+            if shot.shot_id in busy or not shot.final_video:
+                continue
+            key = (shot.shot_id, shot.final_video, video_input_signature(proj, shot))
+            if key in self.seen:
+                continue
+            self.seen.add(key)
+            self.tasks.append(asyncio.create_task(self._review(key)))
+
+    async def _review(self, key):
+        async with self.slots:
+            try:
+                report = await run_independent_review(self.rt, self.pdir, self.project,
+                    shot_ids=[key[0]], version_ids={key[0]: key[1]}, max_concurrency=1,
+                    reason="live review while Producer executes")
+                self.reports.append(report["report_path"])
+                entry = (report.get("results") or [{}])[0]
+                if entry.get("overall") in ("pass", "hard_error", "uncertain"):
+                    self.cache[key[0]] = {**entry, "review_policy_version": REVIEW_POLICY_VERSION,
+                                         "source_report": report["report_path"]}
+            except Exception:
+                # A missing client/corrupt input is reported by mandatory final review.
+                # It must not cancel the Producer or any unrelated generation job.
+                return
+
+    async def _watch(self):
+        while not self.stop_event.is_set():
+            try:
+                await self.scan_once()
+            except Exception:
+                pass  # Final review is mandatory; observer failure never means PASS.
+            try:
+                await asyncio.wait_for(self.stop_event.wait(), timeout=self.interval_s)
+            except asyncio.TimeoutError:
+                pass
+
+    async def close(self, *, cancel=False):
+        self.stop_event.set()
+        if self.monitor is not None:
+            await self.monitor
+        if cancel:
+            for task in self.tasks:
+                task.cancel()
+        await asyncio.gather(*self.tasks, return_exceptions=True)

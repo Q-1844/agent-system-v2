@@ -206,14 +206,16 @@ COLLAB_MODES: Dict[str, dict] = {
 # run）。六员等旧预设显式回退路径不变；在途 run 快照不受影响。
 COLLAB_MODES["combo_recommended"] = {
     **COLLAB_MODES["combo_recommended"],
-    "mode_version": "2.0.0",
+    "mode_version": "2.1.0",
     "description": "【Phase56 实验默认 v2】预铺+主执行+上交+独立机器审查+上限内"
                    "局部修复→复审（闭环）+固定选版清单装配；reference_policy v2"
                    "（接续链强制）",
     "reference_policy": "baseline_equiv_chain",
+    "review_policy": {"profile": "independent_final_review", "stream_during_execution": True,
+                      "max_concurrency": 2},
     "repair_policy": {"repair_limit_per_shot": REPAIR_LIMIT_PER_SHOT,
                       "actor": "mode_run_executor",
-                      "note": "确定性执行器重生成+同政策复审；达上限如实保留失败"},
+                      "note": "身份/重复硬错请求策略调整；新版本绑定复审，不做无策略重掷"},
     "experimental": True,
     "notes": "v1 基线：Phase54 §8.3/§10 推荐组合；v2 增量=参考接续链契约+终审到"
              "局部修复复审闭环（Phase55 冒烟看片不通过[衔接]的针对性修复）。"
@@ -287,9 +289,30 @@ def load_run(pdir: Path, run_id: str) -> Optional[dict]:
         return None
 
 
+_RUN_HELD_STATUSES = ("cancelled", "completed", "completed_with_issues", "failed")
+
+
 def save_run(pdir: Path, run: dict) -> dict:
     p = _runs_dir(pdir)
     p.mkdir(parents=True, exist_ok=True)
+    # 终态保护（A3 隔离对接实证 2026-10-18，经用户批准本机修复回装）：执行侧长流程
+    # 持有的内存 run 快照可能落后于盘上状态（用户在 turn 阻塞期间取消 run → 盘上
+    # cancelled，内存仍 running）。此时后续 save_run 会把盘上终态覆盖回 running，
+    # 已取消 run 被复活为 completed（A3 集成驱动 F4→F7 实证复现）。规定：盘上终态
+    # 优先——内存态与其不同时保留盘上状态，仅随本次写入合并步骤/结果增量；
+    # 终态→终态改写同样不允许。
+    fp = _run_path(pdir, run["run_id"])
+    if fp.exists():
+        try:
+            existing = json.loads(fp.read_text(encoding="utf-8"))
+            held = existing.get("status")
+            if held in _RUN_HELD_STATUSES and held != run.get("status"):
+                run["status"] = held
+                for k in ("finished_at", "result"):
+                    if existing.get(k) is not None:
+                        run[k] = existing[k]
+        except Exception:   # noqa: BLE001 —— 读旧态失败按原样写入（与旧行为一致）
+            pass
     tmp = _run_path(pdir, run["run_id"]).with_suffix(".json.tmp")
     tmp.write_text(json.dumps(run, ensure_ascii=False, indent=1), encoding="utf-8")
     tmp.replace(_run_path(pdir, run["run_id"]))
@@ -482,7 +505,8 @@ async def _execute_run(rt, pdir: Path, project: str, run: dict, *,
         # 恢复走 resume_collab_run（同一逻辑 run 续跑）。
         if run.get("status") == "awaiting_relay":
             return
-        run["status"] = "completed"
+        _check_run_cancelled(pdir, run)
+        run["status"] = _completed_status(run)
         run["finished_at"] = time.time()
         save_run(pdir, run)
     except asyncio.CancelledError:
@@ -590,99 +614,156 @@ async def _wait_job_terminal(q, job_id: str, *, timeout_s: int = 1200,
     return False
 
 
+def _machine_review_state(run: dict, entries: dict) -> None:
+    issues = [{"shot_id": sid, "overall": entry.get("overall", "incomplete"),
+               "error": entry.get("error"), "version_id": entry.get("version_id")}
+              for sid, entry in entries.items() if entry.get("overall") != "pass"]
+    passed = bool(entries) and not issues
+    run["machine_acceptance"] = {
+        "status": "passed" if passed else "needs_attention",
+        "issues": issues or ([] if passed else [{"error": "no review results"}]),
+        "user_acceptance": "pending_user_review"}
+
+
+def _completed_status(run: dict) -> str:
+    acceptance = run.get("machine_acceptance") or {}
+    return ("completed_with_issues" if acceptance.get("status") == "needs_attention"
+            else "completed")
+
+
+def _check_run_cancelled(pdir: Path, run: dict) -> None:
+    latest = load_run(pdir, run["run_id"])
+    if run.get("status") == "cancelled" or (latest or {}).get("status") == "cancelled":
+        raise asyncio.CancelledError()
+
+
 async def _final_review_and_repair(rt, pdir: Path, project: str, run: dict, *,
-                                   thinking: bool = False) -> None:
-    """⑤组合 v2 闭环（Phase56 A1/D1，用户授权的机器路径）：
-    独立终审 → 硬错镜有界局部修复（确定性执行器直接重生成——策略选择不进 LLM）
-    → 绑定复审（同政策重跑该镜）→ 结果落账（装配 gate 状态如实保留）。
-    actor=mode_run_executor；授权来源=run.authorization（启动时落档）。
-    达返工上限/额度不足 → still_hard 如实保留，不无限重试、不冒充通过；
-    最终「用户接受」始终等待用户看片（本函数不填写任何接受状态）。"""
+                                   thinking: bool = False, cached_results: Optional[dict] = None) -> None:
+    """Review exact versions; failed/incomplete repairs never count as acceptance.
+
+    Identity/continuity failures require a changed strategy, not identical rerolls.
+    Pending decisions are explicit; this does not claim a child Producer ran.
+    """
     mode = run["snapshot"]["mode"]
     if (mode.get("review_policy") or {}).get("profile") != "independent_final_review":
         return
     from .review_pipeline import run_independent_review
+    from src.core.store import ProjectStore
+    from src.generation.video_contract import planned_video_seconds
+
+    _check_run_cancelled(pdir, run)
     _begin_step(run, "independent_final_review")
     save_run(pdir, run)
     try:
         rv = await run_independent_review(rt, pdir, project,
-                                          reason=f"collab run {run['run_id']}")
-        _finish_step(run, "independent_final_review", ok=True, **{
-            k: rv.get(k) for k in ("batch_id", "shots_reviewed",
-                                   "hard_error_shots", "report_path")})
+                                          reason=f"collab run {run['run_id']}",
+                                          **({"cached_results": cached_results} if cached_results else {}))
+        entries = {e["shot_id"]: dict(e) for e in rv.get("results", [])}
+        _machine_review_state(run, entries)
+        _finish_step(run, "independent_final_review",
+                     ok=bool(entries) and not rv.get("incomplete_shots"),
+                     **{k: rv.get(k) for k in ("batch_id", "shots_reviewed",
+                         "hard_error_shots", "incomplete_shots", "report_path")})
         run["review"] = {k: rv.get(k) for k in
                          ("batch_id", "shots_reviewed", "hard_error_shots",
-                          "minor_shots", "report_path")}
-    except Exception as e:   # noqa: BLE001 —— 审核失败如实落档（不冒充通过）
-        _finish_step(run, "independent_final_review", ok=False,
-                     error=str(e)[:300])
+                          "minor_shots", "incomplete_shots", "report_path")}
+    except Exception as e:
+        _finish_step(run, "independent_final_review", ok=False, error=str(e)[:300])
+        run["machine_acceptance"] = {"status": "needs_attention",
+            "issues": [{"error": str(e)[:300]}], "user_acceptance": "pending_user_review"}
         save_run(pdir, run)
         return
     save_run(pdir, run)
-    hard = list(rv.get("hard_error_shots") or [])
+    hard = [sid for sid, e in entries.items() if e.get("overall") == "hard_error"]
     if not hard:
         return
-    # ---- 有界局部修复（D1）----
-    limit = int(((mode.get("repair_policy") or {}).get("repair_limit_per_shot"))
-                or REPAIR_LIMIT_PER_SHOT)
-    q = None
-    if hasattr(rt, "_resolve_job_queue_or_none"):
-        q = rt._resolve_job_queue_or_none()
-    if q is None:
-        _begin_step(run, "auto_repair")
-        _finish_step(run, "auto_repair", ok=False,
-                     error="JobQueue 不可用——修复未执行（硬错镜如实保留）")
-        run["repair"] = {"still_hard": [{"shot_id": s, "attempts": 0} for s in hard]}
-        save_run(pdir, run)
-        return
+    policy = mode.get("repair_policy") or {}
+    limit = max(0, int(policy.get("repair_limit_per_shot", REPAIR_LIMIT_PER_SHOT)))
+    q = rt._resolve_job_queue_or_none() if hasattr(rt, "_resolve_job_queue_or_none") else None
     _begin_step(run, "auto_repair", shots=hard, limit_per_shot=limit,
                 actor="mode_run_executor",
                 authorization=(run.get("authorization") or {}).get("scope", ""))
     save_run(pdir, run)
-    repair_log: list = []
-    still_hard: list = []
+    repair_log, still_hard = [], []
+    strategy_dims = {"duplicate_identity", "unexpected_people", "missing_character"}
     for shot_id in hard:
-        cur_hard = True
         attempts = 0
-        while cur_hard and attempts < limit:
-            attempts += 1
-            okq, whyq = _quota_can_video(rt, 12.0)   # 上界预留；实际按规划时长
+        while attempts < limit and entries[shot_id].get("overall") == "hard_error":
+            _check_run_cancelled(pdir, run)
+            fired = set(entries[shot_id].get("hard_errors") or [])
+            if fired & strategy_dims:
+                request = {"type": "repair_strategy_required", "shot_ids": [shot_id],
+                           "hard_errors": sorted(fired), "review_batch": rv.get("batch_id"),
+                           "reason": "identity failure requires a changed input strategy"}
+                run.setdefault("decision_requests", []).append(request)
+                repair_log.append({"shot_id": shot_id, "decision_required": True,
+                                   "hard_errors": sorted(fired)})
+                break
+            if q is None:
+                repair_log.append({"shot_id": shot_id, "error": "JobQueue unavailable"})
+                break
+            before = ProjectStore(pdir).load().get_shot(shot_id)
+            old_version = before.final_video if before else None
+            if before is None:
+                break
+            okq, whyq = _quota_can_video(rt, planned_video_seconds(before))
             if not okq:
-                repair_log.append({"shot_id": shot_id, "attempt": attempts,
-                                   "skipped": f"quota: {whyq}"})
+                repair_log.append({"shot_id": shot_id, "skipped": f"quota: {whyq}"})
                 break
-            job = q.submit(project, "video", shot_id,
-                           origin_run_id=run["run_id"],
-                           repair_of_review=rv.get("batch_id"),
-                           repair_attempt=attempts)
+            attempts += 1
+            job = q.submit(project, "video", shot_id, origin_run_id=run["run_id"],
+                           repair_of_review=rv.get("batch_id"), repair_attempt=attempts)
+            detail = {"shot_id": shot_id, "attempt": attempts, "job_id": job.job_id,
+                      "previous_version_id": old_version}
             done = await _wait_job_terminal(q, job.job_id)
-            if not done:
-                repair_log.append({"shot_id": shot_id, "attempt": attempts,
-                                   "job_id": job.job_id, "timeout": True})
+            _check_run_cancelled(pdir, run)
+            settled = q.get(job.job_id)
+            state = getattr(settled, "state", None)
+            detail["state"] = state
+            if not done or state != "done":
+                detail["error"] = "job_timeout" if not done else f"job_{state or 'missing'}"
+                repair_log.append(detail)
                 break
+            after = ProjectStore(pdir).load().get_shot(shot_id)
+            selected = after.final_video if after else None
+            vv = next((v for v in (after.video_versions if after else [])
+                       if v.version_id == selected), None)
+            if (not selected or selected == old_version or vv is None
+                    or vv.status != "done" or vv.origin_run_id != run["run_id"]):
+                detail["error"] = "repair_did_not_produce_new_run_version"
+                repair_log.append(detail)
+                break
+            detail["version_id"] = selected
             try:
-                rv2 = await run_independent_review(
-                    rt, pdir, project, shot_ids=[shot_id],
-                    reason=f"repair复审 run {run['run_id']} attempt {attempts}")
-                entry = (rv2.get("results") or [{}])[0]
-                cur_hard = entry.get("overall") == "hard_error"
-                repair_log.append({
-                    "shot_id": shot_id, "attempt": attempts,
-                    "job_id": job.job_id, "state": job.state,
-                    "review_overall": entry.get("overall"),
-                    "hard_errors": entry.get("hard_errors"),
-                    "review_batch": rv2.get("batch_id")})
-            except Exception as e:   # noqa: BLE001 —— 复审失败如实落账
-                repair_log.append({"shot_id": shot_id, "attempt": attempts,
-                                   "job_id": job.job_id, "state": job.state,
-                                   "review_error": str(e)[:160]})
+                rv2 = await run_independent_review(rt, pdir, project, shot_ids=[shot_id],
+                    version_ids={shot_id: selected},
+                    reason=f"repair review run {run['run_id']} attempt {attempts}")
+                entry = next((e for e in rv2.get("results", [])
+                              if e.get("shot_id") == shot_id), None)
+                if entry is None or entry.get("version_id") != selected:
+                    raise ValueError("repair review missing exact version receipt")
+                entries[shot_id] = dict(entry)
+                detail.update(review_overall=entry.get("overall"),
+                              hard_errors=entry.get("hard_errors"), review_batch=rv2.get("batch_id"))
+                if entry.get("overall") == "hard_error" and set(entry.get("hard_errors") or []) == fired:
+                    detail["decision_required"] = True
+                    run.setdefault("decision_requests", []).append({
+                        "type": "repair_strategy_required", "shot_ids": [shot_id],
+                        "reason": "same hard error repeated; identical reroll stopped"})
+                    repair_log.append(detail)
+                    break
+            except Exception as e:
+                entries[shot_id] = {"shot_id": shot_id, "version_id": selected,
+                                    "overall": "incomplete", "error": str(e)[:200]}
+                detail["review_error"] = str(e)[:200]
+                repair_log.append(detail)
                 break
-        if cur_hard:
+            repair_log.append(detail)
+        if entries[shot_id].get("overall") != "pass":
             still_hard.append({"shot_id": shot_id, "attempts": attempts})
+    _machine_review_state(run, entries)
     _finish_step(run, "auto_repair", ok=not still_hard,
-                 repairs=repair_log, still_hard=still_hard,
-                 **({"note": "达上限/额度不足镜如实保留失败——不冒充通过"}
-                    if still_hard else {}))
+                 repairs=repair_log, still_hard=still_hard)
     run["repair"] = {"attempts": repair_log, "still_hard": still_hard,
                      "limit_per_shot": limit}
     save_run(pdir, run)
@@ -793,7 +874,8 @@ async def resume_collab_run(rt, project: str, run_id: str, *,
     _finish_step(run, f"resume_{n_resume}", ok=True, to_session=sid)
     # 独立终审 + 修复闭环（与首次执行同一 review/repair 政策，不因恢复而豁免）
     await _final_review_and_repair(rt, pdir, project, run, thinking=thinking)
-    run["status"] = "completed"
+    _check_run_cancelled(pdir, run)
+    run["status"] = _completed_status(run)
     run["finished_at"] = time.time()
     run["result"] = {
         "producer_session_id": sid,
@@ -871,8 +953,24 @@ async def _run_producer_lead(rt, pdir: Path, project: str, run: dict, *,
             story_goal=params.get("story_goal", ""),
             segment_count=params.get("segment_count", "六"),
             duration_hint=params.get("duration_hint", "30-42 秒"))
-    res = await _producer_turn_with_relays(rt, pdir, project, run, sid, content,
-                                           thinking=thinking)
+    from .review_pipeline import LiveReviewSession
+    review_policy = mode.get("review_policy") or {}
+    live = None
+    if review_policy.get("stream_during_execution"):
+        live = LiveReviewSession(rt, pdir, project,
+            concurrency=review_policy.get("max_concurrency", 2))
+        live.start()
+    try:
+        res = await _producer_turn_with_relays(rt, pdir, project, run, sid, content,
+                                               thinking=thinking)
+    except BaseException:
+        if live is not None:
+            await live.close(cancel=True)
+        raise
+    else:
+        if live is not None:
+            await live.close()
+            run["live_review"] = {"reports": live.reports, "receipts": len(live.cache)}
     if run.get("status") == "awaiting_relay":
         return   # 待接力/未完成——_execute_run 不覆盖此状态；恢复走 resume
     _finish_step(run, "producer_turn", ok=True,
@@ -892,7 +990,8 @@ async def _run_producer_lead(rt, pdir: Path, project: str, run: dict, *,
     # 4. 独立终审 → 有界局部修复 → 复审 → 装配 gate（Phase56 A1/D1 闭环；
     # Phase55 D 审核流水化是基础）。profile 非 independent_final_review 的模式
     # 维持旧行为（无终审步）。
-    await _final_review_and_repair(rt, pdir, project, run, thinking=thinking)
+    await _final_review_and_repair(rt, pdir, project, run, thinking=thinking,
+                                   cached_results=live.cache if live is not None else None)
 
 
 # ============ 查询与停止 ============
@@ -902,7 +1001,7 @@ def cancel_run(rt, pdir: Path, run_id: str, reason: str = "") -> dict:
     run = load_run(pdir, run_id)
     if run is None:
         raise ValueError(f"unknown collab run: {run_id}")
-    if run["status"] in ("completed", "failed", "cancelled"):
+    if run["status"] in ("completed", "completed_with_issues", "failed", "cancelled"):
         return {"stopped": False, "status": run["status"]}
     from . import turn_registry
     for sid in (run.get("session_ids") or {}).values():

@@ -52,23 +52,69 @@ async def recover_pending_videos(queue=None, client=None, projects_root=None,
                 # 2.5 新契约任务必须用提交时同一 model_name 轮询（旧数据无 model 字段
                 # → None = config 默认，legacy 行为不变）
                 sh_model = getattr(sh.video, "model", None)
+                # Production recovery reuses the original queue job and handler. This
+                # preserves origin/basis/version receipt and never overwrites legacy paths.
+                if queue is not None and "video" in handlers and hasattr(queue, "jobs"):
+                    # Match the Provider task exactly. A newer queued job without
+                    # an ID must not borrow an older task's result or provenance.
+                    matches = [j for j in queue.jobs.values()
+                               if j.project == p.name and j.shot_id == sh.shot_id
+                               and j.kind == "video" and j.params.get("provider_task_id") == vid]
+                    original = max(matches, key=lambda j: j.created_at) if matches else None
+                    if original is not None:
+                        if (original.state == "cancelled" or
+                                original.params.get("unattached_artifact") or
+                                original.params.get("unattached_provider_receipt")):
+                            logger.warning("保留待核对/已取消结果，不自动重新挂接: %s/%s (%s)",
+                                           p.name, sh.shot_id, vid)
+                            continue
+                        live = getattr(queue, "_running_tasks", {}).get(original.job_id)
+                        if original.state in ("running", "failed") and (live is None or live.done()):
+                            original.state = "queued"
+                            original.finished_at = None
+                            original.error = None
+                            queue._save()
+                            queue._route(original.job_id, "video")
+                        elif original.state == "done":
+                            logger.warning("任务已结算但镜头仍 generating，需核对: %s/%s", p.name, sh.shot_id)
+                    else:
+                        queue.submit(p.name, "video", sh.shot_id, provider_task_id=vid,
+                                     recovered=True, video_model=sh_model)
+                    continue
                 logger.info(f"恢复检查: {p.name}/{sh.shot_id} video_id={vid} model={sh_model or 'default'}")
                 try:
                     res = await client.poll_video(vid, interval=5, max_wait=60,
                                                   model_name=sh_model)
-                    dest = str(pdir / "output" / "videos" / f"{sh.shot_id}.mp4")
+                    from src.core.models import VideoVersion
+                    import uuid
+                    version_id = f"vv_{uuid.uuid4().hex[:12]}"
+                    dest = str(pdir / "output" / "videos" / f"{sh.shot_id}_{version_id}.mp4")
                     await client.download(res["url"], dest)
-                    store.update_shot(sh.shot_id, lambda s, d=dest, r=res: (
-                        s.video.mark_done(d, r["url"]),
-                        setattr(s.video, "seconds_returned", r["seconds"]),
-                        setattr(s.video, "size_returned", r["size"]),
-                    ))
+                    vv = VideoVersion(version_id=version_id, video_id=vid, status="done",
+                                      local=dest, url=res["url"], seconds_returned=res["seconds"],
+                                      size_returned=res["size"], model=sh_model)
+                    def settle(current):
+                        if current.video.video_id != vid or current.final_video != sh.final_video:
+                            raise RuntimeError("recovery task/selection changed; artifact retained unattached")
+                        existing = next((v for v in current.video_versions if v.video_id == vid), None)
+                        if existing is not None:
+                            return
+                        current.video_versions.append(vv)
+                        current.final_video = vv.version_id
+                        current.video.mark_done(dest, res["url"])
+                        current.video.seconds_returned = res["seconds"]
+                        current.video.size_returned = res["size"]
+                    store.update_shot(sh.shot_id, settle)
                     logger.info(f"恢复完成: {sh.shot_id}")
                 except Exception as e:
                     logger.warning(f"恢复 {sh.shot_id} 未完成（{e}），重新入队续轮询")
-                    store.update_shot(sh.shot_id,
-                                      lambda s: setattr(s.video, "status", "queued"))
-                    if "video" in handlers and queue is not None:
+                    still_current = {}
+                    def mark_pending(current):
+                        if current.video.video_id == vid and current.final_video == sh.final_video:
+                            current.video.status = "queued"
+                            still_current["yes"] = True
+                    store.update_shot(sh.shot_id, mark_pending)
+                    if still_current and "video" in handlers and queue is not None:
                         queue.submit(p.name, "video", sh.shot_id)
     except Exception as e:
         logger.error(f"recover_pending_videos 失败: {e}")
