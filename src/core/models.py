@@ -7,6 +7,7 @@ from dataclasses import dataclass, field, asdict
 from enum import Enum
 from typing import Optional, List, Dict, Any
 import time
+import uuid
 
 
 class ShotStatus(str, Enum):
@@ -516,6 +517,10 @@ class Project:
     # 分镜 id 分配水位（batch 0）：新建分镜用 s{next_scene_seq:02d} 后自增，
     # 删除不回收。身份证号语义，详见 PRODUCT_FLOW_DESIGN §一.3。
     next_scene_seq: int = 1
+    # R2 B0（协作下一阶段）：项目实例身份。首次持久化时赋值一次，此后随项目
+    # 存亡——删除后同名重建得到不同实例（同名≠同项目；旧 run/候选/授权不得
+    # 写入同名新项目）。空串 = 尚未持久化的新对象（save 时惰性赋值）。
+    incarnation_id: str = ""
     schema_version: int = 2
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
@@ -546,6 +551,7 @@ class Project:
             ],
             "scenes": [s.to_dict() for s in self.scenes],
             "next_scene_seq": self.next_scene_seq,
+            "incarnation_id": self.incarnation_id,
         }
 
     @classmethod
@@ -587,6 +593,7 @@ class Project:
             characters=characters,
             scenes=scenes,
             next_scene_seq=next_scene_seq,
+            incarnation_id=str(raw.get("incarnation_id", "") or ""),
             schema_version=raw.get("schema_version", 2),
             created_at=raw.get("created_at", time.time()),
             updated_at=raw.get("updated_at", time.time()),

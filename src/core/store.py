@@ -1,7 +1,7 @@
 # src/core/store.py
 # 项目数据读写：原子写、v1->v2 迁移、读-改-写单个 shot。
 # 🔴 硬性规则：所有生成任务写回结果必须走 store.update_shot()，禁止只改内存字典。
-import json, shutil, subprocess, time, hashlib
+import json, shutil, subprocess, time, hashlib, uuid
 from dataclasses import asdict
 from pathlib import Path
 from typing import Optional, Callable
@@ -155,6 +155,9 @@ class ProjectStore:
             expected = expected_signature or getattr(project, "_store_signature", None)
             if expected is not None and self.signature() != expected:
                 raise ProjectConflictError("project changed before commit; reload and rebase")
+            # R2 B0：项目实例身份惰性赋值（仅空时生成一次；已持久化项目恒定不变）
+            if not project.incarnation_id:
+                project.incarnation_id = f"pi_{uuid.uuid4().hex}"
             project.updated_at = time.time()
             _atomic_write_json(self.path, self._to_dict(project))
             project._store_signature = self.signature()
