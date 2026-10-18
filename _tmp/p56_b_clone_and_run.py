@@ -19,6 +19,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = "P56_P1_TESTIMONY"
 API = "http://127.0.0.1:8000"
 
+import os
+SRC = os.environ.get("P56_CLONE_SRC", SRC)   # P2 包克隆：P56_CLONE_SRC=P56_P2_SIGNAL
+
 
 def api(method, path, payload=None, timeout=120):
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8") if payload is not None else None
@@ -115,9 +118,11 @@ def wait_run(project: str, run_id: str, poll_s: float = 15.0, max_s: float = 540
 def export_evidence(project: str, run_id: str):
     run = api("GET", f"/api/project/{project}/collab-runs/{run_id}")["run"]
     jobs = json.loads((ROOT / "cache" / "jobs.json").read_text(encoding="utf-8"))
+    t0 = run.get("created_at") or 0
     media = []
     for j in jobs.values():
-        if j.get("project") == project and j.get("kind") == "video":
+        if j.get("project") == project and j.get("kind") == "video" \
+                and j.get("created_at", 0) >= t0:   # 只取本 run 窗口（jobs.json 全局累计）
             media.append({
                 "job_id": j["job_id"], "shot_id": j.get("shot_id"),
                 "state": j["state"], "created_at": j["created_at"],
