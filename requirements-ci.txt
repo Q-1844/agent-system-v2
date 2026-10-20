@@ -1,7 +1,7 @@
-# CI 专用依赖锁（2026-10-20 自本机 Python 3.13.0 运行环境实测固化）
-# 口径：全量 mock pytest 回归（2847 项）所需核心集，零外部 API 依赖
-# 说明：rembg/onnxruntime/pandas 等重依赖为惰性导入（生产功能用），
-#       mock 测试与收集不触发，CI 不安装；如后续用例需要再评估加层。
+# CI dependency lock (2026-10-20, pinned from local Python 3.13.0 runtime)
+# Scope: full mock pytest regression (2847 tests), zero external API calls.
+# Note: heavy deps (rembg/onnxruntime/pandas) are lazily imported by production
+#       features only; mock tests and collection do not trigger them.
 fastapi==0.136.1
 starlette==1.0.0
 pydantic==2.13.4
