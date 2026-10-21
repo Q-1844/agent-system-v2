@@ -33,6 +33,7 @@ jobs:
         with:
           name: junit-results
           path: results/junit.xml
+          retention-days: 3
 
   pipeline-smoke:
     runs-on: windows-latest
@@ -56,3 +57,4 @@ jobs:
         with:
           name: smoke-results
           path: results/smoke_junit.xml
+          retention-days: 3
