@@ -33,3 +33,26 @@ jobs:
         with:
           name: junit-results
           path: results/junit.xml
+
+  pipeline-smoke:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install CI dependencies
+        run: pip install -r requirements-ci.txt
+
+      - name: Run animation pipeline smoke (AgentRuntime full chain, mock, zero external API)
+        run: python -m pytest tests/test_ai_6f_real_pipeline.py -q --junitxml=results/smoke_junit.xml
+
+      - name: Upload smoke results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-results
+          path: results/smoke_junit.xml
