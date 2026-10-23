@@ -183,12 +183,13 @@ def archive_completed_project(token, nonce, project_dir, final_path, evidence_di
     write_json(evidence_dir / "restore-report.json", restored)
     registry = Registry(cas=B1GitHubCas(task_index(token, nonce, "project-registry.json")))
     registry.create_project(project_id=nonce, alias=project_dir.name, operation_id=f"{nonce}-create")
-    registry.record_activity(project_id=nonce, kind="full_project_production", operation_id=f"{nonce}-activity")
+    registry.record_activity(project_id=nonce, kind="generate_video", operation_id=f"{nonce}-activity")
     registry.plan_archive(project_id=nonce, operation_id=f"{nonce}-plan")
-    registry.begin_snapshot(project_id=nonce, snapshot_fingerprint=package_sha, operation_id=f"{nonce}-snapshot")
+    tree_fingerprint = packaged["package"]["payload"]["snapshot_fingerprint"]
+    registry.begin_snapshot(project_id=nonce, snapshot_fingerprint=tree_fingerprint, operation_id=f"{nonce}-snapshot")
     ref = {"repo": "Q-1844/agent-system-v2-rundata", "release_tag": tag,
            "release_id": release.id, "asset_id": package.id, "asset_name": "project.tar",
-           "sha256": package_sha, "tree_fingerprint": package_sha,
+           "sha256": package_sha, "tree_fingerprint": tree_fingerprint,
            "bytes": len(redownload), "final_mp4_asset_id": media.id, "final_mp4_sha256": media_sha}
     registry.set_verified_restorable(project_id=nonce, archive_ref=ref, restorable_level="full",
                                      operation_id=f"{nonce}-verified")
@@ -277,6 +278,32 @@ async def run_acceptance(nonce, out, summary):
     from src.ai.project_autopilot import get_project_autopilot_manager
     child = get_project_autopilot_manager().get_run(project_name, full.production_run_id)
     summary["project_production_run"] = child.model_dump()
+    if len(child.scenes) != 5 or any(s.status != "completed" for s in child.scenes):
+        raise RuntimeError("not all five native SceneRuns completed")
+    preparation = json.loads(Path(full.preparation_manifest_file).read_text(encoding="utf-8"))
+    if any(s.get("director_source") != "generated_by_full_run" or
+           s.get("production_plan_source") != "generated_by_full_run" for s in preparation["scenes"]):
+        raise RuntimeError("fresh real Director/Planner evidence is missing")
+    manifest = json.loads(Path(child.composition_manifest_file).read_text(encoding="utf-8"))
+    project = ProjectStore(project_dir).load()
+    clips = manifest["clips"]
+    if len(clips) != len(project.all_shots()) or len({c["shot_id"] for c in clips}) != len(clips):
+        raise RuntimeError("composition does not contain exactly one clip per original shot")
+    sources = []
+    accepted_ids = {a.get("video_id") for a in wrapper.video_attempts if a["state"] == "ACCEPTED"}
+    for clip in clips:
+        shot = project.get_shot(clip["shot_id"])
+        version = next((v for v in shot.video_versions if v.version_id == clip["video_version_id"]), None)
+        if version is None or version.video_id not in accepted_ids or shot.final_video != version.version_id:
+            raise RuntimeError("composition references an unverified or unselected source version")
+        data = Path(clip["local_path"]).read_bytes()
+        sources.append({"shot_id": shot.shot_id, "video_id": version.video_id,
+                        "version_id": version.version_id, "bytes": len(data),
+                        "sha256": hashlib.sha256(data).hexdigest(), "seconds_returned": version.seconds_returned})
+    if len({s["sha256"] for s in sources}) != len(sources):
+        raise RuntimeError("duplicate source-video bytes cannot count towards long-film acceptance")
+    summary["source_videos"] = sources
+    write_json(out / "source-videos.json", sources)
     final = Path(full.final_output)
     summary["media"] = await asyncio.to_thread(validate_final_media, final)
     summary["plan"] = wrapper.media_gate()
