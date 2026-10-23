@@ -99,7 +99,7 @@ jobs:
         env:
           AGNES_API_KEY: ${{ secrets.AGNES_API_KEY }}
           B1_ARCHIVE_TOKEN: ${{ secrets.B1_ARCHIVE_TOKEN }}
-          FRAME_HOST_TOKEN: ${{ secrets.FRAME_HOST_TOKEN || secrets.B1_ARCHIVE_TOKEN }}
+          FRAME_HOST_TOKEN: ${{ secrets.FRAME_HOST_TOKEN }}
           PYTHONPATH: .
           TASK_NONCE: ${{ inputs.task_nonce }}
           AGNES_VIDEO_INFLIGHT: '1'

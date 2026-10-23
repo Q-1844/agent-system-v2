@@ -8,7 +8,8 @@ import pytest
 
 from src.core.models import Project, Scene, Shot
 from src.core.store import ProjectStore
-from tools.full_project_cloud_acceptance import BoundedRealClient, validate_planned_project, validate_final_media
+from tools.full_project_cloud_acceptance import (BoundedRealClient, validate_planned_project,
+                                                validate_final_media, acceptance_credentials)
 
 
 def project(duration=10):
@@ -133,3 +134,11 @@ def test_real_video_duration_and_full_decode_are_both_required(monkeypatch):
     result = validate_final_media("final.mp4")
     assert result["duration_s"] == 200 and result["container_duration_s"] == 205
     assert result["full_decode_ok"] and calls[1][0] == "ffmpeg"
+
+
+def test_archive_credentials_cannot_silently_authorize_frame_host_writes():
+    environ = {"AGNES_API_KEY": "provider", "B1_ARCHIVE_TOKEN": "archive"}
+    with pytest.raises(RuntimeError, match="missing FRAME_HOST_TOKEN; no media"):
+        acceptance_credentials(environ)
+    environ["FRAME_HOST_TOKEN"] = "frames"
+    assert acceptance_credentials(environ) == ("archive", "frames")

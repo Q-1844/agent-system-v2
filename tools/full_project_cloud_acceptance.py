@@ -35,6 +35,14 @@ def utc_now():
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
+def acceptance_credentials(environ):
+    # The archive token can be scoped to B/B1. Never silently reuse it for D.
+    for name in ("AGNES_API_KEY", "B1_ARCHIVE_TOKEN", "FRAME_HOST_TOKEN"):
+        if not environ.get(name, "").strip():
+            raise RuntimeError(f"missing {name}; no media generation started")
+    return environ["B1_ARCHIVE_TOKEN"], environ["FRAME_HOST_TOKEN"]
+
+
 def write_json(path, value):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -214,9 +222,7 @@ async def run_acceptance(nonce, out, summary):
     from src.core.models import Project, Scene, StyleAnchor
     from src.core.image_host import GithubPagesHost
 
-    token = os.environ["B1_ARCHIVE_TOKEN"]
-    if not os.environ.get("AGNES_API_KEY"):
-        raise RuntimeError("missing AGNES_API_KEY")
+    token, frame_token = acceptance_credentials(os.environ)
     idx = task_index(token, nonce, "full-project-production.json")
     ensure_branch(idx)
     digest = hashlib.sha256(json.dumps({"scope": "full-project-180s-v1", "scenes": SCENES,
@@ -226,11 +232,16 @@ async def run_acceptance(nonce, out, summary):
         raise RuntimeError("nonce already has a run; restore/reconcile existing evidence before resuming")
     cp.save(phase="STARTING", github_run_id=os.environ.get("GITHUB_RUN_ID"), source_sha=os.environ.get("GITHUB_SHA"))
     # Check the existing image-host write path before any Agnes generation.
-    host = GithubPagesHost("Q-1844", "agnes-frame-host", "main",
-                           os.environ.get("FRAME_HOST_TOKEN") or token)
+    host = GithubPagesHost("Q-1844", "agnes-frame-host", "main", frame_token)
     calibration = out / "host-calibration.png"
     Image.new("RGB", (8, 8), (48, 80, 110)).save(calibration)
-    summary["frame_host_preflight_url"] = await host.upload(calibration)
+    try:
+        summary["frame_host_preflight_url"] = await host.upload(calibration)
+    except Exception as exc:
+        summary.update(blocked_stage="frame_host_preflight", no_media_submitted=True)
+        cp.save(phase="BLOCKED_PREFLIGHT", no_media_submitted=True,
+                blocked_stage="frame_host_preflight", error_type=type(exc).__name__)
+        raise RuntimeError(f"D frame-host preflight failed before media generation: {exc}") from exc
     QuotaLedger.get_default(Path("cache/quota.json"), limits={"video_seconds": VIDEO_BUDGET_SECONDS,
                                                            "images": IMAGE_BUDGET, "text_calls": TEXT_BUDGET})
     import deps
