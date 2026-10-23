@@ -3,6 +3,10 @@
 # Note: heavy deps (rembg/onnxruntime/pandas) are lazily imported by production
 #       features only; mock tests and collection do not trigger them.
 # External test prerequisite: ffmpeg + ffprobe on PATH (installed by ci.yml).
+# Deterministic image/crop tests use Pillow/NumPy with a fake segmentor.
+# These are required test dependencies; no rembg/onnxruntime inference is needed.
+Pillow==12.3.0
+numpy==2.3.5
 fastapi==0.136.1
 starlette==1.0.0
 pydantic==2.13.4
