@@ -1,12 +1,14 @@
 """Offline acceptance guards; these tests do not call a paid Provider."""
 import asyncio
 import copy
+import json
+from types import SimpleNamespace
 
 import pytest
 
 from src.core.models import Project, Scene, Shot
 from src.core.store import ProjectStore
-from tools.full_project_cloud_acceptance import BoundedRealClient, validate_planned_project
+from tools.full_project_cloud_acceptance import BoundedRealClient, validate_planned_project, validate_final_media
 
 
 def project(duration=10):
@@ -101,3 +103,33 @@ def test_short_plan_cannot_make_a_paid_call(tmp_path):
     with pytest.raises(ValueError, match="192-220"):
         asyncio.run(wrapper.create_video("p", duration_s=10))
     assert provider.calls == 0 and journal.writes == []
+
+
+@pytest.mark.parametrize("container,video,attached", [
+    (200, 5, False), (200, None, False), (200, "nan", False),
+    (200, "inf", False), ("nan", 200, False), ("inf", 200, False),
+    (200, 200, True),
+])
+def test_audio_or_cover_art_cannot_satisfy_film_duration(monkeypatch, container, video, attached):
+    calls = []
+    def run(command, **kwargs):
+        calls.append(command)
+        return SimpleNamespace(stdout=json.dumps({"format": {"duration": str(container)},
+            "streams": [{"codec_type": "video", "duration": str(video) if video is not None else "nan",
+                         "disposition": {"attached_pic": int(attached)}}, {"codec_type": "audio"}]}))
+    monkeypatch.setattr("tools.full_project_cloud_acceptance.subprocess.run", run)
+    with pytest.raises(ValueError):
+        validate_final_media("final.mp4")
+    assert len(calls) == 1  # Never proceed to decode/archival after invalid timing.
+
+
+def test_real_video_duration_and_full_decode_are_both_required(monkeypatch):
+    calls = []
+    def run(command, **kwargs):
+        calls.append(command)
+        return SimpleNamespace(stdout=json.dumps({"format": {"duration": "205"},
+            "streams": [{"codec_type": "video", "duration": "200", "codec_name": "h264"}]}))
+    monkeypatch.setattr("tools.full_project_cloud_acceptance.subprocess.run", run)
+    result = validate_final_media("final.mp4")
+    assert result["duration_s"] == 200 and result["container_duration_s"] == 205
+    assert result["full_decode_ok"] and calls[1][0] == "ffmpeg"

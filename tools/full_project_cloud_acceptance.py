@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import math
 import os
 import subprocess
 import time
@@ -22,11 +23,11 @@ IMAGE_BUDGET = 120
 TEXT_BUDGET = 500
 
 SCENES = [
-    ("破晓", "雾海中的灯塔黎明。四个不同的连续视觉重点：海天微光、潮水漫过礁石、灯塔外墙被晨光照亮、旋转灯束在薄雾中渐淡。"),
-    ("早潮", "早晨沿海岸接近灯塔。四个不同的连续视觉重点：浪花穿过潮池、海草随清水摆动、石阶上的水滴闪光、灯塔门前的野花迎风。"),
-    ("午风", "中午风起，灯塔静静守望。四个不同的连续视觉重点：海鸟掠过海面、云影缓慢越过岬角、航标随波轻摇、窗边光影移动。"),
-    ("骤雨", "下午一场短雨经过。四个不同的连续视觉重点：远处雨幕靠近、雨点敲打栏杆、排水沟里清水流动、乌云裂开透出一束阳光。"),
-    ("归灯", "雨后入夜，灯塔再次点亮。四个不同的连续视觉重点：海面映出金色晚霞、潮湿石阶反射天光、灯室缓缓亮起、灯束稳定扫过静谧海面。"),
+    ("失联", "深海研究站失去联系，一台橙色双灯、双机械爪的水下救援无人机前来取回记录匣。四镜依次：船底放下无人机；无人机下潜进入黑暗；探照灯照见破损站体；无人机靠近半开的舱门。"),
+    ("入舱", "同一台橙色双灯、双机械爪无人机进入淹水的研究站。四镜依次：侧身穿过舱门；灯束扫过漂浮的纸张；避开摇摆电缆；在实验台下发现银色记录匣。"),
+    ("取证", "同一无人机要取出银色记录匣。四镜依次：机械爪靠近卡扣；卡扣松开；机械爪夹起记录匣；记录匣收入机身下方固定架。每镜单一动作，记录匣始终只有一个。"),
+    ("脱险", "无人机带着记录匣离开时舱体继续变形。四镜依次：舱顶落下碎屑；通道闸门缓慢合拢；无人机从闸门侧隙穿出；冲出站体避开扬起的泥沙。无人机与记录匣外观保持不变。"),
+    ("回收", "同一无人机带着唯一的银色记录匣返回海面救援船。四镜依次：无人机向上穿过光柱；浮出波浪；回收吊篮托起无人机；固定架里的记录匣在甲板工作灯下显露。镜头只拍设备，不出现人物。"),
 ]
 
 
@@ -61,14 +62,21 @@ def validate_final_media(path):
                         "-of", "json", str(path)], capture_output=True, text=True,
                        check=True, timeout=60)
     probe = json.loads(r.stdout)
-    duration = float(probe["format"]["duration"])
-    videos = [s for s in probe["streams"] if s.get("codec_type") == "video"]
-    if duration < MIN_FINAL_SECONDS or not videos:
-        raise ValueError(f"final film is only {duration}s or has no video stream")
+    container_duration = float(probe["format"]["duration"])
+    videos = [s for s in probe["streams"] if s.get("codec_type") == "video"
+              and not s.get("disposition", {}).get("attached_pic")]
+    if len(videos) != 1:
+        raise ValueError("final film must have exactly one moving video stream")
+    # A long audio track or NaN container duration cannot establish a 3-minute film.
+    duration = float(videos[0].get("duration", "nan"))
+    if (not math.isfinite(duration) or not math.isfinite(container_duration)
+            or duration < MIN_FINAL_SECONDS or container_duration < MIN_FINAL_SECONDS):
+        raise ValueError(f"final moving video is only {duration}s (container {container_duration}s)")
     # Full decode, not just a plausible container header. No loops or padding.
     subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-f", "null", "-"],
                    capture_output=True, check=True, timeout=600)
-    return {"duration_s": duration, "video": [{k: s.get(k) for k in
+    return {"duration_s": duration, "container_duration_s": container_duration,
+            "video": [{k: s.get(k) for k in
             ("codec_name", "width", "height", "avg_frame_rate")} for s in videos],
             "audio_streams": sum(s.get("codec_type") == "audio" for s in probe["streams"]),
             "full_decode_ok": True}
@@ -235,11 +243,11 @@ async def run_acceptance(nonce, out, summary):
     project_name = f"cloud3min_{nonce}"
     project_dir = deps.project_manager.create_project(project_name)
     scenes = [Scene(scene_id=f"s{i:02d}", title=title,
-                    summary=story + " 本段必须规划4个连续镜头，每镜10秒，总计40秒；动作节奏舒缓，每镜只表现上述一个视觉重点。无人物，无对白。")
+                    summary=story + " 本段必须规划4个连续镜头，每镜10秒，总计40秒；每镜只表现上述一个动作。无人物，无对白。")
               for i, (title, story) in enumerate(SCENES, start=1)]
-    project = Project(name=project_name, story_text="《雾海守望》：从破晓、早潮、午风、骤雨到归灯，记录海边灯塔的一天。五段共约200秒；不重复素材，不使用静帧或循环补时长。",
-                      style=StyleAnchor(art_style="hand-painted cinematic animation, coherent watercolor illustration",
-                                        palette="sea blue, warm amber, restrained natural colors", aspect_ratio="16:9"),
+    project = Project(name=project_name, story_text="《失联深海站》：橙色双灯、双机械爪救援无人机潜入淹水的研究站，取回唯一的银色记录匣，在舱体变形中撤离并返回救援船。五段共约200秒；不重复素材，不使用静帧或循环补时长。此次只验收设备动作、跨场景生产和归档；不声称验收人物或对白一致性。",
+                      style=StyleAnchor(art_style="photorealistic cinematic underwater rescue thriller, coherent practical machinery",
+                                        palette="deep ocean blue, safety orange, warm work lights", aspect_ratio="16:9"),
                       characters=[], scenes=scenes, next_scene_seq=6)
     ProjectStore(project_dir).save(project)
     wrapper = BoundedRealClient(deps.agnes_client, cp, project_dir, out)
