@@ -25,8 +25,9 @@ REPO_B = "agent-system-v2-rundata"
 REPO_B1 = "agent-system-v2-rundata-1"
 AGNES_BASE = "https://api.agnes-ai.cn"
 AGNES_VIDEO_MODEL = "agnes-video-2.5-flash"
-PROMPT = ("a fluffy orange cat walking slowly across a sunlit wooden floor, "
-          "cinematic, warm light, gentle camera")
+PROMPT = os.environ.get("TASK_PROMPT") or (
+    "a fluffy orange cat walking slowly across a sunlit wooden floor, "
+    "cinematic, warm light, gentle camera")
 
 
 def _env():
