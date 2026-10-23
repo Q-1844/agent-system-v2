@@ -1,0 +1,43 @@
+name: video-patrol
+
+# Phase 3: scheduled patrol. Triggers on schedule(cron) + workflow_dispatch ONLY
+# (NOT push) -> its own state changes never re-trigger itself (no feedback loop).
+# Dedup via B1 state.json existence -> no A-repo writes -> no CI noise.
+on:
+  schedule:
+    - cron: '*/10 * * * *'   # every 10 min for demo (GitHub may jitter 5-15 min)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: video-patrol
+  cancel-in-progress: false
+
+jobs:
+  patrol:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install CI dependencies
+        run: pip install -r requirements-ci.txt
+
+      - name: Install ffmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+
+      - name: Patrol scan + produce-if-pending
+        env:
+          AGNES_API_KEY: ${{ secrets.AGNES_API_KEY }}
+          B1_ARCHIVE_TOKEN: ${{ secrets.B1_ARCHIVE_TOKEN }}
+          PYTHONPATH: .
+        run: python tools/patrol_run.py
