@@ -1,0 +1,55 @@
+name: video-autoproduction-e2e
+
+# Phase 2: workflow_dispatch only (debug real generation on runner).
+# Schedule (cron) added in Phase 3 after real-gen verified.
+on:
+  workflow_dispatch:
+    inputs:
+      task_nonce:
+        description: '合成任务 nonce（留空=自动时间戳）'
+        required: false
+        default: ''
+
+permissions:
+  contents: read   # 仅 checkout；B1 跨仓写用 B1_ARCHIVE_TOKEN secret，不用 GITHUB_TOKEN
+
+concurrency:
+  group: video-e2e
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install CI dependencies
+        run: pip install -r requirements-ci.txt
+
+      - name: Verify ffmpeg/ffprobe on PATH
+        run: |
+          ffmpeg -version | head -1
+          ffprobe -version | head -1
+
+      - name: Run autonomous E2E (real Agnes gen → MP4 → ffprobe → save B1 → registry)
+        env:
+          AGNES_API_KEY: ${{ secrets.AGNES_API_KEY }}
+          B1_ARCHIVE_TOKEN: ${{ secrets.B1_ARCHIVE_TOKEN }}
+          PYTHONPATH: .
+          TASK_NONCE: ${{ inputs.task_nonce }}
+        run: python tools/e2e_autonomous_run.py
+
+      - name: Upload E2E evidence (MP4 + summary)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-evidence
+          path: |
+            e2e_run/
+          retention-days: 3
+          if-no-files-found: warn
