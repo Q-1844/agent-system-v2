@@ -187,11 +187,13 @@ async def startup():
     except Exception as e:
         logger.error(f"任务队列初始化失败: {e}")
 
+    # Startup recovery completes before accepting fresh production requests.
+    # Only the short scan is awaited; recovered controllers run in background.
     # 阶段 AI-4B：恢复中断的 Autopilot Run（running/pausing）。
     # active job 由 JobQueue 恢复 + find_by_origin 复用，不重复 submit（§三十二）。
     try:
         from src.ai.autopilot import get_autopilot_manager
-        asyncio.create_task(get_autopilot_manager().recover_runs())
+        await get_autopilot_manager().recover_runs()
     except Exception as e:
         logger.error(f"Autopilot 恢复失败: {e}")
 
@@ -199,7 +201,7 @@ async def startup():
     # 🔴 必须在 SceneAutopilotManager.recover_runs() 之后（Project 恢复时需要看到 child 正确状态，§三十）。
     try:
         from src.ai.project_autopilot import get_project_autopilot_manager
-        asyncio.create_task(get_project_autopilot_manager().recover_runs())
+        await get_project_autopilot_manager().recover_runs()
     except Exception as e:
         logger.error(f"ProjectRun 恢复失败: {e}")
 
@@ -208,7 +210,7 @@ async def startup():
     # production child 正确状态，§四十七）。
     try:
         from src.ai.full_project_autopilot import get_full_project_manager
-        asyncio.create_task(get_full_project_manager().recover_runs())
+        await get_full_project_manager().recover_runs()
     except Exception as e:
         logger.error(f"FullProjectRun 恢复失败: {e}")
 

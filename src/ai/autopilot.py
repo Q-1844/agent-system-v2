@@ -465,9 +465,16 @@ class SceneAutopilotManager:
         return run
 
     def _launch_loop(self, run: SceneAutopilotRun):
+        current = self._run_tasks.get(run.run_id)
+        if current is not None and not current.done():
+            return
         task = asyncio.create_task(self._run_loop(run.project_name, run.run_id))
         self._run_tasks[run.run_id] = task
-        task.add_done_callback(lambda t: self._run_tasks.pop(run.run_id, None))
+        def finished(done):
+            # An older completion callback must not remove a replacement loop.
+            if self._run_tasks.get(run.run_id) is done:
+                self._run_tasks.pop(run.run_id, None)
+        task.add_done_callback(finished)
 
     async def resume_run(self, project_name: str, run_id: str) -> SceneAutopilotRun:
         run = self._load_run(project_name, run_id)
@@ -520,6 +527,9 @@ class SceneAutopilotManager:
                         __import__("json").loads(p.read_text(encoding="utf-8")))
                 except Exception:
                     continue
+                current = self._run_tasks.get(run.run_id)
+                if current is not None and not current.done():
+                    continue  # preserve the live owner's requests/checkpoints
                 if run.status in (RUN_RUNNING, RUN_PAUSING, RUN_PENDING):
                     # 重新调度（active job 由 JobQueue 恢复 + find_by_origin 复用）
                     run.status = RUN_RUNNING

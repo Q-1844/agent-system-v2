@@ -491,9 +491,16 @@ class ProjectProductionManager:
         return run
 
     def _launch_loop(self, run: ProjectProductionRun):
+        current = self._run_tasks.get(run.run_id)
+        if current is not None and not current.done():
+            return
         task = asyncio.create_task(self._run_loop(run.project_name, run.run_id))
         self._run_tasks[run.run_id] = task
-        task.add_done_callback(lambda t: self._run_tasks.pop(run.run_id, None))
+        def finished(done):
+            # An older completion callback must not remove a replacement loop.
+            if self._run_tasks.get(run.run_id) is done:
+                self._run_tasks.pop(run.run_id, None)
+        task.add_done_callback(finished)
 
     async def resume_run(self, project_name: str, run_id: str) -> ProjectProductionRun:
         """Resume 同 ProjectRun / 同 source snapshot / 同 plans snapshot（§二十七）。
@@ -594,6 +601,9 @@ class ProjectProductionManager:
                     run = ProjectProductionRun.model_validate(json.loads(p.read_text(encoding="utf-8")))
                 except Exception:
                     continue
+                current = self._run_tasks.get(run.run_id)
+                if current is not None and not current.done():
+                    continue  # preserve the live owner's requests/checkpoints
                 if run.status == PRUN_PAUSED:
                     # AI-7C-H closure：paused+cancel_requested 在此对账为 cancelled
                     # （旧数据/崩溃窗口持久化的组合态，无 loop 可消费该请求）。
