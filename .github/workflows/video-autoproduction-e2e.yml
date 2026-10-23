@@ -14,7 +14,7 @@ permissions:
   contents: read   # 仅 checkout；B1 跨仓写用 B1_ARCHIVE_TOKEN secret，不用 GITHUB_TOKEN
 
 concurrency:
-  group: video-e2e
+  group: video-production
   cancel-in-progress: false
 
 jobs:
@@ -26,6 +26,12 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            tools
+            src
+            config
 
       - uses: actions/setup-python@v5
         with:

@@ -1,18 +1,17 @@
 name: video-patrol
 
-# Phase 3: scheduled patrol. Triggers on schedule(cron) + workflow_dispatch ONLY
-# (NOT push) -> its own state changes never re-trigger itself (no feedback loop).
-# Dedup via B1 state.json existence -> no A-repo writes -> no CI noise.
+# Existing single-clip queue; no A-repo writes or self-trigger loop.
+# GitHub cron is best-effort. The run event and task outcomes are evidence.
 on:
   schedule:
-    - cron: '*/10 * * * *'   # every 10 min for demo (GitHub may jitter 5-15 min)
+    - cron: '7,27,47 * * * *'  # every 20 min, away from the start of the hour
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: video-patrol
+  group: video-production
   cancel-in-progress: false
 
 jobs:
@@ -24,6 +23,14 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          # Keep the 1.39 GB historical media out of a production runner.
+          sparse-checkout: |
+            tools
+            src
+            tasks
+            config
 
       - uses: actions/setup-python@v5
         with:
@@ -41,3 +48,12 @@ jobs:
           B1_ARCHIVE_TOKEN: ${{ secrets.B1_ARCHIVE_TOKEN }}
           PYTHONPATH: .
         run: python tools/patrol_run.py
+
+      - name: Upload patrol evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: patrol-evidence-${{ github.run_id }}
+          path: e2e_run/
+          retention-days: 7
+          if-no-files-found: warn

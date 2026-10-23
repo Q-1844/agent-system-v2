@@ -37,7 +37,7 @@ class FakeVision:
         self.content = content
         self.calls = []
 
-    async def chat_completion_vision(self, msgs, *, model):
+    async def chat_completion_vision(self, msgs, *, model, max_tokens=1600):
         self.calls.append({"model": model, "n_images": sum(
             1 for part in msgs[0]["content"] if part.get("type") == "image_url")})
         return {"content": self.content,

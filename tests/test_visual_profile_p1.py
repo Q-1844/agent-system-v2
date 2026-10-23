@@ -315,7 +315,7 @@ def test_t14_prop_has_no_generation_but_review_records_style_scope(tmp_path):
     assert r3["ok"], r3
 
     class FakeV:
-        async def chat_completion_vision(self, msgs, *, model):
+        async def chat_completion_vision(self, msgs, *, model, max_tokens=1600):
             return {"content": json.dumps({
                 "prop_fidelity": "pass", "fidelity_notes": "ok",
                 "visual_clarity": "pass", "clarity_notes": "ok",
@@ -478,7 +478,7 @@ def test_t19_t20_look_review_style_dimension_and_hard_gate(tmp_path):
         def __init__(self, style):
             self.style = style
 
-        async def chat_completion_vision(self, msgs, *, model):
+        async def chat_completion_vision(self, msgs, *, model, max_tokens=1600):
             content = json.dumps({
                 "identity_consistency": "pass", "identity_notes": "ok",
                 "costume_consistency": "pass", "costume_notes": "ok",
@@ -526,7 +526,7 @@ def test_t19b_unspecified_profile_review_has_no_style_dimension(tmp_path):
     ws.store.save(doc)
 
     class FakeV:
-        async def chat_completion_vision(self, msgs, *, model):
+        async def chat_completion_vision(self, msgs, *, model, max_tokens=1600):
             text = msgs[0]["content"][0]["text"]
             assert "project_style_consistency" not in text
             return {"content": json.dumps({
