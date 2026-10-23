@@ -8,6 +8,7 @@
 import asyncio
 import hashlib
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -691,7 +692,7 @@ def test_t17_generation_records_persistence(env):
            "model": basis["model"], "seed": None, "candidate_asset_ids": [],
            "started_at": 1.0, "completed_at": 2.0, "status": "committed",
            "error": None, "verified": True,
-           "resource_document_revision_after": "abcd1234"}
+           "resource_document_revision_after": "67b64a83"}
     append_record(env["pdir"], rec)
     append_record(env["pdir"], {**rec, "generation_id": "gen_a2", "status": "failed"})
     # 崩溃半行容错
@@ -703,7 +704,10 @@ def test_t17_generation_records_persistence(env):
     # 重启语义：新读取方从磁盘读全量
     assert len(read_records(env["pdir"], look_id=look_id)) == 2
     text = records_path(env["pdir"]).read_text(encoding="utf-8")
-    assert "base64" not in text and "b64" not in text
+    # Valid hex fingerprints can contain "b64". Reject actual encoded-image
+    # fields and data URLs, rather than arbitrary substrings in identifiers.
+    assert not re.search(r'"(?:base64|b64|b64_json)"\s*:', text)
+    assert ";base64," not in text
 
 
 def test_candidate_files_saved_under_look_id_dir(env):
