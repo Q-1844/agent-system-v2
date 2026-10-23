@@ -95,7 +95,7 @@ def validate_final_media(path):
             or duration < MIN_FINAL_SECONDS or container_duration < MIN_FINAL_SECONDS):
         raise ValueError(f"final moving video is only {duration}s (container {container_duration}s)")
     # Full decode, not just a plausible container header. No loops or padding.
-    subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-f", "null", "-"],
+    subprocess.run(["ffmpeg", "-v", "error", "-xerror", "-i", str(path), "-f", "null", "-"],
                    capture_output=True, check=True, timeout=600)
     return {"duration_s": duration, "container_duration_s": container_duration,
             "video": [{k: s.get(k) for k in
