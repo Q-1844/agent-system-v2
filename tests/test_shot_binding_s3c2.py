@@ -102,7 +102,10 @@ class FakeMediaClient:
             "width": width, "height": height, "seed": seed,
             "negative_prompt": negative_prompt, "model": model,
             "duration_s": duration_s})
-        return {"video_id": "vid_s3c20000001", "task_id": "task_s3c2"}
+        # Separate successful submissions have separate Provider identities.
+        # Reusing one ID incorrectly models replay of the same receipt.
+        seq = len(self.video_calls)
+        return {"video_id": f"vid_s3c2{seq:07d}", "task_id": f"task_s3c2_{seq}"}
 
     async def poll_video(self, video_id, *, interval=5.0, max_wait=3600,
                          on_progress=None, max_consecutive_failures=5,
@@ -246,10 +249,10 @@ def _set_video_ready(pdir, shot_id="s01_c01", *, num_frames=97, link_mode=None):
     ProjectStore(pdir).update_shot(shot_id, mut)
 
 
-def _run_video_handler(pdir, shot_id="s01_c01"):
+def _run_video_handler(pdir, shot_id="s01_c01", params=None):
     async def emit(*a, **k):
         pass
-    job = SimpleNamespace(project=pdir.name, shot_id=shot_id, params={},
+    job = SimpleNamespace(project=pdir.name, shot_id=shot_id, params=dict(params or {}),
                           kind="video")
     asyncio.run(_handler_video(job, emit))
 
@@ -316,11 +319,11 @@ def test_b3_bound_stale_never_legacy_fallback(venv):
 def test_b4_unbound_legacy_video_behavior_identical(venv):
     pdir, ids, svc, fake = venv
     _seed_first_frame(pdir)
-    _set_video_ready(pdir, num_frames=89)
+    _set_video_ready(pdir, num_frames=97)  # 2.5 minimum is four seconds
     ProjectStore(pdir).update_shot("s01_c01",
                                    lambda s: (setattr(s, "seed", 42),
-                                              setattr(s, "negative_prompt", "blurry")))
-    _run_video_handler(pdir)
+                                              setattr(s, "negative_prompt", "")))
+    _run_video_handler(pdir, params={"population_constraint": False})
     assert len(fake.video_calls) == 1
     call = fake.video_calls[0]
     project = _load_project(pdir)
@@ -329,7 +332,7 @@ def test_b4_unbound_legacy_video_behavior_identical(venv):
                                                            project.get_shot("s01_c01"))
     assert call["image_urls"] is None, "i2v 不伪造 last-frame 槽"
     assert call["mode"] == "i2v"
-    assert call["seed"] == 42 and call["negative_prompt"] == "blurry"
+    assert call["seed"] == 42 and call["negative_prompt"] == ""
 
 
 # ============ C. Last-frame temporal selection（§28）============
@@ -853,7 +856,7 @@ def test_q2_unbound_video_keyframes_legacy_identical(venv):
     _seed_first_frame(pdir)
     _seed_last_frame(pdir)
     _set_video_ready(pdir, link_mode="keyframes")
-    _run_video_handler(pdir)
+    _run_video_handler(pdir, params={"population_constraint": False})
     assert len(fake.video_calls) == 1
     call = fake.video_calls[0]
     project = _load_project(pdir)

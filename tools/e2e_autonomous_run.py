@@ -20,6 +20,10 @@ import time
 import traceback
 from pathlib import Path
 
+from tools.video_task_state import (ProductionCheckpoint, RecoveryRequired,
+                                   request_digest, task_index, validate_nonce,
+                                   verified_record)
+
 OWNER = "Q-1844"
 REPO_B = "agent-system-v2-rundata"
 REPO_B1 = "agent-system-v2-rundata-1"
@@ -40,7 +44,7 @@ def _env():
 
 def _nonce():
     n = os.environ.get("TASK_NONCE")
-    return n if n else f"e2e-{int(time.time())}"
+    return validate_nonce(n if n else f"e2e-{time.time_ns()}")
 
 
 class B1GitHubCas:
@@ -64,20 +68,31 @@ class B1GitHubCas:
         return {"doc": doc, "revision": doc.get("registry_revision", 0)}
 
     def commit(self, new_doc, expected_revision, *, operation_id):
-        # expected_revision is the Registry's int revision; GitHub concurrency
-        # uses the blob sha we captured at read time. (expected_revision ignored
-        # here — single-writer E2E; the blob sha is the real guard.)
+        from tools.relstore.project_registry import CasConflict
+        from tools.relstore.errors import AssetConflict
+        actual = None if self._cur is None else self._cur["doc"].get("registry_revision", 0)
+        if expected_revision != actual:
+            raise CasConflict("Registry revision mismatch", expected=expected_revision,
+                              actual=actual, candidate=new_doc)
         expected_blob = None if self._cur is None else self._cur["blob_sha"]
-        r = self.idx.write_cas(new_doc, expected_blob,
-                               message=f"registry op={operation_id}")
-        self._cur = self.idx.read()  # reload so next op sees the new blob
+        try:
+            r = self.idx.write_cas(new_doc, expected_blob,
+                                  message=f"registry op={operation_id}")
+        except AssetConflict as exc:
+            raise CasConflict("Registry blob SHA conflict", expected=expected_revision,
+                              actual=None, candidate=new_doc) from exc
+        if not r.get("ok") or not r.get("new_sha"):
+            raise RecoveryRequired("Registry write has no confirmed blob SHA")
+        # Use our own receipt. A GET here could adopt another writer's newer SHA
+        # and allow our stale next document to overwrite that writer.
+        self._cur = {"doc": new_doc, "blob_sha": r["new_sha"]}
         return {"ok": True,
                 "revision": new_doc.get("registry_revision", 0),
                 "http": r.get("http"),
                 "new_blob_sha": r.get("new_sha")}
 
 
-async def gen_video(api_key, out_path):
+async def gen_video(api_key, out_path, checkpoint):
     from src.api.agnes_client import AgnesClient
     cfg = {"base_url": AGNES_BASE, "api_key": api_key,
            "models": {"video": AGNES_VIDEO_MODEL,
@@ -86,15 +101,26 @@ async def gen_video(api_key, out_path):
            "proxy": None, "rpm": None}
     client = AgnesClient(cfg)
     try:
-        receipt = await client.create_video(PROMPT, mode="t2v", duration_s=5)
-        vid = receipt.get("video_id") or receipt.get("task_id")
+        gen = checkpoint.doc.get("gen") or {}
+        vid = gen.get("video_id")
         if not vid:
-            raise RuntimeError(f"no video_id in receipt: {receipt}")
-        done = await client.poll_video(vid)
+            if checkpoint.doc.get("phase") != "READY":
+                raise RecoveryRequired("submission outcome unknown; reconcile before any new POST")
+            checkpoint.save(phase="SUBMITTING")
+            receipt = await client.create_video(PROMPT, mode="t2v", duration_s=5)
+            vid = receipt.get("video_id") or receipt.get("task_id")
+            if not isinstance(vid, str) or not vid:
+                raise RecoveryRequired("submission has no usable video_id; do not auto-resubmit")
+            gen = {"video_id": vid}
+            checkpoint.save(phase="SUBMITTED", gen=gen)
+        done = gen if gen.get("url") else await client.poll_video(vid, max_wait=660)
         url = done["url"]
+        gen = {"video_id": vid, "url": url,
+               "seconds": done.get("seconds"), "size": done.get("size")}
+        # Save the provider URL before download, so a fresh runner can resume.
+        checkpoint.save(phase="GENERATED", gen=gen)
         path = await client.download(url, str(out_path))
-        return {"video_id": vid, "url": url, "path": str(path),
-                "seconds": done.get("seconds"), "size": done.get("size")}
+        return dict(gen, path=str(path))
     finally:
         try:
             await client.aclose()
@@ -111,6 +137,8 @@ def ffprobe(path):
     vid = run(["ffprobe", "-v", "error", "-select_streams", "v",
                "-show_entries", "stream=codec_name,width,height",
                "-of", "csv=p=0", str(path)])
+    if dur.returncode or vid.returncode:
+        raise RuntimeError("ffprobe failed")
     duration = float((dur.stdout or "0").strip() or 0)
     vstream = (vid.stdout or "").strip()
     return {"duration_s": duration, "video_stream": vstream,
@@ -141,20 +169,16 @@ def save_and_register(token, mp4_path, mp4_sha, nonce):
         body=f"autonomous E2E run nonce={nonce}; real Agnes t2v; sha256={mp4_sha}",
         target_commitish="main", draft=True)
     data = Path(mp4_path).read_bytes()
-    meta = a.upload_asset(rel.id, asset_name, data, mp4_sha)
+    meta = a.upload_asset_with_recovery(rel.id, asset_name, data, mp4_sha)
     blob = a.download_asset_authenticated(meta.id)
     dl_sha = hashlib.sha256(blob).hexdigest()
     if dl_sha != mp4_sha:
         raise RuntimeError(f"B asset sha mismatch: dl={dl_sha} != local={mp4_sha}")
 
     # ---- B1: Registry state machine via GitHubContentsIndex CAS bridge ----
-    idx = GitHubContentsIndex.armed(OWNER, REPO_B1, "", "", token, t)
+    idx = task_index(token, nonce, transport=t)
     test_branch = f"test/e2e-{nonce}"
-    if idx.get_branch_head(test_branch) is not None:
-        raise RuntimeError(f"branch exists (nonce clash): {test_branch}")
-    idx.create_branch_from("main", test_branch)
-    idx.branch = test_branch
-    idx.path = f"e2e/{nonce}/state.json"
+    ensure_branch(idx)
 
     cas = B1GitHubCas(idx)
     reg = Registry(cas=cas)  # _load_or_init reads B1 state.json (None first -> empty)
@@ -176,6 +200,8 @@ def save_and_register(token, mp4_path, mp4_sha, nonce):
         project_id=pid, archive_ref=archive_ref,
         restorable_level="full", operation_id=f"op_{nonce}_verify")
     final_doc = reg.to_doc()
+    if not verified_record(final_doc, nonce):
+        raise RecoveryRequired("Registry final receipt is incomplete")
 
     return {
         "b_release": {
@@ -194,19 +220,55 @@ def save_and_register(token, mp4_path, mp4_sha, nonce):
     }
 
 
+def ensure_branch(idx):
+    if idx.get_branch_head() is None:
+        try:
+            idx.create_branch_from("main", idx.branch)
+        except Exception:
+            # A concurrent creator or a lost create receipt is safe only after
+            # confirming the branch exists; all authorization/read errors stop.
+            if idx.get_branch_head() is None:
+                raise
+
+
+def prepare_checkpoint(token, nonce):
+    from tools.relstore.github_release_adapter import GitHubReleaseAdapter, HttpxTransport
+    idx = task_index(token, nonce, "production.json")
+    ensure_branch(idx)
+    cp = ProductionCheckpoint(idx, nonce, request_digest(PROMPT, AGNES_VIDEO_MODEL))
+    if cp.current is None:
+        # Legacy interrupted runs have no pre-submission journal. Never guess
+        # that an absent state.json means the provider was never charged.
+        state = task_index(token, nonce).read()
+        release = GitHubReleaseAdapter.armed(OWNER, REPO_B, token, HttpxTransport())
+        if state is not None or release.get_release_by_tag(f"e2e-video/{nonce}") is not None:
+            raise RecoveryRequired("legacy partial run exists without a checkpoint; reconcile its saved media")
+        cp.save(phase="READY")
+    return cp
+
+
 def main():
     Path("cache").mkdir(exist_ok=True)
     api_key, token = _env()
     n = _nonce()
-    out_dir = Path("e2e_run")
-    out_dir.mkdir(exist_ok=True)
+    out_dir = Path("e2e_run") / n
+    out_dir.mkdir(parents=True, exist_ok=True)
     summary = {"nonce": n,
                "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
     try:
+        state = task_index(token, n).read()
+        rec = verified_record(None if state is None else state["doc"], n)
+        if rec:
+            ProductionCheckpoint(task_index(token, n, "production.json"), n,
+                                 request_digest(PROMPT, AGNES_VIDEO_MODEL))
+            summary.update(status="PASS", deduplicated=True,
+                           archive_ref=rec["archive_ref"])
+            return
+        checkpoint = prepare_checkpoint(token, n)
         # 1. real Agnes t2v generation
         mp4 = out_dir / f"video-{n}.mp4"
         print(f"[1/4] generating real t2v video (nonce={n})...")
-        gen = asyncio.run(gen_video(api_key, mp4))
+        gen = asyncio.run(gen_video(api_key, mp4, checkpoint))
         summary["gen"] = gen
         print(f"[1/4] done: video_id={gen['video_id']} seconds={gen.get('seconds')}")
 
@@ -220,6 +282,10 @@ def main():
 
         # 3. sha256
         sha = sha256_file(mp4)
+        old_sha = checkpoint.doc.get("mp4_sha256")
+        if old_sha is not None and old_sha != sha:
+            raise RecoveryRequired("provider download changed after the first verified MP4")
+        checkpoint.save(phase="GENERATED", mp4_sha256=sha, mp4_bytes=mp4.stat().st_size)
         summary["mp4_sha256"] = sha
         summary["mp4_path"] = str(mp4)
         summary["mp4_bytes"] = mp4.stat().st_size
@@ -228,19 +294,22 @@ def main():
         # 4. save to B Release + register on B1
         print("[4/4] save B Release + B1 registry CAS...")
         saved = save_and_register(token, mp4, sha, n)
+        checkpoint.save(phase="ARCHIVED", save=saved)
         summary["save"] = saved
         print(f"[4/4] done: B release={saved['b_release']['tag']} "
               f"B1 rev={saved['b1_registry']['registry_revision']}")
         summary["status"] = "PASS"
     except Exception as e:
         summary["status"] = "FAIL"
-        summary["error"] = repr(e)
-        summary["traceback"] = traceback.format_exc()
+        from tools.relstore.github_release_adapter import redact
+        summary["error"] = redact(repr(e), token=token).replace(api_key, "<REDACTED>")
+        summary["traceback"] = redact(traceback.format_exc(), token=token).replace(api_key, "<REDACTED>")
     finally:
         summary["finished_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        (out_dir / "summary.json").write_text(
-            json.dumps(summary, ensure_ascii=False, indent=1, default=str),
-            encoding="utf-8")
+        summary_text = json.dumps(summary, ensure_ascii=False, indent=1, default=str)
+        (out_dir / "summary.json").write_text(summary_text, encoding="utf-8")
+        # Retain the original single-run evidence path for existing consumers.
+        (out_dir.parent / "summary.json").write_text(summary_text, encoding="utf-8")
         print("=== E2E SUMMARY ===")
         print(json.dumps(summary, ensure_ascii=False, indent=1, default=str))
         raise SystemExit(0 if summary.get("status") == "PASS" else 1)

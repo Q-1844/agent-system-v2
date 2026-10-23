@@ -1,16 +1,8 @@
 #!/usr/bin/env python3
-"""Patrol — scheduled monitor (Phase 3). Reuses e2e_autonomous_run via subprocess.
+"""Patrol the existing file queue; only verified task receipts count as done.
 
-Loop:
-  - scan tasks/pending/*.json (from checkout)
-  - for each pending task (nonce+prompt): if B1 already has its state.json
-    (test/e2e-<nonce> branch) -> already produced -> SKIP (dedup, no re-production)
-  - else -> run e2e production (real Agnes gen -> MP4 -> save B + register B1)
-  - no pending (or all done) -> IDLE (no gen, no write, no commit)
-
-Dedup is via B1 state.json existence (no A-repo writes -> no CI noise, no self-trigger).
-Patrol workflow triggers on schedule (+ workflow_dispatch) only, NOT on push, so its own
-state has no feedback loop into itself.
+The subprocess owns durable submission/recovery checkpoints. Read errors and
+ambiguous outcomes must never authorize another paid generation.
 """
 from __future__ import annotations
 
@@ -22,94 +14,95 @@ import sys
 import time
 from pathlib import Path
 
-OWNER_B1 = "Q-1844"
-REPO_B1 = "agent-system-v2-rundata-1"
+from tools.video_task_state import (ProductionCheckpoint, request_digest,
+                                   task_index, validate_task, verified_record)
 
 
-def _http(method, url, token, **kw):
-    import httpx
-    with httpx.Client(timeout=30.0) as c:
-        return c.request(method, url, headers={
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/vnd.github+json",
-        }, **kw)
-
-
-def already_produced(token, nonce):
-    """B1 has e2e/<nonce>/state.json on test/e2e-<nonce> branch? -> dedup."""
-    r = _http("GET",
-              f"https://api.github.com/repos/{OWNER_B1}/{REPO_B1}"
-              f"/contents/e2e/{nonce}/state.json?ref=test/e2e-{nonce}",
-              token)
-    return r.status_code == 200
+def already_produced(token, nonce, prompt=None):
+    current = task_index(token, nonce).read()
+    done = verified_record(None if current is None else current["doc"], nonce) is not None
+    if done and prompt is not None:
+        ProductionCheckpoint(task_index(token, nonce, "production.json"), nonce,
+                             request_digest(prompt, "agnes-video-2.5-flash"))
+    return done
 
 
 def run_e2e(nonce, prompt):
-    env = dict(os.environ)
-    env["TASK_NONCE"] = nonce
-    env["TASK_PROMPT"] = prompt
-    env["PYTHONPATH"] = "."
-    # AGNES_API_KEY + B1_ARCHIVE_TOKEN already in env (from workflow)
+    env = dict(os.environ, TASK_NONCE=nonce, TASK_PROMPT=prompt, PYTHONPATH=".")
     return subprocess.run([sys.executable, "tools/e2e_autonomous_run.py"],
-                           env=env, capture_output=True, text=True, timeout=900)
+                          env=env, capture_output=True, text=True, timeout=900)
 
 
 def main():
-    api_key = os.environ.get("AGNES_API_KEY")
     b1_token = os.environ.get("B1_ARCHIVE_TOKEN")
-    if not api_key or not b1_token:
-        print("[patrol] missing AGNES_API_KEY or B1_ARCHIVE_TOKEN env")
-        return 1
-
     pending = sorted(glob.glob("tasks/pending/*.json"))
-    print(f"[patrol] {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} "
-          f"pending tasks found: {len(pending)}")
-
-    if not pending:
-        print("[patrol] no pending tasks -> IDLE (no gen, no write, no commit). standby.")
-        return 0
-
-    produced = 0
-    skipped = 0
-    failed = 0
-    for p in pending:
+    result = {"event": os.environ.get("GITHUB_EVENT_NAME", "local"),
+              "run_id": os.environ.get("GITHUB_RUN_ID"),
+              "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+              "produced": 0, "skipped": 0, "failed": 0, "tasks": []}
+    print(f"[patrol] event={result['event']} pending tasks found: {len(pending)}")
+    # Check the whole queue before the first paid action. Conflicting copies of
+    # the same nonce must not let whichever filename sorts first choose a prompt.
+    prompts, conflicts = {}, set()
+    for path in pending:
         try:
-            t = json.loads(Path(p).read_text(encoding="utf-8"))
-        except Exception as e:
-            print(f"[patrol] skip unreadable {p}: {e}")
-            continue
-        nonce = t.get("nonce")
-        prompt = t.get("prompt")
-        if not nonce or not prompt:
-            print(f"[patrol] skip {p}: missing nonce/prompt")
-            continue
-
-        if already_produced(b1_token, nonce):
-            print(f"[patrol] {nonce}: already produced (B1 state.json exists) "
-                  f"-> SKIP (no re-production)")
-            skipped += 1
-            continue
-
-        print(f"[patrol] {nonce}: pending + not produced -> run production...")
-        r = run_e2e(nonce, prompt)
+            nonce, prompt = validate_task(json.loads(Path(path).read_text(encoding="utf-8")))
+            if nonce in prompts and prompts[nonce] != prompt:
+                conflicts.add(nonce)
+            prompts[nonce] = prompt
+        except (ValueError, OSError):
+            pass  # Report each malformed file in the execution pass below.
+    seen = {}
+    for path in pending:
+        item = {"file": path}
         try:
-            summ = json.loads(Path("e2e_run/summary.json").read_text(encoding="utf-8"))
-        except Exception:
-            summ = {"status": "UNKNOWN",
-                    "stdout_tail": (r.stdout or "")[-600:],
-                    "stderr_tail": (r.stderr or "")[-600:]}
-        if summ.get("status") == "PASS":
-            produced += 1
-            reg = summ.get("save", {}).get("b1_registry", {})
-            print(f"[patrol] {nonce}: PRODUCED -> B1 {reg.get('branch')} "
-                  f"rev={reg.get('registry_revision')} sha={summ.get('mp4_sha256','')[:16]}")
-        else:
-            failed += 1
-            print(f"[patrol] {nonce}: production FAILED -> "
-                  f"{(summ.get('error') or summ.get('stderr_tail','?'))[:300]}")
-
-    print(f"[patrol] done. produced={produced} skipped={skipped} failed={failed}")
-    return 0
+            nonce, prompt = validate_task(json.loads(Path(path).read_text(encoding="utf-8")))
+            item["nonce"] = nonce
+            if nonce in conflicts:
+                raise ValueError("duplicate nonce has conflicting prompts")
+            if nonce in seen:
+                if seen[nonce] != prompt:
+                    raise ValueError("duplicate nonce has conflicting prompts")
+                item["status"] = "DUPLICATE"
+                result["skipped"] += 1
+                continue
+            seen[nonce] = prompt
+            if not b1_token:
+                raise RuntimeError("missing B1_ARCHIVE_TOKEN")
+            if already_produced(b1_token, nonce, prompt):
+                item["status"] = "VERIFIED_RESTORABLE"
+                result["skipped"] += 1
+                print(f"[patrol] {nonce}: verified task receipt -> SKIP")
+                continue
+            if not os.environ.get("AGNES_API_KEY"):
+                raise RuntimeError("missing AGNES_API_KEY")
+            summary_path = Path("e2e_run") / nonce / "summary.json"
+            summary_path.unlink(missing_ok=True)
+            child = run_e2e(nonce, prompt)
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            if child.returncode != 0 or summary.get("nonce") != nonce or summary.get("status") != "PASS":
+                raise RuntimeError(summary.get("error") or
+                                   "production failed or did not return this task's PASS receipt")
+            if not already_produced(b1_token, nonce, prompt):
+                raise RuntimeError("production returned PASS without a verified B1 receipt")
+            item["status"] = "PRODUCED"
+            result["produced"] += 1
+        except Exception as exc:
+            from tools.relstore.github_release_adapter import redact
+            detail = redact(str(exc), token=b1_token)
+            if os.environ.get("AGNES_API_KEY"):
+                detail = detail.replace(os.environ["AGNES_API_KEY"], "<REDACTED>")
+            item.update(status="FAILED", error_type=type(exc).__name__, error=detail[:300])
+            result["failed"] += 1
+            print(f"[patrol] {path}: FAILED ({type(exc).__name__}); see per-task evidence")
+        finally:
+            result["tasks"].append(item)
+    result["status"] = "FAIL" if result["failed"] else ("IDLE" if not result["produced"] else "PASS")
+    out = Path("e2e_run")
+    out.mkdir(exist_ok=True)
+    (out / "patrol-summary.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
+    print(f"[patrol] done. produced={result['produced']} skipped={result['skipped']} failed={result['failed']}")
+    return 1 if result["failed"] else 0
 
 
 if __name__ == "__main__":

@@ -4,18 +4,60 @@ on:
   push:
     branches: [main, chore/migration-readiness, 'collab/**']
   pull_request:
-    branches: [main]
+    branches: [main, chore/migration-readiness]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  runtime-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            tools
+            src
+            tests
+            config
+            routers
+            services
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install -r requirements-ci.txt
+      - name: Offline storage and production recovery regression
+        run: python -m pytest tests/relstore/ -q --junitxml=results/runtime.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: runtime-results
+          path: results/runtime.xml
+          retention-days: 7
+
   mock-regression:
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            tools
+            src
+            tests
+            config
+            routers
+            services
+            scripts
+            input
+            saved_characters
+            saved_scenes
+            docs
+            tasks
 
       - uses: actions/setup-python@v5
         with:
@@ -23,6 +65,17 @@ jobs:
 
       - name: Install CI dependencies
         run: pip install -r requirements-ci.txt
+
+      - name: Ensure ffmpeg and ffprobe for media fixtures
+        shell: pwsh
+        timeout-minutes: 10
+        run: |
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue) -or
+              -not (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
+            choco install ffmpeg --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          ffprobe -version
 
       - name: Run full mock regression (zero external API)
         run: python -m pytest tests/ -q --junitxml=results/junit.xml
@@ -40,6 +93,21 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            tools
+            src
+            tests
+            config
+            routers
+            services
+            scripts
+            input
+            saved_characters
+            saved_scenes
+            docs
+            tasks
 
       - uses: actions/setup-python@v5
         with:

@@ -124,7 +124,7 @@ class FakeVision:
     def __init__(self, content: str):
         self.content = content
 
-    async def chat_completion_vision(self, msgs, *, model):
+    async def chat_completion_vision(self, msgs, *, model, max_tokens=1600):
         return {"content": self.content,
                 "usage": {"prompt_tokens": 10, "completion_tokens": 5}}
 

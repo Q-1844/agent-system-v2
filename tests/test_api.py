@@ -4,6 +4,24 @@ PHASE_5 §5.4 第 1/3 层：连通性 + 接口测试。用 TestClient（不真�
 调 Agnes 的接口（first-frame/video/audio）需 mock_agnes，留待下轮。
 """
 from tests.conftest import P4
+import pytest
+
+
+@pytest.fixture
+def seeded_api_project(client, tmp_path, monkeypatch):
+    """Keep API contracts independent of an untracked developer video project."""
+    import deps
+    from src.core.models import Project, Scene, Shot
+    from src.core.store import ProjectStore
+    from src.utils.project_manager import ProjectManager
+
+    manager = ProjectManager(str(tmp_path / "projects"))
+    pdir = manager.create_project(P4)
+    project = Project(name=P4, scenes=[Scene(scene_id="s01", shots=[
+        Shot(shot_id="s01_c01", scene_id="s01", index=1, motion="walk")])])
+    ProjectStore(pdir).save(project)
+    monkeypatch.setattr(deps, "project_manager", manager)
+    return pdir
 
 
 # ---------- 第 1 层：连通性 ----------
@@ -24,7 +42,7 @@ def test_system_limits(client):
 
 # ---------- 第 3 层：保留接口（shot 级管线，只读 project.json 不调 Agnes）----------
 
-def test_get_shots(client):
+def test_get_shots(client, seeded_api_project):
     r = client.get(f"/api/project/{P4}/shots")
     assert r.status_code == 200
     j = r.json()
@@ -34,7 +52,7 @@ def test_get_shots(client):
     assert all("shots" in s for s in j["scenes"])
 
 
-def test_get_timing(client):
+def test_get_timing(client, seeded_api_project):
     r = client.get(f"/api/project/{P4}/timing")
     assert r.status_code == 200
     j = r.json()
@@ -43,7 +61,7 @@ def test_get_timing(client):
     assert "fps" in j
 
 
-def test_orchestrate_dry_run(client):
+def test_orchestrate_dry_run(client, seeded_api_project):
     """dry_run 不真调 Agnes，只预估视频数/eta/配额"""
     r = client.post(f"/api/project/{P4}/orchestrate", json={
         "stages": ["first_frame", "audio", "last_frame", "video", "compose"],
