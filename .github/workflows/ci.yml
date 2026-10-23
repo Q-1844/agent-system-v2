@@ -31,6 +31,20 @@ jobs:
       - run: pip install -r requirements-ci.txt
       - name: Offline storage and production recovery regression
         run: python -m pytest tests/relstore/ -q --junitxml=results/runtime.xml
+      - name: Validate Linux media bootstrap and H264 encode/decode
+        timeout-minutes: 7
+        env:
+          FFMPEG_BOOTSTRAP_FORCE: '1'
+        run: |
+          bash tools/install_ci_ffmpeg.sh
+          # GITHUB_PATH becomes visible in the following step.
+      - name: Exercise installed ffmpeg and ffprobe
+        run: |
+          ffmpeg -v error -f lavfi -i color=c=blue:s=128x72:r=24 -t 1 \
+            -an -c:v libx264 -pix_fmt yuv420p "$RUNNER_TEMP/media-smoke.mp4"
+          ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,duration \
+            -of json "$RUNNER_TEMP/media-smoke.mp4"
+          ffmpeg -v error -xerror -i "$RUNNER_TEMP/media-smoke.mp4" -f null -
       - uses: actions/upload-artifact@v4
         if: always()
         with:

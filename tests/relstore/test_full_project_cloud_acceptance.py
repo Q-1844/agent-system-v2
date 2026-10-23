@@ -2,6 +2,7 @@
 import asyncio
 import copy
 import json
+import subprocess
 from types import SimpleNamespace
 
 import pytest
@@ -135,6 +136,20 @@ def test_real_video_duration_and_full_decode_are_both_required(monkeypatch):
     result = validate_final_media("final.mp4")
     assert result["duration_s"] == 200 and result["container_duration_s"] == 205
     assert result["full_decode_ok"] and calls[1][0] == "ffmpeg"
+
+
+def test_decode_errors_cannot_pass_with_a_plausible_duration(monkeypatch):
+    def run(command, **kwargs):
+        if command[0] == "ffprobe":
+            return SimpleNamespace(stdout=json.dumps({"format": {"duration": "200"},
+                "streams": [{"codec_type": "video", "duration": "200"}]}))
+        # ffmpeg can log corrupt packets and return zero unless errors are fatal.
+        if "-xerror" in command:
+            raise subprocess.CalledProcessError(1, command, stderr=b"corrupt frame")
+        return SimpleNamespace(returncode=0, stderr=b"corrupt frame")
+    monkeypatch.setattr("tools.full_project_cloud_acceptance.subprocess.run", run)
+    with pytest.raises(subprocess.CalledProcessError):
+        validate_final_media("damaged.mp4")
 
 
 def test_archive_credentials_cannot_silently_authorize_frame_host_writes():

@@ -32,9 +32,9 @@ def file_transaction(path: Path, *, timeout: float = 30.0):
         if not nested:
             path.parent.mkdir(parents=True, exist_ok=True)
             stream = path.open("a+b")
-            if os.name == "nt" and path.stat().st_size == 0:
-                stream.write(b"\0")
-                stream.flush()
+            # Windows supports locking a byte beyond EOF. Do not initialize
+            # that byte: another process can lock it between stat() and flush(),
+            # making the unprotected write fail before the lock retry loop.
             deadline = time.monotonic() + timeout
             while True:
                 try:

@@ -48,12 +48,8 @@ jobs:
 
       - name: Install ffmpeg
         if: steps.work.outputs.needs_media == 'true'
-        timeout-minutes: 15
-        run: |
-          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
-            sudo apt-get update -qq -o Acquire::Retries=2 -o Acquire::http::Timeout=20
-            sudo apt-get install -y -qq --no-install-recommends ffmpeg
-          fi
+        timeout-minutes: 7
+        run: bash tools/install_ci_ffmpeg.sh
 
       - name: Patrol scan + produce-if-pending
         env:
