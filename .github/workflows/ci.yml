@@ -43,6 +43,21 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            tools
+            src
+            tests
+            config
+            routers
+            services
+            scripts
+            input
+            saved_characters
+            saved_scenes
+            docs
+            tasks
 
       - uses: actions/setup-python@v5
         with:
@@ -50,6 +65,17 @@ jobs:
 
       - name: Install CI dependencies
         run: pip install -r requirements-ci.txt
+
+      - name: Ensure ffmpeg and ffprobe for media fixtures
+        shell: pwsh
+        timeout-minutes: 10
+        run: |
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue) -or
+              -not (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
+            choco install ffmpeg --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          ffprobe -version
 
       - name: Run full mock regression (zero external API)
         run: python -m pytest tests/ -q --junitxml=results/junit.xml
@@ -67,6 +93,21 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            tools
+            src
+            tests
+            config
+            routers
+            services
+            scripts
+            input
+            saved_characters
+            saved_scenes
+            docs
+            tasks
 
       - uses: actions/setup-python@v5
         with:

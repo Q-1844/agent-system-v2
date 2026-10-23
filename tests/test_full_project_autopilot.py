@@ -601,9 +601,12 @@ def test_case7_production_child_crash_rebind(client, fake_agnes_swap):
         run2 = full_mgr.get_run(PROJECT_NAME, run_id)
         # 🔴 关键：production_run_id 被重新绑定回原 child（不创建第二个）
         assert run2.production_run_id == original_child_id, "应重新绑定原 child，不创建新 child"
-        # 全项目仅 1 个 ProjectProductionRun
+        # The invariant is one child for this parent. Other FullRuns may have
+        # their own children, including completed records from earlier runs.
         all_prod = get_project_autopilot_manager().list_runs(PROJECT_NAME)
-        assert len(all_prod) == 1, f"应只有 1 个 production child，实际 {len(all_prod)}"
+        children = [child for child in all_prod if child.parent_full_run_id == run_id]
+        assert len(children) == 1, f"该 parent 应只有 1 个 production child，实际 {len(children)}"
+        assert children[0].run_id == original_child_id
     finally:
         _cleanup()
 

@@ -2,6 +2,7 @@
 # Scope: full mock pytest regression (2847 tests), zero external API calls.
 # Note: heavy deps (rembg/onnxruntime/pandas) are lazily imported by production
 #       features only; mock tests and collection do not trigger them.
+# External test prerequisite: ffmpeg + ffprobe on PATH (installed by ci.yml).
 fastapi==0.136.1
 starlette==1.0.0
 pydantic==2.13.4

@@ -81,13 +81,18 @@ def main():
             child = run_e2e(nonce, prompt)
             summary = json.loads(summary_path.read_text(encoding="utf-8"))
             if child.returncode != 0 or summary.get("nonce") != nonce or summary.get("status") != "PASS":
-                raise RuntimeError("production failed or did not return this task's PASS receipt")
+                raise RuntimeError(summary.get("error") or
+                                   "production failed or did not return this task's PASS receipt")
             if not already_produced(b1_token, nonce, prompt):
                 raise RuntimeError("production returned PASS without a verified B1 receipt")
             item["status"] = "PRODUCED"
             result["produced"] += 1
         except Exception as exc:
-            item.update(status="FAILED", error_type=type(exc).__name__)
+            from tools.relstore.github_release_adapter import redact
+            detail = redact(str(exc), token=b1_token)
+            if os.environ.get("AGNES_API_KEY"):
+                detail = detail.replace(os.environ["AGNES_API_KEY"], "<REDACTED>")
+            item.update(status="FAILED", error_type=type(exc).__name__, error=detail[:300])
             result["failed"] += 1
             print(f"[patrol] {path}: FAILED ({type(exc).__name__}); see per-task evidence")
         finally:

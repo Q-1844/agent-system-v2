@@ -101,8 +101,9 @@ def _set_dialogue(pdir, shot_id="s01_c01", dialogue="", characters=None):
 def _run_video(pdir, shot_id="s01_c01", params=None):
     async def emit(*a, **k):
         pass
+    # Isolate the dialogue feature gate from the independent population clause.
     job = SimpleNamespace(project=pdir.name, shot_id=shot_id,
-                          params=params or {}, kind="video")
+                          params={"population_constraint": False, **(params or {})}, kind="video")
     asyncio.run(_handler_video(job, emit))
 
 

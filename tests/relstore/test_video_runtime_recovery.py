@@ -10,6 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 from tools import e2e_autonomous_run as e2e, patrol_run as patrol
+from tools import video_runtime_preflight as preflight
 from tools.relstore.errors import AssetConflict
 from tools.relstore.github_release_adapter import GitHubContentsIndex, MockHttpTransport
 from tools.relstore.project_registry import CasConflict
@@ -64,6 +65,31 @@ def test_terminal_receipt_is_bound_to_task_and_bytes():
     assert not verified_record(doc, "demo2")
     doc["projects"]["e2e_demo1"]["archive_ref"]["tree_fingerprint"] = "b" * 64
     assert not verified_record(doc, "demo1")
+
+
+def test_empty_queue_skips_media_setup_without_secrets(tmp_path):
+    assert not preflight.needs_media("patrol", None, pending_dir=tmp_path)
+
+
+@pytest.mark.parametrize("complete", [False, True])
+def test_read_only_preflight_checks_real_terminal_state(monkeypatch, complete):
+    idx = MemoryIndex()
+    if complete:
+        idx.write_cas(complete_doc(), None)
+    monkeypatch.setattr(preflight, "task_index", lambda *a: idx)
+    assert preflight.needs_media("e2e", "fake", nonce="demo1") is (not complete)
+
+
+def test_preflight_read_error_does_not_authorize_work(monkeypatch):
+    def broken(*a):
+        raise RuntimeError("remote lookup unavailable")
+    monkeypatch.setattr(preflight, "task_index", broken)
+    with pytest.raises(RuntimeError):
+        preflight.needs_media("e2e", "fake", nonce="demo1")
+
+
+def test_fresh_nonce_requires_media_setup():
+    assert preflight.needs_media("e2e", "fake")
 
 
 @pytest.mark.parametrize("task", [[], {}, {"nonce": "../oops", "prompt": "p"},
@@ -156,6 +182,50 @@ def test_download_interruption_resumes_same_video(provider, tmp_path):
     provider.fail_download = False
     gen = asyncio.run(e2e.gen_video("fake", tmp_path / "v.mp4", checkpoint(cp.index)))
     assert gen["video_id"] == "known-video" and provider.creates == 1
+
+
+@pytest.mark.parametrize("accepted", [False, True])
+def test_submission_checkpoint_receipt_loss_never_duplicates_paid_POST(provider, tmp_path, accepted):
+    class FaultIndex(MemoryIndex):
+        calls = 0
+        def write_cas(self, doc, expected_blob_sha, **kw):
+            self.calls += 1
+            if self.calls == 3:  # provider accepted; saving its video ID
+                if accepted:
+                    super().write_cas(doc, expected_blob_sha, **kw)
+                raise TimeoutError("checkpoint receipt lost")
+            return super().write_cas(doc, expected_blob_sha, **kw)
+    cp = checkpoint(FaultIndex())
+    cp.save(phase="READY")
+    with pytest.raises(TimeoutError):
+        asyncio.run(e2e.gen_video("fake", tmp_path / "v.mp4", cp))
+    restarted = checkpoint(cp.index)
+    if accepted:
+        asyncio.run(e2e.gen_video("fake", tmp_path / "v.mp4", restarted))
+    else:
+        with pytest.raises(RecoveryRequired):
+            asyncio.run(e2e.gen_video("fake", tmp_path / "v.mp4", restarted))
+    assert provider.creates == 1
+
+
+def test_concurrent_READY_readers_have_one_paid_submission(provider, tmp_path):
+    first = checkpoint()
+    first.save(phase="READY")
+    second = checkpoint(first.index)
+    asyncio.run(e2e.gen_video("fake", tmp_path / "v.mp4", first))
+    with pytest.raises(AssetConflict):
+        asyncio.run(e2e.gen_video("fake", tmp_path / "other.mp4", second))
+    assert provider.creates == 1
+
+
+def test_completed_nonce_rejects_changed_request(monkeypatch):
+    idx = MemoryIndex()
+    checkpoint(idx).save(phase="ARCHIVED")
+    state = MemoryIndex()
+    state.write_cas(complete_doc(), None)
+    monkeypatch.setattr(patrol, "task_index", lambda *a: idx if len(a) == 3 else state)
+    with pytest.raises(RecoveryRequired):
+        patrol.already_produced("fake", "demo1", "different prompt")
 
 
 def test_CAS_bridge_rejects_wrong_revision_and_remote_conflict():
