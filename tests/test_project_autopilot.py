@@ -442,10 +442,14 @@ def test_case4_recover_rebinds_child(project_2scenes, fake_agnes_swap, client):
     assert final["status"] == "completed", f"status={final['status']}, error={final.get('error')}"
     # scene 1 重新绑定到原 child（不新建）
     assert final["scenes"][0]["child_run_id"] == child_id_s1
-    # 每个 Scene 只有 1 个 child（无重复）
+    # The invariant is one child per parent and scene. Other tests can leave
+    # a late cancelled run in this shared project directory; it is not a child
+    # of the recovered parent and must not be counted as duplicate execution.
     for sid in ("s01", "s02"):
-        children = scene_mgr.list_runs_for_scene(PROJECT_NAME, sid)
+        children = [child for child in scene_mgr.list_runs_for_scene(PROJECT_NAME, sid)
+                    if child.parent_project_run_id == run_id]
         assert len(children) == 1, f"{sid} 有 {len(children)} 个 child（应只有 1）"
+    assert fake_agnes_swap.calls.count("create_video") == 2
 
 
 # ============ Case 5：compose failure -> retry only compose ============

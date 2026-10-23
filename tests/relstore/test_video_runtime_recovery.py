@@ -71,6 +71,29 @@ def test_empty_queue_skips_media_setup_without_secrets(tmp_path):
     assert not preflight.needs_media("patrol", None, pending_dir=tmp_path)
 
 
+def test_held_short_demo_never_reads_remote_or_generates(tmp_path, monkeypatch):
+    pending = tmp_path / "tasks" / "pending"
+    pending.mkdir(parents=True)
+    (pending / "demo.json").write_text(json.dumps({"nonce": "held", "prompt": "p", "enabled": False}))
+    monkeypatch.chdir(tmp_path)
+    def forbidden(*args):
+        raise AssertionError("held task must not access production")
+    monkeypatch.setattr(patrol, "already_produced", forbidden)
+    monkeypatch.setattr(patrol, "run_e2e", forbidden)
+    monkeypatch.setattr(preflight, "task_index", forbidden)
+    assert not preflight.needs_media("patrol", None, pending_dir=pending)
+    assert patrol.main() == 0
+    summary = json.loads((tmp_path / "e2e_run" / "patrol-summary.json").read_text())
+    assert summary["produced"] == 0 and summary["tasks"][0]["status"] == "DEFERRED"
+
+
+@pytest.mark.parametrize("enabled", ["false", 0, None, []])
+def test_malformed_hold_flag_cannot_silently_enable_generation(tmp_path, enabled):
+    (tmp_path / "task.json").write_text(json.dumps({"nonce": "x", "prompt": "p", "enabled": enabled}))
+    with pytest.raises(ValueError, match="enabled"):
+        preflight.needs_media("patrol", None, pending_dir=tmp_path)
+
+
 @pytest.mark.parametrize("complete", [False, True])
 def test_read_only_preflight_checks_real_terminal_state(monkeypatch, complete):
     idx = MemoryIndex()

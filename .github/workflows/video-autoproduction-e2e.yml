@@ -1,10 +1,17 @@
 name: video-autoproduction-e2e
 
-# Phase 2: workflow_dispatch only (debug real generation on runner).
-# Schedule (cron) added in Phase 3 after real-gen verified.
+# Real acceptance is explicit dispatch. The existing single-clip queue has its
+# own patrol; it must not be confused with this full-project >=180s test.
 on:
   workflow_dispatch:
     inputs:
+      acceptance_scope:
+        description: '真实验收范围（长片至少180秒）'
+        type: choice
+        options:
+          - full-project-3min
+          - existing-single-clip
+        default: full-project-3min
       task_nonce:
         description: '合成任务 nonce（留空=自动时间戳）'
         required: false
@@ -19,8 +26,8 @@ concurrency:
 
 jobs:
   e2e:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
     defaults:
       run:
         shell: bash
@@ -32,6 +39,10 @@ jobs:
             tools
             src
             config
+            routers
+            services
+            saved_characters
+            saved_scenes
 
       - uses: actions/setup-python@v5
         with:
@@ -41,6 +52,7 @@ jobs:
         run: pip install -r requirements-ci.txt
 
       - name: Inspect existing task before media setup
+        if: inputs.acceptance_scope == 'existing-single-clip'
         id: work
         env:
           B1_ARCHIVE_TOKEN: ${{ secrets.B1_ARCHIVE_TOKEN }}
@@ -49,27 +61,49 @@ jobs:
         run: python tools/video_runtime_preflight.py e2e
 
       - name: Install ffmpeg
-        if: steps.work.outputs.needs_media == 'true'
-        timeout-minutes: 15
+        if: inputs.acceptance_scope != 'existing-single-clip' || steps.work.outputs.needs_media == 'true'
+        timeout-minutes: 10
         run: |
           if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
-            sudo apt-get update -qq -o Acquire::Retries=2 -o Acquire::http::Timeout=20
-            sudo apt-get install -y -qq --no-install-recommends ffmpeg
+            # Use the runner's cached package indexes first. Refreshing every
+            # third-party repository previously stalled before any generation.
+            if ! sudo timeout 180 apt-get install -y -qq --no-install-recommends \
+                -o Acquire::Retries=1 -o Acquire::http::Timeout=15 ffmpeg; then
+              distro_sources=/etc/apt/sources.list.d/ubuntu.sources
+              if [ ! -f "$distro_sources" ]; then distro_sources=/etc/apt/sources.list; fi
+              sudo timeout 120 apt-get update -qq \
+                -o Dir::Etc::sourcelist="$distro_sources" -o Dir::Etc::sourceparts="-" \
+                -o Acquire::Retries=1 -o Acquire::http::Timeout=15
+              sudo timeout 180 apt-get install -y -qq --no-install-recommends \
+                -o Acquire::Retries=1 -o Acquire::http::Timeout=15 ffmpeg
+            fi
           fi
 
       - name: Verify ffmpeg/ffprobe on PATH
-        if: steps.work.outputs.needs_media == 'true'
+        if: inputs.acceptance_scope != 'existing-single-clip' || steps.work.outputs.needs_media == 'true'
         run: |
           ffmpeg -version | head -1
           ffprobe -version | head -1
 
       - name: Run autonomous E2E (real Agnes gen → MP4 → ffprobe → save B1 → registry)
+        if: inputs.acceptance_scope == 'existing-single-clip'
         env:
           AGNES_API_KEY: ${{ secrets.AGNES_API_KEY }}
           B1_ARCHIVE_TOKEN: ${{ secrets.B1_ARCHIVE_TOKEN }}
           PYTHONPATH: .
           TASK_NONCE: ${{ inputs.task_nonce }}
         run: python tools/e2e_autonomous_run.py
+
+      - name: Real FullProject → Director/Planner → SceneRuns → >=180s final film → restore verification
+        if: inputs.acceptance_scope != 'existing-single-clip'
+        env:
+          AGNES_API_KEY: ${{ secrets.AGNES_API_KEY }}
+          B1_ARCHIVE_TOKEN: ${{ secrets.B1_ARCHIVE_TOKEN }}
+          FRAME_HOST_TOKEN: ${{ secrets.FRAME_HOST_TOKEN }}
+          PYTHONPATH: .
+          TASK_NONCE: ${{ inputs.task_nonce }}
+          AGNES_VIDEO_INFLIGHT: '1'
+        run: python tools/full_project_cloud_acceptance.py
 
       - name: Upload E2E evidence (MP4 + summary)
         if: always()
@@ -78,5 +112,8 @@ jobs:
           name: e2e-evidence
           path: |
             e2e_run/
-          retention-days: 3
+            projects/cloud3min_*/
+            cache/jobs.json
+            cache/quota.json
+          retention-days: 7
           if-no-files-found: warn
