@@ -9,7 +9,8 @@ import pytest
 from src.core.models import Project, Scene, Shot
 from src.core.store import ProjectStore
 from tools.full_project_cloud_acceptance import (BoundedRealClient, validate_planned_project,
-                                                validate_final_media, acceptance_credentials)
+                                                validate_final_media, acceptance_credentials,
+                                                make_frame_host_calibration)
 
 
 def project(duration=10):
@@ -142,3 +143,39 @@ def test_archive_credentials_cannot_silently_authorize_frame_host_writes():
         acceptance_credentials(environ)
     environ["FRAME_HOST_TOKEN"] = "frames"
     assert acceptance_credentials(environ) == ("archive", "frames")
+
+
+def test_frame_host_calibration_cannot_reuse_a_previous_content_address(tmp_path):
+    from PIL import Image
+    from src.core.image_host import GithubPagesHost
+    host = GithubPagesHost("owner", "frames", "main", "read-only")
+    old = tmp_path / "old.png"
+    Image.new("RGB", (8, 8), (48, 80, 110)).save(old)
+    files = [old, make_frame_host_calibration(tmp_path / "one.png"),
+             make_frame_host_calibration(tmp_path / "two.png")]
+    paths = {host._object_path(p.read_bytes(), p.name) for p in files}
+    assert len(paths) == 3
+    for path in files:
+        with Image.open(path) as img:
+            assert img.size == (8, 8) and img.getpixel((0, 0)) == (48, 80, 110)
+
+
+def test_cached_public_calibration_cannot_hide_a_read_only_credential(tmp_path, monkeypatch):
+    from PIL import Image
+    from src.core.image_host import GithubPagesHost
+    host = GithubPagesHost("owner", "frames", "main", "read-only")
+    old = tmp_path / "old.png"
+    Image.new("RGB", (8, 8), (48, 80, 110)).save(old)
+    cached = host._object_path(old.read_bytes(), old.name)
+    writes = []
+    async def remote_matches(path, data):
+        return path == cached
+    async def denied_put(path, data):
+        writes.append(path)
+        raise RuntimeError("github_pages PUT HTTP 403")
+    monkeypatch.setattr(host, "_remote_matches", remote_matches)
+    monkeypatch.setattr(host, "_put_with_retry", denied_put)
+    fresh = make_frame_host_calibration(tmp_path / "check.png")
+    with pytest.raises(RuntimeError, match="403"):
+        asyncio.run(host.upload(fresh))
+    assert len(writes) == 1 and writes[0] != cached
