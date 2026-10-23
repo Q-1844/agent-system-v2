@@ -62,22 +62,8 @@ jobs:
 
       - name: Install ffmpeg
         if: inputs.acceptance_scope != 'existing-single-clip' || steps.work.outputs.needs_media == 'true'
-        timeout-minutes: 10
-        run: |
-          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
-            # Use the runner's cached package indexes first. Refreshing every
-            # third-party repository previously stalled before any generation.
-            if ! sudo timeout 180 apt-get install -y -qq --no-install-recommends \
-                -o Acquire::Retries=1 -o Acquire::http::Timeout=15 ffmpeg; then
-              distro_sources=/etc/apt/sources.list.d/ubuntu.sources
-              if [ ! -f "$distro_sources" ]; then distro_sources=/etc/apt/sources.list; fi
-              sudo timeout 120 apt-get update -qq \
-                -o Dir::Etc::sourcelist="$distro_sources" -o Dir::Etc::sourceparts="-" \
-                -o Acquire::Retries=1 -o Acquire::http::Timeout=15
-              sudo timeout 180 apt-get install -y -qq --no-install-recommends \
-                -o Acquire::Retries=1 -o Acquire::http::Timeout=15 ffmpeg
-            fi
-          fi
+        timeout-minutes: 7
+        run: bash tools/install_ci_ffmpeg.sh
 
       - name: Verify ffmpeg/ffprobe on PATH
         if: inputs.acceptance_scope != 'existing-single-clip' || steps.work.outputs.needs_media == 'true'
