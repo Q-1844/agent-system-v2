@@ -43,6 +43,20 @@ def acceptance_credentials(environ):
     return environ["B1_ARCHIVE_TOKEN"], environ["FRAME_HOST_TOKEN"]
 
 
+def make_frame_host_calibration(path):
+    """Force the normal content-addressed host path to exercise a fresh PUT."""
+    from PIL import Image
+    from PIL.PngImagePlugin import PngInfo
+
+    metadata = PngInfo()
+    # An existing public object proves readability, not the current token's
+    # ability to write. Fresh metadata changes bytes without changing pixels.
+    metadata.add_text("write-check-nonce", os.urandom(16).hex())
+    path = Path(path)
+    Image.new("RGB", (8, 8), (48, 80, 110)).save(path, pnginfo=metadata)
+    return path
+
+
 def write_json(path, value):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -214,7 +228,6 @@ def archive_completed_project(token, nonce, project_dir, final_path, evidence_di
 
 
 async def run_acceptance(nonce, out, summary):
-    from PIL import Image
     from tools.e2e_autonomous_run import ensure_branch
     from tools.video_task_state import ProductionCheckpoint, task_index
     from src.core.quota import QuotaLedger
@@ -233,8 +246,7 @@ async def run_acceptance(nonce, out, summary):
     cp.save(phase="STARTING", github_run_id=os.environ.get("GITHUB_RUN_ID"), source_sha=os.environ.get("GITHUB_SHA"))
     # Check the existing image-host write path before any Agnes generation.
     host = GithubPagesHost("Q-1844", "agnes-frame-host", "main", frame_token)
-    calibration = out / "host-calibration.png"
-    Image.new("RGB", (8, 8), (48, 80, 110)).save(calibration)
+    calibration = make_frame_host_calibration(out / "host-calibration.png")
     try:
         summary["frame_host_preflight_url"] = await host.upload(calibration)
     except Exception as exc:
