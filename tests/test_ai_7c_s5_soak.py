@@ -5,6 +5,7 @@
 #      不出现第二条 char-sync 链 / 双 commit / 双角色生成。
 #   C：项目隔离——A/B 同角色名；A execution 只写 A；B canonical + views 不被串；仅 A 产生 3 次调用。
 #   E：（见文件末 TODO，待 run_character_sync per-view 失败/重试细节确认后补——依赖恢复路径映射）
+import asyncio
 import io
 import time
 
@@ -133,6 +134,23 @@ def _wait_char_views_done(pdir, char_name, timeout=90):
     return ch
 
 
+def _drain_owned_background(client, *project_dirs):
+    """Stop only this fixture's controllers before restoring deps/deleting files."""
+    from src.agents.change_protocol import execution_service as cpx
+    async def drain():
+        execution_ids = {ex.execution_id for pdir in project_dirs
+                         for ex in ChangeProtocolStore(pdir, pdir.name).list_executions()}
+        tasks = [task for registry in (cpx._INFLIGHT_POSTCOMMIT, cpx._STOP_WATCHERS)
+                 for eid, task in list(registry.items()) if eid in execution_ids]
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        await asyncio.sleep(0)  # allow each task's ownership callback to run
+        assert not execution_ids.intersection(cpx._INFLIGHT_POSTCOMMIT)
+        assert not execution_ids.intersection(cpx._STOP_WATCHERS)
+    client.portal.call(drain)
+
+
 # ============ B：快速重复 Execute/Resume -> 不产生第二条 char-sync 链 ============
 def test_soak_b_rapid_resume_no_duplicate_charsync(client, monkeypatch):
     """S5-2 B：execute 后连发 4 次 resume + 1 次重复 execute。
@@ -193,10 +211,13 @@ def test_soak_b_rapid_resume_no_duplicate_charsync(client, monkeypatch):
             f"重复 execution: {[e['execution_id'] for e in rl['executions']]}"
         assert rl["executions"][0]["execution_id"] == eid
     finally:
-        deps.agnes_client = real_agnes
-        deps._rehost_host = real_rehost
-        import shutil
-        shutil.rmtree(pm.get_project_dir(pname), ignore_errors=True)
+        try:
+            _drain_owned_background(client, pm.get_project_dir(pname))
+        finally:
+            deps.agnes_client = real_agnes
+            deps._rehost_host = real_rehost
+            import shutil
+            shutil.rmtree(pm.get_project_dir(pname), ignore_errors=True)
 
 
 # ============ E：失败/重试一致性——永久失败 -> blocked -> 状态一致（无双 commit/无双 execution）============
@@ -293,10 +314,13 @@ def test_soak_e_char_sync_failure_consistent_blocked(client, monkeypatch):
         assert ch is not None and ch.views == {}, \
             f"失败不应落半成品 views: {ch.views if ch else None}"
     finally:
-        deps.agnes_client = real_agnes
-        deps._rehost_host = real_rehost
-        import shutil
-        shutil.rmtree(pm.get_project_dir(pname), ignore_errors=True)
+        try:
+            _drain_owned_background(client, pm.get_project_dir(pname))
+        finally:
+            deps.agnes_client = real_agnes
+            deps._rehost_host = real_rehost
+            import shutil
+            shutil.rmtree(pm.get_project_dir(pname), ignore_errors=True)
 
 
 # ============ C：项目隔离——A/B 同角色名，A execution 不串 B ============
@@ -341,11 +365,15 @@ def test_soak_c_project_isolation(client, monkeypatch):
         assert len(fake.calls) == 3, \
             f"应仅 A 3 次调用，得 {len(fake.calls)}（B 被串生成？）: {fake.calls}"
     finally:
-        deps.agnes_client = real_agnes
-        deps._rehost_host = real_rehost
-        import shutil
-        shutil.rmtree(pm.get_project_dir("_test_7cs_isoA"), ignore_errors=True)
-        shutil.rmtree(pm.get_project_dir("_test_7cs_isoB"), ignore_errors=True)
+        try:
+            _drain_owned_background(client, pm.get_project_dir("_test_7cs_isoA"),
+                                    pm.get_project_dir("_test_7cs_isoB"))
+        finally:
+            deps.agnes_client = real_agnes
+            deps._rehost_host = real_rehost
+            import shutil
+            shutil.rmtree(pm.get_project_dir("_test_7cs_isoA"), ignore_errors=True)
+            shutil.rmtree(pm.get_project_dir("_test_7cs_isoB"), ignore_errors=True)
 
 
 # ============ D：角色重生保留旧生产资产（char-sync 只写 Character.views，不级联删 shot 资产）============
@@ -422,7 +450,10 @@ def test_soak_d_char_sync_preserves_old_shot_assets(client, monkeypatch):
         # 仅 3 次（views 再生一组；shot 资产未被 char-sync 触及 -> 不增调用）
         assert len(fake.calls) == 3, f"应仅 3 次 char views 调用，得 {len(fake.calls)}（shot 被串生成？）"
     finally:
-        deps.agnes_client = real_agnes
-        deps._rehost_host = real_rehost
-        import shutil
-        shutil.rmtree(pm.get_project_dir(pname), ignore_errors=True)
+        try:
+            _drain_owned_background(client, pm.get_project_dir(pname))
+        finally:
+            deps.agnes_client = real_agnes
+            deps._rehost_host = real_rehost
+            import shutil
+            shutil.rmtree(pm.get_project_dir(pname), ignore_errors=True)
