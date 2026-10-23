@@ -34,6 +34,13 @@ def validate_task(task):
     return nonce, prompt
 
 
+def task_enabled(task):
+    """Explicitly held tasks remain evidence, without authorizing generation."""
+    if not isinstance(task, dict) or type(task.get("enabled", True)) is not bool:
+        raise ValueError("enabled must be a JSON boolean")
+    return task.get("enabled", True)
+
+
 def request_digest(prompt, model):
     payload = {"prompt": prompt, "model": model, "mode": "t2v", "duration_s": 5}
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()

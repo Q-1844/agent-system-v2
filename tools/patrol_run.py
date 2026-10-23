@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 
 from tools.video_task_state import (ProductionCheckpoint, request_digest,
-                                   task_index, validate_task, verified_record)
+                                   task_enabled, task_index, validate_task, verified_record)
 
 
 def already_produced(token, nonce, prompt=None):
@@ -46,7 +46,10 @@ def main():
     prompts, conflicts = {}, set()
     for path in pending:
         try:
-            nonce, prompt = validate_task(json.loads(Path(path).read_text(encoding="utf-8")))
+            task = json.loads(Path(path).read_text(encoding="utf-8"))
+            if not task_enabled(task):
+                continue
+            nonce, prompt = validate_task(task)
             if nonce in prompts and prompts[nonce] != prompt:
                 conflicts.add(nonce)
             prompts[nonce] = prompt
@@ -56,7 +59,12 @@ def main():
     for path in pending:
         item = {"file": path}
         try:
-            nonce, prompt = validate_task(json.loads(Path(path).read_text(encoding="utf-8")))
+            task = json.loads(Path(path).read_text(encoding="utf-8"))
+            if not task_enabled(task):
+                item["status"] = "DEFERRED"
+                result["skipped"] += 1
+                continue
+            nonce, prompt = validate_task(task)
             item["nonce"] = nonce
             if nonce in conflicts:
                 raise ValueError("duplicate nonce has conflicting prompts")

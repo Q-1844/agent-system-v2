@@ -7,7 +7,7 @@ import os
 import sys
 from pathlib import Path
 
-from tools.video_task_state import task_index, validate_nonce, validate_task, verified_record
+from tools.video_task_state import task_enabled, task_index, validate_nonce, validate_task, verified_record
 
 
 def needs_media(mode, token, *, nonce="", pending_dir=Path("tasks/pending")):
@@ -16,8 +16,9 @@ def needs_media(mode, token, *, nonce="", pending_dir=Path("tasks/pending")):
             return True  # the producer will allocate a fresh immutable nonce
         nonces = [validate_nonce(nonce)]
     elif mode == "patrol":
-        nonces = [validate_task(json.loads(p.read_text(encoding="utf-8")))[0]
-                  for p in sorted(pending_dir.glob("*.json"))]
+        tasks = [json.loads(p.read_text(encoding="utf-8"))
+                 for p in sorted(pending_dir.glob("*.json"))]
+        nonces = [validate_task(t)[0] for t in tasks if task_enabled(t)]
     else:
         raise ValueError("expected e2e or patrol")
     for task_nonce in nonces:
