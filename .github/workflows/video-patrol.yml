@@ -1,7 +1,10 @@
 name: video-patrol
 
-# Existing single-clip queue; no A-repo writes or self-trigger loop.
+# Existing single-clip queue; no A-repo git writes.
 # GitHub cron is best-effort. The run event and task outcomes are evidence.
+# Since 2026-10-24 this patrol also sweeps dead-link full films: checkpoints
+# left in a resumable phase whose Actions run died get one bounded dispatch
+# hop (patrol_dispatch, hop cap + AWAITING_HUMAN) — see tools/resume_patrol.py.
 on:
   schedule:
     - cron: '7,27,47 * * * *'  # every 20 min, away from the start of the hour
@@ -50,6 +53,13 @@ jobs:
         if: steps.work.outputs.needs_media == 'true'
         timeout-minutes: 7
         run: bash tools/install_ci_ffmpeg.sh
+
+      - name: Dead-link full-film sweep (bounded auto-resume, B)
+        env:
+          B1_ARCHIVE_TOKEN: ${{ secrets.B1_ARCHIVE_TOKEN }}
+          RESUME_DISPATCH_TOKEN: ${{ secrets.RESUME_DISPATCH_TOKEN }}
+          PYTHONPATH: .
+        run: python tools/resume_patrol.py
 
       - name: Patrol scan + produce-if-pending
         env:
