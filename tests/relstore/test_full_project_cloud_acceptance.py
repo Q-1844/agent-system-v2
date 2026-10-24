@@ -240,3 +240,50 @@ def test_cached_public_calibration_cannot_hide_a_read_only_credential(tmp_path, 
     with pytest.raises(RuntimeError, match="403"):
         asyncio.run(host.upload(fresh))
     assert len(writes) == 1 and writes[0] != cached
+
+
+# ---------- 片长档位（200 旧档零变化 / 320 续集档） ----------
+
+def test_film_profile_200_digest_matches_legacy_formula():
+    """200 档 digest 必须与旧公式逐字节一致——旧 nonce 的 resume 链生命线。"""
+    import hashlib, json as _json
+    from tools.full_project_cloud_acceptance import (FILM_PROFILES, SCENES, VIDEO_BUDGET_SECONDS,
+                                                    request_digest)
+    legacy = hashlib.sha256(_json.dumps(
+        {"scope": "full-project-180s-v1", "scenes": SCENES,
+         "video_budget_s": VIDEO_BUDGET_SECONDS}, ensure_ascii=False).encode()).hexdigest()
+    assert request_digest(200, FILM_PROFILES[200]) == legacy
+
+
+def test_film_profile_default_is_200_and_rejects_unknown():
+    from tools.full_project_cloud_acceptance import film_profile
+    assert film_profile({})[0] == 200
+    with pytest.raises(ValueError, match="unsupported film target"):
+        film_profile({"FILM_TARGET_SECONDS": "250"})
+    with pytest.raises(ValueError, match="whole seconds"):
+        film_profile({"FILM_TARGET_SECONDS": "abc"})
+
+
+def test_320s_sequel_profile_validates_eight_scenes():
+    """320 档：八段 32 镜续集剧本过规划校验，预算=384、成片门槛=300s。"""
+    from tools.full_project_cloud_acceptance import FILM_PROFILES, SEQUEL_SCENES
+    profile = FILM_PROFILES[320]
+    assert len(SEQUEL_SCENES) == profile["scene_count"] == 8
+    proj = project()
+    proj.scenes = [Scene(scene_id=f"s{i}", shots=[
+        Shot(shot_id=f"s{i}_c{j}", scene_id=f"s{i}", index=j, target_duration_s=10)
+        for j in range(1, 5)]) for i in range(1, 9)]
+    plan = validate_planned_project(proj, profile)
+    assert plan["planned_seconds"] == 320 and plan["shot_count"] == 32
+    assert profile["budget"] == 384 and profile["min_final"] == 300.0
+
+
+def test_320s_plan_rejected_under_200_profile_and_vice_versa():
+    """档位强绑定：320s 规划过不了 200 档校验（防误配，digest 之外的第二道闸）。"""
+    from tools.full_project_cloud_acceptance import FILM_PROFILES
+    proj = project()
+    proj.scenes = [Scene(scene_id=f"s{i}", shots=[
+        Shot(shot_id=f"s{i}_c{j}", scene_id=f"s{i}", index=j, target_duration_s=10)
+        for j in range(1, 5)]) for i in range(1, 9)]
+    with pytest.raises(ValueError, match="acceptance requires 5 scenes"):
+        validate_planned_project(proj, FILM_PROFILES[200])

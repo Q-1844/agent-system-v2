@@ -151,7 +151,8 @@ def sweep_nonce(nonce, b1_token, dispatch_token, ref, *, _read=None):
         return {"nonce": nonce, "action": "skip",
                 "reason": "run recently finished (A may be dispatching)"}
     result = dispatch_next_hop(dispatch_token, ref=ref,
-                               resume_run_id=run_id, task_nonce=nonce)
+                               resume_run_id=run_id, task_nonce=nonce,
+                               target_seconds=doc.get("film_target_seconds"))
     result["at"] = utc_now_ts()
     if result.get("dispatched"):
         try:  # 记录派发时间，防止下一轮巡检在子运行落账前重复派发
