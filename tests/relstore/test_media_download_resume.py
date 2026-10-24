@@ -219,3 +219,28 @@ def test_cancelled_stage_cannot_be_automatically_retried(monkeypatch):
     monkeypatch.setattr(deps,'job_queue',SimpleNamespace(find_by_origin=lambda *a:SimpleNamespace(state='cancelled')))
     with pytest.raises(RuntimeError,match='cancelled'):
         asyncio.run(SceneAutopilotManager()._enqueue_autopilot_job('p','s','last_frame','key','run'))
+
+
+def test_awaiting_human_checkpoint_is_operator_resumeable(tmp_path):
+    """回归（2026-10-24 跳5 实弹）：MAX_AUTO_HOPS 触顶置 AWAITING_HUMAN 后，
+    人工派发的恢复跳被 phase 白名单拒收（checkpoint is not a failed/interrupted
+    production run）。人工 dispatch 本身即人工介入证明，两种模式都必须放行。"""
+    stage,cp,provenance=snapshot(tmp_path)
+    cp['phase']='AWAITING_HUMAN';cp['terminal_status']='paused'
+    restored=restore_snapshot(stage,tmp_path/'runner','unit',cp,provenance)
+    assert restored['previous_video_seconds']==10
+    assert len(restored['reused_completed_videos'])==1
+
+
+def test_awaiting_human_checkpoint_is_finalize_resumeable(tmp_path,monkeypatch):
+    """AWAITING_HUMAN + finalize_only 同样放行：护栏触顶可能发生在全部镜头
+    完成但未合成时，收尾跳走 finalize-only 路径。"""
+    from tools import full_project_resume as recovery
+    monkeypatch.setattr(recovery,'validate_completed_clip',lambda *a:None)
+    stage,cp,provenance=snapshot(tmp_path)
+    cp['phase']='AWAITING_HUMAN'
+    # finalize 路径要求 summary 的 full_run_id 等身份一致，这里只验证 phase 闸门不再拦截
+    try:
+        recovery.restore_snapshot(stage,tmp_path/'runner','unit',cp,provenance,finalize_only=True)
+    except ValueError as error:
+        assert 'failed/interrupted' not in str(error)
