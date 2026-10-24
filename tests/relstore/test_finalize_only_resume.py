@@ -75,3 +75,15 @@ def test_driver_deadline_preserves_thirty_minute_outer_buffer(value,valid):
     if valid:assert runtime_deadline_minutes({'DRIVER_TIMEOUT_MINUTES':value})==int(value)
     else:
         with pytest.raises(ValueError):runtime_deadline_minutes({'DRIVER_TIMEOUT_MINUTES':value})
+
+
+@pytest.mark.parametrize('platform',['posix','windows'])
+def test_native_state_reconciliation_uses_path_parts_on_both_platforms(platform):
+    from pathlib import PurePosixPath,PureWindowsPath
+    cls=PurePosixPath if platform=='posix' else PureWindowsPath
+    root=cls('/snapshot/project' if platform=='posix' else 'C:/snapshot/project')
+    full={'status':'pausing','pause_requested':True}
+    rewritten={root/'output/project.json':{'scenes':[{'shots':[{'shot_id':'s','final_video':'v','video':{'status':'done'},'video_versions':[{'version_id':'v','video_id':'paid','status':'done'}]}]}]},
+               root/'output/full_runs/f/run.json':full}
+    recovery.reconcile_finalization(root,rewritten,{},['paid'],{'run_id':'stopped'})
+    assert full=={'status':'paused','pause_requested':False}

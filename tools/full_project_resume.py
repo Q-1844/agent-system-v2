@@ -109,7 +109,7 @@ def reconcile_finalization(project, rewritten, jobs, accepted_ids, provenance):
         job['params']['snapshot_reconciliation'] = dict(provenance)
         reconciled.append(job['job_id'])
     for path, native in rewritten.items():
-        if not (str(path).endswith('/run.json') or 'autopilot_runs' in path.parts):
+        if not (path.name == 'run.json' or 'autopilot_runs' in path.parts):
             continue
         if native.get('cancel_requested') or native.get('status') == 'cancelled':
             raise ValueError('finalize-only cannot resume cancelled work')
