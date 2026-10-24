@@ -143,7 +143,7 @@ def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, final
     full_path = project/'output/full_runs'/checkpoint['full_run_id']/'run.json'
     full = json.loads(full_path.read_text())
     if (full.get('run_id') != checkpoint['full_run_id'] or full.get('project_name') != pname
-            or full.get('status') not in ('failed', 'paused', *(('pausing', 'producing') if finalize_only else ()))):
+            or full.get('status') not in ('failed', 'paused', *(('pausing', 'producing', 'completed') if finalize_only else ()))):
         raise ValueError('native FullRun is not safely resumable')
     native_paths = [*project.glob('output/full_runs/*/run.json'),
                     *project.glob('output/production_runs/*/run.json'),

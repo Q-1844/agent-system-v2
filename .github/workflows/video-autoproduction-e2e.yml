@@ -24,6 +24,10 @@ on:
         description: '制作保险丝分钟数（30–330；为360分钟job保留至少30分钟）'
         type: number
         default: 330
+      archive_release_id:
+        description: '仅归档接续时复用已有B Release ID（保留旧资产）'
+        type: string
+        default: ''
       task_nonce:
         description: '合成任务 nonce（留空=自动时间戳）'
         required: false
@@ -106,6 +110,7 @@ jobs:
           FINALIZE_ONLY: ${{ inputs.finalize_only }}
           DRIVER_TIMEOUT_MINUTES: ${{ inputs.driver_timeout_minutes }}
           WORKFLOW_TIMEOUT_MINUTES: '360'
+          ARCHIVE_RELEASE_ID: ${{ inputs.archive_release_id }}
           GITHUB_TOKEN: ${{ github.token }}
         run: python tools/full_project_cloud_acceptance.py
 
