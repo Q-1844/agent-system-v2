@@ -110,9 +110,10 @@ class _Checkpoint:
 
 
 class _Wrapper:
-    def __init__(self, doc):
+    def __init__(self, doc, film_target_seconds=200):
         self.checkpoint = _Checkpoint(doc)
         self.persisted = []
+        self.film_target_seconds = film_target_seconds
 
     async def persist(self, **fields):
         self.persisted.append(fields)
@@ -156,6 +157,28 @@ def test_a_dispatch_records_into_checkpoint(monkeypatch):
     assert wrapper.persisted == [{"auto_resume": result}]
 
 
+def test_dispatch_forwards_film_target_seconds(monkeypatch):
+    """档位透传：target_seconds 进 inputs（防 320 片自动续跑掉回 200 档被 digest 拒）。"""
+    captured = {}
+    def fake_urlopen(req, timeout=None):
+        captured["body"] = json.loads(req.data.decode())
+        class _R:
+            status = 204
+            def read(self, n=-1):
+                return b""
+            def __enter__(self):
+                return self
+            def __exit__(self, *exc):
+                return False
+        return _R()
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    r = dispatch_next_hop("tok", ref="chore/migration-readiness",
+                          resume_run_id="123", task_nonce="n",
+                          target_seconds=320)
+    assert r["dispatched"] is True
+    assert captured["body"]["inputs"]["target_duration_seconds"] == "320"
+
+
 # ---------- B 机制（sweep_nonce 死链判定） ----------
 
 def test_b_raw_doc_shape_evaluates_phase():
@@ -186,7 +209,7 @@ def test_b_dead_beyond_grace_dispatches(monkeypatch):
         "status": "completed",
         "completed_at": "2000-01-01T00:00:00Z"})  # 远古完成时间，必超宽限
     monkeypatch.setattr(resume_patrol, "dispatch_next_hop",
-                        lambda token, ref, resume_run_id, task_nonce: {
+                        lambda token, ref, resume_run_id, task_nonce, **kw: {
                             "dispatched": True, "status": 204})
     out = resume_patrol.sweep_nonce(
         "n", "b1", "tok", "ref",

@@ -43,6 +43,61 @@ SCENES = [
     ("回收", "同一无人机带着唯一的银色记录匣返回海面救援船。四镜依次：无人机向上穿过光柱；浮出波浪；回收吊篮托起无人机；固定架里的记录匣在甲板工作灯下显露。镜头只拍设备，不出现人物。"),
 ]
 
+# 320s 续集：接着《失联深海站》——记录匣带回后数据揭示热液异常，二度下潜溯源。
+# 沿用原片纪律：同一机身外观（橙色双灯；s03 换装采样爪后机身不变）、无人物、
+# 无对白、每镜单一动作、记录匣/数据核心始终唯一。
+SEQUEL_SCENES = [
+    ("破译", "救援船数据舱内，银色记录匣接入读取架开始回传研究站数据。四镜依次：记录匣嵌入读取架卡槽；屏幕亮起数据流；进度条爬满；全息投影浮现研究站完整结构图。镜头只拍设备，不出现人物。"),
+    ("异常", "数据揭示失联源于深海热液异常。四镜依次：屏幕上热液读数标红闪烁；警报灯开始旋转；结构图上裂缝路径被高亮；无人机诊断屏列出受损部件清单。"),
+    ("整备", "同一架橙色双灯无人机在车间换装采样装备。四镜依次：机械臂为机身换装采样爪；声呐模块装入机身；双探照灯逐一亮起自检；无人机离地悬停测试。换装后机身与双灯外观保持不变。"),
+    ("二潜", "无人机重返深海奔赴旧研究站。四镜依次：船底放下无人机潜入黑暗；下潜途中经过发光生物群；探照灯照见旧站残骸；绕开变形坍塌的舱段继续下潜。"),
+    ("探源", "无人机抵达热液区寻找失联根源。四镜依次：热液喷口黑烟翻涌；机械爪伸向喷口边缘采集样本；声呐扫描裂缝深处；探照灯照亮喷口之下的异常岩层结构。"),
+    ("危局", "热液突然喷发，设备受创。四镜依次：海底震动泥沙腾起；落石击中采样架；机械臂关节迸出火花；无人机紧急转向撤离。"),
+    ("舍取", "无人机舍弃样本保住核心数据。四镜依次：机械爪松开采样架；采样架沉入烟尘；机身收紧护住数据核心；无人机冲出扰动区开始上浮。数据核心始终唯一。"),
+    ("归晓", "无人机带着完整数据在黎明返回。四镜依次：无人机穿过渐亮的深海水层；朝阳下破水而出；救援船剪影出现在海平面；数据舱屏幕定格完整坐标。镜头只拍设备，不出现人物。"),
+]
+
+# 片长档位表：只支持定义过的档位（剧本与预算强绑定，防止误配）。
+# 200 档 payload 与旧公式逐字节一致（scope/SCENES/240 不变）→ 旧 nonce 的
+# resume 链 digest 完全兼容；320 档新 scope → 新片新身份。
+FILM_PROFILES = {
+    200: {
+        "scope": "full-project-180s-v1",
+        "scenes": SCENES,
+        "story_text": "《失联深海站》：橙色双灯、双机械爪救援无人机潜入淹水的研究站，取回唯一的银色记录匣，在舱体变形中撤离并返回救援船。五段共约200秒；不重复素材，不使用静帧或循环补时长。此次只验收设备动作、跨场景生产和归档；不声称验收人物或对白一致性。",
+        "min_final": 180.0, "planned_min": 192, "planned_max": 220,
+        "budget": 240, "image_budget": 120, "text_budget": 500,
+        "scene_count": 5, "shot_min": 16, "shot_max": 28,
+    },
+    320: {
+        "scope": "full-project-320s-sequel-v1",
+        "scenes": SEQUEL_SCENES,
+        "story_text": "《深海回响》：橙色双灯、双机械爪救援无人机携记录匣返航后，数据揭示研究站失联源于深海热液异常；无人机换装采样装备二度下潜，穿越旧站残骸抵达热液区，在喷发危机中舍弃样本保住核心数据，于黎明浮出水面。八段共约320秒；不重复素材，不使用静帧或循环补时长。此次只验收设备动作、跨场景生产和归档；不声称验收人物或对白一致性。",
+        "min_final": 300.0, "planned_min": 300, "planned_max": 352,
+        "budget": 384, "image_budget": 200, "text_budget": 800,
+        "scene_count": 8, "shot_min": 24, "shot_max": 40,
+    },
+}
+
+
+def film_profile(environ=None):
+    """解析 FILM_TARGET_SECONDS 到受支持的片长档位。返回 (target, profile)。"""
+    raw = (environ or os.environ).get("FILM_TARGET_SECONDS", "200").strip()
+    try:
+        target = int(raw)
+    except (ValueError, TypeError):
+        raise ValueError('FILM_TARGET_SECONDS must be whole seconds of a supported profile') from None
+    if target not in FILM_PROFILES:
+        raise ValueError(f"unsupported film target {target}s; supported: {sorted(FILM_PROFILES)}")
+    return target, FILM_PROFILES[target]
+
+
+def request_digest(target, profile):
+    """nonce 身份指纹：scope+剧本+视频预算。200 档与旧公式逐字节一致。"""
+    payload = {"scope": profile["scope"], "scenes": profile["scenes"],
+               "video_budget_s": profile["budget"]}
+    return hashlib.sha256(json.dumps(payload, ensure_ascii=False).encode()).hexdigest()
+
 
 def utc_now():
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -78,21 +133,24 @@ def write_json(path, value):
     tmp.replace(path)
 
 
-def validate_planned_project(project):
+def validate_planned_project(project, profile=None):
+    profile = profile or FILM_PROFILES[200]
     shots = project.all_shots()
     durations = [float(s.target_duration_s or 0) for s in shots]
-    if len(project.scenes) != 5 or not 16 <= len(shots) <= 28:
-        raise ValueError("acceptance requires five scenes and 16-28 distinct shots")
+    if len(project.scenes) != profile["scene_count"] or not profile["shot_min"] <= len(shots) <= profile["shot_max"]:
+        raise ValueError(f"acceptance requires {profile['scene_count']} scenes and "
+                         f"{profile['shot_min']}-{profile['shot_max']} distinct shots")
     if any(not 4 <= d <= 11 for d in durations):
         raise ValueError("acceptance shots must each request 4-11 seconds")
     total = sum(round(d) for d in durations)
-    if not MIN_PLANNED_SECONDS <= total <= MAX_PLANNED_SECONDS:
-        raise ValueError(f"planned source duration {total}s is outside 192-220s; no media authorized")
+    if not profile["planned_min"] <= total <= profile["planned_max"]:
+        raise ValueError(f"planned source duration {total}s is outside "
+                         f"{profile['planned_min']}-{profile['planned_max']}s; no media authorized")
     return {"scene_count": len(project.scenes), "shot_count": len(shots),
             "planned_seconds": total, "durations": durations}
 
 
-def validate_final_media(path):
+def validate_final_media(path, min_final=MIN_FINAL_SECONDS):
     r = subprocess.run(["ffprobe", "-v", "error", "-show_format", "-show_streams",
                         "-of", "json", str(path)], capture_output=True, text=True,
                        check=True, timeout=60)
@@ -102,10 +160,10 @@ def validate_final_media(path):
               and not s.get("disposition", {}).get("attached_pic")]
     if len(videos) != 1:
         raise ValueError("final film must have exactly one moving video stream")
-    # A long audio track or NaN container duration cannot establish a 3-minute film.
+    # A long audio track or NaN container duration cannot establish the film length.
     duration = float(videos[0].get("duration", "nan"))
     if (not math.isfinite(duration) or not math.isfinite(container_duration)
-            or duration < MIN_FINAL_SECONDS or container_duration < MIN_FINAL_SECONDS):
+            or duration < min_final or container_duration < min_final):
         raise ValueError(f"final moving video is only {duration}s (container {container_duration}s)")
     # Full decode, not just a plausible container header. No loops or padding.
     subprocess.run(["ffmpeg", "-v", "error", "-xerror", "-i", str(path), "-f", "null", "-"],
@@ -120,7 +178,9 @@ def validate_final_media(path):
 class BoundedRealClient:
     """Forward real calls, with a CAS write-ahead journal and a hard test budget."""
 
-    def __init__(self, client, checkpoint, project_dir, evidence_dir, *, finalize_only=False):
+    def __init__(self, client, checkpoint, project_dir, evidence_dir, *, finalize_only=False,
+                 video_budget=VIDEO_BUDGET_SECONDS, image_budget=IMAGE_BUDGET,
+                 text_budget=TEXT_BUDGET, film_target_seconds=200):
         self.client, self.checkpoint = client, checkpoint
         self.project_dir, self.evidence_dir = Path(project_dir), Path(evidence_dir)
         self.lock = asyncio.Lock()
@@ -130,6 +190,8 @@ class BoundedRealClient:
         self.submission_blocked = False
         self.quota_gate_after = None  # 每日额度耗尽时的日历闸门（UTC ISO）
         self.finalize_only = finalize_only
+        self.video_budget, self.image_budget, self.text_budget = video_budget, image_budget, text_budget
+        self.film_target_seconds = film_target_seconds  # 档位透传给自动续跑派发
 
     def restore_usage(self, document):
         attempts = json.loads(json.dumps(document.get("video_attempts") or []))
@@ -148,7 +210,8 @@ class BoundedRealClient:
     def media_gate(self):
         if self.plan is None:
             from src.core.store import ProjectStore
-            self.plan = validate_planned_project(ProjectStore(self.project_dir).load())
+            profile = FILM_PROFILES.get(self.film_target_seconds)
+            self.plan = validate_planned_project(ProjectStore(self.project_dir).load(), profile)
             write_json(self.evidence_dir / "planned-duration.json", self.plan)
         return self.plan
 
@@ -162,7 +225,7 @@ class BoundedRealClient:
         if self.finalize_only:
             raise RuntimeError('finalize-only forbids new Agnes generation calls')
         self.text_calls += 1
-        if self.text_calls > TEXT_BUDGET:
+        if self.text_calls > self.text_budget:
             raise RuntimeError("acceptance text-call budget exhausted")
         return await self.client.chat(*args, **kwargs)
 
@@ -173,7 +236,7 @@ class BoundedRealClient:
             raise RuntimeError("new media submissions are paused; reconcile existing work")
         self.media_gate()
         self.image_calls += 1
-        if self.image_calls > IMAGE_BUDGET:
+        if self.image_calls > self.image_budget:
             raise RuntimeError("acceptance image budget exhausted")
         return await self.client.generate_image(*args, **kwargs)
 
@@ -186,7 +249,7 @@ class BoundedRealClient:
             raise ValueError("invalid provider duration")
         if self.submission_blocked or any(a["state"] in ("SUBMITTING", "UNKNOWN") for a in self.video_attempts):
             raise RuntimeError("unconfirmed prior submission; reconciliation required, no automatic POST")
-        if sum(a["seconds"] for a in self.video_attempts) + seconds > VIDEO_BUDGET_SECONDS:
+        if sum(a["seconds"] for a in self.video_attempts) + seconds > self.video_budget:
             raise RuntimeError("acceptance 240-second submission budget exhausted")
         attempt = {"ordinal": len(self.video_attempts) + 1, "seconds": seconds,
                    "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
@@ -377,7 +440,8 @@ async def auto_resume_next_hop(wrapper, nonce, driver_minutes):
         return {"dispatched": False, "reason": reason, "hops": hops}
     result = dispatch_next_hop(token, ref=os.environ.get("GITHUB_REF_NAME", ""),
                                resume_run_id=os.environ.get("GITHUB_RUN_ID", ""),
-                               task_nonce=nonce, driver_minutes=driver_minutes)
+                               task_nonce=nonce, driver_minutes=driver_minutes,
+                               target_seconds=wrapper.film_target_seconds)
     result["hops"] = hops
     await wrapper.persist(auto_resume=result)
     return result
@@ -397,12 +461,13 @@ async def run_acceptance(nonce, out, summary):
         raise ValueError('finalize-only requires explicit resume_run_id')
     if os.environ.get('ARCHIVE_RELEASE_ID', '').strip() and not finalize_only:
         raise ValueError('existing archive release reuse requires finalize-only')
-    summary.update(driver_timeout_minutes=driver_minutes, finalize_only=finalize_only)
+    target, profile = film_profile(os.environ)  # 档位错误 → digest 不匹配 → resume 拒绝，安全
+    summary.update(driver_timeout_minutes=driver_minutes, finalize_only=finalize_only,
+                   film_target_seconds=target)
     token, frame_token = acceptance_credentials(os.environ)
     idx = task_index(token, nonce, "full-project-production.json")
     ensure_branch(idx)
-    digest = hashlib.sha256(json.dumps({"scope": "full-project-180s-v1", "scenes": SCENES,
-                                        "video_budget_s": VIDEO_BUDGET_SECONDS}, ensure_ascii=False).encode()).hexdigest()
+    digest = request_digest(target, profile)
     cp = ProductionCheckpoint(idx, nonce, digest)
     resume_id = os.environ.get("RESUME_RUN_ID", "").strip()
     restored = None
@@ -442,8 +507,8 @@ async def run_acceptance(nonce, out, summary):
         cp.save(phase="BLOCKED_PREFLIGHT", no_new_media_submitted=True,
                 blocked_stage="frame_host_preflight", error_type=type(exc).__name__)
         raise RuntimeError(f"D frame-host preflight failed before media generation: {exc}") from exc
-    QuotaLedger.get_default(Path("cache/quota.json"), limits={"video_seconds": VIDEO_BUDGET_SECONDS,
-                                                           "images": IMAGE_BUDGET, "text_calls": TEXT_BUDGET})
+    QuotaLedger.get_default(Path("cache/quota.json"), limits={"video_seconds": profile["budget"],
+                                                           "images": profile["image_budget"], "text_calls": profile["text_budget"]})
     import deps
     import api_server
     from src.ai.full_project_autopilot import get_full_project_manager
@@ -459,13 +524,15 @@ async def run_acceptance(nonce, out, summary):
         project_dir = deps.project_manager.create_project(project_name)
         scenes = [Scene(scene_id=f"s{i:02d}", title=title,
                         summary=story + " 本段必须规划4个连续镜头，每镜10秒，总计40秒；每镜只表现上述一个动作。无人物，无对白。")
-                  for i, (title, story) in enumerate(SCENES, start=1)]
-        project = Project(name=project_name, story_text="《失联深海站》：橙色双灯、双机械爪救援无人机潜入淹水的研究站，取回唯一的银色记录匣，在舱体变形中撤离并返回救援船。五段共约200秒；不重复素材，不使用静帧或循环补时长。此次只验收设备动作、跨场景生产和归档；不声称验收人物或对白一致性。",
+                  for i, (title, story) in enumerate(profile["scenes"], start=1)]
+        project = Project(name=project_name, story_text=profile["story_text"],
                           style=StyleAnchor(art_style="photorealistic cinematic underwater rescue thriller, coherent practical machinery",
                                             palette="deep ocean blue, safety orange, warm work lights", aspect_ratio="16:9"),
-                          characters=[], scenes=scenes, next_scene_seq=6)
+                          characters=[], scenes=scenes, next_scene_seq=len(scenes) + 1)
         ProjectStore(project_dir).save(project)
-    wrapper = BoundedRealClient(deps.agnes_client, cp, project_dir, out, finalize_only=finalize_only)
+    wrapper = BoundedRealClient(deps.agnes_client, cp, project_dir, out, finalize_only=finalize_only,
+                                video_budget=profile["budget"], image_budget=profile["image_budget"],
+                                text_budget=profile["text_budget"], film_target_seconds=target)
     if restored:
         wrapper.restore_usage(previous)
         wrapper.media_gate()
@@ -480,7 +547,8 @@ async def run_acceptance(nonce, out, summary):
         full = await manager.start_run(project_name)
     summary.update(project_name=project_name, full_run_id=full.run_id,
                    project_dir=str(project_dir), source_sha=os.environ.get("GITHUB_SHA"))
-    await wrapper.persist(phase="RUNNING", project_name=project_name, full_run_id=full.run_id)
+    await wrapper.persist(phase="RUNNING", project_name=project_name, full_run_id=full.run_id,
+                           film_target_seconds=target)
     deadline, last_report = time.monotonic() + driver_minutes * 60, 0.0
     while True:
         full = manager.get_run(project_name, full.run_id)
@@ -529,8 +597,8 @@ async def run_acceptance(nonce, out, summary):
     from src.ai.project_autopilot import get_project_autopilot_manager
     child = get_project_autopilot_manager().get_run(project_name, full.production_run_id)
     summary["project_production_run"] = child.model_dump()
-    if len(child.scenes) != 5 or any(s.status != "completed" for s in child.scenes):
-        raise RuntimeError("not all five native SceneRuns completed")
+    if len(child.scenes) != profile["scene_count"] or any(s.status != "completed" for s in child.scenes):
+        raise RuntimeError(f"not all {profile['scene_count']} native SceneRuns completed")
     preparation = json.loads(Path(full.preparation_manifest_file).read_text(encoding="utf-8"))
     if any(s.get("director_source") != "generated_by_full_run" or
            s.get("production_plan_source") != "generated_by_full_run" for s in preparation["scenes"]):
@@ -556,7 +624,7 @@ async def run_acceptance(nonce, out, summary):
     summary["source_videos"] = sources
     write_json(out / "source-videos.json", sources)
     final = Path(full.final_output)
-    summary["media"] = await asyncio.to_thread(validate_final_media, final)
+    summary["media"] = await asyncio.to_thread(validate_final_media, final, profile["min_final"])
     summary["plan"] = wrapper.media_gate()
     accepted = [a for a in wrapper.video_attempts if a["state"] == "ACCEPTED"]
     if len({a["video_id"] for a in accepted}) != len(accepted):

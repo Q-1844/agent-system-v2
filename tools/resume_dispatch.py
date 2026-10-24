@@ -58,11 +58,12 @@ def auto_resume_allowed(checkpoint_doc):
 
 
 def dispatch_next_hop(token, ref, resume_run_id, task_nonce,
-                      driver_minutes=None, finalize_only=None):
+                      driver_minutes=None, finalize_only=None, target_seconds=None):
     """派发下一跳。成功返回 dispatched=True（GitHub 对 dispatch 回 204）。
 
     失败返回错误摘要——派发失败不抛异常：调用方仍按原流程收尾留证，
-    B 巡检稍后会兜底重试。返回值不含 token。
+    B 巡检稍后会兜底重试。返回值不含 token。target_seconds 透传片长档位
+    （检查点的 film_target_seconds）；档位错误会被 digest 校验拒绝，安全。
     """
     token = (token or "").strip()
     ref, resume_run_id, task_nonce = str(ref or "").strip(), str(resume_run_id or "").strip(), str(task_nonce or "").strip()
@@ -78,6 +79,8 @@ def dispatch_next_hop(token, ref, resume_run_id, task_nonce,
         inputs["driver_timeout_minutes"] = str(driver_minutes)
     if finalize_only is not None:
         inputs["finalize_only"] = "true" if finalize_only else "false"
+    if target_seconds:
+        inputs["target_duration_seconds"] = str(target_seconds)
 
     body = json.dumps({"ref": ref, "inputs": inputs}).encode()
     req = urllib.request.Request(

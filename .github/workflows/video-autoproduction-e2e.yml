@@ -29,6 +29,13 @@ on:
         description: '制作保险丝分钟数（30–330；为360分钟job保留至少30分钟）'
         type: number
         default: 330
+      target_duration_seconds:
+        description: '片长档位秒数（200=五段20镜旧片；320=八段32镜续集）'
+        type: choice
+        options:
+          - '200'
+          - '320'
+        default: '200' 
       archive_release_id:
         description: '仅归档接续时复用已有B Release ID（保留旧资产）'
         type: string
@@ -114,6 +121,7 @@ jobs:
           RESUME_RUN_ID: ${{ inputs.resume_run_id }}
           FINALIZE_ONLY: ${{ inputs.finalize_only }}
           DRIVER_TIMEOUT_MINUTES: ${{ inputs.driver_timeout_minutes }}
+          FILM_TARGET_SECONDS: ${{ inputs.target_duration_seconds }}
           WORKFLOW_TIMEOUT_MINUTES: '360'
           ARCHIVE_RELEASE_ID: ${{ inputs.archive_release_id }}
           GITHUB_TOKEN: ${{ github.token }}
