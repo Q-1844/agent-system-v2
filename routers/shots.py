@@ -826,14 +826,15 @@ async def _handler_last_frame(job, emit):
         "model": (getattr(client, "models", {}) or {}).get("image") or getattr(client, "model", None),
     }, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
     origin = job.params.get("origin_run_id")
-    pending = next((b for b in reversed(shot.last_frame_batches)
-                    if b.status != ShotStatus.DONE.value and b.origin_run_id == origin
-                    and (origin or b.batch_id == job.params.get("last_frame_receipt_batch_id"))
-                    and b.generation_basis.get("download_request_sha256") == receipt_digest
-                    and b.candidates and b.candidates[0].url), None)
-    batch_id = pending.batch_id if pending else f"lf_{uuid.uuid4().hex[:8]}"
-    if pending:
-        url, b64 = pending.candidates[0].url, None
+    intent = origin or job.params.setdefault("last_frame_receipt_intent", uuid.uuid4().hex)
+    receipt_key = hashlib.sha256(json.dumps([shot.shot_id, intent, receipt_digest]).encode()).hexdigest()
+    receipt_path = project_dir / "output" / "image_receipts" / f"{receipt_key}.json"
+    receipt = json.loads(receipt_path.read_text()) if receipt_path.exists() else None
+    if receipt is not None and (receipt.get("input_sha256") != receipt_digest or not receipt.get("url")):
+        raise RuntimeError("invalid image receipt; reconcile before regenerating")
+    batch_id = receipt["batch_id"] if receipt else f"lf_{uuid.uuid4().hex[:8]}"
+    if receipt:
+        url, b64 = receipt["url"], None
     else:
         res = await client.generate_image(
             prompt=prompt, image_refs=refs,
@@ -843,16 +844,15 @@ async def _handler_last_frame(job, emit):
         if not url and not b64:
             raise RuntimeError("尾帧生成未返回 URL/b64（sensenova 恒 b64）")
         if url:
-            # Save the paid receipt before a CDN GET. A later batch/restart with
-            # the same frozen inputs can finish downloading this exact image.
-            receipt = ImageBatch(batch_id=batch_id, kind="last_frame", created_at=_time.time(),
-                prompt_snapshot=prompt, based_on_first_frame=shot.selected_first_frame,
-                origin_run_id=origin, generation_basis={"download_request_sha256": receipt_digest},
-                candidates=[Candidate(candidate_id=f"{batch_id}_1", url=url)])
-            store.update_shot(job.shot_id, lambda current: current.last_frame_batches.append(receipt))
-            job.params["last_frame_receipt_batch_id"] = batch_id
+            # This is derived recovery evidence, never an accepted project batch.
+            # The original dependency guard still precedes every canonical commit.
+            from src.core.store import _atomic_write_json
+            receipt = {"batch_id": batch_id, "url": url, "input_sha256": receipt_digest,
+                       "origin_run_id": origin, "shot_id": shot.shot_id, "created_at": _time.time()}
+            _atomic_write_json(receipt_path, receipt)
     await emit("download", f"{shot.shot_id} 下载已有尾帧回执", 30)
-    dest = project_dir / "output" / "frames" / f"{shot.shot_id}_last.png"
+    dest = project_dir / "output" / "frames" / f"{shot.shot_id}_last_{batch_id}.png"
+    dest.parent.mkdir(parents=True, exist_ok=True)
     if b64:
         dest.write_bytes(_base64.b64decode(b64))
     else:

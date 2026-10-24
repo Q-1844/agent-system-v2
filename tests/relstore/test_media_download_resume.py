@@ -78,14 +78,16 @@ def test_tail_receipt_survives_failed_download_and_new_batch(tmp_path,monkeypatc
     async def emit(*a):pass
     def job():return SimpleNamespace(project='p',shot_id='s01_c01',params={'origin_run_id':'run'})
     with pytest.raises(httpx.ConnectTimeout):asyncio.run(routes._handler_last_frame(job(),emit))
-    pending=store.load().get_shot('s01_c01').last_frame_batches
-    assert len(pending)==1 and pending[0].candidates[0].url and pending[0].status!='done'
+    receipts=list((tmp_path/'output/image_receipts').glob('*.json'))
+    assert len(receipts)==1 and json.loads(receipts[0].read_text())['url']
+    assert store.load().get_shot('s01_c01').last_frame_batches==[]
     if changed=='first_frame':store.update_shot('s01_c01',lambda s:setattr(s,'selected_first_frame','ff2'))
     if changed=='model':provider.models={'image':'new'}
     asyncio.run(routes._handler_last_frame(job(),emit))
     saved=store.load().get_shot('s01_c01')
     assert provider.generated==(1 if changed=='unchanged' else 2)
-    assert len(saved.last_frame_batches)==(1 if changed=='unchanged' else 2)
+    assert len(saved.last_frame_batches)==1
+    assert len(list((tmp_path/'output/image_receipts').glob('*.json')))==(1 if changed=='unchanged' else 2)
     assert saved.last_frame_batches[-1].status=='done' and saved.last_frame.ready
 
 
