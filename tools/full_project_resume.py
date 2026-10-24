@@ -129,6 +129,7 @@ def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, final
             or checkpoint.get('source_sha') != provenance['source_sha']):
         raise ValueError('checkpoint belongs to a different Actions run')
     if checkpoint.get('phase') not in ('FAILED', 'RUNNING', 'RESTORED', 'BLOCKED_PREFLIGHT',
+                                      'AWAITING_HUMAN',
                                       *(('PAUSING', 'INTERRUPTED') if finalize_only else ())):
         raise ValueError('checkpoint is not a failed/interrupted production run')
     summary = json.loads((staging/f'e2e_run/{nonce}/summary.json').read_text())
