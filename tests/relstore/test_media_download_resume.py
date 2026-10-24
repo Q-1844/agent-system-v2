@@ -54,7 +54,7 @@ def test_download_failure_preserves_old_file(tmp_path,monkeypatch,status,expecte
     assert not list(tmp_path.glob('*.part'))
 
 
-@pytest.mark.parametrize('changed', [False,True])
+@pytest.mark.parametrize('changed', ['unchanged','first_frame','model'])
 def test_tail_receipt_survives_failed_download_and_new_batch(tmp_path,monkeypatch,changed):
     import routers.shots as routes
     store=ProjectStore(tmp_path)
@@ -63,6 +63,7 @@ def test_tail_receipt_survives_failed_download_and_new_batch(tmp_path,monkeypatc
     store.save(Project(name='p',scenes=[Scene(scene_id='s01',shots=[shot])]))
     class Provider:
         generated=0;downloads=0
+        models={'image':'original'}
         async def generate_image(self,**kw):
             self.generated+=1;return {'url':f'https://cdn.invalid/image{self.generated}.png'}
         async def download(self,url,dest):
@@ -79,11 +80,12 @@ def test_tail_receipt_survives_failed_download_and_new_batch(tmp_path,monkeypatc
     with pytest.raises(httpx.ConnectTimeout):asyncio.run(routes._handler_last_frame(job(),emit))
     pending=store.load().get_shot('s01_c01').last_frame_batches
     assert len(pending)==1 and pending[0].candidates[0].url and pending[0].status!='done'
-    if changed:store.update_shot('s01_c01',lambda s:setattr(s,'selected_first_frame','ff2'))
+    if changed=='first_frame':store.update_shot('s01_c01',lambda s:setattr(s,'selected_first_frame','ff2'))
+    if changed=='model':provider.models={'image':'new'}
     asyncio.run(routes._handler_last_frame(job(),emit))
     saved=store.load().get_shot('s01_c01')
-    assert provider.generated==(2 if changed else 1)
-    assert len(saved.last_frame_batches)==(2 if changed else 1)
+    assert provider.generated==(1 if changed=='unchanged' else 2)
+    assert len(saved.last_frame_batches)==(1 if changed=='unchanged' else 2)
     assert saved.last_frame_batches[-1].status=='done' and saved.last_frame.ready
 
 

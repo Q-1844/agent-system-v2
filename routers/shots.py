@@ -822,6 +822,8 @@ async def _handler_last_frame(job, emit):
         "prompt": prompt, "refs": refs, "provider": provider,
         "size_tier": project.style.size_tier or "1K", "ratio": project.style.aspect_ratio or "16:9",
         "based_on_first_frame": shot.selected_first_frame,
+        "bound_basis": dict(bound_last.basis) if bound_last else None,
+        "model": (getattr(client, "models", {}) or {}).get("image") or getattr(client, "model", None),
     }, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
     origin = job.params.get("origin_run_id")
     pending = next((b for b in reversed(shot.last_frame_batches)
