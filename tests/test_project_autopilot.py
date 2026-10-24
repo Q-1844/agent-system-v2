@@ -39,6 +39,13 @@ from src.ai.project_autopilot import (
 PROJECT_NAME = "_test_project_autopilot"
 
 
+@pytest.fixture(autouse=True)
+def _unique_project_namespace(monkeypatch):
+    # TestClient controllers outlive individual HTTP responses. A fresh project
+    # name prevents an old fixture's late callback touching the next fixture.
+    monkeypatch.setitem(globals(), "PROJECT_NAME", f"_test_project_autopilot_{uuid.uuid4().hex[:8]}")
+
+
 # ============ FakeAgnes（真小 mp4）/ FakeRehost ============
 _FAKE_MP4_BYTES = None
 
