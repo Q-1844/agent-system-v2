@@ -270,6 +270,22 @@ async def pause_and_drain(manager, project_name, run_id, wrapper, queue, *, grac
         await asyncio.sleep(3)
 
 
+def ensure_archive_input(project_dir, nonce):
+    """Preserve real input; otherwise materialize the actual canonical story source."""
+    project_dir = Path(project_dir)
+    if any(p.is_file() for p in (project_dir/'input').rglob('*')):
+        return
+    canonical = json.loads((project_dir/'output/project.json').read_text(encoding='utf-8'))
+    scenes = [{k: scene.get(k) for k in ('scene_id', 'title', 'summary')}
+              for scene in canonical.get('scenes', [])]
+    if not (canonical.get('story_text') or '').strip() or not scenes or any(not s.get('summary') for s in scenes):
+        raise ValueError('no real input or canonical story source available for full archival')
+    write_json(project_dir/'input/cloud-acceptance-source.json', {
+        'schema_version': 1, 'provenance': 'materialized_from_canonical_project_source',
+        'nonce': nonce, 'project_name': canonical['name'],
+        'story_text': canonical['story_text'], 'scenes': scenes, 'style': canonical.get('style')})
+
+
 def archive_completed_project(token, nonce, project_dir, final_path, evidence_dir, source_sha):
     from tools.e2e_autonomous_run import B1GitHubCas, sha256_file
     from tools.relstore import archive_campaign, restore_campaign
@@ -279,28 +295,39 @@ def archive_completed_project(token, nonce, project_dir, final_path, evidence_di
 
     adapter = GitHubReleaseAdapter.armed("Q-1844", "agent-system-v2-rundata", token, HttpxTransport())
     tag = f"full-project/{nonce}"
-    release = adapter.create_release(tag, name=f"Full project >=180s {nonce}", draft=True,
-                                     target_commitish="main")
+    existing_id = os.environ.get('ARCHIVE_RELEASE_ID', '').strip()
+    if existing_id:
+        if not existing_id.isdigit():
+            raise ValueError('archive release ID must be numeric')
+        existing = adapter.get_release(existing_id)
+        if not existing or existing.get('tag_name') != tag:
+            raise ValueError('existing release belongs to a different project')
+        release_id = existing_id
+    else:
+        release_id = adapter.create_release(tag, name=f"Full project >=180s {nonce}", draft=True,
+                                            target_commitish="main").id
     media_sha = sha256_file(final_path)
-    media = adapter.upload_asset_with_recovery(release.id, "final.mp4", final_path.read_bytes(), media_sha)
+    media = adapter.upload_asset_with_recovery(release_id, "final.mp4", final_path.read_bytes(), media_sha)
     if hashlib.sha256(adapter.download_asset_authenticated(media.id)).hexdigest() != media_sha:
         raise RuntimeError("final MP4 re-download SHA mismatch")
     opdir = evidence_dir / "archive"
+    ensure_archive_input(project_dir, nonce)
     archive_campaign.plan(project_dir=project_dir, opdir=opdir, operation_id=f"archive-{nonce}",
                           project_id=nonce, revision=1, lifecycle_status="completed",
                           source_code_commit=source_sha)
     packaged = archive_campaign.package(opdir)
     package_path = Path(packaged["package"]["path"])
     package_sha = packaged["package"]["sha256"]
-    package = adapter.upload_asset_with_recovery(release.id, "project.tar", package_path.read_bytes(), package_sha)
+    package_name = f"project-{os.environ.get('GITHUB_RUN_ID') or package_sha[:12]}.tar" if existing_id else "project.tar"
+    package = adapter.upload_asset_with_recovery(release_id, package_name, package_path.read_bytes(), package_sha)
     redownload = adapter.download_asset_authenticated(package.id)
     downloaded = evidence_dir / "redownload-project.tar"
     downloaded.write_bytes(redownload)
     restored = restore_campaign.restore_package(downloaded, evidence_dir / "restore-check",
                                                 expected_sha256=package_sha)
-    if restored["restorable_level"] != "full" or restored["missing_required"]:
-        raise RuntimeError("project snapshot did not pass full restore verification")
     write_json(evidence_dir / "restore-report.json", restored)
+    if restored["restorable_level"] != "full" or restored["missing_required"]:
+        raise RuntimeError(f"project snapshot did not pass full restore verification: {restored.get('missing_required')}")
     registry = Registry(cas=B1GitHubCas(task_index(token, nonce, "project-registry.json")))
     registry.create_project(project_id=nonce, alias=project_dir.name, operation_id=f"{nonce}-create")
     registry.record_activity(project_id=nonce, kind="generate_video", operation_id=f"{nonce}-activity")
@@ -308,7 +335,7 @@ def archive_completed_project(token, nonce, project_dir, final_path, evidence_di
     tree_fingerprint = packaged["package"]["payload"]["snapshot_fingerprint"]
     registry.begin_snapshot(project_id=nonce, snapshot_fingerprint=tree_fingerprint, operation_id=f"{nonce}-snapshot")
     ref = {"repo": "Q-1844/agent-system-v2-rundata", "release_tag": tag,
-           "release_id": release.id, "asset_id": package.id, "asset_name": "project.tar",
+           "release_id": release_id, "asset_id": package.id, "asset_name": package_name,
            "sha256": package_sha, "tree_fingerprint": tree_fingerprint,
            "bytes": len(redownload), "final_mp4_asset_id": media.id, "final_mp4_sha256": media_sha}
     registry.set_verified_restorable(project_id=nonce, archive_ref=ref, restorable_level="full",
@@ -329,6 +356,8 @@ async def run_acceptance(nonce, out, summary):
     finalize_only = os.environ.get('FINALIZE_ONLY', 'false').lower() == 'true'
     if finalize_only and not os.environ.get('RESUME_RUN_ID', '').strip():
         raise ValueError('finalize-only requires explicit resume_run_id')
+    if os.environ.get('ARCHIVE_RELEASE_ID', '').strip() and not finalize_only:
+        raise ValueError('existing archive release reuse requires finalize-only')
     summary.update(driver_timeout_minutes=driver_minutes, finalize_only=finalize_only)
     token, frame_token = acceptance_credentials(os.environ)
     idx = task_index(token, nonce, "full-project-production.json")
@@ -403,8 +432,13 @@ async def run_acceptance(nonce, out, summary):
         wrapper.media_gate()
     deps.agnes_client = wrapper
     manager = get_full_project_manager()
-    full = (await manager.resume_run(project_name, restored["full_run_id"]) if restored
-            else await manager.start_run(project_name))
+    existing_full = manager.get_run(project_name, restored['full_run_id']) if restored else None
+    if finalize_only and existing_full and existing_full.status == 'completed':
+        full = existing_full
+    elif restored:
+        full = await manager.resume_run(project_name, restored['full_run_id'])
+    else:
+        full = await manager.start_run(project_name)
     summary.update(project_name=project_name, full_run_id=full.run_id,
                    project_dir=str(project_dir), source_sha=os.environ.get("GITHUB_SHA"))
     await wrapper.persist(phase="RUNNING", project_name=project_name, full_run_id=full.run_id)
@@ -474,8 +508,13 @@ async def run_acceptance(nonce, out, summary):
     accepted = [a for a in wrapper.video_attempts if a["state"] == "ACCEPTED"]
     if len({a["video_id"] for a in accepted}) != len(accepted):
         raise RuntimeError("provider returned a duplicate video ID across submissions")
-    summary["saved"] = await asyncio.to_thread(archive_completed_project, token, nonce, project_dir,
-                                               final, out, os.environ.get("GITHUB_SHA", "unknown"))
+    try:
+        summary["saved"] = await asyncio.to_thread(archive_completed_project, token, nonce, project_dir,
+                                                   final, out, os.environ.get("GITHUB_SHA", "unknown"))
+    except Exception:
+        await wrapper.persist(phase='FAILED', terminal_status='archive_failed',
+                              error='project archival failed; inspect restore-report.json and summary')
+        raise
     await wrapper.persist(phase="COMPLETE", duration_s=summary["media"]["duration_s"], saved=summary["saved"])
     summary["status"] = "PASS"
 
