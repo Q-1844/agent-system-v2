@@ -460,6 +460,10 @@ def test_case5_compose_failure_retry(project_2scenes, fake_agnes_swap, client):
     orig = ProjectProductionManager._compose_sync
 
     def failing(self, project_name, run, manifest):
+        # Other fixture controllers can finish on the shared TestClient loop.
+        # Inject this failure only into this test's project.
+        if project_name != PROJECT_NAME:
+            return orig(self, project_name, run, manifest)
         calls["n"] += 1
         if calls["n"] == 1:
             raise RuntimeError("simulated compose failure")

@@ -818,16 +818,43 @@ async def _handler_last_frame(job, emit):
     provider = (job.params.get("image_provider") or "agnes").lower()
     client = deps.get_sensenova_image_client() \
         if provider == "sensenova" else get_agnes_client()
-    res = await client.generate_image(
-        prompt=prompt, image_refs=refs,
-        size_tier=project.style.size_tier or "1K", ratio=project.style.aspect_ratio or "16:9")
-    url = res.get("url")
-    b64 = res.get("b64")
-    if not url and not b64:
-        raise RuntimeError("尾帧生成未返回 URL/b64（sensenova 恒 b64）")
-    dest = project_dir / "output" / "frames" / f"{shot.shot_id}_last.png"
+    receipt_digest = hashlib.sha256(json.dumps({
+        "prompt": prompt, "refs": refs, "provider": provider,
+        "size_tier": project.style.size_tier or "1K", "ratio": project.style.aspect_ratio or "16:9",
+        "based_on_first_frame": shot.selected_first_frame,
+        "bound_basis": dict(bound_last.basis) if bound_last else None,
+        "model": (getattr(client, "models", {}) or {}).get("image") or getattr(client, "model", None),
+    }, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    origin = job.params.get("origin_run_id")
+    intent = origin or job.params.setdefault("last_frame_receipt_intent", uuid.uuid4().hex)
+    receipt_key = hashlib.sha256(json.dumps([shot.shot_id, intent, receipt_digest]).encode()).hexdigest()
+    receipt_path = project_dir / "output" / "image_receipts" / f"{receipt_key}.json"
+    receipt = json.loads(receipt_path.read_text()) if receipt_path.exists() else None
+    if receipt is not None and (receipt.get("input_sha256") != receipt_digest or not receipt.get("url")):
+        raise RuntimeError("invalid image receipt; reconcile before regenerating")
+    batch_id = receipt["batch_id"] if receipt else f"lf_{uuid.uuid4().hex[:8]}"
+    if receipt:
+        url, b64 = receipt["url"], None
+    else:
+        res = await client.generate_image(
+            prompt=prompt, image_refs=refs,
+            size_tier=project.style.size_tier or "1K", ratio=project.style.aspect_ratio or "16:9",
+            **({"want_b64": True} if provider == "agnes" else {}))
+        url, b64 = res.get("url"), res.get("b64")
+        if not url and not b64:
+            raise RuntimeError("尾帧生成未返回 URL/b64（sensenova 恒 b64）")
+        if url:
+            # This is derived recovery evidence, never an accepted project batch.
+            # The original dependency guard still precedes every canonical commit.
+            from src.core.store import _atomic_write_json
+            receipt = {"batch_id": batch_id, "url": url, "input_sha256": receipt_digest,
+                       "origin_run_id": origin, "shot_id": shot.shot_id, "created_at": _time.time()}
+            _atomic_write_json(receipt_path, receipt)
+    await emit("download", f"{shot.shot_id} 下载已有尾帧回执", 30)
+    dest = project_dir / "output" / "frames" / f"{shot.shot_id}_last_{batch_id}.png"
+    dest.parent.mkdir(parents=True, exist_ok=True)
     if b64:
-        dest.write_bytes(_base64.b64decode(b64))   # sensenova：b64 直存
+        dest.write_bytes(_base64.b64decode(b64))
     else:
         await client.download(url, dest)
     # 写尾帧批次（基于当前 selected_first_frame）+ 设 selected_last_frame + 同步旧 last_frame
@@ -837,7 +864,6 @@ async def _handler_last_frame(job, emit):
         post_generation_basis_guard(
             ShotBindingService(project_dir, project_dir.name),
             shot.shot_id, bound_last.basis)
-    batch_id = f"lf_{uuid.uuid4().hex[:8]}"
     now = _time.time()
     cand = Candidate(candidate_id=f"{batch_id}_1", local=str(dest), url=url,
                      status=ShotStatus.DONE.value, created_at=now)
@@ -864,7 +890,11 @@ async def _handler_last_frame(job, emit):
                                                  "diagnostics": [dict(d) for d in bound_last.diagnostics]}
                                                 if bound_last else {})})
     def mut(s, b=new_batch, cid=cand.candidate_id, d=str(dest), u=url):
-        s.last_frame_batches.append(b)
+        existing = next((i for i, old in enumerate(s.last_frame_batches) if old.batch_id == b.batch_id), None)
+        if existing is None:
+            s.last_frame_batches.append(b)
+        else:
+            s.last_frame_batches[existing] = b
         s.selected_last_frame = cid
         s.last_frame.mark_done(d, u)   # 同步旧字段（管线 preflight 读旧）
     store.update_shot(job.shot_id, mut)

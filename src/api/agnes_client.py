@@ -794,19 +794,40 @@ class AgnesClient:
 
     async def download(self, url: str, dest) -> str:
         from pathlib import Path
-        dest = Path(dest); dest.parent.mkdir(parents=True, exist_ok=True)
-        # 资产 URL（platform-outputs.agnes-ai.space）是预签名 URL，
-        # 带 Authorization 头反而 401（实测），用无认证 client 下载。
-        async with httpx.AsyncClient(
-                timeout=httpx.Timeout(connect=30, read=600, write=60, pool=30),
-                follow_redirects=True, proxy=self.proxy,
-                transport=self.transport) as cli:
-            async with cli.stream("GET", url) as r:
-                r.raise_for_status()
-                with open(dest, "wb") as f:
-                    async for chunk in r.aiter_bytes(1 << 16):
-                        f.write(chunk)
-        return str(dest)
+        import os
+        import tempfile
+        dest = Path(dest)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        # Signed asset URLs use an unauthenticated client. Retrying these GETs
+        # never repeats generation; publish only a fully downloaded file.
+        for attempt in range(4):
+            fd, temporary = tempfile.mkstemp(prefix=f".{dest.name}.", suffix=".part", dir=dest.parent)
+            os.close(fd)
+            try:
+                async with httpx.AsyncClient(
+                        timeout=httpx.Timeout(connect=30, read=600, write=60, pool=30),
+                        follow_redirects=True, proxy=self.proxy,
+                        transport=self.transport) as cli:
+                    async with cli.stream("GET", url) as response:
+                        response.raise_for_status()
+                        count = 0
+                        with open(temporary, "wb") as output:
+                            async for chunk in response.aiter_bytes(1 << 16):
+                                output.write(chunk)
+                                count += len(chunk)
+                        if not count:
+                            raise httpx.RemoteProtocolError("empty generated asset")
+                os.replace(temporary, dest)
+                return str(dest)
+            except (httpx.TransportError, httpx.HTTPStatusError) as exc:
+                retryable = (not isinstance(exc, httpx.HTTPStatusError)
+                             or exc.response.status_code in (429, 500, 502, 503, 504))
+                if not retryable or attempt == 3:
+                    raise
+                log.warning("Asset GET failed (%s); retry %s/3 without regenerating", type(exc).__name__, attempt + 1)
+                await asyncio.sleep(2 ** attempt)
+            finally:
+                Path(temporary).unlink(missing_ok=True)
 
     # 阶段5 垫片已全部清理（③-e 清垫片1/2、③-b 清垫片3、更早清垫片4/5）。
     # generate_image 现只接受 size_tier/ratio，返回 {url, b64}（无 data 字段）。

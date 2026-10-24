@@ -591,6 +591,13 @@ class FullProjectManager:
             raise ValueError("Run 不存在")
         if run.status not in FRUN_RESUMABLE:
             raise ValueError(f"Run 状态 {run.status} 不可 resume")
+        if run.stage == FSTAGE_PRODUCTION and run.production_run_id:
+            manager = get_project_autopilot_manager()
+            child = manager.get_run(project_name, run.production_run_id)
+            if child is None:
+                raise ValueError("production child missing; reconciliation required")
+            if child.status in (PROD_FAILED, PROD_PAUSED):
+                await manager.resume_run(project_name, child.run_id)
         run.status = FRUN_PREPARING if run.stage in (FSTAGE_INSPECT, FSTAGE_PREPARE,
                                                      FSTAGE_FINALIZE_PREPARATION) else FRUN_PRODUCING
         run.error = None
