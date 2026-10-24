@@ -150,6 +150,8 @@ class BoundedRealClient:
         return await self.client.chat(*args, **kwargs)
 
     async def generate_image(self, *args, **kwargs):
+        if self.submission_blocked:
+            raise RuntimeError("new media submissions are paused; reconcile existing work")
         self.media_gate()
         self.image_calls += 1
         if self.image_calls > IMAGE_BUDGET:
@@ -189,6 +191,65 @@ class BoundedRealClient:
             except Exception:
                 pass
             raise
+
+
+def snapshot_settled(project_dir, attempts, queue):
+    """A parent PAUSED flag alone does not establish a recoverable snapshot."""
+    project_dir = Path(project_dir)
+    paths = [*project_dir.glob('output/full_runs/*/run.json'),
+             *project_dir.glob('output/production_runs/*/run.json'),
+             *project_dir.glob('output/ai/autopilot_runs/*.json')]
+    if not paths:
+        return False
+    try:
+        if any(json.loads(path.read_text(encoding='utf-8')).get('status') not in
+               ('paused', 'completed', 'failed', 'blocked', 'cancelled') for path in paths):
+            return False
+        if any(job.project == project_dir.name and job.state not in ('done', 'failed')
+               for job in queue.jobs.values()):
+            return False
+        if any(a.get('state') != 'ACCEPTED' or not a.get('video_id') for a in attempts):
+            return False
+        from src.core.store import ProjectStore
+        project = ProjectStore(project_dir).load()
+        versions = [v for shot in project.all_shots() for v in shot.video_versions]
+        for attempt in attempts:
+            matched = [v for v in versions if v.video_id == attempt['video_id'] and v.status == 'done']
+            if len(matched) != 1 or not matched[0].local:
+                return False
+            path = Path(matched[0].local)
+            if not path.resolve().is_relative_to(project_dir.resolve()) or not path.is_file() or not path.stat().st_size:
+                return False
+        return True
+    except (OSError, ValueError, KeyError):
+        return False
+
+
+async def pause_and_drain(manager, project_name, run_id, wrapper, queue, *, grace_seconds=900):
+    """Stop new media, let accepted work land, then record actual recoverability."""
+    wrapper.submission_blocked = True
+    await manager.request_pause(project_name, run_id)
+    await wrapper.persist(phase='PAUSING', deadline_reached=True, drain_complete=False)
+    deadline = time.monotonic() + grace_seconds
+    last_report = time.monotonic()
+    while True:
+        full = manager.get_run(project_name, run_id)
+        if snapshot_settled(wrapper.project_dir, wrapper.video_attempts, queue):
+            full = manager.get_run(project_name, run_id)
+            await wrapper.persist(phase='RUNNING' if full.status == 'completed' else 'FAILED',
+                terminal_status=None if full.status == 'completed' else full.status,
+                error=None if full.status == 'completed' else '150-minute deadline; accepted work saved',
+                drain_complete=True)
+            return True
+        if time.monotonic() >= deadline:
+            await wrapper.persist(phase='INTERRUPTED', terminal_status=full.status,
+                error='deadline drain expired; reconcile accepted work before recovery', drain_complete=False)
+            return False
+        # Keep the remote heartbeat current while a submitted task is draining.
+        if time.monotonic() - last_report >= 30:
+            await wrapper.persist(phase='PAUSING', progress={'status': full.status, 'stage': 'deadline_drain'})
+            last_report = time.monotonic()
+        await asyncio.sleep(3)
 
 
 def archive_completed_project(token, nonce, project_dir, final_path, evidence_dir, source_sha):
@@ -329,8 +390,13 @@ async def run_acceptance(nonce, out, summary):
         if full.status in ("completed", "failed", "blocked", "cancelled", "paused"):
             break
         if time.monotonic() >= deadline:
-            await manager.request_pause(project_name, full.run_id)
-            raise TimeoutError("150-minute test deadline; evidence retained, no blind restart")
+            summary.update(deadline_reached=True, provider_video_attempts=wrapper.video_attempts)
+            drained = await pause_and_drain(manager, project_name, full.run_id, wrapper, deps.job_queue)
+            full = manager.get_run(project_name, full.run_id)
+            summary.update(drain_complete=drained, full_run=full.model_dump())
+            if drained and full.status == 'completed':
+                break   # no new production; finish final-media validation and archival
+            raise TimeoutError("150-minute deadline; bounded drain finished; inspect checkpoint before recovery")
         if time.monotonic() - last_report >= 30:
             progress = {"at": utc_now(), "full_run": full.model_dump(),
                         "video_attempts": wrapper.video_attempts,

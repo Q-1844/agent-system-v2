@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "repo": "Q-1844/agent-system-v2",
+  "checkpoint_repo": "Q-1844/agent-system-v2-rundata-1",
+  "nonce": "film3m-20261023-rescue5",
+  "run_id": 40055563112,
+  "resume_from_run_id": 40053946925,
+  "expected_source_sha": "c3afe255bec6bccdb52aa8ad3e2bf98ab14db9c2",
+  "expected_request_sha256": "8b42d98b28eff6c83369555143ade3d60a28f1f69b5ddddc3a855150bced5583",
+  "expected_full_run_id": "frun_80b1bd5120",
+  "preserved_video_ids": [
+    "task_pkraULzuWocnwoTcMBlawZw0YxYohxo2",
+    "task_zdzn0NXGfj2w4tWoxefFWauIpCqvSmwC"
+  ],
+  "minimum_duration_seconds": 180,
+  "expected_shot_count": 20,
+  "video_budget_seconds": 240
+}
