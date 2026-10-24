@@ -16,6 +16,14 @@ on:
         description: '恢复已失败运行的 Actions run ID（复用原 nonce、项目与已完成视频）'
         required: false
         default: ''
+      finalize_only:
+        description: '仅对账已完成素材并合成归档，禁止 Agnes 新生成'
+        type: boolean
+        default: false
+      driver_timeout_minutes:
+        description: '制作保险丝分钟数（30–330；为360分钟job保留至少30分钟）'
+        type: number
+        default: 330
       task_nonce:
         description: '合成任务 nonce（留空=自动时间戳）'
         required: false
@@ -32,7 +40,7 @@ concurrency:
 jobs:
   e2e:
     runs-on: ubuntu-24.04
-    timeout-minutes: 180
+    timeout-minutes: 360
     defaults:
       run:
         shell: bash
@@ -95,6 +103,9 @@ jobs:
           TASK_NONCE: ${{ inputs.task_nonce }}
           AGNES_VIDEO_INFLIGHT: '1'
           RESUME_RUN_ID: ${{ inputs.resume_run_id }}
+          FINALIZE_ONLY: ${{ inputs.finalize_only }}
+          DRIVER_TIMEOUT_MINUTES: ${{ inputs.driver_timeout_minutes }}
+          WORKFLOW_TIMEOUT_MINUTES: '360'
           GITHUB_TOKEN: ${{ github.token }}
         run: python tools/full_project_cloud_acceptance.py
 
