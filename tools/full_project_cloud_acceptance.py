@@ -22,6 +22,17 @@ VIDEO_BUDGET_SECONDS = 240
 IMAGE_BUDGET = 120
 TEXT_BUDGET = 500
 
+
+def runtime_deadline_minutes(environ):
+    try:
+        driver = int(environ.get('DRIVER_TIMEOUT_MINUTES', '330'))
+        workflow = int(environ.get('WORKFLOW_TIMEOUT_MINUTES', '360'))
+    except (ValueError, TypeError):
+        raise ValueError('timeouts must be whole minutes') from None
+    if not 30 <= driver <= workflow - 30 or not 60 <= workflow <= 360:
+        raise ValueError('driver must leave at least 30 minutes within the <=360-minute workflow')
+    return driver
+
 SCENES = [
     ("失联", "深海研究站失去联系，一台橙色双灯、双机械爪的水下救援无人机前来取回记录匣。四镜依次：船底放下无人机；无人机下潜进入黑暗；探照灯照见破损站体；无人机靠近半开的舱门。"),
     ("入舱", "同一台橙色双灯、双机械爪无人机进入淹水的研究站。四镜依次：侧身穿过舱门；灯束扫过漂浮的纸张；避开摇摆电缆；在实验台下发现银色记录匣。"),
@@ -107,7 +118,7 @@ def validate_final_media(path):
 class BoundedRealClient:
     """Forward real calls, with a CAS write-ahead journal and a hard test budget."""
 
-    def __init__(self, client, checkpoint, project_dir, evidence_dir):
+    def __init__(self, client, checkpoint, project_dir, evidence_dir, *, finalize_only=False):
         self.client, self.checkpoint = client, checkpoint
         self.project_dir, self.evidence_dir = Path(project_dir), Path(evidence_dir)
         self.lock = asyncio.Lock()
@@ -115,6 +126,7 @@ class BoundedRealClient:
         self.image_calls = self.text_calls = 0
         self.plan = None
         self.submission_blocked = False
+        self.finalize_only = finalize_only
 
     def restore_usage(self, document):
         attempts = json.loads(json.dumps(document.get("video_attempts") or []))
@@ -144,12 +156,16 @@ class BoundedRealClient:
             await asyncio.to_thread(self.checkpoint.save, **fields)
 
     async def chat(self, *args, **kwargs):
+        if self.finalize_only:
+            raise RuntimeError('finalize-only forbids new Agnes generation calls')
         self.text_calls += 1
         if self.text_calls > TEXT_BUDGET:
             raise RuntimeError("acceptance text-call budget exhausted")
         return await self.client.chat(*args, **kwargs)
 
     async def generate_image(self, *args, **kwargs):
+        if self.finalize_only:
+            raise RuntimeError('finalize-only forbids new Agnes generation calls')
         if self.submission_blocked:
             raise RuntimeError("new media submissions are paused; reconcile existing work")
         self.media_gate()
@@ -159,6 +175,8 @@ class BoundedRealClient:
         return await self.client.generate_image(*args, **kwargs)
 
     async def create_video(self, prompt, **kwargs):
+        if self.finalize_only:
+            raise RuntimeError('finalize-only forbids new Agnes generation calls')
         self.media_gate()
         seconds = int(kwargs.get("duration_s") or 5)
         if not 4 <= seconds <= 12:
@@ -238,7 +256,7 @@ async def pause_and_drain(manager, project_name, run_id, wrapper, queue, *, grac
             full = manager.get_run(project_name, run_id)
             await wrapper.persist(phase='RUNNING' if full.status == 'completed' else 'FAILED',
                 terminal_status=None if full.status == 'completed' else full.status,
-                error=None if full.status == 'completed' else '150-minute deadline; accepted work saved',
+                error=None if full.status == 'completed' else 'configured deadline; accepted work saved',
                 drain_complete=True)
             return True
         if time.monotonic() >= deadline:
@@ -307,6 +325,11 @@ async def run_acceptance(nonce, out, summary):
     from src.core.models import Project, Scene, StyleAnchor
     from src.core.image_host import GithubPagesHost
 
+    driver_minutes = runtime_deadline_minutes(os.environ)
+    finalize_only = os.environ.get('FINALIZE_ONLY', 'false').lower() == 'true'
+    if finalize_only and not os.environ.get('RESUME_RUN_ID', '').strip():
+        raise ValueError('finalize-only requires explicit resume_run_id')
+    summary.update(driver_timeout_minutes=driver_minutes, finalize_only=finalize_only)
     token, frame_token = acceptance_credentials(os.environ)
     idx = task_index(token, nonce, "full-project-production.json")
     ensure_branch(idx)
@@ -323,7 +346,7 @@ async def run_acceptance(nonce, out, summary):
         staging = out / "source-snapshot"
         provenance = await asyncio.to_thread(download_snapshot, resume_id, nonce,
                                              os.environ.get("GITHUB_TOKEN"), staging)
-        restored = restore_snapshot(staging, Path.cwd(), nonce, previous, provenance)
+        restored = restore_snapshot(staging, Path.cwd(), nonce, previous, provenance, finalize_only=finalize_only)
         import shutil
         shutil.rmtree(staging)  # the live copy is retained; avoid nesting old snapshots in new artifacts
         summary.update(project_name=restored["project_name"], full_run_id=restored["full_run_id"],
@@ -373,7 +396,7 @@ async def run_acceptance(nonce, out, summary):
                                             palette="deep ocean blue, safety orange, warm work lights", aspect_ratio="16:9"),
                           characters=[], scenes=scenes, next_scene_seq=6)
         ProjectStore(project_dir).save(project)
-    wrapper = BoundedRealClient(deps.agnes_client, cp, project_dir, out)
+    wrapper = BoundedRealClient(deps.agnes_client, cp, project_dir, out, finalize_only=finalize_only)
     if restored:
         wrapper.restore_usage(previous)
         wrapper.media_gate()
@@ -384,7 +407,7 @@ async def run_acceptance(nonce, out, summary):
     summary.update(project_name=project_name, full_run_id=full.run_id,
                    project_dir=str(project_dir), source_sha=os.environ.get("GITHUB_SHA"))
     await wrapper.persist(phase="RUNNING", project_name=project_name, full_run_id=full.run_id)
-    deadline, last_report = time.monotonic() + 150 * 60, 0.0
+    deadline, last_report = time.monotonic() + driver_minutes * 60, 0.0
     while True:
         full = manager.get_run(project_name, full.run_id)
         if full.status in ("completed", "failed", "blocked", "cancelled", "paused"):
@@ -396,7 +419,7 @@ async def run_acceptance(nonce, out, summary):
             summary.update(drain_complete=drained, full_run=full.model_dump())
             if drained and full.status == 'completed':
                 break   # no new production; finish final-media validation and archival
-            raise TimeoutError("150-minute deadline; bounded drain finished; inspect checkpoint before recovery")
+            raise TimeoutError("configured deadline; bounded drain finished; inspect checkpoint before recovery")
         if time.monotonic() - last_report >= 30:
             progress = {"at": utc_now(), "full_run": full.model_dump(),
                         "video_attempts": wrapper.video_attempts,
