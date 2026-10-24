@@ -120,9 +120,10 @@ def sweep_once(b1_token, dispatch_token):
 
 def sweep_nonce(nonce, b1_token, dispatch_token, ref, *, _read=None):
     payload = _read if _read is not None else read_checkpoint(nonce, b1_token)
-    if not payload:
+    if not isinstance(payload, dict) or not payload:
         return {"nonce": nonce, "action": "skip", "reason": "no checkpoint readable"}
-    doc = payload.get("doc") or {}
+    # 兼容两种形态：GitHubContentsIndex 风格 {"doc": ...} 与直接文件本体。
+    doc = payload["doc"] if isinstance(payload.get("doc"), dict) else payload
     allowed, reason = auto_resume_allowed(doc)
     if not allowed:
         if "cap" in reason and doc.get("phase") != "AWAITING_HUMAN":
