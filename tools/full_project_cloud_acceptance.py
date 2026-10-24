@@ -357,6 +357,7 @@ async def run_acceptance(nonce, out, summary):
         provenance["previous_error"] = previous.get("error")
         cp.save(phase="RESTORED", github_run_id=os.environ.get("GITHUB_RUN_ID"),
                 source_sha=os.environ.get("GITHUB_SHA"), resume_from_run_id=resume_id,
+                updated_at=utc_now(),
                 terminal_status=None, error=None,
                 resume_history=[*(previous.get("resume_history") or []), provenance])
     else:
