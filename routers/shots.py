@@ -1450,12 +1450,32 @@ def _video_preflight(shot, quota, seconds, eff_ff_ready):
 
 
 async def _await_last_frame_url(store, shot_id, emit, timeout=180, interval=5):
-    """有界等待 last_frame.url_ready（keyframes 尾帧可能还在生成）。超时返回 None。"""
+    """Wait for a selected tail, publishing an already completed local image once."""
     deadline = _time.time() + timeout
     while _time.time() < deadline:
-        sh = store.load().get_shot(shot_id)
+        project = store.load()
+        sh = project.get_shot(shot_id)
         if sh and sh.last_frame.url_ready:
             return sh.last_frame.selected.url
+        selected = sh.last_frame.selected if sh else None
+        if (sh and sh.last_frame.status == "done" and selected
+                and selected.status == "done" and selected.local
+                and Path(selected.local).is_file()):
+            await emit("rehost", f"{shot_id} 尾帧托管中（补公网 URL）", 5)
+            url = await get_rehost_host().upload(selected.local)
+            if not url:
+                raise RuntimeError("尾帧托管未返回公网 URL")
+            def publish(s):
+                s.last_frame.selected.url = url
+                for batch in s.last_frame_batches:
+                    for candidate in batch.candidates:
+                        if (candidate.candidate_id == sh.selected_last_frame
+                                and candidate.local == selected.local):
+                            candidate.url = url
+            # An upload may take time. Never attach its URL to a selection that
+            # changed while awaiting the host; keep canonical and legacy in sync.
+            store.update_shot(shot_id, publish, expected_signature=project._store_signature)
+            return url
         await asyncio.sleep(interval)
     return None
 
@@ -1663,10 +1683,12 @@ async def _handler_video(job, emit):
             else "multi" if shot.link_mode == "multi" else "i2v")
     # keyframes 尾帧 in-progress 有界等待
     if not recovering_video and mode == "keyframes" and not shot.last_frame.url_ready:
+        job.params["video_pre_submit_failure"] = "last_frame_url"
         await emit("wait", f"{shot.shot_id} 等待尾帧就绪", 5)
         if not await _await_last_frame_url(store, job.shot_id, emit):
             raise RuntimeError("等待尾帧超时（尾帧尚未生成完成），请重试")
         shot = store.load().get_shot(job.shot_id)   # 取最新
+    job.params.pop("video_pre_submit_failure", None)
 
     if not recovering_video:
         # Finish asynchronous input preparation before taking the single snapshot

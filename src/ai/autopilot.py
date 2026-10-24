@@ -748,6 +748,17 @@ class SceneAutopilotManager:
                 # Explicit Run resume reuses the failed job and any image receipt.
                 # Cancelled work and ambiguous paid-video submissions stay blocked.
                 return q.retry(existing.job_id) or existing
+            if existing.state == "failed" and kind == "video":
+                receipt = getattr(existing, "params", {}) or {}
+                # Only input preparation failed, before any paid submission.
+                # The exact legacy timeout also identifies the original gate.
+                tail_not_ready = (
+                    getattr(existing, "error", None) == "等待尾帧超时（尾帧尚未生成完成），请重试"
+                    and getattr(existing, "error_stage", None) == "wait")
+                if ((receipt.get("video_pre_submit_failure") == "last_frame_url" or tail_not_ready)
+                        and not any(receipt.get(k) for k in (
+                            "provider_task_id", "submission_intent_id", "dispatch_prompt"))):
+                    return q.retry(existing.job_id) or existing
             return existing
         return q.submit(project_name, kind, shot_id,
                         origin_run_id=run_id, autopilot_stage_key=stage_key, **params)
