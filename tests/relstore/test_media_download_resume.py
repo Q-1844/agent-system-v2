@@ -160,7 +160,7 @@ def test_full_resume_reactivates_the_existing_project_child(monkeypatch):
     assert run.production_run_id=='existing'
 
 
-@pytest.mark.parametrize('kind,state,retried',[('last_frame','failed',True),('video','failed',False),('last_frame','cancelled',False)])
+@pytest.mark.parametrize('kind,state,retried',[('last_frame','failed',True),('video','failed',False)])
 def test_resume_only_requeues_failed_image_stage(monkeypatch,kind,state,retried):
     import deps
     from src.ai.autopilot import SceneAutopilotManager
@@ -191,3 +191,31 @@ def test_artifact_download_rejects_untrusted_snapshot(tmp_path,monkeypatch,corru
     monkeypatch.setattr(recovery.urllib.request,'build_opener',lambda *a:SimpleNamespace(open=open_request))
     with pytest.raises(ValueError):recovery.download_snapshot('10','unit','read-token',tmp_path/'stage')
     assert not (tmp_path/'escape').exists()
+
+
+def test_scene_resume_retries_failed_shot_without_repeating_completed_stages(monkeypatch):
+    import src.ai.autopilot as scene
+    manager=scene.SceneAutopilotManager()
+    first=scene.ShotExecutionState(shot_id='s01_c01',index=1,status='completed',completed_stages=['video'],video_version_id='old-version')
+    failed=scene.ShotExecutionState(shot_id='s01_c02',index=2,status='failed',completed_stages=['activate_plan','last_prompt'])
+    run=scene.SceneAutopilotRun(run_id='original',project_name='p',scene_id='s01',plan_id='plan',
+        plan_snapshot={'shots':[{'shot_id':'s01_c01','opening_source':'independent','link_mode':'i2v','generate_first_frame':True,'generate_last_frame':False,'requires_previous_video_end':False},
+                                {'shot_id':'s01_c02','opening_source':'independent','link_mode':'keyframes','generate_first_frame':True,'generate_last_frame':True,'requires_previous_video_end':False}]},
+        run_seed=1,status='failed',shots=[first,failed])
+    async def save(run):pass
+    monkeypatch.setattr(manager,'_load_run',lambda *a:run)
+    monkeypatch.setattr(manager,'_save_run',save)
+    monkeypatch.setattr(manager,'_launch_loop',lambda *a:None)
+    monkeypatch.setattr(scene,'dependency_ready',lambda *a:True)
+    asyncio.run(manager.resume_run('p','original'))
+    assert manager._next_ready_shot(run,None).shot_id=='s01_c02'
+    assert first.status=='completed' and first.video_version_id=='old-version'
+    assert failed.completed_stages==['activate_plan','last_prompt']
+
+
+def test_cancelled_stage_cannot_be_automatically_retried(monkeypatch):
+    import deps
+    from src.ai.autopilot import SceneAutopilotManager
+    monkeypatch.setattr(deps,'job_queue',SimpleNamespace(find_by_origin=lambda *a:SimpleNamespace(state='cancelled')))
+    with pytest.raises(RuntimeError,match='cancelled'):
+        asyncio.run(SceneAutopilotManager()._enqueue_autopilot_job('p','s','last_frame','key','run'))

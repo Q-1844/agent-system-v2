@@ -482,6 +482,12 @@ class SceneAutopilotManager:
             raise ValueError("Run 不存在")
         if run.status not in (RUN_PAUSED, RUN_FAILED, RUN_BLOCKED):
             raise ValueError(f"Run 状态 {run.status} 不可 resume")
+        # Failed shots are terminal to the scheduler until explicit resume.
+        # Keep completed stages/versions; only the failed shot becomes eligible.
+        for state in run.shots:
+            if state.status == SHOT_FAILED:
+                state.status = SHOT_PENDING
+                state.error = None
         run.status = RUN_RUNNING
         run.error = None
         run.error_code = None
@@ -736,6 +742,8 @@ class SceneAutopilotManager:
         q = get_job_queue()
         existing = q.find_by_origin(run_id, stage_key)
         if existing is not None:
+            if existing.state == "cancelled":
+                raise RuntimeError("stage was cancelled; explicit new authorization is required")
             if existing.state == "failed" and kind in ("first_frame", "last_frame"):
                 # Explicit Run resume reuses the failed job and any image receipt.
                 # Cancelled work and ambiguous paid-video submissions stay blocked.
