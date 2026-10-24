@@ -2,6 +2,11 @@ name: video-autoproduction-e2e
 
 # Real acceptance is explicit dispatch. The existing single-clip queue has its
 # own patrol; it must not be confused with this full-project >=180s test.
+# Bounded auto-resume: when the driver deadline drains cleanly, this workflow
+# dispatches the next hop itself via RESUME_DISPATCH_TOKEN (fine-grained PAT,
+# Actions write on this repo only) instead of GITHUB_TOKEN, which GitHub
+# forbids from triggering new runs. Hop cap + AWAITING_HUMAN guard lives in
+# tools/resume_dispatch.py; the video-patrol sweep is the dead-link fallback.
 on:
   workflow_dispatch:
     inputs:
@@ -112,6 +117,7 @@ jobs:
           WORKFLOW_TIMEOUT_MINUTES: '360'
           ARCHIVE_RELEASE_ID: ${{ inputs.archive_release_id }}
           GITHUB_TOKEN: ${{ github.token }}
+          RESUME_DISPATCH_TOKEN: ${{ secrets.RESUME_DISPATCH_TOKEN }}
         run: python tools/full_project_cloud_acceptance.py
 
       - name: Upload E2E evidence (MP4 + summary)
