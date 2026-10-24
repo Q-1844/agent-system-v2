@@ -15,6 +15,8 @@ import subprocess
 import time
 from pathlib import Path
 
+from tools import quota_gate
+
 MIN_FINAL_SECONDS = 180.0
 MIN_PLANNED_SECONDS = 192.0
 MAX_PLANNED_SECONDS = 220.0
@@ -126,6 +128,7 @@ class BoundedRealClient:
         self.image_calls = self.text_calls = 0
         self.plan = None
         self.submission_blocked = False
+        self.quota_gate_after = None  # 每日额度耗尽时的日历闸门（UTC ISO）
         self.finalize_only = finalize_only
 
     def restore_usage(self, document):
@@ -198,7 +201,19 @@ class BoundedRealClient:
             attempt.update(state="ACCEPTED", video_id=vid)
             await self.persist()
             return result
-        except Exception:
+        except Exception as error:
+            # 每日额度耗尽（本地账本预检或供应商 4xx 明确拒绝）：无任务号、
+            # 无扣费——意图条目安全回滚并记日历闸门；其余异常一律维持
+            # UNKNOWN 对账纪律，绝不凭猜测丢弃收据。
+            if quota_gate.classify_quota_rejection(error):
+                self.video_attempts = [a for a in self.video_attempts if a is not attempt]
+                self.submission_blocked = True
+                self.quota_gate_after = quota_gate.next_quota_reset_utc()
+                try:
+                    await self.persist(quota_resume_after=self.quota_gate_after)
+                except Exception:
+                    pass  # 闸门落账失败则保留 SUBMITTING → UNKNOWN 对账，保守处置
+                raise
             self.submission_blocked = True
             # Even a response/persistence failure must block automatic resubmission.
             # Do not overwrite a confirmed ACCEPTED ID with a fabricated rejection.
@@ -496,6 +511,19 @@ async def run_acceptance(nonce, out, summary):
     summary["provider_video_attempts"] = wrapper.video_attempts
     write_json(out / "full-run.json", full.model_dump())
     if full.status != "completed":
+        if wrapper.quota_gate_after:
+            # 按天接续：额度耗尽是可预期的干净暂停，不是生产失败。意图条目
+            # 已在提交路径回滚（无收据无扣费），落账走日历闸门等巡检拉起。
+            await wrapper.persist(phase="FAILED",
+                                   terminal_status=quota_gate.QUOTA_TERMINAL,
+                                   error="daily video quota exhausted; day-gated resume",
+                                   quota_resume_after=wrapper.quota_gate_after,
+                                   drain_complete=True)
+            summary["quota_pause"] = {"resume_after": wrapper.quota_gate_after,
+                                      "accepted_attempts": len(wrapper.video_attempts)}
+            summary["auto_resume"] = await auto_resume_next_hop(
+                wrapper, nonce, driver_minutes)  # 闸门未开时仅记录派发理由
+            raise RuntimeError(f"FullProject quota-paused until {wrapper.quota_gate_after}: {full.error}")
         await wrapper.persist(phase="FAILED", terminal_status=full.status, error=full.error)
         raise RuntimeError(f"FullProject did not complete: {full.status}: {full.error}")
     from src.ai.project_autopilot import get_project_autopilot_manager

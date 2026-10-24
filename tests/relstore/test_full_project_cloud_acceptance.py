@@ -43,21 +43,24 @@ class Journal:
 
 
 class Provider:
-    def __init__(self, journal, *, fail=False):
-        self.journal, self.fail, self.calls = journal, fail, 0
+    def __init__(self, journal, *, fail=False, quota_fail=False):
+        self.journal, self.fail, self.quota_fail, self.calls = journal, fail, quota_fail, 0
 
     async def create_video(self, prompt, **kw):
         assert self.journal.writes[-1]["video_attempts"][-1]["state"] == "SUBMITTING"
         self.calls += 1
+        if self.quota_fail:
+            # 本地账本预检的既有文案形态（src/core/quota.py：AgnesError 无 status）
+            raise RuntimeError("今日 video_seconds 配额已用 480/500，本次需 10")
         if self.fail:
             raise TimeoutError("submit outcome unknown")
         return {"video_id": f"video-{self.calls}"}
 
 
-def setup_wrapper(tmp_path, *, duration=10, fail=False, fail_at=0):
+def setup_wrapper(tmp_path, *, duration=10, fail=False, fail_at=0, quota_fail=False):
     ProjectStore(tmp_path).save(project(duration))
     journal = Journal(fail_at=fail_at)
-    provider = Provider(journal, fail=fail)
+    provider = Provider(journal, fail=fail, quota_fail=quota_fail)
     return BoundedRealClient(provider, journal, tmp_path, tmp_path / "evidence"), journal, provider
 
 
@@ -78,6 +81,49 @@ def test_ambiguous_submit_cannot_be_automatically_repeated(tmp_path):
         asyncio.run(wrapper.create_video("p", duration_s=10))
     assert provider.calls == 1
     assert journal.writes[-1]["video_attempts"][0]["state"] == "UNKNOWN"
+
+
+def test_daily_quota_rejection_rolls_back_intent_and_sets_gate(tmp_path):
+    """按天接续核心纪律：额度类确定性拒绝=无收据无扣费→意图条目回滚+
+    记日历闸门+封堵后续 POST；绝不像模糊失败那样留 UNKNOWN。"""
+    wrapper, journal, provider = setup_wrapper(tmp_path, quota_fail=True)
+    with pytest.raises(RuntimeError, match="配额已用"):
+        asyncio.run(wrapper.create_video("p", duration_s=10))
+    assert provider.calls == 1
+    # 意图条目已回滚：账面无 SUBMITTING/UNKNOWN 残留（下跳恢复无对账负担）
+    assert wrapper.video_attempts == []
+    assert all(w["video_attempts"] == [] for w in journal.writes[1:])
+    assert wrapper.submission_blocked is True
+    assert wrapper.quota_gate_after
+    assert journal.writes[-1]["quota_resume_after"] == wrapper.quota_gate_after
+    # 额度暂停期间禁止再次 POST（封堵生效，不再烧供应商调用）
+    with pytest.raises(RuntimeError, match="unconfirmed"):
+        asyncio.run(wrapper.create_video("p", duration_s=10))
+    assert provider.calls == 1
+
+
+def test_quota_gate_timestamp_is_beijing_midnight_margin(tmp_path):
+    """闸门=下一个北京 00:10（= UTC 16:10）；格式可被 parse_gate 解析。"""
+    from tools import quota_gate
+    wrapper, journal, provider = setup_wrapper(tmp_path, quota_fail=True)
+    with pytest.raises(RuntimeError, match="配额已用"):
+        asyncio.run(wrapper.create_video("p", duration_s=10))
+    parsed = quota_gate.parse_gate(wrapper.quota_gate_after)
+    assert parsed is not None
+    assert parsed.minute == quota_gate.RESET_MARGIN_MINUTES
+    # 北京 00:10 → UTC 小时 = (0 - RESET_OFFSET_HOURS) % 24
+    assert parsed.hour == (-quota_gate.RESET_OFFSET_HOURS) % 24
+    assert parsed.second == 0
+
+
+def test_uncertain_submit_still_keeps_unknown_discipline(tmp_path):
+    """对照：非额度失败（超时/结局不明）仍走 UNKNOWN 对账，闸门不介入。"""
+    wrapper, journal, provider = setup_wrapper(tmp_path, fail=True)
+    with pytest.raises(TimeoutError):
+        asyncio.run(wrapper.create_video("p", duration_s=10))
+    assert wrapper.quota_gate_after is None
+    assert journal.writes[-1]["video_attempts"][0]["state"] == "UNKNOWN"
+    assert "quota_resume_after" not in journal.writes[-1]
 
 
 def test_lost_known_id_persistence_receipt_blocks_a_second_post(tmp_path):
