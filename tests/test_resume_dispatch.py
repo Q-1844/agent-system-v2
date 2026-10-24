@@ -158,6 +158,16 @@ def test_a_dispatch_records_into_checkpoint(monkeypatch):
 
 # ---------- B 机制（sweep_nonce 死链判定） ----------
 
+def test_b_raw_doc_shape_evaluates_phase():
+    """回归：read_checkpoint 返回文件本体（无 doc 包装层）时相位必须被评估，
+    而不是被误读为 None 导致永远跳过（2026-10-24 实弹巡检发现的解析 bug）。"""
+    out = resume_patrol.sweep_nonce(
+        "n", "b1", "tok", "ref",
+        _read=_doc(phase="COMPLETE"))  # 直接传本体形态
+    assert out["action"] == "skip"
+    assert "phase COMPLETE" in out["reason"]  # 相位被真实评估而非误读 None
+
+
 def test_b_run_alive_skips(monkeypatch):
     monkeypatch.setattr(resume_patrol, "fetch_run",
                         lambda token, run_id: {"status": "in_progress"})
