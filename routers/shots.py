@@ -818,16 +818,41 @@ async def _handler_last_frame(job, emit):
     provider = (job.params.get("image_provider") or "agnes").lower()
     client = deps.get_sensenova_image_client() \
         if provider == "sensenova" else get_agnes_client()
-    res = await client.generate_image(
-        prompt=prompt, image_refs=refs,
-        size_tier=project.style.size_tier or "1K", ratio=project.style.aspect_ratio or "16:9")
-    url = res.get("url")
-    b64 = res.get("b64")
-    if not url and not b64:
-        raise RuntimeError("尾帧生成未返回 URL/b64（sensenova 恒 b64）")
+    receipt_digest = hashlib.sha256(json.dumps({
+        "prompt": prompt, "refs": refs, "provider": provider,
+        "size_tier": project.style.size_tier or "1K", "ratio": project.style.aspect_ratio or "16:9",
+        "based_on_first_frame": shot.selected_first_frame,
+    }, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    origin = job.params.get("origin_run_id")
+    pending = next((b for b in reversed(shot.last_frame_batches)
+                    if b.status != ShotStatus.DONE.value and b.origin_run_id == origin
+                    and (origin or b.batch_id == job.params.get("last_frame_receipt_batch_id"))
+                    and b.generation_basis.get("download_request_sha256") == receipt_digest
+                    and b.candidates and b.candidates[0].url), None)
+    batch_id = pending.batch_id if pending else f"lf_{uuid.uuid4().hex[:8]}"
+    if pending:
+        url, b64 = pending.candidates[0].url, None
+    else:
+        res = await client.generate_image(
+            prompt=prompt, image_refs=refs,
+            size_tier=project.style.size_tier or "1K", ratio=project.style.aspect_ratio or "16:9",
+            **({"want_b64": True} if provider == "agnes" else {}))
+        url, b64 = res.get("url"), res.get("b64")
+        if not url and not b64:
+            raise RuntimeError("尾帧生成未返回 URL/b64（sensenova 恒 b64）")
+        if url:
+            # Save the paid receipt before a CDN GET. A later batch/restart with
+            # the same frozen inputs can finish downloading this exact image.
+            receipt = ImageBatch(batch_id=batch_id, kind="last_frame", created_at=_time.time(),
+                prompt_snapshot=prompt, based_on_first_frame=shot.selected_first_frame,
+                origin_run_id=origin, generation_basis={"download_request_sha256": receipt_digest},
+                candidates=[Candidate(candidate_id=f"{batch_id}_1", url=url)])
+            store.update_shot(job.shot_id, lambda current: current.last_frame_batches.append(receipt))
+            job.params["last_frame_receipt_batch_id"] = batch_id
+    await emit("download", f"{shot.shot_id} 下载已有尾帧回执", 30)
     dest = project_dir / "output" / "frames" / f"{shot.shot_id}_last.png"
     if b64:
-        dest.write_bytes(_base64.b64decode(b64))   # sensenova：b64 直存
+        dest.write_bytes(_base64.b64decode(b64))
     else:
         await client.download(url, dest)
     # 写尾帧批次（基于当前 selected_first_frame）+ 设 selected_last_frame + 同步旧 last_frame
@@ -837,7 +862,6 @@ async def _handler_last_frame(job, emit):
         post_generation_basis_guard(
             ShotBindingService(project_dir, project_dir.name),
             shot.shot_id, bound_last.basis)
-    batch_id = f"lf_{uuid.uuid4().hex[:8]}"
     now = _time.time()
     cand = Candidate(candidate_id=f"{batch_id}_1", local=str(dest), url=url,
                      status=ShotStatus.DONE.value, created_at=now)
@@ -864,7 +888,11 @@ async def _handler_last_frame(job, emit):
                                                  "diagnostics": [dict(d) for d in bound_last.diagnostics]}
                                                 if bound_last else {})})
     def mut(s, b=new_batch, cid=cand.candidate_id, d=str(dest), u=url):
-        s.last_frame_batches.append(b)
+        existing = next((i for i, old in enumerate(s.last_frame_batches) if old.batch_id == b.batch_id), None)
+        if existing is None:
+            s.last_frame_batches.append(b)
+        else:
+            s.last_frame_batches[existing] = b
         s.selected_last_frame = cid
         s.last_frame.mark_done(d, u)   # 同步旧字段（管线 preflight 读旧）
     store.update_shot(job.shot_id, mut)

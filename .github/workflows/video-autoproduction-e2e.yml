@@ -12,12 +12,17 @@ on:
           - full-project-3min
           - existing-single-clip
         default: full-project-3min
+      resume_run_id:
+        description: '恢复已失败运行的 Actions run ID（复用原 nonce、项目与已完成视频）'
+        required: false
+        default: ''
       task_nonce:
         description: '合成任务 nonce（留空=自动时间戳）'
         required: false
         default: ''
 
 permissions:
+  actions: read   # read the exact failed run artifact for explicit recovery
   contents: read   # 仅 checkout；B1 跨仓写用 B1_ARCHIVE_TOKEN secret，不用 GITHUB_TOKEN
 
 concurrency:
@@ -89,6 +94,8 @@ jobs:
           PYTHONPATH: .
           TASK_NONCE: ${{ inputs.task_nonce }}
           AGNES_VIDEO_INFLIGHT: '1'
+          RESUME_RUN_ID: ${{ inputs.resume_run_id }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: python tools/full_project_cloud_acceptance.py
 
       - name: Upload E2E evidence (MP4 + summary)

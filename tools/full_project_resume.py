@@ -1,0 +1,156 @@
+"""Restore the exact failed acceptance snapshot; never mint a replacement task."""
+from __future__ import annotations
+import hashlib
+import io
+import json
+from pathlib import Path, PurePosixPath
+import shutil
+import stat
+import urllib.request
+import zipfile
+
+
+class _DownloadRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, message, headers, url):
+        result = super().redirect_request(request, fp, code, message, headers, url)
+        if not url.startswith('https://api.github.com/'):
+            result.remove_header('Authorization')
+        return result
+
+
+def download_snapshot(run_id, nonce, token, dest):
+    if not str(run_id).isdigit() or not token:
+        raise ValueError('resume requires the source Actions run ID and read token')
+    opener = urllib.request.build_opener(_DownloadRedirect())
+    def get(path, binary=False):
+        req = urllib.request.Request('https://api.github.com/repos/Q-1844/agent-system-v2'+path,
+            headers={'Authorization':'Bearer '+token,'Accept':'application/vnd.github+json',
+                     'User-Agent':'FullProject-snapshot-recovery'})
+        with opener.open(req, timeout=120) as response:
+            data = response.read(1024 * 1024 * 1024 + 1)
+        if len(data) > 1024 * 1024 * 1024:
+            raise ValueError('acceptance artifact exceeds recovery limit')
+        return data if binary else json.loads(data)
+    run = get(f'/actions/runs/{run_id}')
+    if run['status'] != 'completed' or run['conclusion'] not in ('failure', 'cancelled', 'timed_out'):
+        raise ValueError('source run must have stopped before recovery')
+    artifacts = get(f'/actions/runs/{run_id}/artifacts')['artifacts']
+    artifacts = [a for a in artifacts if a['name']=='e2e-evidence' and not a['expired']]
+    if len(artifacts) != 1:
+        raise ValueError('expected exactly one retained acceptance artifact')
+    artifact = artifacts[0]
+    data = get(f"/actions/artifacts/{artifact['id']}/zip", True)
+    digest = hashlib.sha256(data).hexdigest()
+    if artifact.get('digest') != 'sha256:'+digest:
+        raise ValueError('Actions artifact SHA256 mismatch')
+    dest = Path(dest)
+    if dest.exists():
+        raise FileExistsError('recovery staging directory already exists')
+    dest.mkdir(parents=True)
+    allowed = (f'projects/cloud3min_{nonce}/', f'e2e_run/{nonce}/')
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        if sum(i.file_size for i in archive.infolist()) > 2*1024**3:
+            raise ValueError('expanded acceptance snapshot exceeds recovery limit')
+        for info in archive.infolist():
+            name = PurePosixPath(info.filename)
+            if (name.is_absolute() or '..' in name.parts or '\\' in info.filename
+                    or stat.S_ISLNK(info.external_attr >> 16)
+                    or not (info.filename.startswith(allowed) or info.filename in ('cache/jobs.json','cache/quota.json'))):
+                raise ValueError('unexpected acceptance artifact member')
+            archive.extract(info, dest)
+    return {'run_id':str(run_id),'source_sha':run['head_sha'],'artifact_id':artifact['id'],
+            'artifact_sha256':digest,'artifact_bytes':len(data)}
+
+
+def restore_snapshot(staging, workspace, nonce, checkpoint, provenance):
+    """Validate identity/paid receipts before copying any state into the runner."""
+    staging, workspace = Path(staging), Path(workspace).resolve()
+    if (str(checkpoint.get('github_run_id')) != provenance['run_id']
+            or checkpoint.get('source_sha') != provenance['source_sha']):
+        raise ValueError('checkpoint belongs to a different Actions run')
+    if checkpoint.get('phase') not in ('FAILED', 'RUNNING', 'RESTORED', 'BLOCKED_PREFLIGHT'):
+        raise ValueError('checkpoint is not a failed/interrupted production run')
+    summary = json.loads((staging/f'e2e_run/{nonce}/summary.json').read_text())
+    if (summary.get('nonce') != nonce or str(summary.get('github_run_id')) != provenance['run_id']
+            or summary.get('source_sha') != provenance['source_sha']):
+        raise ValueError('snapshot summary does not match the source run')
+    pname = f'cloud3min_{nonce}'
+    project = staging/'projects'/pname
+    doc = json.loads((project/'output/project.json').read_text())
+    if doc['name'] != pname or summary.get('full_run_id') != checkpoint.get('full_run_id'):
+        raise ValueError('project/native run identity mismatch')
+    full_path = project/'output/full_runs'/checkpoint['full_run_id']/'run.json'
+    full = json.loads(full_path.read_text())
+    if (full.get('run_id') != checkpoint['full_run_id'] or full.get('project_name') != pname
+            or full.get('status') not in ('failed', 'paused')):
+        raise ValueError('native FullRun is not safely resumable')
+    native_paths = [*project.glob('output/full_runs/*/run.json'),
+                    *project.glob('output/production_runs/*/run.json'),
+                    *project.glob('output/ai/autopilot_runs/*.json')]
+    for native_path in native_paths:
+        native = json.loads(native_path.read_text())
+        if native.get('status') not in ('failed','paused','completed','blocked','cancelled'):
+            raise ValueError('active native controller must be reconciled before startup')
+    old_root = str(summary['project_dir'])
+    relative_root = 'projects/'+pname
+    if old_root != relative_root and not old_root.endswith('/'+relative_root):
+        raise ValueError('snapshot project directory is invalid')
+    roots = [relative_root]
+    if old_root != relative_root:
+        roots.append(old_root)
+    elif summary.get('working_directory'):
+        roots.append(str(PurePosixPath(summary['working_directory'])/relative_root))
+    def project_suffix(value):
+        for root in roots:
+            if value.startswith(root+'/'):
+                suffix = PurePosixPath(value[len(root)+1:])
+                if suffix.is_absolute() or '..' in suffix.parts:
+                    raise ValueError('unsafe saved local path')
+                return suffix
+        return None
+    attempts = checkpoint.get('video_attempts') or []
+    ids = [a.get('video_id') for a in attempts]
+    if (any(a.get('state')!='ACCEPTED' or not a.get('video_id')
+                or type(a.get('seconds')) is not int or not 4<=a['seconds']<=12 for a in attempts)
+            or len(ids)!=len(set(ids)) or sum(a['seconds'] for a in attempts)>240):
+        raise ValueError('unconfirmed/duplicate paid submission requires reconciliation')
+    versions = [v for sc in doc['scenes'] for shot in sc['shots'] for v in shot.get('video_versions',[])]
+    verified = []
+    for attempt in attempts:
+        matches = [v for v in versions if v.get('video_id')==attempt['video_id'] and v.get('status')=='done']
+        if len(matches)!=1:
+            raise ValueError('accepted video is not a single completed local version; reconcile first')
+        local = matches[0].get('local') or ''
+        suffix = project_suffix(local)
+        if suffix is None:
+            raise ValueError('completed video path is outside the project')
+        file = project/str(suffix)
+        if not file.resolve().is_relative_to(project.resolve()) or not file.is_file() or not file.stat().st_size:
+            raise ValueError('completed paid video is missing from the snapshot')
+        verified.append({'video_id':attempt['video_id'],'version_id':matches[0]['version_id'],
+                         'bytes':file.stat().st_size,'sha256':hashlib.sha256(file.read_bytes()).hexdigest()})
+    target = workspace/'projects'/pname
+    if target.exists() or (workspace/'cache/jobs.json').exists():
+        raise FileExistsError('recovery cannot overwrite an existing project/job queue')
+    def rebase(value):
+        if isinstance(value,str):
+            suffix = project_suffix(value)
+            if suffix is not None:
+                return str(target/str(suffix))
+        if isinstance(value,list):return [rebase(v) for v in value]
+        if isinstance(value,dict):return {k:rebase(v) for k,v in value.items()}
+        return value
+    # Validate all JSON before making the restored project visible to startup.
+    rewritten = {p:rebase(json.loads(p.read_text())) for p in project.rglob('*.json')}
+    jobs = json.loads((staging/'cache/jobs.json').read_text())
+    if any(j['project']!=pname or j['state'] not in ('done','failed') for j in jobs.values()):
+        raise ValueError('snapshot contains unrelated or unresolved queued work')
+    target.parent.mkdir(parents=True,exist_ok=True)
+    shutil.copytree(project,target)
+    for path,value in rewritten.items():
+        (target/path.relative_to(project)).write_text(json.dumps(value,ensure_ascii=False,indent=2))
+    (workspace/'cache').mkdir(exist_ok=True)
+    (workspace/'cache/jobs.json').write_text(json.dumps(rebase(jobs),ensure_ascii=False,indent=2))
+    shutil.copyfile(staging/'cache/quota.json',workspace/'cache/quota.json')
+    return {**provenance,'project_name':pname,'full_run_id':checkpoint['full_run_id'],
+            'reused_completed_videos':verified,'previous_video_seconds':sum(a['seconds'] for a in attempts)}

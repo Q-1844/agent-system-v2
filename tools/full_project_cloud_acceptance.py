@@ -116,6 +116,17 @@ class BoundedRealClient:
         self.plan = None
         self.submission_blocked = False
 
+    def restore_usage(self, document):
+        attempts = json.loads(json.dumps(document.get("video_attempts") or []))
+        if any(a.get("state") != "ACCEPTED" or not a.get("video_id")
+               or type(a.get("seconds")) is not int or not 4 <= a["seconds"] <= 12 for a in attempts):
+            raise RuntimeError("unconfirmed paid submission requires reconciliation")
+        if len({a["video_id"] for a in attempts}) != len(attempts):
+            raise RuntimeError("duplicate restored video receipt")
+        self.video_attempts = attempts
+        self.image_calls = int(document.get("image_calls") or 0)
+        self.text_calls = int(document.get("text_calls") or 0)
+
     def __getattr__(self, name):
         return getattr(self.client, name)
 
@@ -241,17 +252,38 @@ async def run_acceptance(nonce, out, summary):
     digest = hashlib.sha256(json.dumps({"scope": "full-project-180s-v1", "scenes": SCENES,
                                         "video_budget_s": VIDEO_BUDGET_SECONDS}, ensure_ascii=False).encode()).hexdigest()
     cp = ProductionCheckpoint(idx, nonce, digest)
-    if cp.current is not None:
-        raise RuntimeError("nonce already has a run; restore/reconcile existing evidence before resuming")
-    cp.save(phase="STARTING", github_run_id=os.environ.get("GITHUB_RUN_ID"), source_sha=os.environ.get("GITHUB_SHA"))
+    resume_id = os.environ.get("RESUME_RUN_ID", "").strip()
+    restored = None
+    previous = json.loads(json.dumps(cp.doc))
+    if resume_id:
+        if cp.current is None:
+            raise RuntimeError("resume nonce has no authoritative checkpoint")
+        from tools.full_project_resume import download_snapshot, restore_snapshot
+        staging = out / "source-snapshot"
+        provenance = await asyncio.to_thread(download_snapshot, resume_id, nonce,
+                                             os.environ.get("GITHUB_TOKEN"), staging)
+        restored = restore_snapshot(staging, Path.cwd(), nonce, previous, provenance)
+        import shutil
+        shutil.rmtree(staging)  # the live copy is retained; avoid nesting old snapshots in new artifacts
+        summary.update(project_name=restored["project_name"], full_run_id=restored["full_run_id"],
+                       project_dir=str(Path.cwd()/"projects"/restored["project_name"]),
+                       source_sha=os.environ.get("GITHUB_SHA"), resume=restored)
+        write_json(out / "restore-input.json", restored)
+        cp.save(phase="RESTORED", github_run_id=os.environ.get("GITHUB_RUN_ID"),
+                source_sha=os.environ.get("GITHUB_SHA"), resume_from_run_id=resume_id,
+                resume_history=[*(previous.get("resume_history") or []), provenance])
+    else:
+        if cp.current is not None:
+            raise RuntimeError("nonce already has a run; restore/reconcile existing evidence before resuming")
+        cp.save(phase="STARTING", github_run_id=os.environ.get("GITHUB_RUN_ID"), source_sha=os.environ.get("GITHUB_SHA"))
     # Check the existing image-host write path before any Agnes generation.
     host = GithubPagesHost("Q-1844", "agnes-frame-host", "main", frame_token)
     calibration = make_frame_host_calibration(out / "host-calibration.png")
     try:
         summary["frame_host_preflight_url"] = await host.upload(calibration)
     except Exception as exc:
-        summary.update(blocked_stage="frame_host_preflight", no_media_submitted=True)
-        cp.save(phase="BLOCKED_PREFLIGHT", no_media_submitted=True,
+        summary.update(blocked_stage="frame_host_preflight", no_new_media_submitted=True)
+        cp.save(phase="BLOCKED_PREFLIGHT", no_new_media_submitted=True,
                 blocked_stage="frame_host_preflight", error_type=type(exc).__name__)
         raise RuntimeError(f"D frame-host preflight failed before media generation: {exc}") from exc
     QuotaLedger.get_default(Path("cache/quota.json"), limits={"video_seconds": VIDEO_BUDGET_SECONDS,
@@ -263,20 +295,28 @@ async def run_acceptance(nonce, out, summary):
     if deps.agnes_client is None or deps.job_queue is None or deps.project_manager is None:
         raise RuntimeError("application dependencies failed to initialize")
     deps._rehost_host = host
-    project_name = f"cloud3min_{nonce}"
-    project_dir = deps.project_manager.create_project(project_name)
-    scenes = [Scene(scene_id=f"s{i:02d}", title=title,
-                    summary=story + " 本段必须规划4个连续镜头，每镜10秒，总计40秒；每镜只表现上述一个动作。无人物，无对白。")
-              for i, (title, story) in enumerate(SCENES, start=1)]
-    project = Project(name=project_name, story_text="《失联深海站》：橙色双灯、双机械爪救援无人机潜入淹水的研究站，取回唯一的银色记录匣，在舱体变形中撤离并返回救援船。五段共约200秒；不重复素材，不使用静帧或循环补时长。此次只验收设备动作、跨场景生产和归档；不声称验收人物或对白一致性。",
-                      style=StyleAnchor(art_style="photorealistic cinematic underwater rescue thriller, coherent practical machinery",
-                                        palette="deep ocean blue, safety orange, warm work lights", aspect_ratio="16:9"),
-                      characters=[], scenes=scenes, next_scene_seq=6)
-    ProjectStore(project_dir).save(project)
+    if restored:
+        project_name = restored["project_name"]
+        project_dir = deps.project_manager.get_project_dir(project_name)
+    else:
+        project_name = f"cloud3min_{nonce}"
+        project_dir = deps.project_manager.create_project(project_name)
+        scenes = [Scene(scene_id=f"s{i:02d}", title=title,
+                        summary=story + " 本段必须规划4个连续镜头，每镜10秒，总计40秒；每镜只表现上述一个动作。无人物，无对白。")
+                  for i, (title, story) in enumerate(SCENES, start=1)]
+        project = Project(name=project_name, story_text="《失联深海站》：橙色双灯、双机械爪救援无人机潜入淹水的研究站，取回唯一的银色记录匣，在舱体变形中撤离并返回救援船。五段共约200秒；不重复素材，不使用静帧或循环补时长。此次只验收设备动作、跨场景生产和归档；不声称验收人物或对白一致性。",
+                          style=StyleAnchor(art_style="photorealistic cinematic underwater rescue thriller, coherent practical machinery",
+                                            palette="deep ocean blue, safety orange, warm work lights", aspect_ratio="16:9"),
+                          characters=[], scenes=scenes, next_scene_seq=6)
+        ProjectStore(project_dir).save(project)
     wrapper = BoundedRealClient(deps.agnes_client, cp, project_dir, out)
+    if restored:
+        wrapper.restore_usage(previous)
+        wrapper.media_gate()
     deps.agnes_client = wrapper
     manager = get_full_project_manager()
-    full = await manager.start_run(project_name)
+    full = (await manager.resume_run(project_name, restored["full_run_id"]) if restored
+            else await manager.start_run(project_name))
     summary.update(project_name=project_name, full_run_id=full.run_id,
                    project_dir=str(project_dir), source_sha=os.environ.get("GITHUB_SHA"))
     await wrapper.persist(phase="RUNNING", project_name=project_name, full_run_id=full.run_id)
@@ -352,7 +392,8 @@ def main():
     nonce = validate_nonce(os.environ.get("TASK_NONCE") or f"film3m-{os.environ.get('GITHUB_RUN_ID') or time.time_ns()}")
     out = Path("e2e_run") / nonce
     summary = {"scope": "real-full-project-at-least-180s", "nonce": nonce,
-               "github_run_id": os.environ.get("GITHUB_RUN_ID"), "started_at": utc_now(), "status": "FAIL"}
+               "github_run_id": os.environ.get("GITHUB_RUN_ID"), "started_at": utc_now(), "status": "FAIL",
+               "working_directory": str(Path.cwd())}
     out.mkdir(parents=True, exist_ok=True)
     try:
         asyncio.run(run_acceptance(nonce, out, summary))

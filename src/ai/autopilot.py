@@ -736,6 +736,10 @@ class SceneAutopilotManager:
         q = get_job_queue()
         existing = q.find_by_origin(run_id, stage_key)
         if existing is not None:
+            if existing.state == "failed" and kind in ("first_frame", "last_frame"):
+                # Explicit Run resume reuses the failed job and any image receipt.
+                # Cancelled work and ambiguous paid-video submissions stay blocked.
+                return q.retry(existing.job_id) or existing
             return existing
         return q.submit(project_name, kind, shot_id,
                         origin_run_id=run_id, autopilot_stage_key=stage_key, **params)
