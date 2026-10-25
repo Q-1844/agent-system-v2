@@ -285,12 +285,17 @@ def test_t34_continuation_intent_rejected_without_llm():
     assert stage0.text_calls_used == 0  # 零预留（无任何付费前动作）
 
 
-def test_t34_normalize_rejects_continuation_request(monkeypatch):
+def test_t34_normalize_routes_continuation_and_rejects_c2(monkeypatch):
+    """C1 后：继续类意图正常解析并路由；extend/sequel 仍 NotYetWired（C2）。"""
     from tools import full_project_cloud_acceptance as acc
     env = {"PRODUCTION_REQUEST": "继续上次深海项目，把没做完的做完成",
            "SOURCE_PROJECT": "deepsea"}
-    with pytest.raises(NotYetWired):
-        acc.normalize_dispatch_input_to_task_spec("unit", environ=env)
+    spec = acc.normalize_dispatch_input_to_task_spec("unit", environ=env)
+    assert spec.intent == "complete_project" and spec.source_project == "deepsea"
+    with pytest.raises(NotYetWired):  # C2 边界未变
+        acc.normalize_dispatch_input_to_task_spec(
+            "unit", environ={"PRODUCTION_REQUEST": "给这条片子拍一个新续集",
+                             "SOURCE_PROJECT": "deepsea"})
     env2 = {"PRODUCTION_REQUEST": "拍个卫星环绕地球的视频"}
     spec = acc.normalize_dispatch_input_to_task_spec("unit", environ=env2)
     assert spec.intent == "create"

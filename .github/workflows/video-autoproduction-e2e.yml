@@ -42,6 +42,11 @@ on:
         type: string
         required: false
         default: ''
+      source_project:
+        description: '续作类意图（继续项目/补素材）的源项目名；create 模式留空'
+        type: string
+        required: false
+        default: ''
       archive_release_id:
         description: '仅归档接续时复用已有B Release ID（保留旧资产）'
         type: string
@@ -129,6 +134,7 @@ jobs:
           DRIVER_TIMEOUT_MINUTES: ${{ inputs.driver_timeout_minutes }}
           FILM_TARGET_SECONDS: ${{ inputs.target_duration_seconds }}
           PRODUCTION_REQUEST: ${{ inputs.production_request }}
+          SOURCE_PROJECT: ${{ inputs.source_project }}
           WORKFLOW_TIMEOUT_MINUTES: '360'
           ARCHIVE_RELEASE_ID: ${{ inputs.archive_release_id }}
           GITHUB_TOKEN: ${{ github.token }}

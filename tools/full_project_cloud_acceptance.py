@@ -483,13 +483,13 @@ def normalize_dispatch_input_to_task_spec(nonce, environ=None):
         raise ValueError(f"production_request 超长（>{PRODUCTION_REQUEST_MAX} 字符）")
     source_project = (env.get("SOURCE_PROJECT") or "").strip() or None
     intent, reason = suggest_intent(request, source_project=source_project)
-    if intent != "create":
+    if intent in ("extend_existing", "sequel"):
         raise NotYetWired(
-            f"任务被识别为 {intent}（{reason}）；该意图的无值守接线在 PR C1/C2 交付，"
+            f"任务被识别为 {intent}（{reason}）；该意图的无值守接线在 PR C2 交付，"
             "本阶段拒绝执行且不产生任何付费调用")
-    return TaskSpec(intent="create", request_text=request,
+    return TaskSpec(intent=intent, request_text=request,
                     duration=extract_duration_intent(request),
-                    source_project=None)
+                    source_project=source_project)
 
 
 def auto_request_profile(blueprint):
@@ -524,9 +524,166 @@ def _blueprint_to_result(blueprint, task_spec):
 
 
 async def _ensure_app_started():
-    """auto B1 阶段只依赖 agnes_client（规划 chat）；复用固定档的启动方式。"""
+    """启动 app（复用固定档的启动方式）。"""
     import api_server
     await api_server.startup()
+
+
+async def _ensure_deps_ready():
+    """按需启动 app（deps 单例）：Stage 0 物化/快照在共享段 startup 之前就要用。
+
+    修复 B2 潜伏 bug：恢复 hop（stage0 已冻结）不走规划分支 → 没有
+    _ensure_app_started() → 物化时 deps.project_manager 为 None。
+    """
+    import deps
+    if deps.project_manager is None or deps.agnes_client is None:
+        await _ensure_app_started()
+
+
+def _resolve_production_project(target, restored, project_name, profile, nonce):
+    """生产段项目目录解析。返回 (project_name, project_dir)。
+
+    - restored：快照恢复 → 项目名来自恢复信息；
+    - auto（create 已在 Stage 0 物化 / continuation 为源项目）：**绝不重建**，
+      只取目录（修复 B2 潜伏 bug：非恢复分支原样走固定档物化，对 auto 的
+      动态 profile 取 profile["scenes"] 会 KeyError）；
+    - 固定档：首次运行物化预写剧本项目（逐字节保留旧行为）。
+    """
+    import deps
+    from src.core.models import Project, Scene, StyleAnchor
+    from src.core.store import ProjectStore
+    if restored:
+        name = restored["project_name"]
+        return name, deps.project_manager.get_project_dir(name)
+    if target == AUTO_TARGET:
+        return project_name, deps.project_manager.get_project_dir(project_name)
+    name = f"cloud3min_{nonce}"
+    project_dir = deps.project_manager.create_project(name)
+    scenes = [Scene(scene_id=f"s{i:02d}", title=title,
+                    summary=story + " 本段必须规划4个连续镜头，每镜10秒，总计40秒；每镜只表现上述一个动作。无人物，无对白。")
+              for i, (title, story) in enumerate(profile["scenes"], start=1)]
+    project = Project(name=name, story_text=profile["story_text"],
+                      style=StyleAnchor(art_style="photorealistic cinematic underwater rescue thriller, coherent practical machinery",
+                                        palette="deep ocean blue, safety orange, warm work lights", aspect_ratio="16:9"),
+                      characters=[], scenes=scenes, next_scene_seq=len(scenes) + 1)
+    ProjectStore(project_dir).save(project)
+    return name, project_dir
+
+
+async def _run_continuation_acceptance(nonce, out, summary, token, task_spec):
+    """续作主链（PR C1）：complete_project / add_assets / resume_run 的执行。
+
+    与 create 的区别：
+    - 项目 = source_project（绝不新建/重命名）；故事/剧本已存在，**零规划 LLM**，
+      工作计划由项目现状确定性导出（快照 → IncrementalWorkPlan）后冻结；
+    - 执行身份 digest 覆盖（任务 + 场景清单 + 预算），跨 hop 稳定；
+    - add_assets → output_kind=asset_set：验收只看资产完备性，无时长门槛；
+      complete_project/resume_run → final_video：min_final = 0.9 × 既有规划。
+    - resume_run 的诚实边界（T05）：快照恢复机制绑定原 nonce，新任务带
+      RESUME_RUN_ID 一律拒绝并指路；不带则按项目现状继续（complete 语义）。
+    """
+    from tools.stage0_state import (STAGE0_FILENAME, Stage0Conflict, Stage0Record)
+    from tools.video_task_state import ProductionCheckpoint, task_index, validate_nonce
+    from src.ai.project_production_inspect import ProjectProductionInspect
+    from src.ai.incremental_planner import (build_incremental_workplan,
+                                            continuation_media_profile,
+                                            continuation_sidecar_budgets)
+    from src.core.store import ProjectStore
+    import deps
+
+    validate_nonce(nonce)
+    source = task_spec.source_project
+    if task_spec.intent == "resume_run" and os.environ.get("RESUME_RUN_ID", "").strip():
+        summary.update(blocked_stage="resume_run_requires_original_nonce",
+                       no_new_media_submitted=True)
+        raise RuntimeError(
+            "resume_run_id 属于原任务 nonce 的恢复链（workflow_dispatch 原 nonce + "
+            "resume_run_id）；新任务请用『继续项目』语义（不传 run id，按项目现状继续）")
+
+    await _ensure_deps_ready()
+    project_dir = deps.project_manager.get_project_dir(source)
+    snap = ProjectProductionInspect(source, project_dir).snapshot()
+    if not snap.exists:
+        summary.update(blocked_stage="source_project_missing", no_new_media_submitted=True)
+        raise RuntimeError(f"source project 不存在或不可读: {source!r}（零媒体）")
+    if any(b.startswith("ACTIVE_") for b in snap.blockers):
+        summary.update(blocked_stage="active_run_conflict", no_new_media_submitted=True)
+        raise RuntimeError(
+            f"source project 有进行中的运行（{snap.blockers}）；等它结束或先恢复它（零媒体）")
+
+    project = ProjectStore(project_dir).load()
+    workplan = build_incremental_workplan(snap, task_spec.request_text,
+                                          task_spec.intent, project_dir)
+    profile = continuation_media_profile(project)
+
+    stage0_idx = task_index(token, nonce, STAGE0_FILENAME)
+    from tools.e2e_autonomous_run import ensure_branch
+    ensure_branch(stage0_idx)
+    stage0 = Stage0Record(stage0_idx, nonce)
+    try:
+        stage0.bootstrap(task_spec)
+    except Stage0Conflict as exc:
+        summary.update(blocked_stage="stage0_identity", no_new_media_submitted=True)
+        raise RuntimeError(str(exc)) from exc
+    if stage0.plan_fingerprint is not None:
+        stage0.verify()  # 跨 hop：工作计划必须与冻结指纹一致
+        workplan = stage0.blueprint
+        summary.update(stage0_status="FROZEN_RESTORED",
+                       plan_fingerprint=stage0.plan_fingerprint)
+    else:
+        # digest 输入冻结进 workplan：budget 必须取自冻结时刻的状态
+        # （若按 live missing 秒数重算，hop-1 产出后 hop-2 会漂移 → 拒绝恢复）。
+        workplan["digest_inputs"] = {
+            "scope": "full-project-continuation-v1",
+            "scenes": [(sc.scene_id, sc.summary) for sc in snap.scenes],
+            "budget": profile["budget"]}
+        plan_fp = stage0.freeze(workplan)
+        summary.update(stage0_status="FROZEN", plan_fingerprint=plan_fp)
+    summary.update(task_spec_sha256=stage0.doc.get("task_spec_sha256"),
+                   scene_targets=workplan["scene_targets"],
+                   output_kind=workplan["output_kind"],
+                   reuse_assets=len(workplan["reuse_assets"]),
+                   generate_missing=len(workplan["generate_missing"]))
+    write_json(out / "stage0-status.json",
+               {"status": stage0.doc.get("status"),
+                "intent": task_spec.intent,
+                "task_spec_sha256": stage0.doc.get("task_spec_sha256"),
+                "plan_fingerprint": stage0.plan_fingerprint,
+                "text_calls_used": stage0.text_calls_used})
+
+    # sidecar：只补缺（已有 sidecar 不覆盖；无镜头场景给默认预算，
+    # 与 continuation_media_profile 的窗口一致）
+    from src.ai.full_project_autopilot import SCENE_BUDGETS_FILE
+    sidecar = project_dir / "output" / "ai" / SCENE_BUDGETS_FILE
+    if not sidecar.is_file():
+        budgets = continuation_sidecar_budgets(project)
+        if budgets:
+            sidecar.parent.mkdir(parents=True, exist_ok=True)
+            write_json(sidecar, {"schema_version": 1,
+                                 "plan_fingerprint": stage0.plan_fingerprint,
+                                 "scene_budgets": budgets})
+    summary.update(project_name=source, project_dir=str(project_dir))
+
+    # 绑定执行身份（digest 来自冻结 workplan 的 digest_inputs，跨 hop 稳定）
+    digest = request_digest(AUTO_TARGET, dict(workplan["digest_inputs"]))
+    idx = task_index(token, nonce, "full-project-production.json")
+    cp = ProductionCheckpoint(idx, nonce, digest)
+    previous = json.loads(json.dumps(cp.doc))
+    if cp.current is None:
+        cp.save(phase="STAGE0_BOUND", github_run_id=os.environ.get("GITHUB_RUN_ID"),
+                source_sha=os.environ.get("GITHUB_SHA"),
+                film_target_seconds=AUTO_TARGET,
+                task_spec_sha256=stage0.doc.get("task_spec_sha256"),
+                plan_fingerprint=stage0.plan_fingerprint,
+                stage0_text_calls_used=stage0.text_calls_used,
+                output_kind=workplan["output_kind"])
+    else:
+        cp.save(phase="STAGE0_BOUND", github_run_id=os.environ.get("GITHUB_RUN_ID"))
+    summary.update(execution_request_sha256=digest,
+                   stage0_text_calls_used=stage0.text_calls_used)
+    write_json(out / "stage0-workplan.json", workplan)
+    # 续作是全新 nonce：不走原 run 的快照恢复（那是原 nonce 恢复链的职责）
+    return source, profile, cp, None, previous
 
 
 async def _run_auto_acceptance(nonce, out, summary, token):
@@ -563,6 +720,9 @@ async def _run_auto_acceptance(nonce, out, summary, token):
         stage0.verify()
     else:
         task_spec = normalize_dispatch_input_to_task_spec(nonce)  # 需要 PRODUCTION_REQUEST
+    if task_spec.intent in ("complete_project", "add_assets", "resume_run"):
+        # PR C1：续作意图走独立主链（源项目 + 确定性工作计划，零规划 LLM）
+        return await _run_continuation_acceptance(nonce, out, summary, token, task_spec)
     limits = {"text_calls": 60, "image_calls": 40, "video_seconds": 240}
 
     try:
@@ -598,6 +758,7 @@ async def _run_auto_acceptance(nonce, out, summary, token):
                        plan_fingerprint=stage0.plan_fingerprint)
 
     # ---- 物化（幂等：项目已在则复用，不重建）+ scene_budgets sidecar ----
+    await _ensure_deps_ready()  # 恢复 hop 不走规划分支，这里必须确保单例在
     project_name = f"cloud3min_{nonce}"
     from src.core.models import Project, Scene, StyleAnchor
     from src.core.store import ProjectStore
@@ -794,20 +955,8 @@ async def run_acceptance(nonce, out, summary):
     if deps.agnes_client is None or deps.job_queue is None or deps.project_manager is None:
         raise RuntimeError("application dependencies failed to initialize")
     deps._rehost_host = host
-    if restored:
-        project_name = restored["project_name"]
-        project_dir = deps.project_manager.get_project_dir(project_name)
-    else:
-        project_name = f"cloud3min_{nonce}"
-        project_dir = deps.project_manager.create_project(project_name)
-        scenes = [Scene(scene_id=f"s{i:02d}", title=title,
-                        summary=story + " 本段必须规划4个连续镜头，每镜10秒，总计40秒；每镜只表现上述一个动作。无人物，无对白。")
-                  for i, (title, story) in enumerate(profile["scenes"], start=1)]
-        project = Project(name=project_name, story_text=profile["story_text"],
-                          style=StyleAnchor(art_style="photorealistic cinematic underwater rescue thriller, coherent practical machinery",
-                                            palette="deep ocean blue, safety orange, warm work lights", aspect_ratio="16:9"),
-                          characters=[], scenes=scenes, next_scene_seq=len(scenes) + 1)
-        ProjectStore(project_dir).save(project)
+    project_name, project_dir = _resolve_production_project(
+        target, restored, project_name, profile, nonce)
     wrapper = BoundedRealClient(deps.agnes_client, cp, project_dir, out, finalize_only=finalize_only,
                                 video_budget=profile["budget"], image_budget=profile["image_budget"],
                                 text_budget=profile["text_budget"], film_target_seconds=target,
@@ -903,7 +1052,25 @@ async def run_acceptance(nonce, out, summary):
     summary["source_videos"] = sources
     write_json(out / "source-videos.json", sources)
     final = Path(full.final_output)
-    summary["media"] = await asyncio.to_thread(validate_final_media, final, profile["min_final"])
+    if summary.get("output_kind") == "asset_set":
+        # PR C1（T16）：asset_set 独立验收——只看资产完备性，无时长门槛；
+        # 合成成片若存在则记录为 bonus（尽力校验，不设 min_final）。
+        from src.ai.incremental_planner import validate_asset_set
+        check = await asyncio.to_thread(validate_asset_set, project_dir)
+        summary["asset_set"] = check
+        if not check["complete"]:
+            await wrapper.persist(phase="FAILED", terminal_status="asset_set_incomplete",
+                                  error=f"missing assets: {check['missing']}")
+            raise RuntimeError(f"asset_set incomplete: {check['missing']}")
+        if final.is_file():
+            try:
+                summary["media"] = await asyncio.to_thread(validate_final_media, final, 0.0)
+            except Exception:
+                summary["media"] = {"asset_set": True, "final_bonus": True}
+        else:
+            summary["media"] = {"asset_set": True}
+    else:
+        summary["media"] = await asyncio.to_thread(validate_final_media, final, profile["min_final"])
     summary["plan"] = wrapper.media_gate()
     accepted = [a for a in wrapper.video_attempts if a["state"] == "ACCEPTED"]
     if len({a["video_id"] for a in accepted}) != len(accepted):
