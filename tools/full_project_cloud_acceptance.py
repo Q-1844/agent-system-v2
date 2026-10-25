@@ -186,7 +186,7 @@ class BoundedRealClient:
 
     def __init__(self, client, checkpoint, project_dir, evidence_dir, *, finalize_only=False,
                  video_budget=VIDEO_BUDGET_SECONDS, image_budget=IMAGE_BUDGET,
-                 text_budget=TEXT_BUDGET, film_target_seconds=200):
+                 text_budget=TEXT_BUDGET, film_target_seconds=200, auto_profile=None):
         self.client, self.checkpoint = client, checkpoint
         self.project_dir, self.evidence_dir = Path(project_dir), Path(evidence_dir)
         self.lock = asyncio.Lock()
@@ -198,6 +198,7 @@ class BoundedRealClient:
         self.finalize_only = finalize_only
         self.video_budget, self.image_budget, self.text_budget = video_budget, image_budget, text_budget
         self.film_target_seconds = film_target_seconds  # 档位透传给自动续跑派发
+        self.auto_profile = auto_profile  # PR B2：auto 动态 profile（冻结蓝图导出）
 
     def restore_usage(self, document):
         attempts = json.loads(json.dumps(document.get("video_attempts") or []))
@@ -216,7 +217,7 @@ class BoundedRealClient:
     def media_gate(self):
         if self.plan is None:
             from src.core.store import ProjectStore
-            profile = FILM_PROFILES.get(self.film_target_seconds)
+            profile = self.auto_profile or FILM_PROFILES.get(self.film_target_seconds)
             self.plan = validate_planned_project(ProjectStore(self.project_dir).load(), profile)
             write_json(self.evidence_dir / "planned-duration.json", self.plan)
         return self.plan
@@ -529,23 +530,39 @@ async def _ensure_app_started():
 
 
 async def _run_auto_acceptance(nonce, out, summary, token):
-    """auto 模式主链（B1 边界：到执行身份绑定 + 显式停止为止，生产接线属 PR B2）。
+    """auto 模式主链（PR B2：Stage 0 全链 + 恢复/物化 + 动态 profile）。
 
     事务序列（P0-2）：
       bootstrap stage0（任务身份）→ plan（文本预留）→ freeze（原子）→
-      materialize（本地幂等）→ bind ProductionCheckpoint（执行 digest）。
-    恢复语义：plan_fingerprint 存在即必须恢复原蓝图（不得重规划）。
+      materialize（本地幂等，含 scene_budgets sidecar）→ bind ProductionCheckpoint
+      （执行 digest，只在冻结后创建）→ [resume: 快照恢复项目目录] → 返回生产上下文。
+
+    返回 (project_name, dyn_profile, cp, restored, previous)：
+      run_acceptance 的公共生产段（preflight→wrapper→FullRun→归档）从这里汇入。
+
+    恢复语义：
+      - stage0 记录存在（含续跳 hop）→ 从记录恢复 TaskSpec，不要求
+        PRODUCTION_REQUEST（身份权威在 B1 记录）；
+      - plan_fingerprint 存在即必须恢复原蓝图（不得重规划）；
+      - RESUME_RUN_ID 存在 → 与固定档同款 download/restore_snapshot 恢复项目目录。
     """
     from tools.stage0_state import (STAGE0_FILENAME, Stage0Conflict, Stage0Record)
     from tools.video_task_state import ProductionCheckpoint, task_index, validate_nonce
     from src.ai.producer_planning_service import ProducerPlanningService
+    from src.ai.producer_planning_models import TaskSpec
 
     validate_nonce(nonce)
-    task_spec = normalize_dispatch_input_to_task_spec(nonce)
     stage0_idx = task_index(token, nonce, STAGE0_FILENAME)
     from tools.e2e_autonomous_run import ensure_branch
     ensure_branch(stage0_idx)
     stage0 = Stage0Record(stage0_idx, nonce)
+
+    if stage0.exists():
+        # 恢复路径（跨 hop）：身份权威在 B1 记录，不需要再次提供任务文本
+        task_spec = TaskSpec.from_dict(stage0.doc.get("task_spec") or {})
+        stage0.verify()
+    else:
+        task_spec = normalize_dispatch_input_to_task_spec(nonce)  # 需要 PRODUCTION_REQUEST
     limits = {"text_calls": 60, "image_calls": 40, "video_seconds": 240}
 
     try:
@@ -580,7 +597,7 @@ async def _run_auto_acceptance(nonce, out, summary, token):
         summary.update(stage0_status="FROZEN_RESTORED",
                        plan_fingerprint=stage0.plan_fingerprint)
 
-    # ---- 物化（幂等：项目已在则复用，不重建）----
+    # ---- 物化（幂等：项目已在则复用，不重建）+ scene_budgets sidecar ----
     project_name = f"cloud3min_{nonce}"
     from src.core.models import Project, Scene, StyleAnchor
     from src.core.store import ProjectStore
@@ -599,6 +616,13 @@ async def _run_auto_acceptance(nonce, out, summary, token):
                               aspect_ratio=str(style.get("aspect_ratio") or "16:9")),
             characters=[], scenes=scenes)
         ProjectStore(project_dir).save(project)
+    # sidecar：Director 生成/复用据此注入预算约束（PR B2 契约 §4.3）
+    sidecar = project_dir / "output" / "ai" / "scene_budgets.json"
+    if not sidecar.is_file():
+        sidecar.parent.mkdir(parents=True, exist_ok=True)
+        write_json(sidecar, {"schema_version": 1,
+                             "plan_fingerprint": stage0.plan_fingerprint,
+                             "scene_budgets": blueprint["scene_budgets"]})
     summary.update(project_name=project_name, project_dir=str(project_dir))
 
     # ---- 绑定执行身份（ProductionCheckpoint：只在冻结后创建）----
@@ -606,6 +630,7 @@ async def _run_auto_acceptance(nonce, out, summary, token):
     digest = request_digest(AUTO_TARGET, profile)
     idx = task_index(token, nonce, "full-project-production.json")
     cp = ProductionCheckpoint(idx, nonce, digest)
+    previous = json.loads(json.dumps(cp.doc))
     if cp.current is None:
         cp.save(phase="STAGE0_BOUND", github_run_id=os.environ.get("GITHUB_RUN_ID"),
                 source_sha=os.environ.get("GITHUB_SHA"),
@@ -618,7 +643,6 @@ async def _run_auto_acceptance(nonce, out, summary, token):
                 github_run_id=os.environ.get("GITHUB_RUN_ID"))
     summary.update(execution_request_sha256=digest,
                    stage0_text_calls_used=stage0.text_calls_used)
-    # ---- B1 终点：执行摘要落账 + 显式停止（媒体生产接线属 PR B2）----
     plan = {"planned_target_seconds": sum(
                 b.get("target_s") or b.get("min_s") or 0
                 for b in blueprint["scene_budgets"]),
@@ -626,11 +650,64 @@ async def _run_auto_acceptance(nonce, out, summary, token):
             "video_seconds_cap": (blueprint.get("execution_bounds") or {})
             .get("video_seconds")}
     summary["auto_plan"] = plan
-    summary["status"] = "STAGE0_COMPLETE"
     write_json(out / "stage0-blueprint.json", blueprint)
-    raise RuntimeError(
-        "PR B1 边界：auto 任务已冻结并绑定执行身份（零媒体），"
-        "媒体生产接线在 PR B2 交付后开放；此 run 应到此终止")
+
+    # ---- 跨 hop 恢复：项目目录从失败 run 的 artifact 快照恢复（同固定档）----
+    restored = None
+    resume_id = os.environ.get("RESUME_RUN_ID", "").strip()
+    if resume_id:
+        if cp.current is None:
+            raise RuntimeError("resume nonce has no authoritative checkpoint")
+        from tools.full_project_resume import download_snapshot, restore_snapshot
+        staging = out / "source-snapshot"
+        provenance = await asyncio.to_thread(download_snapshot, resume_id, nonce,
+                                             os.environ.get("GITHUB_TOKEN"), staging)
+        restored = restore_snapshot(staging, Path.cwd(), nonce, previous,
+                                     provenance, finalize_only=finalize_only_from_env())
+        import shutil
+        shutil.rmtree(staging)
+        summary.update(full_run_id=restored["full_run_id"],
+                       project_dir=str(Path.cwd() / "projects" / restored["project_name"]),
+                       source_sha=os.environ.get("GITHUB_SHA"), resume=restored)
+        write_json(out / "restore-input.json", restored)
+        provenance["previous_terminal_status"] = previous.get("terminal_status")
+        provenance["previous_error"] = previous.get("error")
+        cp.save(phase="RESTORED", github_run_id=os.environ.get("GITHUB_RUN_ID"),
+                source_sha=os.environ.get("GITHUB_SHA"), resume_from_run_id=resume_id,
+                updated_at=utc_now(), terminal_status=None, error=None,
+                resume_history=[*(previous.get("resume_history") or []), provenance])
+    # ---- 生产上下文（动态 profile：media gate / wrapper budgets / 验收门槛）----
+    dyn_profile = auto_media_profile(blueprint)
+    return project_name, dyn_profile, cp, restored, previous
+
+
+def finalize_only_from_env():
+    return os.environ.get('FINALIZE_ONLY', 'false').lower() == 'true'
+
+
+def auto_media_profile(blueprint):
+    """冻结蓝图 → 生产段动态 profile（与固定档 FILM_PROFILES 同字段集）。
+
+    - shot/planned 窗口 = 各场 SceneBudget 之和；
+    - min_final = planned_min（成片达到各场下界之和即达标）；
+    - 三维资源上限 = 蓝图 execution_bounds（文本/图片/视频）。
+    """
+    budgets = blueprint.get("scene_budgets") or []
+    bounds = blueprint.get("execution_bounds") or {}
+    planned_min = sum(int(b["min_s"]) for b in budgets)
+    planned_max = sum(int(b["max_s"]) for b in budgets)
+    video_cap = int(bounds.get("video_seconds") or max(planned_max, 60))
+    return {
+        "scope": "full-project-auto-v1",
+        "scene_count": len(blueprint.get("scenes") or []),
+        "shot_min": sum(int(b["shot_min"]) for b in budgets),
+        "shot_max": sum(int(b["shot_max"]) for b in budgets),
+        "planned_min": planned_min, "planned_max": planned_max,
+        "min_final": float(min(planned_min, video_cap)),
+        "budget": video_cap,
+        "image_budget": int(bounds.get("image_calls") or 60),
+        "text_budget": int(bounds.get("text_calls") or 80),
+    }
 
 
 async def run_acceptance(nonce, out, summary):
@@ -652,47 +729,52 @@ async def run_acceptance(nonce, out, summary):
                    film_target_seconds=target)
     token, frame_token = acceptance_credentials(os.environ)
     if target == AUTO_TARGET:
-        # 自主规划模式（PR B1）：Stage 0 独立身份域，不进固定档链路。
-        return await _run_auto_acceptance(nonce, out, summary, token)
-    from tools.stage0_state import Stage0Record
-    fixed_idx = task_index(token, nonce, STAGE0_FILENAME)
-    if Stage0Record(fixed_idx, nonce).exists():
-        # P1-1 反向护栏：auto 任务的 nonce 不得被固定档复用（模式不匹配即拒）。
-        raise RuntimeError(
-            f"nonce 已绑定 auto 模式任务，拒绝以固定 {target}s 档续跑；"
-            "请以 target_duration_seconds=auto 恢复")
-    idx = task_index(token, nonce, "full-project-production.json")
-    ensure_branch(idx)
-    digest = request_digest(target, profile)
-    cp = ProductionCheckpoint(idx, nonce, digest)
-    resume_id = os.environ.get("RESUME_RUN_ID", "").strip()
-    restored = None
-    previous = json.loads(json.dumps(cp.doc))
-    if resume_id:
-        if cp.current is None:
-            raise RuntimeError("resume nonce has no authoritative checkpoint")
-        from tools.full_project_resume import download_snapshot, restore_snapshot
-        staging = out / "source-snapshot"
-        provenance = await asyncio.to_thread(download_snapshot, resume_id, nonce,
-                                             os.environ.get("GITHUB_TOKEN"), staging)
-        restored = restore_snapshot(staging, Path.cwd(), nonce, previous, provenance, finalize_only=finalize_only)
-        import shutil
-        shutil.rmtree(staging)  # the live copy is retained; avoid nesting old snapshots in new artifacts
-        summary.update(project_name=restored["project_name"], full_run_id=restored["full_run_id"],
-                       project_dir=str(Path.cwd()/"projects"/restored["project_name"]),
-                       source_sha=os.environ.get("GITHUB_SHA"), resume=restored)
-        write_json(out / "restore-input.json", restored)
-        provenance["previous_terminal_status"] = previous.get("terminal_status")
-        provenance["previous_error"] = previous.get("error")
-        cp.save(phase="RESTORED", github_run_id=os.environ.get("GITHUB_RUN_ID"),
-                source_sha=os.environ.get("GITHUB_SHA"), resume_from_run_id=resume_id,
-                updated_at=utc_now(),
-                terminal_status=None, error=None,
-                resume_history=[*(previous.get("resume_history") or []), provenance])
+        # 自主规划模式（PR B2）：Stage 0 全链（身份→规划→冻结→物化/恢复→绑定），
+        # 返回生产上下文后汇入下方公共生产段（preflight→wrapper→FullRun→归档）。
+        project_name, profile, cp, restored, previous = await _run_auto_acceptance(
+            nonce, out, summary, token)
+        resume_id = os.environ.get("RESUME_RUN_ID", "").strip()
+        summary.update(stage="PRODUCTION", target=target)
     else:
-        if cp.current is not None:
-            raise RuntimeError("nonce already has a run; restore/reconcile existing evidence before resuming")
-        cp.save(phase="STARTING", github_run_id=os.environ.get("GITHUB_RUN_ID"), source_sha=os.environ.get("GITHUB_SHA"))
+        from tools.stage0_state import Stage0Record
+        fixed_idx = task_index(token, nonce, STAGE0_FILENAME)
+        if Stage0Record(fixed_idx, nonce).exists():
+            # P1-1 反向护栏：auto 任务的 nonce 不得被固定档复用（模式不匹配即拒）。
+            raise RuntimeError(
+                f"nonce 已绑定 auto 模式任务，拒绝以固定 {target}s 档续跑；"
+                "请以 target_duration_seconds=auto 恢复")
+        idx = task_index(token, nonce, "full-project-production.json")
+        ensure_branch(idx)
+        digest = request_digest(target, profile)
+        cp = ProductionCheckpoint(idx, nonce, digest)
+        resume_id = os.environ.get("RESUME_RUN_ID", "").strip()
+        restored = None
+        previous = json.loads(json.dumps(cp.doc))
+        if resume_id:
+            if cp.current is None:
+                raise RuntimeError("resume nonce has no authoritative checkpoint")
+            from tools.full_project_resume import download_snapshot, restore_snapshot
+            staging = out / "source-snapshot"
+            provenance = await asyncio.to_thread(download_snapshot, resume_id, nonce,
+                                                 os.environ.get("GITHUB_TOKEN"), staging)
+            restored = restore_snapshot(staging, Path.cwd(), nonce, previous, provenance, finalize_only=finalize_only)
+            import shutil
+            shutil.rmtree(staging)  # the live copy is retained; avoid nesting old snapshots in new artifacts
+            summary.update(project_name=restored["project_name"], full_run_id=restored["full_run_id"],
+                           project_dir=str(Path.cwd()/"projects"/restored["project_name"]),
+                           source_sha=os.environ.get("GITHUB_SHA"), resume=restored)
+            write_json(out / "restore-input.json", restored)
+            provenance["previous_terminal_status"] = previous.get("terminal_status")
+            provenance["previous_error"] = previous.get("error")
+            cp.save(phase="RESTORED", github_run_id=os.environ.get("GITHUB_RUN_ID"),
+                    source_sha=os.environ.get("GITHUB_SHA"), resume_from_run_id=resume_id,
+                    updated_at=utc_now(),
+                    terminal_status=None, error=None,
+                    resume_history=[*(previous.get("resume_history") or []), provenance])
+        else:
+            if cp.current is not None:
+                raise RuntimeError("nonce already has a run; restore/reconcile existing evidence before resuming")
+            cp.save(phase="STARTING", github_run_id=os.environ.get("GITHUB_RUN_ID"), source_sha=os.environ.get("GITHUB_SHA"))
     # Check the existing image-host write path before any Agnes generation.
     host = GithubPagesHost("Q-1844", "agnes-frame-host", "main", frame_token)
     calibration = make_frame_host_calibration(out / "host-calibration.png")
@@ -728,7 +810,8 @@ async def run_acceptance(nonce, out, summary):
         ProjectStore(project_dir).save(project)
     wrapper = BoundedRealClient(deps.agnes_client, cp, project_dir, out, finalize_only=finalize_only,
                                 video_budget=profile["budget"], image_budget=profile["image_budget"],
-                                text_budget=profile["text_budget"], film_target_seconds=target)
+                                text_budget=profile["text_budget"], film_target_seconds=target,
+                                auto_profile=profile if target == AUTO_TARGET else None)
     if restored:
         wrapper.restore_usage(previous)
         wrapper.media_gate()
