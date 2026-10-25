@@ -145,17 +145,22 @@ def test_no_unattended_wiring_claim_yet():
     """PR A 诚实边界：无值守生产链尚未接线本 skill / ProducerPlanningService。
 
     反向断言（skill 存在 != 自动生效）：在无值守入口文件中出现才算接线。
-    PR B1 落地接线后，本测试必须删除。
+    注意：CI mock-regression 是 windows + sparse-checkout（不含 .github/），
+    yml 在该环境缺席时只守卫 tools 入口；PR B1 接线后删除本测试。
     """
     guard_targets = [
         REPO / "tools" / "full_project_cloud_acceptance.py",
         REPO / ".github" / "workflows" / "video-autoproduction-e2e.yml",
     ]
+    guarded = 0
     for path in guard_targets:
-        assert path.is_file(), f"接线守卫目标缺失: {path}"
+        if not path.is_file():
+            continue  # sparse-checkout 缺席（如 CI 的 .github/），无法守卫
+        guarded += 1
         text = path.read_text(encoding="utf-8")
         assert SKILL_ID not in text, (
             f"{path.name} 已出现 {SKILL_ID}：说明 PR B1 已接线，"
             "请删除本测试（test_no_unattended_wiring_claim_yet）")
         assert "ProducerPlanningService" not in text, (
             f"{path.name} 已出现 ProducerPlanningService：同上")
+    assert guarded >= 1, "接线守卫目标全部缺席（异常 checkout？）"
