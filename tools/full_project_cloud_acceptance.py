@@ -81,14 +81,20 @@ FILM_PROFILES = {
 
 
 def film_profile(environ=None):
-    """解析 FILM_TARGET_SECONDS 到受支持的片长档位。返回 (target, profile)。"""
+    """解析 FILM_TARGET_SECONDS 到受支持的片长档位。返回 (target, profile)。
+
+    'auto' → (AUTO_TARGET, None)：自主规划模式，profile 由 Stage 0 冻结蓝图
+    动态导出（见 auto_request_profile），不使用静态档位表。
+    """
     raw = (environ or os.environ).get("FILM_TARGET_SECONDS", "200").strip()
+    if raw == AUTO_TARGET:
+        return AUTO_TARGET, None
     try:
         target = int(raw)
     except (ValueError, TypeError):
         raise ValueError('FILM_TARGET_SECONDS must be whole seconds of a supported profile') from None
     if target not in FILM_PROFILES:
-        raise ValueError(f"unsupported film target {target}s; supported: {sorted(FILM_PROFILES)}")
+        raise ValueError(f"unsupported film target {target}s; supported: {sorted(FILM_PROFILES)} + 'auto'")
     return target, FILM_PROFILES[target]
 
 
@@ -447,6 +453,186 @@ async def auto_resume_next_hop(wrapper, nonce, driver_minutes):
     return result
 
 
+AUTO_TARGET = "auto"
+#: auto 模式的执行摘要（P0-1）：自然语言任务文本，时长可有可无。
+PRODUCTION_REQUEST_MAX = 12000
+
+
+# ---------------------------------------------------------------------------
+# 自主规划模式（PR B1）：Stage 0 全链——任务身份 → 规划 → 冻结 → 物化 → 绑定。
+# 200/320 固定档链路零改动；本段为 auto 专属。
+# ---------------------------------------------------------------------------
+
+def normalize_dispatch_input_to_task_spec(nonce, environ=None):
+    """workflow 输入 → TaskSpec（P0-1：任何 LLM 调用之前完成身份构造）。
+
+    production_request 缺席或超长 → fail fast（不进规划）。
+    时长意图经确定性正则提取（extract_duration_intent），LLM 不参与身份。
+    意图分流（suggest_intent）：B1 只放行 create；继续类意图 → NotYetWired
+    （P1-4，零媒体零文本，PR C1/C2 接线）。
+    """
+    from src.ai.producer_planning_models import TaskSpec, suggest_intent
+    from src.ai.producer_planning_service import NotYetWired, extract_duration_intent
+
+    env = environ or os.environ
+    request = (env.get("PRODUCTION_REQUEST") or "").strip()
+    if not request:
+        raise ValueError("auto 模式要求 workflow input production_request（任务自然语言）")
+    if len(request) > PRODUCTION_REQUEST_MAX:
+        raise ValueError(f"production_request 超长（>{PRODUCTION_REQUEST_MAX} 字符）")
+    source_project = (env.get("SOURCE_PROJECT") or "").strip() or None
+    intent, reason = suggest_intent(request, source_project=source_project)
+    if intent != "create":
+        raise NotYetWired(
+            f"任务被识别为 {intent}（{reason}）；该意图的无值守接线在 PR C1/C2 交付，"
+            "本阶段拒绝执行且不产生任何付费调用")
+    return TaskSpec(intent="create", request_text=request,
+                    duration=extract_duration_intent(request),
+                    source_project=None)
+
+
+def auto_request_profile(blueprint):
+    """冻结蓝图 → request_digest 用的动态 profile（auto 执行摘要）。
+
+    与固定档同构（scope/scenes/budget 三元组），scenes 取蓝图段摘要原文。
+    """
+    scenes = [(s.get("title") or "", s.get("summary") or "")
+              for s in (blueprint.get("scenes") or [])]
+    return {"scope": "full-project-auto-v1", "scenes": scenes,
+            "budget": int((blueprint.get("execution_bounds") or {})
+                          .get("video_seconds") or 0)}
+
+
+def _blueprint_to_result(blueprint, task_spec):
+    """冻结蓝图的 dict 形态 → ProducerPlanningResult（复用既有契约校验）。"""
+    from src.ai.producer_planning_models import (PlannedScene,
+                                                 ProducerPlanningResult, SceneBudget)
+    scenes = [PlannedScene(scene_id=s["scene_id"], title=s.get("title") or "",
+                          summary=s["summary"])
+              for s in blueprint["scenes"]]
+    budgets = [SceneBudget(scene_id=b["scene_id"], min_s=b["min_s"],
+                           max_s=b["max_s"], shot_min=b["shot_min"],
+                           shot_max=b["shot_max"], target_s=b.get("target_s"))
+               for b in blueprint["scene_budgets"]]
+    return ProducerPlanningResult(
+        task_spec_sha256=blueprint.get("task_spec_sha256") or task_spec.sha256(),
+        intent="create", story_text=blueprint["story_text"],
+        scenes=tuple(scenes), scene_budgets=tuple(budgets),
+        execution_bounds=dict(blueprint.get("execution_bounds") or {}),
+        style=dict(blueprint.get("style") or {}))
+
+
+async def _ensure_app_started():
+    """auto B1 阶段只依赖 agnes_client（规划 chat）；复用固定档的启动方式。"""
+    import api_server
+    await api_server.startup()
+
+
+async def _run_auto_acceptance(nonce, out, summary, token):
+    """auto 模式主链（B1 边界：到执行身份绑定 + 显式停止为止，生产接线属 PR B2）。
+
+    事务序列（P0-2）：
+      bootstrap stage0（任务身份）→ plan（文本预留）→ freeze（原子）→
+      materialize（本地幂等）→ bind ProductionCheckpoint（执行 digest）。
+    恢复语义：plan_fingerprint 存在即必须恢复原蓝图（不得重规划）。
+    """
+    from tools.stage0_state import (STAGE0_FILENAME, Stage0Conflict, Stage0Record)
+    from tools.video_task_state import ProductionCheckpoint, task_index, validate_nonce
+    from src.ai.producer_planning_service import ProducerPlanningService
+
+    validate_nonce(nonce)
+    task_spec = normalize_dispatch_input_to_task_spec(nonce)
+    stage0_idx = task_index(token, nonce, STAGE0_FILENAME)
+    from tools.e2e_autonomous_run import ensure_branch
+    ensure_branch(stage0_idx)
+    stage0 = Stage0Record(stage0_idx, nonce)
+    limits = {"text_calls": 60, "image_calls": 40, "video_seconds": 240}
+
+    try:
+        stage0.bootstrap(task_spec)  # 同 nonce 换任务 → Stage0Conflict（T25）
+    except Stage0Conflict as exc:
+        summary.update(blocked_stage="stage0_identity", no_new_media_submitted=True)
+        raise RuntimeError(str(exc)) from exc
+    if stage0.plan_fingerprint is not None:
+        stage0.verify()  # 恢复路径：蓝图指纹必须与内容一致（T28）
+    summary.update(stage0_status=stage0.doc.get("status"),
+                   task_spec_sha256=stage0.doc.get("task_spec_sha256"))
+    write_json(out / "stage0-status.json",
+               {"status": stage0.doc.get("status"),
+                "task_spec_sha256": stage0.doc.get("task_spec_sha256"),
+                "plan_fingerprint": stage0.plan_fingerprint,
+                "text_calls_used": stage0.text_calls_used})
+
+    # ---- 规划（未冻结才规划；已冻结直接恢复原蓝图）----
+    if stage0.plan_fingerprint is None:
+        stage0.mark_planning()
+        import deps
+        await _ensure_app_started()
+        if deps.agnes_client is None:
+            raise RuntimeError("agnes client unavailable for stage0 planning")
+        service = ProducerPlanningService(deps.agnes_client, stage0)
+        result = await service.plan(task_spec, limits)
+        blueprint = json.loads(json.dumps(result.canonical_payload()))
+        plan_fp = stage0.freeze(blueprint)  # 单次原子（方案 A）
+        summary.update(stage0_status="FROZEN", plan_fingerprint=plan_fp)
+    else:
+        blueprint = stage0.blueprint
+        summary.update(stage0_status="FROZEN_RESTORED",
+                       plan_fingerprint=stage0.plan_fingerprint)
+
+    # ---- 物化（幂等：项目已在则复用，不重建）----
+    project_name = f"cloud3min_{nonce}"
+    from src.core.models import Project, Scene, StyleAnchor
+    from src.core.store import ProjectStore
+    import deps as _deps
+    project_dir = _deps.project_manager.get_project_dir(project_name)
+    if not (project_dir / "output" / "project.json").is_file():
+        _deps.project_manager.create_project(project_name)
+        scenes = [Scene(scene_id=s["scene_id"], title=s.get("title") or "",
+                        summary=s["summary"])
+                  for s in blueprint["scenes"]]
+        style = blueprint.get("style") or {}
+        project = Project(
+            name=project_name, story_text=blueprint["story_text"],
+            style=StyleAnchor(art_style=str(style.get("art_style") or ""),
+                              palette=str(style.get("palette") or ""),
+                              aspect_ratio=str(style.get("aspect_ratio") or "16:9")),
+            characters=[], scenes=scenes)
+        ProjectStore(project_dir).save(project)
+    summary.update(project_name=project_name, project_dir=str(project_dir))
+
+    # ---- 绑定执行身份（ProductionCheckpoint：只在冻结后创建）----
+    profile = auto_request_profile(blueprint)
+    digest = request_digest(AUTO_TARGET, profile)
+    idx = task_index(token, nonce, "full-project-production.json")
+    cp = ProductionCheckpoint(idx, nonce, digest)
+    if cp.current is None:
+        cp.save(phase="STAGE0_BOUND", github_run_id=os.environ.get("GITHUB_RUN_ID"),
+                source_sha=os.environ.get("GITHUB_SHA"),
+                film_target_seconds=AUTO_TARGET,
+                task_spec_sha256=stage0.doc.get("task_spec_sha256"),
+                plan_fingerprint=stage0.plan_fingerprint,
+                stage0_text_calls_used=stage0.text_calls_used)
+    else:
+        cp.save(phase="STAGE0_BOUND",
+                github_run_id=os.environ.get("GITHUB_RUN_ID"))
+    summary.update(execution_request_sha256=digest,
+                   stage0_text_calls_used=stage0.text_calls_used)
+    # ---- B1 终点：执行摘要落账 + 显式停止（媒体生产接线属 PR B2）----
+    plan = {"planned_target_seconds": sum(
+                b.get("target_s") or b.get("min_s") or 0
+                for b in blueprint["scene_budgets"]),
+            "scene_count": len(blueprint["scenes"]),
+            "video_seconds_cap": (blueprint.get("execution_bounds") or {})
+            .get("video_seconds")}
+    summary["auto_plan"] = plan
+    summary["status"] = "STAGE0_COMPLETE"
+    write_json(out / "stage0-blueprint.json", blueprint)
+    raise RuntimeError(
+        "PR B1 边界：auto 任务已冻结并绑定执行身份（零媒体），"
+        "媒体生产接线在 PR B2 交付后开放；此 run 应到此终止")
+
+
 async def run_acceptance(nonce, out, summary):
     from tools.e2e_autonomous_run import ensure_branch
     from tools.video_task_state import ProductionCheckpoint, task_index
@@ -465,6 +651,16 @@ async def run_acceptance(nonce, out, summary):
     summary.update(driver_timeout_minutes=driver_minutes, finalize_only=finalize_only,
                    film_target_seconds=target)
     token, frame_token = acceptance_credentials(os.environ)
+    if target == AUTO_TARGET:
+        # 自主规划模式（PR B1）：Stage 0 独立身份域，不进固定档链路。
+        return await _run_auto_acceptance(nonce, out, summary, token)
+    from tools.stage0_state import Stage0Record
+    fixed_idx = task_index(token, nonce, STAGE0_FILENAME)
+    if Stage0Record(fixed_idx, nonce).exists():
+        # P1-1 反向护栏：auto 任务的 nonce 不得被固定档复用（模式不匹配即拒）。
+        raise RuntimeError(
+            f"nonce 已绑定 auto 模式任务，拒绝以固定 {target}s 档续跑；"
+            "请以 target_duration_seconds=auto 恢复")
     idx = task_index(token, nonce, "full-project-production.json")
     ensure_branch(idx)
     digest = request_digest(target, profile)

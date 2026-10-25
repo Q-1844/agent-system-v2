@@ -2,7 +2,7 @@
   "skill_id": "producer-project-planning",
   "version": "0.1.0",
   "name": "Producer 任务规划：自然语言到可执行制作计划",
-  "description": "Producer 收到自然语言任务时的规划决策技能：先识别意图（新建/继续/补素材/延长/续集）与时长意图（exact/range/approximate/unspecified），有项目先读真实状态再决策，产出可审计的 PlanningDecision；付费媒体前必须先冻结有限、可校验的执行计划。本技能是 PR A 交付：契约与决策纪律已定，无值守接线由 PR B1 完成。",
+  "description": "Producer 收到自然语言任务时的规划决策技能：先识别意图（新建/继续/补素材/延长/续集）与时长意图（exact/range/approximate/unspecified），有项目先读真实状态再决策，产出可审计的 PlanningDecision；付费媒体前必须先冻结有限、可校验的执行计划。PR B1 已接线无值守 Stage 0（规划系统提示加载本技能执行纪律；任务身份与文本额度经 B1 CAS 落账）；媒体生产与 Director 约束注入在 PR B2，续作执行在 PR C1/C2。",
   "category": "workflow",
   "source": "builtin",
   "status": "active",

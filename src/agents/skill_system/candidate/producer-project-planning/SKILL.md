@@ -1,8 +1,10 @@
 # Producer Project Planning（producer-project-planning）
 
-> **当前能力边界（PR A 交付）**：本技能只提供规划契约与决策纪律——意图判别、
-> 时长模式、只读状态核实、可审计决策输出。**无值守生产链的 Stage 0 接线由
-> PR B1 完成；在此之前本技能不会也不能触发任何媒体生成、剧本写入或自动执行。**
+> **当前能力边界（PR B1 已接线 Stage 0）**：无值守链已真实调用本技能的规划纪律
+> （ProducerPlanningService 加载 SKILL.md 执行纪律注入规划系统提示；任务身份
+> 与文本额度经 B1 CAS 落账）。**媒体生产与 Director 约束注入由 PR B2 接线；
+> 续作/补素材执行（add_assets / extend_existing / sequel）在 PR C1/C2。**
+> 在 B2 完成前，auto 任务的 run 在冻结与执行身份绑定后显式终止，零媒体。
 
 ## 你在做什么
 
