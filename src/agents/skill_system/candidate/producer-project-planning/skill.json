@@ -1,0 +1,61 @@
+{
+  "skill_id": "producer-project-planning",
+  "version": "0.1.0",
+  "name": "Producer 任务规划：自然语言到可执行制作计划",
+  "description": "Producer 收到自然语言任务时的规划决策技能：先识别意图（新建/继续/补素材/延长/续集）与时长意图（exact/range/approximate/unspecified），有项目先读真实状态再决策，产出可审计的 PlanningDecision；付费媒体前必须先冻结有限、可校验的执行计划。本技能是 PR A 交付：契约与决策纪律已定，无值守接线由 PR B1 完成。",
+  "category": "workflow",
+  "source": "builtin",
+  "status": "active",
+  "applicability": "用户只给大致剧情或时长（或没给时长）要求新视频，或要求继续已有项目/补缺失素材/延长成片/拍续集时使用。",
+  "triggers": [
+    "视频",
+    "做个视频",
+    "做视频",
+    "拍一个视频",
+    "拍视频",
+    "拍个视频",
+    "制作视频",
+    "生成视频",
+    "生成一段",
+    "新视频",
+    "新短片",
+    "大概",
+    "大约",
+    "左右",
+    "多长",
+    "几分钟",
+    "两分钟",
+    "继续项目",
+    "继续这个",
+    "继续上次",
+    "把项目做完",
+    "没做完",
+    "补素材",
+    "补齐",
+    "补镜头",
+    "续集",
+    "续作",
+    "下一部",
+    "延长",
+    "加长"
+  ],
+  "required_capabilities": {
+    "producer": [
+      "project.inspect",
+      "project.quota",
+      "script_writer.delegate"
+    ]
+  },
+  "depends_on": [],
+  "bindings": [
+    {
+      "agent_id": "producer",
+      "enabled": true,
+      "role": "coordinator",
+      "routing_priority": 75,
+      "authority_tier": "builtin",
+      "activation_mode": "hinted",
+      "role_resource": "references/producer.md"
+    }
+  ]
+}
