@@ -70,6 +70,63 @@ from routers.director import (
 from routers.production_planner import (
     plan_production_business, approve_plan_business, _read_plans, _write_plans,
 )
+
+
+# ---------------------------------------------------------------------------
+# SceneBudget 约束（PR B2）：auto 任务的冻结预算注入 Director 生成与复用校验。
+# sidecar：output/ai/scene_budgets.json（物化时写入；固定档项目无此文件=零影响）。
+# ---------------------------------------------------------------------------
+
+SCENE_BUDGETS_FILE = "scene_budgets.json"
+
+
+def read_scene_budgets(project_dir) -> Dict[str, dict]:
+    """读 sidecar（不存在返回空 dict——固定档零影响）。fail-closed on corrupt。"""
+    p = Path(project_dir) / "output" / "ai" / SCENE_BUDGETS_FILE
+    if not p.is_file():
+        return {}
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except (ValueError, OSError):
+        raise RuntimeError(f"scene budget sidecar corrupt: {p}")
+    out = {}
+    for b in (data.get("scene_budgets") or []):
+        if isinstance(b, dict) and b.get("scene_id"):
+            out[b["scene_id"]] = b
+    return out
+
+
+def scene_budget_director_note(budget: dict) -> str:
+    """SceneBudget → 结构化 director_note（注入 plan_scene_business 的提示）。"""
+    return (
+        "【本场制作预算（系统约束，必须严格遵守）】\n"
+        f"- 镜头数量：{budget['shot_min']} 到 {budget['shot_max']} 个\n"
+        f"- 本场总时长：{budget['min_s']} 到 {budget['max_s']} 秒\n"
+        "- 每镜 target_duration_s 必须在 "
+        f"{budget.get('per_shot_min_s', 4)} 到 {budget.get('per_shot_max_s', 11)} 秒之间\n"
+        "- 所有镜头 target_duration_s 之和必须落在本场总时长窗口内\n"
+        "- 镜头数量与时长按内容节奏分配，不要机械均分"
+    )
+
+
+def scene_budget_violations(draft, budget: dict) -> List[str]:
+    """draft 是否违反 SceneBudget。返回违规明细（空=合规）。"""
+    pmin = float(budget.get("per_shot_min_s") or 4)
+    pmax = float(budget.get("per_shot_max_s") or 11)
+    n = len(draft.shots)
+    total = sum(float(s.target_duration_s or 0) for s in draft.shots)
+    v = []
+    if not budget["shot_min"] <= n <= budget["shot_max"]:
+        v.append(f"镜头数 {n} 超出预算范围 {budget['shot_min']}-{budget['shot_max']}")
+    if not budget["min_s"] <= total <= budget["max_s"]:
+        v.append(f"总时长 {total:.1f}s 超出本场窗口 {budget['min_s']}-{budget['max_s']}s")
+    bad = [s.draft_id for s in draft.shots
+           if not pmin <= float(s.target_duration_s or 0) <= pmax]
+    if bad:
+        v.append(f"单镜时长越界（{pmin:.0f}-{pmax:.0f}s）: {bad}")
+    return v
+
+
 from src.api.agnes_client import AgnesError
 
 
@@ -829,16 +886,47 @@ class FullProjectManager:
         # §七：优先复用 fresh valid draft
         drafts = _read_drafts(get_project_dir_safe(project_name))
         draft = drafts.get(entry.scene_id)
-        if draft is not None and _check_stale(draft, scene) is None and not coverage_missing(draft) and draft.shots:
+        # PR B2：auto 任务的 SceneBudget（无 sidecar = 固定档，行为零变化）
+        budgets = read_scene_budgets(get_project_dir_safe(project_name))
+        budget = budgets.get(entry.scene_id)
+        if budget is not None and draft is not None and draft.shots:
+            # 预算约束下的复用前置校验（T20：旧 draft 违反新预算 → 不得授权）
+            violations = scene_budget_violations(draft, budget)
+            if violations:
+                logger.info(f"FullRun {run_id} 故事段 {entry.scene_id} 现有 draft 违反 "
+                            f"SceneBudget（{violations}），拒绝复用并重新生成")
+                budget = budget  # 保留：生成路径继续受约束
+                draft = None
+        if (draft is not None and _check_stale(draft, scene) is None
+                and not coverage_missing(draft) and draft.shots):
             entry.used_existing_director_draft = True
             rec.director_source = "existing_draft"
             logger.info(f"FullRun {run_id} 故事段 {entry.scene_id} 复用现有 Director draft")
         else:
             # 生成（plan_scene_business 内部已含 JSON parse retry）
             client = get_agnes_client()
-            draft = await self._call_director_with_retry(project_name, run_id, entry, project, scene, "", client)
+            director_note = scene_budget_director_note(budget) if budget else ""
+            draft = await self._call_director_with_retry(project_name, run_id, entry, project, scene, director_note, client)
             if draft is None:
                 return None   # paused/failed
+            # 预算约束校验（PR B2）：违反 → 带明细 repair 一次；仍违反 → fail
+            if budget is not None:
+                violations = scene_budget_violations(draft, budget)
+                if violations:
+                    repair_note = ("【上一次镜头规划违反系统预算，必须修正】\n"
+                                   + "；".join(violations)
+                                   + "\n" + scene_budget_director_note(budget))
+                    logger.info(f"FullRun {run_id} 故事段 {entry.scene_id} 违反 SceneBudget "
+                                f"（{violations}），请求预算 repair")
+                    draft = await self._call_director_with_retry(project_name, run_id, entry, project, scene,
+                                                                 repair_note, client, is_repair=True)
+                    if draft is None:
+                        return None
+                    if scene_budget_violations(draft, budget):
+                        await self._fail_scene_named(project_name, run_id, entry, ERR_DIRECTOR_FAILED,
+                                                     f"故事段 {entry.scene_id} 预算校验仍不通过: "
+                                                     f"{scene_budget_violations(draft, budget)}")
+                        return None
             # coverage 校验（§八）：invalid 最多 1 repair
             missing = coverage_missing(draft)
             if missing:

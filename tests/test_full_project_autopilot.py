@@ -87,6 +87,8 @@ class FakeAgnes:
         self.director_calls = 0
         self.planner_calls = 0
         self.chat_calls = 0
+        self.director_user_msgs = []   # PR B2：捕获 Director user message（预算注入断言）
+        self.director_shots_override: dict = {}  # PR B2：scene_id -> shots（预算场景自定义返回）
         self.quota = _FakeQuota()
         self.fail_planner_scenes: set = set()       # scene_id -> Planner 调用抛 AgnesError
         self.side_effect_director: dict = {}        # scene_id -> callable(project_name)
@@ -100,7 +102,11 @@ class FakeAgnes:
         if "分镜导演" in sys_msg or "规划成若干连续镜头" in user_msg:
             # Director 调用
             self.director_calls += 1
+            self.director_user_msgs.append(user_msg)
             scene_id = self._parse_scene_id(user_msg)
+            if scene_id in self.director_shots_override:
+                return json.dumps({"overview": "AI 规划", "shots": self.director_shots_override[scene_id]},
+                                  ensure_ascii=False)
             cb = self.side_effect_director.get(scene_id)
             if cb:
                 cb(PROJECT_NAME)
@@ -629,5 +635,83 @@ def test_case8_child_status_mapping(client, fake_agnes_swap):
         assert final["final_output"]
         # lineage（§七十）
         assert final["production_run_id"]
+    finally:
+        _cleanup()
+
+
+# ============ PR B2：SceneBudget 约束注入 ============
+
+def _write_budget_sidecar(pdir, scene_id, min_s, max_s, shot_min, shot_max):
+    """写 scene_budgets sidecar（auto 任务的 Director 约束来源）。"""
+    from src.ai.full_project_autopilot import SCENE_BUDGETS_FILE
+    p = Path(pdir) / "output" / "ai" / SCENE_BUDGETS_FILE
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps({
+        "schema_version": 1, "plan_fingerprint": "test-fp",
+        "scene_budgets": [{"scene_id": scene_id, "min_s": min_s, "max_s": max_s,
+                           "shot_min": shot_min, "shot_max": shot_max,
+                           "per_shot_min_s": 4, "per_shot_max_s": 11}]}),
+        encoding="utf-8")
+
+
+def test_b2_budget_violating_draft_not_reused(client, fake_agnes_swap):
+    """T20：fresh draft 违反 SceneBudget（镜头数不足）→ 拒绝复用，重新生成合规 draft。"""
+    try:
+        scenes = [Scene(scene_id="s01", summary="段一", characters=["林夏"], shots=[])]
+        pdir = _make_project(PROJECT_NAME, scenes)
+        _seed_director_draft(pdir, "s01", "段一", ["林夏"])  # 1 镜（违反 shot_min=2）
+        _write_budget_sidecar(pdir, "s01", min_s=8, max_s=20, shot_min=2, shot_max=4)
+        fake_agnes_swap.director_shots_override["s01"] = [
+            {"draft_id": "d1", "intent": "林夏潜入", "characters": ["林夏"], "target_duration_s": 5},
+            {"draft_id": "d2", "intent": "林夏搜索", "characters": ["林夏"], "target_duration_s": 5}]
+
+        r = client.post(f"/api/project/{PROJECT_NAME}/full-production/start", json={"respect_locked": True})
+        assert r.status_code == 200, r.text
+        run_id = r.json()["run_id"]
+        final = _wait_full_run_terminal(client, run_id, timeout=180)
+        assert final["status"] == "completed", f"{final['status']}: {final.get('error')}"
+        # 🔴 违反预算的 draft 未被复用：Director 被真实调用
+        assert fake_agnes_swap.director_calls >= 1, "违反 SceneBudget 的 draft 应拒绝复用并重新生成"
+        # override 生成 2 镜×5s=10s ∈ [8,20]、镜数 2 ∈ [2,4] → 合规被采用
+        proj = ProjectStore(get_project_manager().get_project_dir(PROJECT_NAME)).load()
+        assert 2 <= len(proj.scenes[0].shots) <= 4
+    finally:
+        _cleanup()
+
+
+def test_b2_budget_note_injected_into_director_prompt(client, fake_agnes_swap):
+    """T29：sidecar 存在时 Director user message 真实包含预算约束文本。"""
+    try:
+        scenes = [Scene(scene_id="s01", summary="段一", characters=["林夏"], shots=[])]
+        pdir = _make_project(PROJECT_NAME, scenes)
+        _write_budget_sidecar(pdir, "s01", min_s=4, max_s=10, shot_min=1, shot_max=2)
+
+        r = client.post(f"/api/project/{PROJECT_NAME}/full-production/start", json={"respect_locked": True})
+        assert r.status_code == 200, r.text
+        run_id = r.json()["run_id"]
+        final = _wait_full_run_terminal(client, run_id, timeout=180)
+        assert final["status"] == "completed", f"{final['status']}: {final.get('error')}"
+        msgs = fake_agnes_swap.director_user_msgs
+        assert msgs, "Director 应被调用"
+        assert "本场制作预算" in msgs[0], "预算约束文本应注入 Director 提示"
+        assert "镜头数量：1 到 2" in msgs[0]
+        assert "4 到 10 秒" in msgs[0]
+    finally:
+        _cleanup()
+
+
+def test_b2_no_sidecar_zero_impact(client, fake_agnes_swap):
+    """B2 红线：无 sidecar（固定档）时 Director 提示不含预算文本——行为零变化。"""
+    try:
+        scenes = [Scene(scene_id="s01", summary="段一", characters=["林夏"], shots=[])]
+        _make_project(PROJECT_NAME, scenes)  # 不写 sidecar
+
+        r = client.post(f"/api/project/{PROJECT_NAME}/full-production/start", json={"respect_locked": True})
+        assert r.status_code == 200, r.text
+        run_id = r.json()["run_id"]
+        final = _wait_full_run_terminal(client, run_id, timeout=180)
+        assert final["status"] == "completed", f"{final['status']}: {final.get('error')}"
+        assert fake_agnes_swap.director_user_msgs, "Director 应被调用"
+        assert "本场制作预算" not in fake_agnes_swap.director_user_msgs[0]
     finally:
         _cleanup()

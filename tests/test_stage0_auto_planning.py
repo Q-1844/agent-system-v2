@@ -334,12 +334,13 @@ async def _noop_start():
 
 
 def test_integration_auto_acceptance_full_chain(monkeypatch, tmp_path):
-    """auto 全链：身份→规划→冻结→物化→绑定→B1 边界终止；二次进入恢复原蓝图。
+    """auto 全链（PR B2）：身份→规划→冻结→物化(+sidecar)→绑定→返回生产上下文。
 
-    零媒体断言：FakeChat 不实现 generate_image/create_video（调用即 AttributeError）；
-    run 终止原因是显式的 PR B1 边界 RuntimeError，而非任何媒体失败。
+    零媒体断言：FakeChat 不实现 generate_image/create_video；生产段由固定档
+    既有测试覆盖（共享代码），本测试到 _run_auto_acceptance 返回为止。
+    二次进入（模拟续跳）：不得重调 LLM，蓝图原样恢复，digest 稳定，且不需要
+    PRODUCTION_REQUEST（身份权威在 B1 stage0 记录）。
     """
-    from tools import stage0_state as st
     from tools import video_task_state as vts
     from tools import e2e_autonomous_run as e2e
     from tools import full_project_cloud_acceptance as acc
@@ -364,18 +365,28 @@ def test_integration_auto_acceptance_full_chain(monkeypatch, tmp_path):
     summary, out = {}, tmp_path / "out"
     out.mkdir()
 
-    with pytest.raises(RuntimeError, match="PR B1 边界"):
-        asyncio.run(acc._run_auto_acceptance("film-auto-int", out, summary, "tok"))
+    project_name, dyn_profile, cp, restored, previous = asyncio.run(
+        acc._run_auto_acceptance("film-auto-int", out, summary, "tok"))
 
     # 身份/冻结/绑定链
-    assert summary["task_spec_sha256"]
+    assert project_name == "cloud3min_film-auto-int"
     assert summary["stage0_status"] == "FROZEN"
     assert summary["plan_fingerprint"]
     assert summary["execution_request_sha256"]
-    assert summary["auto_plan"]["scene_count"] == 3
-    assert 102 <= summary["auto_plan"]["planned_target_seconds"] <= 138
-    assert summary["status"] == "STAGE0_COMPLETE"
+    assert restored is None and previous is not None
+    # 动态 profile（PR B2）：字段齐全且来自蓝图
+    assert dyn_profile["scene_count"] == 3
+    assert dyn_profile["planned_min"] >= 102 and dyn_profile["planned_max"] <= 138
+    assert dyn_profile["budget"] == 240 and dyn_profile["min_final"] >= 102
     assert chat.calls == 1
+    # sidecar 已写入（Director 注入的依据）
+    sidecar = (tmp_path / "projects" / "cloud3min_film-auto-int"
+               / "output" / "ai" / "scene_budgets.json")
+    assert sidecar.is_file()
+    import json as _json
+    sc = _json.loads(sidecar.read_text(encoding="utf-8"))
+    assert sc["plan_fingerprint"] == summary["plan_fingerprint"]
+    assert len(sc["scene_budgets"]) == 3
     # 生产检查点已绑定且 digest 与蓝图一一对应
     prod = files["full-project-production.json"].blob["doc"]
     assert prod["phase"] == "STAGE0_BOUND"
@@ -384,14 +395,18 @@ def test_integration_auto_acceptance_full_chain(monkeypatch, tmp_path):
     assert prod["request_sha256"] == summary["execution_request_sha256"]
     assert (tmp_path / "projects/cloud3min_film-auto-int/output/project.json").is_file()
 
-    # ---- 二次进入（模拟续跳恢复）：不得重调 LLM，蓝图原样恢复，digest 稳定 ----
+    # ---- 二次进入（模拟续跳恢复，无 PRODUCTION_REQUEST 环境）----
     chat2 = FakeChat(replies=[])  # 空队列：任何调用都会 AssertionError
     monkeypatch.setattr(deps, "agnes_client", chat2)
+    env2 = {"FILM_TARGET_SECONDS": "auto"}  # 无任务文本（身份权威在 B1 记录）
+    monkeypatch.setattr(acc.os, "environ", env2)
     summary2 = {}
-    with pytest.raises(RuntimeError, match="PR B1 边界"):
-        asyncio.run(acc._run_auto_acceptance("film-auto-int", out, summary2, "tok"))
+    name2, dyn2, cp2, restored2, previous2 = asyncio.run(
+        acc._run_auto_acceptance("film-auto-int", out, summary2, "tok"))
+    assert name2 == project_name
     assert summary2["stage0_status"] == "FROZEN_RESTORED"
     assert summary2["plan_fingerprint"] == summary["plan_fingerprint"]
     assert summary2["execution_request_sha256"] == summary["execution_request_sha256"]
-    assert chat2.calls == 0
+    assert dyn2 == dyn_profile  # 动态 profile 由冻结蓝图导出，跨 hop 稳定
+    assert chat2.calls == 0  # 蓝图恢复零 LLM 调用
     assert summary2["stage0_text_calls_used"] == summary["stage0_text_calls_used"]
