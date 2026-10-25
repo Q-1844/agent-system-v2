@@ -30,12 +30,18 @@ on:
         type: number
         default: 330
       target_duration_seconds:
-        description: '片长档位秒数（200=五段20镜旧片；320=八段32镜续集）'
+        description: '片长档位（200/320=固定档预写剧本；auto=Producer 自主规划，需提供任务描述）'
         type: choice
         options:
           - '200'
           - '320'
-        default: '200' 
+          - 'auto'
+        default: '200'
+      production_request:
+        description: 'auto 模式的任务自然语言（如"拍一个热气球穿越云海的故事，大概两分钟"）；时长可有可无'
+        type: string
+        required: false
+        default: ''
       archive_release_id:
         description: '仅归档接续时复用已有B Release ID（保留旧资产）'
         type: string
@@ -122,6 +128,7 @@ jobs:
           FINALIZE_ONLY: ${{ inputs.finalize_only }}
           DRIVER_TIMEOUT_MINUTES: ${{ inputs.driver_timeout_minutes }}
           FILM_TARGET_SECONDS: ${{ inputs.target_duration_seconds }}
+          PRODUCTION_REQUEST: ${{ inputs.production_request }}
           WORKFLOW_TIMEOUT_MINUTES: '360'
           ARCHIVE_RELEASE_ID: ${{ inputs.archive_release_id }}
           GITHUB_TOKEN: ${{ github.token }}
