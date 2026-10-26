@@ -57,10 +57,10 @@ def test_verified_recovery_checks_alias_and_rebases_local_path(tmp_path, monkeyp
     def fake_native_restore(package, dest, **kwargs):
         d = seed(Path(dest), name)
         doc_path = d / 'output' / 'project.json'
-        doc = json.loads(doc_path.read_text())
+        doc = json.loads(doc_path.read_text(encoding='utf-8'))
         doc['scenes'][0]['shots'][0]['video_versions'][0]['local'] = (
             '/old/runner/projects/' + name + '/output/videos/source.mp4')
-        doc_path.write_text(json.dumps(doc))
+        doc_path.write_text(json.dumps(doc), encoding='utf-8')
         return {'alias': name, 'restorable_level': 'full', 'project_root': str(d)}
     import tools.relstore.restore_campaign as restore
     monkeypatch.setattr(restore, 'restore_package', fake_native_restore)
