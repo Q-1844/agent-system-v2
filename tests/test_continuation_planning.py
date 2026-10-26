@@ -27,6 +27,7 @@ from src.ai.incremental_planner import (
     build_incremental_workplan, continuation_media_profile,
     continuation_sidecar_budgets, parse_scene_targets, validate_asset_set,
 )
+from src.ai.project_production_inspect import ProjectProductionInspect
 from src.core.models import (Character, Project, Scene, Shot, StyleAnchor,
                              VideoVersion)
 from src.core.store import ProjectStore
@@ -282,4 +283,7 @@ def test_integration_continuation_full_chain(client, monkeypatch, tmp_path):
     snap3 = ProjectProductionInspect(name, pdir).snapshot()
     live_wp = build_incremental_workplan(snap3, "", "complete_project", pdir)
     assert live_wp["scene_targets"] == ["s03"]  # s02 已补齐，只剩无镜头的 s03
-    assert validate_asset_set(pdir)["complete"] is False  # s03 无镜头仍缺
+    # validate_asset_set 只验收已存在镜头的完备性（shot 级）：s03 无镜头 =
+    # 空集完备 → True 是正确语义；场景级缺口由 workplan.scene_targets 表达。
+    assert validate_asset_set(pdir)["complete"] is True
+    assert validate_asset_set(pdir)["missing"] == []
