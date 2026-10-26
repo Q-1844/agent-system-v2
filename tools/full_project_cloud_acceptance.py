@@ -1407,6 +1407,30 @@ async def run_acceptance(nonce, out, summary):
     c2_uses = summary.get('c2_asset_uses') or []
     c2_prior = summary.get('c2_source_existing_versions') or []
     project = ProjectStore(project_dir).load()
+    governed_video_ids = {a.get('video_id') for a in (wrapper.video_attempts or [])
+                          if a.get('video_id')}
+
+    def _final_version(sh):
+        return next((v for v in sh.video_versions if v.version_id == sh.final_video), None)
+
+    def _has_c2_reuse_provenance(sh):
+        v = _final_version(sh)
+        if v is None:
+            return False
+        if isinstance(v.generation_basis, dict) and v.generation_basis.get('cross_project_reuse'):
+            return True
+        # materialize_c2 落盘路径是确定性的（output/videos/cross_project/<sha>），
+        # 快照往返后仍可核。
+        return bool(v.local and 'videos/cross_project/' in str(v.local).replace('\\\\', '/'))
+
+    def _has_governed_generation(sh):
+        # 经 BoundedRealClient 提交的视频都有 durable intent（POST 前持久化）+
+        # 供应商 video_id 回执；checkpoint 账本按 video_id 与版本一一对应
+        # （与 snapshot_settled 同一映射纪律）。跨 hop 的 Director/Planner
+        # 出处记录在各自 hop 的账本里，此处以账本为准做汇聚。
+        v = _final_version(sh)
+        return bool(v and v.video_id and v.video_id in governed_video_ids)
+
     for rec in preparation['scenes']:
         if rec.get('director_source') == 'generated_by_full_run' and rec.get('production_plan_source') == 'generated_by_full_run':
             continue
@@ -1414,8 +1438,8 @@ async def run_acceptance(nonce, out, summary):
         if target != AUTO_TARGET or scene is None or not scene.shots or not all(
             sh.final_video and (sh.shot_id in reuse_by_shot or
                                 any(pr.get('shot_id') == sh.shot_id for pr in c2_prior) or
-                                any(v.generation_basis.get('cross_project_reuse')
-                                    for v in sh.video_versions if v.version_id == sh.final_video))
+                                _has_c2_reuse_provenance(sh) or
+                                _has_governed_generation(sh))
             for sh in scene.shots):
             raise RuntimeError('fresh Director/Planner evidence missing for newly generated work')
     manifest = json.loads(Path(child.composition_manifest_file).read_text(encoding="utf-8"))
