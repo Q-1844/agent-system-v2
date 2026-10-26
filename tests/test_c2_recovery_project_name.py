@@ -14,19 +14,19 @@ def make_custom_source(tmp_path):
     target = stage / 'projects' / 'origin'
     old.rename(target)
     docpath = target / 'output' / 'project.json'
-    doc = json.loads(docpath.read_text())
+    doc = json.loads(docpath.read_text(encoding='utf-8'))
     doc['name'] = 'origin'
     doc['scenes'][0]['shots'][0]['video_versions'][0]['local'] = '/old/checkout/projects/origin/output/videos/one.mp4'
-    docpath.write_text(json.dumps(doc))
+    docpath.write_text(json.dumps(doc), encoding='utf-8')
     runpath = target / 'output' / 'full_runs/full/run.json'
-    run = json.loads(runpath.read_text())
+    run = json.loads(runpath.read_text(encoding='utf-8'))
     run['project_name'] = 'origin'
-    runpath.write_text(json.dumps(run))
+    runpath.write_text(json.dumps(run), encoding='utf-8')
     summary = stage / 'e2e_run/unit/summary.json'
-    record = json.loads(summary.read_text())
+    record = json.loads(summary.read_text(encoding='utf-8'))
     record['project_name'] = 'origin'
     record['project_dir'] = '/old/checkout/projects/origin'
-    summary.write_text(json.dumps(record))
+    summary.write_text(json.dumps(record), encoding='utf-8')
     return stage, checkpoint, provenance
 
 
@@ -34,7 +34,7 @@ def test_custom_extension_name_recovers_without_renaming(tmp_path):
     stage, cp, prov = make_custom_source(tmp_path)
     r = restore_snapshot(stage, tmp_path / 'runner', 'unit', cp, prov, project_name='origin')
     assert r['project_name'] == 'origin'
-    doc = json.loads((tmp_path / 'runner/projects/origin/output/project.json').read_text())
+    doc = json.loads((tmp_path / 'runner/projects/origin/output/project.json').read_text(encoding='utf-8'))
     local = doc['scenes'][0]['shots'][0]['video_versions'][0]['local']
     assert Path(local).read_bytes() == b'original-video'
 
