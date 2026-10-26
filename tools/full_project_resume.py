@@ -64,15 +64,21 @@ def download_snapshot(run_id, nonce, token, dest, *, project_name=None):
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
         if sum(i.file_size for i in archive.infolist()) > 2*1024**3:
             raise ValueError('expanded acceptance snapshot exceeds recovery limit')
+        skipped_members = 0
         for info in archive.infolist():
             name = PurePosixPath(info.filename)
             if (name.is_absolute() or '..' in name.parts or '\\' in info.filename
-                    or stat.S_ISLNK(info.external_attr >> 16)
-                    or not (info.filename.startswith(allowed) or info.filename in ('cache/jobs.json','cache/quota.json'))):
-                raise ValueError('unexpected acceptance artifact member')
+                    or stat.S_ISLNK(info.external_attr >> 16)):
+                raise ValueError('unsafe acceptance artifact member')
+            if not (info.filename.startswith(allowed) or info.filename in ('cache/jobs.json','cache/quota.json')):
+                # C2 无人值守链会把按需恢复的素材源项目一并上传（workflow 上传
+                # projects/cloud3min_* 通配），它们不属于恢复目标；跳过安全成员，
+                # 只拒收危险路径，避免一次无害多目录把整个快照判死。
+                skipped_members += 1
+                continue
             archive.extract(info, dest)
     return {'run_id':str(run_id),'source_sha':run['head_sha'],'artifact_id':artifact['id'],
-            'artifact_sha256':digest,'artifact_bytes':len(data)}
+            'artifact_sha256':digest,'artifact_bytes':len(data),'skipped_members':skipped_members}
 
 
 def validate_completed_clip(path, requested_seconds):
