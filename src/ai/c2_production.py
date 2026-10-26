@@ -603,6 +603,10 @@ def c2_media_profile(blueprint: dict) -> Dict[str, Any]:
         'planned_max': old + sum(int(b['max_s']) for b in budgets),
         'min_final': float(math.floor(0.9 * (old + sum(int(b['min_s']) for b in budgets)))),
         'budget': int(cap['video_seconds']),
-        'image_budget': int(cap['image_calls']),
-        'text_budget': int(cap['text_calls']),
+        # 真机 T-REAL-A 实证：25 镜规模影片的首帧+重试需要 >40 张图（image=40
+        # 在 s05 中途耗尽→首帧 batch 无候选→停机，19 镜 151s 已 ACCEPTED 的
+        # 成果险些报废）。视频秒数才是真实资金授权线（保持冻结值不动）；
+        # 图像/文本是过程性资源，给确定性下限，取 max(下限, 冻结值)。
+        'image_budget': max(100, int(cap['image_calls'])),
+        'text_budget': max(100, int(cap['text_calls'])),
     }
