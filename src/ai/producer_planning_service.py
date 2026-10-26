@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -26,6 +27,16 @@ from src.ai.producer_planning_models import (
 SKILL_DIR = (Path(__file__).resolve().parent.parent
              / "agents" / "skill_system" / "candidate"
              / "producer-project-planning")
+
+_logger = logging.getLogger(__name__)
+
+
+def _stage0_fail(reason: str, raw: str = "") -> None:
+    """Stage 0 契约失败的可见化：不打日志的 None 返回会让真机排障变成盲猜。"""
+    tail = ""
+    if raw:
+        tail = f" raw_len={len(raw)} head={raw[:200]!r} tail={raw[-200:]!r}"
+    _logger.warning("Stage0 blueprint rejected: %s%s", reason, tail)
 
 #: Stage 0 单次规划的 LLM 调用上限（首次 + 定向修复）。P1-3。
 STAGE0_ATTEMPTS_MAX = 3
@@ -328,6 +339,7 @@ class ProducerPlanningService:
             parsed = self._parse_blueprint(raw, task_spec, window, limits)
             if parsed is not None:
                 return parsed
+            _stage0_fail(f"attempt {_attempt + 1}/{STAGE0_ATTEMPTS_MAX} unparsable", raw)
             last_error = ("\n\n上一次输出不符合契约（JSON 结构、beats 数值或段数"
                           "超界）。请修正后只返回完整 JSON 对象。")
         raise PlanningContractError(
@@ -337,28 +349,36 @@ class ProducerPlanningService:
                          window: Tuple[int, int],
                          limits: Dict[str, Any]) -> Optional[ProducerPlanningResult]:
         if not isinstance(raw, str):
+            _stage0_fail("raw is not str", repr(raw))
             return None
         try:
             m = re.search(r"\{.*\}", raw.strip(), re.DOTALL)
             if not m:
+                _stage0_fail("no JSON object found in output", raw)
                 return None
             obj = json.loads(m.group(0))
             story = str(obj.get("story_text") or "").strip()
             scenes_raw = obj.get("scenes") or []
             style = obj.get("style") or {}
             if not story or not isinstance(scenes_raw, list) or not scenes_raw:
+                _stage0_fail(f"missing story_text or scenes (story={bool(story)}, "
+                             f"scenes_type={type(scenes_raw).__name__})", raw)
                 return None
             if not (2 <= len(scenes_raw) <= 12):
+                _stage0_fail(f"scene count out of range: {len(scenes_raw)}", raw)
                 return None
             scenes: List[PlannedScene] = []
             beats: List[int] = []
             for i, s in enumerate(scenes_raw, start=1):
                 if not isinstance(s, dict):
+                    _stage0_fail(f"scene {i} is not a dict", raw)
                     return None
                 title = str(s.get("title") or "").strip()
                 summary = str(s.get("summary") or "").strip()
                 beat = s.get("beats")
                 if not summary or not isinstance(beat, int) or not 1 <= beat <= 9:
+                    _stage0_fail(f"scene {i} invalid (summary={bool(summary)}, "
+                                 f"beats={beat!r})", raw)
                     return None
                 if not title:
                     title = f"段{i}"
@@ -377,5 +397,6 @@ class ProducerPlanningService:
                                   "image_calls": int(limits.get("image_calls") or 60),
                                   "video_seconds": int(limits.get("video_seconds")
                                                        or max(window[1], 60))})
-        except (ValueError, TypeError, PlanningContractError):
+        except (ValueError, TypeError, PlanningContractError) as exc:
+            _stage0_fail(f"exception during parse/allocate: {exc!r}", raw)
             return None
