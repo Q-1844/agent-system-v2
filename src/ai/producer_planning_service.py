@@ -332,7 +332,10 @@ class ProducerPlanningService:
         last_error = ""
         for _attempt in range(STAGE0_ATTEMPTS_MAX):
             self._ledger.reserve()  # P0-4：预留先于网络请求
-            kwargs = {'thinking': True, 'max_tokens': 4096, 'temperature': 0.35} if self._thinking else {}
+            # thinking=True 时 provider 的推理 token 计入 max_tokens——真机
+            # T-REAL-A 实证 4096 会把 5 段中文蓝图的 JSON 腰斩（raw_len 1990/
+            # 3195，Expecting ',' delimiter）。8192 给推理+完整 JSON 留余量。
+            kwargs = {'thinking': True, 'max_tokens': 8192, 'temperature': 0.35} if self._thinking else {}
             raw = await self._client.chat(
                 [{"role": "system", "content": system},
                  {"role": "user", "content": user + last_error}], **kwargs)
