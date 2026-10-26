@@ -270,10 +270,11 @@ class ProducerPlanningService:
     """
 
     def __init__(self, client, ledger: Stage0Ledger, *,
-                 skill_dir: Path = SKILL_DIR):
+                 skill_dir: Path = SKILL_DIR, thinking: bool = False):
         self._client = client
         self._ledger = ledger
         self._discipline, self._role = load_skill_discipline(skill_dir)
+        self._thinking = bool(thinking)
 
     @property
     def system_prompt(self) -> str:
@@ -320,9 +321,10 @@ class ProducerPlanningService:
         last_error = ""
         for _attempt in range(STAGE0_ATTEMPTS_MAX):
             self._ledger.reserve()  # P0-4：预留先于网络请求
+            kwargs = {'thinking': True, 'max_tokens': 4096, 'temperature': 0.35} if self._thinking else {}
             raw = await self._client.chat(
                 [{"role": "system", "content": system},
-                 {"role": "user", "content": user + last_error}])
+                 {"role": "user", "content": user + last_error}], **kwargs)
             parsed = self._parse_blueprint(raw, task_spec, window, limits)
             if parsed is not None:
                 return parsed

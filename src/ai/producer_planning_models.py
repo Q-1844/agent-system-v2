@@ -255,11 +255,27 @@ class TaskSpec:
                                                 scope="not_applicable"))
     style_hint: Optional[str] = None
     resource_ceiling: ResourceCeiling = field(default_factory=ResourceCeiling)
+    # Additional *named* material sources; absent for legacy Stage0 task
+    # identities, so historical frozen TaskSpec SHA256 values remain stable.
+    asset_source_projects: Tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.intent not in INTENTS:
             raise PlanningContractError(
                 f"intent 非法: {self.intent!r} (合法: {INTENTS})")
+        sources = self.asset_source_projects
+        if not isinstance(sources, (tuple, list)):
+            raise PlanningContractError('asset_source_projects must be a list of names')
+        unique = []
+        for name in sources:
+            if (not isinstance(name, str) or not re.fullmatch(r'[\w.-]{1,120}', name)
+                    or name in ('.', '..') or '/' in name or '\\' in name):
+                raise PlanningContractError(f'invalid asset source project: {name!r}')
+            if name != self.source_project and name not in unique:
+                unique.append(name)
+        if len(unique) > 4:
+            raise PlanningContractError('a C2 task may hydrate at most four extra source projects')
+        object.__setattr__(self, 'asset_source_projects', tuple(sorted(unique)))
         text = self.request_text
         if not isinstance(text, str) or not text.strip() \
                 or len(text) > 12000:
@@ -276,7 +292,7 @@ class TaskSpec:
                     f"{self.intent} 意图必须携带 source_project")
 
     def canonical_payload(self) -> Dict[str, Any]:
-        return {
+        payload = {
             "schema_version": TASK_SPEC_SCHEMA,
             "intent": self.intent,
             "request_text": self.request_text,
@@ -285,6 +301,11 @@ class TaskSpec:
             "style_hint": self.style_hint,
             "resource_ceiling": self.resource_ceiling.to_dict(),
         }
+        # Important: omit empty optional field rather than change old frozen
+        # request hashes when rolling out the new resource-discovery option.
+        if self.asset_source_projects:
+            payload['asset_source_projects'] = list(self.asset_source_projects)
+        return payload
 
     def sha256(self) -> str:
         """任务身份摘要（阶段 0 崩溃后重新规划仍复用同一身份）。"""
@@ -301,6 +322,7 @@ class TaskSpec:
             source_project=d.get("source_project"),
             duration=DurationIntent.from_dict(d.get("duration") or {}),
             style_hint=d.get("style_hint"),
+            asset_source_projects=tuple(d.get('asset_source_projects') or ()),
             resource_ceiling=ResourceCeiling(
                 **{k: (d.get("resource_ceiling") or {}).get(k)
                    for k in RESOURCE_KEYS}),

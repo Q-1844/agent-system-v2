@@ -96,6 +96,7 @@ def _overlap_score(query: str, haystack: str) -> int:
 def discover_project_assets(projects_root: Path, request_text: str,
                             *, source_project: Optional[str] = None,
                             exclude_project: Optional[str] = None,
+                            priority_sources: Optional[List[str]] = None,
                             limit: int = 12) -> List[Dict[str, Any]]:
     """Return validated, provenance-bearing candidates; no writes or paid calls.
 
@@ -106,6 +107,9 @@ def discover_project_assets(projects_root: Path, request_text: str,
     if not 0 <= limit <= 100:
         raise ValueError('invalid candidate limit')
     root = Path(projects_root)
+    # Projects named in the task are worth showing to Agnes even if simple
+    # text n-grams miss a visual synonym. They still require real provenance.
+    pinned = set(priority_sources or ())
     if source_project:
         names = [source_project]
         # Other projects can additionally supply references. No implicit reuse.
@@ -130,7 +134,7 @@ def discover_project_assets(projects_root: Path, request_text: str,
                 context = ' '.join([project.story_text[-400:], scene.title, scene.summary,
                                     shot.description, shot.prompt_en, project.style.art_style])
                 score = _overlap_score(request_text, context)
-                if source_project != name and score == 0:
+                if source_project != name and name not in pinned and score == 0:
                     continue
                 for version in shot.video_versions:
                     if shot.final_video != version.version_id or version.status != 'done':
@@ -151,7 +155,7 @@ def discover_project_assets(projects_root: Path, request_text: str,
                         'seconds': version.seconds_returned or shot.target_duration_s,
                         'direct_reuse_eligible': bool(verified),
                         'description': (shot.description or scene.summary)[:500],
-                        'score': score + (3 if source_project == name else 0),
+                        'score': score + (5 if name in pinned else 3 if source_project == name else 0),
                     }
                     results.append(item)
                 # A selected local first frame is suitable as a reference,
@@ -171,7 +175,7 @@ def discover_project_assets(projects_root: Path, request_text: str,
                             'bytes': checked.stat().st_size if checked else None,
                             'direct_reuse_eligible': False,
                             'description': (shot.description or scene.summary)[:500],
-                            'score': score + (3 if source_project == name else 0),
+                            'score': score + (5 if name in pinned else 3 if source_project == name else 0),
                         })
         # Production Resources V1 holds curated reference images that are not
         # attached to a Shot. Expose them as read-only reference candidates too,
@@ -190,7 +194,7 @@ def discover_project_assets(projects_root: Path, request_text: str,
             context = ' '.join([project.story_text[-400:], project.style.art_style,
                                 asset.purpose, asset.view, asset.source])
             score = _overlap_score(request_text, context)
-            if source_project != name and score == 0:
+            if source_project != name and name not in pinned and score == 0:
                 continue
             checked = local_asset_file(base, asset.local)
             if checked is None and not asset.url:
@@ -209,7 +213,7 @@ def discover_project_assets(projects_root: Path, request_text: str,
                 'sha256': actual_sha, 'bytes': checked.stat().st_size if checked else None,
                 'direct_reuse_eligible': False,
                 'description': f'{asset.purpose} {asset.view}'.strip()[:500],
-                'score': score + (3 if source_project == name else 0),
+                'score': score + (5 if name in pinned else 3 if source_project == name else 0),
             })
     # Stable ordering: favor relevant candidates while using identity tie-breaks.
     results.sort(key=lambda a: (-a['score'], a['source_project'], a['scene_id'],
@@ -222,16 +226,29 @@ def select_asset_uses(candidates: List[Dict[str, Any]], request_text: str,
                       direct_exclude_project: Optional[str] = None) -> List[Dict[str, Any]]:
     """Producer-planning candidate decisions, frozen *before* paid production.
 
-    Direct video reuse is explicit-only; ordinary semantic matches are context
-    references. The actual reuse operation validates the frozen SHA again.
+    Direct reuse is inferred from ordinary creator language; semantic
+    matches alone remain reference-only. The actual reuse operation validates the frozen SHA again.
     """
-    direct = any(word in (request_text or '') for word in
-                 ('直接复用', '直接使用原镜头', '复用原片段', '直接拼入', '直接引用原视频'))
+    text = request_text or ''
+    reference_only = any(word in text for word in (
+        '仅作参考', '只做参考', '作为风格参考', '只参考', '不要复用',
+        '不使用旧镜头', '不要直接复用'))
+    direct = not reference_only and (
+        any(word in text for word in (
+            '直接复用', '直接使用原镜头', '复用原片段', '直接拼入',
+            '直接引用原视频', '沿用旧镜头', '使用以前的镜头',
+            '用以前的镜头', '用之前的镜头', '拿旧镜头', '利用已有视频'))
+        or bool(re.search(r'用.{0,12}(?:旧|原|之前|以前).{0,8}(?:镜头|视频|片段)', text))
+    )
     uses = []
     taken_direct = False
     for item in candidates:
+        try:
+            direct_seconds = float(item.get('seconds') or 0)
+        except (TypeError, ValueError):
+            direct_seconds = 0
         if (not taken_direct and direct and item['kind'] == 'video' and
-                item['direct_reuse_eligible'] and
+                item['direct_reuse_eligible'] and 4 <= direct_seconds <= 11 and
                 item['source_project'] != direct_exclude_project):
             kind, taken_direct = 'reuse_media', True
         elif len([u for u in uses if u['action'] == 'reference_only']) < max_reference:
