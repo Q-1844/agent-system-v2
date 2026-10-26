@@ -183,3 +183,40 @@ def binding_projection(pdir, project_name: Optional[str], shot_id: str) -> dict:
             "binding_revision": (binding or {}).get("binding_revision"),
             "document_revision": (binding or {}).get("document_revision")
                                  or validity.get("document_revision")}
+
+
+# ============ C2 cross-project source continuity projection (read-only) ============
+def source_continuity_projection(pdir) -> dict:
+    """Compact source-world facts for continuation without giving Producer write access.
+
+    This lives in the established, authorized read-only production-context
+    boundary. Project, Scene/SpatialAnchor/SceneState and Production Resources
+    canonical data are observed, never updated by this function.
+    """
+    from src.scene_system.store import SceneSystemStore
+    from src.resources.store import ResourceStore
+    project_dir = Path(pdir)
+    locations = SceneSystemStore(project_dir).load()
+    resources = ResourceStore(project_dir).load()
+    return {
+        'locations': [
+            {'source_location_id': loc.location_id, 'name': loc.name,
+             'identity': (loc.identity_description or loc.description)[:400]}
+            for loc in list(locations.locations.values())[:8]],
+        'spatial_anchors': [
+            {'source_anchor_id': anc.anchor_id, 'source_location_id': anc.location_id,
+             'name': anc.name, 'semantic_zone': anc.semantic_zone}
+            for anc in list(locations.anchors.values())[:16]],
+        'recent_scene_states': [
+            {'source_scene_id': inst.story_scene_id,
+             'source_location_id': inst.location_id,
+             'time_of_day': inst.state.time_of_day,
+             'weather': inst.state.weather, 'lighting': inst.state.lighting,
+             'notes': (inst.state.notes or '')[:260]}
+            for inst in list(locations.scene_instances.values())[-6:]
+            if inst.status == 'active'],
+        'resource_props': [
+            {'source_prop_id': prop.prop_id, 'name': prop.name,
+             'description': (prop.description or '')[:250]}
+            for prop in list(resources.props.values())[:8]],
+    }

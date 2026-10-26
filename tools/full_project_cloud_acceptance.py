@@ -186,7 +186,8 @@ class BoundedRealClient:
 
     def __init__(self, client, checkpoint, project_dir, evidence_dir, *, finalize_only=False,
                  video_budget=VIDEO_BUDGET_SECONDS, image_budget=IMAGE_BUDGET,
-                 text_budget=TEXT_BUDGET, film_target_seconds=200, auto_profile=None):
+                 text_budget=TEXT_BUDGET, film_target_seconds=200, auto_profile=None,
+                 stage0_text_reserved=0):
         self.client, self.checkpoint = client, checkpoint
         self.project_dir, self.evidence_dir = Path(project_dir), Path(evidence_dir)
         self.lock = asyncio.Lock()
@@ -198,6 +199,7 @@ class BoundedRealClient:
         self.finalize_only = finalize_only
         self.video_budget, self.image_budget, self.text_budget = video_budget, image_budget, text_budget
         self.film_target_seconds = film_target_seconds  # 档位透传给自动续跑派发
+        self.stage0_text_reserved = int(stage0_text_reserved)  # 单独冻结的 Stage0 文本调用
         self.auto_profile = auto_profile  # PR B2：auto 动态 profile（冻结蓝图导出）
 
     def restore_usage(self, document):
@@ -231,9 +233,13 @@ class BoundedRealClient:
     async def chat(self, *args, **kwargs):
         if self.finalize_only:
             raise RuntimeError('finalize-only forbids new Agnes generation calls')
-        self.text_calls += 1
-        if self.text_calls > self.text_budget:
+        if self.text_calls + self.stage0_text_reserved + 1 > self.text_budget:
             raise RuntimeError("acceptance text-call budget exhausted")
+        self.text_calls += 1
+        if self.film_target_seconds == AUTO_TARGET:
+            # C2/B2: consume a text slot durably before remote submission.
+            # A crash after reservation may lose one slot, never grant extra.
+            await self.persist()
         return await self.client.chat(*args, **kwargs)
 
     async def generate_image(self, *args, **kwargs):
@@ -242,9 +248,11 @@ class BoundedRealClient:
         if self.submission_blocked:
             raise RuntimeError("new media submissions are paused; reconcile existing work")
         self.media_gate()
-        self.image_calls += 1
-        if self.image_calls > self.image_budget:
+        if self.image_calls + 1 > self.image_budget:
             raise RuntimeError("acceptance image budget exhausted")
+        self.image_calls += 1
+        if self.film_target_seconds == AUTO_TARGET:
+            await self.persist()
         return await self.client.generate_image(*args, **kwargs)
 
     async def create_video(self, prompt, **kwargs):
@@ -371,7 +379,108 @@ def ensure_archive_input(project_dir, nonce):
         'story_text': canonical['story_text'], 'scenes': scenes, 'style': canonical.get('style')})
 
 
-def archive_completed_project(token, nonce, project_dir, final_path, evidence_dir, source_sha):
+def preflight_frozen_reused_media(project_dir, *, workplan=None,
+                                  c2_prior=(), c2_uses=()):
+    """Verify all frozen reused clips BEFORE allowing new paid video calls.
+
+    The original C1 workplan may contain URL-only versions; those are honest
+    metadata but are NOT playable media on a fresh worker. C2 imported clips
+    require a matching SHA-bound selected source. A verified local media file
+    must pass ffprobe+full-decode (reusing existing resume QA).
+    """
+    from src.core.store import ProjectStore
+    from src.ai.cross_project_assets import local_asset_file
+    from tools.full_project_resume import validate_completed_clip
+    workplan = workplan or {}
+    reused = {entry['target']: entry.get('evidence') or {}
+              for entry in workplan.get('reuse_assets') or []}
+    prior = {entry['shot_id']: entry for entry in c2_prior}
+    selected = [u.get('evidence') for u in c2_uses
+                if u.get('action') == 'reuse_media']
+    project = ProjectStore(Path(project_dir)).load()
+    verified = []
+    for shot in project.all_shots():
+        proof = reused.get(shot.shot_id) or prior.get(shot.shot_id)
+        version = next((v for v in shot.video_versions
+                        if v.version_id == shot.final_video and v.status == 'done'), None)
+        basis = (version.generation_basis or {}).get('cross_project_reuse') if version else None
+        if proof is None and basis is None:
+            continue
+        if not version:
+            raise RuntimeError(f'frozen reusable Shot {shot.shot_id} lacks final version')
+        local = local_asset_file(Path(project_dir), version.local)
+        if local is None:
+            raise RuntimeError(f'frozen reusable Shot {shot.shot_id} has no local verified media')
+        digest = hashlib.sha256(local.read_bytes()).hexdigest()
+        if proof is not None:
+            if proof.get('version_id') != version.version_id or proof.get('video_id') != version.video_id:
+                raise RuntimeError(f'frozen source receipt changed: {shot.shot_id}')
+            if proof.get('sha256') and proof['sha256'] != digest:
+                raise RuntimeError(f'frozen source SHA changed: {shot.shot_id}')
+        if basis is not None and (basis not in selected or basis.get('sha256') != digest):
+            raise RuntimeError(f'C2 imported media no longer matches frozen source: {shot.shot_id}')
+        target = float(version.seconds_returned or shot.target_duration_s or 0)
+        if target < 4:
+            raise RuntimeError(f'frozen source has no trustworthy duration: {shot.shot_id}')
+        validate_completed_clip(local, target)
+        verified.append({'shot_id': shot.shot_id, 'version_id': version.version_id,
+                         'sha256': digest})
+    return verified
+
+
+def verify_composition_clip(shot, clip, project_dir, accepted_ids,
+                            *, frozen_reuse=(), frozen_prior=(), selected_assets=()):
+    """Accept old clips only with frozen provenance AND local verified bytes.
+
+    Newly generated clips continue requiring a confirmed provider receipt.
+    C1 and C2 clips can be reused without new paid receipts if their frozen
+    Shot+Version identity matches and the selected file's digest is verified.
+    """
+    if shot is None or not shot.final_video:
+        raise RuntimeError('composition references a missing Shot final')
+    version = next((v for v in shot.video_versions
+                    if v.version_id == clip.get('video_version_id')), None)
+    if (version is None or shot.final_video != version.version_id or
+            version.status != 'done'):
+        raise RuntimeError('composition references an invalid/unselected final version')
+    path = Path(clip['local_path']).resolve()
+    if (not path.is_relative_to(Path(project_dir).resolve()) or not path.is_file() or
+            path.stat().st_size <= 0 or not version.local or
+            path != Path(version.local).resolve()):
+        raise RuntimeError('composition selected file is absent or outside the project')
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    if version.video_id and version.video_id in accepted_ids:
+        provenance = 'new_paid_receipt'
+    else:
+        proof = next((r.get('evidence') or {} for r in frozen_reuse
+                      if r.get('target') == shot.shot_id and
+                      (r.get('evidence') or {}).get('version_id') == version.version_id), None)
+        if proof is None:
+            proof = next((r for r in frozen_prior
+                          if r.get('shot_id') == shot.shot_id and
+                          r.get('version_id') == version.version_id), None)
+        if proof is not None:
+            if proof.get('video_id') != version.video_id:
+                raise RuntimeError('frozen reused receipt mismatch')
+            if proof.get('sha256') and proof['sha256'] != digest:
+                raise RuntimeError('frozen reused bytes SHA mismatch')
+            provenance = 'existing_verified_video'
+        else:
+            basis = version.generation_basis.get('cross_project_reuse') if isinstance(
+                version.generation_basis, dict) else None
+            approved = any(u.get('action') == 'reuse_media' and
+                           u.get('evidence') == basis for u in selected_assets)
+            if not approved or basis.get('sha256') != digest:
+                raise RuntimeError('unverified composition source; no paid receipt or frozen reuse')
+            provenance = 'cross_project_sha_reuse'
+    return {'shot_id': shot.shot_id, 'video_id': version.video_id,
+            'version_id': version.version_id, 'bytes': path.stat().st_size,
+            'sha256': digest, 'seconds_returned': version.seconds_returned,
+            'source_kind': provenance}
+
+
+def archive_completed_project(token, nonce, project_dir, final_path, evidence_dir,
+                              source_sha, *, output_kind='final_video'):
     from tools.e2e_autonomous_run import B1GitHubCas, sha256_file
     from tools.relstore import archive_campaign, restore_campaign
     from tools.relstore.github_release_adapter import GitHubReleaseAdapter, HttpxTransport
@@ -389,12 +498,17 @@ def archive_completed_project(token, nonce, project_dir, final_path, evidence_di
             raise ValueError('existing release belongs to a different project')
         release_id = existing_id
     else:
-        release_id = adapter.create_release(tag, name=f"Full project >=180s {nonce}", draft=True,
+        display = (f"Asset set {nonce}" if output_kind == 'asset_set' else
+                   f"Full project >=180s {nonce}")
+        release_id = adapter.create_release(tag, name=display, draft=True,
                                             target_commitish="main").id
-    media_sha = sha256_file(final_path)
-    media = adapter.upload_asset_with_recovery(release_id, "final.mp4", final_path.read_bytes(), media_sha)
-    if hashlib.sha256(adapter.download_asset_authenticated(media.id)).hexdigest() != media_sha:
-        raise RuntimeError("final MP4 re-download SHA mismatch")
+    media = None
+    media_sha = None
+    if output_kind != 'asset_set':
+        media_sha = sha256_file(final_path)
+        media = adapter.upload_asset_with_recovery(release_id, "final.mp4", final_path.read_bytes(), media_sha)
+        if hashlib.sha256(adapter.download_asset_authenticated(media.id)).hexdigest() != media_sha:
+            raise RuntimeError("final MP4 re-download SHA mismatch")
     opdir = evidence_dir / "archive"
     ensure_archive_input(project_dir, nonce)
     archive_campaign.plan(project_dir=project_dir, opdir=opdir, operation_id=f"archive-{nonce}",
@@ -422,7 +536,11 @@ def archive_completed_project(token, nonce, project_dir, final_path, evidence_di
     ref = {"repo": "Q-1844/agent-system-v2-rundata", "release_tag": tag,
            "release_id": release_id, "asset_id": package.id, "asset_name": package_name,
            "sha256": package_sha, "tree_fingerprint": tree_fingerprint,
-           "bytes": len(redownload), "final_mp4_asset_id": media.id, "final_mp4_sha256": media_sha}
+           "bytes": len(redownload)}
+    if output_kind == 'asset_set':
+        ref['output_kind'] = 'asset_set'
+    else:
+        ref.update(final_mp4_asset_id=media.id, final_mp4_sha256=media_sha)
     registry.set_verified_restorable(project_id=nonce, archive_ref=ref, restorable_level="full",
                                      operation_id=f"{nonce}-verified")
     return {"archive_ref": ref, "registry": registry.to_doc(),
@@ -483,10 +601,8 @@ def normalize_dispatch_input_to_task_spec(nonce, environ=None):
         raise ValueError(f"production_request 超长（>{PRODUCTION_REQUEST_MAX} 字符）")
     source_project = (env.get("SOURCE_PROJECT") or "").strip() or None
     intent, reason = suggest_intent(request, source_project=source_project)
-    if intent in ("extend_existing", "sequel"):
-        raise NotYetWired(
-            f"任务被识别为 {intent}（{reason}）；该意图的无值守接线在 PR C2 交付，"
-            "本阶段拒绝执行且不产生任何付费调用")
+    if intent in ("extend_existing", "sequel") and not source_project:
+        raise ValueError(f"{intent} 需要 source_project（不得新建空白替代原项目）")
     return TaskSpec(intent=intent, request_text=request,
                     duration=extract_duration_intent(request),
                     source_project=source_project)
@@ -571,119 +687,292 @@ def _resolve_production_project(target, restored, project_name, profile, nonce):
 
 
 async def _run_continuation_acceptance(nonce, out, summary, token, task_spec):
-    """续作主链（PR C1）：complete_project / add_assets / resume_run 的执行。
+    """C1: deterministic add_assets/complete_project, with safe cross-hop restore.
 
-    与 create 的区别：
-    - 项目 = source_project（绝不新建/重命名）；故事/剧本已存在，**零规划 LLM**，
-      工作计划由项目现状确定性导出（快照 → IncrementalWorkPlan）后冻结；
-    - 执行身份 digest 覆盖（任务 + 场景清单 + 预算），跨 hop 稳定；
-    - add_assets → output_kind=asset_set：验收只看资产完备性，无时长门槛；
-      complete_project/resume_run → final_video：min_final = 0.9 × 既有规划。
-    - resume_run 的诚实边界（T05）：快照恢复机制绑定原 nonce，新任务带
-      RESUME_RUN_ID 一律拒绝并指路；不带则按项目现状继续（complete 语义）。
+    Live project progress is NOT the frozen authorized workplan. A resumed
+    attempt with paid receipts must recover its actual prior project snapshot;
+    rehydrating an older Release and submitting again is forbidden.
     """
-    from tools.stage0_state import (STAGE0_FILENAME, Stage0Conflict, Stage0Record)
+    from tools.stage0_state import STAGE0_FILENAME, Stage0Conflict, Stage0Record
     from tools.video_task_state import ProductionCheckpoint, task_index, validate_nonce
+    from tools.e2e_autonomous_run import ensure_branch
     from src.ai.project_production_inspect import ProjectProductionInspect
-    from src.ai.incremental_planner import (build_incremental_workplan,
-                                            continuation_media_profile,
-                                            continuation_sidecar_budgets)
+    from src.ai.incremental_planner import (
+        build_incremental_workplan, continuation_media_profile,
+        continuation_sidecar_budgets, validate_live_scope,
+    )
+    from src.ai.cross_project_assets import safe_project_dir
+    from src.ai.cross_project_archive import ensure_archived_source_available
     from src.core.store import ProjectStore
     import deps
 
     validate_nonce(nonce)
     source = task_spec.source_project
-    if task_spec.intent == "resume_run" and os.environ.get("RESUME_RUN_ID", "").strip():
-        summary.update(blocked_stage="resume_run_requires_original_nonce",
+    resume_id = os.environ.get('RESUME_RUN_ID', '').strip()
+    if task_spec.intent == 'resume_run' and resume_id:
+        # The original FullRun is not transferable to a newly created nonce.
+        summary.update(blocked_stage='resume_run_requires_original_nonce',
                        no_new_media_submitted=True)
-        raise RuntimeError(
-            "resume_run_id 属于原任务 nonce 的恢复链（workflow_dispatch 原 nonce + "
-            "resume_run_id）；新任务请用『继续项目』语义（不传 run id，按项目现状继续）")
-
-    await _ensure_deps_ready()
-    project_dir = deps.project_manager.get_project_dir(source)
-    snap = ProjectProductionInspect(source, project_dir).snapshot()
-    if not snap.exists:
-        summary.update(blocked_stage="source_project_missing", no_new_media_submitted=True)
-        raise RuntimeError(f"source project 不存在或不可读: {source!r}（零媒体）")
-    if any(b.startswith("ACTIVE_") for b in snap.blockers):
-        summary.update(blocked_stage="active_run_conflict", no_new_media_submitted=True)
-        raise RuntimeError(
-            f"source project 有进行中的运行（{snap.blockers}）；等它结束或先恢复它（零媒体）")
-
-    project = ProjectStore(project_dir).load()
-    workplan = build_incremental_workplan(snap, task_spec.request_text,
-                                          task_spec.intent, project_dir)
-    profile = continuation_media_profile(project)
+        raise RuntimeError('resume_run_id 属于原任务 nonce 的恢复链（workflow_dispatch 原任务 nonce + '
+                           'resume_run_id）；新任务请用继续项目语义')
 
     stage0_idx = task_index(token, nonce, STAGE0_FILENAME)
-    from tools.e2e_autonomous_run import ensure_branch
     ensure_branch(stage0_idx)
     stage0 = Stage0Record(stage0_idx, nonce)
     try:
         stage0.bootstrap(task_spec)
     except Stage0Conflict as exc:
-        summary.update(blocked_stage="stage0_identity", no_new_media_submitted=True)
+        summary.update(blocked_stage='stage0_identity', no_new_media_submitted=True)
         raise RuntimeError(str(exc)) from exc
+
+    await _ensure_deps_ready()
+    restored = None
+    previous = {}
+    cp = None
     if stage0.plan_fingerprint is not None:
-        stage0.verify()  # 跨 hop：工作计划必须与冻结指纹一致
+        stage0.verify()
         workplan = stage0.blueprint
-        summary.update(stage0_status="FROZEN_RESTORED",
+        digest = request_digest(AUTO_TARGET, dict(workplan['digest_inputs']))
+        cp = ProductionCheckpoint(task_index(token, nonce, 'full-project-production.json'),
+                                  nonce, digest)
+        previous = json.loads(json.dumps(cp.doc))
+        if cp.current is None:
+            # Crash window: Stage0.freeze CAS succeeded, but the initial
+            # ProductionCheckpoint STAGE0_BOUND CAS did not happen yet. The
+            # frozen plan/digest is already immutable, and there cannot be
+            # paid submissions without a bound execution checkpoint.
+            if resume_id:
+                raise RuntimeError('C1 frozen Stage0 has no execution checkpoint to restore')
+            cp.save(phase='STAGE0_BOUND', github_run_id=os.environ.get('GITHUB_RUN_ID'),
+                    source_sha=os.environ.get('GITHUB_SHA'), film_target_seconds=AUTO_TARGET,
+                    task_spec_sha256=stage0.doc.get('task_spec_sha256'),
+                    plan_fingerprint=stage0.plan_fingerprint,
+                    stage0_text_calls_used=stage0.text_calls_used,
+                    output_kind=workplan['output_kind'],
+                    authorized_video_seconds=int(workplan['digest_inputs']['budget']))
+            previous = json.loads(json.dumps(cp.doc))
+            summary['stage0_checkpoint_rebound'] = True
+        if resume_id:
+            from tools.full_project_resume import download_snapshot, restore_snapshot
+            staging = out / 'source-snapshot'
+            provenance = await asyncio.to_thread(
+                download_snapshot, resume_id, nonce,
+                os.environ.get('GITHUB_TOKEN'), staging, project_name=source)
+            restored = restore_snapshot(
+                staging, Path.cwd(), nonce, previous, provenance,
+                finalize_only=finalize_only_from_env(), project_name=source)
+            import shutil
+            shutil.rmtree(staging)
+            if restored['project_name'] != source:
+                raise RuntimeError('restored C1 project differs from frozen source')
+            project_dir = Path.cwd() / 'projects' / source
+            cp.save(phase='RESTORED', github_run_id=os.environ.get('GITHUB_RUN_ID'),
+                    source_sha=os.environ.get('GITHUB_SHA'), resume_from_run_id=resume_id,
+                    updated_at=utc_now(), terminal_status=None, error=None,
+                    resume_history=[*(previous.get('resume_history') or []), provenance])
+            summary['resume'] = restored
+        else:
+            if previous.get('video_attempts'):
+                raise RuntimeError('C1 paid continuation requires RESUME_RUN_ID; '
+                                   'refusing to rehydrate stale source and resubmit media')
+            summary['source_resolution'] = await asyncio.to_thread(
+                ensure_archived_source_available, deps.project_manager.base_dir,
+                source, token=token)
+            project_dir = safe_project_dir(deps.project_manager.base_dir, source)
+        project = ProjectStore(project_dir).load()
+        validate_live_scope(project, workplan)
+        profile = dict(workplan.get('execution_profile') or continuation_media_profile(project))
+        profile['budget'] = int(workplan['digest_inputs']['budget'])
+        summary.update(stage0_status='FROZEN_RESTORED',
                        plan_fingerprint=stage0.plan_fingerprint)
     else:
-        # digest 输入冻结进 workplan：budget 必须取自冻结时刻的状态
-        # （若按 live missing 秒数重算，hop-1 产出后 hop-2 会漂移 → 拒绝恢复）。
-        workplan["digest_inputs"] = {
-            "scope": "full-project-continuation-v1",
-            "scenes": [(sc.scene_id, sc.summary) for sc in snap.scenes],
-            "budget": profile["budget"]}
+        if resume_id:
+            raise RuntimeError('resume source run requires a previously frozen continuation workplan')
+        summary['source_resolution'] = await asyncio.to_thread(
+            ensure_archived_source_available, deps.project_manager.base_dir,
+            source, token=token)
+        project_dir = safe_project_dir(deps.project_manager.base_dir, source)
+        snap = ProjectProductionInspect(source, project_dir).snapshot()
+        if not snap.exists:
+            summary.update(blocked_stage='source_project_missing', no_new_media_submitted=True)
+            raise RuntimeError(f'source project 不存在或不可读: {source!r}（零媒体）')
+        if any(b.startswith('ACTIVE_') for b in snap.blockers):
+            summary.update(blocked_stage='active_run_conflict', no_new_media_submitted=True)
+            raise RuntimeError(f'source project 有进行中的运行（{snap.blockers}）；拒绝新建（零媒体）')
+        project = ProjectStore(project_dir).load()
+        workplan = build_incremental_workplan(snap, task_spec.request_text,
+                                              task_spec.intent, project_dir)
+        profile = continuation_media_profile(project)
+        workplan['digest_inputs'] = {
+            'scope': 'full-project-continuation-v1',
+            'scenes': [(sc.scene_id, sc.summary) for sc in snap.scenes],
+            'budget': profile['budget'],
+        }
+        workplan['execution_profile'] = dict(profile)
         plan_fp = stage0.freeze(workplan)
-        summary.update(stage0_status="FROZEN", plan_fingerprint=plan_fp)
-    summary.update(task_spec_sha256=stage0.doc.get("task_spec_sha256"),
-                   scene_targets=workplan["scene_targets"],
-                   output_kind=workplan["output_kind"],
-                   reuse_assets=len(workplan["reuse_assets"]),
-                   generate_missing=len(workplan["generate_missing"]))
-    write_json(out / "stage0-status.json",
-               {"status": stage0.doc.get("status"),
-                "intent": task_spec.intent,
-                "task_spec_sha256": stage0.doc.get("task_spec_sha256"),
-                "plan_fingerprint": stage0.plan_fingerprint,
-                "text_calls_used": stage0.text_calls_used})
+        summary.update(stage0_status='FROZEN', plan_fingerprint=plan_fp)
+        digest = request_digest(AUTO_TARGET, dict(workplan['digest_inputs']))
+        cp = ProductionCheckpoint(task_index(token, nonce, 'full-project-production.json'),
+                                  nonce, digest)
+        previous = json.loads(json.dumps(cp.doc))
+        if cp.current is not None:
+            raise RuntimeError('fresh C1 freeze found existing execution checkpoint')
+        cp.save(phase='STAGE0_BOUND', github_run_id=os.environ.get('GITHUB_RUN_ID'),
+                source_sha=os.environ.get('GITHUB_SHA'), film_target_seconds=AUTO_TARGET,
+                task_spec_sha256=stage0.doc.get('task_spec_sha256'),
+                plan_fingerprint=stage0.plan_fingerprint,
+                stage0_text_calls_used=stage0.text_calls_used,
+                output_kind=workplan['output_kind'],
+                authorized_video_seconds=int(profile['budget']))
 
-    # sidecar：只补缺（已有 sidecar 不覆盖；无镜头场景给默认预算，
-    # 与 continuation_media_profile 的窗口一致）
+    summary.update(task_spec_sha256=stage0.doc.get('task_spec_sha256'),
+                   scene_targets=workplan['scene_targets'],
+                   output_kind=workplan['output_kind'],
+                   reuse_assets=len(workplan['reuse_assets']),
+                   generate_missing=len(workplan['generate_missing']),
+                   project_name=source, project_dir=str(project_dir),
+                   stage0_text_calls_used=stage0.text_calls_used,
+                   execution_request_sha256=digest)
+    write_json(out / 'stage0-status.json', {
+        'status': stage0.doc.get('status'), 'intent': task_spec.intent,
+        'task_spec_sha256': stage0.doc.get('task_spec_sha256'),
+        'plan_fingerprint': stage0.plan_fingerprint,
+        'text_calls_used': stage0.text_calls_used,
+    })
     from src.ai.full_project_autopilot import SCENE_BUDGETS_FILE
-    sidecar = project_dir / "output" / "ai" / SCENE_BUDGETS_FILE
+    sidecar = project_dir / 'output' / 'ai' / SCENE_BUDGETS_FILE
     if not sidecar.is_file():
         budgets = continuation_sidecar_budgets(project)
         if budgets:
             sidecar.parent.mkdir(parents=True, exist_ok=True)
-            write_json(sidecar, {"schema_version": 1,
-                                 "plan_fingerprint": stage0.plan_fingerprint,
-                                 "scene_budgets": budgets})
-    summary.update(project_name=source, project_dir=str(project_dir))
+            write_json(sidecar, {
+                'schema_version': 1, 'plan_fingerprint': stage0.plan_fingerprint,
+                'scene_budgets': budgets,
+            })
+    write_json(out / 'stage0-workplan.json', workplan)
+    return source, profile, cp, restored, previous
 
-    # 绑定执行身份（digest 来自冻结 workplan 的 digest_inputs，跨 hop 稳定）
-    digest = request_digest(AUTO_TARGET, dict(workplan["digest_inputs"]))
-    idx = task_index(token, nonce, "full-project-production.json")
+
+async def _run_c2_acceptance(nonce, out, summary, token, task_spec, stage0):
+    """A/C2: frozen autonomous extension/sequel, with resumable execution ID.
+
+    Directly selected cross-project media is locally SHA-checked and imported
+    only *after* the B1 Stage0 blueprint has been durably frozen. New footage
+    is delegated to the existing FullProjectManager and BoundedRealClient.
+    """
+    from src.ai.c2_production import (
+        build_c2_blueprint, c2_media_profile, materialize_c2,
+    )
+    from src.ai.cross_project_assets import safe_project_dir
+    from src.ai.producer_planning_models import PlanningContractError
+    from src.core.store import ProjectStore
+    from tools.video_task_state import ProductionCheckpoint, task_index
+    import deps
+
+    await _ensure_deps_ready()
+    limits = {"text_calls": 60, "image_calls": 40, "video_seconds": 240}
+    ceiling = task_spec.resource_ceiling
+    for key in limits:
+        requested = getattr(ceiling, key)
+        if requested is not None:
+            if requested > limits[key]:
+                raise PlanningContractError(f'C2 requested {key} exceeds authorized ceiling')
+            limits[key] = requested
+    stage0.bootstrap(task_spec)
+    if stage0.plan_fingerprint is None:
+        stage0.mark_planning()
+        # Archive read is outside producer/media billing. It is still bounded
+        # by official Release asset SHA and native relstore restore verification.
+        from src.ai.cross_project_archive import ensure_archived_source_available
+        summary['c2_source_resolution'] = await asyncio.to_thread(
+            ensure_archived_source_available, deps.project_manager.base_dir,
+            task_spec.source_project, token=token)
+        blueprint = await build_c2_blueprint(
+            task_spec, projects_root=deps.project_manager.base_dir,
+            client=deps.agnes_client, ledger=stage0, limits=limits)
+        plan_fp = stage0.freeze(blueprint)
+        summary['stage0_status'] = 'FROZEN'
+    else:
+        stage0.verify()
+        blueprint = stage0.blueprint
+        plan_fp = stage0.plan_fingerprint
+        if blueprint.get('intent') != task_spec.intent or blueprint.get('source_project') != task_spec.source_project:
+            raise RuntimeError('C2 frozen blueprint source/intent mismatch')
+        summary['stage0_status'] = 'FROZEN_RESTORED'
+
+    destination = (task_spec.source_project if task_spec.intent == 'extend_existing'
+                   else f'cloud3min_{nonce}')
+    # Freeze all digest inputs: live missing assets and evolving project
+    # snapshots are never inputs into resumed ProductionCheckpoint identity.
+    digest_profile = {
+        'scope': 'full-project-c2-v1',
+        'scenes': [(blueprint['source_project'], blueprint['source_document_sha256']),
+                   *[(s['scene_id'], s['summary']) for s in blueprint['scenes']]],
+        'budget': int(blueprint['execution_bounds']['video_seconds']),
+    }
+    digest = request_digest(AUTO_TARGET, digest_profile)
+    idx = task_index(token, nonce, 'full-project-production.json')
     cp = ProductionCheckpoint(idx, nonce, digest)
     previous = json.loads(json.dumps(cp.doc))
     if cp.current is None:
-        cp.save(phase="STAGE0_BOUND", github_run_id=os.environ.get("GITHUB_RUN_ID"),
-                source_sha=os.environ.get("GITHUB_SHA"),
-                film_target_seconds=AUTO_TARGET,
-                task_spec_sha256=stage0.doc.get("task_spec_sha256"),
-                plan_fingerprint=stage0.plan_fingerprint,
+        cp.save(phase='STAGE0_BOUND', github_run_id=os.environ.get('GITHUB_RUN_ID'),
+                source_sha=os.environ.get('GITHUB_SHA'), film_target_seconds=AUTO_TARGET,
+                task_spec_sha256=task_spec.sha256(), plan_fingerprint=plan_fp,
                 stage0_text_calls_used=stage0.text_calls_used,
-                output_kind=workplan["output_kind"])
+                output_kind='final_video', c2_source_project=task_spec.source_project,
+                authorized_video_seconds=int(blueprint['execution_bounds']['video_seconds']))
+    elif previous.get('video_attempts') and not os.environ.get('RESUME_RUN_ID', '').strip():
+        # A fresh process without its prior media snapshot cannot silently
+        # reset its payment ledger or re-use possibly settled provider jobs.
+        raise RuntimeError('C2 continuation requires RESUME_RUN_ID to recover paid attempts')
+
+    restored = None
+    resume_id = os.environ.get('RESUME_RUN_ID', '').strip()
+    if resume_id:
+        from tools.full_project_resume import download_snapshot, restore_snapshot
+        staging = out / 'source-snapshot'
+        provenance = await asyncio.to_thread(
+            download_snapshot, resume_id, nonce, os.environ.get('GITHUB_TOKEN'), staging,
+            project_name=destination)
+        restored = restore_snapshot(staging, Path.cwd(), nonce, previous, provenance,
+                                    finalize_only=finalize_only_from_env(),
+                                    project_name=destination)
+        import shutil
+        shutil.rmtree(staging)
+        if restored['project_name'] != destination:
+            raise RuntimeError('C2 restored project is not the frozen destination')
+        project_dir = Path.cwd() / 'projects' / destination
+        project = ProjectStore(project_dir).load()
+        if not all(any(sc.scene_id == s['scene_id'] and sc.summary == s['summary']
+                       for sc in project.scenes) for s in blueprint['scenes']):
+            raise RuntimeError('C2 restored project no longer matches frozen scenes')
+        cp.save(phase='RESTORED', github_run_id=os.environ.get('GITHUB_RUN_ID'),
+                source_sha=os.environ.get('GITHUB_SHA'), resume_from_run_id=resume_id,
+                updated_at=utc_now(), terminal_status=None, error=None,
+                resume_history=[*(previous.get('resume_history') or []), provenance])
+        summary['resume'] = restored
     else:
-        cp.save(phase="STAGE0_BOUND", github_run_id=os.environ.get("GITHUB_RUN_ID"))
-    summary.update(execution_request_sha256=digest,
-                   stage0_text_calls_used=stage0.text_calls_used)
-    write_json(out / "stage0-workplan.json", workplan)
-    # 续作是全新 nonce：不走原 run 的快照恢复（那是原 nonce 恢复链的职责）
-    return source, profile, cp, None, previous
+        # A frozen Stage0 may resume on a fresh Actions runner before any
+        # project has been materialized. Rehydrate the *same* verified source
+        # archive rather than re-planning or assuming local disk persistence.
+        from src.ai.cross_project_archive import ensure_archived_source_available
+        summary['c2_source_resolution'] = await asyncio.to_thread(
+            ensure_archived_source_available, deps.project_manager.base_dir,
+            task_spec.source_project, token=token)
+        project_dir, materialized = materialize_c2(
+            blueprint, projects_root=deps.project_manager.base_dir,
+            destination_name=destination, plan_fingerprint=plan_fp)
+        summary['c2_materialized'] = materialized
+    profile = c2_media_profile(blueprint)
+    summary.update(project_name=destination, project_dir=str(project_dir),
+                   output_kind='final_video', stage0_text_calls_used=stage0.text_calls_used,
+                   task_spec_sha256=task_spec.sha256(), plan_fingerprint=plan_fp,
+                   execution_request_sha256=digest,
+                   c2_source_project=task_spec.source_project,
+                   c2_asset_uses=blueprint['selected_assets'],
+                   c2_source_existing_versions=blueprint.get('source_existing_versions') or [])
+    write_json(out / 'stage0-blueprint.json', blueprint)
+    return destination, profile, cp, restored, previous
 
 
 async def _run_auto_acceptance(nonce, out, summary, token):
@@ -723,6 +1012,8 @@ async def _run_auto_acceptance(nonce, out, summary, token):
     if task_spec.intent in ("complete_project", "add_assets", "resume_run"):
         # PR C1：续作意图走独立主链（源项目 + 确定性工作计划，零规划 LLM）
         return await _run_continuation_acceptance(nonce, out, summary, token, task_spec)
+    if task_spec.intent in ("extend_existing", "sequel"):
+        return await _run_c2_acceptance(nonce, out, summary, token, task_spec, stage0)
     limits = {"text_calls": 60, "image_calls": 40, "video_seconds": 240}
 
     try:
@@ -798,7 +1089,8 @@ async def _run_auto_acceptance(nonce, out, summary, token):
                 film_target_seconds=AUTO_TARGET,
                 task_spec_sha256=stage0.doc.get("task_spec_sha256"),
                 plan_fingerprint=stage0.plan_fingerprint,
-                stage0_text_calls_used=stage0.text_calls_used)
+                stage0_text_calls_used=stage0.text_calls_used,
+                authorized_video_seconds=int(profile["budget"]))
     else:
         cp.save(phase="STAGE0_BOUND",
                 github_run_id=os.environ.get("GITHUB_RUN_ID"))
@@ -957,10 +1249,29 @@ async def run_acceptance(nonce, out, summary):
     deps._rehost_host = host
     project_name, project_dir = _resolve_production_project(
         target, restored, project_name, profile, nonce)
+    # Fail before any costly production if reused media cannot be decoded or
+    # traced to the exact frozen version and local bytes. New B2 create tasks
+    # have no frozen reused media and do not enter this preflight.
+    if target == AUTO_TARGET and (
+        summary.get('c2_asset_uses') is not None or
+        summary.get('c2_source_existing_versions') is not None or
+        summary.get('reuse_assets') is not None
+    ):
+        frozen_workplan = None
+        wp_path = out / 'stage0-workplan.json'
+        if wp_path.is_file():
+            frozen_workplan = json.loads(wp_path.read_text(encoding='utf-8'))
+        summary['reused_media_preflight'] = await asyncio.to_thread(
+            preflight_frozen_reused_media, project_dir,
+            workplan=frozen_workplan,
+            c2_prior=summary.get('c2_source_existing_versions') or [],
+            c2_uses=summary.get('c2_asset_uses') or [])
     wrapper = BoundedRealClient(deps.agnes_client, cp, project_dir, out, finalize_only=finalize_only,
                                 video_budget=profile["budget"], image_budget=profile["image_budget"],
                                 text_budget=profile["text_budget"], film_target_seconds=target,
-                                auto_profile=profile if target == AUTO_TARGET else None)
+                                auto_profile=profile if target == AUTO_TARGET else None,
+                                stage0_text_reserved=(summary.get('stage0_text_calls_used') or 0)
+                                if target == AUTO_TARGET else 0)
     if restored:
         wrapper.restore_usage(previous)
         wrapper.media_gate()
@@ -1028,40 +1339,63 @@ async def run_acceptance(nonce, out, summary):
     if len(child.scenes) != profile["scene_count"] or any(s.status != "completed" for s in child.scenes):
         raise RuntimeError(f"not all {profile['scene_count']} native SceneRuns completed")
     preparation = json.loads(Path(full.preparation_manifest_file).read_text(encoding="utf-8"))
-    if any(s.get("director_source") != "generated_by_full_run" or
-           s.get("production_plan_source") != "generated_by_full_run" for s in preparation["scenes"]):
-        raise RuntimeError("fresh real Director/Planner evidence is missing")
+    # Existing completed scenes in C1/C2 may reuse validated videos and
+    # historical plans. Legacy/newly generated scenes still require fresh
+    # Director+Planner provenance.
+    reuse_plan = {}
+    if summary.get('output_kind') == 'asset_set' or summary.get('reuse_assets') is not None:
+        wp_path = out / 'stage0-workplan.json'
+        if wp_path.is_file():
+            reuse_plan = json.loads(wp_path.read_text(encoding='utf-8'))
+    reuse_by_shot = {a.get('target'): (a.get('evidence') or {})
+                     for a in reuse_plan.get('reuse_assets') or []}
+    c2_uses = summary.get('c2_asset_uses') or []
+    c2_prior = summary.get('c2_source_existing_versions') or []
+    project = ProjectStore(project_dir).load()
+    for rec in preparation['scenes']:
+        if rec.get('director_source') == 'generated_by_full_run' and rec.get('production_plan_source') == 'generated_by_full_run':
+            continue
+        scene = next((sc for sc in project.scenes if sc.scene_id == rec.get('scene_id')), None)
+        if target != AUTO_TARGET or scene is None or not scene.shots or not all(
+            sh.final_video and (sh.shot_id in reuse_by_shot or
+                                any(pr.get('shot_id') == sh.shot_id for pr in c2_prior) or
+                                any(v.generation_basis.get('cross_project_reuse')
+                                    for v in sh.video_versions if v.version_id == sh.final_video))
+            for sh in scene.shots):
+            raise RuntimeError('fresh Director/Planner evidence missing for newly generated work')
     manifest = json.loads(Path(child.composition_manifest_file).read_text(encoding="utf-8"))
     project = ProjectStore(project_dir).load()
     clips = manifest["clips"]
     if len(clips) != len(project.all_shots()) or len({c["shot_id"] for c in clips}) != len(clips):
         raise RuntimeError("composition does not contain exactly one clip per original shot")
     sources = []
-    accepted_ids = {a.get("video_id") for a in wrapper.video_attempts if a["state"] == "ACCEPTED"}
+    accepted_ids = {a.get('video_id') for a in wrapper.video_attempts
+                    if a['state'] == 'ACCEPTED'}
     for clip in clips:
-        shot = project.get_shot(clip["shot_id"])
-        version = next((v for v in shot.video_versions if v.version_id == clip["video_version_id"]), None)
-        if version is None or version.video_id not in accepted_ids or shot.final_video != version.version_id:
-            raise RuntimeError("composition references an unverified or unselected source version")
-        data = Path(clip["local_path"]).read_bytes()
-        sources.append({"shot_id": shot.shot_id, "video_id": version.video_id,
-                        "version_id": version.version_id, "bytes": len(data),
-                        "sha256": hashlib.sha256(data).hexdigest(), "seconds_returned": version.seconds_returned})
+        shot = project.get_shot(clip['shot_id'])
+        sources.append(verify_composition_clip(
+            shot, clip, project_dir, accepted_ids,
+            frozen_reuse=reuse_plan.get('reuse_assets') or [],
+            frozen_prior=c2_prior, selected_assets=c2_uses))
     if len({s["sha256"] for s in sources}) != len(sources):
         raise RuntimeError("duplicate source-video bytes cannot count towards long-film acceptance")
     summary["source_videos"] = sources
     write_json(out / "source-videos.json", sources)
-    final = Path(full.final_output)
+    final = (Path(full.final_output) if full.final_output else
+             Path(project_dir) / 'output' / 'final.mp4')
     if summary.get("output_kind") == "asset_set":
         # PR C1（T16）：asset_set 独立验收——只看资产完备性，无时长门槛；
         # 合成成片若存在则记录为 bonus（尽力校验，不设 min_final）。
         from src.ai.incremental_planner import validate_asset_set
-        check = await asyncio.to_thread(validate_asset_set, project_dir)
+        check = await asyncio.to_thread(validate_asset_set, project_dir,
+                                        require_local_verified=True)
         summary["asset_set"] = check
         if not check["complete"]:
             await wrapper.persist(phase="FAILED", terminal_status="asset_set_incomplete",
                                   error=f"missing assets: {check['missing']}")
-            raise RuntimeError(f"asset_set incomplete: {check['missing']}")
+            raise RuntimeError(f"asset_set incomplete: missing={check['missing']}, "
+                               f"unshot_scenes={check['missing_scenes']}, "
+                               f"unverified={check['unverified']}")
         if final.is_file():
             try:
                 summary["media"] = await asyncio.to_thread(validate_final_media, final, 0.0)
@@ -1077,12 +1411,14 @@ async def run_acceptance(nonce, out, summary):
         raise RuntimeError("provider returned a duplicate video ID across submissions")
     try:
         summary["saved"] = await asyncio.to_thread(archive_completed_project, token, nonce, project_dir,
-                                                   final, out, os.environ.get("GITHUB_SHA", "unknown"))
+                                                   final, out, os.environ.get("GITHUB_SHA", "unknown"),
+                                                   output_kind=summary.get('output_kind', 'final_video'))
     except Exception:
         await wrapper.persist(phase='FAILED', terminal_status='archive_failed',
                               error='project archival failed; inspect restore-report.json and summary')
         raise
-    await wrapper.persist(phase="COMPLETE", duration_s=summary["media"]["duration_s"], saved=summary["saved"])
+    await wrapper.persist(phase="COMPLETE", duration_s=summary["media"].get("duration_s"),
+                          saved=summary["saved"])
     summary["status"] = "PASS"
 
 

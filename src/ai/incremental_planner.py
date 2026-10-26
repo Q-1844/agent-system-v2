@@ -15,6 +15,7 @@ output_kind=asset_set 的独立验收（不强迫 final.mp4 时长门槛）。
 from __future__ import annotations
 
 import re
+import hashlib
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -29,7 +30,7 @@ def parse_scene_targets(request_text: str) -> List[str]:
             for m in _SCENE_MENTION_RE.findall(request_text or "")]
 
 
-def _shot_valid_video(shot) -> Optional[dict]:
+def _shot_valid_video(shot, project_dir: Path = None) -> Optional[dict]:
     """镜头是否已有有效成片。返回复用证据（dict）或 None。
 
     有效 = final_video 指针指向一个存在的 version，且该 version 带
@@ -40,10 +41,19 @@ def _shot_valid_video(shot) -> Optional[dict]:
         return None
     for v in (getattr(shot, "video_versions", None) or []):
         if v.version_id == fid:
+            if v.status != "done":
+                return None
             if getattr(v, "local", None) or getattr(v, "url", None):
-                return {"shot_id": shot.shot_id, "version_id": fid,
-                        "local": v.local, "video_id": v.video_id,
-                        "seconds": v.seconds_returned}
+                evidence = {"shot_id": shot.shot_id, "version_id": fid,
+                            "local": v.local, "url": v.url, "video_id": v.video_id,
+                            "seconds": v.seconds_returned, "verified_local": False}
+                if project_dir is not None and v.local:
+                    from src.ai.cross_project_assets import local_asset_file
+                    path = local_asset_file(Path(project_dir), v.local)
+                    if path is not None:
+                        evidence["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+                        evidence["verified_local"] = True
+                return evidence
             return None  # 指针在但版本无实体 → 无效
     return None
 
@@ -73,7 +83,7 @@ def build_incremental_workplan(snapshot, request_text: str, intent: str,
         for scene in project.scenes:
             needs = not scene.shots  # 无镜头 → 需要 Director 规划
             for shot in scene.shots:
-                ev = _shot_valid_video(shot)
+                ev = _shot_valid_video(shot, project_dir)
                 if ev is not None:
                     reuse_assets.append({"action_kind": "reuse_asset",
                                          "target": shot.shot_id,
@@ -98,13 +108,19 @@ def build_incremental_workplan(snapshot, request_text: str, intent: str,
         "output_kind": output_kind,
         "mentioned_scenes": parse_scene_targets(request_text),
         "scene_targets": scene_targets,
+        "authorized_scene_ids": [sc.scene_id for sc in scenes],
+        "known_shot_ids": sorted({a["target"] for a in generate_missing} |
+                                 {a["target"] for a in reuse_assets}),
+        "unshot_scene_ids": [sid for sid, need in scene_needs_work.items()
+                             if need and not any(a["target"].startswith(sid + "_c")
+                                                 for a in generate_missing + reuse_assets)],
         "generate_missing": generate_missing,
         "reuse_assets": reuse_assets,
         "request_text": request_text,
     }
 
 
-def validate_asset_set(project_dir: Path) -> Dict[str, Any]:
+def validate_asset_set(project_dir: Path, *, require_local_verified: bool = False) -> Dict[str, Any]:
     """asset_set 验收（T16）：项目内每个镜头都必须有有效成片。
 
     与 final_video 验收的区别：无时长门槛（用户没有时长承诺），
@@ -113,15 +129,25 @@ def validate_asset_set(project_dir: Path) -> Dict[str, Any]:
     from src.core.store import ProjectStore
     project = ProjectStore(Path(project_dir)).load()
     missing: List[str] = []
+    unverified: List[str] = []
+    missing_scenes: List[str] = []
+    if not project.scenes:
+        missing_scenes.append('__project_has_no_scenes__')
     reused = 0
     for scene in project.scenes:
+        if not scene.shots:
+            missing_scenes.append(scene.scene_id)
         for shot in scene.shots:
-            if _shot_valid_video(shot) is not None:
-                reused += 1
-            else:
+            evidence = _shot_valid_video(shot, project_dir)
+            if evidence is None:
                 missing.append(shot.shot_id)
-    return {"complete": not missing, "missing": missing,
-            "reused_count": reused,
+            elif require_local_verified and not evidence["verified_local"]:
+                unverified.append(shot.shot_id)
+            else:
+                reused += 1
+    return {"complete": not missing and not missing_scenes and not unverified,
+            "missing": missing, "missing_scenes": missing_scenes,
+            "unverified": unverified, "reused_count": reused,
             "shot_count": sum(len(s.shots) for s in project.scenes)}
 
 
@@ -177,3 +203,33 @@ def continuation_sidecar_budgets(project) -> List[Dict[str, Any]]:
                         "per_shot_min_s": 4, "per_shot_max_s": 11,
                         "target_s": None})
     return out
+
+
+def validate_live_scope(project, frozen_workplan: Dict[str, Any]) -> None:
+    """Live progress may *decrease* missing work but must not expand authorization.
+
+    A Scene that had no Shots when freezing may obtain up to six Director Shots;
+    an existing Scene with Shots cannot acquire extra IDs outside frozen scope.
+    Earlier C1 blueprints without new scope fields derive the same guard from
+    their frozen reuse/missing lists (backward compatible with PR #21).
+    """
+    from src.ai.producer_planning_models import PlanningContractError
+    allowed_scenes = set(frozen_workplan.get('authorized_scene_ids') or
+                         [pair[0] for pair in
+                          (frozen_workplan.get('digest_inputs') or {}).get('scenes', [])])
+    if not allowed_scenes:
+        raise PlanningContractError('frozen C1 workplan has no authorized source Scene IDs')
+    known = set(frozen_workplan.get('known_shot_ids') or
+                [a['target'] for a in (frozen_workplan.get('generate_missing') or [])] +
+                [a['target'] for a in (frozen_workplan.get('reuse_assets') or [])])
+    unshot = set(frozen_workplan.get('unshot_scene_ids') or
+                 [sid for sid in (frozen_workplan.get('scene_targets') or [])
+                  if not any(shot.startswith(sid + '_c') for shot in known)])
+    for scene in project.scenes:
+        if scene.scene_id not in allowed_scenes:
+            raise PlanningContractError('live project introduced a scene outside frozen C1 scope')
+        if scene.scene_id in unshot:
+            if len(scene.shots) > 6:
+                raise PlanningContractError('Director exceeded frozen C1 unshot scene max 6')
+        elif any(shot.shot_id not in known for shot in scene.shots):
+            raise PlanningContractError('live project introduced a Shot outside frozen C1 scope')
