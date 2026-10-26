@@ -47,6 +47,11 @@ on:
         type: string
         required: false
         default: ''
+      asset_source_projects:
+        description: 'C2 可选：额外参考素材来源项目名（逗号分隔；仅按需加载最多4个）'
+        type: string
+        required: false
+        default: ''
       archive_release_id:
         description: '仅归档接续时复用已有B Release ID（保留旧资产）'
         type: string
@@ -135,6 +140,7 @@ jobs:
           FILM_TARGET_SECONDS: ${{ inputs.target_duration_seconds }}
           PRODUCTION_REQUEST: ${{ inputs.production_request }}
           SOURCE_PROJECT: ${{ inputs.source_project }}
+          ASSET_SOURCE_PROJECTS: ${{ inputs.asset_source_projects }}
           WORKFLOW_TIMEOUT_MINUTES: '360'
           ARCHIVE_RELEASE_ID: ${{ inputs.archive_release_id }}
           GITHUB_TOKEN: ${{ github.token }}

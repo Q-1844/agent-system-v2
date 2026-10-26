@@ -603,9 +603,18 @@ def normalize_dispatch_input_to_task_spec(nonce, environ=None):
     intent, reason = suggest_intent(request, source_project=source_project)
     if intent in ("extend_existing", "sequel") and not source_project:
         raise ValueError(f"{intent} 需要 source_project（不得新建空白替代原项目）")
+    import re
+    extra_raw = (env.get('ASSET_SOURCE_PROJECTS') or '').strip()
+    extras = [s.strip() for s in re.split(r'[,，;；\s]+', extra_raw) if s.strip()]
+    # Canonical project IDs mentioned in a free-form request may be safely
+    # resolved without forcing the user to fill in every resource field.
+    extras += re.findall(r'(?<![A-Za-z0-9_])cloud3min_[A-Za-z0-9_-]{2,100}', request)
+    if intent not in ('extend_existing', 'sequel'):
+        extras = []  # Preserve create/C1 task identity and behavior.
     return TaskSpec(intent=intent, request_text=request,
                     duration=extract_duration_intent(request),
-                    source_project=source_project)
+                    source_project=source_project,
+                    asset_source_projects=tuple(extras))
 
 
 def auto_request_profile(blueprint):
@@ -853,6 +862,32 @@ async def _run_continuation_acceptance(nonce, out, summary, token, task_spec):
     return source, profile, cp, restored, previous
 
 
+async def _hydrate_c2_optional_sources(projects_root, names, token):
+    """Bounded, on-demand read-only archived asset hydration for C2.
+
+    Extra material sources are optional inspiration, unlike the mandatory main
+    story source. Unavailable optional archives should not block production.
+    """
+    from src.ai.cross_project_archive import ensure_archived_source_available
+    from src.ai.cross_project_assets import AssetUnavailable, safe_project_dir
+    resolved, unavailable = [], []
+    for name in names:
+        safe_project_dir(projects_root, name, must_exist=False)
+        try:
+            info = await asyncio.to_thread(
+                ensure_archived_source_available, projects_root, name, token=token)
+            resolved.append({'name': name, 'origin': info['origin']})
+        except (AssetUnavailable, FileNotFoundError) as exc:
+            unavailable.append({'name': name, 'reason': str(exc)[:300]})
+        except Exception as exc:
+            # An optional reference library is not a reason to abort the
+            # entire film on a transient archive/API transport failure. Do
+            # not echo arbitrary exception text (it may include signed URLs).
+            unavailable.append({'name': name,
+                                'reason': f'archive_transport_{type(exc).__name__}'})
+    return resolved, unavailable
+
+
 async def _run_c2_acceptance(nonce, out, summary, token, task_spec, stage0):
     """A/C2: frozen autonomous extension/sequel, with resumable execution ID.
 
@@ -887,6 +922,10 @@ async def _run_c2_acceptance(nonce, out, summary, token, task_spec, stage0):
         summary['c2_source_resolution'] = await asyncio.to_thread(
             ensure_archived_source_available, deps.project_manager.base_dir,
             task_spec.source_project, token=token)
+        available, unavailable = await _hydrate_c2_optional_sources(
+            deps.project_manager.base_dir, task_spec.asset_source_projects, token)
+        summary['c2_additional_source_resolution'] = available
+        summary['c2_additional_source_unavailable'] = unavailable
         blueprint = await build_c2_blueprint(
             task_spec, projects_root=deps.project_manager.base_dir,
             client=deps.agnes_client, ledger=stage0, limits=limits)
@@ -959,6 +998,17 @@ async def _run_c2_acceptance(nonce, out, summary, token, task_spec, stage0):
         summary['c2_source_resolution'] = await asyncio.to_thread(
             ensure_archived_source_available, deps.project_manager.base_dir,
             task_spec.source_project, token=token)
+        # Source assets frozen by Stage0 need their archived bytes restored
+        # again on a fresh runner, even when the planning hop saw them already.
+        source_names = sorted({u['evidence']['source_project']
+                               for u in blueprint.get('selected_assets') or []
+                               if u['evidence']['source_project'] != task_spec.source_project})
+        if source_names:
+            available, unavailable = await _hydrate_c2_optional_sources(
+                deps.project_manager.base_dir, source_names, token)
+            summary['c2_frozen_sources_restored'] = available
+            if unavailable:
+                raise RuntimeError('frozen C2 source assets are missing: ' + str(unavailable))
         project_dir, materialized = materialize_c2(
             blueprint, projects_root=deps.project_manager.base_dir,
             destination_name=destination, plan_fingerprint=plan_fp)
@@ -970,6 +1020,11 @@ async def _run_c2_acceptance(nonce, out, summary, token, task_spec, stage0):
                    execution_request_sha256=digest,
                    c2_source_project=task_spec.source_project,
                    c2_asset_uses=blueprint['selected_assets'],
+                   c2_asset_decision_method=blueprint.get('asset_decision_method', 'legacy_frozen'),
+                   c2_direct_reuse_count=sum(1 for item in blueprint['selected_assets']
+                                             if item['action'] == 'reuse_media'),
+                   c2_reference_count=sum(1 for item in blueprint['selected_assets']
+                                           if item['action'] == 'reference_only'),
                    c2_source_existing_versions=blueprint.get('source_existing_versions') or [])
     write_json(out / 'stage0-blueprint.json', blueprint)
     return destination, profile, cp, restored, previous

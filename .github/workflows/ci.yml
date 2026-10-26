@@ -61,6 +61,7 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             tools
+            .github/workflows/video-autoproduction-e2e.yml
             src
             tests
             config
