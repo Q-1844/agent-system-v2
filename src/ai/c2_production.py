@@ -308,6 +308,23 @@ async def build_c2_blueprint(spec: TaskSpec, *, projects_root: Path,
     for i, sid in enumerate(new_ids):
         scenes[i]['scene_id'] = sid
         budgets[i]['scene_id'] = sid
+    # Director 面对纯叙事摘要在真机上倾向欠产镜头（T-REAL-A 实证：33s vs
+    # 36-48s 窗口，repair 反向缩短至 29s）。固定档把镜头指令写进场景摘要后
+    # Director 执行可靠；C2 采用同一模式：从冻结预算确定性派生指令写入
+    # summary——蓝图即身份，恢复逐字校验天然一致。
+    for sc_item, bud in zip(scenes, budgets):
+        target = int(bud.get('target_s') or int((bud['min_s'] + bud['max_s']) / 2))
+        lo = int(bud.get('shot_min') or 1)
+        hi = int(bud.get('shot_max') or 16)
+        if target < 12 or hi <= 1:
+            continue  # 复用镜头段（单镜头）或过短段不注入指令
+        desired = max(lo, min(hi, int(round(target / 8))))
+        per = int(round(target / desired))
+        per = min(max(per, int(bud.get('per_shot_min_s') or 4)),
+                  int(bud.get('per_shot_max_s') or 12))
+        sc_item['summary'] = (str(sc_item['summary']).rstrip()
+                              + f" 本段必须规划{desired}个连续镜头，每镜约{per}秒，"
+                                f"总计约{target}秒。")
     # Only newly-generated target seconds consume provider quota. Previously
     # generated, SHA-verified video occupying the first new scene is free.
     imported_scene = budgets[0]['scene_id'] if reused is not None else None
