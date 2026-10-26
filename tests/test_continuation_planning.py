@@ -160,9 +160,21 @@ def test_t16_asset_set_validation(client):
     shot.final_video = "v2"
     shot.video_versions.append(v2)
     ProjectStore(pdir).save(proj)
-    # s03 无镜头 → 不构成缺失（镜头级验收）
+    # C1 hardening: scene without Shots is NOT a completed asset set.
     chk2 = validate_asset_set(pdir)
-    assert chk2["complete"] is True and chk2["missing"] == []
+    assert chk2["complete"] is False and chk2["missing_scenes"] == ["s03"]
+    # Once Director has added a legitimate final-video Shot, full set passes.
+    proj = ProjectStore(pdir).load()
+    from src.core.models import Shot
+    proj.scenes[2].shots.append(Shot(shot_id="s03_c01", scene_id="s03", index=1,
+                                    final_video="v3", video_versions=[VideoVersion(
+                                        version_id="v3", video_id="task_z",
+                                        url="https://x/z.mp4", status="done")]))
+    ProjectStore(pdir).save(proj)
+    chk3 = validate_asset_set(pdir)
+    assert chk3["complete"] is True and chk3["missing"] == []
+    assert chk3["unverified"] == []  # metadata completeness, not byte QA
+    assert validate_asset_set(pdir, require_local_verified=True)["complete"] is False
 
 
 def test_sidecar_budgets_only_for_unshot_scenes(client):
@@ -283,7 +295,83 @@ def test_integration_continuation_full_chain(client, monkeypatch, tmp_path):
     snap3 = ProjectProductionInspect(name, pdir).snapshot()
     live_wp = build_incremental_workplan(snap3, "", "complete_project", pdir)
     assert live_wp["scene_targets"] == ["s03"]  # s02 已补齐，只剩无镜头的 s03
-    # validate_asset_set 只验收已存在镜头的完备性（shot 级）：s03 无镜头 =
-    # 空集完备 → True 是正确语义；场景级缺口由 workplan.scene_targets 表达。
-    assert validate_asset_set(pdir)["complete"] is True
+    # C1 hardening: an unshot scene remains incomplete even when all existing
+    # Shot finals are present, and the frozen workplan still authorizes s03.
+    assert validate_asset_set(pdir)["complete"] is False
     assert validate_asset_set(pdir)["missing"] == []
+    assert validate_asset_set(pdir)["missing_scenes"] == ["s03"]
+
+
+def test_c1_cross_hop_paid_ledger_cannot_restart_without_source_snapshot(client, monkeypatch, tmp_path):
+    """A new worker may not replay an archived source after a paid C1 hop."""
+    from tools import video_task_state as vts
+    from tools import e2e_autonomous_run as e2e
+    from tools import full_project_cloud_acceptance as acc
+    name, pdir, project, snap = _ctx(client)
+    documents = {}
+    monkeypatch.setattr(vts, 'task_index', lambda _tok, _nonce, filename, **kw:
+                        documents.setdefault(filename, FakeIndex()))
+    monkeypatch.setattr(e2e, 'ensure_branch', lambda index: None)
+    monkeypatch.delenv('RESUME_RUN_ID', raising=False)
+    task = TaskSpec(intent='complete_project', source_project=name,
+                    request_text='继续完成旧项目缺失的镜头')
+    out = tmp_path / 'c1-paid'
+    out.mkdir()
+    try:
+        asyncio.run(acc._run_continuation_acceptance('c1-paid-1', out, {}, 'tok', task))
+        from tools.video_task_state import ProductionCheckpoint
+        index = documents['full-project-production.json']
+        cp = ProductionCheckpoint(index, 'c1-paid-1',
+                                  index.blob['doc']['request_sha256'])
+        cp.save(phase='FAILED', video_attempts=[{
+            'ordinal': 1, 'seconds': 8, 'video_id': 'paid-receipt',
+            'state': 'ACCEPTED', 'prompt_sha256': 'fake'}])
+        with pytest.raises(RuntimeError, match='requires RESUME_RUN_ID'):
+            asyncio.run(acc._run_continuation_acceptance('c1-paid-1', out, {}, 'tok', task))
+    finally:
+        import shutil
+        shutil.rmtree(pdir, ignore_errors=True)
+
+
+def test_c1_crash_after_stage0_freeze_before_checkpoint_binding(client, monkeypatch, tmp_path):
+    """Stage0 CAS can commit before the first execution-identity CAS; retry must recover."""
+    from tools import full_project_cloud_acceptance as acc
+    from tools import video_task_state as vts
+    from tools import e2e_autonomous_run as e2e
+    from tools.video_task_state import ProductionCheckpoint
+
+    name, pdir, _, _ = _ctx(client)
+    indexes = {}
+    monkeypatch.setattr(vts, 'task_index', lambda token, nonce, filename='state.json',
+                        transport=None: indexes.setdefault(filename, FakeIndex()))
+    monkeypatch.setattr(e2e, 'ensure_branch', lambda idx: None)
+    env = {'PRODUCTION_REQUEST': '继续这个项目，把没做完的做完',
+           'SOURCE_PROJECT': name, 'FILM_TARGET_SECONDS': 'auto'}
+    monkeypatch.setattr(acc.os, 'environ', env)
+    ts = acc.normalize_dispatch_input_to_task_spec('n', environ=env)
+    original_save = ProductionCheckpoint.save
+    injected = {'yes': True}
+
+    def fail_one_cas(self, **values):
+        if values.get('phase') == 'STAGE0_BOUND' and injected['yes']:
+            injected['yes'] = False
+            raise RuntimeError('injected crash after Stage0.freeze')
+        return original_save(self, **values)
+
+    monkeypatch.setattr(ProductionCheckpoint, 'save', fail_one_cas)
+    output = tmp_path / 'out'
+    output.mkdir()
+    with pytest.raises(RuntimeError, match='injected crash'):
+        asyncio.run(acc._run_continuation_acceptance('c1-crash-gap', output,
+                                                     {}, 'tok', ts))
+    frozen = indexes['producer-stage0.json'].read()['doc']
+    assert frozen['plan_fingerprint']
+    assert indexes['full-project-production.json'].read() is None
+    summary = {}
+    pname, profile, cp, _, _ = asyncio.run(
+        acc._run_continuation_acceptance('c1-crash-gap', output, summary, 'tok', ts))
+    assert pname == name
+    assert summary['stage0_checkpoint_rebound'] is True
+    assert summary['plan_fingerprint'] == frozen['plan_fingerprint']
+    assert cp.current['doc']['plan_fingerprint'] == frozen['plan_fingerprint']
+    assert cp.current['doc']['authorized_video_seconds'] == profile['budget']

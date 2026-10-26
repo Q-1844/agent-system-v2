@@ -20,7 +20,17 @@ class _DownloadRedirect(urllib.request.HTTPRedirectHandler):
         return result
 
 
-def download_snapshot(run_id, nonce, token, dest):
+def _recovery_project_name(nonce, project_name=None):
+    """Validate the exact project binding without broadening ZIP extraction."""
+    from src.ai.cross_project_assets import safe_project_dir
+    # The default must remain byte-compatible with legacy 200/320 recovery.
+    name = project_name or f'cloud3min_{nonce}'
+    # Use a synthetic root to validate path components without touching disk.
+    safe_project_dir(Path('/__recovery_project_guard__'), name, must_exist=False)
+    return name
+
+
+def download_snapshot(run_id, nonce, token, dest, *, project_name=None):
     if not str(run_id).isdigit() or not token:
         raise ValueError('resume requires the source Actions run ID and read token')
     opener = urllib.request.build_opener(_DownloadRedirect())
@@ -49,7 +59,8 @@ def download_snapshot(run_id, nonce, token, dest):
     if dest.exists():
         raise FileExistsError('recovery staging directory already exists')
     dest.mkdir(parents=True)
-    allowed = (f'projects/cloud3min_{nonce}/', f'e2e_run/{nonce}/')
+    pname = _recovery_project_name(nonce, project_name)
+    allowed = (f'projects/{pname}/', f'e2e_run/{nonce}/')
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
         if sum(i.file_size for i in archive.infolist()) > 2*1024**3:
             raise ValueError('expanded acceptance snapshot exceeds recovery limit')
@@ -122,7 +133,7 @@ def reconcile_finalization(project, rewritten, jobs, accepted_ids, provenance):
     return reconciled
 
 
-def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, finalize_only=False):
+def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, finalize_only=False, project_name=None):
     """Validate identity/paid receipts before copying any state into the runner."""
     staging, workspace = Path(staging), Path(workspace).resolve()
     if (str(checkpoint.get('github_run_id')) != provenance['run_id']
@@ -136,7 +147,9 @@ def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, final
     if (summary.get('nonce') != nonce or str(summary.get('github_run_id')) != provenance['run_id']
             or summary.get('source_sha') != provenance['source_sha']):
         raise ValueError('snapshot summary does not match the source run')
-    pname = f'cloud3min_{nonce}'
+    pname = _recovery_project_name(nonce, project_name)
+    if project_name and summary.get('project_name') not in (None, project_name):
+        raise ValueError('snapshot project name differs from frozen continuation task')
     project = staging/'projects'/pname
     doc = json.loads((project/'output/project.json').read_text())
     if doc['name'] != pname or summary.get('full_run_id') != checkpoint.get('full_run_id'):
@@ -172,9 +185,15 @@ def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, final
         return None
     attempts = checkpoint.get('video_attempts') or []
     ids = [a.get('video_id') for a in attempts]
-    if (any(a.get('state')!='ACCEPTED' or not a.get('video_id')
+    # Legacy 200/320 still use their historical, verified limits; auto C1/C2
+    # binds its own upper limit at Stage0 media authorization. Never derive
+    # this cap from live missing seconds or a new runner's fresh client.
+    historical = 384 if str(checkpoint.get('film_target_seconds')) == '320' else 240
+    authorized = checkpoint.get('authorized_video_seconds', historical)
+    if (type(authorized) is not int or not 0 < authorized <= 5000 or
+            any(a.get('state')!='ACCEPTED' or not a.get('video_id')
                 or type(a.get('seconds')) is not int or not 4<=a['seconds']<=12 for a in attempts)
-            or len(ids)!=len(set(ids)) or sum(a['seconds'] for a in attempts)>240):
+            or len(ids)!=len(set(ids)) or sum(a['seconds'] for a in attempts)>authorized):
         raise ValueError('unconfirmed/duplicate paid submission requires reconciliation')
     versions = [v for sc in doc['scenes'] for shot in sc['shots'] for v in shot.get('video_versions',[])]
     verified = []
