@@ -990,6 +990,13 @@ async def _run_c2_acceptance(nonce, out, summary, token, task_spec, stage0):
                 updated_at=utc_now(), terminal_status=None, error=None,
                 resume_history=[*(previous.get('resume_history') or []), provenance])
         summary['resume'] = restored
+        # 恢复成功即固化完整身份字段进 summary：早期失败的 run（如恢复后死在
+        # D 预检）finally 写出的 summary 缺 source_sha/project/full_run 字段，
+        # 会让下一跳恢复守卫死锁（checkpoint 已更新 run 绑定而 summary 还是旧
+        # 值或缺失=部分出处刷新）。此处补齐，后续任何阶段失败都能被干净恢复。
+        summary.update(project_name=destination, project_dir=str(project_dir),
+                       full_run_id=restored.get('full_run_id'),
+                       source_sha=os.environ.get('GITHUB_SHA'))
     else:
         # A frozen Stage0 may resume on a fresh Actions runner before any
         # project has been materialized. Rehydrate the *same* verified source

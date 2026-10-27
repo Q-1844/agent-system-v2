@@ -150,15 +150,20 @@ def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, final
                                       *(('PAUSING', 'INTERRUPTED') if finalize_only else ())):
         raise ValueError('checkpoint is not a failed/interrupted production run')
     summary = json.loads((staging/f'e2e_run/{nonce}/summary.json').read_text())
+    # 早期失败的 run（如 BLOCKED_PREFLIGHT）在 finally 写 summary 时可能尚未
+    # 建立生产上下文，source_sha 等字段缺失；此时以 checkpoint 为权威（它已
+    # 通过上一组校验），只拒绝"写了但写错"的情况。
     if (summary.get('nonce') != nonce or str(summary.get('github_run_id')) != provenance['run_id']
-            or summary.get('source_sha') != provenance['source_sha']):
+            or (summary.get('source_sha') is not None
+                and summary.get('source_sha') != provenance['source_sha'])):
         raise ValueError('snapshot summary does not match the source run')
     pname = _recovery_project_name(nonce, project_name)
     if project_name and summary.get('project_name') not in (None, project_name):
         raise ValueError('snapshot project name differs from frozen continuation task')
     project = staging/'projects'/pname
     doc = json.loads((project/'output/project.json').read_text())
-    if doc['name'] != pname or summary.get('full_run_id') != checkpoint.get('full_run_id'):
+    if doc['name'] != pname or (summary.get('full_run_id') is not None
+                                and summary.get('full_run_id') != checkpoint.get('full_run_id')):
         raise ValueError('project/native run identity mismatch')
     full_path = project/'output/full_runs'/checkpoint['full_run_id']/'run.json'
     full = json.loads(full_path.read_text())
@@ -172,12 +177,12 @@ def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, final
         native = json.loads(native_path.read_text())
         if not finalize_only and native.get('status') not in ('failed','paused','completed','blocked','cancelled'):
             raise ValueError('active native controller must be reconciled before startup')
-    old_root = str(summary['project_dir'])
+    old_root = str(summary['project_dir']) if summary.get('project_dir') else None
     relative_root = 'projects/'+pname
-    if old_root != relative_root and not old_root.endswith('/'+relative_root):
+    if old_root and old_root != relative_root and not old_root.endswith('/'+relative_root):
         raise ValueError('snapshot project directory is invalid')
     roots = [relative_root]
-    if old_root != relative_root:
+    if old_root and old_root != relative_root:
         roots.append(old_root)
     elif summary.get('working_directory'):
         roots.append(str(PurePosixPath(summary['working_directory'])/relative_root))
