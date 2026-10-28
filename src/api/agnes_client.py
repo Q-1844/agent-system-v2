@@ -20,6 +20,7 @@ import httpx
 from ..utils.logger import setup_logger
 from ..core.rate_limiter import RateLimiter
 from ..core.quota import QuotaLedger
+from .model_budget import resolve_text_max_tokens
 
 log = setup_logger("agnes_client")
 
@@ -354,7 +355,15 @@ class AgnesClient:
 
     # ---------- 文本 ----------
     async def chat(self, messages: List[dict], *, temperature=0.7,
-                   max_tokens=2048, thinking=False, json_mode=False) -> str:
+                   max_tokens=None, thinking=False, json_mode=False) -> str:
+        """文本生成。
+
+        ``max_tokens`` 不传 = 用全局预算策略（实测端点上限 65536，见
+        ``src/api/model_budget.py``）。传了也会被夹到安全区：小于下限会被抬高
+        （thinking 模式下过小的预算会把答案截断在 JSON 中间，解析失败后静默
+        降级），大于上限会被压回（端点会 400）。业务层不再需要记住任何数字。
+        """
+        max_tokens = resolve_text_max_tokens(max_tokens)
         if self.quota:
             ok, why = self.quota.can("text_calls", 1)
             if not ok: raise AgnesError(why)
@@ -376,7 +385,7 @@ class AgnesClient:
         return text
 
     async def chat_completion(self, messages: List[dict], *, temperature=0.7,
-                              max_tokens=2048, thinking=False,
+                              max_tokens=None, thinking=False,
                               tools: Optional[List[dict]] = None,
                               tool_choice: Optional[Any] = None) -> dict:
         """OpenAI 兼容的 chat completion（支持原生 function-calling）。
@@ -384,7 +393,9 @@ class AgnesClient:
         返回 message dict：{"content": str|None, "tool_calls": list|None, "role": "assistant"}。
         tool_calls 元素为 {"id","type":"function","function":{"name","arguments"(str)}}，
         与 OpenAI Chat Completions 格式一致。tools 为标准 OpenAI tools 数组。
-        不做 response_format/json_mode 处理（agent 工具调用走结构化 tool_calls，不需要）。"""
+        不做 response_format/json_mode 处理（agent 工具调用走结构化 tool_calls，不需要）。
+        ``max_tokens`` 走全局预算策略（同 ``chat``）。"""
+        max_tokens = resolve_text_max_tokens(max_tokens)
         if self.quota:
             ok, why = self.quota.can("text_calls", 1)
             if not ok: raise AgnesError(why)
@@ -413,7 +424,7 @@ class AgnesClient:
         }
 
     async def chat_completion_vision(self, messages: List[dict], *, model: str,
-                                     temperature=0.2, max_tokens=1600,
+                                     temperature=0.2, max_tokens=None,
                                      thinking: bool = True) -> dict:
         """Vision 请求（Visual Review Tool V1，2026-09-06 probe 定案）。
 
@@ -429,7 +440,9 @@ class AgnesClient:
         复用 _request（限流/重试/退避/配额），不新造 retry。
         Phase49：视觉审查调用也开 thinking（真机探针 2026-10-07 实证：视觉端点
         接受 chat_template_kwargs.enable_thinking 且回包含 reasoning_content）；
-        thinking=False 不传字段（回归旧行为）。"""
+        thinking=False 不传字段（回归旧行为）。
+        ``max_tokens`` 走全局预算策略；视觉端点实测上限同为 65536。"""
+        max_tokens = resolve_text_max_tokens(max_tokens)
         if self.quota:
             ok, why = self.quota.can("text_calls", 1)
             if not ok: raise AgnesError(why)
@@ -448,7 +461,7 @@ class AgnesClient:
         }
 
     async def chat_completion_stream(self, messages: List[dict], *, temperature=0.7,
-                                      max_tokens=2048, thinking=False,
+                                      max_tokens=None, thinking=False,
                                       tools: Optional[List[dict]] = None,
                                       tool_choice: Optional[Any] = None):
         """OpenAI 兼容 streaming chat completion（原生 function-calling + reasoning）。
@@ -460,7 +473,9 @@ class AgnesClient:
            "tool_calls":list|None,"usage":dict|None}
         tool_calls 内部按 index 聚合（id/name 只首片，arguments 顺序拼接），finish 时给
         完整 list——与非流式 chat_completion 返回形状一致，供 tool-loop 执行；不暴露原始
-        argument delta（§六）。不影响非流式 chat_completion。"""
+        argument delta（§六）。不影响非流式 chat_completion。
+        ``max_tokens`` 走全局预算策略（同 ``chat``）。"""
+        max_tokens = resolve_text_max_tokens(max_tokens)
         if self.quota:
             ok, why = self.quota.can("text_calls", 1)
             if not ok: raise AgnesError(why)

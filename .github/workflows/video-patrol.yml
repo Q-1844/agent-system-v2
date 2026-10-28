@@ -15,6 +15,7 @@ permissions:
 
 concurrency:
   group: video-production
+  queue: max  # Avoid scheduled patrol replacing a pending full-film resume
   cancel-in-progress: false
 
 jobs:

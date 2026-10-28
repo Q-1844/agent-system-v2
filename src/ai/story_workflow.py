@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 
 # ============ 草稿数据结构（规格 §二十二）============
+from src.api.model_budget import DEFAULT_TEXT_MAX_TOKENS
 class DraftScene(BaseModel):
     """AI 整理出的一个故事段草稿。draft_id 仅 AI 草稿内部用，不进 project.json。"""
     draft_id: str
@@ -197,7 +198,7 @@ class StoryWorkflow:
         obj = await self._chat_json(
             [{"role": "system", "content": _ORGANIZE_SYSTEM},
              {"role": "user", "content": user}],
-            temperature=0.7, max_tokens=4096)
+            temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
         if obj is None:
             raise ValueError("AI 未返回可解析的 JSON")
         overview = (obj.get("overview") or "").strip()
@@ -225,7 +226,7 @@ class StoryWorkflow:
         text = await self._client.chat(
             [{"role": "system", "content": _CHAR_SYSTEM},
              {"role": "user", "content": user}],
-            temperature=0.7, max_tokens=800)
+            temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
         return text.strip()
 
     # ---------- AI：批量角色文字草稿 ----------
@@ -238,7 +239,7 @@ class StoryWorkflow:
         obj = await self._chat_json(
             [{"role": "system", "content": _CHAR_BATCH_SYSTEM},
              {"role": "user", "content": user}],
-            temperature=0.7, max_tokens=2048)
+            temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
         if obj is None:
             raise ValueError("AI 未返回可解析的 JSON")
         out: list[tuple[str, str]] = []
@@ -291,7 +292,7 @@ class StoryWorkflow:
         text = await self._client.chat(
             [{"role": "system", "content": _CONTINUE_SYSTEM},
              {"role": "user", "content": user}],
-            temperature=0.8, max_tokens=2048)
+            temperature=0.8, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
         return text.strip()
 
     # ---------- Phase AI-1B：整理新增正文（JSON，只拆 continuation_text）----------
@@ -308,7 +309,7 @@ class StoryWorkflow:
         obj = await self._chat_json(
             [{"role": "system", "content": _ORGANIZE_CONTINUATION_SYSTEM},
              {"role": "user", "content": user}],
-            temperature=0.7, max_tokens=4096)
+            temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
         if obj is None:
             raise ValueError("AI 未返回可解析的 JSON")
         overview = (obj.get("overview") or "").strip()

@@ -26,7 +26,7 @@ from src.audio.av_sync.models import (
     resolve_speaker_target,
 )
 
-# 42.md §4.6：权威视频夹具改为仓库内常驻合成 mp4（ffmpeg testsrc 2s，真实可解码）。
+# Phase3 离线测试：缺失仓库中的原 A2 夹具，以生成的 5.042s H.264/AAC 合成测试媒体补齐。
 # 原值指向 projects/AGNES_GoldenPath_H 的真实成片——该项目 09-24 清理删除后 39 项
 # AV-sync/lipsync 测试 FileNotFoundError 挂账（41.md 「零净增」掩盖的环境性失败）。
 # A2 路径（外挂 lip-sync，已搁置留档为 fallback）测试只需要一个可解码真实 mp4，

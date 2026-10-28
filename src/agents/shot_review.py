@@ -29,6 +29,7 @@ from ..core.store import ProjectStore
 from .script_writer import _base_receipt, _parse_args
 from .runtime import AgentError, AgentRuntime
 
+from src.api.model_budget import DEFAULT_TEXT_MAX_TOKENS
 log = logging.getLogger("shot_review")
 
 VISION_MODEL = "agnes-2.5-flash"
@@ -419,7 +420,7 @@ async def review_shot_core(client: Any, *, project_dir: Path, proj: Project,
 
     def _vision(msgs):
         return client.chat_completion_vision(msgs, model=VISION_MODEL,
-                                             temperature=0.2, max_tokens=1600)
+                                             temperature=0.2, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
 
     t0 = time.perf_counter()
     try:

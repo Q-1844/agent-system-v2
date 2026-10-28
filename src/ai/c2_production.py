@@ -27,9 +27,12 @@ from src.ai.producer_planning_models import (
 from src.ai.producer_planning_service import (
     ProducerPlanningService, allocate_scene_budgets, effective_planning_window,
 )
-from src.core.models import Character, Project, Scene, Shot, ShotStatus, VideoVersion
+from src.core.models import (
+    Character, Project, Scene, Shot, ShotStatus, VideoAsset, VideoVersion,
+)
 from src.core.store import ProjectStore
 
+from src.api.model_budget import DEFAULT_TEXT_MAX_TOKENS
 C2_SCHEMA = 'producer-cross-project-c2-v1'
 TOTAL_MARKERS = ('总长', '总时长', '总长度', '总共', '整片到', '成片达到', '最终达到', '合计到')
 log = logging.getLogger(__name__)
@@ -80,7 +83,7 @@ async def choose_cross_project_assets(client, ledger, candidates, request_text,
     ledger.reserve()  # Same durable Stage0 text ledger as narrative planning
     try:
         answer = await client.chat(messages, thinking=True, temperature=0.25,
-                                   max_tokens=1600)
+                                   max_tokens=DEFAULT_TEXT_MAX_TOKENS)
         if not isinstance(answer, str):
             return fallback, 'heuristic_fallback'
         match = re.search(r'\{.*\}', answer, re.DOTALL)
@@ -367,6 +370,23 @@ def _same_new_content(project: Project, blueprint: dict) -> bool:
                for item in expected)
 
 
+def _shot_video_asset(version: VideoVersion) -> VideoAsset:
+    """Shot 级 video Asset 必须与 final_video 版本保持一致。
+
+    正常生产路径 routers/shots.set_final_video_business 会同时写 final_video
+    和 Shot.video。跨项目复用路径原本只写 final_video + video_versions，
+    于是 Shot.video 停留在 pending：锁定校验（LOCKED_SHOT_NO_FINAL）与
+    upstream_ready 读的都是 Shot.video，复用镜头会被判成「没有成片」。
+    """
+    return VideoAsset(local=version.local, url=version.url,
+                 status=version.status, video_id=version.video_id,
+                 task_id=version.task_id,
+                 seconds_returned=version.seconds_returned,
+                 size_returned=version.size_returned,
+                 num_frames=version.num_frames,
+                 frame_rate=version.frame_rate)
+
+
 def _copy_reused_clip(blueprint: dict, projects_root: Path, dest: Path,
                       scene: Scene) -> Optional[Dict[str, Any]]:
     use = next((u for u in blueprint['selected_assets']
@@ -405,6 +425,7 @@ def _copy_reused_clip(blueprint: dict, projects_root: Path, dest: Path,
         shot_id=new_shot_id, scene_id=scene.scene_id, index=1,
         description=ev.get('description') or scene.summary,
         target_duration_s=sec, status=ShotStatus.DONE.value,
+        video=_shot_video_asset(version),
         video_versions=[version], final_video=new_version_id,
     )]
     return {'target_shot_id': new_shot_id,
@@ -486,6 +507,15 @@ def materialize_c2(blueprint: dict, *, projects_root: Path,
                 hashlib.sha256(Path(version.local).read_bytes()).hexdigest() !=
                     use['evidence']['sha256']):
                 raise AssetUnavailable('restored cross-project copy digest mismatch')
+            # 幂等重放：把 Shot.video 对齐到已冻结的 DONE 版本（媒体字节不动）。
+            # 旧版本物化只写了 final_video + video_versions，Shot.video 仍是
+            # pending，会让锁定校验报 LOCKED_SHOT_NO_FINAL。
+            reused_shot = first.shots[0]
+            if (reused_shot.video.status != version.status or
+                    reused_shot.video.local != version.local or
+                    reused_shot.video.video_id != version.video_id):
+                reused_shot.video = _shot_video_asset(version)
+                ProjectStore(dest).save(project)
     else:
         scenes = [Scene(scene_id=s['scene_id'], title=s.get('title') or '',
                         summary=s['summary']) for s in new]
@@ -606,7 +636,7 @@ def c2_media_profile(blueprint: dict) -> Dict[str, Any]:
         # 真机 T-REAL-A 实证：25 镜规模影片的首帧+重试需要 >40 张图（image=40
         # 在 s05 中途耗尽→首帧 batch 无候选→停机，19 镜 151s 已 ACCEPTED 的
         # 成果险些报废）。视频秒数才是真实资金授权线（保持冻结值不动）；
-        # 图像/文本是过程性资源，给确定性下限，取 max(下限, 冻结值)。
-        'image_budget': max(100, int(cap['image_calls'])),
-        'text_budget': max(100, int(cap['text_calls'])),
+        # 图像/文本/视频的执行授权与冻结身份分开；资源调用额度取极高下限。
+        'image_budget': max(10000, int(cap['image_calls'])),
+        'text_budget': max(50000, int(cap['text_calls'])),
     }

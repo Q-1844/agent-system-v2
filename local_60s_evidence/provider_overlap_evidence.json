@@ -1,0 +1,643 @@
+{
+  "project": "c2_parallel_local60_20261027",
+  "run_id": "prun_f09e81f0d8",
+  "provider_events": {
+    "submitted_count": 12,
+    "completed_count": 12,
+    "downloaded_count": 12,
+    "shots_submitted": [
+      "s01_c01",
+      "s01_c02",
+      "s01_c03",
+      "s01_c04",
+      "s02_c01",
+      "s02_c02",
+      "s02_c03",
+      "s02_c04",
+      "s03_c01",
+      "s03_c02",
+      "s03_c03",
+      "s03_c04"
+    ]
+  },
+  "provider_intervals": [
+    {
+      "shot_id": "s01_c01",
+      "provider_task_id": "task_NRUFiYhMc9Pd8ROAKLKBKxyAACujpV3m",
+      "job_id": "2268d9d805e4",
+      "submitted_epoch": 1793115230.579,
+      "submitted_local": "2026-10-27T23:33:50.579+08:00",
+      "completed_epoch": 1793115346.163,
+      "completed_local": "2026-10-27T23:35:46.163+08:00",
+      "download_epoch": 1793115347.58,
+      "remote_wait_s": 115.58,
+      "seconds_requested": 5.04
+    },
+    {
+      "shot_id": "s02_c01",
+      "provider_task_id": "task_glw9EtaAmiAifJRkFvRNMzOSidmHgmT8",
+      "job_id": "d5a2e2080992",
+      "submitted_epoch": 1793115301.282,
+      "submitted_local": "2026-10-27T23:35:01.282+08:00",
+      "completed_epoch": 1793115563.045,
+      "completed_local": "2026-10-27T23:39:23.045+08:00",
+      "download_epoch": 1793115564.244,
+      "remote_wait_s": 261.76,
+      "seconds_requested": 5.04
+    },
+    {
+      "shot_id": "s01_c02",
+      "provider_task_id": "task_suuTyaSjkjYdWmmxyGRoemYOAjp6C4nS",
+      "job_id": "1a8b1453e1ca",
+      "submitted_epoch": 1793115371.801,
+      "submitted_local": "2026-10-27T23:36:11.801+08:00",
+      "completed_epoch": 1793115613.449,
+      "completed_local": "2026-10-27T23:40:13.449+08:00",
+      "download_epoch": 1793115614.998,
+      "remote_wait_s": 241.65,
+      "seconds_requested": 5.04
+    },
+    {
+      "shot_id": "s02_c03",
+      "provider_task_id": "task_DP9GGZLIIhvFTKVxMbQtFtPu1KapV0Y8",
+      "job_id": "29a8cfec60e8",
+      "submitted_epoch": 1793115566.381,
+      "submitted_local": "2026-10-27T23:39:26.381+08:00",
+      "completed_epoch": 1793115682.99,
+      "completed_local": "2026-10-27T23:41:22.990+08:00",
+      "download_epoch": 1793115684.569,
+      "remote_wait_s": 116.61,
+      "seconds_requested": 5.04
+    },
+    {
+      "shot_id": "s01_c04",
+      "provider_task_id": "task_4gsfnQm235Z6sg3In4zF8f59WnnQ66Tx",
+      "job_id": "17b79864dac1",
+      "submitted_epoch": 1793115636.521,
+      "submitted_local": "2026-10-27T23:40:36.521+08:00",
+      "completed_epoch": 1793115964.619,
+      "completed_local": "2026-10-27T23:46:04.619+08:00",
+      "download_epoch": 1793115966.12,
+      "remote_wait_s": 328.1,
+      "seconds_requested": 5.04
+    },
+    {
+      "shot_id": "s02_c04",
+      "provider_task_id": "task_Mv2FiLpXfuMqR4sI70c2CZhmkTbjNbQI",
+      "job_id": "986c4fd33a19",
+      "submitted_epoch": 1793115722.872,
+      "submitted_local": "2026-10-27T23:42:02.872+08:00",
+      "completed_epoch": 1793115998.523,
+      "completed_local": "2026-10-27T23:46:38.523+08:00",
+      "download_epoch": 1793116000.028,
+      "remote_wait_s": 275.65,
+      "seconds_requested": 5.04
+    },
+    {
+      "shot_id": "s02_c02",
+      "provider_task_id": "task_gDr98l9Lete6S26bWHR5e0acFbzelP63",
+      "job_id": "aa4b57f3fd41",
+      "submitted_epoch": 1793115973.49,
+      "submitted_local": "2026-10-27T23:46:13.490+08:00",
+      "completed_epoch": 1793116238.892,
+      "completed_local": "2026-10-27T23:50:38.892+08:00",
+      "download_epoch": 1793116240.45,
+      "remote_wait_s": 265.4,
+      "seconds_requested": 5.04
+    },
+    {
+      "shot_id": "s01_c03",
+      "provider_task_id": "task_pBi0LKbyDiv30aLY1DY1yJA41LcRIVaE",
+      "job_id": "d0010cc427c8",
+      "submitted_epoch": 1793116043.285,
+      "submitted_local": "2026-10-27T23:47:23.285+08:00",
+      "completed_epoch": 1793116172.016,
+      "completed_local": "2026-10-27T23:49:32.016+08:00",
+      "download_epoch": 1793116173.416,
+      "remote_wait_s": 128.73,
+      "seconds_requested": 5.04
+    },
+    {
+      "shot_id": "s03_c02",
+      "provider_task_id": "task_Cy1XPj5xStfCllsLTQcdFe4yERbYkYf0",
+      "job_id": "7e3bfe1c6a9d",
+      "submitted_epoch": 1793116205.485,
+      "submitted_local": "2026-10-27T23:50:05.485+08:00",
+      "completed_epoch": 1793116461.29,
+      "completed_local": "2026-10-27T23:54:21.290+08:00",
+      "download_epoch": 1793116463.005,
+      "remote_wait_s": 255.81,
+      "seconds_requested": 5.04
+    },
+    {
+      "shot_id": "s03_c01",
+      "provider_task_id": "task_zzWlnxAeyaGVm8g7cdUuWNrG4gG4wqNM",
+      "job_id": "cbf4e00c1bda",
+      "submitted_epoch": 1793116276.018,
+      "submitted_local": "2026-10-27T23:51:16.018+08:00",
+      "completed_epoch": 1793116407.292,
+      "completed_local": "2026-10-27T23:53:27.292+08:00",
+      "download_epoch": 1793116408.963,
+      "remote_wait_s": 131.27,
+      "seconds_requested": 5.04
+    },
+    {
+      "shot_id": "s03_c04",
+      "provider_task_id": "task_rtPkzX1ckOvOc2crb4BR7nj7nIfyG8eC",
+      "job_id": "207bdaa13e41",
+      "submitted_epoch": 1793116434.796,
+      "submitted_local": "2026-10-27T23:53:54.796+08:00",
+      "completed_epoch": 1793116601.819,
+      "completed_local": "2026-10-27T23:56:41.819+08:00",
+      "download_epoch": 1793116604.607,
+      "remote_wait_s": 167.02,
+      "seconds_requested": 5.04
+    },
+    {
+      "shot_id": "s03_c03",
+      "provider_task_id": "task_2gJr6rFbSzp03wOcUM1T0JCqH0NAnNLu",
+      "job_id": "08273326e533",
+      "submitted_epoch": 1793116715.172,
+      "submitted_local": "2026-10-27T23:58:35.172+08:00",
+      "completed_epoch": 1793116960.244,
+      "completed_local": "2026-10-28T00:02:40.244+08:00",
+      "download_epoch": 1793116961.873,
+      "remote_wait_s": 245.07,
+      "seconds_requested": 5.04
+    }
+  ],
+  "provider_inflight_overlaps": [
+    {
+      "shot_a": "s01_c04",
+      "shot_b": "s02_c04",
+      "task_a": "task_4gsfnQm235Z6sg3In4zF8f59WnnQ66Tx",
+      "task_b": "task_Mv2FiLpXfuMqR4sI70c2CZhmkTbjNbQI",
+      "overlap_seconds": 241.75,
+      "overlap_window_local": [
+        "2026-10-27T23:42:02.872+08:00",
+        "2026-10-27T23:46:04.619+08:00"
+      ]
+    },
+    {
+      "shot_a": "s02_c01",
+      "shot_b": "s01_c02",
+      "task_a": "task_glw9EtaAmiAifJRkFvRNMzOSidmHgmT8",
+      "task_b": "task_suuTyaSjkjYdWmmxyGRoemYOAjp6C4nS",
+      "overlap_seconds": 191.24,
+      "overlap_window_local": [
+        "2026-10-27T23:36:11.801+08:00",
+        "2026-10-27T23:39:23.045+08:00"
+      ]
+    },
+    {
+      "shot_a": "s03_c02",
+      "shot_b": "s03_c01",
+      "task_a": "task_Cy1XPj5xStfCllsLTQcdFe4yERbYkYf0",
+      "task_b": "task_zzWlnxAeyaGVm8g7cdUuWNrG4gG4wqNM",
+      "overlap_seconds": 131.27,
+      "overlap_window_local": [
+        "2026-10-27T23:51:16.018+08:00",
+        "2026-10-27T23:53:27.292+08:00"
+      ]
+    },
+    {
+      "shot_a": "s02_c02",
+      "shot_b": "s01_c03",
+      "task_a": "task_gDr98l9Lete6S26bWHR5e0acFbzelP63",
+      "task_b": "task_pBi0LKbyDiv30aLY1DY1yJA41LcRIVaE",
+      "overlap_seconds": 128.73,
+      "overlap_window_local": [
+        "2026-10-27T23:47:23.285+08:00",
+        "2026-10-27T23:49:32.016+08:00"
+      ]
+    },
+    {
+      "shot_a": "s01_c02",
+      "shot_b": "s02_c03",
+      "task_a": "task_suuTyaSjkjYdWmmxyGRoemYOAjp6C4nS",
+      "task_b": "task_DP9GGZLIIhvFTKVxMbQtFtPu1KapV0Y8",
+      "overlap_seconds": 47.07,
+      "overlap_window_local": [
+        "2026-10-27T23:39:26.381+08:00",
+        "2026-10-27T23:40:13.449+08:00"
+      ]
+    },
+    {
+      "shot_a": "s02_c03",
+      "shot_b": "s01_c04",
+      "task_a": "task_DP9GGZLIIhvFTKVxMbQtFtPu1KapV0Y8",
+      "task_b": "task_4gsfnQm235Z6sg3In4zF8f59WnnQ66Tx",
+      "overlap_seconds": 46.47,
+      "overlap_window_local": [
+        "2026-10-27T23:40:36.521+08:00",
+        "2026-10-27T23:41:22.990+08:00"
+      ]
+    },
+    {
+      "shot_a": "s01_c01",
+      "shot_b": "s02_c01",
+      "task_a": "task_NRUFiYhMc9Pd8ROAKLKBKxyAACujpV3m",
+      "task_b": "task_glw9EtaAmiAifJRkFvRNMzOSidmHgmT8",
+      "overlap_seconds": 44.88,
+      "overlap_window_local": [
+        "2026-10-27T23:35:01.282+08:00",
+        "2026-10-27T23:35:46.163+08:00"
+      ]
+    },
+    {
+      "shot_a": "s02_c02",
+      "shot_b": "s03_c02",
+      "task_a": "task_gDr98l9Lete6S26bWHR5e0acFbzelP63",
+      "task_b": "task_Cy1XPj5xStfCllsLTQcdFe4yERbYkYf0",
+      "overlap_seconds": 33.41,
+      "overlap_window_local": [
+        "2026-10-27T23:50:05.485+08:00",
+        "2026-10-27T23:50:38.892+08:00"
+      ]
+    },
+    {
+      "shot_a": "s03_c02",
+      "shot_b": "s03_c04",
+      "task_a": "task_Cy1XPj5xStfCllsLTQcdFe4yERbYkYf0",
+      "task_b": "task_rtPkzX1ckOvOc2crb4BR7nj7nIfyG8eC",
+      "overlap_seconds": 26.49,
+      "overlap_window_local": [
+        "2026-10-27T23:53:54.796+08:00",
+        "2026-10-27T23:54:21.290+08:00"
+      ]
+    },
+    {
+      "shot_a": "s02_c04",
+      "shot_b": "s02_c02",
+      "task_a": "task_Mv2FiLpXfuMqR4sI70c2CZhmkTbjNbQI",
+      "task_b": "task_gDr98l9Lete6S26bWHR5e0acFbzelP63",
+      "overlap_seconds": 25.03,
+      "overlap_window_local": [
+        "2026-10-27T23:46:13.490+08:00",
+        "2026-10-27T23:46:38.523+08:00"
+      ]
+    }
+  ],
+  "provider_concurrency_observed": true,
+  "max_provider_concurrency_hint": 2,
+  "dependency_wait_checks": [
+    {
+      "downstream": "s01_c03",
+      "upstream": "s01_c02",
+      "downstream_submitted_epoch": 1793116043.285,
+      "upstream_completed_epoch": 1793115613.449,
+      "downstream_task": "task_pBi0LKbyDiv30aLY1DY1yJA41LcRIVaE",
+      "upstream_task": "task_suuTyaSjkjYdWmmxyGRoemYOAjp6C4nS",
+      "waited_after_upstream_complete_s": 429.84,
+      "submitted_before_upstream_complete": false
+    },
+    {
+      "downstream": "s02_c02",
+      "upstream": "s02_c01",
+      "downstream_submitted_epoch": 1793115973.49,
+      "upstream_completed_epoch": 1793115563.045,
+      "downstream_task": "task_gDr98l9Lete6S26bWHR5e0acFbzelP63",
+      "upstream_task": "task_glw9EtaAmiAifJRkFvRNMzOSidmHgmT8",
+      "waited_after_upstream_complete_s": 410.44,
+      "submitted_before_upstream_complete": false
+    },
+    {
+      "downstream": "s03_c03",
+      "upstream": "s03_c02",
+      "downstream_submitted_epoch": 1793116715.172,
+      "upstream_completed_epoch": 1793116461.29,
+      "downstream_task": "task_2gJr6rFbSzp03wOcUM1T0JCqH0NAnNLu",
+      "upstream_task": "task_Cy1XPj5xStfCllsLTQcdFe4yERbYkYf0",
+      "waited_after_upstream_complete_s": 253.88,
+      "submitted_before_upstream_complete": false
+    }
+  ],
+  "dependency_wait_all_clean": true,
+  "duplicate_video_submissions": {},
+  "no_duplicate_submission": true,
+  "distinct_provider_task_ids": 12,
+  "video_jobs": [
+    {
+      "job_id": "2268d9d805e4",
+      "shot_id": "s01_c01",
+      "state": "done",
+      "started_epoch": 1793115229.404568,
+      "finished_epoch": 1793115348.0758421,
+      "duration_s": 118.67,
+      "provider_task_id": "task_NRUFiYhMc9Pd8ROAKLKBKxyAACujpV3m",
+      "error": ""
+    },
+    {
+      "job_id": "d5a2e2080992",
+      "shot_id": "s02_c01",
+      "state": "done",
+      "started_epoch": 1793115235.9999466,
+      "finished_epoch": 1793115564.7345488,
+      "duration_s": 328.73,
+      "provider_task_id": "task_glw9EtaAmiAifJRkFvRNMzOSidmHgmT8",
+      "error": ""
+    },
+    {
+      "job_id": "1a8b1453e1ca",
+      "shot_id": "s01_c02",
+      "state": "done",
+      "started_epoch": 1793115348.0825427,
+      "finished_epoch": 1793115615.5506856,
+      "duration_s": 267.47,
+      "provider_task_id": "task_suuTyaSjkjYdWmmxyGRoemYOAjp6C4nS",
+      "error": ""
+    },
+    {
+      "job_id": "29a8cfec60e8",
+      "shot_id": "s02_c03",
+      "state": "done",
+      "started_epoch": 1793115564.7409263,
+      "finished_epoch": 1793115685.0631423,
+      "duration_s": 120.32,
+      "provider_task_id": "task_DP9GGZLIIhvFTKVxMbQtFtPu1KapV0Y8",
+      "error": ""
+    },
+    {
+      "job_id": "17b79864dac1",
+      "shot_id": "s01_c04",
+      "state": "done",
+      "started_epoch": 1793115615.557396,
+      "finished_epoch": 1793115966.5801973,
+      "duration_s": 351.02,
+      "provider_task_id": "task_4gsfnQm235Z6sg3In4zF8f59WnnQ66Tx",
+      "error": ""
+    },
+    {
+      "job_id": "986c4fd33a19",
+      "shot_id": "s02_c04",
+      "state": "done",
+      "started_epoch": 1793115721.5581334,
+      "finished_epoch": 1793116000.51622,
+      "duration_s": 278.96,
+      "provider_task_id": "task_Mv2FiLpXfuMqR4sI70c2CZhmkTbjNbQI",
+      "error": ""
+    },
+    {
+      "job_id": "aa4b57f3fd41",
+      "shot_id": "s02_c02",
+      "state": "done",
+      "started_epoch": 1793115966.5880527,
+      "finished_epoch": 1793116240.9826975,
+      "duration_s": 274.39,
+      "provider_task_id": "task_gDr98l9Lete6S26bWHR5e0acFbzelP63",
+      "error": ""
+    },
+    {
+      "job_id": "d0010cc427c8",
+      "shot_id": "s01_c03",
+      "state": "done",
+      "started_epoch": 1793116000.5245037,
+      "finished_epoch": 1793116173.9085076,
+      "duration_s": 173.38,
+      "provider_task_id": "task_pBi0LKbyDiv30aLY1DY1yJA41LcRIVaE",
+      "error": ""
+    },
+    {
+      "job_id": "7e3bfe1c6a9d",
+      "shot_id": "s03_c02",
+      "state": "done",
+      "started_epoch": 1793116204.2334685,
+      "finished_epoch": 1793116463.5571048,
+      "duration_s": 259.32,
+      "provider_task_id": "task_Cy1XPj5xStfCllsLTQcdFe4yERbYkYf0",
+      "error": ""
+    },
+    {
+      "job_id": "cbf4e00c1bda",
+      "shot_id": "s03_c01",
+      "state": "done",
+      "started_epoch": 1793116240.9908981,
+      "finished_epoch": 1793116409.46816,
+      "duration_s": 168.48,
+      "provider_task_id": "task_zzWlnxAeyaGVm8g7cdUuWNrG4gG4wqNM",
+      "error": ""
+    },
+    {
+      "job_id": "207bdaa13e41",
+      "shot_id": "s03_c04",
+      "state": "done",
+      "started_epoch": 1793116433.4723718,
+      "finished_epoch": 1793116605.18549,
+      "duration_s": 171.71,
+      "provider_task_id": "task_rtPkzX1ckOvOc2crb4BR7nj7nIfyG8eC",
+      "error": ""
+    },
+    {
+      "job_id": "08273326e533",
+      "shot_id": "s03_c03",
+      "state": "done",
+      "started_epoch": 1793116713.5511608,
+      "finished_epoch": 1793116962.4358988,
+      "duration_s": 248.88,
+      "provider_task_id": "task_2gJr6rFbSzp03wOcUM1T0JCqH0NAnNLu",
+      "error": ""
+    }
+  ],
+  "video_job_count": 12,
+  "run_status": "completed",
+  "run_stage": "done",
+  "final_output": "C:\\Users\\曹文淇\\Desktop\\ai工作流\\测试25\\local_60s_test\\A仓_阶段二三_C2全片智能并行_66b81092\\projects\\c2_parallel_local60_20261027\\output\\production_runs\\prun_f09e81f0d8\\final.mp4",
+  "final_output_raw_in_run_json": "projects\\c2_parallel_local60_20261027\\output\\production_runs\\prun_f09e81f0d8\\final.mp4",
+  "final_duration_s": 62.229333,
+  "final_size_bytes": 16146309,
+  "final_exists": true,
+  "shots": [
+    {
+      "shot_id": "s01_c01",
+      "scene_id": "s01",
+      "final_video": "vv_cfc232725674",
+      "video_status": "done",
+      "video_id": "task_NRUFiYhMc9Pd8ROAKLKBKxyAACujpV3m",
+      "seconds_returned": 5.0,
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "video_end_url": null,
+      "video_end_local": "projects\\c2_parallel_local60_20261027\\output\\frames\\s01_c01_video_end_vv_cfc232725674.jpg",
+      "video_end_status": "done",
+      "video_end_error": "",
+      "video_end_source_version": "vv_cfc232725674",
+      "num_video_versions": 1
+    },
+    {
+      "shot_id": "s01_c02",
+      "scene_id": "s01",
+      "final_video": "vv_75eaaa0f44a3",
+      "video_status": "done",
+      "video_id": "task_suuTyaSjkjYdWmmxyGRoemYOAjp6C4nS",
+      "seconds_returned": 5.0,
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "video_end_url": "https://Q-1844.github.io/agnes-frame-host/objects/e57724d99b1ef70e.jpg",
+      "video_end_local": "projects\\c2_parallel_local60_20261027\\output\\frames\\s01_c02_video_end_vv_75eaaa0f44a3.jpg",
+      "video_end_status": "done",
+      "video_end_error": "",
+      "video_end_source_version": "vv_75eaaa0f44a3",
+      "num_video_versions": 1
+    },
+    {
+      "shot_id": "s01_c03",
+      "scene_id": "s01",
+      "final_video": "vv_a35d5c842321",
+      "video_status": "done",
+      "video_id": "task_pBi0LKbyDiv30aLY1DY1yJA41LcRIVaE",
+      "seconds_returned": 5.0,
+      "opening_source": "inherit_previous",
+      "source_shot_id": "s01_c02",
+      "video_end_url": null,
+      "video_end_local": "projects\\c2_parallel_local60_20261027\\output\\frames\\s01_c03_video_end_vv_a35d5c842321.jpg",
+      "video_end_status": "done",
+      "video_end_error": "",
+      "video_end_source_version": "vv_a35d5c842321",
+      "num_video_versions": 1
+    },
+    {
+      "shot_id": "s01_c04",
+      "scene_id": "s01",
+      "final_video": "vv_d7bee5a37aa4",
+      "video_status": "done",
+      "video_id": "task_4gsfnQm235Z6sg3In4zF8f59WnnQ66Tx",
+      "seconds_returned": 5.0,
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "video_end_url": null,
+      "video_end_local": "projects\\c2_parallel_local60_20261027\\output\\frames\\s01_c04_video_end_vv_d7bee5a37aa4.jpg",
+      "video_end_status": "done",
+      "video_end_error": "",
+      "video_end_source_version": "vv_d7bee5a37aa4",
+      "num_video_versions": 1
+    },
+    {
+      "shot_id": "s02_c01",
+      "scene_id": "s02",
+      "final_video": "vv_08b4e5f382f1",
+      "video_status": "done",
+      "video_id": "task_glw9EtaAmiAifJRkFvRNMzOSidmHgmT8",
+      "seconds_returned": 5.0,
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "video_end_url": "https://Q-1844.github.io/agnes-frame-host/objects/1c6c5d2cd8647611.jpg",
+      "video_end_local": "projects\\c2_parallel_local60_20261027\\output\\frames\\s02_c01_video_end_vv_08b4e5f382f1.jpg",
+      "video_end_status": "done",
+      "video_end_error": "",
+      "video_end_source_version": "vv_08b4e5f382f1",
+      "num_video_versions": 1
+    },
+    {
+      "shot_id": "s02_c02",
+      "scene_id": "s02",
+      "final_video": "vv_8825b0e7ecae",
+      "video_status": "done",
+      "video_id": "task_gDr98l9Lete6S26bWHR5e0acFbzelP63",
+      "seconds_returned": 5.0,
+      "opening_source": "inherit_previous",
+      "source_shot_id": "s02_c01",
+      "video_end_url": null,
+      "video_end_local": "projects\\c2_parallel_local60_20261027\\output\\frames\\s02_c02_video_end_vv_8825b0e7ecae.jpg",
+      "video_end_status": "done",
+      "video_end_error": "",
+      "video_end_source_version": "vv_8825b0e7ecae",
+      "num_video_versions": 1
+    },
+    {
+      "shot_id": "s02_c03",
+      "scene_id": "s02",
+      "final_video": "vv_970cf9b1c587",
+      "video_status": "done",
+      "video_id": "task_DP9GGZLIIhvFTKVxMbQtFtPu1KapV0Y8",
+      "seconds_returned": 5.0,
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "video_end_url": null,
+      "video_end_local": "projects\\c2_parallel_local60_20261027\\output\\frames\\s02_c03_video_end_vv_970cf9b1c587.jpg",
+      "video_end_status": "done",
+      "video_end_error": "",
+      "video_end_source_version": "vv_970cf9b1c587",
+      "num_video_versions": 1
+    },
+    {
+      "shot_id": "s02_c04",
+      "scene_id": "s02",
+      "final_video": "vv_e04932cdf10f",
+      "video_status": "done",
+      "video_id": "task_Mv2FiLpXfuMqR4sI70c2CZhmkTbjNbQI",
+      "seconds_returned": 5.0,
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "video_end_url": null,
+      "video_end_local": "projects\\c2_parallel_local60_20261027\\output\\frames\\s02_c04_video_end_vv_e04932cdf10f.jpg",
+      "video_end_status": "done",
+      "video_end_error": "",
+      "video_end_source_version": "vv_e04932cdf10f",
+      "num_video_versions": 1
+    },
+    {
+      "shot_id": "s03_c01",
+      "scene_id": "s03",
+      "final_video": "vv_e1a2cd590d9d",
+      "video_status": "done",
+      "video_id": "task_zzWlnxAeyaGVm8g7cdUuWNrG4gG4wqNM",
+      "seconds_returned": 5.0,
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "video_end_url": null,
+      "video_end_local": "projects\\c2_parallel_local60_20261027\\output\\frames\\s03_c01_video_end_vv_e1a2cd590d9d.jpg",
+      "video_end_status": "done",
+      "video_end_error": "",
+      "video_end_source_version": "vv_e1a2cd590d9d",
+      "num_video_versions": 1
+    },
+    {
+      "shot_id": "s03_c02",
+      "scene_id": "s03",
+      "final_video": "vv_111bbfc614df",
+      "video_status": "done",
+      "video_id": "task_Cy1XPj5xStfCllsLTQcdFe4yERbYkYf0",
+      "seconds_returned": 5.0,
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "video_end_url": "https://Q-1844.github.io/agnes-frame-host/objects/1a05c0a8262074e0.jpg",
+      "video_end_local": "projects\\c2_parallel_local60_20261027\\output\\frames\\s03_c02_video_end_vv_111bbfc614df.jpg",
+      "video_end_status": "done",
+      "video_end_error": "",
+      "video_end_source_version": "vv_111bbfc614df",
+      "num_video_versions": 1
+    },
+    {
+      "shot_id": "s03_c03",
+      "scene_id": "s03",
+      "final_video": "vv_779adaa1778c",
+      "video_status": "done",
+      "video_id": "task_2gJr6rFbSzp03wOcUM1T0JCqH0NAnNLu",
+      "seconds_returned": 5.0,
+      "opening_source": "reference_previous",
+      "source_shot_id": "s03_c02",
+      "video_end_url": null,
+      "video_end_local": "projects\\c2_parallel_local60_20261027\\output\\frames\\s03_c03_video_end_vv_779adaa1778c.jpg",
+      "video_end_status": "done",
+      "video_end_error": "",
+      "video_end_source_version": "vv_779adaa1778c",
+      "num_video_versions": 1
+    },
+    {
+      "shot_id": "s03_c04",
+      "scene_id": "s03",
+      "final_video": "vv_53a22c49955e",
+      "video_status": "done",
+      "video_id": "task_rtPkzX1ckOvOc2crb4BR7nj7nIfyG8eC",
+      "seconds_returned": 5.0,
+      "opening_source": "independent",
+      "source_shot_id": null,
+      "video_end_url": null,
+      "video_end_local": "projects\\c2_parallel_local60_20261027\\output\\frames\\s03_c04_video_end_vv_53a22c49955e.jpg",
+      "video_end_status": "done",
+      "video_end_error": "",
+      "video_end_source_version": "vv_53a22c49955e",
+      "num_video_versions": 1
+    }
+  ]
+}

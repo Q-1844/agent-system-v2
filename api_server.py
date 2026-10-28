@@ -29,12 +29,17 @@ if _env_path.exists():
                     os.environ[_key] = _val
 
 import asyncio
+import json
+import time
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from src.pipeline.controller import PipelineController
+# 🔴 Round05 Gate B：账本所有权冲突类型在模块级导入——startup 的 except 子句必须
+# 始终能识别它（即使 JobQueue 本身导入失败也不能退化成「吞掉继续启动」）。
+from src.core.job_queue_ownership import JobQueueOwnershipError
 
 # 共享状态/单例/getter/配置/路径都在 deps（阶段5③拆分：避免 api_server <-> router 循环导入）。
 # 🔴 reassigned 单例（pipeline_controller/job_queue/_rehost_host）用 deps.X 属性访问，
@@ -60,6 +65,36 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# 🔴 Round05 Gate B：账本所有权冲突 → 写入类请求明确 503（fail closed）。
+# 用**纯 ASGI 中间件**（非 BaseHTTPMiddleware）：不缓冲响应体，SSE 通道行为不变。
+class _OwnershipGuardMiddleware:
+    """第二进程未拥有任务账本时，写入类路由立即 503（不排队、不半初始化接单）。"""
+
+    _SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") == "http" and scope.get("method", "GET") not in self._SAFE_METHODS:
+            conflict = getattr(deps, "job_queue_conflict", None)
+            if conflict:
+                body = json.dumps({
+                    "detail": "任务账本所有权冲突：本进程未拥有该账本，写入已禁用",
+                    "reason": str(conflict),
+                }, ensure_ascii=False).encode("utf-8")
+                await send({"type": "http.response.start", "status": 503, "headers": [
+                    (b"content-type", b"application/json; charset=utf-8"),
+                    (b"content-length", str(len(body)).encode("ascii")),
+                ]})
+                await send({"type": "http.response.body", "body": body})
+                return
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(_OwnershipGuardMiddleware)
 
 # 全局状态、任务队列单例、重新托管单例、任务存储、getter、请求模型统已在 deps.py
 # （pipeline_controller / job_queue / _rehost_host 用 deps.X 属性访问，见顶部 import 注释）。
@@ -116,6 +151,37 @@ app.include_router(workflow_router.router)   # Phase 46 可视化工作流后端
 @app.on_event("startup")
 async def startup():
     """启动时初始化"""
+    # 🔴 Round05 Gate B（先于一切）：**先取得任务账本所有权**。
+    # 账本是文件——两个进程可同时 load 同一批 queued job 并各自领走
+    # （= 同一 job 执行两次 / 视频重复付费生成；第 04 轮 D1 污染事故的直接成因）。
+    # 所有权冲突 → fail fast：不构造控制器、不做资源/场景恢复、不写盘、不接单、
+    # 不执行任何 handler、不启动后台恢复。第二个进程**不得**以半初始化状态对外接单。
+    deps.job_queue_conflict = None
+    try:
+        from src.core.job_queue import JobQueue
+        _video_inflight = None
+        try:
+            # Phase55 C：并发档位进 config（concurrency.video_inflight，默认 1=串行
+            # 基线不变；AGNES_VIDEO_INFLIGHT env 仍为最高优先逃生口）。
+            _video_inflight = int(((_APP_CFG or {}).get("concurrency") or {})
+                                  .get("video_inflight") or 0) or None
+        except Exception:
+            _video_inflight = None
+        deps.job_queue = JobQueue(BASE_DIR / "cache" / "jobs.json", JOB_HANDLERS,
+                                  video_worker_count=_video_inflight)
+    except JobQueueOwnershipError as e:
+        # 🔴 fail closed：不写账本、不领任务、不恢复、不执行 handler。
+        deps.job_queue = None
+        deps.job_queue_conflict = {
+            "reason": str(e),
+            "at": time.time(),
+            "ledger": str(BASE_DIR / "cache" / "jobs.json"),
+        }
+        logger.error("任务队列所有权冲突（另一进程已拥有本账本）——本进程拒绝启动: %s", e)
+        raise
+    except Exception as e:
+        logger.error(f"任务队列初始化失败: {e}")
+
     try:
         # 先初始化限流器与配额单例（用 config 的值），再创建 PipelineController
         # （其 AgnesClient 会复用这两个进程级单例）
@@ -164,19 +230,10 @@ async def startup():
     # 初始化默认角色到角色库
     characters._init_default_characters()
 
-    # 阶段 3：启动全局任务队列 + 崩溃恢复（恢复在后台跑，不阻塞服务就绪）
+    # 阶段 3：启动 worker + 崩溃恢复（此时**已持有账本所有权**；恢复在后台跑，不阻塞服务就绪）
     try:
-        from src.core.job_queue import JobQueue
-        _video_inflight = None
-        try:
-            # Phase55 C：并发档位进 config（concurrency.video_inflight，默认 1=串行
-            # 基线不变；AGNES_VIDEO_INFLIGHT env 仍为最高优先逃生口）。
-            _video_inflight = int(((_APP_CFG or {}).get("concurrency") or {})
-                                  .get("video_inflight") or 0) or None
-        except Exception:
-            _video_inflight = None
-        deps.job_queue = JobQueue(BASE_DIR / "cache" / "jobs.json", JOB_HANDLERS,
-                                  video_worker_count=_video_inflight)
+        if deps.job_queue is None:
+            raise RuntimeError("任务队列未初始化（所有权冲突或初始化失败）")
         # 🔴 清理孤儿 job（project/shot 已删除的 running/queued）--在 start route 前，孤儿不进 worker
         purged = deps.job_queue.purge_orphans(lifecycle.job_target_exists)
         if purged:
@@ -185,7 +242,7 @@ async def startup():
         asyncio.create_task(lifecycle.recover_pending_videos())
         logger.info("全局任务队列已就绪")
     except Exception as e:
-        logger.error(f"任务队列初始化失败: {e}")
+        logger.error(f"任务队列启动失败: {e}")
 
     # Startup recovery completes before accepting fresh production requests.
     # Only the short scan is awaited; recovered controllers run in background.

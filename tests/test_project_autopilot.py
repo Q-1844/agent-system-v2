@@ -553,6 +553,14 @@ def test_case7_source_changed_blocked(project_2scenes, fake_agnes_swap, client,
     业务判断完全由生产代码做出。"""
     import threading
     from src.ai.project_autopilot import ProjectProductionManager
+    # This legacy test explicitly asserts the second scene has not started at
+    # the first-scene boundary. Under C2 auto-parallelism, that is only a valid
+    # contract when Producer chose serial continuity for scene two.
+    from routers.production_planner import _read_plans, _write_plans
+    pdir = get_project_manager().get_project_dir(PROJECT_NAME)
+    frozen_plans = _read_plans(pdir)
+    frozen_plans["s02"].shots[0].parallel_preference = "required_serial"
+    _write_plans(pdir, frozen_plans)
 
     entered = threading.Event()
     proceed = threading.Event()

@@ -170,6 +170,50 @@ def test_sequel_creates_independent_project_and_leaves_source_unchanged(tmp_path
     assert dest2 == dest and len(ProjectStore(dest2).load().scenes) == 3
 
 
+def test_reused_clip_shot_video_asset_mirrors_final_version(tmp_path):
+    """复用镜头的 Shot.video 必须与 final_video 版本一致。
+
+    回归 LOCKED_SHOT_NO_FINAL：materialize_c2 原先只写 final_video +
+    video_versions，Shot.video 停在 pending。锁定校验与 upstream_ready 读的
+    都是 Shot.video，于是已完成的复用镜头被当成「没有成片」。
+    """
+    from src.ai.autopilot import _locked_shot_problems
+
+    class _Planned:
+        def __init__(self, shot_id, requires_previous_video_end=False):
+            self.shot_id = shot_id
+            self.requires_previous_video_end = requires_previous_video_end
+
+    class _Plan:
+        def __init__(self, shots):
+            self.shots = shots
+
+    root = tmp_path / 'projects'
+    seed(root)
+    bp, _ = plan(root, 'sequel', '必须直接复用旧片镜头制作大约一分钟的续集')
+    reuse = [u for u in bp['selected_assets'] if u['action'] == 'reuse_media']
+    assert reuse, 'this test needs a reuse_media selection'
+    dest, _info = materialize_c2(bp, projects_root=root,
+                                 destination_name='sequel-reuse',
+                                 plan_fingerprint='d' * 64)
+    project = ProjectStore(dest).load()
+    reused = project.scenes[0].shots[0]
+    version = next(v for v in reused.video_versions
+                   if v.version_id == reused.final_video)
+    assert reused.video.status == 'done'
+    assert reused.video.local == version.local
+    assert reused.video.video_id == version.video_id
+    assert reused.video.seconds_returned == version.seconds_returned
+    # 锁定校验读 Shot.video：完成态的复用镜头不得再被判成没有成片。
+    reused.locked = True
+    ProjectStore(dest).save(project)
+    problems = _locked_shot_problems(
+        project.scenes[0],
+        _Plan([_Planned('s01_c01')]),
+        True)
+    assert problems == []
+
+
 def test_extension_rejects_external_source_story_edit(tmp_path):
     root=tmp_path/'projects'
     d=seed(root)

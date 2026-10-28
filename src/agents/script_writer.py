@@ -52,6 +52,7 @@ from .skill_system.tools import (
 )
 from .skill_system.runtime import get_skill_runtime as _get_skill_runtime
 
+from src.api.model_budget import DEFAULT_TEXT_MAX_TOKENS
 log = logging.getLogger("agents.script_writer")
 
 # AI-7D-R 超时恢复（长批量生成）：单次 LLM read timeout=360s（agnes_client），
@@ -2601,7 +2602,7 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                 step_reasoning_buf: list[str] = []   # 累积本步 reasoning 文本（持久化用，不进 system）
                 step_content_buf: list[str] = []
                 async for ev in client.chat_completion_stream(
-                        messages, temperature=0.7, max_tokens=65536,
+                        messages, temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS,
                         thinking=thinking, tools=SCRIPT_WRITER_TOOLS,
                         tool_choice="auto"):
                     k = ev["kind"]
@@ -2635,7 +2636,7 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                         event_cb({"type": "assistant.delta", "delta": d})
             else:
                 resp = await client.chat_completion(
-                    messages, temperature=0.7, max_tokens=65536,
+                    messages, temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS,
                     tools=SCRIPT_WRITER_TOOLS, tool_choice="auto")
                 tool_calls = resp.get("tool_calls")
                 content = resp.get("content")

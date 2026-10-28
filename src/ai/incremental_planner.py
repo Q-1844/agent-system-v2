@@ -53,6 +53,13 @@ def _shot_valid_video(shot, project_dir: Path = None) -> Optional[dict]:
                     if path is not None:
                         evidence["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
                         evidence["verified_local"] = True
+                    elif not v.url:
+                        # A local-only pointer is not a reusable video when its
+                        # file was moved/deleted (or escapes the project root).
+                        # C1 must schedule it as a missing asset rather than
+                        # silently skip its production.  A remote URL remains
+                        # a separately valid (but not local-verified) source.
+                        return None
                 return evidence
             return None  # 指针在但版本无实体 → 无效
     return None

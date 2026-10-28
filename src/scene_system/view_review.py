@@ -358,11 +358,12 @@ async def review_location_view_candidates(project_dir, view_id: str, *,
         msgs = [{"role": "user", "content": content}]
         try:
             # Phase53 A1（用户授权的实验解堵例外，2026-10-13）：母版视图审查与
-            # instance_view_review 对齐 max_tokens=6000——Phase49 只接了 sciv 七维审查，
-            # 本处漏改；thinking 长响应在默认 1600 处截断 → JSON 不平衡 → parse_failed
-            # → 母版永不可批 → 全部 sciv fail-closed 阻塞（真机 run_e0f1a17c44e5 实证）。
-            res = await vision_json_call(agnes_client, msgs, model=VISION_MODEL,
-                                         max_tokens=6000)
+            # instance_view_review 原本在此写死 max_tokens=6000——Phase49 只接了 sciv
+            # 七维审查，本处漏改；thinking 长响应在默认 1600 处截断 → JSON 不平衡 →
+            # parse_failed → 母版永不可批 → 全部 sciv fail-closed 阻塞（真机
+            # run_e0f1a17c44e5 实证）。第 03 轮起预算由全局策略
+            # （src/api/model_budget.py，实测端点上限 65536）统一接管，此处不再写死。
+            res = await vision_json_call(agnes_client, msgs, model=VISION_MODEL)
         except Exception as e:
             return {"candidate_index": candidate_index, "candidate_file": candidate_file,
                     "status": "provider_error", "overall": "uncertain",

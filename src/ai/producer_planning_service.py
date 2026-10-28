@@ -95,10 +95,35 @@ def _cn_to_int(text: str) -> Optional[int]:
 
 _NUM = r"(\d+(?:\.\d+)?|[零一二两三四五六七八九十百]+)"
 _UNIT = r"(秒|s|S|分钟|分|min|mins|minutes)"
-_RANGE_RE = re.compile(_NUM + r"\s*(?:到|至|-|~|—|–)\s*" + _NUM + r"\s*" + _UNIT)
+# 区间连接符：半角 -/~、全角 ～（U+FF5E，中文输入法默认输出）、波折号 〜（U+301C）、破折号、中文「到/至」。
+_RANGE_RE = re.compile(_NUM + r"\s*(?:到|至|-|~|～|〜|—|–)\s*" + _NUM + r"\s*" + _UNIT)
 _VALUE_RE = re.compile(_NUM + r"\s*" + _UNIT)
 _APPROX_MARKERS = ("约", "大约", "大概", "左右", "差不多", "差不多是", "接近")
 _EXACT_MARKERS = ("必须", "正好", "恰好", "精确", "整", "严格")
+#: 分句边界：精确时长标记只在它所在的分句内对时长有效力。
+_CLAUSE_BREAKS = "\u3002\uff01\uff1f\uff1b!?;\n"
+
+
+def _local_clause(text: str, start: int, end: int) -> str:
+    """返回包含 text[start:end] 的那个分句，并去掉时长值本身。
+
+    精确标记（必须/恰好/正好/精确/整/严格）只修饰与它同句的那个时长。
+    旧实现扫描整段文本，导致别句的「必须直接复用」把「大约一分钟」
+    升格成硬性 exact 目标，等于把用户的软目标伪装成精确秒数。
+    """
+    left = 0
+    for i in range(start - 1, -1, -1):
+        if text[i] in _CLAUSE_BREAKS:
+            left = i + 1
+            break
+    right = len(text)
+    for i in range(end, len(text)):
+        if text[i] in _CLAUSE_BREAKS:
+            right = i
+            break
+    clause = text[left:right]
+    offset = start - left
+    return clause[:offset] + clause[offset + (end - start):]
 
 
 def _to_seconds(num: str, unit: str) -> int:
@@ -131,8 +156,8 @@ def extract_duration_intent(request_text: str) -> DurationIntent:
     m = _VALUE_RE.search(text)
     if m:
         seconds = _to_seconds(m.group(1), m.group(2))
-        head = text[:max(0, m.start())] + text[m.end():]
-        if any(k in head for k in _EXACT_MARKERS):
+        local = _local_clause(text, m.start(), m.end())
+        if any(k in local for k in _EXACT_MARKERS):
             return DurationIntent(mode="exact", target_seconds=seconds,
                                   source="user_explicit")
         return DurationIntent(mode="approximate", target_seconds=seconds,

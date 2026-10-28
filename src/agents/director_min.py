@@ -34,6 +34,7 @@ from .runtime import AgentRuntime, AgentError
 from .revision_audit import DirectEditAuditStore
 
 
+from src.api.model_budget import DEFAULT_TEXT_MAX_TOKENS
 DIRECTOR_MIN_SYSTEM = """你是 AGNES 的 Director，负责把剧本正文（story_text）分割成故事段（Scene）、把每个故事段拆成镜头（Shot），并在用户要求时读取、修改或删除故事段/镜头。
 
 你一共有十个工具（3 个只读 + 7 个写入）。**只读工具真实存在且随时可用**，绝不要声称"没有读取工具/无法读取"——要知道任何当前值，就调用它们。
@@ -785,7 +786,7 @@ async def director_turn(rt: AgentRuntime, project: str, session_id: str,
         deletion_proposed = False
         for step in range(MAX_TOOL_STEPS):
             try:
-                reply = await client.chat(messages, temperature=0.5, max_tokens=65536)
+                reply = await client.chat(messages, temperature=0.5, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
             except Exception as e:
                 final_text = f"[调用失败: {str(e)[:200]}]"
                 status = ResultStatus.FAILED.value

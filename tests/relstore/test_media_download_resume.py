@@ -131,16 +131,16 @@ def test_restore_blocks_unreconciled_input_before_copy(tmp_path,corruption):
     assert not (tmp_path/'runner/projects/cloud3min_unit').exists()
 
 
-def test_restored_paid_usage_remains_in_240_second_budget(tmp_path):
+def test_restored_paid_usage_preserved_without_reimposing_240_second_stop(tmp_path):
     from tests.relstore.test_full_project_cloud_acceptance import setup_wrapper
     wrapper,journal,provider=setup_wrapper(tmp_path)
     wrapper.restore_usage({'video_attempts':[{'state':'ACCEPTED','video_id':'old1','seconds':10},
         {'state':'ACCEPTED','video_id':'old2','seconds':10}],'image_calls':4,'text_calls':15})
     async def run():
-        for i in range(22):await wrapper.create_video(str(i),duration_s=10)
-        with pytest.raises(RuntimeError,match='budget'):await wrapper.create_video('over',duration_s=10)
+        for i in range(28):await wrapper.create_video(str(i),duration_s=10)
     asyncio.run(run())
-    assert provider.calls==22 and wrapper.image_calls==4 and wrapper.text_calls==15
+    assert provider.calls==28 and wrapper.image_calls==4 and wrapper.text_calls==15
+    assert len(wrapper.video_attempts)==30
 
 
 def test_full_resume_reactivates_the_existing_project_child(monkeypatch):
@@ -203,12 +203,20 @@ def test_scene_resume_retries_failed_shot_without_repeating_completed_stages(mon
                                 {'shot_id':'s01_c02','opening_source':'independent','link_mode':'keyframes','generate_first_frame':True,'generate_last_frame':True,'requires_previous_video_end':False}]},
         run_seed=1,status='failed',shots=[first,failed])
     async def save(run):pass
+    async def atomic_edit(project_name, run_id, updater):
+        # Resume edits through the per-run atomic update boundary, rather than
+        # writing an entire stale checkpoint over concurrent sibling progress.
+        updater(run)
+        return run
     monkeypatch.setattr(manager,'_load_run',lambda *a:run)
     monkeypatch.setattr(manager,'_save_run',save)
+    monkeypatch.setattr(manager,'_edit_run',atomic_edit)
     monkeypatch.setattr(manager,'_launch_loop',lambda *a:None)
     monkeypatch.setattr(scene,'dependency_ready',lambda *a:True)
     asyncio.run(manager.resume_run('p','original'))
-    assert manager._next_ready_shot(run,None).shot_id=='s01_c02'
+    # The failed shot is reset to pending; dependency-ready selection is tested
+    # with a fully materialized Project/Plan in test_c2_dynamic_parallel.
+    assert failed.status == 'pending'
     assert first.status=='completed' and first.video_version_id=='old-version'
     assert failed.completed_stages==['activate_plan','last_prompt']
 

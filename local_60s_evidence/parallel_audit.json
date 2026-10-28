@@ -1,0 +1,224 @@
+{
+  "project_name": "c2_parallel_local60_20261027",
+  "project_run_id": "prun_f09e81f0d8",
+  "project_parallel_scene_cap": 2,
+  "video_job_count_with_timestamps": 12,
+  "video_worker_overlap_pair_count": 10,
+  "independent_overlap_pair_count": 10,
+  "suspicious_same_shot_or_dependency_pair_count": 0,
+  "worker_parallel_observed": true,
+  "provider_concurrency_proven": false,
+  "provider_concurrency_note": "Must corroborate with real provider task IDs and submit/poll/finish timestamps.",
+  "jobs": [
+    {
+      "job_id": "2268d9d805e4",
+      "shot_id": "s01_c01",
+      "state": "done",
+      "started_at": 1793115229.404568,
+      "finished_at": 1793115348.0758421,
+      "started_utc": "2026-10-27T15:33:49+00:00",
+      "finished_utc": "2026-10-27T15:35:48+00:00"
+    },
+    {
+      "job_id": "d5a2e2080992",
+      "shot_id": "s02_c01",
+      "state": "done",
+      "started_at": 1793115235.9999466,
+      "finished_at": 1793115564.7345488,
+      "started_utc": "2026-10-27T15:33:55+00:00",
+      "finished_utc": "2026-10-27T15:39:24+00:00"
+    },
+    {
+      "job_id": "1a8b1453e1ca",
+      "shot_id": "s01_c02",
+      "state": "done",
+      "started_at": 1793115348.0825427,
+      "finished_at": 1793115615.5506856,
+      "started_utc": "2026-10-27T15:35:48+00:00",
+      "finished_utc": "2026-10-27T15:40:15+00:00"
+    },
+    {
+      "job_id": "29a8cfec60e8",
+      "shot_id": "s02_c03",
+      "state": "done",
+      "started_at": 1793115564.7409263,
+      "finished_at": 1793115685.0631423,
+      "started_utc": "2026-10-27T15:39:24+00:00",
+      "finished_utc": "2026-10-27T15:41:25+00:00"
+    },
+    {
+      "job_id": "17b79864dac1",
+      "shot_id": "s01_c04",
+      "state": "done",
+      "started_at": 1793115615.557396,
+      "finished_at": 1793115966.5801973,
+      "started_utc": "2026-10-27T15:40:15+00:00",
+      "finished_utc": "2026-10-27T15:46:06+00:00"
+    },
+    {
+      "job_id": "986c4fd33a19",
+      "shot_id": "s02_c04",
+      "state": "done",
+      "started_at": 1793115721.5581334,
+      "finished_at": 1793116000.51622,
+      "started_utc": "2026-10-27T15:42:01+00:00",
+      "finished_utc": "2026-10-27T15:46:40+00:00"
+    },
+    {
+      "job_id": "aa4b57f3fd41",
+      "shot_id": "s02_c02",
+      "state": "done",
+      "started_at": 1793115966.5880527,
+      "finished_at": 1793116240.9826975,
+      "started_utc": "2026-10-27T15:46:06+00:00",
+      "finished_utc": "2026-10-27T15:50:40+00:00"
+    },
+    {
+      "job_id": "d0010cc427c8",
+      "shot_id": "s01_c03",
+      "state": "done",
+      "started_at": 1793116000.5245037,
+      "finished_at": 1793116173.9085076,
+      "started_utc": "2026-10-27T15:46:40+00:00",
+      "finished_utc": "2026-10-27T15:49:33+00:00"
+    },
+    {
+      "job_id": "7e3bfe1c6a9d",
+      "shot_id": "s03_c02",
+      "state": "done",
+      "started_at": 1793116204.2334685,
+      "finished_at": 1793116463.5571048,
+      "started_utc": "2026-10-27T15:50:04+00:00",
+      "finished_utc": "2026-10-27T15:54:23+00:00"
+    },
+    {
+      "job_id": "cbf4e00c1bda",
+      "shot_id": "s03_c01",
+      "state": "done",
+      "started_at": 1793116240.9908981,
+      "finished_at": 1793116409.46816,
+      "started_utc": "2026-10-27T15:50:40+00:00",
+      "finished_utc": "2026-10-27T15:53:29+00:00"
+    },
+    {
+      "job_id": "207bdaa13e41",
+      "shot_id": "s03_c04",
+      "state": "done",
+      "started_at": 1793116433.4723718,
+      "finished_at": 1793116605.18549,
+      "started_utc": "2026-10-27T15:53:53+00:00",
+      "finished_utc": "2026-10-27T15:56:45+00:00"
+    },
+    {
+      "job_id": "08273326e533",
+      "shot_id": "s03_c03",
+      "state": "done",
+      "started_at": 1793116713.5511608,
+      "finished_at": 1793116962.4358988,
+      "started_utc": "2026-10-27T15:58:33+00:00",
+      "finished_utc": "2026-10-27T16:02:42+00:00"
+    }
+  ],
+  "overlap_pairs": [
+    {
+      "shot_a": "s01_c01",
+      "shot_b": "s02_c01",
+      "job_a": "2268d9d805e4",
+      "job_b": "d5a2e2080992",
+      "overlap_seconds": 112.076,
+      "same_shot": false,
+      "dependency_overlap_needs_review": false,
+      "independent": true
+    },
+    {
+      "shot_a": "s02_c01",
+      "shot_b": "s01_c02",
+      "job_a": "d5a2e2080992",
+      "job_b": "1a8b1453e1ca",
+      "overlap_seconds": 216.652,
+      "same_shot": false,
+      "dependency_overlap_needs_review": false,
+      "independent": true
+    },
+    {
+      "shot_a": "s01_c02",
+      "shot_b": "s02_c03",
+      "job_a": "1a8b1453e1ca",
+      "job_b": "29a8cfec60e8",
+      "overlap_seconds": 50.81,
+      "same_shot": false,
+      "dependency_overlap_needs_review": false,
+      "independent": true
+    },
+    {
+      "shot_a": "s02_c03",
+      "shot_b": "s01_c04",
+      "job_a": "29a8cfec60e8",
+      "job_b": "17b79864dac1",
+      "overlap_seconds": 69.506,
+      "same_shot": false,
+      "dependency_overlap_needs_review": false,
+      "independent": true
+    },
+    {
+      "shot_a": "s01_c04",
+      "shot_b": "s02_c04",
+      "job_a": "17b79864dac1",
+      "job_b": "986c4fd33a19",
+      "overlap_seconds": 245.022,
+      "same_shot": false,
+      "dependency_overlap_needs_review": false,
+      "independent": true
+    },
+    {
+      "shot_a": "s02_c04",
+      "shot_b": "s02_c02",
+      "job_a": "986c4fd33a19",
+      "job_b": "aa4b57f3fd41",
+      "overlap_seconds": 33.928,
+      "same_shot": false,
+      "dependency_overlap_needs_review": false,
+      "independent": true
+    },
+    {
+      "shot_a": "s02_c02",
+      "shot_b": "s01_c03",
+      "job_a": "aa4b57f3fd41",
+      "job_b": "d0010cc427c8",
+      "overlap_seconds": 173.384,
+      "same_shot": false,
+      "dependency_overlap_needs_review": false,
+      "independent": true
+    },
+    {
+      "shot_a": "s02_c02",
+      "shot_b": "s03_c02",
+      "job_a": "aa4b57f3fd41",
+      "job_b": "7e3bfe1c6a9d",
+      "overlap_seconds": 36.749,
+      "same_shot": false,
+      "dependency_overlap_needs_review": false,
+      "independent": true
+    },
+    {
+      "shot_a": "s03_c02",
+      "shot_b": "s03_c01",
+      "job_a": "7e3bfe1c6a9d",
+      "job_b": "cbf4e00c1bda",
+      "overlap_seconds": 168.477,
+      "same_shot": false,
+      "dependency_overlap_needs_review": false,
+      "independent": true
+    },
+    {
+      "shot_a": "s03_c02",
+      "shot_b": "s03_c04",
+      "job_a": "7e3bfe1c6a9d",
+      "job_b": "207bdaa13e41",
+      "overlap_seconds": 30.085,
+      "same_shot": false,
+      "dependency_overlap_needs_review": false,
+      "independent": true
+    }
+  ]
+}

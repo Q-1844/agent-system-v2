@@ -4,6 +4,8 @@
 全部 mock：内存 FakeIndex（CAS）+ FakeChat（脚本化 LLM）；零网络、零媒体。
 覆盖：
 - T23 auto+约120s → approximate 任务身份 → 规划 → 冻结（指纹非空）
+- T23b 区间连接符回归：到/至/-/~/～(U+FF5E)/〜(U+301C) 全部解析成 range
+- T23c 精确标记作用域：别句的「必须」不得把软目标时长升格成 exact
 - T24 auto+无时长 → unspecified → 默认内部窗口仍产出可冻结蓝图
 - T25 同 nonce 换任务 → Stage0Conflict（身份拒绝）
 - T26 文本预留先于网络；调用失败额度不回退（含失败那次）
@@ -131,6 +133,40 @@ def test_t23_plan_and_freeze():
     window = effective_planning_window(
         extract_duration_intent("拍一个热气球穿越云海的故事，大概两分钟"), {})
     assert window[0] <= sum(b.target_s for b in result.scene_budgets) <= window[1]
+
+
+# ============ T23b：区间连接符回归（到/至/-/~/～） ============
+
+@pytest.mark.parametrize("text,expected", [
+    ("拍一个45到75秒的无人机短片", (45, 75)),
+    ("拍一个45至75秒的无人机短片", (45, 75)),
+    ("拍一个45-75秒的无人机短片", (45, 75)),
+    ("拍一个45~75秒的无人机短片", (45, 75)),
+    ("拍一个45～75秒的无人机短片", (45, 75)),
+    ("拍一个45〜75秒的无人机短片", (45, 75)),
+])
+def test_t23b_duration_range_connectors(text, expected):
+    """每种区间连接符都必须解析成 range，不能退化成 approximate。"""
+    d = extract_duration_intent(text)
+    assert d.mode == "range"
+    assert tuple(d.range_seconds) == expected
+
+
+# ============ T23c：精确标记只修饰同一分句的时长 ============
+
+@pytest.mark.parametrize("text,mode,target", [
+    ("必须恰好60秒的无人机短片", "exact", 60),
+    ("拍一个大约一分钟的无人机短片", "approximate", 60),
+    ("制作大约一分钟的新续集。必须直接复用旧片里的一个镜头。",
+     "approximate", 60),
+    ("制作一分钟的新续集。必须直接复用旧片里的一个镜头。",
+     "approximate", 60),
+])
+def test_t23c_exact_marker_scope(text, mode, target):
+    """别句的「必须」不得把软目标时长升格成 exact。"""
+    d = extract_duration_intent(text)
+    assert d.mode == mode
+    assert d.target_seconds == target
 
 
 # ============ T24：无时长 ============
@@ -385,7 +421,7 @@ def test_integration_auto_acceptance_full_chain(monkeypatch, tmp_path):
     # 动态 profile（PR B2）：字段齐全且来自蓝图
     assert dyn_profile["scene_count"] == 3
     assert dyn_profile["planned_min"] >= 102 and dyn_profile["planned_max"] <= 138
-    assert dyn_profile["budget"] == 240 and dyn_profile["min_final"] >= 102
+    assert dyn_profile["budget"] == 1_000_000_000 and dyn_profile["min_final"] >= 102
     assert chat.calls == 1
     # sidecar 已写入（Director 注入的依据）
     sidecar = (tmp_path / "projects" / "cloud3min_film-auto-int"

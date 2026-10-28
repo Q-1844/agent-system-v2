@@ -1,0 +1,318 @@
+{
+  "t": 1793116991.39,
+  "elapsed_s": 1762.5,
+  "run": {
+    "status": "completed",
+    "stage": "done",
+    "final_output": "projects\\c2_parallel_local60_20261027\\output\\production_runs\\prun_f09e81f0d8\\final.mp4",
+    "final_duration_s": 62.229333,
+    "error": null,
+    "error_code": null,
+    "scenes": {
+      "s01": "completed",
+      "s02": "completed",
+      "s03": "completed"
+    },
+    "children": {
+      "s01": "run_3acc77abfa",
+      "s02": "run_800f06434d",
+      "s03": "run_525ff84cea"
+    }
+  },
+  "shots": {
+    "s01_c01": {
+      "status": "completed",
+      "stage": null,
+      "vv": "vv_cfc232725674",
+      "warn": []
+    },
+    "s01_c02": {
+      "status": "completed",
+      "stage": null,
+      "vv": "vv_75eaaa0f44a3",
+      "warn": []
+    },
+    "s01_c03": {
+      "status": "completed",
+      "stage": null,
+      "vv": "vv_a35d5c842321",
+      "warn": []
+    },
+    "s01_c04": {
+      "status": "completed",
+      "stage": null,
+      "vv": "vv_d7bee5a37aa4",
+      "warn": []
+    },
+    "s02_c01": {
+      "status": "completed",
+      "stage": null,
+      "vv": "vv_08b4e5f382f1",
+      "warn": []
+    },
+    "s02_c02": {
+      "status": "completed",
+      "stage": null,
+      "vv": "vv_8825b0e7ecae",
+      "warn": []
+    },
+    "s02_c03": {
+      "status": "completed",
+      "stage": null,
+      "vv": "vv_970cf9b1c587",
+      "warn": []
+    },
+    "s02_c04": {
+      "status": "completed",
+      "stage": null,
+      "vv": "vv_e04932cdf10f",
+      "warn": []
+    },
+    "s03_c01": {
+      "status": "completed",
+      "stage": null,
+      "vv": "vv_e1a2cd590d9d",
+      "warn": []
+    },
+    "s03_c02": {
+      "status": "completed",
+      "stage": null,
+      "vv": "vv_111bbfc614df",
+      "warn": []
+    },
+    "s03_c03": {
+      "status": "completed",
+      "stage": null,
+      "vv": "vv_779adaa1778c",
+      "warn": []
+    },
+    "s03_c04": {
+      "status": "completed",
+      "stage": null,
+      "vv": "vv_53a22c49955e",
+      "warn": []
+    }
+  },
+  "jobs": {
+    "71b95bee1ec3": {
+      "kind": "first_frame",
+      "shot": "s01_c01",
+      "state": "done",
+      "started_at": 1793115207.846328,
+      "finished_at": 1793115227.165912,
+      "provider_task_id": null,
+      "submit_state": null,
+      "error": ""
+    },
+    "820bfabb915b": {
+      "kind": "first_frame",
+      "shot": "s02_c01",
+      "state": "done",
+      "started_at": 1793115210.1959636,
+      "finished_at": 1793115233.1332028,
+      "provider_task_id": null,
+      "submit_state": null,
+      "error": ""
+    },
+    "5d94b26bdfdd": {
+      "kind": "first_frame",
+      "shot": "s01_c02",
+      "state": "done",
+      "started_at": 1793115214.0341835,
+      "finished_at": 1793115236.4396539,
+      "provider_task_id": null,
+      "submit_state": null,
+      "error": ""
+    },
+    "869969e6a93a": {
+      "kind": "first_frame",
+      "shot": "s02_c03",
+      "state": "done",
+      "started_at": 1793115227.1730134,
+      "finished_at": 1793115249.1735294,
+      "provider_task_id": null,
+      "submit_state": null,
+      "error": ""
+    },
+    "2268d9d805e4": {
+      "kind": "video",
+      "shot": "s01_c01",
+      "state": "done",
+      "started_at": 1793115229.404568,
+      "finished_at": 1793115348.0758421,
+      "provider_task_id": "task_NRUFiYhMc9Pd8ROAKLKBKxyAACujpV3m",
+      "submit_state": "accepted",
+      "error": ""
+    },
+    "d5a2e2080992": {
+      "kind": "video",
+      "shot": "s02_c01",
+      "state": "done",
+      "started_at": 1793115235.9999466,
+      "finished_at": 1793115564.7345488,
+      "provider_task_id": "task_glw9EtaAmiAifJRkFvRNMzOSidmHgmT8",
+      "submit_state": "accepted",
+      "error": ""
+    },
+    "1a8b1453e1ca": {
+      "kind": "video",
+      "shot": "s01_c02",
+      "state": "done",
+      "started_at": 1793115348.0825427,
+      "finished_at": 1793115615.5506856,
+      "provider_task_id": "task_suuTyaSjkjYdWmmxyGRoemYOAjp6C4nS",
+      "submit_state": "accepted",
+      "error": ""
+    },
+    "29a8cfec60e8": {
+      "kind": "video",
+      "shot": "s02_c03",
+      "state": "done",
+      "started_at": 1793115564.7409263,
+      "finished_at": 1793115685.0631423,
+      "provider_task_id": "task_DP9GGZLIIhvFTKVxMbQtFtPu1KapV0Y8",
+      "submit_state": "accepted",
+      "error": ""
+    },
+    "1f43cd5a0aca": {
+      "kind": "first_frame",
+      "shot": "s01_c04",
+      "state": "done",
+      "started_at": 1793115351.209497,
+      "finished_at": 1793115369.702521,
+      "provider_task_id": null,
+      "submit_state": null,
+      "error": ""
+    },
+    "17b79864dac1": {
+      "kind": "video",
+      "shot": "s01_c04",
+      "state": "done",
+      "started_at": 1793115615.557396,
+      "finished_at": 1793115966.5801973,
+      "provider_task_id": "task_4gsfnQm235Z6sg3In4zF8f59WnnQ66Tx",
+      "submit_state": "accepted",
+      "error": ""
+    },
+    "60496e831cf7": {
+      "kind": "first_frame",
+      "shot": "s02_c04",
+      "state": "done",
+      "started_at": 1793115688.2343378,
+      "finished_at": 1793115716.5195322,
+      "provider_task_id": null,
+      "submit_state": null,
+      "error": ""
+    },
+    "986c4fd33a19": {
+      "kind": "video",
+      "shot": "s02_c04",
+      "state": "done",
+      "started_at": 1793115721.5581334,
+      "finished_at": 1793116000.51622,
+      "provider_task_id": "task_Mv2FiLpXfuMqR4sI70c2CZhmkTbjNbQI",
+      "submit_state": "accepted",
+      "error": ""
+    },
+    "aa4b57f3fd41": {
+      "kind": "video",
+      "shot": "s02_c02",
+      "state": "done",
+      "started_at": 1793115966.5880527,
+      "finished_at": 1793116240.9826975,
+      "provider_task_id": "task_gDr98l9Lete6S26bWHR5e0acFbzelP63",
+      "submit_state": "accepted",
+      "error": ""
+    },
+    "d0010cc427c8": {
+      "kind": "video",
+      "shot": "s01_c03",
+      "state": "done",
+      "started_at": 1793116000.5245037,
+      "finished_at": 1793116173.9085076,
+      "provider_task_id": "task_pBi0LKbyDiv30aLY1DY1yJA41LcRIVaE",
+      "submit_state": "accepted",
+      "error": ""
+    },
+    "d1ce23b8b24a": {
+      "kind": "first_frame",
+      "shot": "s03_c01",
+      "state": "done",
+      "started_at": 1793116180.3044088,
+      "finished_at": 1793116208.3620028,
+      "provider_task_id": null,
+      "submit_state": null,
+      "error": ""
+    },
+    "ff0af3978c05": {
+      "kind": "first_frame",
+      "shot": "s03_c02",
+      "state": "done",
+      "started_at": 1793116184.4290328,
+      "finished_at": 1793116202.1759784,
+      "provider_task_id": null,
+      "submit_state": null,
+      "error": ""
+    },
+    "7e3bfe1c6a9d": {
+      "kind": "video",
+      "shot": "s03_c02",
+      "state": "done",
+      "started_at": 1793116204.2334685,
+      "finished_at": 1793116463.5571048,
+      "provider_task_id": "task_Cy1XPj5xStfCllsLTQcdFe4yERbYkYf0",
+      "submit_state": "accepted",
+      "error": ""
+    },
+    "cbf4e00c1bda": {
+      "kind": "video",
+      "shot": "s03_c01",
+      "state": "done",
+      "started_at": 1793116240.9908981,
+      "finished_at": 1793116409.46816,
+      "provider_task_id": "task_zzWlnxAeyaGVm8g7cdUuWNrG4gG4wqNM",
+      "submit_state": "accepted",
+      "error": ""
+    },
+    "fd0ba490716b": {
+      "kind": "first_frame",
+      "shot": "s03_c04",
+      "state": "done",
+      "started_at": 1793116412.259737,
+      "finished_at": 1793116430.5587988,
+      "provider_task_id": null,
+      "submit_state": null,
+      "error": ""
+    },
+    "207bdaa13e41": {
+      "kind": "video",
+      "shot": "s03_c04",
+      "state": "done",
+      "started_at": 1793116433.4723718,
+      "finished_at": 1793116605.18549,
+      "provider_task_id": "task_rtPkzX1ckOvOc2crb4BR7nj7nIfyG8eC",
+      "submit_state": "accepted",
+      "error": ""
+    },
+    "881d0308ffc2": {
+      "kind": "first_frame",
+      "shot": "s03_c03",
+      "state": "done",
+      "started_at": 1793116650.5400114,
+      "finished_at": 1793116711.0556805,
+      "provider_task_id": null,
+      "submit_state": null,
+      "error": ""
+    },
+    "08273326e533": {
+      "kind": "video",
+      "shot": "s03_c03",
+      "state": "done",
+      "started_at": 1793116713.5511608,
+      "finished_at": 1793116962.4358988,
+      "provider_task_id": "task_2gJr6rFbSzp03wOcUM1T0JCqH0NAnNLu",
+      "submit_state": "accepted",
+      "error": ""
+    }
+  }
+}

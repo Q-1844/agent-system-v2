@@ -20,6 +20,7 @@ from .modes import AgentExecutionMode, assert_mode_allowed
 from .models import ModuleProposal
 
 
+from src.api.model_budget import DEFAULT_TEXT_MAX_TOKENS
 def new_item_id() -> str:
     return "item_" + secrets.token_hex(4)
 
@@ -58,7 +59,7 @@ async def call_and_parse(client, messages: list, parser: Callable[[str], Any]
     parser 抛 ValueError 视为可 repair 的解析/校验失败；其它异常视为 LLM 失败。
     绝不无限重试（§102）。"""
     try:
-        raw = await client.chat(messages, json_mode=True, temperature=0.3, max_tokens=2048)
+        raw = await client.chat(messages, json_mode=True, temperature=0.3, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
     except Exception as e:
         return None, f"Agnes 调用失败：{str(e)[:200]}"
     try:
@@ -67,7 +68,7 @@ async def call_and_parse(client, messages: list, parser: Callable[[str], Any]
         repair = messages + [{"role": "system",
                               "content": f"上次返回无法使用：{e}。请严格遵循 schema，只返回一个合法 JSON 对象。"}]
         try:
-            raw2 = await client.chat(repair, json_mode=True, temperature=0.2, max_tokens=2048)
+            raw2 = await client.chat(repair, json_mode=True, temperature=0.2, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
             return parser(raw2), None
         except ValueError as e2:
             return None, f"输出无法解析/校验：{e2}"

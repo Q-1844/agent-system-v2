@@ -23,6 +23,7 @@ from .runtime import AgentRuntime, AgentError
 from .revision_audit import DirectEditAuditStore
 
 
+from src.api.model_budget import DEFAULT_TEXT_MAX_TOKENS
 SCRIPT_WRITER_MIN_SYSTEM = """你是 AGNES 的 Script Writer，负责剧本正文（story_text）的创作与修改。
 
 你有一个工具可以使用：
@@ -186,7 +187,7 @@ async def script_writer_turn(rt: AgentRuntime, project: str, session_id: str,
         messages += history
         messages.append({"role": "user", "content": content})
         try:
-            reply = await client.chat(messages, temperature=0.7, max_tokens=65536)
+            reply = await client.chat(messages, temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
         except Exception as e:
             assistant_text = f"[调用失败: {str(e)[:200]}]"
             status = ResultStatus.FAILED.value

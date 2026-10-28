@@ -33,6 +33,9 @@ from pydantic import BaseModel, Field
 from src.core.store import ProjectStore, _atomic_write_json
 from src.core.models import ShotStatus
 from src.ai.production_planner import is_plan_stale, SceneProductionPlan
+from src.ai.c2_parallel import (shot_dependencies, scene_dependencies,
+                                validate_parallelism, C2DependencyError, source_completed_for_run,
+                                media_sources_for_shot)
 from src.ai.autopilot import (
     get_autopilot_manager, preflight_scene_autopilot, SceneRunPreflight,
     SceneAutopilotRun,
@@ -99,6 +102,14 @@ class ProjectProductionRun(BaseModel):
     status: str = PRUN_PENDING
     stage: str = PSTAGE_PREFLIGHT
     respect_locked: bool = True
+    max_parallel_scenes: int = Field(default=1, ge=1, le=2)
+    scene_dependencies: Dict[str, List[str]] = Field(default_factory=dict)
+    # Full-film, per-shot edges: permits an independent shot in scene B to
+    # start before scene A completes, even if another B shot relays A's tail.
+    shot_dependencies: Dict[str, List[str]] = Field(default_factory=dict)
+    # Frozen continuity/reference selections used by the DAG. Old runs use
+    # their original signature contract (empty map = no extra validation).
+    reference_asset_snapshot: Dict[str, Optional[str]] = Field(default_factory=dict)
     pause_requested: bool = False
     cancel_requested: bool = False
     current_scene_id: Optional[str] = None
@@ -305,7 +316,7 @@ class _ExistingProjectRunError(Exception):
 
 
 class ProjectProductionManager:
-    """项目级制作生命周期 + 后台串行 Scene 编排 + 合成。"""
+    """项目级制作生命周期 + 有依赖图的 Scene 并行编排 + 合成。"""
 
     def __init__(self):
         self._locks: Dict[str, asyncio.Lock] = {}
@@ -390,6 +401,18 @@ class ProjectProductionManager:
                 return r
         return None
 
+    async def _edit_run(self, project_name: str, run_id: str, edit):
+        """Atomic run-level edit: concurrent pause/cancel and child completions
+        cannot overwrite one another's checkpoint fields.
+        """
+        async with self._lock_for(run_id):
+            latest = self._load_run(project_name, run_id)
+            if latest is None:
+                raise RuntimeError(f"missing production run {run_id}")
+            edit(latest)
+            self._write_run(latest)
+            return latest
+
     # ---------- manifest IO ----------
     def _load_manifest(self, run: ProjectProductionRun) -> Optional[CompositionManifest]:
         p = self._manifest_path(run)
@@ -409,7 +432,8 @@ class ProjectProductionManager:
                         target_scene_ids: Optional[List[str]] = None,
                         target_shot_ids: Optional[List[str]] = None,
                         shot_actions: Optional[Dict[str, Dict[str, Any]]] = None,
-                        parent_change_execution_id: Optional[str] = None) -> ProjectProductionRun:
+                        parent_change_execution_id: Optional[str] = None,
+                        max_parallel_scenes: int = 2) -> ProjectProductionRun:
         """§十九 start 流程：load -> 检查无 active ProjectRun -> project preflight ->
         冻结 source snapshot + plans snapshot -> 建 run dir -> 写 run.json -> 启动 Executor。
         后端自己 load，不信任前端 preflight（§十九）。
@@ -459,12 +483,29 @@ class ProjectProductionManager:
                 raise ValueError(f"故事段 {sc.scene_id} 无 approved Plan")
             plans_snapshot[sc.scene_id] = plan.model_dump()
 
+        # Freeze the dependency DAG with approved Producer intent.  Scene
+        # concurrency is not equivalent to media worker concurrency: upstream
+        # actual end-frame dependencies are represented as cross-scene edges.
+        max_parallel_scenes = validate_parallelism(max_parallel_scenes)
+        try:
+            all_deps = shot_dependencies(project, plans,
+                                         selected_scene_ids=[sc.scene_id for sc in scenes_to_run])
+            scene_deps = scene_dependencies(project, all_deps,
+                                            [sc.scene_id for sc in scenes_to_run])
+        except C2DependencyError as exc:
+            raise ValueError(f"C2 parallel dependency plan invalid: {exc}") from exc
+
         # 创建 Run
         run_id = f"prun_{uuid.uuid4().hex[:10]}"
         run = ProjectProductionRun(
             run_id=run_id, project_name=project_name, parent_full_run_id=parent_full_run_id,
             status=PRUN_PENDING, stage=PSTAGE_PREFLIGHT, respect_locked=respect_locked,
             source_signature=signature,
+            max_parallel_scenes=max_parallel_scenes,
+            scene_dependencies={sid: sorted(deps) for sid, deps in scene_deps.items()},
+            shot_dependencies={sid: sorted(deps) for sid, deps in all_deps.items()},
+            reference_asset_snapshot={sh.shot_id: getattr(sh, "video_reference_asset_id", None)
+                                      for sc in project.scenes for sh in sc.shots},
             target_scene_ids=target_scene_ids, target_shot_ids=target_shot_ids,
             shot_actions=shot_actions, parent_change_execution_id=parent_change_execution_id,
             created_at=time.time(), updated_at=time.time(),
@@ -513,6 +554,15 @@ class ProjectProductionManager:
                 raise ValueError("Run 不存在")
             if run.status not in PRUN_RESUMABLE:
                 raise ValueError(f"Run 状态 {run.status} 不可 resume")
+            # Parent resume must re-queue *all* paused children. Their IDs
+            # remain bound to existing child runs, so they resume at their
+            # own saved media stages without duplicating any provider POST.
+            # A raw PSCENE_PAUSED marker here would otherwise be mistaken
+            # for a fresh independent pause request by the DAG coordinator.
+            for entry in run.scenes:
+                if entry.status == PSCENE_PAUSED:
+                    entry.status = PSCENE_PENDING
+            run.pause_requested = run.cancel_requested = False
             run.status = PRUN_RUNNING
             run.error = None
             run.error_code = None
@@ -521,61 +571,42 @@ class ProjectProductionManager:
         return run
 
     async def request_pause(self, project_name: str, run_id: str) -> ProjectProductionRun:
-        """§二十六：若存在 active child -> 设 pause_requested + PAUSING -> 传给 child，
-        child 当前 job 完成后 paused -> Project paused。Scene 间 -> 立即 paused。"""
-        run = self._load_run(project_name, run_id)
-        if run is None:
-            raise ValueError("Run 不存在")
-        if run.status not in (PRUN_RUNNING, PRUN_PENDING, PRUN_PAUSING):
-            raise ValueError(f"Run 状态 {run.status} 不可暂停")
-        run.pause_requested = True
-        if run.status != PRUN_PAUSING:
-            run.status = PRUN_PAUSING
-        await self._save_run(run)
-        # 传给当前 child（若有）
-        if run.current_child_run_id:
-            try:
-                await get_autopilot_manager().request_pause(project_name, run.current_child_run_id)
-            except Exception:
-                pass   # child 可能已 terminal，忽略
+        """Pause every active child; never just the legacy first UI child."""
+        def mark(latest):
+            if latest.status not in (PRUN_RUNNING, PRUN_PENDING, PRUN_PAUSING):
+                raise ValueError(f"Run 状态 {latest.status} 不可暂停")
+            latest.pause_requested = True
+            latest.status = PRUN_PAUSING
+        run = await self._edit_run(project_name, run_id, mark)
+        manager = get_autopilot_manager()
+        for entry in run.scenes:
+            if entry.child_run_id and entry.status == PSCENE_RUNNING:
+                try:
+                    await manager.request_pause(project_name, entry.child_run_id)
+                except ValueError:
+                    pass
         return run
 
     async def request_cancel(self, project_name: str, run_id: str) -> ProjectProductionRun:
-        """§二十八：传 cancel 给 child（允许当前已提交 Agnes job 完成并保存），child cancelled 后
-        Project cancelled。Scene 间 -> 立即 cancelled。已生成资产全部保留，不回滚。
-
-        AI-7C-H closure：paused run 的执行 loop 已退出（暂停即 checkpoint 返回），
-        无人消费 cancel_requested —— per-run lock 内 reload-latest 后直接转终态
-        cancelled（确定性，不 resume、不建新工作、不删资产）。锁内复查防两类竞态：
-        重复 cancel 不覆盖终态；与 resume_run 并发时先到先得、cancelled 不被复活。"""
-        from deps import logger
-        run = self._load_run(project_name, run_id)
-        if run is None:
-            raise ValueError("Run 不存在")
-        if run.status in PRUN_TERMINAL:
-            raise ValueError(f"Run 已 {run.status}")
-        if run.status == PRUN_PAUSED:
-            async with self._lock_for(run_id):
-                latest = self._load_run(project_name, run_id)
-                if latest is None:
-                    raise ValueError("Run 不存在")
-                if latest.status in PRUN_TERMINAL:
-                    raise ValueError(f"Run 已 {latest.status}")
-                if latest.status == PRUN_PAUSED:
-                    latest.cancel_requested = False
-                    latest.status = PRUN_CANCELLED
-                    self._write_run(latest)
-                    logger.info(f"ProjectRun {run_id} paused -> cancelled"
-                                f"（AI-7C-H：无活跃 loop，直接终态）")
-                    return latest
-                run = latest   # 锁窗口内被 resume 恢复 active -> 走既有 cooperative 路径
-        run.cancel_requested = True
-        await self._save_run(run)
-        if run.current_child_run_id:
-            try:
-                await get_autopilot_manager().request_cancel(project_name, run.current_child_run_id)
-            except Exception:
-                pass
+        """Cooperatively cancel all running scenes, or atomically cancel paused."""
+        def mark(latest):
+            if latest.status in PRUN_TERMINAL:
+                raise ValueError(f"Run 已 {latest.status}")
+            if latest.status == PRUN_PAUSED:
+                latest.cancel_requested = False
+                latest.status = PRUN_CANCELLED
+            else:
+                latest.cancel_requested = True
+        run = await self._edit_run(project_name, run_id, mark)
+        if run.status == PRUN_CANCELLED:
+            return run
+        manager = get_autopilot_manager()
+        for entry in run.scenes:
+            if entry.child_run_id and entry.status == PSCENE_RUNNING:
+                try:
+                    await manager.request_cancel(project_name, entry.child_run_id)
+                except ValueError:
+                    pass
         return run
 
     async def recover_runs(self):
@@ -615,142 +646,213 @@ class ProjectProductionManager:
                     continue
                 if run.status not in (PRUN_RUNNING, PRUN_PAUSING, PRUN_COMPOSING, PRUN_PENDING):
                     continue
-                if run.pause_requested:
-                    run.pause_requested = False
-                    run.status = PRUN_PAUSED
-                    await self._save_run(run)
-                    logger.info(f"恢复 ProjectRun {run.run_id} -> paused（暂停请求未完成）")
-                elif run.cancel_requested:
-                    run.cancel_requested = False
-                    run.status = PRUN_CANCELLED
-                    await self._save_run(run)
-                    logger.info(f"恢复 ProjectRun {run.run_id} -> cancelled")
-                else:
-                    run.status = PRUN_RUNNING
-                    await self._save_run(run)
-                    self._launch_loop(run)
-                    n += 1
-                    logger.info(f"恢复 ProjectRun {run.run_id} ({run.project_name})")
+                self._launch_loop(run)
+                n += 1
+                logger.info(f"恢复 ProjectRun {run.run_id} ({run.project_name})")
         if n:
             logger.info(f"ProjectRun 恢复 {n} 个")
 
     # ---------- 执行循环（§二十二）----------
     async def _run_loop(self, project_name: str, run_id: str):
-        """串行 Scene 编排（§二十四 第一版严格串行，一次一个 active SceneRun）+
-        全部完成后 compose。"""
+        """Dynamic scene DAG executor, shared by FullProject/C2 and manual runs.
+
+        An independent later scene may launch before an earlier scene finishes.
+        Continuity and Producer-declared required-serial edges gate launch.
+        All task/child IDs are persisted before the coordinator awaits them.
+        """
         from deps import logger
+        tasks: Dict[str, asyncio.Task] = {}
         try:
             while True:
                 run = self._load_run(project_name, run_id)
                 if run is None:
                     return
-                # cancel/pause checkpoint（Scene 间，§二十六/§二十八）
-                if run.cancel_requested:
-                    run.cancel_requested = False
-                    run.status = PRUN_CANCELLED
-                    await self._save_run(run); return
-                if run.pause_requested:
-                    run.pause_requested = False
-                    run.status = PRUN_PAUSED
-                    await self._save_run(run); return
-                # compose stage（post-scenes 或恢复，§四十三）
+                for sid, task in list(tasks.items()):
+                    if task.done():
+                        tasks.pop(sid)
+                        if not task.cancelled() and task.exception():
+                            msg = str(task.exception())[:300]
+                            def mark_failed(latest, scene_id=sid, error=msg):
+                                e = next(e for e in latest.scenes if e.scene_id == scene_id)
+                                e.status, e.error = PSCENE_FAILED, error
+                            await self._edit_run(project_name, run_id, mark_failed)
+                        elif not task.cancelled():
+                            child = task.result()
+                            def complete(latest, scene_id=sid, completed=child):
+                                entry = next(e for e in latest.scenes if e.scene_id == scene_id)
+                                entry.child_run_id = completed.run_id
+                                entry.status = self._scene_status_from_child(completed)
+                                if completed.status in (RUN_FAILED, RUN_BLOCKED):
+                                    entry.error = completed.error
+                                active = [e for e in latest.scenes if e.status == PSCENE_RUNNING]
+                                first = min(active, key=lambda e: e.index) if active else None
+                                latest.current_scene_id = first.scene_id if first else None
+                                latest.current_child_run_id = first.child_run_id if first else None
+                            await self._edit_run(project_name, run_id, complete)
+                run = self._load_run(project_name, run_id)
+                if run.status in PRUN_TERMINAL:
+                    if tasks:
+                        await asyncio.wait(tasks.values(), timeout=0.1,
+                                           return_when=asyncio.FIRST_COMPLETED)
+                        continue
+                    return
+                # Propagate pause/cancel to ALL child scenes, including those
+                # rebound after restart. Do not abandon a paid in-flight job.
+                if run.pause_requested or run.cancel_requested:
+                    for entry in run.scenes:
+                        if entry.status != PSCENE_RUNNING or not entry.child_run_id:
+                            continue
+                        child = get_autopilot_manager().get_run(project_name, entry.child_run_id)
+                        if child is None or child.status in RUN_TERMINAL or child.status == RUN_PAUSED:
+                            continue
+                        try:
+                            if run.cancel_requested:
+                                await get_autopilot_manager().request_cancel(project_name, entry.child_run_id)
+                            elif not child.pause_requested:
+                                await get_autopilot_manager().request_pause(project_name, entry.child_run_id)
+                        except ValueError:
+                            pass
+                    if tasks:
+                        await asyncio.wait(tasks.values(), timeout=0.15,
+                                           return_when=asyncio.FIRST_COMPLETED)
+                        continue
+                    def settle(latest):
+                        latest.status = PRUN_CANCELLED if latest.cancel_requested else PRUN_PAUSED
+                        latest.cancel_requested = latest.pause_requested = False
+                        latest.current_scene_id = latest.current_child_run_id = None
+                    await self._edit_run(project_name, run_id, settle)
+                    return
+                # Failed sibling: keep the successful independent results, but
+                # never launch more work after detecting a real failure.
+                bad = next((e for e in run.scenes if e.status in
+                            (PSCENE_FAILED, PSCENE_BLOCKED, PSCENE_CANCELLED)), None)
+                if bad and not tasks:
+                    def fail(latest):
+                        latest.status = {
+                            PSCENE_FAILED: PRUN_FAILED,
+                            PSCENE_BLOCKED: PRUN_BLOCKED,
+                            PSCENE_CANCELLED: PRUN_CANCELLED,
+                        }[bad.status]
+                        latest.error = f"故事段 {bad.scene_id}: {bad.error or bad.status}"
+                        if bad.status == PSCENE_BLOCKED:
+                            latest.error_code = ERR_SOURCE_CHANGED
+                    await self._edit_run(project_name, run_id, fail)
+                    return
                 if run.stage in (PSTAGE_COMPOSE, PSTAGE_DONE):
-                    await self._compose_project(project_name, run_id); return
-                # scenes stage
-                run.status = PRUN_RUNNING
-                run.stage = PSTAGE_SCENES
-                await self._save_run(run)
+                    if tasks:
+                        raise RuntimeError("cannot compose with active child scenes")
+                    await self._compose_project(project_name, run_id)
+                    return
 
-                entry = self._next_incomplete_scene(run)
-                if entry is None:
-                    # 所有 Scene 完成 -> 进 compose（§四十五）
-                    run.stage = PSTAGE_COMPOSE
-                    await self._save_run(run)
+                if all(e.status == PSCENE_COMPLETED for e in run.scenes):
+                    # Validate source immediately before composition too. An
+                    # external edit during already-running scenes is not safe.
+                    changed = self._validate_source_for_scene(project_name, run)
+                    if changed:
+                        await self._edit_run(project_name, run_id, lambda latest: (
+                            setattr(latest, "status", PRUN_BLOCKED),
+                            setattr(latest, "error_code", ERR_SOURCE_CHANGED),
+                            setattr(latest, "error", changed)))
+                        return
+                    await self._edit_run(project_name, run_id, lambda latest: (
+                        setattr(latest, "stage", PSTAGE_COMPOSE)))
                     continue
 
-                # 进入尚未执行的 Scene 前：runtime source 校验（§十三/§十五）
-                changed = self._validate_source_for_scene(project_name, run)
-                if changed:
-                    run.status = PRUN_BLOCKED
-                    run.error_code = ERR_SOURCE_CHANGED
-                    run.error = changed
-                    await self._save_run(run); return
-
-                # 启动 / 复用 child（§七 crash-safe）
-                try:
-                    child = await self._start_or_reuse_child(project_name, run, entry)
-                except _SourceStructureChanged as e:
-                    run.status = PRUN_BLOCKED
-                    run.error_code = ERR_SOURCE_CHANGED
-                    run.error = f"故事段 {entry.scene_id} 结构变化: {e}"
-                    await self._save_run(run); return
-                except _ExistingRunError as e:
-                    run.status = PRUN_BLOCKED
-                    run.error = f"故事段 {entry.scene_id} 已有其他自动制作任务: {e.existing_run_id}"
-                    await self._save_run(run); return
-                except Exception as e:
-                    run.status = PRUN_FAILED
-                    run.error = f"启动故事段 {entry.scene_id} 失败: {str(e)[:300]}"
-                    await self._save_run(run); return
-
-                entry.child_run_id = child.run_id
-                entry.status = PSCENE_RUNNING
-                run.current_scene_id = entry.scene_id
-                run.current_child_run_id = child.run_id
-                await self._save_run(run)
-
-                # 等待 child terminal（completed/paused/failed/blocked/cancelled）
-                child = await self._wait_child(project_name, child.run_id)
-                # 🔴 reload run：pause/cancel 可能已被并发 endpoint 设置，不能覆盖（否则丢失暂停请求）
-                run = self._load_run(project_name, run_id)
-                entry = next(e for e in run.scenes if e.scene_id == entry.scene_id)
-                entry.status = self._scene_status_from_child(child)
-                if child.status == RUN_FAILED:
-                    entry.error = child.error
-                elif child.status == RUN_BLOCKED:
-                    entry.error = child.error
-                run.current_child_run_id = None
-                # 并发 pause/cancel 优先（_wait_child 期间到达的请求）
-                if run.cancel_requested:
-                    run.cancel_requested = False
-                    run.status = PRUN_CANCELLED
-                    await self._save_run(run); return
-                if run.pause_requested:
-                    run.pause_requested = False
-                    run.status = PRUN_PAUSED
-                    await self._save_run(run); return
-                await self._save_run(run)
-
-                if child.status == RUN_COMPLETED:
-                    continue   # 下一 Scene
-                if child.status == RUN_PAUSED:
-                    run.pause_requested = False
-                    run.status = PRUN_PAUSED
-                    await self._save_run(run); return
-                if child.status == RUN_FAILED:
-                    run.status = PRUN_FAILED
-                    run.error = f"故事段 {entry.scene_id}: {child.error or '失败'}"
-                    await self._save_run(run); return
-                if child.status == RUN_BLOCKED:
-                    run.status = PRUN_BLOCKED
-                    run.error_code = child.error_code or ERR_SOURCE_CHANGED
-                    run.error = f"故事段 {entry.scene_id}: {child.error or '结构变化'}"
-                    await self._save_run(run); return
-                if child.status == RUN_CANCELLED:
-                    run.cancel_requested = False
-                    run.status = PRUN_CANCELLED
-                    await self._save_run(run); return
-                # 未知状态
-                run.status = PRUN_FAILED
-                run.error = f"未知 child 状态: {child.status}"
-                await self._save_run(run); return
+                paused_child = any(e.status == PSCENE_PAUSED for e in run.scenes)
+                if paused_child and not run.pause_requested:
+                    # A scene was paused independently (rather than via the
+                    # parent endpoint). Pause sibling scenes and the parent,
+                    # never auto-resume the paused child without authorization.
+                    await self._edit_run(project_name, run_id, lambda latest:
+                                         setattr(latest, "pause_requested", True))
+                    continue
+                if not bad:
+                    changed = self._validate_source_for_scene(project_name, run)
+                    if changed:
+                        if tasks:
+                            # Do not start new work, but let posted jobs settle
+                            # before final blocked status; source is already stale.
+                            await asyncio.wait(tasks.values(), timeout=0.15,
+                                               return_when=asyncio.FIRST_COMPLETED)
+                            continue
+                        await self._edit_run(project_name, run_id, lambda latest: (
+                            setattr(latest, "status", PRUN_BLOCKED),
+                            setattr(latest, "error_code", ERR_SOURCE_CHANGED),
+                            setattr(latest, "error", changed)))
+                        return
+                    slots = max(0, validate_parallelism(run.max_parallel_scenes) - len(tasks))
+                    for entry in sorted(run.scenes, key=lambda e: e.index):
+                        if slots <= 0 or run.pause_requested or run.cancel_requested:
+                            break
+                        if entry.status in (PSCENE_COMPLETED, PSCENE_BLOCKED, PSCENE_CANCELLED) or entry.scene_id in tasks:
+                            continue
+                        # A *scene-wide* edge is too conservative: one B shot
+                        # may need A's tail while another B shot is independent.
+                        # Only launch when at least one shot in B is runnable,
+                        # so waiting scenes cannot consume both scheduler slots.
+                        # Older frozen runs have no shot DAG; preserve their
+                        # original scene-level serial semantics.
+                        if not entry.child_run_id:
+                            # Crash window: a child can be committed but the
+                            # parent binding not yet checkpointed. Rebind that
+                            # existing child even when none of its *remaining*
+                            # shots is currently ready, or resume could stall.
+                            existing_child = get_autopilot_manager().find_by_parent_project_run(
+                                project_name, run.run_id, entry.scene_id)
+                            if existing_child is None and not self._scene_can_start(
+                                    project_name, run, entry):
+                                continue
+                        try:
+                            child = await self._start_or_reuse_child(project_name, run, entry)
+                        except (_SourceStructureChanged, _ExistingRunError) as e:
+                            kind = PSCENE_BLOCKED
+                            msg = str(e)[:300]
+                        except Exception as e:
+                            kind = PSCENE_FAILED
+                            msg = str(e)[:300]
+                        else:
+                            kind, msg = PSCENE_RUNNING, None
+                        def bind(latest, scene_id=entry.scene_id, child_run=child if kind == PSCENE_RUNNING else None,
+                                 status=kind, error=msg):
+                            e = next(e for e in latest.scenes if e.scene_id == scene_id)
+                            e.status, e.error = status, error
+                            if child_run:
+                                e.child_run_id = child_run.run_id
+                                if not latest.current_scene_id:
+                                    latest.current_scene_id = scene_id
+                                    latest.current_child_run_id = child_run.run_id
+                            latest.status, latest.stage = PRUN_RUNNING, PSTAGE_SCENES
+                        run = await self._edit_run(project_name, run_id, bind)
+                        if kind != PSCENE_RUNNING:
+                            break
+                        tasks[entry.scene_id] = asyncio.create_task(self._wait_child(project_name, child.run_id))
+                        slots -= 1
+                if not tasks:
+                    run = self._load_run(project_name, run_id)
+                    if any(e.status in (PSCENE_FAILED, PSCENE_BLOCKED, PSCENE_CANCELLED)
+                           for e in run.scenes):
+                        continue
+                    # Missing dependency or lost child must block, never spin
+                    # forever or create two children for the same scene.
+                    await self._edit_run(project_name, run_id, lambda latest: (
+                        setattr(latest, "status", PRUN_BLOCKED),
+                        setattr(latest, "error", "场景依赖尚未就绪，无法继续调度")))
+                    return
+                await asyncio.wait(tasks.values(), timeout=0.2,
+                                   return_when=asyncio.FIRST_COMPLETED)
+        except asyncio.CancelledError:
+            # Backend process crash or test-injected coordinator loss: child
+            # IDs/JobQueue receipts are persisted; the recovery loop rebinds.
+            raise
         except Exception as e:
             logger.exception(f"ProjectRun _run_loop {run_id} 异常")
-            run = self._load_run(project_name, run_id)
-            if run:
-                run.status = PRUN_FAILED
-                run.error = f"执行循环异常: {str(e)[:400]}"
-                await self._save_run(run)
+            try:
+                await self._edit_run(project_name, run_id, lambda latest: (
+                    setattr(latest, "status", PRUN_FAILED),
+                    setattr(latest, "error", f"执行循环异常: {str(e)[:400]}")))
+            finally:
+                if tasks:
+                    await asyncio.gather(*tasks.values(), return_exceptions=True)
 
     def _next_incomplete_scene(self, run: ProjectProductionRun) -> Optional[ProjectSceneExecutionState]:
         """第一个未完成的 Scene（pending/running/paused/failed）。blocked 不重试（source 变化）。"""
@@ -777,7 +879,44 @@ class ProjectProductionManager:
         if current != run.source_signature:
             return ("项目的故事、角色或镜头规划在完整制作期间发生了变化。"
                     "当前制作任务已安全停止。请确认最新制作计划后重新开始一次完整制作。")
+        if run.reference_asset_snapshot:
+            actual_refs = {sh.shot_id: getattr(sh, "video_reference_asset_id", None)
+                           for scene in project.scenes for sh in scene.shots}
+            if actual_refs != run.reference_asset_snapshot:
+                return "镜头视频参考或尾帧接力源在冻结后改变，必须重新确认依赖计划"
         return None
+
+    def _scene_can_start(self, project_name: str, run: ProjectProductionRun,
+                         entry: ProjectSceneExecutionState) -> bool:
+        """Select a scene if it contains a currently runnable *shot*.
+
+        With two scene slots we must not reserve a slot for an entirely
+        dependency-blocked scene. A scene that has an independent shot may
+        start while another of its shots waits for a cross-scene video tail.
+        """
+        if not run.shot_dependencies:
+            done = {e.scene_id for e in run.scenes if e.status == PSCENE_COMPLETED}
+            return set(run.scene_dependencies.get(entry.scene_id, [])) <= done
+        from deps import get_project_manager
+        project = ProjectStore(get_project_manager().get_project_dir(project_name)).load()
+        scene = next((s for s in project.scenes if s.scene_id == entry.scene_id), None)
+        plan_data = self._frozen_plan_for_scene(run, entry.scene_id)
+        if scene is None or not plan_data:
+            return False
+        plan = SceneProductionPlan.model_validate(plan_data)
+        planned_by_id = {p.shot_id: p for p in plan.shots}
+        scene_manager = get_autopilot_manager()
+        for shot in scene.shots:
+            deps = run.shot_dependencies.get(shot.shot_id, [])
+            planned = planned_by_id.get(shot.shot_id)
+            if planned is None:
+                continue
+            media = media_sources_for_shot(project, planned, shot.shot_id)
+            if all(source_completed_for_run(
+                    project, source, parent_run=run, scene_manager=scene_manager,
+                    require_media=source in media) for source in deps):
+                return True
+        return False
 
     async def _start_or_reuse_child(self, project_name: str, run: ProjectProductionRun,
                                     entry: ProjectSceneExecutionState) -> SceneAutopilotRun:
