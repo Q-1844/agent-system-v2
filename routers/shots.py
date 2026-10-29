@@ -1407,6 +1407,70 @@ async def shot_prompt_rebuild(project_name: str, shot_id: str,
 # ==================== 阶段 3：镜头视频生成（shot 级，走 JobQueue 串行视频 worker）====================
 from src.api.agnes_client import resolve_size as _resolve_size, PollTransientError, AgnesError
 
+# 素材 URL 拉取失败（供应商 400 source_unavailable）时的安全重试预算。
+# 该错误是【明确拒绝】：远端没有创建任务、没有扣费（不是 408，也不是结局不明），
+# 所以重发安全——真正绝不可重发的是「结局不明」（VideoSubmissionUncertain）。
+MATERIAL_FETCH_RETRY_LIMIT = 2
+MATERIAL_FETCH_RETRY_SECONDS = 20.0
+_MATERIAL_FETCH_ERROR_CODE = "source_unavailable"
+
+
+def _is_material_fetch_rejection(error) -> bool:
+    """供应商【明确拒绝】：拉不到我们提供的素材 URL（400 source_unavailable）。
+
+    典型触发：图床（GitHub Pages）构建抖动 / 边缘缓存未同步，provider 抓图超时。
+    远端没有创建任务、没有扣费 —— 因此允许安全重试（绝不重发的是「结局不明」）。
+    """
+    status = getattr(error, "status", None)
+    if status is None or not 400 <= status < 500:
+        return False
+    body = getattr(error, "body", None)
+    return _MATERIAL_FETCH_ERROR_CODE in str(body or "") or \
+        _MATERIAL_FETCH_ERROR_CODE in str(error)
+
+
+def _reset_not_sent_submit(current, compiled_final_video):
+    """未发出提交 ⇒ 抹掉镜头的 GENERATING 痕迹（没有远端任务、没有扣费）。
+
+    没有这一步，「未发出」会被下一轮派发误读成「早前一次付费提交结局不明」
+    （shots.py 的 previous_submit_uncertain 闸门）——镜头被永久卡死，还凭空
+    背上一次人工对账（run #41 的 s01_c02 即此）。
+    """
+    from src.core.models import ShotStatus
+    if (current.final_video == compiled_final_video and
+            current.video.status == ShotStatus.GENERATING.value and
+            not current.video.video_id):
+        current.video.status = ShotStatus.PENDING.value
+        current.video.video_id = None
+        current.video.task_id = None
+
+
+async def _submit_with_material_retry(client, prompt, *, mode, shot_id=None,
+                                      emit=None, **kwargs):
+    """提交视频；素材 URL 拉取失败（远端明确拒绝、无扣费）时安全重试。
+
+    供应商 400 source_unavailable = 它抓不到我们提供的素材 URL（图床 GitHub
+    Pages 构建窗口 / 边缘缓存未同步）。远端【没有】创建任务、【没有】扣费
+    （是明确拒绝，不是 408，也不是结局不明），所以重发安全——真正绝不可重发
+    的是「结局不明」（VideoSubmissionUncertain）。
+    """
+    last_err = None
+    for attempt in range(MATERIAL_FETCH_RETRY_LIMIT):
+        try:
+            return await client.create_video(prompt, mode=mode, **kwargs)
+        except Exception as err:
+            if not _is_material_fetch_rejection(err):
+                raise
+            last_err = err
+            if attempt + 1 >= MATERIAL_FETCH_RETRY_LIMIT:
+                raise
+            if emit is not None:
+                await emit("submit_retry",
+                           f"{shot_id} 素材 URL 拉取失败（远端明确拒绝、无扣费），"
+                           f"退避 {MATERIAL_FETCH_RETRY_SECONDS:.0f}s 后重试", 5)
+            await asyncio.sleep(MATERIAL_FETCH_RETRY_SECONDS)
+    raise last_err
+
 
 def _video_preflight(shot, quota, seconds, eff_ff_ready):
     """视频前置硬校验（缺一不可，不通过就不提交，省 60s）。
@@ -2043,15 +2107,30 @@ async def _handler_video(job, emit):
         })
         try:
             try:
-                created = await get_agnes_client().create_video(prompt, mode=mode, **kwargs)
+                created = await _submit_with_material_retry(
+                    get_agnes_client(), prompt, mode=mode, shot_id=shot.shot_id,
+                    emit=emit, **kwargs)
             finally:
                 active_video_submission.reset(submission_token)
         except Exception as _sub_err:
-            from src.api.agnes_client import VideoSubmissionUncertain
+            from src.api.agnes_client import VideoSubmissionUncertain, VideoSubmissionNotSent
             status = getattr(_sub_err, "status", None)
             known_rejection = (isinstance(_sub_err, AgnesError)
                                and not isinstance(_sub_err, VideoSubmissionUncertain)
                                and status is not None and 400 <= status < 500 and status != 408)
+            if isinstance(_sub_err, VideoSubmissionNotSent):
+                # 本次【未向 provider 发出请求】：没有远端任务、没有扣费。
+                # 绝不能留下「提交结果不明」痕迹——否则下一次派发会把它误判为
+                # 「早前一次付费提交结局不明」，该镜头被永久卡死并凭空背上人工
+                # 对账负担（run #41 的 s01_c02 即如此背上一笔不存在的对账债）。
+                job.params["provider_submit_state"] = "not_sent"
+                store.update_shot(
+                    job.shot_id,
+                    lambda current: _reset_not_sent_submit(current, compiled_final_video))
+                await emit("submit_not_sent",
+                           f"{shot.shot_id} 未发出提交（无远端任务、无扣费），已复位待重试", 5)
+                _dns_classify(str(_sub_err))
+                raise
             job.params["provider_submit_state"] = "rejected" if known_rejection else "unknown"
             if known_rejection:
                 def _reject_if_current(current):
