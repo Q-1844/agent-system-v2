@@ -375,3 +375,26 @@ def test_c1_crash_after_stage0_freeze_before_checkpoint_binding(client, monkeypa
     assert summary['plan_fingerprint'] == frozen['plan_fingerprint']
     assert cp.current['doc']['plan_fingerprint'] == frozen['plan_fingerprint']
     assert cp.current['doc']['authorized_video_seconds'] == profile['budget']
+
+
+# ============ run_acceptance 固定档路径 project_name 绑定（run #43 回归锁）============
+# PR #22 把 project_name 赋值收窄到 AUTO 分支，固定档非 resume 路径在生产段
+# _resolve_production_project(target, restored, project_name, ...) 处 UnboundLocalError。
+# run_acceptance 太重无法单测起全套，用 AST 数据流检查代替（发现即失败）。
+
+def test_run_acceptance_fixed_profile_binds_project_name_before_use():
+    import ast
+    from tools import full_project_cloud_acceptance as acc
+    tree = ast.parse(open(acc.__file__, encoding='utf-8').read())
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+              and n.name == 'run_acceptance')
+    assigned, used = [], []
+    for n in ast.walk(fn):
+        if isinstance(n, ast.Name) and n.id == 'project_name':
+            (assigned if isinstance(n.ctx, ast.Store) else used).append(n.lineno)
+    assert used, 'run_acceptance 不再引用 project_name——回归锁过期，请复核'
+    first_use = min(used)
+    stores_before_use = [l for l in assigned if l <= first_use]
+    assert stores_before_use, (
+        'project_name 在绑定前被引用——固定档/任意路径 UnboundLocalError 复发（run #43 同因）')
