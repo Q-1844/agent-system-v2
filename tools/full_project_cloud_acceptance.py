@@ -1432,6 +1432,13 @@ async def run_acceptance(nonce, out, summary):
         summary.update(stage="PRODUCTION", target=target)
     else:
         from tools.stage0_state import Stage0Record
+        # 固定档：物化名与 _resolve_production_project 内部一致。PR #22 重构
+        # 把 project_name 的赋值从「if/else 前统一」收窄到 AUTO 分支，固定档
+        # 非 resume 路径流到生产段 _resolve_production_project(target,
+        # restored, project_name, ...) 时未绑定 → UnboundLocalError（run #43
+        # 实测：dispatch 未带 target_duration_seconds=auto，走默认固定档 200
+        # 即崩）。restored 分支优先（项目名来自恢复信息，本占位被忽略）。
+        project_name = f"cloud3min_{nonce}"
         fixed_idx = task_index(token, nonce, STAGE0_FILENAME)
         if Stage0Record(fixed_idx, nonce).exists():
             # P1-1 反向护栏：auto 任务的 nonce 不得被固定档复用（模式不匹配即拒）。
