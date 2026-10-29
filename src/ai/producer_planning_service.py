@@ -239,6 +239,62 @@ def allocate_scene_budgets(beats: List[int], window: Tuple[int, int],
     return out
 
 
+def derive_shot_instructions(budgets: List[SceneBudget]) -> Dict[str, str]:
+    """从冻结预算**确定性派生**每场的镜头指令（纯函数，无 LLM）。
+
+    为什么需要它（run #40 实测，T-REAL-A 同型）：
+    Director 面对**纯叙事摘要**时倾向欠产镜头——run #40 的 s01 窗口是
+    32-44s，Director 首次只给 21.0s，repair 后 28.0s，两次都低于下界，
+    于是 DIRECTOR_FAILED（预算校验仍不通过），整条 auto 长片在第一段就断了。
+
+    C2 路径早就踩过同一个坑并解决：它把「本段必须规划 N 个连续镜头，
+    每镜约 X 秒，总计约 Y 秒」从冻结预算确定性派生出来写进 scene summary，
+    Director 执行就可靠了。**auto 路径缺这一步**，所以本函数把 C2 的
+    做法搬到 auto 路径——同样确定性、同样可审计（数值全部来自冻结预算）。
+
+    与 C2 的差异：C2 用 target_s//8 估镜头数；这里用预算自身的
+    shot_min/shot_max 与 per_shot 窗口反推，优先贴着 target_s，
+    并保证「派生值落在预算窗口内」，避免指令本身违反预算。
+
+    返回 {scene_id: 指令文本}；无法安全派生的场次不出现在结果里。
+    """
+    out: Dict[str, str] = {}
+    for b in budgets:
+        target = int(b.target_s or 0) or int((b.min_s + b.max_s) / 2)
+        lo = int(b.shot_min or 1)
+        hi = int(b.shot_max or 1)
+        # 单镜头段（复用镜头的场景）或过短段不注入：没有分解余地。
+        if hi <= 1 or target < 12:
+            continue
+        # 镜头数：在 [lo, hi] 内选一个让每镜时长落在 per_shot 窗口里的值。
+        desired = max(lo, min(hi, int(round(target / 8))))
+        per = int(round(target / desired))
+        per = min(max(per, int(b.per_shot_min_s or 4)),
+                  int(b.per_shot_max_s or 11))
+        # 反向校正：per 被夹到 per_shot 窗口后，实际总时长可能掉出
+        # [min_s, max_s]。此时在允许范围内增减镜头数把总时长拉回窗口。
+        total = per * desired
+        if total < b.min_s:
+            # 增镜头（每镜时长不动）
+            need = int((b.min_s + per - 1) // per)
+            if need <= hi:
+                desired = need
+                total = per * desired
+        elif total > b.max_s:
+            # 减镜头（每镜时长不动）
+            allow = int(b.max_s // per)
+            if allow >= lo:
+                desired = allow
+                total = per * desired
+        # 仍不落在窗口内 → 不注入（宁可不注入，也不要给出违反预算的指令）
+        if not (b.min_s <= total <= b.max_s):
+            continue
+        out[b.scene_id] = (
+            f" 本段必须规划{desired}个连续镜头，每镜约{per}秒，"
+            f"总计约{total}秒。")
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Skill 真实加载（P0-6）
 # ---------------------------------------------------------------------------
@@ -414,6 +470,19 @@ class ProducerPlanningService:
                                            summary=summary))
                 beats.append(beat)
             budgets = allocate_scene_budgets(beats, window)
+            # 确定性镜头指令注入（run #40 实测修）：Director 面对纯叙事摘要
+            # 倾向欠产镜头 ⇒ 把从冻结预算派生的镜头数/每镜时长写进 summary。
+            # 必须在 freeze() 之前完成：蓝图指纹覆盖注入后的 summary，
+            # 恢复路径逐字校验天然一致（与 C2 同款做法）。
+            # 只对 create 意图注入：C2（extend_existing/sequel）在 plan() 之后
+            # 会**重算**预算并注入自己的指令，这里再注入会变成双重指令。
+            if task_spec.intent == "create":
+                shot_notes = derive_shot_instructions(budgets)
+                if shot_notes:
+                    scenes = [PlannedScene(
+                        scene_id=sc.scene_id, title=sc.title,
+                        summary=sc.summary.rstrip() + shot_notes.get(sc.scene_id, ""))
+                        for sc in scenes]
             return ProducerPlanningResult(
                 task_spec_sha256=task_spec.sha256(), intent=task_spec.intent,
                 output_kind="final_video", story_text=story,

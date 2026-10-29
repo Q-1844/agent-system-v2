@@ -557,3 +557,152 @@ def test_auto_restore_precedes_materialization():
     i_materialize = src.index("create_project(")
     assert i_restore < i_materialize, "恢复必须早于物化，否则会被「拒绝覆盖」守卫挡住"
     assert src.index("ProductionCheckpoint(") < i_restore, "恢复要读检查点，绑定身份必须更早"
+
+
+# ============ 第 06 轮实测回归：auto 路径的确定性镜头指令 ============
+#
+# 实测故障：A 仓真实云端长片 run #40（2026-10-29）在 Director 阶段崩溃 ——
+#   DIRECTOR_FAILED 故事段 s01 预算校验仍不通过: ['总时长 28.0s 超出本场窗口 32-44s']
+#   （首次 21.0s → repair 后 28.0s，两次都低于场景窗口下界 32s）
+# 根因：Director 面对**纯叙事摘要**时倾向欠产镜头（T-REAL-A 同型）。
+# C2 路径早就在 c2_production.py 里把「本段必须规划 N 个连续镜头…」写进
+# scene summary；**auto 路径缺这一步**，于是预算校验永远过不去。
+# 修复：规划阶段从冻结预算**确定性派生**镜头指令，写进 summary（freeze 之前）。
+
+#: run #40 的真实冻结预算（evidence/g2_run40846737077_artifacts/
+#: e2e-evidence__scene_budgets.json），逐字照抄，作为回归夹具。
+_RUN40_SCENE_BUDGETS = [
+    {"scene_id": "s01", "min_s": 32, "max_s": 44, "shot_min": 3, "shot_max": 11,
+     "target_s": 38, "per_shot_min_s": 4, "per_shot_max_s": 11},
+    {"scene_id": "s02", "min_s": 42, "max_s": 58, "shot_min": 4, "shot_max": 14,
+     "target_s": 50, "per_shot_min_s": 4, "per_shot_max_s": 11},
+    {"scene_id": "s03", "min_s": 42, "max_s": 58, "shot_min": 4, "shot_max": 14,
+     "target_s": 50, "per_shot_min_s": 4, "per_shot_max_s": 11},
+    {"scene_id": "s04", "min_s": 32, "max_s": 44, "shot_min": 3, "shot_max": 11,
+     "target_s": 38, "per_shot_min_s": 4, "per_shot_max_s": 11},
+    {"scene_id": "s05", "min_s": 20, "max_s": 28, "shot_min": 2, "shot_max": 7,
+     "target_s": 24, "per_shot_min_s": 4, "per_shot_max_s": 11},
+]
+
+
+def _budgets_from_run40():
+    from src.ai.producer_planning_models import SceneBudget
+    return [SceneBudget(
+        scene_id=b["scene_id"], min_s=b["min_s"], max_s=b["max_s"],
+        shot_min=b["shot_min"], shot_max=b["shot_max"], target_s=b["target_s"],
+        per_shot_min_s=b["per_shot_min_s"], per_shot_max_s=b["per_shot_max_s"])
+        for b in _RUN40_SCENE_BUDGETS]
+
+
+def test_derive_shot_instructions_covers_run40_s01():
+    """run #40 的 s01（窗口 32-44s）必须派生出落在窗口内的镜头指令。"""
+    from src.ai.producer_planning_service import derive_shot_instructions
+    notes = derive_shot_instructions(_budgets_from_run40())
+    assert "s01" in notes, "s01 必须有镜头指令"
+    note = notes["s01"]
+    assert "必须规划" in note and "个连续镜头" in note
+    # 从指令文本反解出镜头数/每镜秒数/总时长，断言三者自洽且落在预算窗口内
+    import re
+    m = re.search(r"必须规划(\d+)个连续镜头，每镜约(\d+)秒，总计约(\d+)秒", note)
+    assert m, "指令必须可被确定性解析：%r" % note
+    desired, per, total = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    assert total == desired * per, "总时长必须等于镜头数×每镜秒数"
+    b = _RUN40_SCENE_BUDGETS[0]
+    assert b["shot_min"] <= desired <= b["shot_max"], "镜头数必须落在预算范围"
+    assert b["min_s"] <= total <= b["max_s"], "总时长必须落在场景窗口内"
+    assert b["per_shot_min_s"] <= per <= b["per_shot_max_s"], "每镜秒数必须落在合同内"
+
+
+def test_derive_shot_instructions_all_budgets_feasible():
+    """所有场次的派生指令都必须落在各自预算窗口内（否则宁可不注入）。"""
+    from src.ai.producer_planning_service import derive_shot_instructions
+    import re
+    notes = derive_shot_instructions(_budgets_from_run40())
+    assert len(notes) == len(_RUN40_SCENE_BUDGETS), "每个场次都要有指令"
+    for b in _RUN40_SCENE_BUDGETS:
+        note = notes[b["scene_id"]]
+        m = re.search(r"必须规划(\d+)个连续镜头，每镜约(\d+)秒，总计约(\d+)秒", note)
+        assert m, note
+        desired, per, total = (int(m.group(i)) for i in (1, 2, 3))
+        assert b["shot_min"] <= desired <= b["shot_max"], b["scene_id"]
+        assert b["min_s"] <= total <= b["max_s"], b["scene_id"]
+        assert b["per_shot_min_s"] <= per <= b["per_shot_max_s"], b["scene_id"]
+        assert total == desired * per, b["scene_id"]
+
+
+def test_derive_shot_instructions_skips_single_shot_and_short():
+    """单镜头段（复用镜头的场）与过短段不注入：没有分解余地。"""
+    from src.ai.producer_planning_models import SceneBudget
+    from src.ai.producer_planning_service import derive_shot_instructions
+    budgets = [
+        SceneBudget(scene_id="s01", min_s=8, max_s=8, shot_min=1, shot_max=1,
+                    target_s=8),                      # 单镜头段
+        SceneBudget(scene_id="s02", min_s=4, max_s=10, shot_min=1, shot_max=2,
+                    target_s=8),                      # target < 12
+    ]
+    assert derive_shot_instructions(budgets) == {}
+
+
+def test_auto_plan_injects_shot_instruction_into_summary():
+    """auto(create) 规划出的场景摘要必须带上确定性镜头指令。"""
+    import asyncio as _asyncio
+    from src.ai.producer_planning_service import ProducerPlanningService
+    idx = FakeIndex()
+    stage0 = Stage0Record(idx, "unittest-shotnote")
+    task = TaskSpec(intent="create",
+                    request_text="拍一个热气球穿越云海的故事，大概两分钟",
+                    duration=extract_duration_intent(
+                        "拍一个热气球穿越云海的故事，大概两分钟"))
+    stage0.bootstrap(task)
+    chat = FakeChat([_blueprint_reply()])
+    service = ProducerPlanningService(chat, stage0)
+    result = _asyncio.run(service.plan(
+        task, {"text_calls": 10, "image_calls": 5, "video_seconds": 170}))
+    for sc in result.scenes:
+        assert "必须规划" in sc.summary, (
+            "场景 %s 的摘要必须带确定性镜头指令：%r" % (sc.scene_id, sc.summary))
+        assert "个连续镜头" in sc.summary
+
+
+def test_auto_plan_injection_is_frozen_in_fingerprint():
+    """注入必须发生在 freeze 之前 ⇒ 蓝图指纹覆盖注入后的摘要（恢复逐字一致）。"""
+    import asyncio as _asyncio
+    from src.ai.producer_planning_service import ProducerPlanningService
+    idx = FakeIndex()
+    stage0 = Stage0Record(idx, "unittest-shotnote-fp")
+    task = TaskSpec(intent="create",
+                    request_text="拍一个热气球穿越云海的故事，大概两分钟",
+                    duration=extract_duration_intent(
+                        "拍一个热气球穿越云海的故事，大概两分钟"))
+    stage0.bootstrap(task)
+    chat = FakeChat([_blueprint_reply()])
+    service = ProducerPlanningService(chat, stage0)
+    result = _asyncio.run(service.plan(
+        task, {"text_calls": 10, "image_calls": 5, "video_seconds": 170}))
+    payload = json.loads(json.dumps(result.canonical_payload()))
+    fp = stage0.freeze(payload)
+    # 冻结后 verify 必须通过（指纹与内容一致）
+    stage0.verify()
+    assert stage0.plan_fingerprint == fp
+    frozen_summary = stage0.doc["blueprint"]["scenes"][0]["summary"]
+    assert "必须规划" in frozen_summary, "冻结的蓝图里必须含镜头指令"
+
+
+def test_c2_intent_does_not_get_double_injection():
+    """C2（extend_existing/sequel）自己会注入指令 ⇒ 规划层不得重复注入。"""
+    import asyncio as _asyncio
+    from src.ai.producer_planning_service import ProducerPlanningService
+    idx = FakeIndex()
+    stage0 = Stage0Record(idx, "unittest-c2-nodouble")
+    task = TaskSpec(intent="create",
+                    request_text="拍一个热气球穿越云海的故事，大概两分钟",
+                    duration=extract_duration_intent(
+                        "拍一个热气球穿越云海的故事，大概两分钟"))
+    stage0.bootstrap(task)
+    chat = FakeChat([_blueprint_reply()])
+    service = ProducerPlanningService(chat, stage0)
+    result = _asyncio.run(service.plan(
+        task, {"text_calls": 10, "image_calls": 5, "video_seconds": 170}))
+    for sc in result.scenes:
+        # create 意图只注入一次（一个「必须规划」标记）
+        assert sc.summary.count("必须规划") == 1, sc.summary
