@@ -361,15 +361,29 @@ def test_allocator_sums_inside_window():
 # ============ 集成：_run_auto_acceptance 全链（fake 注入，零媒体） ============
 
 class FakeProjectManager:
+    """必须严格镜像 src.utils.project_manager.ProjectManager 的契约。
+
+    真实实现 get_project_dir() 在目录不存在时抛 FileNotFoundError，
+    create_project() 在目录已存在时抛 FileExistsError 且返回项目目录。
+    假实现若比真实实现宽松，就会悄悄掩盖「先取目录后创建」这类顺序缺陷
+    （第 06 轮实测：真实云端长片在物化这一步崩溃，而 3684 个测试全绿）。
+    """
+
     def __init__(self, base):
         self.base = Path(base)
 
     def get_project_dir(self, name):
-        return self.base / name
+        d = self.base / name
+        if not d.exists():
+            raise FileNotFoundError(f"项目不存在: {name}")
+        return d
 
     def create_project(self, name):
         d = self.base / name
-        (d / "output").mkdir(parents=True, exist_ok=True)
+        if d.exists():
+            raise FileExistsError(f"项目已存在: {name}")
+        (d / "input").mkdir(parents=True)
+        (d / "output" / "videos").mkdir(parents=True)
         return d
 
 
@@ -454,3 +468,92 @@ def test_integration_auto_acceptance_full_chain(monkeypatch, tmp_path):
     assert dyn2 == dyn_profile  # 动态 profile 由冻结蓝图导出，跨 hop 稳定
     assert chat2.calls == 0  # 蓝图恢复零 LLM 调用
     assert summary2["stage0_text_calls_used"] == summary["stage0_text_calls_used"]
+
+
+# ============ 第 06 轮回归：物化顺序（假实现必须与真实实现同契约） ============
+
+def test_fake_project_manager_mirrors_real_contract(tmp_path):
+    """假实现与真实 ProjectManager 的契约必须一致。
+
+    真实实现 src/utils/project_manager.py:get_project_dir 在目录不存在时抛
+    FileNotFoundError；create_project 在目录已存在时抛 FileExistsError 并返回
+    项目目录。假实现若比真实实现宽松，就会悄悄掩盖顺序缺陷。
+    """
+    from src.utils.project_manager import ProjectManager
+    real = ProjectManager(tmp_path / "real")
+    fake = FakeProjectManager(tmp_path / "fake")
+
+    for pm in (real, fake):
+        with pytest.raises(FileNotFoundError):
+            pm.get_project_dir("cloud3min_missing")
+
+    real_dir = real.create_project("cloud3min_x")
+    fake_dir = fake.create_project("cloud3min_x")
+    assert real_dir == real.get_project_dir("cloud3min_x")
+    assert fake_dir == fake.get_project_dir("cloud3min_x")
+    for pm in (real, fake):
+        with pytest.raises(FileExistsError):
+            pm.create_project("cloud3min_x")  # 已存在绝不覆盖
+
+
+def test_auto_materialization_on_fresh_hop_writes_blueprint(monkeypatch, tmp_path):
+    """第 06 轮实测回归：auto + create 意图在全新 hop 上必须真正建出项目。
+
+    实测故障：A 仓真实云端长片 run #39（2026-10-29）在物化阶段崩溃 ——
+    FileNotFoundError: 项目不存在: cloud3min_film3m-40792621748。
+    根因：先调用 get_project_dir()（要求目录已存在）后调用 create_project()，
+    而全新 hop 的项目目录根本不存在 ⇒ 永远走不到创建那一步。
+    本用例用与真实实现同契约的假实现把该顺序缺陷钉死。
+    """
+    from tools import video_task_state as vts
+    from tools import e2e_autonomous_run as e2e
+    from tools import full_project_cloud_acceptance as acc
+    import deps
+
+    files = {}
+
+    def fake_task_index(token, nonce, filename="state.json", transport=None):
+        return files.setdefault(filename, FakeIndex())
+
+    monkeypatch.setattr(vts, "task_index", fake_task_index)
+    monkeypatch.setattr(e2e, "ensure_branch", lambda idx: None)
+    monkeypatch.setattr(acc, "_ensure_app_started", _noop_start)
+    monkeypatch.setattr(deps, "agnes_client", FakeChat(replies=[_blueprint_reply()]))
+    monkeypatch.setattr(deps, "project_manager",
+                        FakeProjectManager(tmp_path / "projects"))
+    monkeypatch.setattr(acc.os, "environ", {
+        "PRODUCTION_REQUEST": "拍一个热气球穿越云海的故事，大概两分钟",
+        "FILM_TARGET_SECONDS": "auto"})
+
+    summary, out = {}, tmp_path / "out"
+    out.mkdir()
+    project_name, _, _, _, _ = asyncio.run(
+        acc._run_auto_acceptance("film-mat-reg", out, summary, "tok"))
+
+    project_json = tmp_path / "projects" / project_name / "output" / "project.json"
+    assert project_json.is_file(), "全新 hop 必须建出项目并写入 project.json"
+    doc = json.loads(project_json.read_text(encoding="utf-8"))
+    # 落盘的必须是冻结蓝图，而不是 create_project 留下的空项目
+    assert doc.get("story_text", "").strip(), "蓝图 story_text 必须落盘"
+    assert doc.get("scenes"), "蓝图 scenes 必须落盘"
+
+
+def test_auto_restore_precedes_materialization():
+    """恢复必须早于物化（第 06 轮实测：否则自动续跑永远走不通）。
+
+    restore_snapshot 明确拒绝覆盖已存在的项目目录与 cache/jobs.json
+    （FileExistsError: recovery cannot overwrite an existing project/job queue）。
+    而全新 runner 上物化会先建出项目目录、_ensure_deps_ready() 会先建出
+    cache/jobs.json ⇒ 若物化排在恢复之前，恢复必被挡在门外，
+    「330 分钟到点自动续跑」这条链在 auto 路径上就断了。
+
+    本用例用源码顺序钉死这条不变量（跨 Actions run 的快照恢复无法在单测里
+    真跑，故以顺序断言守住这条最容易被后续重构打破的约束）。
+    """
+    import inspect
+    from tools import full_project_cloud_acceptance as acc
+    src = inspect.getsource(acc._run_auto_acceptance)
+    i_restore = src.index("restore_snapshot(")
+    i_materialize = src.index("create_project(")
+    assert i_restore < i_materialize, "恢复必须早于物化，否则会被「拒绝覆盖」守卫挡住"
+    assert src.index("ProductionCheckpoint(") < i_restore, "恢复要读检查点，绑定身份必须更早"

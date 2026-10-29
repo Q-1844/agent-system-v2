@@ -1215,35 +1215,6 @@ async def _run_auto_acceptance(nonce, out, summary, token):
         summary.update(stage0_status="FROZEN_RESTORED",
                        plan_fingerprint=stage0.plan_fingerprint)
 
-    # ---- 物化（幂等：项目已在则复用，不重建）+ scene_budgets sidecar ----
-    await _ensure_deps_ready()  # 恢复 hop 不走规划分支，这里必须确保单例在
-    project_name = f"cloud3min_{nonce}"
-    from src.core.models import Project, Scene, StyleAnchor
-    from src.core.store import ProjectStore
-    import deps as _deps
-    project_dir = _deps.project_manager.get_project_dir(project_name)
-    if not (project_dir / "output" / "project.json").is_file():
-        _deps.project_manager.create_project(project_name)
-        scenes = [Scene(scene_id=s["scene_id"], title=s.get("title") or "",
-                        summary=s["summary"])
-                  for s in blueprint["scenes"]]
-        style = blueprint.get("style") or {}
-        project = Project(
-            name=project_name, story_text=blueprint["story_text"],
-            style=StyleAnchor(art_style=str(style.get("art_style") or ""),
-                              palette=str(style.get("palette") or ""),
-                              aspect_ratio=str(style.get("aspect_ratio") or "16:9")),
-            characters=[], scenes=scenes)
-        ProjectStore(project_dir).save(project)
-    # sidecar：Director 生成/复用据此注入预算约束（PR B2 契约 §4.3）
-    sidecar = project_dir / "output" / "ai" / "scene_budgets.json"
-    if not sidecar.is_file():
-        sidecar.parent.mkdir(parents=True, exist_ok=True)
-        write_json(sidecar, {"schema_version": 1,
-                             "plan_fingerprint": stage0.plan_fingerprint,
-                             "scene_budgets": blueprint["scene_budgets"]})
-    summary.update(project_name=project_name, project_dir=str(project_dir))
-
     # ---- 绑定执行身份（ProductionCheckpoint：只在冻结后创建）----
     profile = auto_request_profile(blueprint)
     digest = request_digest(AUTO_TARGET, profile)
@@ -1264,16 +1235,13 @@ async def _run_auto_acceptance(nonce, out, summary, token):
                 github_run_id=os.environ.get("GITHUB_RUN_ID"))
     summary.update(execution_request_sha256=digest,
                    stage0_text_calls_used=stage0.text_calls_used)
-    plan = {"planned_target_seconds": sum(
-                b.get("target_s") or b.get("min_s") or 0
-                for b in blueprint["scene_budgets"]),
-            "scene_count": len(blueprint["scenes"]),
-            "video_seconds_cap": (blueprint.get("execution_bounds") or {})
-            .get("video_seconds")}
-    summary["auto_plan"] = plan
-    write_json(out / "stage0-blueprint.json", blueprint)
 
     # ---- 跨 hop 恢复：项目目录从失败 run 的 artifact 快照恢复（同固定档）----
+    # 必须早于物化：restore_snapshot 拒绝覆盖已存在的项目目录与任务队列
+    # （FileExistsError: recovery cannot overwrite an existing project/job
+    # queue），而全新 runner 上项目目录与 cache/jobs.json 都不存在。
+    # ⇒ 先恢复、再物化：恢复命中时项目由快照提供，物化只复用、绝不重建；
+    #    恢复也保证了物化不会抢先建出目录而把恢复挡在门外。
     restored = None
     resume_id = os.environ.get("RESUME_RUN_ID", "").strip()
     if resume_id:
@@ -1297,6 +1265,53 @@ async def _run_auto_acceptance(nonce, out, summary, token):
                 source_sha=os.environ.get("GITHUB_SHA"), resume_from_run_id=resume_id,
                 updated_at=utc_now(), terminal_status=None, error=None,
                 resume_history=[*(previous.get("resume_history") or []), provenance])
+
+    # ---- 物化（幂等：项目已在则复用，不重建）+ scene_budgets sidecar ----
+    await _ensure_deps_ready()  # 恢复 hop 不走规划分支，这里必须确保单例在
+    project_name = f"cloud3min_{nonce}"
+    from src.core.models import Project, Scene, StyleAnchor
+    from src.core.store import ProjectStore
+    import deps as _deps
+    # Materialization must tolerate a fresh hop: get_project_dir() raises when
+    # the project directory does not exist yet, so resolve the project first and
+    # create the skeleton only when there is no project.json yet. An existing
+    # project (e.g. restored from a failed run's snapshot) is reused as-is and
+    # never rebuilt.
+    try:
+        project_dir = _deps.project_manager.get_project_dir(project_name)
+        needs_blueprint = not (project_dir / "output" / "project.json").is_file()
+    except FileNotFoundError:
+        project_dir = _deps.project_manager.create_project(project_name)
+        needs_blueprint = True
+    if needs_blueprint:
+        scenes = [Scene(scene_id=s["scene_id"], title=s.get("title") or "",
+                        summary=s["summary"])
+                  for s in blueprint["scenes"]]
+        style = blueprint.get("style") or {}
+        project = Project(
+            name=project_name, story_text=blueprint["story_text"],
+            style=StyleAnchor(art_style=str(style.get("art_style") or ""),
+                              palette=str(style.get("palette") or ""),
+                              aspect_ratio=str(style.get("aspect_ratio") or "16:9")),
+            characters=[], scenes=scenes)
+        ProjectStore(project_dir).save(project)
+    # sidecar：Director 生成/复用据此注入预算约束（PR B2 契约 §4.3）
+    sidecar = project_dir / "output" / "ai" / "scene_budgets.json"
+    if not sidecar.is_file():
+        sidecar.parent.mkdir(parents=True, exist_ok=True)
+        write_json(sidecar, {"schema_version": 1,
+                             "plan_fingerprint": stage0.plan_fingerprint,
+                             "scene_budgets": blueprint["scene_budgets"]})
+    summary.update(project_name=project_name, project_dir=str(project_dir))
+
+    plan = {"planned_target_seconds": sum(
+                b.get("target_s") or b.get("min_s") or 0
+                for b in blueprint["scene_budgets"]),
+            "scene_count": len(blueprint["scenes"]),
+            "video_seconds_cap": (blueprint.get("execution_bounds") or {})
+            .get("video_seconds")}
+    summary["auto_plan"] = plan
+    write_json(out / "stage0-blueprint.json", blueprint)
     # ---- 生产上下文（动态 profile：media gate / wrapper budgets / 验收门槛）----
     dyn_profile = auto_media_profile(blueprint)
     return project_name, dyn_profile, cp, restored, previous
