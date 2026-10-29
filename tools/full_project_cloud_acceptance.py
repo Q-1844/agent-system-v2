@@ -184,6 +184,24 @@ def validate_final_media(path, min_final=MIN_FINAL_SECONDS):
             "full_decode_ok": True}
 
 
+def provider_explicitly_rejected(error) -> bool:
+    """供应商【明确拒绝】(4xx，≠408)：远端没有创建任务、没有扣费。
+
+    与「结局不明」严格区分：
+      - 明确拒绝 -> 无远端任务、无扣费 -> 意图条目可安全回滚，镜头可安全重发；
+      - 结局不明（传输层歧义）-> 可能已受理 -> 必须保留收据走人工对账。
+
+    判定与 routers/shots.py 的 known_rejection 同源（同一套 4xx/408 边界）。
+    """
+    from src.api.agnes_client import AgnesError, VideoSubmissionUncertain
+    if isinstance(error, VideoSubmissionUncertain):
+        return False
+    if not isinstance(error, AgnesError):
+        return False
+    status = getattr(error, "status", None)
+    return status is not None and 400 <= status < 500 and status != 408
+
+
 class BoundedRealClient:
     """Forward real calls, with a CAS write-ahead journal and a hard test budget."""
 
@@ -259,22 +277,38 @@ class BoundedRealClient:
         return await self.client.generate_image(*args, **kwargs)
 
     async def create_video(self, prompt, **kwargs):
+        # 【未发出提交】一律抛 VideoSubmissionNotSent：请求根本没离开本进程，
+        # 没有远端任务、没有扣费。调用方据此【不得】留下「提交结果不明」痕迹
+        # （没有钱要花、没有任务要查）；把它当成 Uncertain 会让镜头凭空背上
+        # 一笔不存在的对账债并被永久卡死（run #41 的 s01_c02 即此）。
+        from src.api.agnes_client import VideoSubmissionNotSent
         if self.finalize_only:
-            raise RuntimeError('finalize-only forbids new Agnes generation calls')
+            raise VideoSubmissionNotSent('finalize-only forbids new Agnes generation calls')
         self.media_gate()
         seconds = int(kwargs.get("duration_s") or 5)
         if not 4 <= seconds <= 12:
-            raise ValueError("invalid provider duration")
-        if self.submission_blocked or any(a["state"] in ("SUBMITTING", "UNKNOWN") for a in self.video_attempts):
-            raise RuntimeError("unconfirmed prior submission; reconciliation required, no automatic POST")
+            raise VideoSubmissionNotSent("invalid provider duration")
+        from src.core.media_submission_context import active_video_submission
+        native_intent = active_video_submission.get()
+        logical_shot_id = (native_intent or {}).get('logical_shot_id')
+        # 闸门粒度 = 同一逻辑镜头（42.md 对账纪律的最小必要面）：
+        #   同一镜头存在未决提交 -> 该镜头禁止自动重发（防重复扣费）；
+        #   其它镜头存在未决提交 -> 【不阻塞】，并发生产照常推进。
+        # 旧实现按「全项目任一未决」封堵，把一个镜头的对账债放大成整片停摆，
+        # 被误封的镜头还会凭空背上「上次付费提交结局不明」的假痕迹（run #41）。
+        pending = [a for a in self.video_attempts if a["state"] in ("SUBMITTING", "UNKNOWN")]
+        if logical_shot_id:
+            pending = [a for a in pending if a.get("logical_shot_id") == logical_shot_id]
+        if self.submission_blocked or pending:
+            raise VideoSubmissionNotSent(
+                "unconfirmed prior submission%s; reconciliation required, no automatic POST"
+                % ((" for " + logical_shot_id) if logical_shot_id else ""))
         if sum(a["seconds"] for a in self.video_attempts) + seconds > self.video_budget:
-            raise RuntimeError("acceptance execution video budget exhausted")
+            raise VideoSubmissionNotSent("acceptance execution video budget exhausted")
         prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()
         attempt = {"ordinal": len(self.video_attempts) + 1, "seconds": seconds,
                    "prompt_sha256": prompt_hash,
                    "state": "SUBMITTING", "started_at": utc_now()}
-        from src.core.media_submission_context import active_video_submission
-        native_intent = active_video_submission.get()
         repair_history = (getattr(self.checkpoint, 'doc', None) or {}).get('repair_revisions') or []
         if native_intent and native_intent.get('project') == self.project_dir.name:
             # Native JobQueue recorded this intent BEFORE the HTTP POST.
@@ -293,9 +327,17 @@ class BoundedRealClient:
         elif repair_history:
             # No anonymous video submissions from an approved revised plan:
             # otherwise a cross-hop replay cannot prove whose media this is.
-            raise RuntimeError('repair video submission lacks native shot intent identity')
+            raise VideoSubmissionNotSent(
+                'repair video submission lacks native shot intent identity')
         self.video_attempts.append(attempt)
-        await self.persist()  # durable intent precedes the paid HTTP request
+        try:
+            await self.persist()  # durable intent precedes the paid HTTP request
+        except Exception as exc:
+            # 写前日志没落盘 => 请求【没有】发出（POST 在其后）：如实标记为
+            # 未发出，不得让调用方背「结局不明」。
+            raise VideoSubmissionNotSent(
+                "submission intent could not be persisted (%s); "
+                "no provider request was sent" % exc) from exc
         try:
             result = await self.client.create_video(prompt, **kwargs)
             vid = result.get("video_id") or result.get("task_id")
@@ -317,11 +359,27 @@ class BoundedRealClient:
                 except Exception:
                     pass  # 闸门落账失败则保留 SUBMITTING → UNKNOWN 对账，保守处置
                 raise
-            self.submission_blocked = True
-            # Even a response/persistence failure must block automatic resubmission.
-            # Do not overwrite a confirmed ACCEPTED ID with a fabricated rejection.
+            # 供应商【明确拒绝】(4xx，≠408)：远端没有创建任务、没有扣费。
+            # 与「结局不明」严格区分：回滚意图条目（不背 UNKNOWN 对账债），
+            # 但【不】置日历闸门（额度没耗尽）——该镜头可安全重发。
+            # 这与 routers/shots.py 的 known_rejection 判定同源：产品层已经
+            # 允许 4xx 镜头重发，账本层却把它记成 UNKNOWN，二者自相矛盾。
+            if provider_explicitly_rejected(error):
+                self.video_attempts = [a for a in self.video_attempts if a is not attempt]
+                try:
+                    await self.persist()
+                except Exception:
+                    pass
+                raise
+            # 结局不明（传输层歧义）：保留 UNKNOWN 收据（绝不凭猜测丢弃），
+            # 但【不】置全局闸门——未决只封锁同一镜头，其它镜头照常提交，
+            # 与本模块错误文案「同项目其它已就绪任务可继续」一致。
             if attempt["state"] == "SUBMITTING":
                 attempt["state"] = "UNKNOWN"
+            if attempt["state"] == "ACCEPTED":
+                # 供应商已受理、但本地收据落库失败：本地账本可能缺该 video_id，
+                # 崩溃后无法证明已扣费 -> 封堵后续 POST（保守，防重复扣费）。
+                self.submission_blocked = True
             try:
                 await self.persist()
             except Exception:

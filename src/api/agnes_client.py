@@ -195,6 +195,19 @@ class VideoSubmissionUncertain(AgnesError):
     """The provider may have accepted a non-idempotent video submission."""
 
 
+class VideoSubmissionNotSent(RuntimeError):
+    """本次调用【未向 provider 发出任何请求】：确定没有远端任务、没有扣费。
+
+    与 VideoSubmissionUncertain 的边界（两者绝不可混用）：
+      - NotSent：请求根本没离开本进程（预算/闸门/参数校验/本地预检拒绝）。
+        调用方【不得】留下「提交结果不明」痕迹——没有钱要花、没有任务要查，
+        重试是安全的。若把它当成 Uncertain，镜头会被永久误判为
+        「早前一次付费提交结局不明」，整片卡死且凭空背上人工对账负担。
+      - Uncertain：请求可能已经到达 provider，存在远端任务与扣费的可能，
+        必须走人工对账，绝不自动重发。
+    """
+
+
 class PollTransientError(AgnesError):
     """轮询的暂时性失败（网络/超时/5xx 耗尽）。调用方不应标 video.status=failed，
     应保留 video_id 让 retry/recover 续轮询，避免重提交丢掉已生成的视频。
