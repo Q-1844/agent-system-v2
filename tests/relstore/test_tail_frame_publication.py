@@ -10,6 +10,19 @@ from src.core.models import Asset, ImageAsset, Project, Scene, Shot
 from src.core.store import ProjectConflictError, ProjectStore
 
 
+def _write_png(path, w=192, h=108, seed=0):
+    """Real decodable PNG（随机噪声——PNG 不可压缩，保证后续 JPEG q88 显著更小）。
+    尾帧补托管入口 2026-10-29 起对 .png 做 PNG→JPEG q88 转换，假字节 fixture
+    会撞 fail-loud 转换错误。"""
+    import os as _os
+    from PIL import Image as _I
+    rnd = _os.urandom(w * h * 3)
+    img = _I.frombytes('RGB', (w, h), rnd)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    img.save(path, 'PNG')
+    return path
+
+
 def test_inline_tail_is_published_and_both_selections_stay_consistent(tmp_path, monkeypatch):
     import routers.shots as routes
     store = ProjectStore(tmp_path)
@@ -17,14 +30,20 @@ def test_inline_tail_is_published_and_both_selections_stay_consistent(tmp_path, 
                 first_frame=ImageAsset(candidates=[Asset(url='https://frame.invalid/first', status='done')], status='done'))
     store.save(Project(name='p', scenes=[Scene(scene_id='s01', shots=[shot])]))
     calls = []
+    real_png_bytes = _write_png(tmp_path / 'seed.png').read_bytes()
     class Provider:
         async def generate_image(self, **kw):
             assert kw['want_b64'] is True
             calls.append('generate')
-            return {'b64': base64.b64encode(b'original-inline-image').decode()}
+            return {'b64': base64.b64encode(real_png_bytes).decode()}
     class Host:
         async def upload(self, path):
-            assert Path(path).read_bytes() == b'original-inline-image'
+            # 补托管入口对 .png 先做 PNG→JPEG q88——上传载体必须是
+            # .hosted.jpg（体积压缩）且可解码，原 PNG 字节不再直传。
+            assert path.endswith('.hosted.jpg'), path
+            from PIL import Image as _I
+            _I.open(path).verify()
+            assert Path(path).stat().st_size < len(real_png_bytes)
             calls.append('upload')
             return 'https://host.invalid/tail.png'
     monkeypatch.setattr(routes, 'get_project_manager', lambda: SimpleNamespace(get_project_dir=lambda _: tmp_path))
@@ -50,7 +69,8 @@ def test_inline_tail_is_published_and_both_selections_stay_consistent(tmp_path, 
 @pytest.mark.parametrize('failure', ['upload', 'selection_changed'])
 def test_failed_or_stale_upload_preserves_the_completed_tail(tmp_path, monkeypatch, failure):
     import routers.shots as routes
-    local = tmp_path/'tail.png'; local.write_bytes(b'paid-image')
+    local = tmp_path/'tail.png'; _write_png(local)
+    original_bytes = local.read_bytes()
     store = ProjectStore(tmp_path)
     shot = Shot(shot_id='s01_c01', scene_id='s01', index=1, link_mode='keyframes',
                 last_frame=ImageAsset(candidates=[Asset(local=str(local), status='done')], status='done'))
@@ -66,7 +86,7 @@ def test_failed_or_stale_upload_preserves_the_completed_tail(tmp_path, monkeypat
         asyncio.run(routes._await_last_frame_url(store, shot.shot_id, emit))
     saved = store.load().get_shot(shot.shot_id)
     assert saved.last_frame.ready and not saved.last_frame.url_ready
-    assert local.read_bytes() == b'paid-image'
+    assert local.read_bytes() == original_bytes
     if failure == 'selection_changed': assert saved.selected_last_frame == 'new-selection'
 
 
@@ -96,7 +116,7 @@ def test_only_proven_pre_submit_video_failure_can_retry(monkeypatch, params, err
 
 def _round02_tail_fixture(tmp_path):
     local = tmp_path / 'paid-tail.png'
-    local.write_bytes(b'stable-paid-tail-image')
+    _write_png(local)
     tail = Shot(
         shot_id='s01_c01', scene_id='s01', index=1, link_mode='keyframes',
         last_frame=ImageAsset(
@@ -113,7 +133,8 @@ def test_tail_host_rebases_over_other_worker_without_clobber(tmp_path, monkeypat
     store, local = _round02_tail_fixture(tmp_path)
     class Host:
         async def upload(self, path):
-            assert path == str(local)
+            # PNG→JPEG q88 后上传载体是 .hosted.jpg，且源于原 PNG 同目录同 stem
+            assert path == str(local).replace('.png', '.hosted.jpg')
             # The slow host yields long enough for another worker to commit.
             store.update_shot('s01_c02',
                               lambda s: setattr(s, 'description', 'completed in parallel'))
@@ -127,6 +148,37 @@ def test_tail_host_rebases_over_other_worker_without_clobber(tmp_path, monkeypat
     assert tail.last_frame.selected.url == result
     assert tail.last_frame_batches[-1].candidates[0].url == result
     assert saved.get_shot('s01_c02').description == 'completed in parallel'
+
+
+def test_tail_rehost_compresses_png_before_upload(tmp_path, monkeypatch):
+    """run #41/#42 根因回归：尾帧补托管必须走 PNG→JPEG q88（35.md 同款纪律），
+    不能直传原始 PNG——github.io 对 Agnes 侧 ~25KB/s，1.27MB PNG 下载 50s+ 必超时。"""
+    import routers.shots as routes
+    local = _write_png(tmp_path / 'tail.png', w=320, h=180)  # 噪声 PNG ≈ 170KB
+    png_bytes = local.read_bytes()
+    store = ProjectStore(tmp_path)
+    shot = Shot(shot_id='s01_c01', scene_id='s01', index=1, link_mode='keyframes',
+                last_frame=ImageAsset(
+                    candidates=[Asset(local=str(local), status='done')], status='done'))
+    store.save(Project(name='p', scenes=[Scene(scene_id='s01', shots=[shot])]))
+    seen = {}
+    class Host:
+        async def upload(self, path):
+            seen['path'] = path
+            seen['bytes'] = Path(path).read_bytes()
+            return 'https://host.invalid/tail.jpg'
+    monkeypatch.setattr(routes, 'get_rehost_host', Host)
+    async def emit(*a): pass
+    url = asyncio.run(routes._await_last_frame_url(store, shot.shot_id, emit))
+    assert url == 'https://host.invalid/tail.jpg'
+    # 上传载体：JPEG、可解码、体积显著小于原 PNG（q88 + 噪声不可压缩）
+    assert seen['path'].endswith('.hosted.jpg')
+    from PIL import Image as _I
+    with _I.open(seen['path']) as im:
+        assert im.format == 'JPEG' and im.size == (320, 180)
+    assert len(seen['bytes']) < len(png_bytes) * 0.6
+    # 原 PNG 证据不动；守卫 digest 锁的一直是原 PNG
+    assert local.read_bytes() == png_bytes
 
 
 def test_tail_host_preserves_other_worker_public_url(tmp_path, monkeypatch):
@@ -155,14 +207,14 @@ def test_tail_host_rejects_superseded_selection_after_upload(tmp_path, monkeypat
     import routers.shots as routes
     store, local = _round02_tail_fixture(tmp_path)
     replacement = tmp_path / 'other-tail.png'
-    replacement.write_bytes(b'another-tail')
+    _write_png(replacement)
     class Host:
         async def upload(self, path):
             if change == 'local_path':
                 store.update_shot('s01_c01', lambda s: setattr(
                     s.last_frame.selected, 'local', str(replacement)))
             elif change == 'local_bytes':
-                local.write_bytes(b'changed-payload')
+                local.write_bytes(b'changed-payload')  # digest guard: bytes change, not format
             elif change == 'lock':
                 store.update_shot('s01_c01', lambda s: setattr(s, 'locked', True))
             else:
