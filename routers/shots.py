@@ -1544,7 +1544,26 @@ async def _await_last_frame_url(store, shot_id, emit, timeout=180, interval=5):
             expected_lock = sh.locked
             expected_digest = hashlib.sha256(Path(expected_local).read_bytes()).digest()
             await emit("rehost", f"{shot_id} 尾帧托管中（补公网 URL）", 5)
-            url = await get_rehost_host().upload(expected_local)
+            # 🔴 尾帧业务层 PNG→JPEG q88（35.md 同款纪律，run #41/#42 根因）：
+            # _extract_video_end_frame（末帧接力）一直做 PNG→JPEG q88——168KB≈PNG 1/6，
+            # 避开 Agnes 30s 抓图超时（PNG 1MB 实测 30.5s）。本入口（keyframes 尾帧
+            # b64 落地后的补托管）此前直传原始 PNG（run #42 实测 1.27MB，github.io
+            # 对 Agnes 侧吞吐 ~25KB/s ⇒ 50s+ 必超时）——同一纪律必须覆盖所有
+            # 「进 Agnes 视频接口」的托管入口。转换产物独立落盘（原 PNG 证据不动，
+            # 守卫 digest 仍锁原 PNG 选择身份）；PNG 之外直传（无谓二次压缩）。
+            upload_src = expected_local
+            if expected_local.lower().endswith(".png"):
+                try:
+                    from PIL import Image as _PILImage
+                    jpg_path = Path(expected_local).with_suffix(
+                        ".hosted.jpg")
+                    _PILImage.open(expected_local).convert("RGB").save(
+                        jpg_path, "JPEG", quality=88)
+                    upload_src = str(jpg_path)
+                except Exception as _jpg_err:  # fail-loud：不静默回落 PNG
+                    raise RuntimeError(
+                        f"尾帧托管前 PNG→JPEG 转换失败: {_jpg_err}") from _jpg_err
+            url = await get_rehost_host().upload(upload_src)
             if not url:
                 raise RuntimeError("尾帧托管未返回公网 URL")
 
