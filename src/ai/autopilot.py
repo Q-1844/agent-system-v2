@@ -33,6 +33,8 @@ from src.core.store import ProjectStore, _atomic_write_json
 from src.core.models import ShotStatus
 from src.ai.production_planner import SceneProductionPlan, PlannedShot, is_plan_stale
 from src.ai.production_planner import choose_candidate
+from src.ai.c2_parallel import (shot_dependencies, upstream_ready, validate_parallelism,
+                                media_sources_for_shot, source_completed_for_run)
 
 
 # ============ 状态常量 ============
@@ -100,6 +102,7 @@ class SceneAutopilotRun(BaseModel):
     plan_id: str
     plan_snapshot: dict                        # 冻结的 approved plan（§七）
     run_seed: int                              # 本 Run 独立 seed（§六）：derive(plan_seed, run_id)
+    max_parallel_shots: int = Field(default=1, ge=1, le=2)
     parent_project_run_id: Optional[str] = None   # AI-5A：父 ProjectProductionRun（None=手工点击）
     status: str = RUN_PENDING
     respect_locked: bool = True
@@ -313,6 +316,40 @@ class SceneAutopilotManager:
             _atomic_write_json(self._run_path(run.project_name, run.run_id),
                                _json.loads(run.model_dump_json()))
 
+    async def _edit_run(self, project_name: str, run_id: str, edit):
+        """Read/modify/write in one lock scope; never replace another concurrent
+        shot's checkpoint or a pause/cancel flag from a stale in-memory Run.
+        """
+        import json as _json
+        async with self._lock_for(run_id):
+            current = self._load_run(project_name, run_id)
+            if current is None:
+                raise RuntimeError(f"autopilot run {run_id} disappeared")
+            edit(current)
+            current.updated_at = time.time()
+            _atomic_write_json(self._run_path(project_name, run_id),
+                               _json.loads(current.model_dump_json()))
+            return current
+
+    async def _save_shot_state(self, run: SceneAutopilotRun,
+                               state: ShotExecutionState):
+        """Only this shot's fields are owned by its coroutine.  Parent flags,
+        other shot states, and the current run status stay authoritative.
+        """
+        copy = state.model_copy(deep=True)
+        def apply(latest):
+            for i, old in enumerate(latest.shots):
+                if old.shot_id == copy.shot_id:
+                    latest.shots[i] = copy
+                    break
+            else:
+                raise RuntimeError(f"shot {copy.shot_id} no longer belongs to this run")
+            active = [st for st in latest.shots if st.status == SHOT_RUNNING]
+            first = min(active, key=lambda st: st.index) if active else None
+            latest.current_shot_id = first.shot_id if first else None
+            latest.current_stage = first.stage if first else None
+        return await self._edit_run(run.project_name, run.run_id, apply)
+
     def list_runs_for_scene(self, project_name: str, scene_id: str) -> List[SceneAutopilotRun]:
         out = []
         for p in sorted(self._runs_dir(project_name).glob("*.json")):
@@ -397,6 +434,7 @@ class SceneAutopilotManager:
             run_id=run_id, project_name=project_name, scene_id=scene.scene_id,
             plan_id=plan.plan_id, plan_snapshot=plan_snapshot,
             run_seed=run_seed, status=RUN_PENDING, respect_locked=respect_locked,
+            max_parallel_shots=validate_parallelism(plan.max_parallel_shots),
             parent_project_run_id=parent_project_run_id,
             created_at=time.time(), updated_at=time.time(),
         )
@@ -477,44 +515,38 @@ class SceneAutopilotManager:
         task.add_done_callback(finished)
 
     async def resume_run(self, project_name: str, run_id: str) -> SceneAutopilotRun:
-        run = self._load_run(project_name, run_id)
-        if run is None:
-            raise ValueError("Run 不存在")
-        if run.status not in (RUN_PAUSED, RUN_FAILED, RUN_BLOCKED):
-            raise ValueError(f"Run 状态 {run.status} 不可 resume")
-        # Failed shots are terminal to the scheduler until explicit resume.
-        # Keep completed stages/versions; only the failed shot becomes eligible.
-        for state in run.shots:
-            if state.status == SHOT_FAILED:
-                state.status = SHOT_PENDING
-                state.error = None
-        run.status = RUN_RUNNING
-        run.error = None
-        run.error_code = None
-        await self._save_run(run)
+        def resume(latest):
+            if latest.status not in (RUN_PAUSED, RUN_FAILED, RUN_BLOCKED):
+                raise ValueError(f"Run 状态 {latest.status} 不可 resume")
+            for state in latest.shots:
+                if state.status == SHOT_FAILED:
+                    state.status = SHOT_PENDING
+                    state.error = None
+            latest.status = RUN_RUNNING
+            latest.error = latest.error_code = None
+            latest.pause_requested = latest.cancel_requested = False
+        run = await self._edit_run(project_name, run_id, resume)
         self._launch_loop(run)
         return run
 
     async def request_pause(self, project_name: str, run_id: str) -> SceneAutopilotRun:
-        run = self._load_run(project_name, run_id)
-        if run is None:
-            raise ValueError("Run 不存在")
-        if run.status not in (RUN_RUNNING, RUN_PENDING):
-            raise ValueError(f"Run 状态 {run.status} 不可暂停")
-        run.pause_requested = True
-        run.status = RUN_PAUSING
-        await self._save_run(run)
-        return run
+        def pause(latest):
+            if latest.status not in (RUN_RUNNING, RUN_PENDING, RUN_PAUSING):
+                raise ValueError(f"Run 状态 {latest.status} 不可暂停")
+            latest.pause_requested = True
+            latest.status = RUN_PAUSING
+        return await self._edit_run(project_name, run_id, pause)
 
     async def request_cancel(self, project_name: str, run_id: str) -> SceneAutopilotRun:
-        run = self._load_run(project_name, run_id)
-        if run is None:
-            raise ValueError("Run 不存在")
-        if run.status in RUN_TERMINAL:
-            raise ValueError(f"Run 已 {run.status}")
-        run.cancel_requested = True
-        await self._save_run(run)
-        return run
+        def cancel(latest):
+            if latest.status in RUN_TERMINAL:
+                raise ValueError(f"Run 已 {latest.status}")
+            if latest.status == RUN_PAUSED:
+                latest.status = RUN_CANCELLED
+                latest.cancel_requested = False
+            else:
+                latest.cancel_requested = True
+        return await self._edit_run(project_name, run_id, cancel)
 
     async def recover_runs(self):
         """startup 恢复（§三十二）：扫描所有项目的 running/pausing Run，重新调度。"""
@@ -547,92 +579,198 @@ class SceneAutopilotManager:
             logger.info(f"Autopilot 恢复 {n} 个 Run")
 
     # ---------- 执行循环 ----------
+    def _ready_shots(self, run: SceneAutopilotRun, project,
+                     active_ids: Optional[set] = None) -> List[ShotExecutionState]:
+        """Choose independently runnable shots across the *entire* film.
+
+        A historical ACCEPTED final is not a valid prerequisite when the
+        current parent run is recreating its upstream shot. Require its fresh
+        child checkpoint and media version, even across scene boundaries.
+        """
+        plan = SceneProductionPlan.model_validate(run.plan_snapshot)
+        deps = shot_dependencies(project, {run.scene_id: plan},
+                                 selected_scene_ids=[run.scene_id])
+        states = {st.shot_id: st for st in run.shots}
+        active_ids = active_ids or set()
+        planned = {p.shot_id: p for p in plan.shots}
+        parent = None
+        if run.parent_project_run_id:
+            from src.ai.project_autopilot import get_project_autopilot_manager
+            parent = get_project_autopilot_manager().get_run(
+                run.project_name, run.parent_project_run_id)
+            if parent is None:
+                return []
+            if parent.shot_dependencies:
+                deps = {st.shot_id: set(parent.shot_dependencies.get(st.shot_id, []))
+                        for st in run.shots}
+            if parent.reference_asset_snapshot:
+                for st in run.shots:
+                    ref = getattr(project.get_shot(st.shot_id),
+                                  "video_reference_asset_id", None)
+                    if ref != parent.reference_asset_snapshot.get(st.shot_id):
+                        raise RuntimeError("frozen C2 reference selection changed during parallel run")
+        ready = []
+        for st in run.shots:
+            if st.status in SHOT_TERMINAL or st.shot_id in active_ids:
+                continue
+            p = planned.get(st.shot_id)
+            if p is None:
+                continue
+            sources = deps.get(st.shot_id, set())
+            media = media_sources_for_shot(project, p, st.shot_id)
+            def source_ready(source):
+                if source in states:
+                    upstream = states[source]
+                    if upstream.status not in (SHOT_COMPLETED, SHOT_SKIPPED_LOCKED):
+                        return False
+                    if source in media:
+                        return (bool(upstream.video_version_id) and
+                                upstream_ready(project, source,
+                                               expected_version=upstream.video_version_id))
+                    return True
+                return source_completed_for_run(
+                    project, source, parent_run=parent,
+                    scene_manager=self if parent is not None else None,
+                    require_media=source in media)
+            if all(source_ready(source) for source in sources):
+                ready.append(st)
+        return sorted(ready, key=lambda item: item.index)
+
+    def _pending_external_source(self, run: SceneAutopilotRun, project) -> bool:
+        """Wait only when an unfinished earlier scene can still unblock us.
+
+        Do not busy-loop forever for missing/unselected sources, a failed
+        upstream scene, or an old version after the source has completed.
+        """
+        if not run.parent_project_run_id:
+            return False
+        from src.ai.project_autopilot import get_project_autopilot_manager
+        parent = get_project_autopilot_manager().get_run(
+            run.project_name, run.parent_project_run_id)
+        if parent is None or parent.status in ("failed", "blocked", "cancelled"):
+            return False
+        plan = SceneProductionPlan.model_validate(run.plan_snapshot)
+        deps = shot_dependencies(project, {run.scene_id: plan},
+                                 selected_scene_ids=[run.scene_id])
+        mine = {st.shot_id for st in run.shots}
+        source_scene = {sh.shot_id: scene.scene_id for scene in project.scenes
+                        for sh in scene.shots}
+        entries = {entry.scene_id: entry for entry in parent.scenes}
+        for shot in run.shots:
+            if shot.status in SHOT_TERMINAL:
+                continue
+            for source in deps.get(shot.shot_id, set()) - mine:
+                entry = entries.get(source_scene.get(source))
+                if entry and entry.status in ("pending", "running"):
+                    return True
+        return False
+
+    def _next_ready_shot(self, run: SceneAutopilotRun, project) -> Optional[ShotExecutionState]:
+        """Legacy helper: deterministic first item of the dependency-ready set."""
+        ready = self._ready_shots(run, project)
+        return ready[0] if ready else None
+
     async def _run_loop(self, project_name: str, run_id: str):
-        """依赖 scheduler（§二）：从所有 dependency 已满足的 Shot 中按 index 选第一个执行。
-        第一版严格串行（一次只跑一个 Shot）；未来并发只需改放行数量。"""
+        """Actual parallel C2 Scene executor, not merely a two-worker setting.
+
+        Only dependency-ready shots are launched concurrently. In-progress
+        tasks are drained on pause/cancel/failure; no new stages are dispatched
+        after a terminal or pause flag. JobQueue keeps provider POST idempotent.
+        """
         from deps import logger, get_project_manager
+        tasks: Dict[str, asyncio.Task] = {}
         try:
             while True:
                 run = self._load_run(project_name, run_id)
                 if run is None:
                     return
-                # 已终止（失败/完成/取消/blocked）-> 不再循环（_execute_shot 内 fail 后由此退出）
-                if run.status in RUN_TERMINAL:
+                # Finished coroutines may finish *before* their tasks are reaped.
+                for sid, task in list(tasks.items()):
+                    if task.done():
+                        tasks.pop(sid)
+                        if not task.cancelled() and task.exception():
+                            await self._fail_shot(run, sid, str(task.exception())[:300])
+                run = self._load_run(project_name, run_id)
+                if run.status in RUN_TERMINAL or run.pause_requested or run.cancel_requested:
+                    if tasks:
+                        await asyncio.wait(tasks.values(), timeout=0.1,
+                                           return_when=asyncio.FIRST_COMPLETED)
+                        continue
+                    if run.status in RUN_TERMINAL:
+                        return
+                    await self._edit_run(project_name, run_id, lambda latest: (
+                        setattr(latest, "status", RUN_CANCELLED if latest.cancel_requested else RUN_PAUSED),
+                        setattr(latest, "cancel_requested", False),
+                        setattr(latest, "pause_requested", False),
+                        setattr(latest, "current_shot_id", None),
+                        setattr(latest, "current_stage", None)))
                     return
-                # pause / cancel checkpoint
-                if run.cancel_requested:
-                    run.cancel_requested = False
-                    run.status = RUN_CANCELLED
-                    await self._save_run(run); return
-                if run.pause_requested:
-                    run.pause_requested = False
-                    run.status = RUN_PAUSED
-                    await self._save_run(run); return
-                run.status = RUN_RUNNING
 
                 project = ProjectStore(get_project_manager().get_project_dir(project_name)).load()
-                scene = next((s for s in project.scenes if s.scene_id == run.scene_id), None)
+                scene = next((sc for sc in project.scenes if sc.scene_id == run.scene_id), None)
                 if scene is None:
-                    run.status = RUN_FAILED; run.error = "故事段已删除"
-                    await self._save_run(run); return
-
-                state = self._next_ready_shot(run, project)
-                if state is None:
-                    if all(s.status in SHOT_TERMINAL for s in run.shots):
-                        run.status = RUN_COMPLETED
+                    await self._edit_run(project_name, run_id, lambda latest: (
+                        setattr(latest, "status", RUN_FAILED),
+                        setattr(latest, "error", "故事段已删除")))
+                    continue
+                # Before launching any new shot, validate the complete frozen
+                # scene structure; never post against a half-edited revision.
+                ready = self._ready_shots(run, project, set(tasks))
+                if ready and _structure_changed(run, scene):
+                    await self._edit_run(project_name, run_id, lambda latest: (
+                        setattr(latest, "status", RUN_BLOCKED),
+                        setattr(latest, "error_code", "STRUCTURE_CHANGED"),
+                        setattr(latest, "error", "故事段或镜头规划在自动制作期间发生了变化")))
+                    continue
+                slots = max(0, validate_parallelism(run.max_parallel_shots) - len(tasks))
+                for candidate in ready[:slots]:
+                    sid = candidate.shot_id
+                    def start(latest, shot_id=sid):
+                        if (latest.pause_requested or latest.cancel_requested or
+                                latest.status in RUN_TERMINAL):
+                            return
+                        st = next(st for st in latest.shots if st.shot_id == shot_id)
+                        st.status = SHOT_RUNNING
+                        latest.status = RUN_RUNNING
+                        current = [s for s in latest.shots if s.status == SHOT_RUNNING]
+                        latest.current_shot_id = min(current, key=lambda s: s.index).shot_id
+                    run = await self._edit_run(project_name, run_id, start)
+                    if run.pause_requested or run.cancel_requested or run.status in RUN_TERMINAL:
+                        break
+                    tasks[sid] = asyncio.create_task(self._execute_shot(project_name, run, sid))
+                if not tasks:
+                    run = self._load_run(project_name, run_id)
+                    if all(s.status in (SHOT_COMPLETED, SHOT_SKIPPED_LOCKED) for s in run.shots):
+                        status, error = RUN_COMPLETED, None
+                    elif self._pending_external_source(run, project):
+                        # Another scene is still producing the genuine tail.
+                        # Keep this child bound to its original Run ID; it may
+                        # already have completed independent shots.
+                        await asyncio.sleep(0.2)
+                        continue
                     else:
-                        run.status = RUN_BLOCKED
-                        if not run.error:
-                            run.error = "无可用镜头（依赖未满足）"
-                    run.current_shot_id = None; run.current_stage = None
-                    await self._save_run(run); return
-
-                # 尚未开始的 Shot：检查结构是否变化（§三十五）
-                if state.status == SHOT_PENDING:
-                    changed = _structure_changed(run, scene)
-                    if changed:
-                        run.status = RUN_BLOCKED
-                        run.error_code = "STRUCTURE_CHANGED"
-                        run.error = "故事段或镜头规划在自动制作期间发生了变化"
-                        await self._save_run(run); return
-
-                state.status = SHOT_RUNNING
-                run.current_shot_id = state.shot_id
-                await self._save_run(run)
-
-                await self._execute_shot(project_name, run, state.shot_id)
-                # 循环继续：reload run；若 _execute_shot 内 fail/blocked，下一轮顶部 RUN_TERMINAL 退出
+                        status, error = RUN_BLOCKED, "无可用镜头（依赖未满足）"
+                    def finish(latest):
+                        latest.status = status
+                        latest.error = error
+                        latest.current_shot_id = latest.current_stage = None
+                    await self._edit_run(project_name, run_id, finish)
+                    return
+                await asyncio.wait(tasks.values(), timeout=0.15,
+                                   return_when=asyncio.FIRST_COMPLETED)
         except Exception as e:
             logger.exception(f"Autopilot _run_loop {run_id} 异常")
-            run = self._load_run(project_name, run_id)
-            if run:
-                run.status = RUN_FAILED
-                run.error = f"执行循环异常: {str(e)[:400]}"
-                await self._save_run(run)
-
-    def _next_ready_shot(self, run: SceneAutopilotRun, project) -> Optional[ShotExecutionState]:
-        """从所有 dependency 已满足的非 terminal Shot 中，按 index 选第一个（§二）。
-        PENDING/WAITING 都重新校验依赖（避免 WAITING 后不再重检的 bug）。"""
-        ready = []
-        for st in run.shots:
-            if st.status in SHOT_TERMINAL:
-                continue
-            planned = _planned_for(run, st.shot_id)
-            if planned is None:
-                continue
-            if st.status == SHOT_RUNNING:
-                return st   # 正在执行（resume 场景，串行下一般不出现）
-            if dependency_ready(project, planned):
-                st.status = SHOT_PENDING
-                ready.append(st)
-            else:
-                st.status = SHOT_WAITING
-        if not ready:
-            return None
-        return min(ready, key=lambda s: s.index)
+            try:
+                await self._edit_run(project_name, run_id, lambda latest: (
+                    setattr(latest, "status", RUN_FAILED),
+                    setattr(latest, "error", f"执行循环异常: {str(e)[:400]}")))
+            finally:
+                # If a coordinator fails, do not abandon already-submitted jobs.
+                if tasks:
+                    await asyncio.gather(*tasks.values(), return_exceptions=True)
 
     async def _execute_shot(self, project_name: str, run: SceneAutopilotRun, shot_id: str):
-        """执行单个 Shot 的所有 stage（按 checkpoint 跳过已完成的，§五）。"""
+        """One shot task owns only its ShotExecutionState; stages checkpoint atomically."""
         from deps import get_project_manager
         project_dir = get_project_manager().get_project_dir(project_name)
         store = ProjectStore(project_dir)
@@ -640,55 +778,47 @@ class SceneAutopilotManager:
         if planned is None:
             await self._fail_shot(run, shot_id, "计划中无此镜头")
             return
-        stages = build_stage_sequence(planned)
-
-        for stage in stages:
-            # reload 最新 run/state
+        for stage in build_stage_sequence(planned):
             run = self._load_run(project_name, run.run_id)
             state = next((s for s in run.shots if s.shot_id == shot_id), None)
-            if state is None:
+            if state is None or run.status in RUN_TERMINAL:
                 return
-            # checkpoint：已完成则跳过（§五 Resume）
             if stage in state.completed_stages:
                 continue
-            # pause/cancel checkpoint
             if run.pause_requested or run.cancel_requested:
                 return
             state.stage = stage
-            run.current_stage = stage
-            await self._save_run(run)
+            await self._save_shot_state(run, state)
             try:
                 await self._execute_stage(project_name, run, state, stage, planned, store, project_dir)
-                # reload + 标记完成
                 run = self._load_run(project_name, run.run_id)
                 state = next((s for s in run.shots if s.shot_id == shot_id), None)
                 if state is None:
                     return
                 if stage not in state.completed_stages:
                     state.completed_stages.append(stage)
-                await self._save_run(run)
+                await self._save_shot_state(run, state)
             except Exception as e:
                 await self._fail_shot(run, shot_id, f"stage {stage} 失败: {str(e)[:300]}")
                 return
-        # Shot 全部 stage 完成
         run = self._load_run(project_name, run.run_id)
         state = next((s for s in run.shots if s.shot_id == shot_id), None)
-        if state:
+        if state is not None:
             state.status = SHOT_COMPLETED
             state.stage = None
-            await self._save_run(run)
+            await self._save_shot_state(run, state)
 
     async def _fail_shot(self, run: SceneAutopilotRun, shot_id: str, error: str):
-        """Shot 失败 -> Run 失败。"""
-        from deps import get_project_manager
-        run = self._load_run(run.project_name, run.run_id)
-        state = next((s for s in run.shots if s.shot_id == shot_id), None)
-        if state:
-            state.status = SHOT_FAILED
-            state.error = error
-        run.status = RUN_FAILED
-        run.error = f"镜头 {shot_id}: {error}"
-        await self._save_run(run)
+        """Fail exactly one shot while preserving all sibling checkpoints."""
+        def fail(latest):
+            state = next((s for s in latest.shots if s.shot_id == shot_id), None)
+            if state is not None:
+                state.status = SHOT_FAILED
+                state.error = error
+            if latest.status not in (RUN_CANCELLED, RUN_PAUSED):
+                latest.status = RUN_FAILED
+                latest.error = f"镜头 {shot_id}: {error}"
+        await self._edit_run(run.project_name, run.run_id, fail)
 
     # ---------- stage 派发 ----------
     async def _execute_stage(self, project_name: str, run: SceneAutopilotRun,
@@ -760,6 +890,22 @@ class SceneAutopilotManager:
                             "provider_task_id", "submission_intent_id", "dispatch_prompt"))):
                     return q.retry(existing.job_id) or existing
             return existing
+        if kind == "video":
+            # The C2 executor submits directly to JobQueue (not through the
+            # Producer REST batch endpoint). Carry the same exact pinned tail
+            # snapshot used by that endpoint into the video handler's pre-POST
+            # and post-result atomic Store guards. This closes the queue-time
+            # upstream selection race for parallel repair/revision runs.
+            from deps import get_project_manager
+            from src.agents.producer_orchestration import video_submission_dependencies
+            current = ProjectStore(get_project_manager().get_project_dir(project_name)).load()
+            _, blocked, snapshots = video_submission_dependencies(
+                current, [{"shot_id": shot_id, "frame": "video"}])
+            if blocked:
+                raise RuntimeError(
+                    "C2 video dependency not ready: " +
+                    str(blocked[0].get("dependency_reason") or blocked[0].get("error")))
+            params["continuity_dependency_snapshot"] = snapshots.get(shot_id)
         return q.submit(project_name, kind, shot_id,
                         origin_run_id=run_id, autopilot_stage_key=stage_key, **params)
 
@@ -792,7 +938,7 @@ class SceneAutopilotManager:
                                                     stage_key, run.run_id, variants=2)
             state.active_job_id = job.job_id
             state.active_stage_key = stage_key
-            await self._save_run(run)
+            await self._save_shot_state(run, state)
             job = await self._wait_job(job.job_id)
             state.active_job_id = None
             if job.state != "done":
@@ -814,7 +960,7 @@ class SceneAutopilotManager:
             choose_first_frame_business(store, state.shot_id, cid)
             state.first_batch_id = batch.batch_id
             state.selected_first_candidate_id = cid
-            await self._save_run(run)
+            await self._save_shot_state(run, state)
             return
         raise RuntimeError("首帧生成失败（2 次 batch 均无成功候选）")
 
@@ -829,7 +975,7 @@ class SceneAutopilotManager:
                                                     stage_key, run.run_id)
             state.active_job_id = job.job_id
             state.active_stage_key = stage_key
-            await self._save_run(run)
+            await self._save_shot_state(run, state)
             job = await self._wait_job(job.job_id)
             state.active_job_id = None
             if job.state != "done":
@@ -849,7 +995,7 @@ class SceneAutopilotManager:
             choose_last_frame_business(store, state.shot_id, cid)
             state.last_batch_id = batch.batch_id
             state.selected_last_candidate_id = cid
-            await self._save_run(run)
+            await self._save_shot_state(run, state)
             return
         raise RuntimeError("尾帧生成失败（2 次 batch 均无成功候选）")
 
@@ -862,11 +1008,17 @@ class SceneAutopilotManager:
         job = None
         for attempt in range(1, 3):
             stage_key = f"autopilot:{run.run_id}:{state.shot_id}:video:{attempt}"
+            # 🔴 C2 本地 60 秒验证修复（2026-10-27）：tail_host_required=False
+            # -> video handler 只在本地提取末帧、不做图床托管。托管改由本镜的
+            # video_end stage 按「下游是否真的消费公网尾帧」决定（见 _do_video_end）。
+            # 原因：github_pages 1 PUT = 1 次 Pages 构建（实测 232s），在 video worker
+            # 内托管会把视频 worker 占住一个构建周期，直接压低并行度。
             job = await self._enqueue_autopilot_job(project_name, state.shot_id, "video",
-                                                    stage_key, run.run_id)
+                                                    stage_key, run.run_id,
+                                                    tail_host_required=False)
             state.active_job_id = job.job_id
             state.active_stage_key = stage_key
-            await self._save_run(run)
+            await self._save_shot_state(run, state)
             job = await self._wait_job(job.job_id)
             state.active_job_id = None
             if job.state == "done":
@@ -884,7 +1036,7 @@ class SceneAutopilotManager:
         if shot.final_video != vv.version_id:
             await set_final_video_business(store, project_dir, state.shot_id, vv.version_id)
         state.video_version_id = vv.version_id
-        await self._save_run(run)
+        await self._save_shot_state(run, state)
 
     async def _do_video_end(self, project_name: str, run: SceneAutopilotRun,
                             state: ShotExecutionState, store: ProjectStore, project_dir: Path):
@@ -897,29 +1049,38 @@ class SceneAutopilotManager:
         if (shot.video_end_frame.url_ready
                 and shot.video_end_source_version == state.video_version_id):
             return
-        # refresh 一次（§二十六）
-        vv = next((v for v in shot.video_versions if v.version_id == state.video_version_id), None)
-        if vv and vv.local and Path(vv.local).exists():
-            try:
-                end_asset, _ok = await _extract_video_end_frame(
-                    project_dir, state.shot_id, vv.local, vv.version_id)
-                store.update_shot(state.shot_id, lambda s, ea=end_asset, sv=vv.version_id: (
-                    setattr(s, "video_end_frame", ea), setattr(s, "video_end_source_version", sv)))
-                if end_asset.url_ready:
-                    return
-            except Exception as e:
-                state.warnings.append(f"末帧提取异常: {str(e)[:120]}")
-        # 仍未就绪：看下游是否依赖（§二十六）
+        # 🔴 C2 本地 60 秒验证修复（2026-10-27）：先判定下游是否真的需要「公网末帧 URL」，
+        # 再据此决定是否做图床托管。github_pages 图床 1 次 PUT = 1 次 Pages 构建
+        # （实测 232s，构建 soft limit 10 次/小时），无下游依赖的镜头也托管会把构建数
+        # 从 3 推到 12——既逼近限额，又让 9 个镜头各白等一个构建周期。
+        # 依赖判定逻辑（§二十六）本身不变，只是提前求值 + 按需托管。
         idx = next((i for i, s in enumerate(run.shots) if s.shot_id == state.shot_id), -1)
         downstream_needs = False
         if idx >= 0 and idx + 1 < len(run.shots):
             nxt_planned = _planned_for(run, run.shots[idx + 1].shot_id)
             if nxt_planned and nxt_planned.requires_previous_video_end:
                 downstream_needs = True
+        # refresh 一次（§二十六）
+        vv = next((v for v in shot.video_versions if v.version_id == state.video_version_id), None)
+        if vv and vv.local and Path(vv.local).exists():
+            try:
+                end_asset, _ok = await _extract_video_end_frame(
+                    project_dir, state.shot_id, vv.local, vv.version_id,
+                    host=downstream_needs)
+                store.update_shot(state.shot_id, lambda s, ea=end_asset, sv=vv.version_id: (
+                    setattr(s, "video_end_frame", ea), setattr(s, "video_end_source_version", sv)))
+                if end_asset.url_ready:
+                    return
+                if not downstream_needs and not end_asset.error:
+                    # 托管按需跳过（host=False）——提取本身成功，非失败，无需告警。
+                    return
+            except Exception as e:
+                state.warnings.append(f"末帧提取异常: {str(e)[:120]}")
+        # 仍未就绪：看下游是否依赖（§二十六）
         if downstream_needs:
             raise RuntimeError("视频末帧提取失败，下游镜头依赖它")
         state.warnings.append("视频已完成，但实际末帧提取失败。后续镜头不依赖它，因此继续。")
-        await self._save_run(run)
+        await self._save_shot_state(run, state)
 
 
 class _ExistingRunError(Exception):

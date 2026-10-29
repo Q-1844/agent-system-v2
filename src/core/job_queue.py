@@ -14,6 +14,21 @@ from enum import Enum
 from pathlib import Path
 from typing import Callable, Awaitable, Optional, List, Dict, Any
 
+try:  # 正常包内导入
+    from .job_queue_ownership import (
+        JobQueueOwnershipError,
+        LedgerOwnership,
+        acquire_ownership,
+        release_ownership,
+    )
+except ImportError:  # pragma: no cover - 以顶层模块方式直接导入时的兜底
+    from job_queue_ownership import (  # type: ignore
+        JobQueueOwnershipError,
+        LedgerOwnership,
+        acquire_ownership,
+        release_ownership,
+    )
+
 log = logging.getLogger("JobQueue")
 
 
@@ -67,7 +82,8 @@ class JobQueue:
     video_worker_count = 1     # start() 后为实际 worker 数（观测/测试用）
 
     def __init__(self, state_path: Path, handlers: Dict[str, HandlerFn],
-                 video_worker_count: Optional[int] = None):
+                 video_worker_count: Optional[int] = None,
+                 *, require_ownership: bool = True):
         self.state_path = Path(state_path)
         self.handlers = handlers                      # 外部可变 dict，注册 handler 即增
         self._video_worker_count_override = video_worker_count   # Phase55 C：config 档位（env 仍可覆盖）
@@ -79,7 +95,41 @@ class JobQueue:
         self._tasks: List[asyncio.Task] = []
         self._running_tasks: Dict[str, asyncio.Task] = {}   # job_id -> 执行 task（force cancel/看门狗中断用）
         self._started = False
+        # 🔴 跨进程所有权（Round05 Gate B）：**先取得所有权，再读账本**。
+        # 账本是文件——两个进程可同时 load 同一份 queued job → 同一 job 被领走两次
+        # （video kind = 重复付费生成；第 04 轮 D1 污染事故的直接成因之一）。
+        # 所有权冲突 → JobQueueOwnershipError（fail closed）：不读、不写、不领、不恢复。
+        self._ownership: Optional[LedgerOwnership] = None
+        self._require_ownership = bool(require_ownership)
+        if self._require_ownership:
+            self._ownership = acquire_ownership(self.state_path, purpose="job_queue")
         self._load()
+
+    # ---------- 跨进程所有权（Round05 Gate B）----------
+    @property
+    def owns_ledger(self) -> bool:
+        """本进程当前是否持有该账本的写所有权。"""
+        return self._ownership is not None and not self._ownership.released
+
+    def _assert_owner(self, action: str) -> None:
+        """所有写账本的路径在动手前显式校验所有权。
+
+        这不是「只在 _save 上加短锁」：所有权在 __init__ 就已取得并被进程持续持有，
+        这里是**第二道闸**——即使句柄被释放/失效，写入也必须 fail closed，
+        绝不出现「旧 owner 失去锁后继续写」的分叉状态。"""
+        if not self._require_ownership:
+            return
+        if not self.owns_ledger:
+            raise JobQueueOwnershipError(
+                f"JobQueue ledger ownership lost before {action} "
+                f"(ledger={self.state_path}); refusing to modify a ledger this "
+                "process does not own")
+
+    def close(self) -> None:
+        """释放本进程对该账本的所有权（正常退出/测试收尾用）。"""
+        if self._ownership is not None:
+            release_ownership(self.state_path)
+            self._ownership = None
 
     # ---------- Phase56 A4：并发档位单一解析与结算后重配 ----------
     @staticmethod
@@ -156,6 +206,32 @@ class JobQueue:
                 "source": self.video_inflight_source}
 
     # ---------- 持久化（原子写）----------
+    @staticmethod
+    def restart_decision(job: Job) -> dict:
+        """🔴 重启后该 job 是否可安全重新排队（Round05 Gate C 铁律）。
+
+        只有**能证明「确实没有提交」**才允许重新排队：
+        - 非视频 job：可重新排队（无付费副作用）；
+        - 视频 job：只要存在提交意图 / provider 回执 / 提交状态不明 → **保持原状**，
+          交由对账路径（poll / 人工核对）处理，**绝不自动再 POST 一次**。
+
+        判定只依赖**持久化的提交事实**（submission_intent_id / provider_task_id /
+        provider_submit_state / handler_started），不依赖 attempts 或内存态。
+        """
+        params = job.params or {}
+        if job.kind != JobKind.VIDEO.value:
+            return {"resettable": True, "reason": "non_video_job"}
+        if params.get("provider_task_id"):
+            return {"resettable": False, "reason": "provider_task_id_present"}
+        if params.get("submission_intent_id"):
+            return {"resettable": False, "reason": "submission_intent_present"}
+        state = str(params.get("provider_submit_state") or "")
+        if state in ("submitting", "unknown", "accepted"):
+            return {"resettable": False, "reason": "provider_submit_state_" + state}
+        if "handler_started" not in params:
+            return {"resettable": False, "reason": "handler_started_marker_missing"}
+        return {"resettable": True, "reason": "provably_not_submitted"}
+
     def _load(self):
         if not self.state_path.exists():
             return
@@ -164,16 +240,21 @@ class JobQueue:
             self.jobs = {k: Job(**v) for k, v in data.items()}
             # 🔴 重启后 running 的任务重置为 queued（视频交给 recover 处理，不在此重排）
             for j in self.jobs.values():
-                if j.state == JobState.RUNNING.value and (
-                    j.kind != JobKind.VIDEO.value or
-                    ("handler_started" in j.params and not j.params.get("submission_intent_id")
-                     and not j.params.get("provider_task_id"))):
+                if j.state != JobState.RUNNING.value:
+                    continue
+                decision = self.restart_decision(j)
+                if decision["resettable"]:
                     j.state = JobState.QUEUED.value
+                elif j.kind == JobKind.VIDEO.value:
+                    log.warning(
+                        "[JobQueue] 重启后 video job %s 保持原状（%s）——不自动重排、不重复提交，"
+                        "交由对账路径处理", j.job_id, decision["reason"])
         except Exception as e:
             log.error("队列状态读取失败，保留原文件并停止恢复: %s", e)
             raise RuntimeError("JobQueue state corrupt; recovery required (original file preserved)") from e
 
     def _save(self):
+        self._assert_owner("save")
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp = tempfile.mkstemp(dir=str(self.state_path.parent), suffix=".tmp")
         try:
@@ -197,6 +278,7 @@ class JobQueue:
     # ---------- 入队 ----------
     def submit(self, project: str, kind: str, shot_id: Optional[str] = None,
                **params) -> Job:
+        self._assert_owner("submit")
         job = Job(job_id=uuid.uuid4().hex[:12], project=project,
                   kind=kind, shot_id=shot_id, params=params)
         self.jobs[job.job_id] = job
@@ -218,6 +300,7 @@ class JobQueue:
         🔴 params 为空的 video job 是正常状态（submit 时不传 video_id，video_id 落 shot.video.video_id），
         不是 bug——job 记录与 params 在 submit() 里是同一次 _save 原子写，不会分裂。
         僵尸成因是 running+孤儿(project/shot已删)+无清理，由 purge_orphans + 看门狗解决。"""
+        self._assert_owner("cancel")
         j = self.jobs.get(job_id)
         if not j:
             return False
@@ -235,9 +318,32 @@ class JobQueue:
         return False
 
     def retry(self, job_id: str) -> Optional[Job]:
+        self._assert_owner("retry")
         j = self.jobs.get(job_id)
         if not j or j.state not in (JobState.FAILED.value, JobState.CANCELLED.value):
             return None
+        if j.kind == JobKind.VIDEO.value:
+            # Manual retry and retry-failed must obey the same paid-submission
+            # uncertainty gate as restart recovery.  A queued, never-started
+            # cancelled job has provably not reached its handler and is safe.
+            never_started_cancel = (j.state == JobState.CANCELLED.value
+                                      and j.attempts == 0
+                                      and j.started_at is None)
+            decision = self.restart_decision(j)
+            evidence = j.params or {}
+            has_paid_evidence = bool(
+                evidence.get("submission_intent_id")
+                or evidence.get("provider_task_id")
+                or evidence.get("unattached_provider_receipt")
+                or evidence.get("provider_submit_state") in
+                ("submitting", "unknown", "accepted"))
+            safe_to_retry = (not has_paid_evidence and
+                             (decision["resettable"] or never_started_cancel))
+            if not safe_to_retry:
+                log.warning("[JobQueue] video retry blocked pending provider reconciliation: "
+                            "job=%s (reason=%s)", job_id,
+                            "paid_submission_evidence" if has_paid_evidence else decision["reason"])
+                return None
         j.state, j.error, j.progress, j.message = JobState.QUEUED.value, None, 0, ""
         j.finished_at = None
         self._save()
@@ -254,6 +360,7 @@ class JobQueue:
         return ids
 
     def clear_finished(self, project: Optional[str] = None) -> int:
+        self._assert_owner("clear_finished")
         n = 0
         for jid in list(self.jobs.keys()):
             j = self.jobs[jid]
@@ -267,6 +374,7 @@ class JobQueue:
     def purge_orphans(self, exists_fn) -> int:
         """🔴 清理孤儿 job（用户要求2）：project/shot 已不存在的 running/queued -> cancelled。
         exists_fn(project, shot_id) -> bool。在 start() route 前调用，孤儿不进 worker、不占计数。"""
+        self._assert_owner("purge_orphans")
         n = 0
         for j in list(self.jobs.values()):
             if j.state in (JobState.RUNNING.value, JobState.QUEUED.value):
@@ -285,6 +393,7 @@ class JobQueue:
     async def start(self):
         if self._started:
             return
+        self._assert_owner("start")
         self._started = True
         # Phase50 A（PHASE50_A §3/A2）：视频 worker 数可由环境变量提升（默认 1 = 既有串行行为
         # 逐字节不变）。串行是 AI-4B 时代"1 RPM 硬约束"下的保守决策；真机探针已实证 Agnes

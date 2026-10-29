@@ -11,6 +11,7 @@ import yaml
 
 from ..utils.logger import setup_logger
 
+from src.api.model_budget import DEFAULT_TEXT_MAX_TOKENS
 logger = setup_logger("script_parser")
 
 
@@ -122,7 +123,7 @@ class ScriptParser:
             try:
                 enhanced = await self.agnes_client.chat(
                     [{"role": "user", "content": prompt}],
-                    temperature=0.7, max_tokens=4096,
+                    temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS,
                 )
                 scene["enhanced_prompt"] = enhanced.strip()
                 logger.info(f"场景{scene['id']}描述已增强")

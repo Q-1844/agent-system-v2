@@ -200,8 +200,9 @@ def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, final
     # binds its own upper limit at Stage0 media authorization. Never derive
     # this cap from live missing seconds or a new runner's fresh client.
     historical = 384 if str(checkpoint.get('film_target_seconds')) == '320' else 240
-    authorized = checkpoint.get('authorized_video_seconds', historical)
-    if (type(authorized) is not int or not 0 < authorized <= 5000 or
+    authorized = max(checkpoint.get('authorized_video_seconds', historical),
+                     checkpoint.get('execution_video_authorization', 0))
+    if (type(authorized) is not int or not 0 < authorized <= 1_000_000_000 or
             any(a.get('state')!='ACCEPTED' or not a.get('video_id')
                 or type(a.get('seconds')) is not int or not 4<=a['seconds']<=12 for a in attempts)
             or len(ids)!=len(set(ids)) or sum(a['seconds'] for a in attempts)>authorized):

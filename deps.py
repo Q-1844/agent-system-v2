@@ -59,6 +59,10 @@ agnes_client = None
 sensenova_text_client = None
 project_manager = None
 job_queue = None
+# 🔴 Round05 Gate B：任务账本所有权冲突标记。非 None = 本进程**没有**拥有
+# cache/jobs.json（另一进程已拥有）→ 写入类路由 503，且 startup fail fast。
+# 生产写入路径不得在未拥有账本时继续修改任务。
+job_queue_conflict = None
 
 
 def get_controller():

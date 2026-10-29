@@ -4,6 +4,7 @@
 import asyncio
 import hashlib
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -19,12 +20,24 @@ G1_TAR = Path(r"C:\Users\Public\Documents\AgentV2_Release_POC_20261021\P55_SMOKE
 B_TAR = Path(r"C:\Users\曹文淇\Desktop\ai工作流\agent-system-v2-rundata\films\P55_SMOKE2B.tar")
 # 注：用户名路径含中文，下面用显式拼接避免编码猜测
 B_TAR = Path("C:/Users/曹文淇/Desktop/ai工作流/agent-system-v2-rundata/films/P55_SMOKE2B.tar")
+# CI runner 上没有本机路径，用 P55_TAR_PATH 传入样本位置（跨平台）；
+# 未设置时回落到上面两个本机路径，本地开发行为完全不变。
+P55_TAR_ENV = "P55_TAR_PATH"
+
+
+def _p55_candidates():
+    cands = []
+    env = (os.environ.get(P55_TAR_ENV) or "").strip()
+    if env:
+        cands.append(Path(env))
+    cands.extend((G1_TAR, B_TAR))
+    return cands
 
 
 @pytest.fixture(scope="module")
 def p55_tar():
     chosen = None
-    for cand in (G1_TAR, B_TAR):
+    for cand in _p55_candidates():
         if cand.exists():
             h = hashlib.sha256()
             with open(cand, "rb") as f:

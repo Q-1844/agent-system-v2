@@ -3,12 +3,16 @@
 # 落盘保存，进程重启不丢。跨天自动重置。
 from __future__ import annotations
 import json, threading
-from datetime import date
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+def _supplier_day():
+    return datetime.now(ZoneInfo("Asia/Shanghai")).date().isoformat()
 from pathlib import Path
 
 # 默认落盘位置（相对 cwd，即项目根）。可由调用方覆盖。
 _DEFAULT_PATH = Path("cache/quota.json")
-_DEFAULT_LIMITS = {"video_seconds": 300, "images": 500, "text_calls": 2000}
+_DEFAULT_LIMITS = {"video_seconds": 500, "images": 10000, "text_calls": 50000}
 
 
 class QuotaLedger:
@@ -17,13 +21,13 @@ class QuotaLedger:
 
     def __init__(self, path: Path, limits: dict | None = None):
         self.path = Path(path)
-        # 免费用户官方未公布确切数值，这里给保守默认值，可在 config.yaml 覆盖
+        # C2 长片生产执行额度不限制创作；供应商实际日视频配额独立按天滚动
         self.limits = {**_DEFAULT_LIMITS, **(limits or {})}
         self._lock = threading.Lock()
         self._data = self._load()
 
     def _load(self) -> dict:
-        today = date.today().isoformat()
+        today = _supplier_day()
         if self.path.exists():
             try:
                 d = json.loads(self.path.read_text(encoding="utf-8"))
@@ -39,8 +43,9 @@ class QuotaLedger:
                              encoding="utf-8")
 
     def _rollover(self):
-        if self._data.get("date") != date.today().isoformat():
-            self._data = {"date": date.today().isoformat(),
+        today = _supplier_day()
+        if self._data.get("date") != today:
+            self._data = {"date": today,
                           "video_seconds": 0.0, "images": 0, "text_calls": 0}
 
     def can(self, kind: str, amount: float = 1) -> tuple[bool, str]:

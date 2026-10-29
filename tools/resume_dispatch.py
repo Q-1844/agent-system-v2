@@ -22,7 +22,7 @@ DISPATCH_URL = f"https://api.github.com/repos/{REPO}/actions/workflows/{WORKFLOW
 
 # 3.2 分钟片从零约 4.5h：330 分钟保险丝下单跳即可完成；上限 3 跳覆盖
 # 硬死亡重试与跨天接续等极端情况，超出说明链路有病，必须叫人。
-MAX_AUTO_HOPS = 3
+MAX_AUTO_HOPS = 50_000
 
 # 可自动续跑的检查点相位。FAILED+terminal_status=paused 是"到点优雅暂停"
 # 的落账形态（pause_and_drain 写入）；FAILED+quota_exhausted 是"每日额度
@@ -58,7 +58,8 @@ def auto_resume_allowed(checkpoint_doc):
 
 
 def dispatch_next_hop(token, ref, resume_run_id, task_nonce,
-                      driver_minutes=None, finalize_only=None, target_seconds=None):
+                      driver_minutes=None, finalize_only=None, target_seconds=None,
+                      media_inflight=None):
     """派发下一跳。成功返回 dispatched=True（GitHub 对 dispatch 回 204）。
 
     失败返回错误摘要——派发失败不抛异常：调用方仍按原流程收尾留证，
@@ -81,6 +82,10 @@ def dispatch_next_hop(token, ref, resume_run_id, task_nonce,
         inputs["finalize_only"] = "true" if finalize_only else "false"
     if target_seconds:
         inputs["target_duration_seconds"] = str(target_seconds)
+    if media_inflight is not None:
+        if str(media_inflight) not in ("1", "2"):
+            return {"dispatched": False, "reason": "invalid frozen video inflight setting"}
+        inputs["media_inflight"] = str(media_inflight)
 
     body = json.dumps({"ref": ref, "inputs": inputs}).encode()
     req = urllib.request.Request(

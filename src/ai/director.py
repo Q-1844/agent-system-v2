@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from src.ai.story_workflow import _parse_json_object
 
 
+from src.api.model_budget import DEFAULT_TEXT_MAX_TOKENS
 class ShotPlanItem(BaseModel):
     """一个镜头规划草稿。进入 Shot 的核心字段：intent/characters/target_duration_s。"""
     draft_id: str
@@ -138,7 +139,7 @@ class DirectorWorkflow:
         obj = await self._chat_json(
             [{"role": "system", "content": _DIRECTOR_SYSTEM},
              {"role": "user", "content": user}],
-            temperature=0.7, max_tokens=2048)
+            temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
         if obj is None:
             raise ValueError("AI 未返回可解析的 JSON")
         return _build_draft(obj, sid, scene.summary or "", scene_chars, director_note)

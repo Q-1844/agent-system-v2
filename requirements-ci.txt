@@ -23,3 +23,17 @@ colorama==0.4.6
 pytest==9.1.1
 pluggy==1.6.0
 iniconfig==2.3.0
+
+
+
+# pytest-asyncio: 18 tests in this repo use the @pytest.mark.asyncio marker.
+#   Without it pytest reports "async def functions are not natively supported"
+#   which is a FAILURE, not a skip. Measured 2026-10-28 (round 06 pre-push):
+#   48 of the 228 failures in a CI-equivalent full run came from here.
+pytest-asyncio==1.4.1
+
+# tzdata: Windows runners ship no IANA zone database, so zoneinfo needs this
+#   package to resolve "Asia/Shanghai". Without it ZoneInfoNotFoundError
+#   cascades into 182 "503 ProjectManager init failed" failures.
+#   Linux runners have system tzdata, so only the windows-latest job breaks.
+tzdata==2026.2

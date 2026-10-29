@@ -23,6 +23,7 @@ from deps import (
     get_agnes_client, get_project_manager, get_job_queue, get_rehost_host,
 )
 
+from src.api.model_budget import DEFAULT_TEXT_MAX_TOKENS
 router = APIRouter()
 
 
@@ -488,9 +489,15 @@ def continuity_status(project, shot):
     return ("ready", "")
 
 
-async def _extract_video_end_frame(project_dir, shot_id, video_local, version_id, emit=None):
+async def _extract_video_end_frame(project_dir, shot_id, video_local, version_id, emit=None,
+                                   *, host: bool = True):
     """从最终视频文件提取实际末帧 -> output/frames/{shot_id}_video_end_{version_id}.jpg，
     上传图床取公网 URL（视频接力进 Agnes 视频接口必需；保真不用 agnes_rehost）。
+    🔴 C2 本地 60 秒验证修复（2026-10-27）：新增 host 开关——host=False 时只提取本地末帧、
+    不做公网托管（仍然产出 local + status=DONE，reference_previous 走 base64 参考即可）。
+    动机：github_pages 图床 1 PUT = 1 次 Pages 构建（实测 232s，soft limit 10 次/小时），
+    无下游依赖的镜头也托管会把构建数从 3 推到 12，既逼近限额又让 9 个镜头白等一个构建周期。
+    依赖是否真的需要公网 URL 由调用方（下游镜头的 requires_previous_video_end）判定。
     提取/托管失败不抛（视频本身仍成功），返回带 error 的 Asset；允许 retry。
     🔴 Phase 3 守卫：文件名带来源版本 id——同一镜头重提取不再覆盖旧版本字节
     （旧 ffsync/接力候选的 local 记录因此保持与其登记 URL 对应，不产生
@@ -526,6 +533,9 @@ async def _extract_video_end_frame(project_dir, shot_id, video_local, version_id
         jpg_path = end_path.with_suffix(".jpg")
         from PIL import Image as _PILImage
         _PILImage.open(end_path).convert("RGB").save(jpg_path, "JPEG", quality=88)
+        if not host:
+            # 无下游依赖 -> 不占图床托管配额（Pages 构建昂贵）。local 仍可用于 base64 参考。
+            return Asset(local=str(jpg_path), status=ShotStatus.DONE.value), True
         url = await get_rehost_host().upload(str(jpg_path))
         return Asset(local=str(jpg_path), url=url, status=ShotStatus.DONE.value), True
     except Exception as e:
@@ -1281,21 +1291,21 @@ async def shot_prompt_generate(project_name: str, shot_id: str, req: PromptAIReq
                 en = await client.chat(
                     [{"role": "system", "content": _FIRST_FRAME_SYSTEM_HAS_INTENT},
                      {"role": "user", "content": user}],
-                    temperature=0.7, max_tokens=512)
+                    temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
                 return {"prompt": en.strip()}
             if has_intent:
                 user = f"Stage: first frame\n\nContext:\n{ctx_text}"
                 en = await client.chat(
                     [{"role": "system", "content": _FIRST_FRAME_SYSTEM_HAS_INTENT},
                      {"role": "user", "content": user}],
-                    temperature=0.7, max_tokens=512)
+                    temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
                 return {"prompt": en.strip()}
             # 无意图且多镜 -> 推断本镜意图，返回 inferred_shot_intent 供前端确认
             user = f"Stage: first frame (infer shot intent)\n\nContext:\n{ctx_text}"
             raw = await client.chat(
                 [{"role": "system", "content": _FIRST_FRAME_SYSTEM_INFER},
                  {"role": "user", "content": user}],
-                temperature=0.7, max_tokens=700, json_mode=True)
+                temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS, json_mode=True)
             import json as _json, re as _re
             m = _re.search(r'\{.*\}', raw, _re.DOTALL)
             if m:
@@ -1312,7 +1322,7 @@ async def shot_prompt_generate(project_name: str, shot_id: str, req: PromptAIReq
         en = await client.chat(
             [{"role": "system", "content": system},
              {"role": "user", "content": f"Stage: {stage_desc}\n\nContext:\n{ctx_text}"}],
-            temperature=0.7, max_tokens=512)
+            temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
         return {"prompt": en.strip()}
     except FileNotFoundError:
         raise HTTPException(404, "项目不存在")
@@ -1341,7 +1351,7 @@ async def shot_prompt_optimize(project_name: str, shot_id: str, req: PromptAIReq
         en = await get_agnes_client().chat(
             [{"role": "system", "content": _PROMPT_OPT_SYSTEM},
              {"role": "user", "content": f"Current prompt:\n{text}\n\nContext:\n{ctx}"}],
-            temperature=0.5, max_tokens=512)
+            temperature=0.5, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
         return {"prompt": en.strip()}
     except FileNotFoundError:
         raise HTTPException(404, "项目不存在")
@@ -1461,23 +1471,102 @@ async def _await_last_frame_url(store, shot_id, emit, timeout=180, interval=5):
         if (sh and sh.last_frame.status == "done" and selected
                 and selected.status == "done" and selected.local
                 and Path(selected.local).is_file()):
+            # Snapshot only this tail identity.  Other video workers may safely
+            # change unrelated shots while a Pages publish is in flight; the
+            # project-wide signature from the earlier load is NOT a valid guard.
+            expected_selected_id = sh.selected_last_frame
+            expected_selected_index = sh.last_frame.selected_index
+            expected_local = selected.local
+            expected_lock = sh.locked
+            expected_digest = hashlib.sha256(Path(expected_local).read_bytes()).digest()
             await emit("rehost", f"{shot_id} 尾帧托管中（补公网 URL）", 5)
-            url = await get_rehost_host().upload(selected.local)
+            url = await get_rehost_host().upload(expected_local)
             if not url:
                 raise RuntimeError("尾帧托管未返回公网 URL")
-            def publish(s):
-                s.last_frame.selected.url = url
-                for batch in s.last_frame_batches:
+
+            from src.core.store import ProjectConflictError
+
+            def still_same_tail(_project, current):
+                """Fail closed if the selected image was superseded during upload."""
+                current_selected = current.last_frame.selected
+                if (current.locked != expected_lock or
+                        current.selected_last_frame != expected_selected_id or
+                        current.last_frame.selected_index != expected_selected_index or
+                        current.last_frame.status != "done" or
+                        current_selected is None or
+                        current_selected.local != expected_local or
+                        current_selected.status != "done"):
+                    raise ProjectConflictError("selected tail changed during hosting")
+                try:
+                    current_digest = hashlib.sha256(
+                        Path(current_selected.local).read_bytes()).digest()
+                except OSError as exc:
+                    raise ProjectConflictError(
+                        "selected tail disappeared during hosting") from exc
+                if current_digest != expected_digest:
+                    raise ProjectConflictError("selected tail bytes changed during hosting")
+
+            def publish(current):
+                # Another worker may have published the SAME selected image
+                # while we uploaded.  Preserve its public URL instead of
+                # replacing it with an older redundant hosting result.
+                active_url = current.last_frame.selected.url or url
+                current.last_frame.selected.url = active_url
+                for batch in current.last_frame_batches:
                     for candidate in batch.candidates:
-                        if (candidate.candidate_id == sh.selected_last_frame
-                                and candidate.local == selected.local):
-                            candidate.url = url
-            # An upload may take time. Never attach its URL to a selection that
-            # changed while awaiting the host; keep canonical and legacy in sync.
-            store.update_shot(shot_id, publish, expected_signature=project._store_signature)
-            return url
+                        if (candidate.candidate_id == expected_selected_id and
+                                candidate.local == expected_local):
+                            candidate.url = active_url
+            # update_shot obtains the store lock and reloads the latest project.
+            # No stale project-wide expected_signature: concurrent unrelated
+            # shot writes must survive, without losing selection safety.
+            latest = store.update_shot(shot_id, publish, guard=still_same_tail)
+            return latest.last_frame.selected.url
         await asyncio.sleep(interval)
     return None
+
+
+def _commit_hosted_first_frame_url(store, shot_id, *, selected_id,
+                                   selected_index, source_local, source_digest,
+                                   locked, url):
+    """Rebase an uploaded first-frame URL without changing another selection.
+
+    Upload may take minutes.  A project-wide signature would reject harmless
+    concurrent work, but updating a stale candidate index could instead host
+    the WRONG image.  Verify the selected media identity under the store lock.
+    """
+    from src.core.store import ProjectConflictError
+
+    def guard(_project, current):
+        chosen = current.first_frame.selected
+        if (current.locked != locked or
+                current.selected_first_frame != selected_id or
+                current.first_frame.selected_index != selected_index or
+                current.first_frame.status != "done" or
+                chosen is None or chosen.local != source_local or
+                chosen.status != "done"):
+            raise ProjectConflictError("selected first frame changed during hosting")
+        try:
+            current_digest = hashlib.sha256(Path(chosen.local).read_bytes()).digest()
+        except OSError as exc:
+            raise ProjectConflictError(
+                "selected first frame disappeared during hosting") from exc
+        if current_digest != source_digest:
+            raise ProjectConflictError("selected first frame bytes changed during hosting")
+
+    def publish(current):
+        active_url = current.first_frame.selected.url or url
+        current.first_frame.selected.url = active_url
+        current.first_frame.selected.status = "done"
+        for batch in current.first_frame_batches:
+            for candidate in batch.candidates:
+                if (candidate.candidate_id == selected_id and
+                        candidate.local == source_local):
+                    candidate.url = active_url
+        current.first_frame.status = "done"
+        current.first_frame.updated_at = _time.time()
+
+    return store.update_shot(shot_id, publish, guard=guard)
 
 
 async def _ensure_multi_video_prompt(project_name: str, shot_id: str, emit) -> dict:
@@ -1634,15 +1723,22 @@ async def _handler_video(job, emit):
     if (not recovering_video and shot.opening_source != OpeningSource.INHERIT_PREVIOUS.value
             and shot.first_frame.status == "done" and sel_ff and sel_ff.local
             and not sel_ff.url):
+        # An unrelated shot may complete while hosting; that is safe.  A new
+        # first-frame selection or changed local bytes are NOT safe and must
+        # never inherit the obsolete hosted URL.
+        source_local = sel_ff.local
+        source_digest = hashlib.sha256(Path(source_local).read_bytes()).digest()
+        selected_id = shot.selected_first_frame
+        selected_index = shot.first_frame.selected_index
+        locked = shot.locked
         await emit("rehost", f"{shot.shot_id} 首帧重新托管中（补公网 URL）", 3)
-        url = await get_rehost_host().upload(sel_ff.local)
-        def _mut_rehost(s, u=url, idx=shot.first_frame.selected_index):
-            if 0 <= idx < len(s.first_frame.candidates):
-                s.first_frame.candidates[idx].url = u
-                s.first_frame.candidates[idx].status = "done"
-            s.first_frame.status = "done"
-            s.first_frame.updated_at = _time.time()
-        store.update_shot(job.shot_id, _mut_rehost)
+        url = await get_rehost_host().upload(source_local)
+        if not url:
+            raise RuntimeError("首帧托管未返回公网 URL")
+        _commit_hosted_first_frame_url(
+            store, job.shot_id, selected_id=selected_id,
+            selected_index=selected_index, source_local=source_local,
+            source_digest=source_digest, locked=locked, url=url)
         shot = store.load().get_shot(job.shot_id)   # 取最新
 
     # 🔴 视频提交尺寸：16:9 直接按服务端实测输出 1280x704 提交（FACTS §3.4.1：1312x736 会被
@@ -1922,6 +2018,13 @@ async def _handler_video(job, emit):
             current.video.video_id = None
             current.video.task_id = None
         def _guard_submit(current_project, current):
+            # The provider has NOT been called yet: a queued relay must use
+            # the exact selected upstream version/real tail frozen at enqueue.
+            # This guards changes occurring while JobQueue waits for a worker.
+            if "continuity_dependency_snapshot" in job.params:
+                from src.agents.producer_orchestration import assert_pinned_video_dependencies
+                assert_pinned_video_dependencies(current_project, job.shot_id,
+                    job.params["continuity_dependency_snapshot"])
             if (video_input_signature(current_project, current) != compiled_signature or
                     current.final_video != compiled_final_video):
                 raise RuntimeError("video inputs/selection changed before submit; recompile before retry")
@@ -1931,8 +2034,18 @@ async def _handler_video(job, emit):
                     provider_options=dict(provider_options))
         store.update_shot(job.shot_id, _claim_submit, guard=_guard_submit)
         await emit("submit_intent", f"{shot.shot_id} 提交意图已持久化", 10)
+        from src.core.media_submission_context import active_video_submission
+        submission_token = active_video_submission.set({
+            'project': job.project, 'logical_shot_id': job.shot_id,
+            'attempt_id': job.params['submission_intent_id'],
+            'input_signature': compiled_signature,
+            'previous_final_video': compiled_final_video,
+        })
         try:
-            created = await get_agnes_client().create_video(prompt, mode=mode, **kwargs)
+            try:
+                created = await get_agnes_client().create_video(prompt, mode=mode, **kwargs)
+            finally:
+                active_video_submission.reset(submission_token)
         except Exception as _sub_err:
             from src.api.agnes_client import VideoSubmissionUncertain
             status = getattr(_sub_err, "status", None)
@@ -2045,6 +2158,12 @@ async def _handler_video(job, emit):
     retained = {}
     def guard(current_project, current_shot):
         # Validate at the actual commit point, after every asynchronous download.
+        # If an upstream selected tail changed during provider execution, keep
+        # the video artifact but never attach it as the valid current version.
+        if "continuity_dependency_snapshot" in job.params and not recovering_video:
+            from src.agents.producer_orchestration import assert_pinned_video_dependencies
+            assert_pinned_video_dependencies(current_project, job.shot_id,
+                job.params["continuity_dependency_snapshot"])
         if ("dispatch_final_video" in job.params and
                 current_shot.final_video != job.params["dispatch_final_video"]):
             raise RuntimeError("video selection changed during generation/download; result retained unattached")
@@ -2100,8 +2219,12 @@ async def _handler_video(job, emit):
         logger.warning(f"{shot.shot_id} 首帧槽同步异常（不影响视频完成）: {e}")
 
     # Phase 6A：提取实际视频末帧（供下游镜头接力）。失败不影响视频成功状态，独立 error + 可 retry。
+    # 🔴 C2 本地 60 秒验证修复（2026-10-27）：tail_host_required=False 时只本地提取、不托管。
+    # 默认 True（手工流程维持原行为）；C2 Executor 按下游依赖自行决定托管时机。
     try:
-        end_asset, _ok = await _extract_video_end_frame(project_dir, job.shot_id, str(dest), vvid, emit)
+        tail_host_required = bool(job.params.get("tail_host_required", True))
+        end_asset, _ok = await _extract_video_end_frame(project_dir, job.shot_id, str(dest), vvid, emit,
+                                                        host=tail_host_required)
         def _mut_end(s, ea=end_asset, sv=vvid):
             if s.final_video == sv:
                 s.video_end_frame = ea
@@ -2206,7 +2329,21 @@ async def shot_video(project_name: str, shot_id: str,
             scene_ref=_scene_ref_consumed(_proj, _shot, project_dir,
                                           validity=_validity),
             compiled_negative_prompt=bool((_shot.negative_prompt or "").strip()))
+        # Phase3: REST shares the native real-tail dependency guard. No
+        # bypass around the Producer's video submission invariants.
+        from src.agents.producer_orchestration import video_submission_dependencies
+        _ready, _blocked, _deps = video_submission_dependencies(
+            _proj, [{"shot_id": shot_id, "frame": "video"}])
+        if _blocked:
+            raise HTTPException(422, detail={"error": "continuity_dependency_unready",
+                                             "violations": _blocked})
+        extra["continuity_dependency_snapshot"] = _deps.get(shot_id)
         q = get_job_queue()
+        from src.agents.producer_orchestration import existing_active_video_job
+        duplicate = existing_active_video_job(q, project_name, shot_id)
+        if duplicate:
+            raise HTTPException(409, detail={"error": "shot_video_already_in_flight",
+                                             "existing_job_id": duplicate})
         job = q.submit(project_name, "video", shot_id, **extra)
         return {"job_id": job.job_id, "shot_id": shot_id}
     except FileNotFoundError:
@@ -2776,7 +2913,7 @@ async def translate_text(req: TranslateRequest):
         prompt = (f"将以下中文画面描述翻译成英文图片生成提示词，"
                   f"只返回英文提示词，不要其他文字：\n{req.text}")
         en = await agnes.chat([{"role": "user", "content": prompt}],
-                              temperature=0.5, max_tokens=1024)
+                              temperature=0.5, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
         return {"english": (en or "").strip()}
     except Exception as e:
         raise HTTPException(500, str(e))
@@ -2811,19 +2948,19 @@ async def generate_prompt_for_stage(project_name: str, shot_id: str, stage: str,
             user = f"本镜意图(取自故事段): {ctx['scene_summary']}\n\nContext:\n{ctx_text}"
             en = await client.chat(
                 [{"role": "system", "content": _FIRST_FRAME_SYSTEM_HAS_INTENT},
-                 {"role": "user", "content": user}], temperature=0.7, max_tokens=512)
+                 {"role": "user", "content": user}], temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
             prompt = en.strip()
         elif has_intent:
             user = f"Stage: first frame\n\nContext:\n{ctx_text}"
             en = await client.chat(
                 [{"role": "system", "content": _FIRST_FRAME_SYSTEM_HAS_INTENT},
-                 {"role": "user", "content": user}], temperature=0.7, max_tokens=512)
+                 {"role": "user", "content": user}], temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
             prompt = en.strip()
         else:
             user = f"Stage: first frame (infer shot intent)\n\nContext:\n{ctx_text}"
             raw = await client.chat(
                 [{"role": "system", "content": _FIRST_FRAME_SYSTEM_INFER},
-                 {"role": "user", "content": user}], temperature=0.7, max_tokens=700, json_mode=True)
+                 {"role": "user", "content": user}], temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS, json_mode=True)
             import json as _json, re as _re
             m = _re.search(r'\{.*\}', raw, _re.DOTALL)
             if m:
@@ -2841,7 +2978,7 @@ async def generate_prompt_for_stage(project_name: str, shot_id: str, stage: str,
         en = await client.chat(
             [{"role": "system", "content": system},
              {"role": "user", "content": f"Stage: {stage_desc}\n\nContext:\n{ctx_text}"}],
-            temperature=0.7, max_tokens=512)
+            temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
         prompt = en.strip()
 
     if persist:

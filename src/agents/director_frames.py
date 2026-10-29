@@ -29,6 +29,7 @@ from .director_vision_review import (
 
 
 # ============ video.extract_frame ============
+from src.api.model_budget import DEFAULT_TEXT_MAX_TOKENS
 VIDEO_EXTRACT_FRAME_TOOL = {
     "type": "function",
     "function": {
@@ -150,7 +151,7 @@ async def _pair_check(client, frames: List[dict]) -> List[dict]:
                  "content": [{"type": "text", "text": user}] + entries}]
         try:
             res = await client.chat_completion_vision(
-                msgs, model=VISION_MODEL, temperature=0.2, max_tokens=300)
+                msgs, model=VISION_MODEL, temperature=0.2, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
         except AgnesError as e:
             raise AgentError("provider_error",
                              f"帧对视觉检查 provider 失败：{e}") from e
@@ -169,7 +170,7 @@ async def _pair_check(client, frames: List[dict]) -> List[dict]:
                             {"role": "user",
                              "content": "你的上次输出不是契约 JSON。只重新输出一个"
                                         "符合契约的 JSON 对象，不要任何其他文字。"}],
-                    model=VISION_MODEL, temperature=0.2, max_tokens=300)
+                    model=VISION_MODEL, temperature=0.2, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
                 obj = json.loads(_strip_fence(res2.get("content") or ""))
             except Exception:   # noqa: BLE001
                 obj = {"discontinuity": "unresolved",

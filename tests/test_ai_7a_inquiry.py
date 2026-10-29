@@ -306,3 +306,81 @@ def test_inquiry_soft_fails_without_client(tmp_path):
     assert out2["kind"] == "change"
     assert all(c["status"] == "blocked" for c in out2["consultations"])
     assert out2["analysis"]["execution_ready"] is False
+
+
+# ============ 10. 综合降级必须可见（第 03 轮加固）============
+# Round 03: the Producer synthesis used to swallow a failed / unparseable
+# model answer and hand back a deterministic fallback with **no log line and
+# no marker in the returned analysis** — the caller could not tell a degraded
+# plan from a real one.  Same defect class as the Producer collaboration
+# planner (producer_orchestration.py).  Two channels must now exist:
+# a WARNING in the log, and a marker in the returned analysis.
+class SynthesisFailingClient:
+    """咨询正常返回，综合阶段抛异常（模拟模型调用失败）。"""
+
+    def __init__(self):
+        self.calls = 0
+
+    async def chat(self, messages, **kw):
+        self.calls += 1
+        u = messages[-1]["content"] if messages else ""
+        if "咨询问题" in u:
+            return _consult_json()
+        if "咨询结果" in u or "综合" in u:
+            raise RuntimeError("synthesis boom")
+        return "项目级答案"
+
+
+def _warnings_from(caplog):
+    return [r for r in caplog.records
+            if r.levelname == "WARNING"
+            and r.name == "src.agents.inquiry"]
+
+
+def test_synthesis_failure_is_logged_and_marked(tmp_path, caplog):
+    """模型调用失败 → 必须有 WARNING，且返回的 analysis 带上降级标记。"""
+    _save(tmp_path)
+    client = SynthesisFailingClient()
+    rt = _rt(tmp_path, client=client)
+    with caplog.at_level("WARNING", logger="src.agents.inquiry"):
+        out = _run_inquiry(rt, "demo", "把 Xiaoyu 的头发改长", client=client)
+
+    assert out["kind"] == "change"
+    a = out["analysis"]
+    # 1) 调用方能分辨：降级被标记
+    assert a.get("synthesis_note"), "降级分析必须带上 synthesis_note 标记"
+    assert "兜底" in a["synthesis_note"]
+    # 2) 日志里能查到
+    warns = _warnings_from(caplog)
+    assert warns, "综合降级必须写 WARNING 日志"
+    assert "fell back" in warns[0].getMessage()
+    assert "RuntimeError" in warns[0].getMessage()
+
+
+def test_unparseable_synthesis_is_logged_and_marked(tmp_path, caplog):
+    """模型返回了但不是 JSON → 同样必须可见，不能当成正常结果。"""
+    _save(tmp_path)
+    client = ScriptedClient(synthesis="this is not json")
+    rt = _rt(tmp_path, client=client)
+    with caplog.at_level("WARNING", logger="src.agents.inquiry"):
+        out = _run_inquiry(rt, "demo", "把 Xiaoyu 的头发改长", client=client)
+
+    assert out["kind"] == "change"
+    a = out["analysis"]
+    assert a.get("synthesis_note"), "不可解析的综合结果必须留下降级标记"
+    warns = _warnings_from(caplog)
+    assert warns, "不可解析的综合结果必须写 WARNING 日志"
+    assert "not a JSON object" in warns[0].getMessage()
+
+
+def test_healthy_synthesis_is_not_marked_degraded(tmp_path, caplog):
+    """正常综合路径不得被误标为降级（防止把告警变成噪声）。"""
+    _save(tmp_path)
+    client = ScriptedClient()
+    rt = _rt(tmp_path, client=client)
+    with caplog.at_level("WARNING", logger="src.agents.inquiry"):
+        out = _run_inquiry(rt, "demo", "把 Xiaoyu 的头发改长", client=client)
+
+    a = out["analysis"]
+    assert not a.get("synthesis_note"), "正常综合不应出现降级标记"
+    assert not _warnings_from(caplog), "正常综合不应产生降级告警"

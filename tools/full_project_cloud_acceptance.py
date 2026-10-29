@@ -20,9 +20,12 @@ from tools import quota_gate
 MIN_FINAL_SECONDS = 180.0
 MIN_PLANNED_SECONDS = 192.0
 MAX_PLANNED_SECONDS = 220.0
-VIDEO_BUDGET_SECONDS = 240
-IMAGE_BUDGET = 120
-TEXT_BUDGET = 500
+# Execution authorizations, not daily supplier quotas or story duration targets.
+# User priority: quality first; avoid historical test-only hard stops.
+VIDEO_BUDGET_SECONDS = 1_000_000_000
+IMAGE_BUDGET = 10_000
+TEXT_BUDGET = 50_000
+DAILY_VIDEO_SECONDS = 500
 
 
 def runtime_deadline_minutes(environ):
@@ -66,7 +69,7 @@ FILM_PROFILES = {
         "scenes": SCENES,
         "story_text": "《失联深海站》：橙色双灯、双机械爪救援无人机潜入淹水的研究站，取回唯一的银色记录匣，在舱体变形中撤离并返回救援船。五段共约200秒；不重复素材，不使用静帧或循环补时长。此次只验收设备动作、跨场景生产和归档；不声称验收人物或对白一致性。",
         "min_final": 180.0, "planned_min": 192, "planned_max": 220,
-        "budget": 240, "image_budget": 120, "text_budget": 500,
+        "budget": 240, "image_budget": IMAGE_BUDGET, "text_budget": TEXT_BUDGET,
         "scene_count": 5, "shot_min": 16, "shot_max": 28,
     },
     320: {
@@ -74,7 +77,7 @@ FILM_PROFILES = {
         "scenes": SEQUEL_SCENES,
         "story_text": "《深海回响》：橙色双灯、双机械爪救援无人机携记录匣返航后，数据揭示研究站失联源于深海热液异常；无人机换装采样装备二度下潜，穿越旧站残骸抵达热液区，在喷发危机中舍弃样本保住核心数据，于黎明浮出水面。八段共约320秒；不重复素材，不使用静帧或循环补时长。此次只验收设备动作、跨场景生产和归档；不声称验收人物或对白一致性。",
         "min_final": 300.0, "planned_min": 300, "planned_max": 352,
-        "budget": 384, "image_budget": 200, "text_budget": 800,
+        "budget": 384, "image_budget": IMAGE_BUDGET, "text_budget": TEXT_BUDGET,
         "scene_count": 8, "shot_min": 24, "shot_max": 40,
     },
 }
@@ -265,10 +268,32 @@ class BoundedRealClient:
         if self.submission_blocked or any(a["state"] in ("SUBMITTING", "UNKNOWN") for a in self.video_attempts):
             raise RuntimeError("unconfirmed prior submission; reconciliation required, no automatic POST")
         if sum(a["seconds"] for a in self.video_attempts) + seconds > self.video_budget:
-            raise RuntimeError("acceptance 240-second submission budget exhausted")
+            raise RuntimeError("acceptance execution video budget exhausted")
+        prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()
         attempt = {"ordinal": len(self.video_attempts) + 1, "seconds": seconds,
-                   "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
+                   "prompt_sha256": prompt_hash,
                    "state": "SUBMITTING", "started_at": utc_now()}
+        from src.core.media_submission_context import active_video_submission
+        native_intent = active_video_submission.get()
+        repair_history = (getattr(self.checkpoint, 'doc', None) or {}).get('repair_revisions') or []
+        if native_intent and native_intent.get('project') == self.project_dir.name:
+            # Native JobQueue recorded this intent BEFORE the HTTP POST.
+            # The CAS mirror binds it to the effective revision version and
+            # the exact immutable native shot/visual-input fingerprint.
+            attempt.update(
+                logical_shot_id=native_intent['logical_shot_id'],
+                attempt_id=native_intent['attempt_id'],
+                immutable_input_digest=hashlib.sha256(json.dumps({
+                    'native_signature': native_intent['input_signature'],
+                    'previous_final_video': native_intent['previous_final_video'],
+                    'prompt_sha256': prompt_hash, 'seconds': seconds,
+                    'kwargs': kwargs}, sort_keys=True, ensure_ascii=False,
+                    default=str).encode('utf-8')).hexdigest(),
+                revision_id=repair_history[-1]['revision_id'] if repair_history else None)
+        elif repair_history:
+            # No anonymous video submissions from an approved revised plan:
+            # otherwise a cross-hop replay cannot prove whose media this is.
+            raise RuntimeError('repair video submission lacks native shot intent identity')
         self.video_attempts.append(attempt)
         await self.persist()  # durable intent precedes the paid HTTP request
         try:
@@ -566,7 +591,8 @@ async def auto_resume_next_hop(wrapper, nonce, driver_minutes):
     result = dispatch_next_hop(token, ref=os.environ.get("GITHUB_REF_NAME", ""),
                                resume_run_id=os.environ.get("GITHUB_RUN_ID", ""),
                                task_nonce=nonce, driver_minutes=driver_minutes,
-                               target_seconds=wrapper.film_target_seconds)
+                               target_seconds=wrapper.film_target_seconds,
+                               media_inflight=wrapper.checkpoint.doc.get('producer_video_inflight'))
     result["hops"] = hops
     await wrapper.persist(auto_resume=result)
     return result
@@ -695,6 +721,39 @@ def _resolve_production_project(target, restored, project_name, profile, nonce):
     return name, project_dir
 
 
+def _frozen_media_inflight(doc: dict) -> int:
+    """Preserve true provider concurrency across C1/C2 day/hop resumes.
+
+    Old paid checkpoints without a concurrency snapshot keep the historical
+    serial worker. New jobs may use the workflow-selected 1/2 profile; a new
+    hop cannot silently change an already frozen setting.
+    """
+    raw = os.environ.get('AGNES_VIDEO_INFLIGHT', '1')
+    try:
+        requested = int(raw)
+    except (TypeError, ValueError):
+        raise RuntimeError('AGNES_VIDEO_INFLIGHT must be an integer 1..2') from None
+    if requested not in (1, 2):
+        raise RuntimeError('tested video inflight profiles are 1 or 2')
+    previous = doc.get('producer_video_inflight')
+    if previous is not None:
+        if type(previous) is not int or previous not in (1, 2):
+            raise RuntimeError('invalid frozen producer_video_inflight in checkpoint')
+        return previous
+    if doc.get('video_attempts'):
+        return 1
+    return requested
+
+
+async def _apply_frozen_media_inflight(queue, requested: int) -> None:
+    """Never silently operate with a worker policy different from the CAS run."""
+    current = getattr(queue, 'video_worker_count', None)
+    if current is not None and current != requested:
+        settled = await queue.reconfigure_video_workers(requested, wait_settle=False)
+        if not settled.get('applied'):
+            raise RuntimeError(f'video inflight policy pending reconciliation: {settled}')
+
+
 async def _run_continuation_acceptance(nonce, out, summary, token, task_spec):
     """C1: deterministic add_assets/complete_project, with safe cross-hop restore.
 
@@ -758,7 +817,10 @@ async def _run_continuation_acceptance(nonce, out, summary, token, task_spec):
                     plan_fingerprint=stage0.plan_fingerprint,
                     stage0_text_calls_used=stage0.text_calls_used,
                     output_kind=workplan['output_kind'],
-                    authorized_video_seconds=int(workplan['digest_inputs']['budget']))
+                    authorized_video_seconds=int(workplan['digest_inputs']['budget']),
+                    execution_video_authorization=VIDEO_BUDGET_SECONDS,
+                    producer_video_inflight=_frozen_media_inflight(previous),
+                    producer_collab_mode_id='combo_recommended')
             previous = json.loads(json.dumps(cp.doc))
             summary['stage0_checkpoint_rebound'] = True
         if resume_id:
@@ -775,7 +837,8 @@ async def _run_continuation_acceptance(nonce, out, summary, token, task_spec):
             if restored['project_name'] != source:
                 raise RuntimeError('restored C1 project differs from frozen source')
             project_dir = Path.cwd() / 'projects' / source
-            cp.save(phase='RESTORED', github_run_id=os.environ.get('GITHUB_RUN_ID'),
+            cp.save(phase='RESTORED', execution_video_authorization=VIDEO_BUDGET_SECONDS,
+                github_run_id=os.environ.get('GITHUB_RUN_ID'),
                     source_sha=os.environ.get('GITHUB_SHA'), resume_from_run_id=resume_id,
                     updated_at=utc_now(), terminal_status=None, error=None,
                     resume_history=[*(previous.get('resume_history') or []), provenance])
@@ -832,7 +895,18 @@ async def _run_continuation_acceptance(nonce, out, summary, token, task_spec):
                 plan_fingerprint=stage0.plan_fingerprint,
                 stage0_text_calls_used=stage0.text_calls_used,
                 output_kind=workplan['output_kind'],
-                authorized_video_seconds=int(profile['budget']))
+                authorized_video_seconds=int(profile['budget']),
+                execution_video_authorization=VIDEO_BUDGET_SECONDS,
+                producer_video_inflight=_frozen_media_inflight(previous),
+                producer_collab_mode_id='combo_recommended')
+
+    # Stage0 rebind, fresh freeze and remote restoration all converge here.
+    # An older job with paid receipts remains at one worker by default.
+    selected_inflight = _frozen_media_inflight(cp.doc)
+    await _apply_frozen_media_inflight(deps.job_queue, selected_inflight)
+    if cp.doc.get('producer_video_inflight') is None:
+        cp.save(producer_video_inflight=selected_inflight,
+                producer_collab_mode_id='combo_recommended')
 
     summary.update(task_spec_sha256=stage0.doc.get('task_spec_sha256'),
                    scene_targets=workplan['scene_targets'],
@@ -905,14 +979,14 @@ async def _run_c2_acceptance(nonce, out, summary, token, task_spec, stage0):
     import deps
 
     await _ensure_deps_ready()
-    limits = {"text_calls": 60, "image_calls": 40, "video_seconds": 240}
+    limits = {"text_calls": TEXT_BUDGET, "image_calls": IMAGE_BUDGET, "video_seconds": VIDEO_BUDGET_SECONDS}
     ceiling = task_spec.resource_ceiling
     for key in limits:
         requested = getattr(ceiling, key)
         if requested is not None:
-            if requested > limits[key]:
-                raise PlanningContractError(f'C2 requested {key} exceeds authorized ceiling')
-            limits[key] = requested
+            # A user-requested lower value remains a planning hint.  It is not
+            # allowed to reproduce the 40/60/240 technical cost stop.
+            limits[key] = max(requested, limits[key])
     stage0.bootstrap(task_spec)
     if stage0.plan_fingerprint is None:
         stage0.mark_planning()
@@ -953,17 +1027,34 @@ async def _run_c2_acceptance(nonce, out, summary, token, task_spec, stage0):
     idx = task_index(token, nonce, 'full-project-production.json')
     cp = ProductionCheckpoint(idx, nonce, digest)
     previous = json.loads(json.dumps(cp.doc))
+    # Phase3: preserve a single collaboration identity and an actual media
+    # worker policy across hops. This is an EXECUTION snapshot, not a change
+    # to the immutable Stage0 plan or its request digest. Older in-flight
+    # tasks without the new field retain the historical serial worker.
+    from src.agents.producer_orchestration import DEFAULT_MODE
+    requested_inflight = _frozen_media_inflight(cp.doc)
+    if cp.doc.get('producer_collab_mode_id') not in (None, DEFAULT_MODE):
+        raise RuntimeError('running C2 repair collaboration mode changed unexpectedly')
     if cp.current is None:
         cp.save(phase='STAGE0_BOUND', github_run_id=os.environ.get('GITHUB_RUN_ID'),
                 source_sha=os.environ.get('GITHUB_SHA'), film_target_seconds=AUTO_TARGET,
                 task_spec_sha256=task_spec.sha256(), plan_fingerprint=plan_fp,
                 stage0_text_calls_used=stage0.text_calls_used,
                 output_kind='final_video', c2_source_project=task_spec.source_project,
-                authorized_video_seconds=int(blueprint['execution_bounds']['video_seconds']))
+                authorized_video_seconds=int(blueprint['execution_bounds']['video_seconds']),
+                execution_video_authorization=VIDEO_BUDGET_SECONDS)
     elif previous.get('video_attempts') and not os.environ.get('RESUME_RUN_ID', '').strip():
         # A fresh process without its prior media snapshot cannot silently
         # reset its payment ledger or re-use possibly settled provider jobs.
         raise RuntimeError('C2 continuation requires RESUME_RUN_ID to recover paid attempts')
+    # Do not reconfigure a shared queue while provider submissions are in
+    # flight; JobQueue will apply the recorded policy only after settlement.
+    # Older runs missing this field must remain at the historical 1-worker
+    # setting. If this is unavailable, leave an explicit blocked diagnostic.
+    await _apply_frozen_media_inflight(deps.job_queue, requested_inflight)
+    if cp.doc.get('producer_video_inflight') is None or cp.doc.get('producer_collab_mode_id') is None:
+        cp.save(producer_video_inflight=requested_inflight,
+                producer_collab_mode_id=DEFAULT_MODE)
 
     restored = None
     resume_id = os.environ.get('RESUME_RUN_ID', '').strip()
@@ -981,11 +1072,16 @@ async def _run_c2_acceptance(nonce, out, summary, token, task_spec, stage0):
         if restored['project_name'] != destination:
             raise RuntimeError('C2 restored project is not the frozen destination')
         project_dir = Path.cwd() / 'projects' / destination
+        # P1/P2: C2 plan is the original frozen Stage0 plus committed overlay.
+        # Reconcile a crash after CAS but before materialization. The strict
+        # integrity check now compares the *effective* view, not base.summary.
+        from tools.c2_repair_bridge import validate_repaired_project
+        revision_events = cp.doc.get('repair_revisions') or []
+        summary['c2_repair_effective_plan'] = validate_repaired_project(
+            project_dir, blueprint, revision_events, plan_fp)
         project = ProjectStore(project_dir).load()
-        if not all(any(sc.scene_id == s['scene_id'] and sc.summary == s['summary']
-                       for sc in project.scenes) for s in blueprint['scenes']):
-            raise RuntimeError('C2 restored project no longer matches frozen scenes')
-        cp.save(phase='RESTORED', github_run_id=os.environ.get('GITHUB_RUN_ID'),
+        cp.save(phase='RESTORED', execution_video_authorization=VIDEO_BUDGET_SECONDS,
+                github_run_id=os.environ.get('GITHUB_RUN_ID'),
                 source_sha=os.environ.get('GITHUB_SHA'), resume_from_run_id=resume_id,
                 updated_at=utc_now(), terminal_status=None, error=None,
                 resume_history=[*(previous.get('resume_history') or []), provenance])
@@ -1020,12 +1116,21 @@ async def _run_c2_acceptance(nonce, out, summary, token, task_spec, stage0):
             blueprint, projects_root=deps.project_manager.base_dir,
             destination_name=destination, plan_fingerprint=plan_fp)
         summary['c2_materialized'] = materialized
-    profile = c2_media_profile(blueprint)
+    # Even the first freshly materialized run may encounter a CAS-committed
+    # revision after Stage0 (e.g. a crash at the project-write boundary).
+    from tools.c2_repair_bridge import effective_media_profile, validate_repaired_project
+    revision_events = cp.doc.get('repair_revisions') or []
+    summary['c2_repair_effective_plan'] = validate_repaired_project(
+        project_dir, blueprint, revision_events, plan_fp)
+    profile = effective_media_profile(c2_media_profile(blueprint),
+                                      ProjectStore(project_dir).load(), revision_events)
     summary.update(project_name=destination, project_dir=str(project_dir),
                    output_kind='final_video', stage0_text_calls_used=stage0.text_calls_used,
                    task_spec_sha256=task_spec.sha256(), plan_fingerprint=plan_fp,
                    execution_request_sha256=digest,
                    c2_source_project=task_spec.source_project,
+                   repair_revision_ids=[e['revision_id'] for e in revision_events],
+                   effective_plan_digest=cp.doc.get('effective_plan_digest'),
                    c2_asset_uses=blueprint['selected_assets'],
                    c2_asset_decision_method=blueprint.get('asset_decision_method', 'legacy_frozen'),
                    c2_direct_reuse_count=sum(1 for item in blueprint['selected_assets']
@@ -1076,7 +1181,7 @@ async def _run_auto_acceptance(nonce, out, summary, token):
         return await _run_continuation_acceptance(nonce, out, summary, token, task_spec)
     if task_spec.intent in ("extend_existing", "sequel"):
         return await _run_c2_acceptance(nonce, out, summary, token, task_spec, stage0)
-    limits = {"text_calls": 60, "image_calls": 40, "video_seconds": 240}
+    limits = {"text_calls": TEXT_BUDGET, "image_calls": IMAGE_BUDGET, "video_seconds": VIDEO_BUDGET_SECONDS}
 
     try:
         stage0.bootstrap(task_spec)  # 同 nonce 换任务 → Stage0Conflict（T25）
@@ -1110,35 +1215,6 @@ async def _run_auto_acceptance(nonce, out, summary, token):
         summary.update(stage0_status="FROZEN_RESTORED",
                        plan_fingerprint=stage0.plan_fingerprint)
 
-    # ---- 物化（幂等：项目已在则复用，不重建）+ scene_budgets sidecar ----
-    await _ensure_deps_ready()  # 恢复 hop 不走规划分支，这里必须确保单例在
-    project_name = f"cloud3min_{nonce}"
-    from src.core.models import Project, Scene, StyleAnchor
-    from src.core.store import ProjectStore
-    import deps as _deps
-    project_dir = _deps.project_manager.get_project_dir(project_name)
-    if not (project_dir / "output" / "project.json").is_file():
-        _deps.project_manager.create_project(project_name)
-        scenes = [Scene(scene_id=s["scene_id"], title=s.get("title") or "",
-                        summary=s["summary"])
-                  for s in blueprint["scenes"]]
-        style = blueprint.get("style") or {}
-        project = Project(
-            name=project_name, story_text=blueprint["story_text"],
-            style=StyleAnchor(art_style=str(style.get("art_style") or ""),
-                              palette=str(style.get("palette") or ""),
-                              aspect_ratio=str(style.get("aspect_ratio") or "16:9")),
-            characters=[], scenes=scenes)
-        ProjectStore(project_dir).save(project)
-    # sidecar：Director 生成/复用据此注入预算约束（PR B2 契约 §4.3）
-    sidecar = project_dir / "output" / "ai" / "scene_budgets.json"
-    if not sidecar.is_file():
-        sidecar.parent.mkdir(parents=True, exist_ok=True)
-        write_json(sidecar, {"schema_version": 1,
-                             "plan_fingerprint": stage0.plan_fingerprint,
-                             "scene_budgets": blueprint["scene_budgets"]})
-    summary.update(project_name=project_name, project_dir=str(project_dir))
-
     # ---- 绑定执行身份（ProductionCheckpoint：只在冻结后创建）----
     profile = auto_request_profile(blueprint)
     digest = request_digest(AUTO_TARGET, profile)
@@ -1152,22 +1228,20 @@ async def _run_auto_acceptance(nonce, out, summary, token):
                 task_spec_sha256=stage0.doc.get("task_spec_sha256"),
                 plan_fingerprint=stage0.plan_fingerprint,
                 stage0_text_calls_used=stage0.text_calls_used,
-                authorized_video_seconds=int(profile["budget"]))
+                authorized_video_seconds=int(profile["budget"]),
+                    execution_video_authorization=VIDEO_BUDGET_SECONDS)
     else:
         cp.save(phase="STAGE0_BOUND",
                 github_run_id=os.environ.get("GITHUB_RUN_ID"))
     summary.update(execution_request_sha256=digest,
                    stage0_text_calls_used=stage0.text_calls_used)
-    plan = {"planned_target_seconds": sum(
-                b.get("target_s") or b.get("min_s") or 0
-                for b in blueprint["scene_budgets"]),
-            "scene_count": len(blueprint["scenes"]),
-            "video_seconds_cap": (blueprint.get("execution_bounds") or {})
-            .get("video_seconds")}
-    summary["auto_plan"] = plan
-    write_json(out / "stage0-blueprint.json", blueprint)
 
     # ---- 跨 hop 恢复：项目目录从失败 run 的 artifact 快照恢复（同固定档）----
+    # 必须早于物化：restore_snapshot 拒绝覆盖已存在的项目目录与任务队列
+    # （FileExistsError: recovery cannot overwrite an existing project/job
+    # queue），而全新 runner 上项目目录与 cache/jobs.json 都不存在。
+    # ⇒ 先恢复、再物化：恢复命中时项目由快照提供，物化只复用、绝不重建；
+    #    恢复也保证了物化不会抢先建出目录而把恢复挡在门外。
     restored = None
     resume_id = os.environ.get("RESUME_RUN_ID", "").strip()
     if resume_id:
@@ -1191,6 +1265,53 @@ async def _run_auto_acceptance(nonce, out, summary, token):
                 source_sha=os.environ.get("GITHUB_SHA"), resume_from_run_id=resume_id,
                 updated_at=utc_now(), terminal_status=None, error=None,
                 resume_history=[*(previous.get("resume_history") or []), provenance])
+
+    # ---- 物化（幂等：项目已在则复用，不重建）+ scene_budgets sidecar ----
+    await _ensure_deps_ready()  # 恢复 hop 不走规划分支，这里必须确保单例在
+    project_name = f"cloud3min_{nonce}"
+    from src.core.models import Project, Scene, StyleAnchor
+    from src.core.store import ProjectStore
+    import deps as _deps
+    # Materialization must tolerate a fresh hop: get_project_dir() raises when
+    # the project directory does not exist yet, so resolve the project first and
+    # create the skeleton only when there is no project.json yet. An existing
+    # project (e.g. restored from a failed run's snapshot) is reused as-is and
+    # never rebuilt.
+    try:
+        project_dir = _deps.project_manager.get_project_dir(project_name)
+        needs_blueprint = not (project_dir / "output" / "project.json").is_file()
+    except FileNotFoundError:
+        project_dir = _deps.project_manager.create_project(project_name)
+        needs_blueprint = True
+    if needs_blueprint:
+        scenes = [Scene(scene_id=s["scene_id"], title=s.get("title") or "",
+                        summary=s["summary"])
+                  for s in blueprint["scenes"]]
+        style = blueprint.get("style") or {}
+        project = Project(
+            name=project_name, story_text=blueprint["story_text"],
+            style=StyleAnchor(art_style=str(style.get("art_style") or ""),
+                              palette=str(style.get("palette") or ""),
+                              aspect_ratio=str(style.get("aspect_ratio") or "16:9")),
+            characters=[], scenes=scenes)
+        ProjectStore(project_dir).save(project)
+    # sidecar：Director 生成/复用据此注入预算约束（PR B2 契约 §4.3）
+    sidecar = project_dir / "output" / "ai" / "scene_budgets.json"
+    if not sidecar.is_file():
+        sidecar.parent.mkdir(parents=True, exist_ok=True)
+        write_json(sidecar, {"schema_version": 1,
+                             "plan_fingerprint": stage0.plan_fingerprint,
+                             "scene_budgets": blueprint["scene_budgets"]})
+    summary.update(project_name=project_name, project_dir=str(project_dir))
+
+    plan = {"planned_target_seconds": sum(
+                b.get("target_s") or b.get("min_s") or 0
+                for b in blueprint["scene_budgets"]),
+            "scene_count": len(blueprint["scenes"]),
+            "video_seconds_cap": (blueprint.get("execution_bounds") or {})
+            .get("video_seconds")}
+    summary["auto_plan"] = plan
+    write_json(out / "stage0-blueprint.json", blueprint)
     # ---- 生产上下文（动态 profile：media gate / wrapper budgets / 验收门槛）----
     dyn_profile = auto_media_profile(blueprint)
     return project_name, dyn_profile, cp, restored, previous
@@ -1220,12 +1341,13 @@ def auto_media_profile(blueprint):
         "planned_min": planned_min, "planned_max": planned_max,
         "min_final": float(min(planned_min, video_cap)),
         "budget": video_cap,
-        "image_budget": int(bounds.get("image_calls") or 60),
-        "text_budget": int(bounds.get("text_calls") or 80),
+        "image_budget": max(IMAGE_BUDGET, int(bounds.get("image_calls") or 60)),
+        "text_budget": max(TEXT_BUDGET, int(bounds.get("text_calls") or 80)),
     }
 
 
 async def run_acceptance(nonce, out, summary):
+    from tools.stage0_state import Stage0Record, STAGE0_FILENAME
     from tools.e2e_autonomous_run import ensure_branch
     from tools.video_task_state import ProductionCheckpoint, task_index
     from src.core.quota import QuotaLedger
@@ -1300,8 +1422,14 @@ async def run_acceptance(nonce, out, summary):
         cp.save(phase="BLOCKED_PREFLIGHT", no_new_media_submitted=True,
                 blocked_stage="frame_host_preflight", error_type=type(exc).__name__)
         raise RuntimeError(f"D frame-host preflight failed before media generation: {exc}") from exc
-    QuotaLedger.get_default(Path("cache/quota.json"), limits={"video_seconds": profile["budget"],
-                                                           "images": profile["image_budget"], "text_calls": profile["text_budget"]})
+    quota = QuotaLedger.get_default(Path("cache/quota.json"), limits={"video_seconds": DAILY_VIDEO_SECONDS,
+                                                               "images": IMAGE_BUDGET,
+                                                               "text_calls": TEXT_BUDGET})
+    # get_default ignores new limits after its first initialization. A prior
+    # startup may have created the singleton with the legacy 300/500/2000 caps.
+    # Apply this policy to the existing object too, without clearing usage.
+    quota.limits.update(video_seconds=DAILY_VIDEO_SECONDS, images=IMAGE_BUDGET,
+                        text_calls=TEXT_BUDGET)
     import deps
     import api_server
     from src.ai.full_project_autopilot import get_full_project_manager
@@ -1329,21 +1457,51 @@ async def run_acceptance(nonce, out, summary):
             c2_prior=summary.get('c2_source_existing_versions') or [],
             c2_uses=summary.get('c2_asset_uses') or [])
     wrapper = BoundedRealClient(deps.agnes_client, cp, project_dir, out, finalize_only=finalize_only,
-                                video_budget=profile["budget"], image_budget=profile["image_budget"],
-                                text_budget=profile["text_budget"], film_target_seconds=target,
+                                video_budget=max(VIDEO_BUDGET_SECONDS, profile["budget"]),
+                                image_budget=max(IMAGE_BUDGET, profile["image_budget"]),
+                                text_budget=max(TEXT_BUDGET, profile["text_budget"]), film_target_seconds=target,
                                 auto_profile=profile if target == AUTO_TARGET else None,
                                 stage0_text_reserved=(summary.get('stage0_text_calls_used') or 0)
                                 if target == AUTO_TARGET else 0)
     if restored:
         wrapper.restore_usage(previous)
-        wrapper.media_gate()
+        # A Director failure may leave an intentionally incomplete scene plan.
+        # Replaying a committed R3/R4 repair must be allowed before images start;
+        # each subsequent generation call still enforces media_gate.
+        if not (cp.doc.get('repair_revisions') and
+                cp.doc.get('repair_phase') in ('COMMITTED_PENDING_REPLAY', 'APPLIED', 'READY_TO_RESTART')):
+            wrapper.media_gate()
     deps.agnes_client = wrapper
     manager = get_full_project_manager()
-    existing_full = manager.get_run(project_name, restored['full_run_id']) if restored else None
+    # An approved repair creates a NEW FullRun instead of mutating the source
+    # run's immutable snapshot. Remember the new identity across hop recovery.
+    selected_full_run_id = (cp.doc.get('repair_active_full_run_id') or
+                            restored['full_run_id']) if restored else None
+    existing_full = manager.get_run(project_name, selected_full_run_id) if restored else None
     if finalize_only and existing_full and existing_full.status == 'completed':
         full = existing_full
+    elif restored and existing_full and existing_full.status == 'completed':
+        full = existing_full
+    elif restored and existing_full and existing_full.status in ('paused', 'failed'):
+        # A CAS-committed repair may have landed just before a crash, without
+        # binding the new FullRun. Starting the next run is safe only when
+        # native controllers and the job queue are fully reconciled.
+        if (cp.doc.get('repair_revisions') and
+                cp.doc.get('repair_phase') in ('COMMITTED_PENDING_REPLAY', 'APPLIED', 'READY_TO_RESTART') and
+                not cp.doc.get('repair_active_full_run_id')):
+            from src.ai.repair_revision import assert_quiescent
+            from tools.c2_repair_bridge import lock_preserved_shots
+            assert_quiescent(project_dir, cp.doc)
+            latest = cp.doc['repair_revisions'][-1]
+            touched = {s['shot_id'] for s in (*latest['proposal']['replace_shots'],
+                                             *latest['proposal']['add_shots'])}
+            lock_preserved_shots(project_dir, touched)
+            full = await manager.start_run(project_name)
+            cp.save(repair_phase='RESTARTED', repair_active_full_run_id=full.run_id)
+        else:
+            full = await manager.resume_run(project_name, selected_full_run_id)
     elif restored:
-        full = await manager.resume_run(project_name, restored['full_run_id'])
+        full = await manager.resume_run(project_name, selected_full_run_id)
     else:
         full = await manager.start_run(project_name)
     summary.update(project_name=project_name, full_run_id=full.run_id,
@@ -1353,6 +1511,35 @@ async def run_acceptance(nonce, out, summary):
     deadline, last_report = time.monotonic() + driver_minutes * 60, 0.0
     while True:
         full = manager.get_run(project_name, full.run_id)
+        if full.status in ('failed', 'completed') and target == AUTO_TARGET and not finalize_only and summary.get('c2_source_project'):
+            from tools.c2_repair_bridge import auto_repair_failed_full, effective_media_profile
+            from src.ai.repair_revision import RepairRevisionError
+            try:
+                stage0_for_repair = Stage0Record(task_index(token, nonce, STAGE0_FILENAME), nonce)
+                if stage0_for_repair.plan_fingerprint != cp.doc.get('plan_fingerprint'):
+                    raise RepairRevisionError('repair base blueprint fingerprint changed')
+                replacement = await auto_repair_failed_full(
+                    manager=manager, full=full, wrapper=wrapper, checkpoint=cp,
+                    blueprint=stage0_for_repair.blueprint,
+                    base_plan_fingerprint=stage0_for_repair.plan_fingerprint,
+                    evidence_dir=out)
+            except RepairRevisionError as exc:
+                summary['repair_blocked_reason'] = str(exc)
+                replacement = None
+            if replacement is not None:
+                full = replacement
+                wrapper.plan = None  # original planned-duration cache is obsolete
+                wrapper.auto_profile = effective_media_profile(
+                    wrapper.auto_profile, ProjectStore(project_dir).load(),
+                    cp.doc.get('repair_revisions') or [])
+                summary['repair_revision_ids'] = [e['revision_id'] for e in cp.doc.get('repair_revisions') or []]
+                # Recovery cross-checks e2e/summary.full_run_id against the
+                # authoritative CAS FullRun binding. Keep both identities in
+                # sync when the repair starts a replacement controller.
+                summary['full_run_id'] = full.run_id
+                summary['active_full_run_id'] = full.run_id
+                await wrapper.persist(phase='RUNNING', full_run_id=full.run_id)
+                continue
         if full.status in ("completed", "failed", "blocked", "cancelled", "paused"):
             break
         if time.monotonic() >= deadline:

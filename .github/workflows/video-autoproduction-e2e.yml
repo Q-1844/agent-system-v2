@@ -17,6 +17,13 @@ on:
           - full-project-3min
           - existing-single-clip
         default: full-project-3min
+      media_inflight:
+        description: '视频实际在途档位（1=严格串行；2=无依赖镜头允许两路。接力依赖始终串行）'
+        type: choice
+        options:
+          - '1'
+          - '2'
+        default: '2'
       resume_run_id:
         description: '恢复已失败运行的 Actions run ID（复用原 nonce、项目与已完成视频）'
         required: false
@@ -67,6 +74,7 @@ permissions:
 
 concurrency:
   group: video-production
+  queue: max  # Avoid scheduled patrol replacing a pending full-film resume
   cancel-in-progress: false
 
 jobs:
@@ -133,7 +141,7 @@ jobs:
           FRAME_HOST_TOKEN: ${{ secrets.FRAME_HOST_TOKEN }}
           PYTHONPATH: .
           TASK_NONCE: ${{ inputs.task_nonce }}
-          AGNES_VIDEO_INFLIGHT: '1'
+          AGNES_VIDEO_INFLIGHT: ${{ inputs.media_inflight }}
           RESUME_RUN_ID: ${{ inputs.resume_run_id }}
           FINALIZE_ONLY: ${{ inputs.finalize_only }}
           DRIVER_TIMEOUT_MINUTES: ${{ inputs.driver_timeout_minutes }}

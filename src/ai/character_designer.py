@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from src.ai.story_workflow import _parse_json_object
 
 
+from src.api.model_budget import DEFAULT_TEXT_MAX_TOKENS
 class CharacterDesignDraft(BaseModel):
     """AI 角色视觉设计草稿（§九）。部分字段可空（人类/机器人/动物不同）。"""
     character_name: str
@@ -115,7 +116,7 @@ class CharacterDesigner:
         obj = await self._chat_json(
             [{"role": "system", "content": _DESIGN_SYSTEM},
              {"role": "user", "content": user}],
-            temperature=0.7, max_tokens=1500)
+            temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
         if obj is None:
             raise ValueError("AI 未返回可解析的 JSON")
         return _build_draft(obj, character_name)

@@ -30,6 +30,7 @@ from pydantic import BaseModel, Field
 from src.core.atomic import atomic_write_json
 from src.ai.story_workflow import _parse_json_object
 
+from src.api.model_budget import DEFAULT_TEXT_MAX_TOKENS
 _log = logging.getLogger(__name__)
 
 
@@ -51,6 +52,9 @@ class PlannedShot(BaseModel):
     requires_previous_video_end: bool
     auto_select_policy: str = "seeded_random"
     reason: str = ""
+    # The Producer may elect serial execution for creative decision dependencies.
+    # Hard video/end-frame dependencies remain enforced even when "allow".
+    parallel_preference: str = "allow"
     # Phase56 A2（reference_policy v2）：independent opening 的显式切镜依据
     # （same_scene_recam/scene_change/time_jump）——activate 时随 opening_source
     # 落 shot.opening_cut_reason；v2 策略下未声明的独立首帧在提交前被拒绝。
@@ -68,6 +72,7 @@ class SceneProductionPlan(BaseModel):
     run_seed: int = 0
     overview: str = ""
     shots: list[PlannedShot] = Field(default_factory=list)
+    max_parallel_shots: int = Field(default=1, ge=1, le=2)
     status: str = "draft"            # draft | approved（stale 为派生标志 is_stale，不持久化）
     created_at: float = 0.0
     approved_at: Optional[float] = None
@@ -109,7 +114,9 @@ _PLANNER_SYSTEM = """你是一名 AI 视频制作规划师。你不是编剧，�
 1. 判断 Shot 与上一 Shot 的视觉连续关系。
 2. 选择 opening_source：independent / reference_previous / inherit_previous
 3. 选择 link_mode：i2v / keyframes
-4. 给出简短理由。
+4. 给出简短理由，并为每镜提供 parallel_preference：allow 或 required_serial。
+   没有真实视频尾帧依赖、无需等待其它镜头的创作决策时选 allow；即使素材已有，Producer 仍可要求 required_serial。
+   执行器最终根据真实媒体依赖决定并行；你的建议不能绕过尾帧接力。
 
 你不负责：改写 Shot、创建 Shot、修改角色、写图片 prompt、写视频 prompt、生成图片、生成视频。
 
@@ -128,7 +135,8 @@ _PLANNER_SYSTEM = """你是一名 AI 视频制作规划师。你不是编剧，�
 - 一个 Shot = 一个连续镜头。
 - 不要跨 Scene 建立连续关系（本任务只在当前 Scene 内判断）。
 
-只返回一个 JSON 对象，不要有任何解释文字：
+只返回一个 JSON 对象，不要有任何解释文字。可以包含 max_parallel_shots（1 或 2）；
+各镜可以指定 parallel_preference（allow 或 required_serial）：
 {"overview":"一句话概述本次制作规划","shots":[{"shot_id":"s02_c01","opening_source":"independent","link_mode":"keyframes","reason":"这是故事段第一镜，且存在明确的结束站立状态。"},{"shot_id":"s02_c02","opening_source":"reference_previous","link_mode":"i2v","reason":"人物与环境连续，但这一镜需要新的画面构图。"}]}
 shot_id 必须与输入中的 shot_id 完全一致，每个 Shot 都要返回。"""
 
@@ -189,7 +197,7 @@ class ProductionPlannerWorkflow:
         obj = await self._chat_json(
             [{"role": "system", "content": _PLANNER_SYSTEM},
              {"role": "user", "content": user}],
-            temperature=0.5, max_tokens=2048)
+            temperature=0.5, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
         if obj is None:
             raise ValueError("AI 未返回可解析的 JSON")
         return obj
@@ -208,7 +216,7 @@ def shot_structure_snapshot(scene) -> list[dict]:
 
 
 # ============ derivation（§九/§十）============
-def _build_planned_shots(scene, decisions: dict) -> list[PlannedShot]:
+def _build_planned_shots(scene, decisions: dict, preferences: Optional[dict] = None) -> list[PlannedShot]:
     """根据 (shot_id -> (opening_source_raw, link_mode_raw, reason)) 构建 PlannedShot[]。
     应用 sanitizer 规则（§十四）+ derivation（§九/§十）：
       - 第一镜强制 independent
@@ -221,6 +229,7 @@ def _build_planned_shots(scene, decisions: dict) -> list[PlannedShot]:
     decisions 缺失的 Shot（AI 漏返回）-> 安全默认 independent + i2v（§十四）。
     """
     shots = scene.shots
+    preferences = preferences or {}
     planned: list[PlannedShot] = []
     for i, sh in enumerate(shots):
         raw = decisions.get(sh.shot_id)
@@ -264,6 +273,9 @@ def _build_planned_shots(scene, decisions: dict) -> list[PlannedShot]:
             requires_previous_video_end=requires_prev,
             auto_select_policy="seeded_random",
             reason=reason_text,
+            parallel_preference=(preferences.get(sh.shot_id)
+                                 if preferences.get(sh.shot_id) in ("allow", "required_serial")
+                                 else "allow"),
         ))
     return planned
 
@@ -286,7 +298,12 @@ def sanitize_plan(scene, ai_result: dict, *, run_seed: int, project_name: str) -
     """deterministic sanitizer（§十四）：AI 原始输出 -> 合法 SceneProductionPlan。
     AI 返回不存在的 shot_id -> 忽略；AI 漏 Shot -> 安全默认。derive 全由代码完成。"""
     decisions = _decisions_from_ai(ai_result)
-    planned = _build_planned_shots(scene, decisions)
+    preferences = {str(sh.get("shot_id")): sh.get("parallel_preference")
+                   for sh in (ai_result.get("shots") or []) if isinstance(sh, dict)}
+    planned = _build_planned_shots(scene, decisions, preferences)
+    max_parallel = ai_result.get("max_parallel_shots", 2)
+    if type(max_parallel) is not int or max_parallel not in (1, 2):
+        max_parallel = 2
     overview = str(ai_result.get("overview") or "").strip()
     return SceneProductionPlan(
         plan_id=f"plan_{scene.scene_id}",
@@ -298,6 +315,7 @@ def sanitize_plan(scene, ai_result: dict, *, run_seed: int, project_name: str) -
         run_seed=run_seed,
         overview=overview,
         shots=planned,
+        max_parallel_shots=max_parallel,
         status="draft",
         created_at=0.0,   # 由 router 填 time.time()
     )
@@ -315,7 +333,11 @@ def rederive_from_edits(scene, plan: SceneProductionPlan,
         sid = str(e.get("shot_id") or "").strip()
         if sid:
             decisions[sid] = (e.get("opening_source"), e.get("link_mode"), e.get("reason"))
-    planned = _build_planned_shots(scene, decisions)
+    preferences = {p.shot_id: p.parallel_preference for p in plan.shots}
+    for edit in edits:
+        if edit.get("parallel_preference") in ("allow", "required_serial"):
+            preferences[str(edit.get("shot_id"))] = edit["parallel_preference"]
+    planned = _build_planned_shots(scene, decisions, preferences)
     plan.shots = planned
     if plan.status == "approved":
         plan.status = "draft"     # 编辑后需重新确认

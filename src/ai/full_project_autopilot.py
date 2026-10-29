@@ -93,6 +93,29 @@ def read_scene_budgets(project_dir) -> Dict[str, dict]:
     for b in (data.get("scene_budgets") or []):
         if isinstance(b, dict) and b.get("scene_id"):
             out[b["scene_id"]] = b
+    # The frozen budget is immutable. A Producer-approved R3/R4 revision may
+    # widen its *soft* shot/seconds window in the derived effective plan.
+    # Keep the original sidecar and hard user delivery checks unchanged.
+    overlay_path = Path(project_dir) / "output" / "ai" / "repair_effective_plan.json"
+    if overlay_path.is_file():
+        try:
+            overlay = json.loads(overlay_path.read_text(encoding="utf-8"))
+            changed = overlay.get("scene_budget_overrides") or {}
+            if not isinstance(changed, dict):
+                raise ValueError("invalid repair budget overrides")
+            for scene_id, bounds in changed.items():
+                if scene_id not in out or not isinstance(bounds, dict):
+                    raise ValueError("repair budget references unknown scene")
+                old = out[scene_id]
+                for lower, upper in (("shot_min", "shot_max"), ("min_s", "max_s")):
+                    if (type(bounds.get(lower)) is not int or type(bounds.get(upper)) is not int or
+                            bounds[lower] > int(old[lower]) or bounds[upper] < int(old[upper]) or
+                            bounds[lower] > bounds[upper]):
+                        raise ValueError("repair overlay may only widen soft budget bounds")
+                out[scene_id] = {**old, **{k: bounds[k] for k in
+                                 ("shot_min", "shot_max", "min_s", "max_s")}}
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            raise RuntimeError(f"repair SceneBudget overlay corrupt: {overlay_path}") from exc
     return out
 
 

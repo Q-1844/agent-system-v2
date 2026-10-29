@@ -136,8 +136,19 @@ def test_lost_known_id_persistence_receipt_blocks_a_second_post(tmp_path):
     assert journal.writes[-1]["video_attempts"][0]["video_id"] == "video-1"
 
 
-def test_240_second_budget_counts_every_attempt(tmp_path):
+def test_high_execution_budget_keeps_generating_beyond_historical_240_seconds(tmp_path):
     wrapper, journal, provider = setup_wrapper(tmp_path)
+    async def run():
+        for i in range(26):
+            await wrapper.create_video(f"p-{i}", duration_s=10)
+    asyncio.run(run())
+    assert wrapper.video_budget == 1_000_000_000
+    assert provider.calls == 26 and len(journal.writes) == 52
+
+
+def test_explicit_execution_video_budget_is_still_a_mechanical_guard(tmp_path):
+    wrapper, journal, provider = setup_wrapper(tmp_path)
+    wrapper.video_budget = 240
     async def run():
         for i in range(24):
             await wrapper.create_video(f"p-{i}", duration_s=10)
@@ -251,8 +262,9 @@ def test_film_profile_200_digest_matches_legacy_formula():
                                                     request_digest)
     legacy = hashlib.sha256(_json.dumps(
         {"scope": "full-project-180s-v1", "scenes": SCENES,
-         "video_budget_s": VIDEO_BUDGET_SECONDS}, ensure_ascii=False).encode()).hexdigest()
+         "video_budget_s": 240}, ensure_ascii=False).encode()).hexdigest()
     assert request_digest(200, FILM_PROFILES[200]) == legacy
+    assert VIDEO_BUDGET_SECONDS == 1_000_000_000  # separate execution allowance
 
 
 def test_film_profile_default_is_200_and_rejects_unknown():

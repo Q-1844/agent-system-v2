@@ -39,6 +39,7 @@ from src.revision.workspace import WorkspaceStore
 from src.revision.changeset import ChangeSetError
 
 
+from src.api.model_budget import DEFAULT_TEXT_MAX_TOKENS
 class AgentError(Exception):
     """Agent runtime 错误。code 由 router 映射 HTTP。"""
     def __init__(self, code: str, message: str):
@@ -320,7 +321,7 @@ class AgentRuntime:
                 content="[chat 未配置：Agnes 推理模型不可用。请在设置中配置 API Key 后重试。]",
                 status=ResultStatus.NOT_CONFIGURED.value)
         try:
-            text = await client.chat(messages, temperature=0.7, max_tokens=1024)
+            text = await client.chat(messages, temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
         except Exception as e:
             return AgentMessage(role="assistant",
                                 content=f"[调用失败: {str(e)[:200]}]",

@@ -33,6 +33,7 @@ from ..core.models import Candidate, Project, Shot
 from .runtime import AgentError, AgentRuntime
 from .script_writer import _base_receipt, _parse_args
 
+from src.api.model_budget import DEFAULT_TEXT_MAX_TOKENS
 log = logging.getLogger("director_vision_review")
 
 VISION_MODEL = "agnes-2.5-flash"
@@ -370,7 +371,7 @@ async def _execute_visual_review(rt: AgentRuntime, project: str, arguments: str,
 
     def _vision(msgs):
         return client.chat_completion_vision(msgs, model=VISION_MODEL,
-                                             temperature=0.2, max_tokens=1200)
+                                             temperature=0.2, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
 
     t0 = time.perf_counter()
     try:

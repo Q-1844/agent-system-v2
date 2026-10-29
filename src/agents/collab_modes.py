@@ -30,7 +30,7 @@ from typing import Any, Dict, List, Optional
 
 COLLAB_MODE_SCHEMA = "collab_mode_v1"
 COLLAB_RUN_SCHEMA = "collab_run_v1"
-MODE_REGISTRY_VERSION = "p56_a_modes_v2"
+MODE_REGISTRY_VERSION = "phase3_on_demand_orchestration_v1"
 
 # Phase56 A1：实验默认——既有组合预设的新版本（combo_recommended v2）。
 # 用户本轮选择固定：优先缩短单片等待并减少手工推动；六员等旧预设保留为显式
@@ -260,6 +260,18 @@ def validate_start(mode_id: str, params: dict) -> List[str]:
                         "scene_designer）——避免泛做其它专业素材")
             if preflight.get("roles") and not (params.get("story_goal") or "").strip():
                 errors.append("预铺模式必须提供 story_goal")
+    # Phase3: plan-level specialist overrides are snapshotted once.  These
+    # are NOT hot switches of the mode, its tool grant or review policy.
+    if "preflight_roles" in params:
+        choices = params["preflight_roles"]
+        available = set((mode.get("preflight") or {}).get("roles") or [])
+        if not isinstance(choices, list) or any(not isinstance(r, str) for r in choices) or len(set(choices)) != len(choices):
+            errors.append("preflight_roles must be a unique array of specialist IDs")
+        elif set(choices) - available:
+            errors.append("preflight_roles cannot enable specialist outside this mode's preflight grant")
+    if params.get("specialist_parallel_preference", "allow") not in (
+            "allow", "prefer_serial", "required_serial"):
+        errors.append("specialist_parallel_preference must be allow/prefer_serial/required_serial")
     # 参考策略：legacy 必须显式声明为实验（基线等价家族 bound_required/
     # baseline_equiv_chain 均为合法默认；v2=Phase56 A2 接续链契约）
     if mode.get("reference_policy") not in ("bound_required", "legacy_allowed",
@@ -430,6 +442,14 @@ async def start_collab_run(rt, project: str, mode_id: Optional[str], params: dic
         "grant_ids": [],
         "workflow_run_id": None,
         "result": None,
+        "collaboration_decision_policy": {
+            "mode_frozen": mode_id,
+            "specialist_preflight_roles": params.get("preflight_roles",
+                list((mode.get("preflight") or {}).get("roles") or [])),
+            "specialist_parallel_preference": params.get("specialist_parallel_preference", "allow"),
+            "on_demand_delegation": bool(mode.get("delegates_enabled")),
+            "note": "Producer may ask bound specialists on demand; never hot-switch mode or grants",
+        },
         # Phase56 A1：机器审核/有界修复的授权来源落 run（可审计；「用户接受」
         # 不在此填写——始终等待用户看片反馈回填）。
         "authorization": {
@@ -566,8 +586,9 @@ async def _run_specialist_preflight(rt, pdir: Path, project: str, run: dict,
     mode = run["snapshot"]["mode"]
     params = run["snapshot"]["params"]
     story = params.get("story_goal", "")
-    roles = (mode.get("preflight") or {}).get("roles") or []
-    parallel = bool((mode.get("preflight") or {}).get("parallel", True))
+    roles = params.get("preflight_roles", (mode.get("preflight") or {}).get("roles") or [])
+    parallel = (bool((mode.get("preflight") or {}).get("parallel", True))
+                and params.get("specialist_parallel_preference", "allow") == "allow")
     templates = mode.get("preflight_objective_templates") or {}
     results: Dict[str, dict] = {}
 
@@ -862,6 +883,8 @@ async def resume_collab_run(rt, project: str, run_id: str, *,
         story_goal=params.get("story_goal", ""),
         segment_count=params.get("segment_count", "六"),
         duration_hint=params.get("duration_hint", "30-42 秒"))
+    content += ("\n\n【继续已冻结的 Producer 协作】不要更换模式。按需委派专业 Agent；"
+                "独立镜可并行，真实末帧依赖必须串行，使用正式已绑定 Skill。")
     res = await _producer_turn_with_relays(rt, pdir, project, run, sid, content,
                                            thinking=thinking)
     if run.get("status") == "awaiting_relay":
@@ -900,8 +923,9 @@ async def _run_producer_lead(rt, pdir: Path, project: str, run: dict, *,
     # 克隆跳过预铺（资产已冻结——六组对照不重做素材，步骤账本如实记 skipped）。
     if mode.get("preflight") and not params.get("approved_package"):
         _begin_step(run, "preflight",
-                    roles=mode["preflight"].get("roles"),
-                    parallel=mode["preflight"].get("parallel", True))
+                    roles=params.get("preflight_roles", mode["preflight"].get("roles")),
+                    parallel=mode["preflight"].get("parallel", True)
+                              and params.get("specialist_parallel_preference", "allow") == "allow")
         save_run(pdir, run)
         try:
             pre = await _run_specialist_preflight(rt, pdir, project, run, thinking)
@@ -953,6 +977,16 @@ async def _run_producer_lead(rt, pdir: Path, project: str, run: dict, *,
             story_goal=params.get("story_goal", ""),
             segment_count=params.get("segment_count", "六"),
             duration_hint=params.get("duration_hint", "30-42 秒"))
+    # The agent chooses when to call specialists during execution; on-demand
+    # consultations do not mutate the frozen mode or disable baseline review.
+    # Its native video batch tool enforces actual accepted-tail dependencies.
+    content += ("\n\n【Producer 自由协作（本 run 模式已冻结）】"
+                "按实际难度决定是否调用专业 Agent 和正式已绑定 Skill；无须为简单镜头"
+                "无意义召集全部专家。复杂故事可用专业委派、先后依赖和独立并行咨询。"
+                "shot.generate_videos 的 parallel_preference 可取 allow / "
+                "prefer_serial / required_serial；真实末帧接力镜头始终先验选定视频"
+                "及真实末帧，未满足时不得提前提交。任何专家建议不得覆盖"
+                "P0 宽松审核、用户硬要求、运行快照或 CAS 视频回执。")
     from .review_pipeline import LiveReviewSession
     review_policy = mode.get("review_policy") or {}
     live = None

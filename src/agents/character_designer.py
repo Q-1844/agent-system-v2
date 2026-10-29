@@ -71,6 +71,7 @@ from .skill_system.tools import (
 )
 from .skill_system.runtime import get_skill_runtime as _get_skill_runtime
 
+from src.api.model_budget import DEFAULT_TEXT_MAX_TOKENS
 log = logging.getLogger("agents.character_designer")
 
 # 执行窗口大小（renewable window）：单次窗口用满后注入 self-check nudge 并续接
@@ -2742,7 +2743,7 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                 step_reasoning_buf: list[str] = []
                 step_content_buf: list[str] = []
                 async for ev in client.chat_completion_stream(
-                        messages, temperature=0.7, max_tokens=65536,
+                        messages, temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS,
                         thinking=thinking, tools=tools_offered,
                         tool_choice="auto"):
                     k = ev["kind"]
@@ -2774,7 +2775,7 @@ async def _run_tool_loop(rt: AgentRuntime, client, project: str,
                         event_cb({"type": "assistant.delta", "delta": d})
             else:
                 resp = await client.chat_completion(
-                    messages, temperature=0.7, max_tokens=65536,
+                    messages, temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS,
                     tools=tools_offered, tool_choice="auto")
                 tool_calls = resp.get("tool_calls")
                 content = resp.get("content")

@@ -29,6 +29,17 @@ jobs:
         with:
           python-version: '3.13'
       - run: pip install -r requirements-ci.txt
+      - name: Fetch P55 relstore sample from B archive
+        env:
+          P55_TAR_URL: https://api.github.com/repos/Q-1844/agent-system-v2-rundata/contents/films/P55_SMOKE2B.tar
+          P55_TAR_SHA256: f18a80b3a2b60b4ed762ef9aec70edb85f9124147dd8cdc1f7f38779dd2b75ff
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/p55"
+          curl -fsSL -o "$RUNNER_TEMP/p55/P55_SMOKE2B.tar" \
+            -H "Accept: application/vnd.github.raw" "$P55_TAR_URL"
+          echo "$P55_TAR_SHA256  $RUNNER_TEMP/p55/P55_SMOKE2B.tar" | sha256sum -c -
+          echo "P55_TAR_PATH=$RUNNER_TEMP/p55/P55_SMOKE2B.tar" >> "$GITHUB_ENV"
       - name: Offline storage and production recovery regression
         run: python -m pytest tests/relstore/ -q --junitxml=results/runtime.xml
       - name: Validate Linux media bootstrap and H264 encode/decode
@@ -91,6 +102,22 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
           ffprobe -version
+
+      - name: Fetch P55 relstore sample from B archive
+        shell: pwsh
+        env:
+          P55_TAR_URL: https://api.github.com/repos/Q-1844/agent-system-v2-rundata/contents/films/P55_SMOKE2B.tar
+          P55_TAR_SHA256: f18a80b3a2b60b4ed762ef9aec70edb85f9124147dd8cdc1f7f38779dd2b75ff
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = Join-Path $env:RUNNER_TEMP 'p55'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          $tar = Join-Path $dir 'P55_SMOKE2B.tar'
+          curl.exe -fsSL -o $tar -H 'Accept: application/vnd.github.raw' $env:P55_TAR_URL
+          if ($LASTEXITCODE -ne 0) { throw "curl failed with exit code $LASTEXITCODE" }
+          $h = (Get-FileHash $tar -Algorithm SHA256).Hash.ToLower()
+          if ($h -ne $env:P55_TAR_SHA256) { throw "P55 tar sha mismatch: got $h" }
+          [System.IO.File]::AppendAllText($env:GITHUB_ENV, "P55_TAR_PATH=$tar`n")
 
       - name: Run full mock regression (zero external API)
         run: python -m pytest tests/ -q --junitxml=results/junit.xml

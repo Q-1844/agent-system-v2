@@ -21,6 +21,7 @@
 from __future__ import annotations
 import asyncio
 import json
+import logging
 import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -33,7 +34,11 @@ from .models import AgentOp, ResultStatus, TaskStatus, AgentTask
 from .runtime import AgentRuntime, AgentError
 
 
+logger = logging.getLogger(__name__)
+
+
 # ============ 模块→owner / inspect-cap / view 映射（确定性归属，§33）============
+from src.api.model_budget import DEFAULT_TEXT_MAX_TOKENS
 MODULE_OWNER: Dict[str, str] = {
     "script": "script_writer", "character": "character_designer",
     "storyboard": "director", "production_plan": "production_planner",
@@ -437,7 +442,7 @@ async def _consult_llm(rt: AgentRuntime, project: str, task: AgentTask,
         {"role": "user", "content": f"咨询问题：{question}\n\n仅返回上面要求的 JSON 对象。"},
     ]
     try:
-        text = await client.chat(messages, json_mode=True, temperature=0.3, max_tokens=1024)
+        text = await client.chat(messages, json_mode=True, temperature=0.3, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
     except Exception as e:   # 网络/配额失败 → blocked（不把整轮拖垮）
         return ConsultationResult(status="blocked", summary=f"咨询调用失败: {str(e)[:200]}",
                                   owner_module=module, owner_agent=agent_id,
@@ -448,7 +453,7 @@ async def _consult_llm(rt: AgentRuntime, project: str, task: AgentTask,
             text2 = await client.chat(
                 [{"role": "system", "content": CONSULTATION_SYSTEM},
                  {"role": "user", "content": f"上一次返回无法解析，请只返回合法 JSON 对象。\n{question}"}],
-                json_mode=True, temperature=0.2, max_tokens=1024)
+                json_mode=True, temperature=0.2, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
             r2 = _parse_consultation(text2, agent_id, module)
             if r2.status != "blocked":
                 result = r2
@@ -650,7 +655,7 @@ async def _producer_answer(rt: AgentRuntime, project: str, request: str,
                    f"不要输出工具调用语法（<function=...>、{{\"function\":...}}）；不要说'我来查看'然后"
                    f"停下——上下文已就绪，直接给完整最终答案。不要声称已修改/已生成。\n问题：{request}"})
     try:
-        return await client.chat(messages, temperature=0.7, max_tokens=1024)
+        return await client.chat(messages, temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
     except Exception as e:
         return f"[综合失败: {str(e)[:200]}]"
 
@@ -673,11 +678,26 @@ async def _producer_synthesize_analysis(rt: AgentRuntime, project: str, request:
         {"role": "user", "content": f"用户变更请求：{request}\n\n咨询结果：{cons_json}\n\n仅返回要求的 JSON。"},
     ]
     try:
-        text = await client.chat(messages, json_mode=True, temperature=0.3, max_tokens=2048)
-    except Exception:
+        text = await client.chat(messages, json_mode=True, temperature=0.3, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
+    except Exception as exc:
+        # A silent fallback would hide the loss of the real Producer synthesis:
+        # the caller could not tell a degraded plan from a real one.  Same
+        # discipline as producer_orchestration.py — the degradation must be
+        # visible in the log AND marked in the returned analysis.
+        logger.warning(
+            "producer synthesis fell back to the deterministic analysis: %s: %s",
+            type(exc).__name__, str(exc)[:220])
+        fallback["synthesis_note"] = (
+            "Agnes 综合失败（%s），已使用确定性兜底分析。" % type(exc).__name__)
         return fallback
     obj = _parse_json_object(text)
     if not isinstance(obj, dict):
+        # The model answered, but the answer was not a usable JSON object —
+        # indistinguishable from success unless it is logged.
+        logger.warning(
+            "producer synthesis answer was not a JSON object; fell back to the "
+            "deterministic analysis (%d visible chars)", len(text or ""))
+        fallback["synthesis_note"] = "Agnes 综合结果无法解析为 JSON，已使用确定性兜底分析。"
         return fallback
     return _normalize_analysis(obj, request, consultations)
 
@@ -913,7 +933,7 @@ async def run_specialist_read_answer(rt: "AgentRuntime", project: str, agent_id:
         "content": f"基于以上项目上下文与对话历史，直接回答用户。数据不足请明说，不要臆造。"
                    f"不要声称已修改/已生成/已执行任何变更或制作。\n问题：{request}"})
     try:
-        text = await cli.chat(messages, temperature=0.7, max_tokens=1024)
+        text = await cli.chat(messages, temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
     except Exception as e:
         return {"answer": f"[回答失败: {str(e)[:200]}]",
                 "evidence_refs": ev, "inspection_calls": obs_calls,
