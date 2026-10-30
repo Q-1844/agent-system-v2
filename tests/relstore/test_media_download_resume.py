@@ -294,3 +294,41 @@ def test_project_resume_requeues_failed_scenes(monkeypatch):
     assert done.status == 'completed'          # 已完成不重跑（不重复扣费）
     assert blocked.status == 'blocked'          # §二十九：source 变更不可 resume
     assert run.status == 'running' and run.error is None
+
+
+def test_extract_staging_denests_reuploaded_snapshots(tmp_path):
+    """回归（2026-10-31 r46 第五跳实弹）：死在 RESTORED 之前的跳会把上一跳
+    artifact 以 e2e_run/{nonce}/source-snapshot/ 前缀整包再上传，逐跳加深
+    嵌套，restore_snapshot 只读 staging 顶层 projects/ → FileNotFoundError。
+    _extract_staging 必须逐层剥掉前缀；素材（projects//cache/）冲突取嵌套版
+    （真实工作区状态），身份文件（e2e_run/{nonce}/...）取顶层版（本跳自己的）。"""
+    import io, zipfile as zf
+    from tools.full_project_resume import _extract_staging
+    nonce, pname = 'film6m-unit', 'cloud3min_film6m-unit'
+    buf = io.BytesIO()
+    with zf.ZipFile(buf, 'w') as z:
+        # 顶层（本跳自身状态）：summary + 全新空壳 jobs.json（无收据）
+        z.writestr(f'e2e_run/{nonce}/summary.json', '{"github_run_id": "hopN"}')
+        z.writestr('cache/jobs.json', '{"jobs": []}')
+        # 嵌套两层（原始素材 + 带收据的 job 队列 + 上一跳 summary）
+        nest = f'e2e_run/{nonce}/source-snapshot/'
+        z.writestr(f'{nest}{nest}projects/{pname}/output/project.json', '{"name": "%s"}' % pname)
+        z.writestr(f'{nest}{nest}projects/{pname}/output/videos/one.mp4', 'x' * 16)
+        z.writestr(f'{nest}{nest}cache/jobs.json', '{"jobs": [{"id": "receipt-1"}]}')
+        z.writestr(f'{nest}{nest}e2e_run/{nonce}/summary.json', '{"github_run_id": "stale-hop"}')
+        # 非目标成员（C2 通配上传的其他项目）→ 安全跳过
+        z.writestr('projects/other_project/output/project.json', '{}')
+    out = tmp_path / 'staging'
+    out.mkdir()
+    skipped = _extract_staging(buf.getvalue(), out, nonce, pname)
+    # 素材被剥到顶层且内容为嵌套版
+    pj = json.loads((out / f'projects/{pname}/output/project.json').read_text(encoding='utf-8'))
+    assert pj['name'] == pname
+    assert (out / f'projects/{pname}/output/videos/one.mp4').stat().st_size == 16
+    # cache 取嵌套版（带收据），不取本跳全新空壳
+    assert 'receipt-1' in (out / 'cache/jobs.json').read_text(encoding='utf-8')
+    # 身份文件取顶层版（本跳自己的 summary），嵌套旧版被仲裁淘汰
+    assert 'hopN' in (out / f'e2e_run/{nonce}/summary.json').read_text(encoding='utf-8')
+    # 非目标成员跳过且不落盘
+    assert not (out / 'projects/other_project').exists()
+    assert skipped >= 1
