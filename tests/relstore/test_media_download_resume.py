@@ -252,3 +252,31 @@ def test_awaiting_human_checkpoint_is_finalize_resumeable(tmp_path,monkeypatch):
         recovery.restore_snapshot(stage,tmp_path/'runner','unit',cp,provenance,finalize_only=True)
     except ValueError as error:
         assert 'failed/interrupted' not in str(error)
+
+
+def test_project_resume_requeues_failed_scenes(monkeypatch):
+    """r46 2026-10-31 实测回填：项目级 resume 必须把 FAILED 场景重置为 PENDING，
+    否则调度循环的 "Failed sibling: never launch more work" 守卫会原样重放
+    旧 error（如额度墙的陈旧供应商报错）并立即判死 run——按天接续下一跳
+    无法推进。与 SceneAutopilot.resume_run 的 SHOT_FAILED→SHOT_PENDING 对称；
+    BLOCKED 语义（§二十九 source 变更）保持不可 resume。"""
+    from src.ai.project_autopilot import (ProjectProductionManager, ProjectProductionRun,
+                                          ProjectSceneExecutionState, PSCENE_PENDING)
+    manager = ProjectProductionManager()
+    failed = ProjectSceneExecutionState(scene_id='s04', index=3, status='failed',
+                                        error='stage video 失败: 429 已达到 API 用量上限')
+    paused = ProjectSceneExecutionState(scene_id='s05', index=4, status='paused')
+    done = ProjectSceneExecutionState(scene_id='s01', index=0, status='completed')
+    blocked = ProjectSceneExecutionState(scene_id='s02', index=1, status='blocked',
+                                          error='source changed')
+    run = ProjectProductionRun(run_id='prun_r46', project_name='p', status='failed',
+                               scenes=[done, blocked, failed, paused])
+    monkeypatch.setattr(manager, '_load_run', lambda *a: run)
+    monkeypatch.setattr(manager, '_write_run', lambda run: None)
+    monkeypatch.setattr(manager, '_launch_loop', lambda run: None)
+    asyncio.run(manager.resume_run('p', 'prun_r46'))
+    assert failed.status == PSCENE_PENDING and failed.error is None
+    assert paused.status == PSCENE_PENDING
+    assert done.status == 'completed'          # 已完成不重跑（不重复扣费）
+    assert blocked.status == 'blocked'          # §二十九：source 变更不可 resume
+    assert run.status == 'running' and run.error is None
