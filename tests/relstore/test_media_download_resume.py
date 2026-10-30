@@ -240,6 +240,20 @@ def test_awaiting_human_checkpoint_is_operator_resumeable(tmp_path):
     assert len(restored['reused_completed_videos'])==1
 
 
+def test_stage0_bound_checkpoint_is_operator_resumeable(tmp_path):
+    """回归（2026-10-31 r46 第四跳实弹）：牺牲跳死于身份校验（重绑已先行）后，
+    检查点停留 phase=STAGE0_BOUND——身份两字段（github_run_id+source_sha）与
+    牺牲跳 artifact 完全一致（PR#32 成对重绑生效），下一跳却仍被 phase 白名单
+    拒收（checkpoint is not a failed/interrupted production run）。重绑后死在
+    RESTORED 之前的跳属「被中断的生产」，其素材在 artifact（staging 链）里，
+    必须放行。"""
+    stage,cp,provenance=snapshot(tmp_path)
+    cp['phase']='STAGE0_BOUND'
+    restored=restore_snapshot(stage,tmp_path/'runner','unit',cp,provenance)
+    assert restored['previous_video_seconds']==10
+    assert len(restored['reused_completed_videos'])==1
+
+
 def test_awaiting_human_checkpoint_is_finalize_resumeable(tmp_path,monkeypatch):
     """AWAITING_HUMAN + finalize_only 同样放行：护栏触顶可能发生在全部镜头
     完成但未合成时，收尾跳走 finalize-only 路径。"""
