@@ -559,9 +559,17 @@ class ProjectProductionManager:
             # own saved media stages without duplicating any provider POST.
             # A raw PSCENE_PAUSED marker here would otherwise be mistaken
             # for a fresh independent pause request by the DAG coordinator.
+            # PSCENE_FAILED resets symmetrically (r46 2026-10-31 实测回填)：
+            # resume 语义 = 重试失败场景（与 SceneAutopilot.resume_run 的
+            # SHOT_FAILED→SHOT_PENDING 对称）。不重置则调度循环的
+            # "Failed sibling: never launch more work" 守卫会原样重放旧
+            # error（含陈旧供应商报错）并立即判死 run——额度墙按天接续
+            # 的下一跳正是该形态。BLOCKED 不在此列（§二十九 source 变更
+            # 语义不可 resume）。
             for entry in run.scenes:
-                if entry.status == PSCENE_PAUSED:
+                if entry.status in (PSCENE_PAUSED, PSCENE_FAILED):
                     entry.status = PSCENE_PENDING
+                    entry.error = None
             run.pause_requested = run.cancel_requested = False
             run.status = PRUN_RUNNING
             run.error = None
