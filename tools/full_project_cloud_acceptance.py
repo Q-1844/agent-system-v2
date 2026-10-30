@@ -701,6 +701,18 @@ def normalize_dispatch_input_to_task_spec(nonce, environ=None):
                     asset_source_projects=tuple(extras))
 
 
+def _stage0_rebind_for_hop(cp):
+    """跨 hop 重绑执行身份：github_run_id 与 source_sha 必须成对落账。
+
+    r46 第三跳（run 41092423597）实测教训：只重绑 run id 会造成「半重绑」
+    检查点——该跳若死在重绑与 RESTORED 之间（如身份校验拒绝），下一跳
+    的 restore_snapshot 身份校验 source_sha 恒不匹配（检查点存的是上上跳
+    的 sha），链式恢复死锁。成对重绑后，一次牺牲跳即可让链条自愈。"""
+    cp.save(phase="STAGE0_BOUND",
+            github_run_id=os.environ.get("GITHUB_RUN_ID"),
+            source_sha=os.environ.get("GITHUB_SHA"))
+
+
 def auto_request_profile(blueprint):
     """冻结蓝图 → request_digest 用的动态 profile（auto 执行摘要）。
 
@@ -1289,8 +1301,7 @@ async def _run_auto_acceptance(nonce, out, summary, token):
                 authorized_video_seconds=int(profile["budget"]),
                     execution_video_authorization=VIDEO_BUDGET_SECONDS)
     else:
-        cp.save(phase="STAGE0_BOUND",
-                github_run_id=os.environ.get("GITHUB_RUN_ID"))
+        _stage0_rebind_for_hop(cp)
     summary.update(execution_request_sha256=digest,
                    stage0_text_calls_used=stage0.text_calls_used)
 

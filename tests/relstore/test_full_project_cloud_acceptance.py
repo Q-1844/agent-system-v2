@@ -299,3 +299,21 @@ def test_320s_plan_rejected_under_200_profile_and_vice_versa():
         for j in range(1, 5)]) for i in range(1, 9)]
     with pytest.raises(ValueError, match="acceptance requires 5 scenes"):
         validate_planned_project(proj, FILM_PROFILES[200])
+
+
+def test_stage0_rebind_pairs_run_id_with_source_sha(monkeypatch):
+    """r46 第三跳实测回填：跨 hop 重绑必须成对落账（github_run_id + source_sha）。
+    只重绑 run id 的「半重绑」会让该跳死在身份校验时（重绑先于校验）留下
+    检查点：github_run_id=本跳、source_sha=上上跳——下一跳的
+    restore_snapshot 身份校验 source_sha 恒不匹配，链式恢复死锁。"""
+    from tools.full_project_cloud_acceptance import _stage0_rebind_for_hop
+    monkeypatch.setenv("GITHUB_RUN_ID", "41100000001")
+    monkeypatch.setenv("GITHUB_SHA", "deadbeef90")
+    saved = {}
+    class _CP:
+        def save(self, **fields):
+            saved.update(fields)
+    _stage0_rebind_for_hop(_CP())
+    assert saved["github_run_id"] == "41100000001"
+    assert saved["source_sha"] == "deadbeef90"
+    assert saved["phase"] == "STAGE0_BOUND"
