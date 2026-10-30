@@ -33,10 +33,14 @@ GATE_FIELD = "quota_resume_after"
 RESET_OFFSET_HOURS = 8
 RESET_MARGIN_MINUTES = 10
 
-# 供应商 4xx 文案的额度语义关键词（未见真实样例前的保守集合，自然验证后扩充）。
+# 供应商 4xx 文案的额度语义关键词。
+# 2026-10-30 r46 实测样例（run 40994707518，s04_c03 提交被拒）：
+#   429 {"error":{"message":"已达到 API 用量上限，请在 2026-10-31 00:00 之后重试"}}
+# 「用量上限」由该真实文案补充；「API 用量」「上限」单字过泛（如「字符上限」
+# 不是额度），不采用。供应商口径：北京 00:00 刷新（RESET_OFFSET_HOURS=8 维持）。
 _PROVIDER_MARKERS = (
     "quota", "配额", "额度", "insufficient", "balance",
-    "余额", "exceeded", "too many requests",
+    "余额", "exceeded", "too many requests", "用量上限",
 )
 _GATE_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 

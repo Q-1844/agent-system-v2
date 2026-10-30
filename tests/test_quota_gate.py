@@ -55,6 +55,11 @@ def test_local_ledger_message_is_classified():
     "今日额度不足",
     "余额不足，请充值",
     "Too Many Requests",
+    # 2026-10-30 r46 实测真实文案（run 40994707518，供应商 429 原文，
+    # 含 request id 形态；修复前该文案不被识别 → 误走普通 FAILED 路径）
+    '429: {"error":{"code":"","message":"已达到 API 用量上限，请在 '
+    '2026-10-31 00:00 之后重试。 (request id: 20261030054158288898746xBCF0xVu)",'
+    '"type":"Agn',
 ])
 @pytest.mark.parametrize("status", [402, 429])
 def test_provider_4xx_quota_semantics_is_classified(message, status):
