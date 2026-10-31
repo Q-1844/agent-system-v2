@@ -134,6 +134,7 @@ jobs:
         run: python tools/e2e_autonomous_run.py
 
       - name: Real FullProject → Director/Planner → SceneRuns → >=180s final film → restore verification
+        id: full_project
         if: inputs.acceptance_scope != 'existing-single-clip'
         env:
           AGNES_API_KEY: ${{ secrets.AGNES_API_KEY }}
@@ -163,7 +164,8 @@ jobs:
           path: |
             e2e_run/
             projects/cloud3min_*/
+            ${{ steps.full_project.outputs.project_path }}
             cache/jobs.json
             cache/quota.json
-          retention-days: 7
+          retention-days: 30
           if-no-files-found: warn

@@ -28,15 +28,8 @@ RETRYABLE = {408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524}
 
 
 def _parse_retry_after(r) -> Optional[float]:
-    """429 响应的 Retry-After 解析（秒；HTTP-date 形态不支持——Agnes 未实证使用，
-    不可解析=回落指数退避，不猜）。"""
-    try:
-        v = r.headers.get("Retry-After") or r.headers.get("retry-after")
-        if not v:
-            return None
-        return float(str(v).strip())
-    except Exception:   # noqa: BLE001
-        return None
+    from ..core.provider_errors import retry_after_seconds
+    return retry_after_seconds(r.headers.get("Retry-After"))
 
 # 唯一视频模型（2026-09-28：v2.0 官方下线+用户指令删除；config 缺失/测试 fake
 # 无 models 时的确定兜底——dispatch 与 freshness 重算投影必须同源）。
@@ -191,6 +184,20 @@ class AgnesError(Exception):
         super().__init__(msg); self.status, self.body = status, body
 
 
+class DailyQuotaExhausted(AgnesError):
+    """Explicit daily rejection: wait for reset; never retry inside this request."""
+    def __init__(self, msg, status=None, body=None, retry_after=None):
+        super().__init__(msg, status, body)
+        from ..core.provider_errors import quota_resume_after
+        self.retry_after = retry_after
+        self.resume_after = quota_resume_after(self)
+        self.not_sent = status is None
+
+
+class VideoGenerationFailed(AgnesError):
+    """The provider explicitly reports a terminal failed task, not a poll outage."""
+
+
 class VideoSubmissionUncertain(AgnesError):
     """The provider may have accepted a non-idempotent video submission."""
 
@@ -243,6 +250,7 @@ class AgnesClient:
         # 共享进程级配额单例：api_server 启动时会先用 config 初始化它，此处复用
         self.quota    = quota or QuotaLedger.get_default()
         self._client: Optional[httpx.AsyncClient] = None
+        self._video_quota_resume_after: Optional[str] = None
         self._img_pos: Optional[str] = None      # "extra" | "top"，双位置探测结果缓存
         # 测试注入用（阶段5③-c）：传 httpx.MockTransport 拦截所有请求；默认 None 走真实网络。
         # 生产路径（api_server.startup 构造 AgnesClient）不传 transport，初始化行为不变。
@@ -311,6 +319,17 @@ class AgnesClient:
         if self._text_client and not self._text_client.is_closed:
             await self._text_client.aclose()
 
+    def _check_video_quota_gate(self):
+        until = self._video_quota_resume_after
+        if until:
+            from ..core.provider_errors import retry_gate_status
+            open_, reason = retry_gate_status(until)
+            if not open_:
+                error = DailyQuotaExhausted(reason)
+                error.resume_after = until
+                raise error
+            self._video_quota_resume_after = None
+
     # ---------- 带退避的请求 ----------
     async def _request(self, method: str, url: str, bucket: str,
                        max_attempts: int = 5, *, text_ep: bool = False,
@@ -320,7 +339,13 @@ class AgnesClient:
         last = None
         for attempt in range(max_attempts):
             retry_after_s = None
+            if bucket == "video" and method.upper() == "POST":
+                self._check_video_quota_gate()
             async with self.limiter.slot(bucket):
+                if bucket == "video" and method.upper() == "POST":
+                    # Another worker may have learned the daily quota while
+                    # this request was waiting for its rate-limiter slot.
+                    self._check_video_quota_gate()
                 try:
                     c = await (self._text_http() if text_ep else self.client())
                     if text_ep:
@@ -338,6 +363,14 @@ class AgnesClient:
                 else:
                     if r.status_code < 400:
                         return r
+                    from ..core.provider_errors import daily_quota_rejection
+                    failure = AgnesError(f"{label} API 错误 {r.status_code}: {r.text[:400]}",
+                                         r.status_code, r.text)
+                    if not text_ep and bucket == "video" and daily_quota_rejection(failure):
+                        failure = DailyQuotaExhausted(str(failure), r.status_code, r.text,
+                                                      _parse_retry_after(r))
+                        self._video_quota_resume_after = failure.resume_after
+                        raise failure
                     if r.status_code not in RETRYABLE:
                         raise AgnesError(
                             f"{label} API 错误 {r.status_code}: {r.text[:400]}",
@@ -741,13 +774,13 @@ class AgnesClient:
             body["seed"] = int(seed)     # 官方参数（2026-09-28 文档核读）：seed integer
         if self.quota:
             ok, why = self.quota.can("video_seconds", seconds_25)
-            if not ok: raise AgnesError(why)
+            if not ok: raise DailyQuotaExhausted(why)
         try:
             r = await self._request("POST", "/v1/videos", "video", json=body,
                                     retry_ambiguous=False)
         except (httpx.TransportError, AgnesError) as exc:
             status = getattr(exc, "status", None)
-            if status is not None and 400 <= status < 500 and status != 408:
+            if isinstance(exc, DailyQuotaExhausted) or (status is not None and 400 <= status < 500 and status != 408):
                 raise
             raise VideoSubmissionUncertain(
                 "video submission outcome unknown; reconcile before any new POST",
@@ -787,18 +820,19 @@ class AgnesClient:
                                                 "model_name": self._video_model_id(model_name)},
                                         max_attempts=3)
             except AgnesError as e:
-                if e.status is None:
+                if e.status is None or e.status in RETRYABLE:
                     # HTTP 层错误（网络/5xx/429 耗尽重试）-> 计数重试，不立刻放弃
                     consecutive += 1
                     log.warning("poll_video %s 网络错误（连续 %d/%d）: %s",
                                 video_id[:16], consecutive, max_consecutive_failures, e)
                     if consecutive >= max_consecutive_failures:
                         raise PollTransientError(
-                            f"轮询连续 {max_consecutive_failures} 次网络失败: {e}")
+                            f"轮询连续 {max_consecutive_failures} 次网络失败: {e}",
+                            status=e.status, body=e.body)
                     continue
                 # 有 status（4xx 等，_request 已判定不可重试）-> 永久失败，立刻抛
                 if e.status == 404:
-                    raise AgnesError(f"video_id 不存在: {video_id}", 404)
+                    raise VideoGenerationFailed(f"video_id 不存在: {video_id}", 404)
                 raise
             consecutive = 0   # 成功，重置
             d = r.json()
@@ -817,7 +851,7 @@ class AgnesClient:
                         "seconds": float(d.get("seconds") or 0),   # 🔴 回读
                         "size": d.get("size"), "raw": d}
             if st == "failed":
-                raise AgnesError(f"视频生成失败: {d.get('error')}")
+                raise VideoGenerationFailed(f"视频生成失败: {d.get('error')}", body=json.dumps(d, ensure_ascii=False))
         raise PollTransientError(f"视频生成超时（{max_wait}s），video_id={video_id}")
 
     async def download(self, url: str, dest) -> str:

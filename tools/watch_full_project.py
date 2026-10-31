@@ -17,7 +17,7 @@ import urllib.request
 import zipfile
 
 ACTIVE = {'queued', 'in_progress', 'pending', 'waiting', 'requested'}
-CODES = {'ACTIVE': 10, 'WAITING_FOR_CLAIM': 10, 'FINALIZING': 10,
+CODES = {'WAITING_QUOTA': 6, 'QUOTA_READY': 6, 'ACTIVE': 10, 'WAITING_FOR_CLAIM': 10, 'FINALIZING': 10,
          'CLOUD_PASS_REQUIRES_LOCAL_AUDIT': 20, 'FAILED': 2,
          'INTERRUPTED_RECONCILE': 4, 'RECONCILE_REQUIRED': 4,
          'READ_ERROR': 3, 'MONITOR_TIMEOUT': 5}
@@ -164,6 +164,15 @@ def observed_state(config, run, checkpoint, now=None):
                 state['state'] = 'RECONCILE_REQUIRED'
                 state['note'] = 'Submission has no accepted receipt after five minutes.'
                 return state
+    if cp.get('phase') == 'WAITING_QUOTA' or cp.get('terminal_status') == 'quota_exhausted':
+        from tools.quota_gate import gate_status, parse_gate
+        if parse_gate(cp.get('quota_resume_after')) is None:
+            state.update(state='RECONCILE_REQUIRED', note='Quota wait has no valid reset gate.')
+        else:
+            ready, reason = gate_status(cp, now)
+            state.update(state='QUOTA_READY' if ready else 'WAITING_QUOTA',
+                         note=reason, quota_resume_after=cp['quota_resume_after'])
+        return state
     if run['status'] == 'completed':
         if run.get('conclusion') != 'success':
             state['state'] = 'INTERRUPTED_RECONCILE' if cp.get('phase') in ('RUNNING', 'RESTORED') else 'FAILED'

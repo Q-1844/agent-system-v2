@@ -172,25 +172,8 @@ def _structure_changed(run: SceneAutopilotRun, scene) -> Optional[str]:
     return is_plan_stale(plan, scene)
 
 
-# 供应商 4xx 额度语义关键词——与 tools/quota_gate._PROVIDER_MARKERS 同源
-# （src 不反向 import tools，避免分层倒挂）。r46 实测样例见 quota_gate.py。
-_QUOTA_MARKERS = (
-    "quota", "配额", "额度", "insufficient", "balance",
-    "余额", "exceeded", "too many requests", "用量上限",
-)
-
-
-def _provider_rejected_quota(error) -> bool:
-    """持久化的 job error 字符串是否为「供应商 429 确定性额度拒绝」。
-
-    job error 是 AgnesError 的 str（无 status 属性），形如
-    "重试 5 次仍失败: 429: {\\"error\\":{\\"message\\":\\"已达到 API 用量上限…\\"}}"。
-    True 意味着请求被供应商拒收：无任务号、零扣费，resume 重排是安全的；
-    5xx/无状态码/无额度关键词一律 False（结局不明，§二十四 维持阻塞）。"""
-    if not isinstance(error, str) or "429:" not in error:
-        return False
-    lowered = error.lower()
-    return any(marker in lowered for marker in _QUOTA_MARKERS)
+# Backward-compatible migration of persisted pre-structured quota errors.
+from src.api.agnes_client import DailyQuotaExhausted
 
 
 # ============ 共享 preflight（§十七/§十八：手工 Autopilot 与 Project Preflight 同一规则）============
@@ -819,6 +802,17 @@ class SceneAutopilotManager:
                 if stage not in state.completed_stages:
                     state.completed_stages.append(stage)
                 await self._save_shot_state(run, state)
+            except DailyQuotaExhausted as e:
+                def wait_for_quota(latest):
+                    current = next(s for s in latest.shots if s.shot_id == shot_id)
+                    current.status = SHOT_PENDING
+                    current.active_job_id = None
+                    current.error = str(e)
+                    latest.pause_requested = True
+                    latest.error_code = "QUOTA_EXHAUSTED"
+                    latest.error = str(e)
+                await self._edit_run(project_name, run.run_id, wait_for_quota)
+                return
             except Exception as e:
                 await self._fail_shot(run, shot_id, f"stage {stage} 失败: {str(e)[:300]}")
                 return
@@ -908,29 +902,14 @@ class SceneAutopilotManager:
                 tail_not_ready = (
                     getattr(existing, "error", None) == "等待尾帧超时（尾帧尚未生成完成），请重试"
                     and getattr(existing, "error_stage", None) == "wait")
-                # r46 hop6（2026-10-31）实测回填：供应商 429 额度拒绝是
-                # 「确定性未受理」——无任务号、零扣费，但持久化的 job error
-                # 会在 resume 时原样重放（request id 都是前一天的），4 秒内
-                # 判死 run，按天接续闸门重开后永远走不完最后一公里。与
-                # tools/quota_gate.classify_quota_rejection 同语义（4xx 确定性
-                # 拒绝 + 额度关键词），但 job error 是纯字符串无 status 属性。
-                # 5xx/无状态码=结局不明，维持 §二十四 不重排纪律。
-                # r46 hop7（2026-10-31 run 41160317704 实测回填）：
-                # submission_intent_id / dispatch_prompt 是 handler 在 POST
-                # 之前登记的意图收据，429 拒收时**未兑现**（artifact 实证该
-                # job provider_task_id=None、request id 为前一日、零新请求）。
-                # 把意图字段当已付费证据会让 quota_rejected 永远 False——
-                # 旧错误原样重放。真付费证据 = provider_task_id（受理后回填）。
-                provider_accepted = bool(receipt.get("provider_task_id"))
-                quota_rejected = (not provider_accepted
-                                  and _provider_rejected_quota(getattr(existing, "error", None)))
                 if (receipt.get("video_pre_submit_failure") == "last_frame_url"
                         or tail_not_ready) and not paid:
                     return q.retry(existing.job_id) or existing
-                if quota_rejected:
-                    # 意图条目未兑现即重排是安全的（无任务号零扣费）；
-                    # 遗留的未兑现 intent 条目由 B1 对账侧审计（见 C 仓
-                    # handoff 文档），此处不静默清除账本状态。
+                if (receipt.get("provider_task_id") and
+                        receipt.get("failure_category") == "poll_transient"):
+                    return q.retry(existing.job_id) or existing
+                from src.core.provider_errors import safe_submit_retry
+                if safe_submit_retry(receipt, getattr(existing, "error", None)):
                     return q.retry(existing.job_id) or existing
             return existing
         if kind == "video":
@@ -1066,6 +1045,21 @@ class SceneAutopilotManager:
             state.active_job_id = None
             if job.state == "done":
                 break
+            from src.core.provider_errors import legacy_quota_rejection, safe_submit_retry
+            if (safe_submit_retry(job.params, job.error) and
+                    (job.params.get("failure_category") == "daily_quota"
+                     or legacy_quota_rejection(job.error))):
+                wait = DailyQuotaExhausted(f"等待视频每日额度刷新: {job.error}")
+                wait.resume_after = job.params.get("quota_resume_after") or wait.resume_after
+                raise wait
+            if job.params.get("provider_submit_state") in ("unknown", "submitting"):
+                raise RuntimeError(f"视频提交待核验: {job.error}")
+            if job.params.get("failure_category") in ("poll_transient", "rate_limit"):
+                # Keep one origin/job for the same paid task; another stage key
+                # would create two native owners of one receipt across a hop.
+                state.attempts["video_technical"] = state.attempts.get("video_technical", 0) + 1
+                await self._save_shot_state(run, state)
+                raise RuntimeError(f"视频技术性暂歇，保留原任务继续: {job.error}")
             state.attempts["video"] = attempt
         else:
             raise RuntimeError(f"视频生成失败: {(job.error if job else '未知')}")
