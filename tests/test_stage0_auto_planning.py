@@ -728,3 +728,23 @@ def test_budget_repair_allows_up_to_three_attempts():
     assert "repair 一次；仍违反 → fail" not in src, "旧单次 repair 语义残留"
     # coverage repair 保持 1 次（§八 语义不变）
     assert "invalid 最多 1 repair" in src, "coverage repair 次数语义被意外改动"
+
+
+def test_budget_repair_second_round_pins_exact_numbers():
+    """run #60 实测回归（Bug G）：repair note 第 2 轮起必须数值钉死。
+
+    现场：s02 预算 117-159s、summary 指令「17 镜×8s=136s」，但 Director 四轮
+    给 107/92/89/97s——镜头数合规（未报违反）、每镜自由发挥 5-6s（4-11s 窗口
+    内合法）→ 总时长稳定低于下限。「约 N 秒」软指令不构成硬约束。
+    修复：第 2 次 repair 起给「恰好 N 镜、每镜精确 X.0 秒、总和等于 Y.0 秒」
+    的数值钉死指令（优先复用 summary 里的确定性指令数值）。"""
+    import inspect, re
+    from src.ai import full_project_autopilot as fpa
+    src = inspect.getsource(fpa)
+    # 第 2 轮起数值钉死分支存在且先读 summary 指令
+    assert "必须精确执行以下数值" in src, "第 2 轮 repair 必须数值钉死"
+    assert "每个镜头的 target_duration_s 必须精确设为" in src
+    m = re.search(r"if repair_round >= 2:", src)
+    assert m, "数值钉死分支必须存在"
+    # 数值来自 summary 指令优先（与 derive_shot_instructions 同源一致）
+    assert "必须规划(\\d+)个连续镜头" in src.replace("\\\\", "\\"), "需解析 summary 确定性指令"
