@@ -973,25 +973,32 @@ class FullProjectManager:
             draft = await self._call_director_with_retry(project_name, run_id, entry, project, scene, director_note, client)
             if draft is None:
                 return None   # paused/failed
-            # 预算约束校验（PR B2）：违反 → 带明细 repair 一次；仍违反 → fail
+            # 预算约束校验（PR B2）：违反 → 带明细 repair；🔴 2026-11-01 起最多 3 次
+            #（daycarry12m run #59 实测回填：首版 115s 超上限 1s，repair 过冲到 57s
+            # 低于下限 27s——LLM 单次修复在「窗口窄、镜头多」时震荡是常态，1 次
+            # repair 即 fail 对 12 分钟长片过于苛刻。每次 repair 携带历次违反明细
+            # 帮助收敛；3 次仍违反才 fail）。
             if budget is not None:
                 violations = scene_budget_violations(draft, budget)
-                if violations:
-                    repair_note = ("【上一次镜头规划违反系统预算，必须修正】\n"
+                repair_round = 0
+                while violations and repair_round < 3:
+                    repair_round += 1
+                    repair_note = (f"【上一次镜头规划违反系统预算，必须修正（第 {repair_round}/3 次 repair）】\n"
                                    + "；".join(violations)
                                    + "\n" + scene_budget_director_note(budget)
                                    + ("\n" + cross_refs if cross_refs else ""))
                     logger.info(f"FullRun {run_id} 故事段 {entry.scene_id} 违反 SceneBudget "
-                                f"（{violations}），请求预算 repair")
+                                f"（{violations}），请求预算 repair 第 {repair_round}/3 次")
                     draft = await self._call_director_with_retry(project_name, run_id, entry, project, scene,
                                                                  repair_note, client, is_repair=True)
                     if draft is None:
                         return None
-                    if scene_budget_violations(draft, budget):
-                        await self._fail_scene_named(project_name, run_id, entry, ERR_DIRECTOR_FAILED,
-                                                     f"故事段 {entry.scene_id} 预算校验仍不通过: "
-                                                     f"{scene_budget_violations(draft, budget)}")
-                        return None
+                    violations = scene_budget_violations(draft, budget)
+                if violations:
+                    await self._fail_scene_named(project_name, run_id, entry, ERR_DIRECTOR_FAILED,
+                                                 f"故事段 {entry.scene_id} 预算校验仍不通过: "
+                                                 f"{violations}")
+                    return None
             # coverage 校验（§八）：invalid 最多 1 repair
             missing = coverage_missing(draft)
             if missing:
