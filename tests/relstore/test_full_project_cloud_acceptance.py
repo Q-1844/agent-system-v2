@@ -97,7 +97,8 @@ def test_daily_quota_rejection_rolls_back_intent_and_sets_gate(tmp_path):
     assert wrapper.quota_gate_after
     assert journal.writes[-1]["quota_resume_after"] == wrapper.quota_gate_after
     # 额度暂停期间禁止再次 POST（封堵生效，不再烧供应商调用）
-    with pytest.raises(RuntimeError, match="unconfirmed"):
+    from src.api.agnes_client import DailyQuotaExhausted
+    with pytest.raises(DailyQuotaExhausted, match="每日额度"):
         asyncio.run(wrapper.create_video("p", duration_s=10))
     assert provider.calls == 1
 

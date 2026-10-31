@@ -1429,6 +1429,17 @@ def _is_material_fetch_rejection(error) -> bool:
         _MATERIAL_FETCH_ERROR_CODE in str(error)
 
 
+async def _record_video_quota_wait(job, error, emit):
+    from src.api.agnes_client import DailyQuotaExhausted
+    from src.core.provider_errors import quota_resume_after
+    job.params.update(failure_category="daily_quota",
+                      quota_resume_after=getattr(error, "resume_after", None) or quota_resume_after(error))
+    client = get_agnes_client()
+    if hasattr(client, "pause_for_quota"):
+        await client.pause_for_quota(error)
+    await emit("quota_wait", f"{job.shot_id} 等待每日额度刷新，进度已保存", None)
+
+
 def _reset_not_sent_submit(current, compiled_final_video):
     """未发出提交 ⇒ 抹掉镜头的 GENERATING 痕迹（没有远端任务、没有扣费）。
 
@@ -1517,9 +1528,9 @@ def _video_preflight(shot, quota, seconds, eff_ff_ready):
                        f"（当前 {round(seconds, 1)} 秒）——请把镜头 target_duration_s "
                        f"调到 {min_s}-{12} 秒后重试（成片保留时长另行决定）")
     if quota:
-        ok, why = quota.can("video_seconds", seconds)
+        ok, why = quota.can("video_seconds", max(4, min(12, round(seconds))))
         if not ok:
-            return False, f"配额不足: {why}"
+            return False, why
     return True, ""
 
 
@@ -1799,6 +1810,26 @@ async def _handler_video(job, emit):
     if shot is None:
         raise RuntimeError(f"镜头 {job.shot_id} 不存在")
 
+    until = job.params.get("quota_resume_after")
+    if until:
+        from src.core.provider_errors import retry_gate_status
+        open_, reason = retry_gate_status(until)
+        if not open_:
+            from src.api.agnes_client import DailyQuotaExhausted
+            error = DailyQuotaExhausted(reason)
+            error.resume_after = until
+            await _record_video_quota_wait(job, error, emit)
+            raise error
+    pinned_task = job.params.get("provider_task_id")
+    if pinned_task and (shot.video.video_id != pinned_task or shot.video.status == "failed"):
+        raise RuntimeError("recorded provider task differs from active shot; reconcile before any POST")
+    if pinned_task and shot.video.status == "done":
+        selected = next((v for v in shot.video_versions if v.version_id == shot.final_video), None)
+        if (selected and selected.video_id == pinned_task and selected.local
+                and Path(selected.local).is_file() and Path(selected.local).stat().st_size):
+            await emit("done", f"{shot.shot_id} 原任务已收货，保留现有选版", 100)
+            return
+        raise RuntimeError("recorded task already completed but its selected artifact is missing; reconcile before POST")
     recovering_video = bool(shot.video.video_id and shot.video.status not in ("done", "failed"))
     # 🔴 自动重新托管：首帧 local 有 / url 空（v1 迁移数据）-> imgbb 补公网 URL（100% 保真，不丢画面）。
     #  inherit_previous 不使用本镜 first_frame（开场来自来源镜头末帧），跳过。
@@ -1856,6 +1887,13 @@ async def _handler_video(job, emit):
     ok, why = ((True, "recover existing task") if recovering_video else
                _video_preflight(shot, get_agnes_client().quota, seconds, bool(eff_ff_url)))
     if not ok and not recovering_video:
+        from src.core.provider_errors import daily_quota_rejection
+        if daily_quota_rejection(RuntimeError(why)):
+            from src.api.agnes_client import DailyQuotaExhausted
+            error = DailyQuotaExhausted(why)
+            job.params["provider_submit_state"] = "not_sent"
+            await _record_video_quota_wait(job, error, emit)
+            raise error
         raise RuntimeError(why)   # 不发起 API 请求
 
     mode = ("keyframes" if shot.link_mode == "keyframes"
@@ -1901,6 +1939,13 @@ async def _handler_video(job, emit):
         seconds = shot.video.num_frames / max(shot.video.frame_rate, 1)
         ok, why = _video_preflight(shot, get_agnes_client().quota, seconds, bool(eff_ff_url))
         if not ok:
+            from src.core.provider_errors import daily_quota_rejection
+            if daily_quota_rejection(RuntimeError(why)):
+                from src.api.agnes_client import DailyQuotaExhausted
+                error = DailyQuotaExhausted(why)
+                job.params["provider_submit_state"] = "not_sent"
+                await _record_video_quota_wait(job, error, emit)
+                raise error
             raise RuntimeError(why)
 
     prompt = build_video_prompt(shot, mode)
@@ -1979,6 +2024,7 @@ async def _handler_video(job, emit):
         # Phase55 C：provider task ID 随 job 落档——watchdog 据此识别「本地失联≠
         # provider 失败」（休眠/断网不作废不补交，M5 事故路径修复）。
         job.params["provider_task_id"] = vid
+        job.params["provider_submit_state"] = "accepted"
         native_generation_basis = dict(job.params.get("dispatch_native_basis") or {})
         provider_options = dict(job.params.get("dispatch_provider_options") or provider_options)
         prompt = job.params.get("dispatch_prompt") or "[recovered: original prompt not recorded]"
@@ -2086,6 +2132,7 @@ async def _handler_video(job, emit):
                                          native_generation_basis,
                                          language_override=ndc_lang,
                                          provider_options=dict(provider_options))
+        job.params["video_model"] = video_model
         job.params["dispatch_input_signature"] = compiled_signature
         job.params["dispatch_final_video"] = compiled_final_video
         job.params["dispatch_native_basis"] = dict(native_generation_basis)
@@ -2143,6 +2190,7 @@ async def _handler_video(job, emit):
                 # 「早前一次付费提交结局不明」，该镜头被永久卡死并凭空背上人工
                 # 对账负担（run #41 的 s01_c02 即如此背上一笔不存在的对账债）。
                 job.params["provider_submit_state"] = "not_sent"
+                job.params["failure_category"] = "not_sent"
                 store.update_shot(
                     job.shot_id,
                     lambda current: _reset_not_sent_submit(current, compiled_final_video))
@@ -2150,7 +2198,13 @@ async def _handler_video(job, emit):
                            f"{shot.shot_id} 未发出提交（无远端任务、无扣费），已复位待重试", 5)
                 _dns_classify(str(_sub_err))
                 raise
-            job.params["provider_submit_state"] = "rejected" if known_rejection else "unknown"
+            from src.core.provider_errors import daily_quota_rejection
+            quota_wait = daily_quota_rejection(_sub_err)
+            known_rejection = known_rejection or quota_wait
+            job.params["provider_submit_state"] = ("not_sent" if getattr(_sub_err, "not_sent", False)
+                                                   else "rejected" if known_rejection else "unknown")
+            job.params["failure_category"] = ("rate_limit" if known_rejection and status == 429 and not quota_wait
+                                               else "provider_rejection" if known_rejection else "submission_unknown")
             if known_rejection:
                 def _reject_if_current(current):
                     if (current.final_video == compiled_final_video and
@@ -2160,6 +2214,8 @@ async def _handler_video(job, emit):
                 store.update_shot(job.shot_id, _reject_if_current)
             await emit("submit_rejected" if known_rejection else "submit_unknown",
                        f"{shot.shot_id} 提交失败；" + ("远端明确拒绝" if known_rejection else "结果待核验，禁止自动补交"), None)
+            if quota_wait:
+                await _record_video_quota_wait(job, _sub_err, emit)
             _dns_classify(str(_sub_err))
             raise
         _dns_classify("")   # 提交成功 → 清零连续失败计数
@@ -2205,6 +2261,7 @@ async def _handler_video(job, emit):
         res = await get_agnes_client().poll_video(vid, interval=5, on_progress=on_prog,
                                                   model_name=poll_model)
     except PollTransientError as e:
+        job.params["failure_category"] = "poll_transient"
         # 网络/超时（连续 5 次）：不标 failed，保留 video_id+generating，
         # retry/recover 续轮询（不重提交、不丢已生成视频）
         _dns_classify(str(e))

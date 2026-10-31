@@ -27,7 +27,7 @@ MAX_AUTO_HOPS = 50_000
 # 可自动续跑的检查点相位。FAILED+terminal_status=paused 是"到点优雅暂停"
 # 的落账形态（pause_and_drain 写入）；FAILED+quota_exhausted 是"每日额度
 # 耗尽暂停"（quota_gate 写入，需过日历闸门）；其余 FAILED 是真实失败，交人工。
-RESUMABLE_PHASES = {"RUNNING", "RESTORED", "PAUSING", "INTERRUPTED"}
+RESUMABLE_PHASES = {"RUNNING", "RESTORED", "PAUSING", "INTERRUPTED", "WAITING_QUOTA"}
 RESUMABLE_TERMINAL = {"paused", "quota_exhausted"}
 DEAD_PHASES = {"COMPLETE", "AWAITING_HUMAN", "BLOCKED_PREFLIGHT", "STARTING"}
 

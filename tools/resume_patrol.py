@@ -60,11 +60,17 @@ def b1_get(path, token):
 
 
 def list_e2e_nonces(token):
-    data = b1_get("branches?per_page=100", token)
-    if not isinstance(data, list):
-        return []
-    return [b["name"][len("test/e2e-"):] for b in data
-            if isinstance(b, dict) and str(b.get("name", "")).startswith("test/e2e-")]
+    nonces, page = [], 1
+    while True:
+        path = "branches?per_page=100" + (f"&page={page}" if page > 1 else "")
+        data = b1_get(path, token)
+        if not isinstance(data, list):
+            return nonces
+        nonces.extend(b["name"][len("test/e2e-"):] for b in data
+                      if isinstance(b, dict) and str(b.get("name", "")).startswith("test/e2e-"))
+        if len(data) < 100:
+            return nonces
+        page += 1
 
 
 def read_checkpoint(nonce, token):

@@ -149,7 +149,7 @@ app.include_router(workflow_router.router)   # Phase 46 可视化工作流后端
 
 
 @app.on_event("startup")
-async def startup():
+async def startup(*, defer_production: bool = False):
     """启动时初始化"""
     # 🔴 Round05 Gate B（先于一切）：**先取得任务账本所有权**。
     # 账本是文件——两个进程可同时 load 同一批 queued job 并各自领走
@@ -229,6 +229,11 @@ async def startup():
 
     # 初始化默认角色到角色库
     characters._init_default_characters()
+
+    if defer_production:
+        # Cloud driver restores identity, media and the CAS journal before any
+        # worker or recovery coroutine may process paid work.
+        return
 
     # 阶段 3：启动 worker + 崩溃恢复（此时**已持有账本所有权**；恢复在后台跑，不阻塞服务就绪）
     try:

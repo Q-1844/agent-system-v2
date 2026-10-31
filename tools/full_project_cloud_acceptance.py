@@ -13,6 +13,7 @@ import math
 import os
 import subprocess
 import time
+import uuid
 from pathlib import Path
 
 from tools import quota_gate
@@ -193,13 +194,8 @@ def provider_explicitly_rejected(error) -> bool:
 
     判定与 routers/shots.py 的 known_rejection 同源（同一套 4xx/408 边界）。
     """
-    from src.api.agnes_client import AgnesError, VideoSubmissionUncertain
-    if isinstance(error, VideoSubmissionUncertain):
-        return False
-    if not isinstance(error, AgnesError):
-        return False
-    status = getattr(error, "status", None)
-    return status is not None and 400 <= status < 500 and status != 408
+    from src.core.provider_errors import explicit_rejection
+    return explicit_rejection(error)
 
 
 class BoundedRealClient:
@@ -213,6 +209,7 @@ class BoundedRealClient:
         self.project_dir, self.evidence_dir = Path(project_dir), Path(evidence_dir)
         self.lock = asyncio.Lock()
         self.video_attempts = []
+        self.submission_intents = []
         self.image_calls = self.text_calls = 0
         self.plan = None
         self.submission_blocked = False
@@ -224,12 +221,20 @@ class BoundedRealClient:
         self.auto_profile = auto_profile  # PR B2：auto 动态 profile（冻结蓝图导出）
 
     def restore_usage(self, document):
+        allowed, reason = quota_gate.gate_status(document)
+        if not allowed:
+            from src.api.agnes_client import VideoSubmissionNotSent
+            raise VideoSubmissionNotSent(reason)
+        self.submission_intents = json.loads(json.dumps(
+            document.get("submission_intents") or document.get("video_attempts") or []))
         attempts = json.loads(json.dumps(document.get("video_attempts") or []))
         if any(a.get("state") != "ACCEPTED" or not a.get("video_id")
                or type(a.get("seconds")) is not int or not 4 <= a["seconds"] <= 12 for a in attempts):
             raise RuntimeError("unconfirmed paid submission requires reconciliation")
         if len({a["video_id"] for a in attempts}) != len(attempts):
             raise RuntimeError("duplicate restored video receipt")
+        from src.core.provider_errors import validate_intent_history
+        validate_intent_history(self.submission_intents, attempts)
         self.video_attempts = attempts
         self.image_calls = int(document.get("image_calls") or 0)
         self.text_calls = int(document.get("text_calls") or 0)
@@ -249,7 +254,35 @@ class BoundedRealClient:
         async with self.lock:
             fields = dict(video_attempts=self.video_attempts, image_calls=self.image_calls,
                           text_calls=self.text_calls, updated_at=utc_now(), **extra)
-            await asyncio.to_thread(self.checkpoint.save, **fields)
+            # Freeze before handing mutable runtime state to the CAS writer thread.
+            fields["submission_intents"] = self.submission_intents
+            await asyncio.to_thread(self.checkpoint.save, **json.loads(json.dumps(fields)))
+
+    async def pause_for_quota(self, error):
+        self.submission_blocked = True
+        self.quota_gate_after = (getattr(error, "resume_after", None)
+                                 or quota_gate.next_quota_reset_utc(error=error))
+        await self.persist(phase="WAITING_QUOTA", terminal_status=quota_gate.QUOTA_TERMINAL,
+                           quota_resume_after=self.quota_gate_after, drain_complete=False)
+
+    async def poll_video(self, video_id, **kwargs):
+        from src.api.agnes_client import VideoGenerationFailed
+        try:
+            result = await self.client.poll_video(video_id, **kwargs)
+        except VideoGenerationFailed as error:
+            for attempt in self.video_attempts:
+                if attempt.get("video_id") == video_id:
+                    attempt.update(provider_outcome="FAILED", provider_error=str(error)[:500])
+            for intent in self.submission_intents:
+                if intent.get("video_id") == video_id:
+                    intent.update(state="FAILED", finished_at=utc_now(), error=str(error)[:500])
+            await self.persist()
+            raise
+        for intent in self.submission_intents:
+            if intent.get("video_id") == video_id:
+                intent.update(state="COMPLETED", completed_at=utc_now())
+        await self.persist()
+        return result
 
     async def chat(self, *args, **kwargs):
         if self.finalize_only:
@@ -299,6 +332,11 @@ class BoundedRealClient:
         pending = [a for a in self.video_attempts if a["state"] in ("SUBMITTING", "UNKNOWN")]
         if logical_shot_id:
             pending = [a for a in pending if a.get("logical_shot_id") == logical_shot_id]
+        if self.quota_gate_after:
+            from src.api.agnes_client import DailyQuotaExhausted
+            error = DailyQuotaExhausted("等待视频每日额度刷新")
+            error.resume_after = self.quota_gate_after
+            raise error
         if self.submission_blocked or pending:
             raise VideoSubmissionNotSent(
                 "unconfirmed prior submission%s; reconciliation required, no automatic POST"
@@ -306,8 +344,8 @@ class BoundedRealClient:
         if sum(a["seconds"] for a in self.video_attempts) + seconds > self.video_budget:
             raise VideoSubmissionNotSent("acceptance execution video budget exhausted")
         prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()
-        attempt = {"ordinal": len(self.video_attempts) + 1, "seconds": seconds,
-                   "prompt_sha256": prompt_hash,
+        attempt = {"ordinal": len(self.submission_intents) + 1, "intent_id": uuid.uuid4().hex, "seconds": seconds,
+                   "prompt_sha256": prompt_hash, "provider_model": kwargs.get("model"),
                    "state": "SUBMITTING", "started_at": utc_now()}
         repair_history = (getattr(self.checkpoint, 'doc', None) or {}).get('repair_revisions') or []
         if native_intent and native_intent.get('project') == self.project_dir.name:
@@ -330,11 +368,16 @@ class BoundedRealClient:
             raise VideoSubmissionNotSent(
                 'repair video submission lacks native shot intent identity')
         self.video_attempts.append(attempt)
+        intent = dict(attempt)
+        self.submission_intents.append(intent)
         try:
             await self.persist()  # durable intent precedes the paid HTTP request
         except Exception as exc:
             # 写前日志没落盘 => 请求【没有】发出（POST 在其后）：如实标记为
             # 未发出，不得让调用方背「结局不明」。
+            self.submission_blocked = True  # lost CAS acknowledgement: freeze this writer
+            self.video_attempts.remove(attempt)
+            intent.update(state="NOT_SENT", finished_at=utc_now(), error=str(exc)[:500])
             raise VideoSubmissionNotSent(
                 "submission intent could not be persisted (%s); "
                 "no provider request was sent" % exc) from exc
@@ -344,42 +387,49 @@ class BoundedRealClient:
             if not isinstance(vid, str) or not vid:
                 raise RuntimeError("provider receipt has no confirmed video ID")
             attempt.update(state="ACCEPTED", video_id=vid)
+            intent.update(state="ACCEPTED", video_id=vid, accepted_at=utc_now())
             await self.persist()
             return result
         except Exception as error:
+            if attempt["state"] == "ACCEPTED":
+                # A later CAS/storage error cannot retroactively reject a paid
+                # provider task, even if that error also has HTTP status 429.
+                self.submission_blocked = True
+                try:
+                    await self.persist()
+                except Exception:
+                    pass
+                raise
             # 每日额度耗尽（本地账本预检或供应商 4xx 明确拒绝）：无任务号、
             # 无扣费——意图条目安全回滚并记日历闸门；其余异常一律维持
             # UNKNOWN 对账纪律，绝不凭猜测丢弃收据。
             if quota_gate.classify_quota_rejection(error):
                 self.video_attempts = [a for a in self.video_attempts if a is not attempt]
-                self.submission_blocked = True
-                self.quota_gate_after = quota_gate.next_quota_reset_utc()
-                try:
-                    await self.persist(quota_resume_after=self.quota_gate_after)
-                except Exception:
-                    pass  # 闸门落账失败则保留 SUBMITTING → UNKNOWN 对账，保守处置
+                intent.update(state="NOT_SENT" if getattr(error, "not_sent", False) else "REJECTED",
+                              failure_category="daily_quota",
+                              finished_at=utc_now(), error=str(error)[:500])
+                await self.pause_for_quota(error)
                 raise
             # 供应商【明确拒绝】(4xx，≠408)：远端没有创建任务、没有扣费。
             # 与「结局不明」严格区分：回滚意图条目（不背 UNKNOWN 对账债），
             # 但【不】置日历闸门（额度没耗尽）——该镜头可安全重发。
             # 这与 routers/shots.py 的 known_rejection 判定同源：产品层已经
             # 允许 4xx 镜头重发，账本层却把它记成 UNKNOWN，二者自相矛盾。
-            if provider_explicitly_rejected(error):
+            if provider_explicitly_rejected(error) or isinstance(error, VideoSubmissionNotSent):
                 self.video_attempts = [a for a in self.video_attempts if a is not attempt]
+                intent.update(state="NOT_SENT" if isinstance(error, VideoSubmissionNotSent) else "REJECTED",
+                              finished_at=utc_now(), error=str(error)[:500])
                 try:
                     await self.persist()
                 except Exception:
-                    pass
+                    self.submission_blocked = True  # the CAS writer lost authority
                 raise
             # 结局不明（传输层歧义）：保留 UNKNOWN 收据（绝不凭猜测丢弃），
             # 但【不】置全局闸门——未决只封锁同一镜头，其它镜头照常提交，
             # 与本模块错误文案「同项目其它已就绪任务可继续」一致。
             if attempt["state"] == "SUBMITTING":
                 attempt["state"] = "UNKNOWN"
-            if attempt["state"] == "ACCEPTED":
-                # 供应商已受理、但本地收据落库失败：本地账本可能缺该 video_id，
-                # 崩溃后无法证明已扣费 -> 封堵后续 POST（保守，防重复扣费）。
-                self.submission_blocked = True
+                intent.update(state="UNKNOWN", error=str(error)[:500])
             try:
                 await self.persist()
             except Exception:
@@ -408,6 +458,8 @@ def snapshot_settled(project_dir, attempts, queue):
         project = ProjectStore(project_dir).load()
         versions = [v for shot in project.all_shots() for v in shot.video_versions]
         for attempt in attempts:
+            if attempt.get('provider_outcome') == 'FAILED':
+                continue  # confirmed terminal failure has no downloadable clip
             matched = [v for v in versions if v.video_id == attempt['video_id'] and v.status == 'done']
             if len(matched) != 1 or not matched[0].local:
                 return False
@@ -422,7 +474,11 @@ def snapshot_settled(project_dir, attempts, queue):
 async def pause_and_drain(manager, project_name, run_id, wrapper, queue, *, grace_seconds=900):
     """Stop new media, let accepted work land, then record actual recoverability."""
     wrapper.submission_blocked = True
-    await manager.request_pause(project_name, run_id)
+    try:
+        await manager.request_pause(project_name, run_id)
+    except ValueError:
+        if manager.get_run(project_name, run_id).status not in ("paused", "failed", "blocked", "completed"):
+            raise
     await wrapper.persist(phase='PAUSING', deadline_reached=True, drain_complete=False)
     deadline = time.monotonic() + grace_seconds
     last_report = time.monotonic()
@@ -652,6 +708,8 @@ async def auto_resume_next_hop(wrapper, nonce, driver_minutes):
                                target_seconds=wrapper.film_target_seconds,
                                media_inflight=wrapper.checkpoint.doc.get('producer_video_inflight'))
     result["hops"] = hops
+    if result.get("dispatched"):
+        result["at"] = time.time()
     await wrapper.persist(auto_resume=result)
     return result
 
@@ -747,7 +805,7 @@ def _blueprint_to_result(blueprint, task_spec):
 async def _ensure_app_started():
     """启动 app（复用固定档的启动方式）。"""
     import api_server
-    await api_server.startup()
+    await api_server.startup(defer_production=True)
 
 
 async def _ensure_deps_ready():
@@ -817,6 +875,9 @@ def _frozen_media_inflight(doc: dict) -> int:
 
 async def _apply_frozen_media_inflight(queue, requested: int) -> None:
     """Never silently operate with a worker policy different from the CAS run."""
+    if getattr(queue, '_started', None) is False:
+        queue._video_worker_count_override = requested
+        return
     current = getattr(queue, 'video_worker_count', None)
     if current is not None and current != requested:
         settled = await queue.reconfigure_video_workers(requested, wait_settle=False)
@@ -910,7 +971,7 @@ async def _run_continuation_acceptance(nonce, out, summary, token, task_spec):
             cp.save(phase='RESTORED', execution_video_authorization=VIDEO_BUDGET_SECONDS,
                 github_run_id=os.environ.get('GITHUB_RUN_ID'),
                     source_sha=os.environ.get('GITHUB_SHA'), resume_from_run_id=resume_id,
-                    updated_at=utc_now(), terminal_status=None, error=None,
+                    updated_at=utc_now(), terminal_status=None, error=None, quota_resume_after=None,
                     resume_history=[*(previous.get('resume_history') or []), provenance])
             summary['resume'] = restored
         else:
@@ -1153,7 +1214,7 @@ async def _run_c2_acceptance(nonce, out, summary, token, task_spec, stage0):
         cp.save(phase='RESTORED', execution_video_authorization=VIDEO_BUDGET_SECONDS,
                 github_run_id=os.environ.get('GITHUB_RUN_ID'),
                 source_sha=os.environ.get('GITHUB_SHA'), resume_from_run_id=resume_id,
-                updated_at=utc_now(), terminal_status=None, error=None,
+                updated_at=utc_now(), terminal_status=None, error=None, quota_resume_after=None,
                 resume_history=[*(previous.get('resume_history') or []), provenance])
         summary['resume'] = restored
         # 恢复成功即固化完整身份字段进 summary：早期失败的 run（如恢复后死在
@@ -1332,8 +1393,13 @@ async def _run_auto_acceptance(nonce, out, summary, token):
         provenance["previous_error"] = previous.get("error")
         cp.save(phase="RESTORED", github_run_id=os.environ.get("GITHUB_RUN_ID"),
                 source_sha=os.environ.get("GITHUB_SHA"), resume_from_run_id=resume_id,
-                updated_at=utc_now(), terminal_status=None, error=None,
+                updated_at=utc_now(), terminal_status=None, error=None, quota_resume_after=None,
                 resume_history=[*(previous.get("resume_history") or []), provenance])
+
+    # Legacy create-mode runs used the workflow's explicit inflight input but
+    # never froze it in B1. Preserve that policy once during migration.
+    if cp.doc.get('producer_video_inflight') is None:
+        cp.save(producer_video_inflight=_frozen_media_inflight({}))
 
     # ---- 物化（幂等：项目已在则复用，不重建）+ scene_budgets sidecar ----
     await _ensure_deps_ready()  # 恢复 hop 不走规划分支，这里必须确保单例在
@@ -1482,7 +1548,7 @@ async def run_acceptance(nonce, out, summary):
             cp.save(phase="RESTORED", github_run_id=os.environ.get("GITHUB_RUN_ID"),
                     source_sha=os.environ.get("GITHUB_SHA"), resume_from_run_id=resume_id,
                     updated_at=utc_now(),
-                    terminal_status=None, error=None,
+                    terminal_status=None, error=None, quota_resume_after=None,
                     resume_history=[*(previous.get("resume_history") or []), provenance])
         else:
             if cp.current is not None:
@@ -1509,7 +1575,11 @@ async def run_acceptance(nonce, out, summary):
     import deps
     import api_server
     from src.ai.full_project_autopilot import get_full_project_manager
-    await api_server.startup()
+    await _ensure_deps_ready()
+    if restored:
+        deps.job_queue._load()  # same owner, no workers have started yet
+        with quota._lock:
+            quota._data = quota._load()  # restore happened after Stage0 dependency initialization
     if deps.agnes_client is None or deps.job_queue is None or deps.project_manager is None:
         raise RuntimeError("application dependencies failed to initialize")
     deps._rehost_host = host
@@ -1548,6 +1618,13 @@ async def run_acceptance(nonce, out, summary):
                 cp.doc.get('repair_phase') in ('COMMITTED_PENDING_REPLAY', 'APPLIED', 'READY_TO_RESTART')):
             wrapper.media_gate()
     deps.agnes_client = wrapper
+    # Dispatch/recovery can only start after the bounded CAS client is installed.
+    inflight = _frozen_media_inflight(cp.doc)
+    cp.save(producer_video_inflight=inflight)
+    os.environ['AGNES_VIDEO_INFLIGHT'] = str(inflight)
+    await deps.job_queue.start()
+    from services.lifecycle import recover_pending_videos
+    await recover_pending_videos()
     manager = get_full_project_manager()
     # An approved repair creates a NEW FullRun instead of mutating the source
     # run's immutable snapshot. Remember the new identity across hop recovery.
@@ -1587,7 +1664,10 @@ async def run_acceptance(nonce, out, summary):
     deadline, last_report = time.monotonic() + driver_minutes * 60, 0.0
     while True:
         full = manager.get_run(project_name, full.run_id)
-        if full.status in ('failed', 'completed') and target == AUTO_TARGET and not finalize_only and summary.get('c2_source_project'):
+        if (full.status in ('failed', 'completed') and target == AUTO_TARGET and not finalize_only
+                and summary.get('c2_source_project')
+                and (full.status == "completed" or
+                     production_wait_reason(wrapper, deps.job_queue, project_name) is None)):
             from tools.c2_repair_bridge import auto_repair_failed_full, effective_media_profile
             from src.ai.repair_revision import RepairRevisionError
             try:
@@ -1644,9 +1724,12 @@ async def run_acceptance(nonce, out, summary):
     write_json(out / "full-run.json", full.model_dump())
     if full.status != "completed":
         if wrapper.quota_gate_after:
+            drained = await pause_and_drain(manager, project_name, full.run_id, wrapper, deps.job_queue)
+            if not drained:
+                raise RuntimeError("quota drain incomplete; accepted tasks retained for recovery")
             # 按天接续：额度耗尽是可预期的干净暂停，不是生产失败。意图条目
             # 已在提交路径回滚（无收据无扣费），落账走日历闸门等巡检拉起。
-            await wrapper.persist(phase="FAILED",
+            await wrapper.persist(phase="WAITING_QUOTA",
                                    terminal_status=quota_gate.QUOTA_TERMINAL,
                                    error="daily video quota exhausted; day-gated resume",
                                    quota_resume_after=wrapper.quota_gate_after,
@@ -1656,6 +1739,12 @@ async def run_acceptance(nonce, out, summary):
             summary["auto_resume"] = await auto_resume_next_hop(
                 wrapper, nonce, driver_minutes)  # 闸门未开时仅记录派发理由
             raise RuntimeError(f"FullProject quota-paused until {wrapper.quota_gate_after}: {full.error}")
+        wait_reason = production_wait_reason(wrapper, deps.job_queue, project_name)
+        if wait_reason in ('poll_transient', 'rate_limit'):
+            await wrapper.persist(phase="INTERRUPTED", terminal_status="technical_wait", error=full.error,
+                                  drain_complete=False)
+            summary["auto_resume"] = await auto_resume_next_hop(wrapper, nonce, driver_minutes)
+            raise RuntimeError("transient video failure; continue the original jobs next hop")
         await wrapper.persist(phase="FAILED", terminal_status=full.status, error=full.error)
         raise RuntimeError(f"FullProject did not complete: {full.status}: {full.error}")
     from src.ai.project_autopilot import get_project_autopilot_manager
@@ -1771,6 +1860,37 @@ async def run_acceptance(nonce, out, summary):
     summary["status"] = "PASS"
 
 
+def production_wait_reason(wrapper, queue, project_name):
+    """Infrastructure waits never authorize a story/shot rewrite."""
+    if wrapper.quota_gate_after:
+        return 'daily_quota'
+    jobs = [j for j in queue.jobs.values() if j.project == project_name and j.kind == 'video']
+    for job in jobs:
+        if job.state != 'failed':
+            continue
+        reason = job.params.get('failure_category')
+        if reason != 'submission_unknown' and any(
+                newer.shot_id == job.shot_id and newer.state == 'done'
+                and (newer.finished_at or newer.created_at) > (job.finished_at or job.created_at)
+                for newer in jobs):
+            continue
+        if reason in ('poll_transient', 'rate_limit', 'submission_unknown', 'not_sent'):
+            return reason
+    return None
+
+
+def write_evidence_project_output(summary):
+    """Include named C1/C2 projects in the same Actions artifact as the journal."""
+    output = os.environ.get('GITHUB_OUTPUT')
+    name = summary.get('project_name')
+    if not output or not name:
+        return
+    from src.ai.cross_project_assets import safe_project_dir
+    project = safe_project_dir(Path.cwd() / 'projects', name, must_exist=False)
+    with open(output, 'a', encoding='utf-8') as stream:
+        stream.write(f"project_path={project.relative_to(Path.cwd()).as_posix()}/\n")
+
+
 def main():
     from tools.video_task_state import validate_nonce
     nonce = validate_nonce(os.environ.get("TASK_NONCE") or f"film3m-{os.environ.get('GITHUB_RUN_ID') or time.time_ns()}")
@@ -1791,6 +1911,7 @@ def main():
     finally:
         summary["finished_at"] = utc_now()
         write_json(out / "summary.json", summary)
+        write_evidence_project_output(summary)
     return 0 if summary["status"] == "PASS" else 1
 
 

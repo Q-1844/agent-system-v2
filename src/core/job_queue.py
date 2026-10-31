@@ -223,6 +223,9 @@ class JobQueue:
             return {"resettable": True, "reason": "non_video_job"}
         if params.get("provider_task_id"):
             return {"resettable": False, "reason": "provider_task_id_present"}
+        from .provider_errors import safe_submit_retry
+        if safe_submit_retry(params, job.error):
+            return {"resettable": True, "reason": "explicit_non_acceptance"}
         if params.get("submission_intent_id"):
             return {"resettable": False, "reason": "submission_intent_present"}
         state = str(params.get("provider_submit_state") or "")
@@ -337,13 +340,39 @@ class JobQueue:
                 or evidence.get("unattached_provider_receipt")
                 or evidence.get("provider_submit_state") in
                 ("submitting", "unknown", "accepted"))
-            safe_to_retry = (not has_paid_evidence and
+            from .provider_errors import safe_submit_retry
+            rejected = safe_submit_retry(evidence, j.error)
+            until = evidence.get("quota_resume_after")
+            if rejected and until:
+                from datetime import datetime, timezone
+                try:
+                    if datetime.fromisoformat(until.replace("Z", "+00:00")) > datetime.now(timezone.utc):
+                        return None
+                except (ValueError, TypeError):
+                    return None
+            resume_poll = bool(evidence.get("provider_task_id")
+                               and evidence.get("failure_category") == "poll_transient"
+                               and evidence.get("provider_submit_state") == "accepted"
+                               and not evidence.get("unattached_provider_receipt")
+                               and not evidence.get("unattached_artifact"))
+            safe_to_retry = resume_poll or rejected or (not has_paid_evidence and
                              (decision["resettable"] or never_started_cancel))
             if not safe_to_retry:
                 log.warning("[JobQueue] video retry blocked pending provider reconciliation: "
                             "job=%s (reason=%s)", job_id,
                             "paid_submission_evidence" if has_paid_evidence else decision["reason"])
                 return None
+            if resume_poll:
+                j.params.pop("failure_category", None)  # a new failure must supply fresh facts
+        if j.kind == JobKind.VIDEO.value and rejected:
+            # Retain the old intent and error as history, then compile a new intent.
+            keys = ("submission_intent_id", "provider_submit_state", "dispatch_prompt",
+                    "dispatch_input_signature", "dispatch_final_video", "dispatch_native_basis",
+                    "dispatch_provider_options", "failure_category", "quota_resume_after")
+            history = {k: j.params.pop(k) for k in keys if k in j.params}
+            history.update(error=j.error, attempts=j.attempts, finished_at=j.finished_at)
+            j.params.setdefault("submission_history", []).append(history)
+        j.error_class = j.error_stage = j.error_provider = j.error_model = None
         j.state, j.error, j.progress, j.message = JobState.QUEUED.value, None, 0, ""
         j.finished_at = None
         self._save()

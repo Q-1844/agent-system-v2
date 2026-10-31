@@ -175,6 +175,55 @@ def reconcile_finalization(project, rewritten, jobs, accepted_ids, provenance):
     return reconciled
 
 
+def reconcile_accepted_work(doc, jobs, attempts):
+    """Use confirmed CAS receipts to recover polling, never to authorize a POST.
+
+    Covers death after the CAS receipt but before native shot receipt commit.
+    Unknown submissions remain quarantined by the caller's receipt validation.
+    """
+    recovered = []
+    shots = {sh.get('shot_id'): sh for sc in doc['scenes'] for sh in sc['shots']}
+    for attempt in attempts:
+        if attempt.get('provider_outcome') == 'FAILED':
+            continue
+        vid = attempt['video_id']
+        versions = [v for sh in shots.values() for v in sh.get('video_versions', [])
+                    if v.get('video_id') == vid and v.get('status') == 'done']
+        if versions:
+            continue
+        candidates = [j for j in jobs.values() if j.get('kind') == 'video'
+                      and (j.get('params', {}).get('provider_task_id') == vid or
+                           (attempt.get('attempt_id') and
+                            j.get('params', {}).get('submission_intent_id') == attempt['attempt_id']))]
+        if len(candidates) != 1:
+            raise ValueError('accepted video has no unique native intent; reconcile first')
+        job = candidates[0]
+        params = job.get('params') or {}
+        shot = shots.get(job.get('shot_id'))
+        if (not shot or job.get('state') == 'cancelled'
+                or params.get('unattached_provider_receipt') or params.get('unattached_artifact')
+                or params.get('provider_task_id') not in (None, vid)
+                or attempt.get('logical_shot_id') not in (None, shot['shot_id'])
+                or shot.get('video', {}).get('status') != 'generating'
+                or shot['video'].get('video_id') not in (None, vid)):
+            raise ValueError('accepted task conflicts with native shot; reconcile first')
+        if params.get('dispatch_input_signature'):
+            from src.core.models import Project
+            from src.generation.video_commit import video_input_signature
+            project = Project.from_dict(doc)
+            if (video_input_signature(project, project.get_shot(shot['shot_id'])) != params['dispatch_input_signature']
+                    or shot.get('final_video') != params.get('dispatch_final_video')):
+                raise ValueError('accepted task inputs/selection changed; reconcile first')
+        elif not shot['video'].get('video_id'):
+            raise ValueError('receipt attachment requires the exact dispatch signature')
+        shot['video']['video_id'] = vid
+        shot['video']['model'] = attempt.get('provider_model') or shot['video'].get('model')
+        params.update(provider_task_id=vid, provider_submit_state='accepted')
+        job.update(state='queued', error=None, finished_at=None, params=params)
+        recovered.append(job['job_id'])
+    return recovered
+
+
 def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, finalize_only=False, project_name=None):
     """Validate identity/paid receipts before copying any state into the runner."""
     staging, workspace = Path(staging), Path(workspace).resolve()
@@ -182,9 +231,12 @@ def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, final
             or checkpoint.get('source_sha') != provenance['source_sha']):
         raise ValueError('checkpoint belongs to a different Actions run')
     if checkpoint.get('phase') not in ('FAILED', 'RUNNING', 'RESTORED', 'BLOCKED_PREFLIGHT',
-                                      'AWAITING_HUMAN', 'STAGE0_BOUND',
-                                      *(('PAUSING', 'INTERRUPTED') if finalize_only else ())):
+                                      'AWAITING_HUMAN', 'STAGE0_BOUND', 'WAITING_QUOTA', 'PAUSING', 'INTERRUPTED'):
         raise ValueError('checkpoint is not a failed/interrupted production run')
+    from tools.quota_gate import gate_status
+    gate_open, reason = gate_status(checkpoint)
+    if not gate_open:
+        raise ValueError(reason)
     summary = json.loads((staging/f'e2e_run/{nonce}/summary.json').read_text())
     # 早期失败的 run（如 BLOCKED_PREFLIGHT）在 finally 写 summary 时可能尚未
     # 建立生产上下文，source_sha 等字段缺失；此时以 checkpoint 为权威（它已
@@ -201,18 +253,6 @@ def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, final
     if doc['name'] != pname or (summary.get('full_run_id') is not None
                                 and summary.get('full_run_id') != checkpoint.get('full_run_id')):
         raise ValueError('project/native run identity mismatch')
-    full_path = project/'output/full_runs'/checkpoint['full_run_id']/'run.json'
-    full = json.loads(full_path.read_text())
-    if (full.get('run_id') != checkpoint['full_run_id'] or full.get('project_name') != pname
-            or full.get('status') not in ('failed', 'paused', *(('pausing', 'producing', 'completed') if finalize_only else ()))):
-        raise ValueError('native FullRun is not safely resumable')
-    native_paths = [*project.glob('output/full_runs/*/run.json'),
-                    *project.glob('output/production_runs/*/run.json'),
-                    *project.glob('output/ai/autopilot_runs/*.json')]
-    for native_path in native_paths:
-        native = json.loads(native_path.read_text())
-        if not finalize_only and native.get('status') not in ('failed','paused','completed','blocked','cancelled'):
-            raise ValueError('active native controller must be reconciled before startup')
     old_root = str(summary['project_dir']) if summary.get('project_dir') else None
     relative_root = 'projects/'+pname
     if old_root and old_root != relative_root and not old_root.endswith('/'+relative_root):
@@ -243,10 +283,37 @@ def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, final
                 or type(a.get('seconds')) is not int or not 4<=a['seconds']<=12 for a in attempts)
             or len(ids)!=len(set(ids)) or sum(a['seconds'] for a in attempts)>authorized):
         raise ValueError('unconfirmed/duplicate paid submission requires reconciliation')
+    from src.core.provider_errors import validate_intent_history
+    validate_intent_history(checkpoint.get('submission_intents') or [], attempts)
+    jobs = json.loads((staging/'cache/jobs.json').read_text())
+    if any(j.get('project') != pname for j in jobs.values()):
+        raise ValueError('snapshot contains unrelated jobs')
+    recovered_jobs = [] if finalize_only else reconcile_accepted_work(doc, jobs, attempts)
+    full_path = project/'output/full_runs'/checkpoint['full_run_id']/'run.json'
+    full = json.loads(full_path.read_text())
+    allowed_full_states = {'failed', 'paused'}
+    if finalize_only or recovered_jobs:
+        allowed_full_states.update(('pausing', 'producing'))
+    if finalize_only:
+        allowed_full_states.add('completed')
+    if (full.get('run_id') != checkpoint['full_run_id'] or full.get('project_name') != pname
+            or full.get('status') not in allowed_full_states):
+        raise ValueError('native FullRun is not safely resumable')
+    native_paths = [*project.glob('output/full_runs/*/run.json'),
+                    *project.glob('output/production_runs/*/run.json'),
+                    *project.glob('output/ai/autopilot_runs/*.json')]
+    for native_path in native_paths:
+        native = json.loads(native_path.read_text())
+        if not finalize_only and not recovered_jobs and native.get('status') not in ('failed','paused','completed','blocked','cancelled'):
+            raise ValueError('active native controller must be reconciled before startup')
     versions = [v for sc in doc['scenes'] for shot in sc['shots'] for v in shot.get('video_versions',[])]
     verified = []
     for attempt in attempts:
+        if attempt.get('provider_outcome') == 'FAILED':
+            continue
         matches = [v for v in versions if v.get('video_id')==attempt['video_id'] and v.get('status')=='done']
+        if not matches and recovered_jobs:
+            continue  # confirmed ID will be polled by its original handler
         if len(matches)!=1:
             raise ValueError('accepted video is not a single completed local version; reconcile first')
         local = matches[0].get('local') or ''
@@ -273,11 +340,29 @@ def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, final
         return value
     # Validate all JSON before making the restored project visible to startup.
     rewritten = {p:rebase(json.loads(p.read_text())) for p in project.rglob('*.json')}
-    jobs = json.loads((staging/'cache/jobs.json').read_text())
-    if any(j['project'] != pname for j in jobs.values()):
-        raise ValueError('snapshot contains unrelated jobs')
-    reconciled_jobs = reconcile_finalization(project, rewritten, jobs, ids, provenance) if finalize_only else []
-    if any(j['project']!=pname or j['state'] not in ('done','failed') for j in jobs.values()):
+    rewritten[project/'output/project.json'] = rebase(doc)
+    if recovered_jobs:
+        from src.core.models import Project
+        from src.generation.video_commit import video_input_signature
+        rebased_project = Project.from_dict(rewritten[project/'output/project.json'])
+        for job_id in recovered_jobs:
+            params = jobs[job_id]['params']
+            original = params.get('dispatch_input_signature')
+            if original:
+                # The original signature was validated BEFORE rebasing. Paths
+                # in otherwise identical frame assets change on a new runner.
+                # Rebind only the local commit guard, retaining original proof.
+                params['recovery_original_input_signature'] = original
+                params['snapshot_reconciliation'] = dict(provenance)
+                params['dispatch_input_signature'] = video_input_signature(
+                    rebased_project, rebased_project.get_shot(jobs[job_id]['shot_id']))
+    if recovered_jobs:
+        for path, native in rewritten.items():
+            if path in native_paths and native.get('status') in ('running', 'producing', 'pending', 'pausing'):
+                native.update(status='paused', pause_requested=False, cancel_requested=False)
+    # Only proven accepted tasks may survive as queued work in a restored snapshot.
+    reconciled_jobs = reconcile_finalization(project, rewritten, jobs, [a['video_id'] for a in attempts if a.get('provider_outcome') != 'FAILED'], provenance) if finalize_only else []
+    if any(j['project']!=pname or (j['state'] not in ('done','failed') and j.get('job_id') not in recovered_jobs) for j in jobs.values()):
         raise ValueError('snapshot contains unrelated or unresolved queued work')
     target.parent.mkdir(parents=True,exist_ok=True)
     shutil.copytree(project,target)
@@ -288,4 +373,4 @@ def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, final
     shutil.copyfile(staging/'cache/quota.json',workspace/'cache/quota.json')
     return {**provenance,'project_name':pname,'full_run_id':checkpoint['full_run_id'],
             'reused_completed_videos':verified,'previous_video_seconds':sum(a['seconds'] for a in attempts),
-            'finalize_only':finalize_only, 'reconciled_jobs':reconciled_jobs}
+            'finalize_only':finalize_only, 'reconciled_jobs':reconciled_jobs, 'recovered_poll_jobs':recovered_jobs}
