@@ -706,3 +706,25 @@ def test_c2_intent_does_not_get_double_injection():
     for sc in result.scenes:
         # create 意图只注入一次（一个「必须规划」标记）
         assert sc.summary.count("必须规划") == 1, sc.summary
+
+
+# ============ daycarry12m run #59 实测回归：预算 repair 次数 ============
+#
+# 实测故障（run 41221999724，2026-11-01）：Director 首版 115s 超上限 1s →
+# repair 过冲到 57s 低于下限 27s → 仅 1 次 repair 即 DIRECTOR_FAILED。
+# LLM 单次修复在「窗口窄、镜头多」时震荡是常态（run #40 21s→28s 同型）。
+# 修复：预算 repair 循环上限 1 → 3（coverage repair 语义不变，仍 1 次）。
+# FullProject 流程太重无法单测起全套，用源码级断言锁住循环结构。
+
+def test_budget_repair_allows_up_to_three_attempts():
+    import inspect, re
+    from src.ai import full_project_autopilot as fpa
+    src = inspect.getsource(fpa)
+    # 预算 repair 循环：while + 上限 3（不再是「repair 一次；仍违反 → fail」）
+    m = re.search(r"repair_round = 0\s*\n\s*while violations and repair_round < (\d+):", src)
+    assert m, "预算 repair 必须是带次数上限的 while 循环"
+    assert int(m.group(1)) == 3, f"预算 repair 上限应为 3，实际 {m.group(1)}"
+    # 旧的「一次 repair 即 fail」语义必须绝迹
+    assert "repair 一次；仍违反 → fail" not in src, "旧单次 repair 语义残留"
+    # coverage repair 保持 1 次（§八 语义不变）
+    assert "invalid 最多 1 repair" in src, "coverage repair 次数语义被意外改动"
