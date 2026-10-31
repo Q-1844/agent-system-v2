@@ -978,17 +978,50 @@ class FullProjectManager:
             # 低于下限 27s——LLM 单次修复在「窗口窄、镜头多」时震荡是常态，1 次
             # repair 即 fail 对 12 分钟长片过于苛刻。每次 repair 携带历次违反明细
             # 帮助收敛；3 次仍违反才 fail）。
+            # 🔴 run #60 实测回填（Bug G）：repair note 只给「窗口范围」，LLM 给的
+            # 每镜时长（4-11s 窗口内自由发挥 5-6s）×合理镜头数 → 总时长稳定低于
+            # 下限（107/92/89/97 vs 117-159）。「约 N 秒」的软指令不构成硬约束。
+            # 修复：第 2 次 repair 起改为派生精确数值指令（镜头数、每镜秒数、
+            # 总秒数全部点名必须精确执行——与 derive_shot_instructions 同源但
+            # 更强：不再用「约」，直接给定具体数字）。
             if budget is not None:
                 violations = scene_budget_violations(draft, budget)
                 repair_round = 0
                 while violations and repair_round < 3:
                     repair_round += 1
-                    repair_note = (f"【上一次镜头规划违反系统预算，必须修正（第 {repair_round}/3 次 repair）】\n"
-                                   + "；".join(violations)
-                                   + "\n" + scene_budget_director_note(budget)
-                                   + ("\n" + cross_refs if cross_refs else ""))
+                    if repair_round >= 2:
+                        # 数值钉死指令（第 2 轮起）：从预算确定性反推精确配置
+                        _tgt = float(budget.get("target_s") or 0) or (
+                            (float(budget["min_s"]) + float(budget["max_s"])) / 2)
+                        _per = max(float(budget.get("per_shot_min_s") or 4),
+                                   min(float(budget.get("per_shot_max_s") or 11),
+                                       round(_tgt / 17.0) if _tgt > 90 else 8.0))
+                        _per = max(_per, float(budget.get("per_shot_min_s") or 4))
+                        _nshots = max(int(budget.get("shot_min") or 1),
+                                      min(int(budget.get("shot_max") or 20),
+                                          int(round(_tgt / _per))))
+                        # 优先用 summary 里已有的确定性指令数值（保持一致）
+                        import re as _re
+                        _m = _re.search(r"必须规划(\d+)个连续镜头，每镜约(\d+)秒，总计约(\d+)秒",
+                                        (scene.summary or ""))
+                        if _m:
+                            _nshots, _per, _tgt = int(_m.group(1)), float(_m.group(2)), float(_m.group(3))
+                        repair_note = (
+                            f"【第 {repair_round}/3 次修正——前两版均违反预算，本次必须精确执行以下数值】\n"
+                            f"- 必须恰好规划 {_nshots} 个镜头（一个不能多、一个不能少）\n"
+                            f"- 每个镜头的 target_duration_s 必须精确设为 {_per:.0f}.0 秒\n"
+                            f"- 所有镜头 target_duration_s 之和必须等于 {_tgt:.0f}.0 秒\n"
+                            f"（预算窗口 {budget['min_s']}-{budget['max_s']}s；"
+                            f"逐镜数值不要自由发挥，就是 {_per:.0f}）"
+                            + ("\n" + cross_refs if cross_refs else ""))
+                    else:
+                        repair_note = (f"【上一次镜头规划违反系统预算，必须修正（第 {repair_round}/3 次 repair）】\n"
+                                       + "；".join(violations)
+                                       + "\n" + scene_budget_director_note(budget)
+                                       + ("\n" + cross_refs if cross_refs else ""))
                     logger.info(f"FullRun {run_id} 故事段 {entry.scene_id} 违反 SceneBudget "
-                                f"（{violations}），请求预算 repair 第 {repair_round}/3 次")
+                                f"（{violations}），请求预算 repair 第 {repair_round}/3 次"
+                                + ("（数值钉死）" if repair_round >= 2 else ""))
                     draft = await self._call_director_with_retry(project_name, run_id, entry, project, scene,
                                                                  repair_note, client, is_repair=True)
                     if draft is None:
