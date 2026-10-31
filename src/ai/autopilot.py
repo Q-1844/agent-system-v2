@@ -915,10 +915,22 @@ class SceneAutopilotManager:
                 # tools/quota_gate.classify_quota_rejection 同语义（4xx 确定性
                 # 拒绝 + 额度关键词），但 job error 是纯字符串无 status 属性。
                 # 5xx/无状态码=结局不明，维持 §二十四 不重排纪律。
-                quota_rejected = (not paid
+                # r46 hop7（2026-10-31 run 41160317704 实测回填）：
+                # submission_intent_id / dispatch_prompt 是 handler 在 POST
+                # 之前登记的意图收据，429 拒收时**未兑现**（artifact 实证该
+                # job provider_task_id=None、request id 为前一日、零新请求）。
+                # 把意图字段当已付费证据会让 quota_rejected 永远 False——
+                # 旧错误原样重放。真付费证据 = provider_task_id（受理后回填）。
+                provider_accepted = bool(receipt.get("provider_task_id"))
+                quota_rejected = (not provider_accepted
                                   and _provider_rejected_quota(getattr(existing, "error", None)))
-                if ((receipt.get("video_pre_submit_failure") == "last_frame_url"
-                        or tail_not_ready or quota_rejected) and not paid):
+                if (receipt.get("video_pre_submit_failure") == "last_frame_url"
+                        or tail_not_ready) and not paid:
+                    return q.retry(existing.job_id) or existing
+                if quota_rejected:
+                    # 意图条目未兑现即重排是安全的（无任务号零扣费）；
+                    # 遗留的未兑现 intent 条目由 B1 对账侧审计（见 C 仓
+                    # handoff 文档），此处不静默清除账本状态。
                     return q.retry(existing.job_id) or existing
             return existing
         if kind == "video":
