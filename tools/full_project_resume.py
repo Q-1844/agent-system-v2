@@ -60,25 +60,61 @@ def download_snapshot(run_id, nonce, token, dest, *, project_name=None):
         raise FileExistsError('recovery staging directory already exists')
     dest.mkdir(parents=True)
     pname = _recovery_project_name(nonce, project_name)
+    skipped_members = _extract_staging(data, dest, nonce, pname)
+    return {'run_id':str(run_id),'source_sha':run['head_sha'],'artifact_id':artifact['id'],
+            'artifact_sha256':digest,'artifact_bytes':len(data),'skipped_members':skipped_members}
+
+
+def _extract_staging(data, dest, nonce, pname):
+    """e2e-evidence artifact → 恢复 staging（含嵌套剥离与冲突仲裁）。
+
+    返回 skipped_members（安全跳过的非目标成员数）。"""
     allowed = (f'projects/{pname}/', f'e2e_run/{nonce}/')
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
         if sum(i.file_size for i in archive.infolist()) > 2*1024**3:
             raise ValueError('expanded acceptance snapshot exceeds recovery limit')
         skipped_members = 0
+        # ---- staging 重传剥离（r46 2026-10-31 第五跳实测回填）----
+        # 死在 RESTORED 之前的跳会把上一跳 artifact 以 e2e_run/{nonce}/
+        # source-snapshot/ 前缀整包再上传；每中转一跳嵌套加深一层，而
+        # restore_snapshot 只读 staging 顶层 projects/。逐层剥掉该前缀
+        # 恢复 workspace 语义；冲突时素材（projects//cache/）取嵌套版
+        # （真实工作区状态——未恢复跳的顶层是全新空壳），身份文件
+        # （e2e_run/{nonce}/...）取顶层版（本跳自己的 summary 等）。
+        _NEST = f'e2e_run/{nonce}/source-snapshot/'
+        staged = {}
         for info in archive.infolist():
             name = PurePosixPath(info.filename)
             if (name.is_absolute() or '..' in name.parts or '\\' in info.filename
                     or stat.S_ISLNK(info.external_attr >> 16)):
                 raise ValueError('unsafe acceptance artifact member')
-            if not (info.filename.startswith(allowed) or info.filename in ('cache/jobs.json','cache/quota.json')):
+            member, generations = info.filename, 0
+            while member.startswith(_NEST):
+                member, generations = member[len(_NEST):], generations + 1
+            if not member:
+                skipped_members += 1
+                continue
+            if not (member.startswith(allowed) or member in ('cache/jobs.json','cache/quota.json')):
                 # C2 无人值守链会把按需恢复的素材源项目一并上传（workflow 上传
                 # projects/cloud3min_* 通配），它们不属于恢复目标；跳过安全成员，
                 # 只拒收危险路径，避免一次无害多目录把整个快照判死。
                 skipped_members += 1
                 continue
-            archive.extract(info, dest)
-    return {'run_id':str(run_id),'source_sha':run['head_sha'],'artifact_id':artifact['id'],
-            'artifact_sha256':digest,'artifact_bytes':len(data),'skipped_members':skipped_members}
+            stripped = PurePosixPath(member)
+            if (stripped.is_absolute() or '..' in stripped.parts or '\\' in member):
+                raise ValueError('unsafe acceptance artifact member after denesting')
+            workspace_state = member.startswith('projects/') or member.startswith('cache/')
+            prev = staged.get(member)
+            if prev is None or (workspace_state and generations > prev[1]) \
+                    or (not workspace_state and generations < prev[1]):
+                staged[member] = (info, generations, workspace_state)
+        for member, (info, generations, workspace_state) in staged.items():
+            if info.is_dir():
+                continue
+            target = dest / member
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(archive.read(info))
+    return skipped_members
 
 
 def validate_completed_clip(path, requested_seconds):
