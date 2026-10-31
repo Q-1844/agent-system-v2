@@ -375,3 +375,34 @@ def test_resume_requeues_provider_quota_rejected_video_job(monkeypatch):
                                               params={}, error_stage='video'))
     asyncio.run(mgr._enqueue_autopilot_job('p', 's04_c03', 'video', 'sk', 'r1'))
     assert calls == []
+
+
+def test_resume_requeues_quota_rejected_video_with_unredeemed_intent(monkeypatch):
+    """r46 hop7（2026-10-31 run 41160317704）实测回填：429 拒收的 video job
+    params 里带着 handler POST 前登记的 submission_intent_id / dispatch_prompt
+    （artifact 实证 provider_task_id=None）。意图登记≠已兑现——不能当已付费
+    证据，否则 quota_rejected 永远 False，旧错误（前一日 request id）原样
+    重放、4 秒判死 run。真付费证据 = provider_task_id。"""
+    import deps
+    from src.ai.autopilot import SceneAutopilotManager
+
+    stale = ('重试 5 次仍失败: 429: {"error":{"code":"","message":'
+             '"已达到 API 用量上限，请在 **2026-10-31 00:00** 之后重试。 '
+             '(request id: 20261030054158288898746xBCF0xVu)","type":"AgnesAI"}}')
+    # hop7 artifact 实测形态：意图字段在、任务号无
+    params = {'submission_intent_id': 'f2cb61f840a24ae19e0cc98ed51fa3ea',
+              'dispatch_prompt': 'The 10 luminous circles ...',
+              'origin_run_id': 'run_dd9ae9216f',
+              'autopilot_stage_key': 'autopilot:run_dd9ae9216f:s04_c03:video:2'}
+    calls = []
+    def retry(job_id):
+        calls.append(job_id)
+        return SimpleNamespace(job_id=job_id, state='queued')
+    monkeypatch.setattr(deps, 'job_queue', SimpleNamespace(
+        find_by_origin=lambda *a: SimpleNamespace(
+            job_id='j-hop7', state='failed', error=stale,
+            params=params, error_stage='video'),
+        retry=retry))
+    mgr = SceneAutopilotManager()
+    got = asyncio.run(mgr._enqueue_autopilot_job('p', 's04_c03', 'video', 'sk', 'r1'))
+    assert calls == ['j-hop7'] and got is not None
