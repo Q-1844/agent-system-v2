@@ -332,3 +332,46 @@ def test_extract_staging_denests_reuploaded_snapshots(tmp_path):
     # 非目标成员跳过且不落盘
     assert not (out / 'projects/other_project').exists()
     assert skipped >= 1
+
+
+def test_resume_requeues_provider_quota_rejected_video_job(monkeypatch):
+    """r46 hop6（2026-10-31）实测回填：恢复链最后一公里——持久化的 429 额度
+    拒绝 job（无任务号、零扣费）必须在 resume 时重排，否则旧错误原样重放
+    （request id 是前一天的），4 秒判死 run，按天接续闸门重开后永远走不通。
+    有付费收据（provider_task_id 等）或结局不明（5xx）仍维持 §二十四 阻塞。"""
+    import deps
+    from src.ai.autopilot import SceneAutopilotManager
+
+    stale = ('视频生成失败: 重试 5 次仍失败: 429: {"error":{"code":"","message":'
+             '"已达到 API 用量上限，请在 **2026-10-31 00:00** 之后重试。 '
+             '(request id: 20261030054158288898746xBCF0xVu)","type":"AgnesAI"}}')
+
+    def wire(monkeypatch, job):
+        calls = []
+        def retry(job_id):
+            calls.append(job_id)
+            return job
+        monkeypatch.setattr(deps, 'job_queue', SimpleNamespace(
+            find_by_origin=lambda *a: job, retry=retry))
+        return calls
+
+    mgr = SceneAutopilotManager()
+
+    # 1) 无收据的 429 额度拒绝 → 重排（确定性未受理，安全）
+    calls = wire(monkeypatch, SimpleNamespace(job_id='j1', state='failed', error=stale,
+                                              params={}, error_stage='video'))
+    got = asyncio.run(mgr._enqueue_autopilot_job('p', 's04_c03', 'video', 'sk', 'r1'))
+    assert calls == ['j1'] and got is not None
+
+    # 2) 有 provider_task_id（供应商已受理）→ 不重排（双扣费风险）
+    calls = wire(monkeypatch, SimpleNamespace(job_id='j2', state='failed', error=stale,
+                                              params={'provider_task_id': 'T123'}, error_stage='video'))
+    asyncio.run(mgr._enqueue_autopilot_job('p', 's04_c03', 'video', 'sk', 'r1'))
+    assert calls == []
+
+    # 3) 5xx 结局不明 → 不重排（§二十四）
+    calls = wire(monkeypatch, SimpleNamespace(job_id='j3', state='failed',
+                                              error='重试 5 次仍失败: 503: upstream',
+                                              params={}, error_stage='video'))
+    asyncio.run(mgr._enqueue_autopilot_job('p', 's04_c03', 'video', 'sk', 'r1'))
+    assert calls == []

@@ -172,6 +172,27 @@ def _structure_changed(run: SceneAutopilotRun, scene) -> Optional[str]:
     return is_plan_stale(plan, scene)
 
 
+# 供应商 4xx 额度语义关键词——与 tools/quota_gate._PROVIDER_MARKERS 同源
+# （src 不反向 import tools，避免分层倒挂）。r46 实测样例见 quota_gate.py。
+_QUOTA_MARKERS = (
+    "quota", "配额", "额度", "insufficient", "balance",
+    "余额", "exceeded", "too many requests", "用量上限",
+)
+
+
+def _provider_rejected_quota(error) -> bool:
+    """持久化的 job error 字符串是否为「供应商 429 确定性额度拒绝」。
+
+    job error 是 AgnesError 的 str（无 status 属性），形如
+    "重试 5 次仍失败: 429: {\\"error\\":{\\"message\\":\\"已达到 API 用量上限…\\"}}"。
+    True 意味着请求被供应商拒收：无任务号、零扣费，resume 重排是安全的；
+    5xx/无状态码/无额度关键词一律 False（结局不明，§二十四 维持阻塞）。"""
+    if not isinstance(error, str) or "429:" not in error:
+        return False
+    lowered = error.lower()
+    return any(marker in lowered for marker in _QUOTA_MARKERS)
+
+
 # ============ 共享 preflight（§十七/§十八：手工 Autopilot 与 Project Preflight 同一规则）============
 # AI-5A 提取：手工 start_scene_run 与 Project Preflight 必须用同一套 ready 判定，
 # 否则会出现「Project Preflight 说 ready -> 运行时 Scene Autopilot 说 locked invalid」。
@@ -880,14 +901,24 @@ class SceneAutopilotManager:
                 return q.retry(existing.job_id) or existing
             if existing.state == "failed" and kind == "video":
                 receipt = getattr(existing, "params", {}) or {}
+                paid = any(receipt.get(k) for k in (
+                    "provider_task_id", "submission_intent_id", "dispatch_prompt"))
                 # Only input preparation failed, before any paid submission.
                 # The exact legacy timeout also identifies the original gate.
                 tail_not_ready = (
                     getattr(existing, "error", None) == "等待尾帧超时（尾帧尚未生成完成），请重试"
                     and getattr(existing, "error_stage", None) == "wait")
-                if ((receipt.get("video_pre_submit_failure") == "last_frame_url" or tail_not_ready)
-                        and not any(receipt.get(k) for k in (
-                            "provider_task_id", "submission_intent_id", "dispatch_prompt"))):
+                # r46 hop6（2026-10-31）实测回填：供应商 429 额度拒绝是
+                # 「确定性未受理」——无任务号、零扣费，但持久化的 job error
+                # 会在 resume 时原样重放（request id 都是前一天的），4 秒内
+                # 判死 run，按天接续闸门重开后永远走不完最后一公里。与
+                # tools/quota_gate.classify_quota_rejection 同语义（4xx 确定性
+                # 拒绝 + 额度关键词），但 job error 是纯字符串无 status 属性。
+                # 5xx/无状态码=结局不明，维持 §二十四 不重排纪律。
+                quota_rejected = (not paid
+                                  and _provider_rejected_quota(getattr(existing, "error", None)))
+                if ((receipt.get("video_pre_submit_failure") == "last_frame_url"
+                        or tail_not_ready or quota_rejected) and not paid):
                     return q.retry(existing.job_id) or existing
             return existing
         if kind == "video":
