@@ -417,3 +417,35 @@ def test_inspect_fields_immutable_after_freeze(tmp_path):
     adapter = ProjectProductionInspect("deepsea", tmp_path)
     with pytest.raises(AttributeError):
         adapter.project_name = "hijack"
+
+
+# ============ Bug F（2026-11-01 daycarry12m 派发实测回填）：意图分类否定语境 ============
+
+def test_suggest_intent_ignores_negated_keyword_hits():
+    """负面约束里的关键词不算正向意图信号。
+
+    现场：run #58 任务文案「不得用循环、重复片段、静帧或延长音轨凑时长」
+    ——「延长」被当正向延长信号 → 误判 extend_existing → 无 source_project
+    32 秒即退。分句级否定检测：顿号是并列分隔符，否定词作用于整个列表。"""
+    from src.ai.producer_planning_models import suggest_intent
+
+    # run #58 原文节选（Bug F 现场）→ create
+    r58 = ("请从零自主制作一部完整的电影短片，成片总时长必须在720-780秒之间。"
+           "所有必要镜头采用本次新生成的真实运动视频；"
+           "不得用循环、重复片段、静帧或延长音轨凑时长，"
+           "不复用历史影片素材抵扣本次生成量。"
+           "每日额度耗尽时保存进度并进入等待，额度刷新后沿同一个 nonce 和项目自动接续。")
+    got, reason = suggest_intent(r58)
+    assert got == "create", f"run #58 原文应判 create，实判 {got}（{reason}）"
+
+    # 正反例矩阵
+    assert suggest_intent("把这部片子延长到十分钟", source_project="p")[0] == "extend_existing"
+    assert suggest_intent("请帮我加长视频")[0] == "extend_existing"
+    assert suggest_intent("不要恢复运行")[0] == "create"
+    assert suggest_intent("恢复运行")[0] == "resume_run"
+    assert suggest_intent("不得用静帧或延长音轨凑时长")[0] == "create"
+    assert suggest_intent("把项目做完", source_project="p")[0] == "complete_project"
+    # 并列否定：否定词与关键词隔着顿号列表也覆盖
+    assert suggest_intent("禁止用循环、重复片段或追加素材充数")[0] == "create"
+    # 关键词多次出现：一处否定一处正向 → 仍算命中（正向那次生效）
+    assert suggest_intent("不要延长音轨；请把片子延长到十分钟") == ("extend_existing", "命中延长信号: 延长")

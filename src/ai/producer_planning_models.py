@@ -559,6 +559,40 @@ _COMPLETE_PATTERNS = ("把项目做完", "完成项目", "做完这个项目", "
                       "继续这个项目", "继续上次项目", "把没做完的做完")
 _CONTINUATION_MARKERS = ("继续", "接着", "做完", "补", "完成")
 
+# 🔴 Bug F（2026-11-01，daycarry12m 派发实测回填）：意图分类器的关键词命中
+# 不区分否定语境——「不得用循环、重复片段、静帧或延长音轨凑时长」里的「延长」
+# 被当成正向延长信号，误判 extend_existing → 无 source_project 32 秒即退。
+# 修复：分句级否定检测——命中关键词所在子句若含否定词，视为负面表述跳过。
+_NEGATION_MARKERS = ("不得", "不要", "不能", "不用", "避免", "勿", "禁止", "不得用",
+                     "不许", "无法", "不可")
+# 子句边界：中文标点 + 换行。顿号（、）**不算**——它是并列分隔符，否定词
+# 作用于整个并列列表（「不得用循环、重复片段、静帧或延长音轨」）。
+_CLAUSE_SEPARATORS = "，。；？！,;?!?\n"
+
+
+def _clause_of(text: str, pos: int, length: int) -> str:
+    """返回 text[pos:pos+length] 命中所在的子句（前后最近的分隔符之间）。"""
+    start = max(text.rfind(sep, 0, pos) for sep in _CLAUSE_SEPARATORS) + 1
+    end = len(text)
+    for sep in _CLAUSE_SEPARATORS:
+        idx = text.find(sep, pos + length)
+        if idx != -1:
+            end = min(end, idx)
+    return text[start:end]
+
+
+def _negated_hit(text: str, pat: str) -> bool:
+    """关键词命中是否【全部】处于否定语境——存在任一非否定出现即算正向命中。"""
+    pos = text.find(pat)
+    if pos == -1:
+        return False
+    while pos != -1:
+        clause = _clause_of(text, pos, len(pat))
+        if not any(neg in clause for neg in _NEGATION_MARKERS):
+            return False  # 该出现处无否定词 → 正向命中
+        pos = text.find(pat, pos + 1)
+    return True
+
 
 def suggest_intent(request_text: str,
                    *, source_project: Optional[str] = None) -> Tuple[str, str]:
@@ -567,25 +601,31 @@ def suggest_intent(request_text: str,
     优先级（从高到低）：resume_run > add_assets > extend_existing >
     sequel > complete_project > create。带 source_project 时，含"继续"
     类标记的文本绝不下沉为 create。
+
+    🔴 Bug F（2026-11-01）：所有 pattern 命中先过否定语境检测——负面表述
+    （「不得用…延长音轨凑时长」）里的关键词不算正向信号。同句全部命中都被
+    否定时该 pattern 类整体跳过（宁漏勿误：正向意图词被否定的概率远低于
+    负面约束词误触发；宁可用更明确的任务文案，不可误派生续作意图）。
     """
     text = (request_text or "").strip().lower()
     has_source = bool(source_project)
-    for pat in _RESUME_PATTERNS:
-        if pat in text:
-            return "resume_run", f"命中恢复信号: {pat}"
-    for pat in _ADD_ASSET_PATTERNS:
-        if pat in text:
-            return "add_assets", f"命中补素材信号: {pat}"
-    for pat in _EXTEND_PATTERNS:
-        if pat in text:
-            return "extend_existing", f"命中延长信号: {pat}"
-    for pat in _SEQUEL_PATTERNS:
-        if pat in text:
-            return "sequel", f"命中续集信号: {pat}"
-    for pat in _COMPLETE_PATTERNS:
-        if pat in text:
-            return "complete_project", f"命中完成项目信号: {pat}"
+
+    def hits(pats):
+        """未被否定语境覆盖的命中 pattern（保持 patterns 顺序）。"""
+        return [p for p in pats if p in text and not _negated_hit(text, p)]
+
+    for pat in hits(_RESUME_PATTERNS):
+        return "resume_run", f"命中恢复信号: {pat}"
+    for pat in hits(_ADD_ASSET_PATTERNS):
+        return "add_assets", f"命中补素材信号: {pat}"
+    for pat in hits(_EXTEND_PATTERNS):
+        return "extend_existing", f"命中延长信号: {pat}"
+    for pat in hits(_SEQUEL_PATTERNS):
+        return "sequel", f"命中续集信号: {pat}"
+    for pat in hits(_COMPLETE_PATTERNS):
+        return "complete_project", f"命中完成项目信号: {pat}"
     # 铁律：已有 source_project 且文本含继续类标记 -> 永不 create
+    # （继续类标记不参与否定过滤：保守分流宁严勿松）
     if has_source and any(m in text for m in _CONTINUATION_MARKERS):
         return "complete_project", "source_project + 继续类标记（保守分流）"
     return "create", "未命中继续类信号，默认新建"
