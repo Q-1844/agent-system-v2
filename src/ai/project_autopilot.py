@@ -59,7 +59,7 @@ PRUN_COMPLETED = "completed"
 PRUN_CANCELLED = "cancelled"
 PRUN_ACTIVE = {PRUN_PENDING, PRUN_RUNNING, PRUN_PAUSING, PRUN_PAUSED, PRUN_COMPOSING}   # 阻止新 Run
 PRUN_TERMINAL = {PRUN_COMPLETED, PRUN_FAILED, PRUN_CANCELLED, PRUN_BLOCKED}
-PRUN_RESUMABLE = {PRUN_PAUSED, PRUN_FAILED}   # blocked 不可 resume（source 变化，§二十九）
+PRUN_RESUMABLE = {PRUN_PAUSED, PRUN_PAUSING, PRUN_FAILED}   # blocked 不可 resume（source 变化，§二十九）；pausing=干净暂停（quota 墙 drain 后进程亡）
 
 # stage
 PSTAGE_PREFLIGHT = "preflight"
@@ -933,7 +933,7 @@ class ProjectProductionManager:
         scene_mgr = get_autopilot_manager()
         existing = scene_mgr.find_by_parent_project_run(project_name, run.run_id, entry.scene_id)
         if existing is not None:
-            if existing.status in (RUN_PAUSED, RUN_FAILED):
+            if existing.status in (RUN_PAUSED, RUN_PAUSING, RUN_FAILED):
                 try:
                     existing = await scene_mgr.resume_run(project_name, existing.run_id)
                 except Exception as e:
