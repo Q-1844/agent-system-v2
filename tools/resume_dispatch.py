@@ -44,7 +44,8 @@ def auto_resume_allowed(checkpoint_doc):
     if phase in DEAD_PHASES:
         return False, f"phase {phase} is terminal or pre-flight"
     if phase not in RESUMABLE_PHASES:
-        if phase == "FAILED" and doc.get("terminal_status") in RESUMABLE_TERMINAL:
+        if (phase in ("FAILED", "STAGE0_BOUND") and doc.get("terminal_status") in RESUMABLE_TERMINAL
+                and (phase != "STAGE0_BOUND" or (doc.get("full_run_id") and doc.get("video_attempts")))):
             pass  # 优雅暂停/额度暂停落账，可恢复（后者需过日历闸门）
         else:
             return False, f"phase {phase} not auto-resumable"

@@ -141,6 +141,8 @@ def observed_state(config, run, checkpoint, now=None):
         raise ValueError('checkpoint belongs to another Actions run; reconcile first')
     if cp.get('source_sha') != config['expected_source_sha']:
         raise ValueError('checkpoint source mismatch')
+    from src.core.submission_recovery import authorized_attempt, validate_document_policy
+    validate_document_policy(cp)
     attempts = cp.get('video_attempts') or []
     if any(type(a.get('seconds')) is not int or not 4 <= a['seconds'] <= 12 for a in attempts):
         raise ValueError('invalid cumulative video budget record')
@@ -153,9 +155,12 @@ def observed_state(config, run, checkpoint, now=None):
     if [a.get('video_id') for a in attempts[:len(previous)]] != previous:
         raise ValueError('original paid receipts changed')
     state = {'state': 'ACTIVE', 'accepted_tasks': len(ids), 'submitted_seconds': sum(a['seconds'] for a in attempts),
+             'possible_unconfirmed_seconds': sum(a['seconds'] for a in attempts
+                                                if a.get('state') == 'RESUBMIT_AUTHORIZED'),
              'image_calls': cp.get('image_calls'), 'text_calls': cp.get('text_calls'),
              'note': 'Accepted tasks are not completed clips or final-film duration.'}
-    if any(a.get('state') not in ('ACCEPTED', 'SUBMITTING') for a in attempts):
+    if any(a.get('state') not in ('ACCEPTED', 'SUBMITTING') and not authorized_attempt(
+            a, nonce=cp.get('nonce'), request_sha256=cp.get('request_sha256')) for a in attempts):
         state['state'] = 'RECONCILE_REQUIRED'; return state
     for attempt in attempts:
         if attempt.get('state') == 'SUBMITTING':
@@ -180,7 +185,7 @@ def observed_state(config, run, checkpoint, now=None):
                 and cp.get('terminal_status') in (None, 'completed')
                 and type(cp.get('duration_s')) in (int, float)
                 and math.isfinite(cp['duration_s']) and cp['duration_s'] >= config['minimum_duration_seconds']
-                and all(a.get('state') == 'ACCEPTED' for a in attempts)
+                and all(a.get('state') == 'ACCEPTED' or authorized_attempt(a) for a in attempts)
                 and cp.get('saved', {}).get('restorable_level') == 'full'):
             state['state'] = 'CLOUD_PASS_REQUIRES_LOCAL_AUDIT'
         else: state['state'] = 'RECONCILE_REQUIRED'
@@ -234,7 +239,7 @@ def collect_evidence(api, config, observation, output, max_bytes):
         media = summary.get('media', {})
         duration = media.get('duration_s')
         sources = summary.get('source_videos') or []
-        accepted = {a['video_id'] for a in observation['checkpoint']['video_attempts']}
+        accepted = {a['video_id'] for a in observation['checkpoint']['video_attempts'] if a.get('state') == 'ACCEPTED'}
         if (type(duration) not in (int, float) or not math.isfinite(duration)
                 or duration < config['minimum_duration_seconds'] or media.get('full_decode_ok') is not True
                 or len(sources) != config['expected_shot_count']

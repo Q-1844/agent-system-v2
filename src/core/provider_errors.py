@@ -126,6 +126,14 @@ def validate_intent_history(intents, paid_attempts):
     paid_ids = {a.get('video_id') for a in paid_attempts if a.get('state') == 'ACCEPTED'}
     for intent in intents:
         state = intent.get('state')
+        if state == 'RESUBMIT_AUTHORIZED':
+            from .submission_recovery import authorized_attempt
+            if (not authorized_attempt(intent) or not any(
+                    a.get('intent_id') == intent.get('intent_id') and authorized_attempt(a)
+                    and a.get('resubmit_authorization') == intent.get('resubmit_authorization')
+                    for a in paid_attempts)):
+                raise ValueError('uncertain intent has no matching authorized financial record')
+            continue
         if state not in ('REJECTED', 'NOT_SENT', 'ACCEPTED', 'COMPLETED', 'FAILED'):
             raise ValueError('unconfirmed submission intent requires reconciliation')
         if state in ('ACCEPTED', 'COMPLETED', 'FAILED'):

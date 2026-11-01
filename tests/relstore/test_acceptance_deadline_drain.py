@@ -45,7 +45,7 @@ def test_deadline_allows_bounded_drain_and_never_authorizes_new_media(tmp_path,m
         if finish:queue.jobs['j'].state='done'
     monkeypatch.setattr(driver.time,'monotonic',lambda:clock[0]);monkeypatch.setattr(driver.asyncio,'sleep',tick)
     complete=asyncio.run(driver.pause_and_drain(manager,'p','original',wrapper,queue,grace_seconds=6))
-    assert paused==[('p','original')] and complete==finish and wrapper.submission_blocked
+    assert paused==[] and complete==finish and wrapper.submission_blocked
     assert writes[-1]['drain_complete']==finish
     assert writes[-1]['phase']==('FAILED' if finish else 'INTERRUPTED')
 

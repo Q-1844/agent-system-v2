@@ -228,11 +228,10 @@ class BoundedRealClient:
         self.submission_intents = json.loads(json.dumps(
             document.get("submission_intents") or document.get("video_attempts") or []))
         attempts = json.loads(json.dumps(document.get("video_attempts") or []))
-        if any(a.get("state") != "ACCEPTED" or not a.get("video_id")
-               or type(a.get("seconds")) is not int or not 4 <= a["seconds"] <= 12 for a in attempts):
-            raise RuntimeError("unconfirmed paid submission requires reconciliation")
-        if len({a["video_id"] for a in attempts}) != len(attempts):
-            raise RuntimeError("duplicate restored video receipt")
+        from src.core.submission_recovery import validate_attempts, validate_document_policy
+        validate_document_policy(document)
+        validate_attempts(attempts, nonce=document.get('nonce'),
+                          request_sha256=document.get('request_sha256'))
         from src.core.provider_errors import validate_intent_history
         validate_intent_history(self.submission_intents, attempts)
         self.video_attempts = attempts
@@ -367,6 +366,21 @@ class BoundedRealClient:
             # otherwise a cross-hop replay cannot prove whose media this is.
             raise VideoSubmissionNotSent(
                 'repair video submission lacks native shot intent identity')
+        authorization = (native_intent or {}).get('resubmit_authorization')
+        if authorization:
+            from src.core.submission_recovery import authorization_valid, authorized_attempt
+            if (not authorization_valid(authorization)
+                    or native_intent.get('project') != self.project_dir.name
+                    or not attempt.get('attempt_id')):
+                raise VideoSubmissionNotSent('uncertain replacement authorization is invalid')
+            original = next((a for a in self.video_attempts
+                             if authorized_attempt(a) and a['attempt_id'] == authorization['original_attempt_id']
+                             and a.get('resubmit_authorization') == authorization), None)
+            if original is None or original.get('replaced_by_attempt_id'):
+                raise VideoSubmissionNotSent('uncertain replacement permission already consumed or missing')
+            attempt['resubmission_of'] = original['attempt_id']
+            attempt['resubmit_authorization_id'] = authorization['authorization_id']
+            original['replaced_by_attempt_id'] = attempt.get('attempt_id') or attempt['intent_id']
         self.video_attempts.append(attempt)
         intent = dict(attempt)
         self.submission_intents.append(intent)
@@ -377,6 +391,8 @@ class BoundedRealClient:
             # 未发出，不得让调用方背「结局不明」。
             self.submission_blocked = True  # lost CAS acknowledgement: freeze this writer
             self.video_attempts.remove(attempt)
+            if authorization:
+                original.pop('replaced_by_attempt_id', None)
             intent.update(state="NOT_SENT", finished_at=utc_now(), error=str(exc)[:500])
             raise VideoSubmissionNotSent(
                 "submission intent could not be persisted (%s); "
@@ -405,6 +421,8 @@ class BoundedRealClient:
             # UNKNOWN 对账纪律，绝不凭猜测丢弃收据。
             if quota_gate.classify_quota_rejection(error):
                 self.video_attempts = [a for a in self.video_attempts if a is not attempt]
+                if authorization:
+                    original.pop('replaced_by_attempt_id', None)
                 intent.update(state="NOT_SENT" if getattr(error, "not_sent", False) else "REJECTED",
                               failure_category="daily_quota",
                               finished_at=utc_now(), error=str(error)[:500])
@@ -417,6 +435,8 @@ class BoundedRealClient:
             # 允许 4xx 镜头重发，账本层却把它记成 UNKNOWN，二者自相矛盾。
             if provider_explicitly_rejected(error) or isinstance(error, VideoSubmissionNotSent):
                 self.video_attempts = [a for a in self.video_attempts if a is not attempt]
+                if authorization:
+                    original.pop('replaced_by_attempt_id', None)
                 intent.update(state="NOT_SENT" if isinstance(error, VideoSubmissionNotSent) else "REJECTED",
                               finished_at=utc_now(), error=str(error)[:500])
                 try:
@@ -452,12 +472,12 @@ def snapshot_settled(project_dir, attempts, queue):
         if any(job.project == project_dir.name and job.state not in ('done', 'failed')
                for job in queue.jobs.values()):
             return False
-        if any(a.get('state') != 'ACCEPTED' or not a.get('video_id') for a in attempts):
-            return False
+        from src.core.submission_recovery import validate_attempts
+        confirmed_attempts = validate_attempts(attempts)
         from src.core.store import ProjectStore
         project = ProjectStore(project_dir).load()
         versions = [v for shot in project.all_shots() for v in shot.video_versions]
-        for attempt in attempts:
+        for attempt in confirmed_attempts:
             if attempt.get('provider_outcome') == 'FAILED':
                 continue  # confirmed terminal failure has no downloadable clip
             matched = [v for v in versions if v.video_id == attempt['video_id'] and v.status == 'done']
@@ -471,15 +491,23 @@ def snapshot_settled(project_dir, attempts, queue):
         return False
 
 
-async def pause_and_drain(manager, project_name, run_id, wrapper, queue, *, grace_seconds=900):
+async def pause_and_drain(manager, project_name, run_id, wrapper, queue, *, grace_seconds=900,
+                          reason='deadline'):
     """Stop new media, let accepted work land, then record actual recoverability."""
     wrapper.submission_blocked = True
-    try:
-        await manager.request_pause(project_name, run_id)
-    except ValueError:
-        if manager.get_run(project_name, run_id).status not in ("paused", "failed", "blocked", "completed"):
-            raise
-    await wrapper.persist(phase='PAUSING', deadline_reached=True, drain_complete=False)
+    # Re-pausing an already stopped FullRun changes it back to PAUSING, with
+    # no coordinator left to settle it. Its children/jobs still need draining.
+    stopped = ("paused", "failed", "blocked", "completed", "cancelled")
+    if manager.get_run(project_name, run_id).status not in stopped:
+        try:
+            await manager.request_pause(project_name, run_id)
+        except ValueError:
+            if manager.get_run(project_name, run_id).status not in stopped:
+                raise
+    elif callable(getattr(manager, 'pause_children_for_drain', None)):
+        await manager.pause_children_for_drain(project_name, run_id)
+    await wrapper.persist(phase='PAUSING', deadline_reached=reason == 'deadline',
+                          pause_reason=reason, drain_complete=False)
     deadline = time.monotonic() + grace_seconds
     last_report = time.monotonic()
     while True:
@@ -488,12 +516,12 @@ async def pause_and_drain(manager, project_name, run_id, wrapper, queue, *, grac
             full = manager.get_run(project_name, run_id)
             await wrapper.persist(phase='RUNNING' if full.status == 'completed' else 'FAILED',
                 terminal_status=None if full.status == 'completed' else full.status,
-                error=None if full.status == 'completed' else 'configured deadline; accepted work saved',
+                error=None if full.status == 'completed' else f'{reason}; accepted work saved',
                 drain_complete=True)
             return True
         if time.monotonic() >= deadline:
             await wrapper.persist(phase='INTERRUPTED', terminal_status=full.status,
-                error='deadline drain expired; reconcile accepted work before recovery', drain_complete=False)
+                error=f'{reason} drain expired; reconcile accepted work before recovery', drain_complete=False)
             return False
         # Keep the remote heartbeat current while a submitted task is draining.
         if time.monotonic() - last_report >= 30:
@@ -759,13 +787,32 @@ def normalize_dispatch_input_to_task_spec(nonce, environ=None):
                     asset_source_projects=tuple(extras))
 
 
-def _stage0_rebind_for_hop(cp):
-    """跨 hop 重绑执行身份：github_run_id 与 source_sha 必须成对落账。
+def submission_recovery_options(environ=None):
+    env = os.environ if environ is None else environ
+    raw = str(env.get('CONFIRM_UNCERTAIN_SUBMISSIONS', 'false')).strip().lower() or 'false'
+    if raw not in ('true', 'false'):
+        raise ValueError('CONFIRM_UNCERTAIN_SUBMISSIONS must be true or false')
+    if raw == 'false':
+        return {}
+    if not env.get('RESUME_RUN_ID'):
+        raise ValueError('uncertain replacement authorization requires an explicit resume source')
+    return dict(confirm_uncertain_submissions=True, authorization_actor=env.get('GITHUB_ACTOR'),
+                authorization_run_id=env.get('GITHUB_RUN_ID'))
 
-    r46 第三跳（run 41092423597）实测教训：只重绑 run id 会造成「半重绑」
-    检查点——该跳若死在重绑与 RESTORED 之间（如身份校验拒绝），下一跳
-    的 restore_snapshot 身份校验 source_sha 恒不匹配（检查点存的是上上跳
-    的 sha），链式恢复死锁。成对重绑后，一次牺牲跳即可让链条自愈。"""
+
+from tools.submission_reconciliation import recovered_checkpoint
+
+
+def _stage0_rebind_for_hop(cp):
+    """Only claim a new hop after snapshot recovery has committed successfully.
+
+    Legacy code claimed STAGE0_BOUND before reading the source. A failed
+    recovery then stranded patrol on that new, non-resumable owner/phase.
+    """
+    if os.environ.get('RESUME_RUN_ID', '').strip():
+        # The source snapshot stays authoritative until RESTORED commits both
+        # identity fields and its reconciled ledger. A failed read cannot claim it.
+        return
     cp.save(phase="STAGE0_BOUND",
             github_run_id=os.environ.get("GITHUB_RUN_ID"),
             source_sha=os.environ.get("GITHUB_SHA"))
@@ -962,17 +1009,20 @@ async def _run_continuation_acceptance(nonce, out, summary, token, task_spec):
                 os.environ.get('GITHUB_TOKEN'), staging, project_name=source)
             restored = restore_snapshot(
                 staging, Path.cwd(), nonce, previous, provenance,
-                finalize_only=finalize_only_from_env(), project_name=source)
+                finalize_only=finalize_only_from_env(), project_name=source,
+                **submission_recovery_options())
             import shutil
             shutil.rmtree(staging)
             if restored['project_name'] != source:
                 raise RuntimeError('restored C1 project differs from frozen source')
             project_dir = Path.cwd() / 'projects' / source
+            previous = recovered_checkpoint(previous, restored)
             cp.save(phase='RESTORED', execution_video_authorization=VIDEO_BUDGET_SECONDS,
                 github_run_id=os.environ.get('GITHUB_RUN_ID'),
                     source_sha=os.environ.get('GITHUB_SHA'), resume_from_run_id=resume_id,
                     updated_at=utc_now(), terminal_status=None, error=None, quota_resume_after=None,
-                    resume_history=[*(previous.get('resume_history') or []), provenance])
+                    resume_history=[*(previous.get('resume_history') or []), provenance],
+                    **restored.get('submission_recovery_updates', {}))
             summary['resume'] = restored
         else:
             if previous.get('video_attempts'):
@@ -1197,7 +1247,7 @@ async def _run_c2_acceptance(nonce, out, summary, token, task_spec, stage0):
             project_name=destination)
         restored = restore_snapshot(staging, Path.cwd(), nonce, previous, provenance,
                                     finalize_only=finalize_only_from_env(),
-                                    project_name=destination)
+                                    project_name=destination, **submission_recovery_options())
         import shutil
         shutil.rmtree(staging)
         if restored['project_name'] != destination:
@@ -1211,11 +1261,13 @@ async def _run_c2_acceptance(nonce, out, summary, token, task_spec, stage0):
         summary['c2_repair_effective_plan'] = validate_repaired_project(
             project_dir, blueprint, revision_events, plan_fp)
         project = ProjectStore(project_dir).load()
+        previous = recovered_checkpoint(previous, restored)
         cp.save(phase='RESTORED', execution_video_authorization=VIDEO_BUDGET_SECONDS,
                 github_run_id=os.environ.get('GITHUB_RUN_ID'),
                 source_sha=os.environ.get('GITHUB_SHA'), resume_from_run_id=resume_id,
                 updated_at=utc_now(), terminal_status=None, error=None, quota_resume_after=None,
-                resume_history=[*(previous.get('resume_history') or []), provenance])
+                resume_history=[*(previous.get('resume_history') or []), provenance],
+                    **restored.get('submission_recovery_updates', {}))
         summary['resume'] = restored
         # 恢复成功即固化完整身份字段进 summary：早期失败的 run（如恢复后死在
         # D 预检）finally 写出的 summary 缺 source_sha/project/full_run 字段，
@@ -1382,7 +1434,8 @@ async def _run_auto_acceptance(nonce, out, summary, token):
         provenance = await asyncio.to_thread(download_snapshot, resume_id, nonce,
                                              os.environ.get("GITHUB_TOKEN"), staging)
         restored = restore_snapshot(staging, Path.cwd(), nonce, previous,
-                                     provenance, finalize_only=finalize_only_from_env())
+                                     provenance, finalize_only=finalize_only_from_env(),
+                                     **submission_recovery_options())
         import shutil
         shutil.rmtree(staging)
         summary.update(full_run_id=restored["full_run_id"],
@@ -1391,10 +1444,12 @@ async def _run_auto_acceptance(nonce, out, summary, token):
         write_json(out / "restore-input.json", restored)
         provenance["previous_terminal_status"] = previous.get("terminal_status")
         provenance["previous_error"] = previous.get("error")
+        previous = recovered_checkpoint(previous, restored)
         cp.save(phase="RESTORED", github_run_id=os.environ.get("GITHUB_RUN_ID"),
                 source_sha=os.environ.get("GITHUB_SHA"), resume_from_run_id=resume_id,
                 updated_at=utc_now(), terminal_status=None, error=None, quota_resume_after=None,
-                resume_history=[*(previous.get("resume_history") or []), provenance])
+                resume_history=[*(previous.get("resume_history") or []), provenance],
+                **restored.get("submission_recovery_updates", {}))
 
     # Legacy create-mode runs used the workflow's explicit inflight input but
     # never froze it in B1. Preserve that policy once during migration.
@@ -1536,7 +1591,8 @@ async def run_acceptance(nonce, out, summary):
             staging = out / "source-snapshot"
             provenance = await asyncio.to_thread(download_snapshot, resume_id, nonce,
                                                  os.environ.get("GITHUB_TOKEN"), staging)
-            restored = restore_snapshot(staging, Path.cwd(), nonce, previous, provenance, finalize_only=finalize_only)
+            restored = restore_snapshot(staging, Path.cwd(), nonce, previous, provenance, finalize_only=finalize_only,
+                                        **submission_recovery_options())
             import shutil
             shutil.rmtree(staging)  # the live copy is retained; avoid nesting old snapshots in new artifacts
             summary.update(project_name=restored["project_name"], full_run_id=restored["full_run_id"],
@@ -1545,11 +1601,13 @@ async def run_acceptance(nonce, out, summary):
             write_json(out / "restore-input.json", restored)
             provenance["previous_terminal_status"] = previous.get("terminal_status")
             provenance["previous_error"] = previous.get("error")
+            previous = recovered_checkpoint(previous, restored)
             cp.save(phase="RESTORED", github_run_id=os.environ.get("GITHUB_RUN_ID"),
                     source_sha=os.environ.get("GITHUB_SHA"), resume_from_run_id=resume_id,
                     updated_at=utc_now(),
                     terminal_status=None, error=None, quota_resume_after=None,
-                    resume_history=[*(previous.get("resume_history") or []), provenance])
+                    resume_history=[*(previous.get("resume_history") or []), provenance],
+                **restored.get("submission_recovery_updates", {}))
         else:
             if cp.current is not None:
                 raise RuntimeError("nonce already has a run; restore/reconcile existing evidence before resuming")
@@ -1724,7 +1782,8 @@ async def run_acceptance(nonce, out, summary):
     write_json(out / "full-run.json", full.model_dump())
     if full.status != "completed":
         if wrapper.quota_gate_after:
-            drained = await pause_and_drain(manager, project_name, full.run_id, wrapper, deps.job_queue)
+            drained = await pause_and_drain(manager, project_name, full.run_id, wrapper, deps.job_queue,
+                                            reason='quota')
             if not drained:
                 raise RuntimeError("quota drain incomplete; accepted tasks retained for recovery")
             # 按天接续：额度耗尽是可预期的干净暂停，不是生产失败。意图条目
@@ -1735,10 +1794,17 @@ async def run_acceptance(nonce, out, summary):
                                    quota_resume_after=wrapper.quota_gate_after,
                                    drain_complete=True)
             summary["quota_pause"] = {"resume_after": wrapper.quota_gate_after,
-                                      "accepted_attempts": len(wrapper.video_attempts)}
+                                      "accepted_attempts": sum(a["state"] == "ACCEPTED" for a in wrapper.video_attempts)}
             summary["auto_resume"] = await auto_resume_next_hop(
                 wrapper, nonce, driver_minutes)  # 闸门未开时仅记录派发理由
             raise RuntimeError(f"FullProject quota-paused until {wrapper.quota_gate_after}: {full.error}")
+        if full.status == 'paused':
+            drained = await pause_and_drain(manager, project_name, full.run_id, wrapper,
+                                            deps.job_queue, reason='paused')
+            summary['pause_drain_complete'] = drained
+            summary['auto_resume'] = await auto_resume_next_hop(wrapper, nonce, driver_minutes)
+            raise RuntimeError('FullProject paused; in-flight submissions drained' if drained
+                               else 'FullProject paused; drain incomplete, receipts retained')
         wait_reason = production_wait_reason(wrapper, deps.job_queue, project_name)
         if wait_reason in ('poll_transient', 'rate_limit'):
             await wrapper.persist(phase="INTERRUPTED", terminal_status="technical_wait", error=full.error,

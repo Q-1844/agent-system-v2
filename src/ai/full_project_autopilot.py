@@ -730,6 +730,27 @@ class FullProjectManager:
         self._launch_loop(run)
         return run
 
+    async def pause_children_for_drain(self, project_name: str, run_id: str):
+        """Stop child dispatch even when this coordinator has already paused.
+
+        Do not revive a stopped FullRun as PAUSING: it has no loop left to
+        settle that state. Existing child loops still need their own signal.
+        """
+        run = self._load_run(project_name, run_id)
+        if run is None:
+            raise ValueError("Run 不存在")
+        if run.stage == FSTAGE_PRODUCTION and run.production_run_id:
+            manager = get_project_autopilot_manager()
+            child = manager.get_run(project_name, run.production_run_id)
+            if child is not None and child.status in (PROD_PENDING, PROD_RUNNING, PROD_PAUSING):
+                try:
+                    await manager.request_pause(project_name, run.production_run_id)
+                except ValueError:
+                    # A child may finish between the read and pause request.
+                    latest = manager.get_run(project_name, run.production_run_id)
+                    if latest is not None and latest.status in (PROD_PENDING, PROD_RUNNING, PROD_PAUSING):
+                        raise
+
     async def request_pause(self, project_name: str, run_id: str) -> FullProjectRun:
         """§三十六/§四十五：prepare 阶段 -> 设 pause_requested（loop 在下一 checkpoint 暂停，AI 已发出的
         请求允许返回后保存 proposal 再暂停）；production 阶段 -> 传给 ProjectProductionRun child。"""
