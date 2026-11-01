@@ -53,6 +53,7 @@ from src.core.store import ProjectStore, _atomic_write_json
 from src.ai.project_autopilot import (
     get_project_autopilot_manager, build_project_source_signature,
     PRUN_PENDING as PROD_PENDING, PRUN_RUNNING as PROD_RUNNING, PRUN_PAUSED as PROD_PAUSED,
+    PRUN_PAUSING as PROD_PAUSING,
     PRUN_FAILED as PROD_FAILED, PRUN_BLOCKED as PROD_BLOCKED, PRUN_COMPOSING as PROD_COMPOSING,
     PRUN_COMPLETED as PROD_COMPLETED, PRUN_CANCELLED as PROD_CANCELLED,
     PRUN_ACTIVE as PROD_ACTIVE, PRUN_TERMINAL as PROD_TERMINAL,
@@ -204,7 +205,7 @@ FRUN_COMPLETED = "completed"
 FRUN_CANCELLED = "cancelled"
 FRUN_ACTIVE = {FRUN_PENDING, FRUN_PREPARING, FRUN_PAUSING, FRUN_PAUSED, FRUN_PRODUCING}
 FRUN_TERMINAL = {FRUN_COMPLETED, FRUN_FAILED, FRUN_CANCELLED, FRUN_BLOCKED}
-FRUN_RESUMABLE = {FRUN_PAUSED, FRUN_FAILED}   # blocked 不可 resume（§三十五）
+FRUN_RESUMABLE = {FRUN_PAUSED, FRUN_PAUSING, FRUN_FAILED}   # blocked 不可 resume（§三十五）；pausing=干净暂停（quota 撞墙 drain 后进程亡，控制器已死，收据已落账）
 
 # stage
 FSTAGE_INSPECT = "inspect"
@@ -714,7 +715,7 @@ class FullProjectManager:
             child = manager.get_run(project_name, run.production_run_id)
             if child is None:
                 raise ValueError("production child missing; reconciliation required")
-            if child.status in (PROD_FAILED, PROD_PAUSED):
+            if child.status in (PROD_FAILED, PROD_PAUSED, PROD_PAUSING):
                 await manager.resume_run(project_name, child.run_id)
         run.status = FRUN_PREPARING if run.stage in (FSTAGE_INSPECT, FSTAGE_PREPARE,
                                                      FSTAGE_FINALIZE_PREPARATION) else FRUN_PRODUCING

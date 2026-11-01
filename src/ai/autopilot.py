@@ -520,7 +520,7 @@ class SceneAutopilotManager:
 
     async def resume_run(self, project_name: str, run_id: str) -> SceneAutopilotRun:
         def resume(latest):
-            if latest.status not in (RUN_PAUSED, RUN_FAILED, RUN_BLOCKED):
+            if latest.status not in (RUN_PAUSED, RUN_PAUSING, RUN_FAILED, RUN_BLOCKED):
                 raise ValueError(f"Run 状态 {latest.status} 不可 resume")
             for state in latest.shots:
                 if state.status == SHOT_FAILED:
