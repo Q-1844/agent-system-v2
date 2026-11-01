@@ -909,7 +909,8 @@ class SceneAutopilotManager:
                         receipt.get("failure_category") == "poll_transient"):
                     return q.retry(existing.job_id) or existing
                 from src.core.provider_errors import safe_submit_retry
-                if safe_submit_retry(receipt, getattr(existing, "error", None)):
+                from src.core.submission_recovery import authorized_job_retry
+                if safe_submit_retry(receipt, getattr(existing, "error", None)) or authorized_job_retry(receipt):
                     return q.retry(existing.job_id) or existing
             return existing
         if kind == "video":

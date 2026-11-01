@@ -2017,7 +2017,7 @@ async def _handler_video(job, emit):
     bound_video = None   # BOUND fresh-submit 时为 Adapter 产物（39D input_visuals 来源）
     # 42.md §二缺陷④：fresh-submit 前发现「上次提交结果不明」时置 True，
     # 如实随 VideoVersion 落库（续轮询路径恒 False）。
-    previous_submit_uncertain = False
+    previous_submit_uncertain = bool(job.params.get("resubmit_authorization"))
     if shot.video.video_id and shot.video.status not in (
             ShotStatus.DONE.value, ShotStatus.FAILED.value):
         vid = shot.video.video_id
@@ -2170,6 +2170,7 @@ async def _handler_video(job, emit):
             'attempt_id': job.params['submission_intent_id'],
             'input_signature': compiled_signature,
             'previous_final_video': compiled_final_video,
+            'resubmit_authorization': job.params.get('resubmit_authorization'),
         })
         try:
             try:
@@ -2205,6 +2206,9 @@ async def _handler_video(job, emit):
                                                    else "rejected" if known_rejection else "unknown")
             job.params["failure_category"] = ("rate_limit" if known_rejection and status == 429 and not quota_wait
                                                else "provider_rejection" if known_rejection else "submission_unknown")
+            if not known_rejection:
+                job.params.pop('confirm_uncertain_resubmit', None)
+                job.params.pop('resubmit_authorization', None)
             if known_rejection:
                 def _reject_if_current(current):
                     if (current.final_video == compiled_final_video and
@@ -2218,6 +2222,8 @@ async def _handler_video(job, emit):
                 await _record_video_quota_wait(job, _sub_err, emit)
             _dns_classify(str(_sub_err))
             raise
+        job.params.pop('confirm_uncertain_resubmit', None)
+        job.params.pop('resubmit_authorization', None)
         _dns_classify("")   # 提交成功 → 清零连续失败计数
         vid = created.get("video_id") or created.get("task_id") or created.get("id")
         if not vid:

@@ -28,6 +28,10 @@ on:
         description: '恢复已失败运行的 Actions run ID（复用原 nonce、项目与已完成视频）'
         required: false
         default: ''
+      confirm_uncertain_submissions:
+        description: '显式接受此 nonce 当前及后续 hop 的 UNKNOWN 重提可能重复计费（持久授权，默认禁止）'
+        type: boolean
+        default: false
       finalize_only:
         description: '仅对账已完成素材并合成归档，禁止 Agnes 新生成'
         type: boolean
@@ -144,6 +148,7 @@ jobs:
           TASK_NONCE: ${{ inputs.task_nonce }}
           AGNES_VIDEO_INFLIGHT: ${{ inputs.media_inflight }}
           RESUME_RUN_ID: ${{ inputs.resume_run_id }}
+          CONFIRM_UNCERTAIN_SUBMISSIONS: ${{ inputs.confirm_uncertain_submissions }}
           FINALIZE_ONLY: ${{ inputs.finalize_only }}
           DRIVER_TIMEOUT_MINUTES: ${{ inputs.driver_timeout_minutes }}
           FILM_TARGET_SECONDS: ${{ inputs.target_duration_seconds }}

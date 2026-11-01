@@ -224,9 +224,14 @@ def reconcile_accepted_work(doc, jobs, attempts):
     return recovered
 
 
-def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, finalize_only=False, project_name=None):
+def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, finalize_only=False, project_name=None,
+                     confirm_uncertain_submissions=False, authorization_actor=None, authorization_run_id=None):
     """Validate identity/paid receipts before copying any state into the runner."""
     staging, workspace = Path(staging), Path(workspace).resolve()
+    if type(confirm_uncertain_submissions) is not bool:
+        raise ValueError('uncertain submission confirmation must be a boolean')
+    if checkpoint.get('nonce') not in (None, nonce):
+        raise ValueError('checkpoint belongs to a different task nonce')
     if (str(checkpoint.get('github_run_id')) != provenance['run_id']
             or checkpoint.get('source_sha') != provenance['source_sha']):
         raise ValueError('checkpoint belongs to a different Actions run')
@@ -270,24 +275,30 @@ def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, final
                     raise ValueError('unsafe saved local path')
                 return suffix
         return None
-    attempts = checkpoint.get('video_attempts') or []
-    ids = [a.get('video_id') for a in attempts]
-    # Legacy 200/320 still use their historical, verified limits; auto C1/C2
-    # binds its own upper limit at Stage0 media authorization. Never derive
-    # this cap from live missing seconds or a new runner's fresh client.
-    historical = 384 if str(checkpoint.get('film_target_seconds')) == '320' else 240
-    authorized = max(checkpoint.get('authorized_video_seconds', historical),
-                     checkpoint.get('execution_video_authorization', 0))
-    if (type(authorized) is not int or not 0 < authorized <= 1_000_000_000 or
-            any(a.get('state')!='ACCEPTED' or not a.get('video_id')
-                or type(a.get('seconds')) is not int or not 4<=a['seconds']<=12 for a in attempts)
-            or len(ids)!=len(set(ids)) or sum(a['seconds'] for a in attempts)>authorized):
-        raise ValueError('unconfirmed/duplicate paid submission requires reconciliation')
-    from src.core.provider_errors import validate_intent_history
-    validate_intent_history(checkpoint.get('submission_intents') or [], attempts)
+    if finalize_only and confirm_uncertain_submissions:
+        raise ValueError('finalize-only cannot authorize new uncertain submissions')
     jobs = json.loads((staging/'cache/jobs.json').read_text())
     if any(j.get('project') != pname for j in jobs.values()):
         raise ValueError('snapshot contains unrelated jobs')
+    from tools.submission_reconciliation import reconcile_snapshot_submissions
+    checkpoint, recovery_updates, authorized_jobs = reconcile_snapshot_submissions(
+        checkpoint, doc, jobs, nonce, provenance, confirm=confirm_uncertain_submissions,
+        actor=authorization_actor, authorization_run_id=authorization_run_id)
+    submission_jobs = [e['job_id'] for e in recovery_updates.get('submission_reconciliations', [])
+                       if e.get('source_run_id') == provenance['run_id']]
+    all_attempts = checkpoint.get('video_attempts') or []
+    from src.core.submission_recovery import validate_attempts
+    attempts = validate_attempts(all_attempts, nonce=checkpoint.get('nonce'),
+                                 request_sha256=checkpoint.get('request_sha256'))
+    ids = [a['video_id'] for a in attempts]
+    historical = 384 if str(checkpoint.get('film_target_seconds')) == '320' else 240
+    authorized = max(checkpoint.get('authorized_video_seconds', historical),
+                     checkpoint.get('execution_video_authorization', 0))
+    if (type(authorized) is not int or not 0 < authorized <= 1_000_000_000
+            or sum(a['seconds'] for a in all_attempts) > authorized):
+        raise ValueError('unconfirmed/duplicate paid submission requires reconciliation')
+    from src.core.provider_errors import validate_intent_history
+    validate_intent_history(checkpoint.get('submission_intents') or [], all_attempts)
     recovered_jobs = [] if finalize_only else reconcile_accepted_work(doc, jobs, attempts)
     full_path = project/'output/full_runs'/checkpoint['full_run_id']/'run.json'
     full = json.loads(full_path.read_text())
@@ -298,7 +309,7 @@ def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, final
     # 收据），干净 drain 反而被拒，次日续跑死在恢复门口、额度白等。
     # 'producing'（controller 可能活着）仍维持原有条件放行。
     allowed_full_states = {'failed', 'paused', 'pausing'}
-    if finalize_only or recovered_jobs:
+    if finalize_only or recovered_jobs or submission_jobs:
         allowed_full_states.update(('producing',))
     if finalize_only:
         allowed_full_states.add('completed')
@@ -313,7 +324,7 @@ def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, final
         # 'pausing' 同上放行（daycarry12m 实测）：drain 静止态，controller 已死，
         # 在途工作由 reconcile_accepted_work + 恢复侧 paid-retry 纪律处理，
         # 安全性与 'failed' 同级；'producing' 才是可能的活态。
-        if not finalize_only and not recovered_jobs and native.get('status') not in ('failed','paused','pausing','completed','blocked','cancelled'):
+        if not finalize_only and not (recovered_jobs or submission_jobs) and native.get('status') not in ('failed','paused','pausing','completed','blocked','cancelled'):
             raise ValueError('active native controller must be reconciled before startup')
     versions = [v for sc in doc['scenes'] for shot in sc['shots'] for v in shot.get('video_versions',[])]
     verified = []
@@ -365,7 +376,7 @@ def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, final
                 params['snapshot_reconciliation'] = dict(provenance)
                 params['dispatch_input_signature'] = video_input_signature(
                     rebased_project, rebased_project.get_shot(jobs[job_id]['shot_id']))
-    if recovered_jobs:
+    if recovered_jobs or submission_jobs:
         for path, native in rewritten.items():
             if path in native_paths and native.get('status') in ('running', 'producing', 'pending', 'pausing'):
                 native.update(status='paused', pause_requested=False, cancel_requested=False)
@@ -382,4 +393,7 @@ def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, final
     shutil.copyfile(staging/'cache/quota.json',workspace/'cache/quota.json')
     return {**provenance,'project_name':pname,'full_run_id':checkpoint['full_run_id'],
             'reused_completed_videos':verified,'previous_video_seconds':sum(a['seconds'] for a in attempts),
-            'finalize_only':finalize_only, 'reconciled_jobs':reconciled_jobs, 'recovered_poll_jobs':recovered_jobs}
+            'finalize_only':finalize_only, 'reconciled_jobs':reconciled_jobs, 'recovered_poll_jobs':recovered_jobs,
+            'authorized_resubmit_jobs':authorized_jobs, 'reconciled_submission_jobs':submission_jobs,
+            'submission_recovery_updates':recovery_updates,
+            'possible_unconfirmed_seconds':sum(a['seconds'] for a in all_attempts if a['state'] == 'RESUBMIT_AUTHORIZED')}

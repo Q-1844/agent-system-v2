@@ -226,6 +226,9 @@ class JobQueue:
         from .provider_errors import safe_submit_retry
         if safe_submit_retry(params, job.error):
             return {"resettable": True, "reason": "explicit_non_acceptance"}
+        from .submission_recovery import authorized_job_retry
+        if authorized_job_retry(params) and params['resubmit_authorization']['job_id'] == job.job_id:
+            return {"resettable": True, "reason": "explicit_duplicate_charge_authorization"}
         if params.get("submission_intent_id"):
             return {"resettable": False, "reason": "submission_intent_present"}
         state = str(params.get("provider_submit_state") or "")
@@ -342,6 +345,9 @@ class JobQueue:
                 ("submitting", "unknown", "accepted"))
             from .provider_errors import safe_submit_retry
             rejected = safe_submit_retry(evidence, j.error)
+            from .submission_recovery import authorized_job_retry
+            replacement = (authorized_job_retry(evidence)
+                           and evidence['resubmit_authorization']['job_id'] == j.job_id)
             until = evidence.get("quota_resume_after")
             if rejected and until:
                 from datetime import datetime, timezone
@@ -355,7 +361,7 @@ class JobQueue:
                                and evidence.get("provider_submit_state") == "accepted"
                                and not evidence.get("unattached_provider_receipt")
                                and not evidence.get("unattached_artifact"))
-            safe_to_retry = resume_poll or rejected or (not has_paid_evidence and
+            safe_to_retry = resume_poll or replacement or rejected or (not has_paid_evidence and
                              (decision["resettable"] or never_started_cancel))
             if not safe_to_retry:
                 log.warning("[JobQueue] video retry blocked pending provider reconciliation: "
@@ -364,12 +370,14 @@ class JobQueue:
                 return None
             if resume_poll:
                 j.params.pop("failure_category", None)  # a new failure must supply fresh facts
-        if j.kind == JobKind.VIDEO.value and rejected:
+        if j.kind == JobKind.VIDEO.value and (rejected or replacement):
             # Retain the old intent and error as history, then compile a new intent.
             keys = ("submission_intent_id", "provider_submit_state", "dispatch_prompt",
                     "dispatch_input_signature", "dispatch_final_video", "dispatch_native_basis",
-                    "dispatch_provider_options", "failure_category", "quota_resume_after")
+                    "dispatch_provider_options", "failure_category", "quota_resume_after", "resubmit_authorization")
             history = {k: j.params.pop(k) for k in keys if k in j.params}
+            if history.get('resubmit_authorization'):
+                j.params['resubmit_authorization'] = history['resubmit_authorization']
             history.update(error=j.error, attempts=j.attempts, finished_at=j.finished_at)
             j.params.setdefault("submission_history", []).append(history)
         j.error_class = j.error_stage = j.error_provider = j.error_model = None

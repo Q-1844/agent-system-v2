@@ -207,9 +207,15 @@ def _busy_paths(project_dir: Path) -> list[Path]:
 
 
 def assert_quiescent(project_dir: Path, checkpoint: dict, *, jobs_file: Optional[Path] = None):
-    if any(a.get("state") != "ACCEPTED" or not a.get("video_id")
-           for a in (checkpoint.get("video_attempts") or [])):
-        raise RepairRevisionError("SUBMITTING/UNKNOWN/ambiguous video receipts require reconciliation")
+    from src.core.submission_recovery import authorized_attempt, validate_document_policy
+    try:
+        validate_document_policy(checkpoint)
+        if any(not (a.get('state') == 'ACCEPTED' and a.get('video_id')) and not authorized_attempt(
+                a, nonce=checkpoint.get('nonce'), request_sha256=checkpoint.get('request_sha256'))
+               for a in checkpoint.get('video_attempts') or []):
+            raise ValueError('unreconciled video receipt')
+    except ValueError as exc:
+        raise RepairRevisionError('SUBMITTING/UNKNOWN/ambiguous video receipts require reconciliation') from exc
     for path in _busy_paths(Path(project_dir)):
         try:
             status = json.loads(path.read_text(encoding="utf-8")).get("status")
