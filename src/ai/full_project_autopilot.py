@@ -719,6 +719,11 @@ class FullProjectManager:
                 await manager.resume_run(project_name, child.run_id)
         run.status = FRUN_PREPARING if run.stage in (FSTAGE_INSPECT, FSTAGE_PREPARE,
                                                      FSTAGE_FINALIZE_PREPARATION) else FRUN_PRODUCING
+        # 清暂停/取消请求标志（daycarry12m run 41330631017 实测回填）：
+        # 干净暂停（quota 墙 drain）置的 pause_requested 若不清，run loop
+        # 第一个检查点立即再暂停（paused: None）。project/scene 两级 resume
+        # 均已清，FullProject 级此前漏了。
+        run.pause_requested = run.cancel_requested = False
         run.error = None
         run.error_code = None
         await self._save_run(run)
