@@ -715,3 +715,28 @@ def test_b2_no_sidecar_zero_impact(client, fake_agnes_swap):
         assert "本场制作预算" not in fake_agnes_swap.director_user_msgs[0]
     finally:
         _cleanup()
+
+
+# ============ daycarry12m 2026-11-02：干净暂停 resume 清 pause_requested ============
+def test_resume_clears_pause_requested_flag():
+    """run 41330631017 实测回填：干净暂停（quota 墙 drain）置的
+    pause_requested 若 resume 不清，run loop 第一个检查点立即再暂停
+    （FullProject did not complete: paused: None）。project/scene 两级
+    resume 均清标志，FullProject 级此前漏了。"""
+    from src.ai.full_project_autopilot import (
+        FullProjectManager, FullProjectRun, FRUN_PAUSED, FSTAGE_PRODUCTION)
+    import dataclasses
+
+    mgr = FullProjectManager.__new__(FullProjectManager)
+    run = FullProjectRun(run_id="frun_x", project_name="p", status=FRUN_PAUSED,
+                         stage=FSTAGE_PRODUCTION)
+    run.pause_requested = True
+    run.cancel_requested = True
+    saved = {}
+    mgr._load_run = lambda project_name, run_id: run if run_id == "frun_x" else None
+    async def _save(r): saved['status'] = r.status; saved['pause'] = r.pause_requested
+    mgr._save_run = _save
+    mgr._launch_loop = lambda r: None
+    got = asyncio.run(mgr.resume_run("p", "frun_x"))
+    assert got.pause_requested is False and got.cancel_requested is False
+    assert saved['pause'] is False and saved['status'] != FRUN_PAUSED
