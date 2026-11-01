@@ -17,6 +17,7 @@
 5. **走原生 Job/handler。** 对账只为确切 native Job 写 `confirm_uncertain_resubmit`；队列归档旧 dispatch 和 intent 后编译新请求。VideoVersion 保留 `previous_submit_uncertain=True`。已完成镜头、已选版本和文件不被重新制作。
 6. **跨 hop 一致。** 通过全部 snapshot 校验后，将新 ledger/policy 和 RESTORED owner 一次 CAS 保存。恢复失败保持旧 phase/owner，防止巡检失去接棒对象。已有 STAGE0_BOUND 仅在真实 FullRun、非空已付费记录、paused/quota_exhausted 终态等条件同时满足时允许巡检接棒。
 7. **后续 hop 继承同一 nonce 的策略。** 无需每天再次手工放行；默认 false 表示“不新增授权”，不会撤销已经落账的本任务策略。其它任务没有该策略仍 fail-loud。readonly monitor、后续恢复、局部修订与最终合成都识别有审计记录的历史未知成本，不能把它当作视频文件或真实回执。
+8. **新的 UNKNOWN 也能交给巡检。** 有有效持久授权且新未知意图身份齐全的 `FAILED/failed` 任务允许巡检接棒，再由 stopped-snapshot 恢复检查核对原生 Job/输入并逐笔授权；不在活进程内盲重提。无授权、缺失身份、已带回执、取消或超 hop 上限仍不允许此入口。
 
 当前客户端按已知任务号查询的路径继续复用；本次没有声称能凭时间/提示词查询无任务号请求，也没有伪造供应商回执。
 

@@ -64,6 +64,28 @@ def test_hop_cap_blocks_and_flags():
     assert "cap" in reason
 
 
+@pytest.mark.parametrize('change,allowed', [
+    ('none', True), ('no_policy', False), ('other_task', False), ('no_pending', False),
+    ('missing_identity', False), ('has_receipt', False), ('cancelled', False), ('hop_cap', False),
+])
+def test_patrol_can_reconcile_new_unknown_only_under_persisted_task_permission(change, allowed):
+    from src.core.submission_recovery import make_policy
+    doc = _doc(phase='FAILED', terminal='failed', nonce='film', request_sha256='d'*64,
+               full_run_id='full', video_attempts=[dict(state='UNKNOWN', seconds=8,
+                   attempt_id='new-attempt', intent_id='new-intent', immutable_input_digest='e'*64,
+                   logical_shot_id='s05_c03')])
+    doc['submission_recovery_policy'] = make_policy('film', 'd'*64,
+        actor='operator', run_id='200', at='2026-11-01T18:39:37Z')
+    if change == 'no_policy':doc.pop('submission_recovery_policy')
+    if change == 'other_task':doc['nonce'] = 'other-film'
+    if change == 'no_pending':doc['video_attempts'] = []
+    if change == 'missing_identity':doc['video_attempts'][0].pop('attempt_id')
+    if change == 'has_receipt':doc['video_attempts'][0]['video_id'] = 'paid'
+    if change == 'cancelled':doc['terminal_status'] = 'cancelled'
+    if change == 'hop_cap':doc['resume_history'] = [{}] * MAX_AUTO_HOPS
+    assert auto_resume_allowed(doc)[0] is allowed
+
+
 # ---------- 派发请求形状与降级 ----------
 
 def test_dispatch_success_posts_workflow_dispatch(monkeypatch):

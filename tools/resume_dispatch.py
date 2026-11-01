@@ -26,7 +26,8 @@ MAX_AUTO_HOPS = 50_000
 
 # 可自动续跑的检查点相位。FAILED+terminal_status=paused 是"到点优雅暂停"
 # 的落账形态（pause_and_drain 写入）；FAILED+quota_exhausted 是"每日额度
-# 耗尽暂停"（quota_gate 写入，需过日历闸门）；其余 FAILED 是真实失败，交人工。
+# 耗尽暂停"（quota_gate 写入，需过日历闸门）。新 UNKNOWN 仅在有效持久
+# 风险授权下允许进入恢复对账；其余 FAILED 是真实失败，交人工。
 RESUMABLE_PHASES = {"RUNNING", "RESTORED", "PAUSING", "INTERRUPTED", "WAITING_QUOTA"}
 RESUMABLE_TERMINAL = {"paused", "quota_exhausted"}
 DEAD_PHASES = {"COMPLETE", "AWAITING_HUMAN", "BLOCKED_PREFLIGHT", "STARTING"}
@@ -37,17 +38,25 @@ def hop_count(checkpoint_doc):
 
 
 def auto_resume_allowed(checkpoint_doc):
-    """返回 (allowed, reason)。只依据检查点权威相位与跳数，不猜测。"""
+    """返回 (allowed, reason)。依据权威相位、显式授权与跳数，不猜测。"""
     from tools.quota_gate import gate_status
     doc = checkpoint_doc or {}
     phase = doc.get("phase")
+    from src.core.submission_recovery import policy_valid
+    pending = [a for a in doc.get('video_attempts') or []
+               if a.get('state') in ('SUBMITTING', 'UNKNOWN')]
+    authorized_unknown = (phase == 'FAILED' and doc.get('terminal_status') == 'failed'
+        and bool(doc.get('full_run_id')) and bool(pending)
+        and all(not a.get('video_id') and all(a.get(k) for k in
+                    ('attempt_id', 'intent_id', 'immutable_input_digest', 'logical_shot_id')) for a in pending)
+        and policy_valid(doc.get('submission_recovery_policy'), doc.get('nonce'), doc.get('request_sha256')))
     if phase in DEAD_PHASES:
         return False, f"phase {phase} is terminal or pre-flight"
     if phase not in RESUMABLE_PHASES:
-        if (phase in ("FAILED", "STAGE0_BOUND") and doc.get("terminal_status") in RESUMABLE_TERMINAL
-                and (phase != "STAGE0_BOUND" or (doc.get("full_run_id") and doc.get("video_attempts")))):
-            pass  # 优雅暂停/额度暂停落账，可恢复（后者需过日历闸门）
-        else:
+        resumable_pause = (phase in ("FAILED", "STAGE0_BOUND")
+            and doc.get("terminal_status") in RESUMABLE_TERMINAL
+            and (phase != "STAGE0_BOUND" or (doc.get("full_run_id") and doc.get("video_attempts"))))
+        if not (authorized_unknown or resumable_pause):
             return False, f"phase {phase} not auto-resumable"
     gate_open, gate_reason = gate_status(doc)
     if not gate_open:
