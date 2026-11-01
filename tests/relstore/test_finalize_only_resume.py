@@ -87,3 +87,27 @@ def test_native_state_reconciliation_uses_path_parts_on_both_platforms(platform)
                root/'output/full_runs/f/run.json':full}
     recovery.reconcile_finalization(root,rewritten,{},['paid'],{'run_id':'stopped'})
     assert full=={'status':'paused','pause_requested':False}
+
+
+def test_clean_pause_drain_is_resumable_without_finalize(tmp_path):
+    """daycarry12m 2026-11-01 续跑实测回填（run 41327008169）：干净暂停——
+    quota 撞墙→drain 完成→收据全部落账（video.status=done、无 in-flight job）
+    →FullRun 落 'pausing'。reconcile_accepted_work 无事可做（recovered_jobs
+    为空），旧条件「finalize_only or recovered_jobs」只覆盖脏 drain，干净
+    drain 反而被拒 → native FullRun is not safely resumable，次日续跑死在
+    恢复门口，500s 额度白等。非 finalize 恢复必须放行干净暂停形态。"""
+    stage,cp,provenance=snapshot(tmp_path)
+    p=stage/'projects/cloud3min_unit'
+    # 收据已落账：video_version status=done，镜头已完成（无在途 job）
+    f=p/'output/project.json';d=json.loads(f.read_text())
+    d['scenes'][0]['shots'][0].update(shot_id='s1',final_video='v1',
+        video={'status':'done','video_id':'paid1'})
+    f.write_text(json.dumps(d))
+    full=p/'output/full_runs/full/run.json';d=json.loads(full.read_text())
+    d.update(status='pausing',pause_requested=True);full.write_text(json.dumps(d))
+    # jobs.json 空（干净 drain：无未结算提交）
+    (stage/'cache/jobs.json').write_text('{}')
+    result=recovery.restore_snapshot(stage,tmp_path/'runner','unit',cp,provenance)
+    assert result['previous_video_seconds']==10
+    target=tmp_path/'runner/projects/cloud3min_unit/output/full_runs/full/run.json'
+    assert json.loads(target.read_text())['status']=='pausing'

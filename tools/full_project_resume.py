@@ -291,9 +291,15 @@ def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, final
     recovered_jobs = [] if finalize_only else reconcile_accepted_work(doc, jobs, attempts)
     full_path = project/'output/full_runs'/checkpoint['full_run_id']/'run.json'
     full = json.loads(full_path.read_text())
-    allowed_full_states = {'failed', 'paused'}
+    # 'pausing' 无条件放行（daycarry12m 2026-11-01 续跑 run 41327008169 实测
+    # 回填）：干净暂停形态——quota 撞墙→drain 完成→收据全部落账→FullRun 落
+    # 'pausing'。此时 reconcile_accepted_work 无事可做（recovered_jobs=[]），
+    # 旧条件「finalize_only or recovered_jobs」只覆盖脏 drain（有未 commit
+    # 收据），干净 drain 反而被拒，次日续跑死在恢复门口、额度白等。
+    # 'producing'（controller 可能活着）仍维持原有条件放行。
+    allowed_full_states = {'failed', 'paused', 'pausing'}
     if finalize_only or recovered_jobs:
-        allowed_full_states.update(('pausing', 'producing'))
+        allowed_full_states.update(('producing',))
     if finalize_only:
         allowed_full_states.add('completed')
     if (full.get('run_id') != checkpoint['full_run_id'] or full.get('project_name') != pname
@@ -304,7 +310,10 @@ def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, final
                     *project.glob('output/ai/autopilot_runs/*.json')]
     for native_path in native_paths:
         native = json.loads(native_path.read_text())
-        if not finalize_only and not recovered_jobs and native.get('status') not in ('failed','paused','completed','blocked','cancelled'):
+        # 'pausing' 同上放行（daycarry12m 实测）：drain 静止态，controller 已死，
+        # 在途工作由 reconcile_accepted_work + 恢复侧 paid-retry 纪律处理，
+        # 安全性与 'failed' 同级；'producing' 才是可能的活态。
+        if not finalize_only and not recovered_jobs and native.get('status') not in ('failed','paused','pausing','completed','blocked','cancelled'):
             raise ValueError('active native controller must be reconciled before startup')
     versions = [v for sc in doc['scenes'] for shot in sc['shots'] for v in shot.get('video_versions',[])]
     verified = []
