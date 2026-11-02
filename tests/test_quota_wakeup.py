@@ -122,6 +122,26 @@ def test_existing_child_receipt_stops_duplicate_controller(control,monkeypatch):
     assert wake.wake_once('archive','native','branch','film','10')['action']=='skip'
 
 
+@pytest.mark.parametrize('source,nonce,expected',[
+    ('10','film','skip'), (10,'film','skip'), ('9','film','dispatch'),
+    ('10','other','dispatch'), (None,None,'skip'), (None,'film','skip'), ('9',None,'dispatch'),
+])
+def test_inherited_dispatch_receipt_does_not_strand_a_later_owner(control,monkeypatch,source,nonce,expected):
+    from types import SimpleNamespace
+    import tools.video_task_state as state
+    doc,_,dispatches=control
+    inputs={}
+    if source is not None:inputs['resume_run_id']=source
+    if nonce is not None:inputs['task_nonce']=nonce
+    doc['auto_resume']=dict(dispatched=True,at=wake.patrol.utc_now_ts()-60,inputs=inputs)
+    monkeypatch.setattr(state,'task_index',lambda *a:None)
+    monkeypatch.setattr(state,'ProductionCheckpoint',lambda *a:SimpleNamespace(save=lambda **kw:doc.update(kw)))
+    old_receipts=copy.deepcopy(doc['video_attempts'])
+    result=wake.wake_once('archive','native','branch','film','10')
+    assert result['action']==expected and len(dispatches)==(1 if expected=='dispatch' else 0)
+    assert doc['github_run_id']=='10' and doc['video_attempts']==old_receipts
+
+
 def test_owner_handoff_stops_old_timer_without_mutating_receipts(control,monkeypatch):
     doc,tickets,_=control;doc['github_run_id']='11';before=copy.deepcopy(doc)
     monkeypatch.setattr(wake,'post_workflow_dispatch',lambda *a:pytest.fail('stale dispatch'))

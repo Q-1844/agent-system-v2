@@ -22,6 +22,8 @@
 5. B1 `quota_wakeup` 记录 ARMED/FIRED、来源 run、唤醒 run 和时间。写回只用 CAS；已换 owner 不覆盖，审计 CAS 失败不能成为重复派发的理由。
 6. GitHub cron patrol 保留兜底。短控制任务或 GitHub 平台仍可能失败/排队，不能承诺某一分钟准点；不再以 cron 为唯一唤醒入口。
 
+近期派发回执按 `inputs.resume_run_id` 和 `inputs.task_nonce` 限定作用范围：新 owner 继承的上一跳回执不能再触发 30 分钟去重，否则一次快速技术故障后，20 分钟唤醒会错误地以为子运行仍在等待而停止。当前 source 的真实派发回执和无来源字段的 legacy 回执仍保守去重。该补丁新增 7 项真实 patrol/controller 矩阵，相关回归 178 项通过。
+
 为防 fork 自动创建无保护规则的环境而形成快速自派发循环，wake 还核验真实 alarm run 的仓库、workflow path 和最小经过时间，未观察到等待则 fail closed。`smoke_test=true` 只使用 1 分钟测试环境；仍检查供应商 quota gate，任何再次登记一律转回标准 20 分钟环境。
 
 ## GitHub 配置和凭据
