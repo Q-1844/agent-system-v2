@@ -147,6 +147,7 @@ def _run(coro):
 
 def test_a_no_token_degrades_quietly(monkeypatch):
     monkeypatch.delenv("RESUME_DISPATCH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     from tools.full_project_cloud_acceptance import auto_resume_next_hop
     wrapper = _Wrapper(_doc(phase="RUNNING"))
     result = _run(auto_resume_next_hop(wrapper, "n", 330))

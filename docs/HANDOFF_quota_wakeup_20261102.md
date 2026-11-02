@@ -44,6 +44,8 @@
 
 本地新增测试覆盖事件识别、源身份/SHA、quota 跨天、关闭时仅再登记定时器、到点走实际 patrol、原回执不变、源已更换、近期派发去重、网络/上传尚未稳定的延迟检查、CAS 竞争/回执丢失、计时规则缺失及原生 token fallback。
 
+本地全量回归 **3869 passed，0 skipped / failed**，449.85 秒，P55 fixture SHA256 已核验；23 项既有弃用 warning。新增 32 项控制测试，关联回归 171 项通过。全量后仅补齐无凭据测试对 GITHUB_TOKEN 的隔离，并用注入假令牌的测试环境复验。
+
 本次遗留任务在新 observer 部署前已经停止，GitHub 不会重放过去的 completed 事件，因此通过一次 smoke dispatch 登记现有任务：
 
 ```json
