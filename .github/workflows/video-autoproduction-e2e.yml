@@ -3,9 +3,8 @@ name: video-autoproduction-e2e
 # Real acceptance is explicit dispatch. The existing single-clip queue has its
 # own patrol; it must not be confused with this full-project >=180s test.
 # Bounded auto-resume: when the driver deadline drains cleanly, this workflow
-# dispatches the next hop itself via RESUME_DISPATCH_TOKEN (fine-grained PAT,
-# Actions write on this repo only) instead of GITHUB_TOKEN, which GitHub
-# forbids from triggering new runs. Hop cap + AWAITING_HUMAN guard lives in
+# dispatches the next hop via an explicit workflow_dispatch, using a scoped
+# PAT or the native GITHUB_TOKEN (an allowed event exception). Hop cap lives in
 # tools/resume_dispatch.py; the video-patrol sweep is the dead-link fallback.
 on:
   workflow_dispatch:
@@ -73,7 +72,7 @@ on:
         default: ''
 
 permissions:
-  actions: read   # read the exact failed run artifact for explicit recovery
+  actions: write  # explicit workflow_dispatch and exact source artifact reads
   contents: read   # 仅 checkout；B1 跨仓写用 B1_ARCHIVE_TOKEN secret，不用 GITHUB_TOKEN
 
 concurrency:

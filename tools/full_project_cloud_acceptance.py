@@ -721,11 +721,11 @@ def archive_completed_project(token, nonce, project_dir, final_path, evidence_di
 async def auto_resume_next_hop(wrapper, nonce, driver_minutes):
     """A 机制：排水干净结束后立即派发下一跳（workflow_dispatch 显式恢复入口）。
 
-    无 RESUME_DISPATCH_TOKEN、相位不可恢复或跳数超限时安静降级为人工，
-    绝不影响既有留证与退出路径。返回值写入 summary 与检查点 auto_resume 字段。
+    使用 PAT 或原生 GITHUB_TOKEN。相位/闸门不可恢复时保留证据；
+    完成事件的延迟唤醒和巡检接手。返回值写入 summary / auto_resume。
     """
-    from tools.resume_dispatch import auto_resume_allowed, dispatch_next_hop, hop_count
-    token = os.environ.get("RESUME_DISPATCH_TOKEN", "")
+    from tools.resume_dispatch import auto_resume_allowed, dispatch_next_hop, hop_count, dispatch_token
+    token = dispatch_token()
     if not token.strip():
         return {"dispatched": False, "reason": "RESUME_DISPATCH_TOKEN not configured"}
     allowed, reason = auto_resume_allowed(wrapper.checkpoint.doc)

@@ -20,7 +20,7 @@ import urllib.request
 
 from tools.resume_dispatch import (
     MAX_AUTO_HOPS, auto_resume_allowed, default_branch, dispatch_next_hop,
-    fetch_run, hop_count)
+    fetch_run, hop_count, dispatch_token)
 
 B1_REPO = "Q-1844/agent-system-v2-rundata-1"
 CHECKPOINT_FILE = "full-project-production.json"
@@ -176,7 +176,7 @@ def sweep_nonce(nonce, b1_token, dispatch_token, ref, *, _read=None):
 
 def main():
     b1 = os.environ.get("B1_ARCHIVE_TOKEN", "")
-    dispatch = os.environ.get("RESUME_DISPATCH_TOKEN", "")
+    dispatch = dispatch_token()
     if not b1.strip():
         print(json.dumps({"sweep": "skipped", "reason": "B1_ARCHIVE_TOKEN not configured"},
                          ensure_ascii=False))
