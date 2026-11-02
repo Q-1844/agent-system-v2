@@ -8,8 +8,15 @@ from pathlib import Path, PurePosixPath
 import shutil
 import stat
 import subprocess
+import tempfile
 import urllib.request
 import zipfile
+
+# Bound disk use without loading a multi-day film into RAM. The old 1 GiB ZIP /
+# 2 GiB expanded limits could reject a legitimate long film on its next hop.
+MAX_ARTIFACT_BYTES = 8 * 1024**3
+MAX_EXPANDED_BYTES = 16 * 1024**3
+COPY_CHUNK_BYTES = 1024**2
 
 
 class _DownloadRedirect(urllib.request.HTTPRedirectHandler):
@@ -34,15 +41,16 @@ def download_snapshot(run_id, nonce, token, dest, *, project_name=None):
     if not str(run_id).isdigit() or not token:
         raise ValueError('resume requires the source Actions run ID and read token')
     opener = urllib.request.build_opener(_DownloadRedirect())
-    def get(path, binary=False):
-        req = urllib.request.Request('https://api.github.com/repos/Q-1844/agent-system-v2'+path,
+    def request(path):
+        return urllib.request.Request('https://api.github.com/repos/Q-1844/agent-system-v2'+path,
             headers={'Authorization':'Bearer '+token,'Accept':'application/vnd.github+json',
                      'User-Agent':'FullProject-snapshot-recovery'})
-        with opener.open(req, timeout=120) as response:
-            data = response.read(1024 * 1024 * 1024 + 1)
-        if len(data) > 1024 * 1024 * 1024:
-            raise ValueError('acceptance artifact exceeds recovery limit')
-        return data if binary else json.loads(data)
+    def get(path):
+        with opener.open(request(path), timeout=120) as response:
+            data = response.read(8 * 1024**2 + 1)
+        if len(data) > 8 * 1024**2:
+            raise ValueError('recovery metadata exceeds limit')
+        return json.loads(data)
     run = get(f'/actions/runs/{run_id}')
     if run['status'] != 'completed' or run['conclusion'] not in ('failure', 'cancelled', 'timed_out'):
         raise ValueError('source run must have stopped before recovery')
@@ -51,18 +59,33 @@ def download_snapshot(run_id, nonce, token, dest, *, project_name=None):
     if len(artifacts) != 1:
         raise ValueError('expected exactly one retained acceptance artifact')
     artifact = artifacts[0]
-    data = get(f"/actions/artifacts/{artifact['id']}/zip", True)
-    digest = hashlib.sha256(data).hexdigest()
-    if artifact.get('digest') != 'sha256:'+digest:
-        raise ValueError('Actions artifact SHA256 mismatch')
+    declared = artifact.get('size_in_bytes')
+    if declared is not None and (type(declared) is not int or not 0 < declared <= MAX_ARTIFACT_BYTES):
+        raise ValueError('acceptance artifact exceeds recovery disk limit')
     dest = Path(dest)
     if dest.exists():
         raise FileExistsError('recovery staging directory already exists')
-    dest.mkdir(parents=True)
     pname = _recovery_project_name(nonce, project_name)
-    skipped_members = _extract_staging(data, dest, nonce, pname)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryFile(prefix='.snapshot-download-', dir=dest.parent) as archive:
+        hasher, size = hashlib.sha256(), 0
+        with opener.open(request(f"/actions/artifacts/{artifact['id']}/zip"), timeout=120) as response:
+            while chunk := response.read(COPY_CHUNK_BYTES):
+                size += len(chunk)
+                if size > MAX_ARTIFACT_BYTES:
+                    raise ValueError('acceptance artifact exceeds recovery disk limit')
+                hasher.update(chunk)
+                archive.write(chunk)
+        digest = hasher.hexdigest()
+        if declared is not None and size != declared:
+            raise ValueError('Actions artifact size mismatch')
+        if artifact.get('digest') != 'sha256:'+digest:
+            raise ValueError('Actions artifact SHA256 mismatch')
+        archive.seek(0)
+        dest.mkdir(parents=True)
+        skipped_members = _extract_staging(archive, dest, nonce, pname)
     return {'run_id':str(run_id),'source_sha':run['head_sha'],'artifact_id':artifact['id'],
-            'artifact_sha256':digest,'artifact_bytes':len(data),'skipped_members':skipped_members}
+            'artifact_sha256':digest,'artifact_bytes':size,'skipped_members':skipped_members}
 
 
 def _extract_staging(data, dest, nonce, pname):
@@ -70,8 +93,9 @@ def _extract_staging(data, dest, nonce, pname):
 
     返回 skipped_members（安全跳过的非目标成员数）。"""
     allowed = (f'projects/{pname}/', f'e2e_run/{nonce}/')
-    with zipfile.ZipFile(io.BytesIO(data)) as archive:
-        if sum(i.file_size for i in archive.infolist()) > 2*1024**3:
+    source = io.BytesIO(data) if isinstance(data, (bytes, bytearray)) else data
+    with zipfile.ZipFile(source) as archive:
+        if sum(i.file_size for i in archive.infolist()) > MAX_EXPANDED_BYTES:
             raise ValueError('expanded acceptance snapshot exceeds recovery limit')
         skipped_members = 0
         # ---- staging 重传剥离（r46 2026-10-31 第五跳实测回填）----
@@ -113,7 +137,8 @@ def _extract_staging(data, dest, nonce, pname):
                 continue
             target = dest / member
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(archive.read(info))
+            with archive.open(info) as input_file, target.open('wb') as output_file:
+                shutil.copyfileobj(input_file, output_file, length=COPY_CHUNK_BYTES)
     return skipped_members
 
 

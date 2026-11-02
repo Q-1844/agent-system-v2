@@ -710,6 +710,10 @@ def archive_completed_project(token, nonce, project_dir, final_path, evidence_di
         ref.update(final_mp4_asset_id=media.id, final_mp4_sha256=media_sha)
     registry.set_verified_restorable(project_id=nonce, archive_ref=ref, restorable_level="full",
                                      operation_id=f"{nonce}-verified")
+    record = registry.get(nonce)
+    registry.mark_completed(project_id=nonce, archive_ref=ref,
+        expected_activity_seq=record.last_activity_seq, expected_project_revision=record.project_revision,
+        operation_id=f'{nonce}-completed')
     return {"archive_ref": ref, "registry": registry.to_doc(),
             "restore_files_checked": restored["files_checked"], "restorable_level": "full"}
 
@@ -787,17 +791,42 @@ def normalize_dispatch_input_to_task_spec(nonce, environ=None):
                     asset_source_projects=tuple(extras))
 
 
-def submission_recovery_options(environ=None):
+def submission_recovery_options(environ=None, *, require_resume=True):
     env = os.environ if environ is None else environ
     raw = str(env.get('CONFIRM_UNCERTAIN_SUBMISSIONS', 'false')).strip().lower() or 'false'
     if raw not in ('true', 'false'):
         raise ValueError('CONFIRM_UNCERTAIN_SUBMISSIONS must be true or false')
     if raw == 'false':
         return {}
-    if not env.get('RESUME_RUN_ID'):
+    if require_resume and not str(env.get('RESUME_RUN_ID') or '').strip():
         raise ValueError('uncertain replacement authorization requires an explicit resume source')
     return dict(confirm_uncertain_submissions=True, authorization_actor=env.get('GITHUB_ACTOR'),
                 authorization_run_id=env.get('GITHUB_RUN_ID'))
+
+
+def initialize_submission_recovery_policy(checkpoint, environ=None):
+    """Persist explicit future-risk consent for a fresh, request-bound task.
+
+    A fresh dispatch previously ignored the flag because only restore consumed
+    it. Keep the existing restore-source guard and authorize fresh tasks here,
+    before native workers can dispatch any media.
+    """
+    env = os.environ if environ is None else environ
+    options = submission_recovery_options(env, require_resume=False)
+    if not options or str(env.get('RESUME_RUN_ID') or '').strip():
+        return
+    from src.core.submission_recovery import make_policy, policy_valid
+    doc = checkpoint.doc
+    if doc.get('video_attempts') or doc.get('full_run_id') or doc.get('phase') not in ('STAGE0_BOUND', 'STARTING'):
+        raise ValueError('fresh risk authorization requires a new task before production')
+    policy = doc.get('submission_recovery_policy')
+    if policy is not None:
+        if not policy_valid(policy, doc.get('nonce'), doc.get('request_sha256')):
+            raise ValueError('fresh risk authorization belongs to another task')
+        return
+    policy = make_policy(doc.get('nonce'), doc.get('request_sha256'),
+        actor=options['authorization_actor'], run_id=options['authorization_run_id'], at=utc_now())
+    checkpoint.save(submission_recovery_policy=policy)
 
 
 from tools.submission_reconciliation import recovered_checkpoint
@@ -1660,6 +1689,8 @@ async def run_acceptance(nonce, out, summary):
             workplan=frozen_workplan,
             c2_prior=summary.get('c2_source_existing_versions') or [],
             c2_uses=summary.get('c2_asset_uses') or [])
+    if not restored:
+        initialize_submission_recovery_policy(cp)
     wrapper = BoundedRealClient(deps.agnes_client, cp, project_dir, out, finalize_only=finalize_only,
                                 video_budget=max(VIDEO_BUDGET_SECONDS, profile["budget"]),
                                 image_budget=max(IMAGE_BUDGET, profile["image_budget"]),

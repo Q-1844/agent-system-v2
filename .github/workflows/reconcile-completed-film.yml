@@ -1,0 +1,44 @@
+name: reconcile-completed-film
+
+on:
+  workflow_dispatch:
+    inputs:
+      task_nonce:
+        description: '已成片任务的原 nonce（仅修复完成状态，不生成媒体）'
+        required: true
+        type: string
+      expected_run_id:
+        description: 'B1 COMPLETE 检查点所属的 Actions run ID'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: video-production
+  queue: max
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            tools
+            src
+            config
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install -r requirements-ci.txt
+      - name: Reconcile verified completion via CAS
+        env:
+          B1_ARCHIVE_TOKEN: ${{ secrets.B1_ARCHIVE_TOKEN }}
+          TASK_NONCE: ${{ inputs.task_nonce }}
+          EXPECTED_RUN_ID: ${{ inputs.expected_run_id }}
+        run: python -m tools.reconcile_completed_registry --nonce "$TASK_NONCE" --expected-run-id "$EXPECTED_RUN_ID"
