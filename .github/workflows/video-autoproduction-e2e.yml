@@ -29,7 +29,7 @@ on:
         required: false
         default: ''
       confirm_uncertain_submissions:
-        description: '显式接受此 nonce 当前及后续 hop 的 UNKNOWN 重提可能重复计费（持久授权，默认禁止）'
+        description: '新任务预授权/续跑确认：接受此 nonce 当前及后续 hop 的 UNKNOWN 重提可能重复计费（默认禁止）'
         type: boolean
         default: false
       finalize_only:
@@ -172,5 +172,8 @@ jobs:
             ${{ steps.full_project.outputs.project_path }}
             cache/jobs.json
             cache/quota.json
+            !e2e_run/**/archive/*.tar
+            !e2e_run/**/redownload-project.tar
+            !e2e_run/**/restore-check/**
           retention-days: 30
           if-no-files-found: warn

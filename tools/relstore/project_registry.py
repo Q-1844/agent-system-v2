@@ -498,6 +498,37 @@ class Registry:
         self._persist()
         return {"ok": True, "level": restorable_level, "evict_permitted": False}
 
+    def mark_completed(self, *, project_id: str, archive_ref: dict,
+                       expected_activity_seq: int, expected_project_revision: int,
+                       operation_id: str | None = None) -> dict:
+        """Finish production only against the exact verified, idle revision.
+
+        Archiving an in-progress project remains supported; verification alone
+        must not complete it. The production driver calls this after final QA.
+        """
+        op = self._dedupe(operation_id, "mark_completed", project_id, {})
+        rec = self.get(project_id)
+        if rec is None:
+            raise KeyError(project_id)
+        if (rec.archive_status != ARC_VERIFIED_RESTORABLE or rec.archive_ref != archive_ref
+                or not archive_ref.get('sha256') or not rec.snapshot_fingerprint
+                or archive_ref.get('tree_fingerprint') != rec.snapshot_fingerprint
+                or rec.missing_required or rec.open_jobs or rec.pending_sync_intents
+                or rec.active_operation_id
+                or rec.last_activity_seq != expected_activity_seq
+                or rec.project_revision != expected_project_revision):
+            raise ValueError('completion requires the same fully verified idle project revision')
+        if op is not None:
+            if op['kind'] != 'mark_completed' or op['project_id'] != project_id:
+                raise ValueError('completion operation identity conflict')
+            return op['result']
+        rec.production_status = PROD_COMPLETE
+        self.state.archive_queue = [pid for pid in self.state.archive_queue if pid != project_id]
+        result = {'ok': True, 'production_status': PROD_COMPLETE}
+        self._record_op(operation_id or new_operation_id(), 'mark_completed', project_id, result)
+        self._persist()
+        return result
+
     # ---- 取回 ----
     def retrieve(self, *, project_id: str, archive_ref: dict,
                  operation_id: str | None = None) -> dict:

@@ -1,0 +1,18 @@
+{
+  "run_id": "41337749271",
+  "source_sha": "6696fda5ba736e34c906bbf6361a86ada4f04b30",
+  "phase": "COMPLETE",
+  "duration_s": 719.711995,
+  "selected_completed_shots": 90,
+  "completed_scenes": 6,
+  "accepted_receipts": 90,
+  "confirmed_request_seconds": 714,
+  "possible_unconfirmed_seconds": 8,
+  "preserved_original_selected_hashes": 63,
+  "restore_files_checked": 600,
+  "restorable_level": "full",
+  "archive_sha256": "4c7f37ff7f0ef84eb3ef0e549fd9a8096fcd49b6b15c4e2267b07b999d6e8057",
+  "final_sha256": "909f9a9fcc7c17b29dad8da996537aa028e804fdaa394967310ff46c0b53178f",
+  "full_decode_ok": true,
+  "registry_status_before": "IN_PROGRESS"
+}
