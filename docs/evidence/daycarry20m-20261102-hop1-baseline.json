@@ -1,0 +1,218 @@
+{
+  "run_id": "41379443191",
+  "source_sha": "0aaca50b10b6da4fae4adb5802c2a4997cb24cf9",
+  "artifact_id": 13116077738,
+  "artifact_sha256": "646f7168f3a0a32769a53d2ffd61e111932ab2100e7a69bd59c51a94407b5014",
+  "artifact_bytes": 194540377,
+  "project_name": "cloud3min_daycarry20m-20261102",
+  "full_run_id": "frun_6dec578ae4",
+  "previous_video_seconds": 278,
+  "reused_completed_videos": [
+    {
+      "video_id": "task_w9UniYEnvTtl7V1MhGIiJAM8q3ipyaT2",
+      "version_id": "vv_bb32f5d1485a",
+      "bytes": 1678487,
+      "sha256": "97aca61ea8523cbb85cdc763d414ae130c868ec79f1002e21e7b6a34aa2f0497"
+    },
+    {
+      "video_id": "task_TjswYlxYRX8rzIlbn19pHKbnJntqmPkh",
+      "version_id": "vv_9e1b8c61e20f",
+      "bytes": 1682346,
+      "sha256": "fa7fb54386fd3ab87eb7ac93f25bba6c6ddcef6b8d1c2c99e0ea266b790c8176"
+    },
+    {
+      "video_id": "task_LDbQ1R9aio0JPATXIqLgs07mIzjpIF5Q",
+      "version_id": "vv_dacb4cdd4349",
+      "bytes": 2866029,
+      "sha256": "0addf2b120f78e3134c264e9e60c3bcfb595e25be1d265f42518cecd65d06c3f"
+    },
+    {
+      "video_id": "task_R3OKvnShN6eMuhRkl42J19dl1gwLrSBn",
+      "version_id": "vv_c09deeffeb0b",
+      "bytes": 2554023,
+      "sha256": "3ba0d07a7677ff0ca21b95177ef43a3c8741e130a61e6a52a741e13b5f16b5bb"
+    },
+    {
+      "video_id": "task_KFlnG8fLwwgvpK83O9gLVSvk5nqCmZci",
+      "version_id": "vv_f14de34bfa03",
+      "bytes": 1485674,
+      "sha256": "a3d4fd8f82c03f91521b7b3e971fd2c60123230788732637b44e648fbaef1853"
+    },
+    {
+      "video_id": "task_7ETRhxLGEw5CiJJSLWCFFZIBNh73xLOA",
+      "version_id": "vv_88d483fd43bc",
+      "bytes": 4577073,
+      "sha256": "fd701febbf52f8de82ab68d398cbae24565aeb0fadfc86763d4464275672377f"
+    },
+    {
+      "video_id": "task_E6qZmQ0lGqqLBroL6RFmPSMD8MgrcZPs",
+      "version_id": "vv_c455c1e84f76",
+      "bytes": 3207659,
+      "sha256": "a12977b7ead8191ab7da3bdaa84a50e1a9c4dfddd99f2279984b0b222cc779ce"
+    },
+    {
+      "video_id": "task_L87QGpILCk986Iw86VhRXuGeV1XHNWsD",
+      "version_id": "vv_f420717e3ece",
+      "bytes": 3111591,
+      "sha256": "1b377dbfd5d70f5b778b1ce9021889347284e5350d80c8b83e95c53d3206e5d3"
+    },
+    {
+      "video_id": "task_m0maSFwYQDU4MY9btNbwG7cvdsfgCrdJ",
+      "version_id": "vv_f01774e8f0f4",
+      "bytes": 5472990,
+      "sha256": "ddca88099cb8b930cf7dd6566c38cea4542dac8ade022ab6a4c481cc751addb7"
+    },
+    {
+      "video_id": "task_dCWuprdIwx2Cu6HZFSjwkmzi9mL1iahd",
+      "version_id": "vv_656848acf433",
+      "bytes": 2073134,
+      "sha256": "24fd4b5d0292bc2b04a5bbc07078524c7df9c9fdf015e467fad8562985c80cc3"
+    },
+    {
+      "video_id": "task_spdNrw56kr70pTLI9TluqAsAyJ6mkVBz",
+      "version_id": "vv_7fdbe09ee3de",
+      "bytes": 1782740,
+      "sha256": "2010d1a0cb0508e7591036dd3245f0afc5c387ebb74502455857654fdb4eb92b"
+    },
+    {
+      "video_id": "task_tGZushCQnMw1Wra8U0F5r1hrIP4oO1WH",
+      "version_id": "vv_45aa5cab4eb3",
+      "bytes": 3204056,
+      "sha256": "221e9627ac5e3e87035193c91ebdd6e9c7e56ad8c4103df953138e3549095cf7"
+    },
+    {
+      "video_id": "task_xczooKEK7x0BmuOtGGvuZ8btnBKectgc",
+      "version_id": "vv_8b563cac5299",
+      "bytes": 2151684,
+      "sha256": "2818cec038b61731f6bcd4ae6158be004a6b34188c4cc8e0ab9f0135a4c26570"
+    },
+    {
+      "video_id": "task_lZvdaaby5WtCe91L1RTLYc0ugtoM7e4D",
+      "version_id": "vv_a476d4a93404",
+      "bytes": 1762388,
+      "sha256": "40f6875e065c721cbcaa30e529d47696a6c626e2c9952e5400926a6674516f35"
+    },
+    {
+      "video_id": "task_6pjGWvLAWEMRZnhozZN4rYMRehl42RZz",
+      "version_id": "vv_18581af15ab2",
+      "bytes": 3783884,
+      "sha256": "a102685085951d40a9edb2a2432ed2bcc6f218aa486741541c891ab66c5dcf9b"
+    },
+    {
+      "video_id": "task_unG50w0vB1LmDBi0oqLZzr9aBLZQQ8RD",
+      "version_id": "vv_ed4a8d951876",
+      "bytes": 2273769,
+      "sha256": "ed9ca04d7dad35f3db9b3ad96c7285d9dd0fdc8738c76169cf904bc0ee86df73"
+    },
+    {
+      "video_id": "task_MLFdunRJ1WJEEFJC1vi9ii9zEGmRrpgJ",
+      "version_id": "vv_2b4524ebde91",
+      "bytes": 2691166,
+      "sha256": "3b10a9d5c898781ab680b639937c1eadf5f4b322df47b1e74427955b38a868cc"
+    },
+    {
+      "video_id": "task_MuXPKuYt0Lzoy0uQWrlxAGDuBqWtwuOG",
+      "version_id": "vv_b329109bf463",
+      "bytes": 2990806,
+      "sha256": "ef7a7c79686776e944a6eaf2fa80c622181802e55f19732113170b6baad78f19"
+    },
+    {
+      "video_id": "task_dOVNkRfG8mI7SPQHHY5usoruvP6sXfbr",
+      "version_id": "vv_ac57424faa10",
+      "bytes": 2294674,
+      "sha256": "ee6484a1745662e51c813cfe013bb8b5109a80985b51fbaa68d7d533274f31c7"
+    },
+    {
+      "video_id": "task_GluorOqSUhSanDbMyomDXKg5PMdyiPYI",
+      "version_id": "vv_e9a7b83cfcde",
+      "bytes": 2506121,
+      "sha256": "bb8f1d4a19d81a4f371a068fcc05afe22a13ff498653d6511ed5b515bb856fb8"
+    },
+    {
+      "video_id": "task_pksVfmzpZgHz7W5jeTGe8PQ8ewJGw8Y8",
+      "version_id": "vv_020c4c0691f3",
+      "bytes": 2162071,
+      "sha256": "16e8d14ef6f09f13d1110d8fccba67f79fa5e436e70b1c323a17113bb900d5fc"
+    },
+    {
+      "video_id": "task_LyQOSDkezB2JcidPYrRMvAh7wVcfs8BH",
+      "version_id": "vv_9db87b8fde17",
+      "bytes": 1931934,
+      "sha256": "404c878cc6239f7ffbb0cb1c88e9e02b0840783b7909c8b11b495118eb3c7659"
+    },
+    {
+      "video_id": "task_guUuhy2LWUgDbSuDCSdhKftXQM9UKe8i",
+      "version_id": "vv_79bf4d6159a3",
+      "bytes": 1823300,
+      "sha256": "a7fd440c79c2297a0f1aaeafae5bcedae190d673b366bdb7b51cd56244c95f08"
+    },
+    {
+      "video_id": "task_D5Nb4Yeaz979nP0hDw4es4YGLJizlkdM",
+      "version_id": "vv_2fb32e4ab6f6",
+      "bytes": 1866374,
+      "sha256": "7d28f03d575ea27d9558110d0268071fe1c6c752d21f419ca8c5a7427e967ed7"
+    },
+    {
+      "video_id": "task_ZwU35VRn5bNuWKcfO5qz6pktT5YK3atd",
+      "version_id": "vv_8553eac1149d",
+      "bytes": 2434587,
+      "sha256": "3758316e3be0aab599da4f6644d2b293ecbd72c6c3635a036131e413c033c8cf"
+    },
+    {
+      "video_id": "task_hHPFHbeLDm3ZXtD1ovRdRC9vNzaiUQsy",
+      "version_id": "vv_db77e194ad55",
+      "bytes": 3059233,
+      "sha256": "14d12c09ed043b329d90a4ade89985e9c57c4504004f88f756c59f17db258046"
+    },
+    {
+      "video_id": "task_YlGzyXf6p7tCOQoCM6GiMgTZPZvxEQuP",
+      "version_id": "vv_fb780e8a640e",
+      "bytes": 2188520,
+      "sha256": "ba54cb73b83ca2fe57aac280798e99fc8500b1ec8f54a7e753037cc128f7f8b3"
+    },
+    {
+      "video_id": "task_ssNFnUr1WzIwKjcwjqtMNgHCmcT9HHzG",
+      "version_id": "vv_f43c29cb9768",
+      "bytes": 1596661,
+      "sha256": "41ad0b70976a6cef607c6b6d23a28eaec2a6f0cde799021cc7077c802d9db410"
+    },
+    {
+      "video_id": "task_vFMwjNa6uozEOeHYbydwVmsyElUAcxeq",
+      "version_id": "vv_9da0a5d6d997",
+      "bytes": 2213624,
+      "sha256": "62e8a94d450735d3cc852d28a9e013eec79553f58d19df6d5498077b74c24e87"
+    },
+    {
+      "video_id": "task_dZOYM0pbdGquVLFhx4r10BvTsCp4VftE",
+      "version_id": "vv_735ee4c06f13",
+      "bytes": 3146573,
+      "sha256": "2dcf2810199ae67ab1bd940e206f0deb507c6f1d918847411dacb9075fd14ced"
+    },
+    {
+      "video_id": "task_JpPUTMOSnx9fXv6FUBAXuaWE4GgVy09H",
+      "version_id": "vv_5d21bc932b6f",
+      "bytes": 2840155,
+      "sha256": "c6cdcfab0c6e1b888d2a381d26b8fa7373668aa12d011322d43466da687a8685"
+    },
+    {
+      "video_id": "task_79Z5WWKABvPdIWIu16GWBKIkDQkI5nWd",
+      "version_id": "vv_d5cb91336af0",
+      "bytes": 3304517,
+      "sha256": "901cdfc7a65ec07cebf4bb11968fb96f90d640db0fac1322e2151f24035b76cf"
+    },
+    {
+      "video_id": "task_2k5IpdKg94vwQ0bS9Ru672d2z350WoYH",
+      "version_id": "vv_62643d935bd0",
+      "bytes": 3235492,
+      "sha256": "a8417290350b1fcdd75f0cee69cc1535cfa36d6993c0fe087eb8814095fe0527"
+    },
+    {
+      "video_id": "task_Ny4Mm8qvy1f6NsSNr6iYXAnIFLHU3V8o",
+      "version_id": "vv_812c7b412550",
+      "bytes": 2095541,
+      "sha256": "e30bb1beaa38fe7dd6ff136444a819bf494885d5ad5cabea5719c93b83341a95"
+    }
+  ],
+  "nonce": "daycarry20m-20261102",
+  "purpose": "immutable pre-resume baseline; no paid calls"
+}

@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 concurrency:
   group: video-production
@@ -59,6 +60,7 @@ jobs:
         env:
           B1_ARCHIVE_TOKEN: ${{ secrets.B1_ARCHIVE_TOKEN }}
           RESUME_DISPATCH_TOKEN: ${{ secrets.RESUME_DISPATCH_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           PYTHONPATH: .
         run: python tools/resume_patrol.py
 
