@@ -142,7 +142,15 @@ def sweep_nonce(nonce, b1_token, dispatch_token, ref, *, _read=None):
                 "reason": "no authoritative github_run_id"}
     prior = doc.get("auto_resume") or {}
     dispatched_at = prior.get("at") if isinstance(prior, dict) else None
+    prior_inputs = (prior.get('inputs') or {}) if isinstance(prior, dict) else {}
+    if not isinstance(prior_inputs, dict):
+        prior_inputs = {}
+    receipt_source = prior_inputs.get('resume_run_id')
+    receipt_nonce = prior_inputs.get('task_nonce')
+    same_source = not receipt_source or str(receipt_source) == run_id
+    same_task = not receipt_nonce or receipt_nonce == nonce
     if (isinstance(dispatched_at, (int, float))
+            and same_source and same_task
             and utc_now_ts() - dispatched_at < RECENT_DISPATCH_SKIP_MINUTES * 60):
         return {"nonce": nonce, "action": "skip",
                 "reason": "dispatched recently, waiting for child run"}
