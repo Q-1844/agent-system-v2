@@ -80,6 +80,11 @@ jobs:
       - name: Recheck gate and dispatch recovery or next timer
         env:
           B1_ARCHIVE_TOKEN: ${{ secrets.B1_ARCHIVE_TOKEN }}
+          # 🔴 必须用 PAT 派发（daycarry20m-20261102 实测回填）：缺此 secret 时
+          # dispatch_token() 回退 GITHUB_TOKEN，GitHub 反递归规则会静默吞掉
+          # 所派发 run 完成时的 workflow_run 触发——wakeup 链在第一跳后即死，
+          # 次日闸门空转、片子停在原地（run 41498341720 完成后零 wakeup run）。
+          RESUME_DISPATCH_TOKEN: ${{ secrets.RESUME_DISPATCH_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
           TASK_NONCE: ${{ needs.resolve.outputs.nonce }}
           SOURCE_RUN_ID: ${{ needs.resolve.outputs.source }}
