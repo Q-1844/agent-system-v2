@@ -1,0 +1,47 @@
+name: b1-checkpoint-repair
+
+# B1 检查点身份修复（维护）：把 github_run_id 重绑回「artifact 完整可恢复」的跳。
+# 场景：某跳 RESTORED 落盘后被取消、artifact 缺 summary.json → 恢复链死锁。
+# 反递归 checklist：不派发任何后续 run；写操作仅 B1_ARCHIVE_TOKEN 单文件 CAS。
+
+on:
+  workflow_dispatch:
+    inputs:
+      nonce:
+        description: '检查点 nonce（如 hilbert-hotel-20261104）'
+        required: true
+        type: string
+      github_run_id:
+        description: '重绑目标跳的 Actions run ID（须有完整 artifact）'
+        required: true
+        type: string
+      dry_run:
+        description: '只打印差异不写入'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install httpx
+      - name: B1 checkpoint identity repair
+        env:
+          B1_ARCHIVE_TOKEN: ${{ secrets.B1_ARCHIVE_TOKEN }}
+          INPUT_NONCE: ${{ inputs.nonce }}
+          INPUT_RUN_ID: ${{ inputs.github_run_id }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          args=(--nonce "$INPUT_NONCE" --github-run-id "$INPUT_RUN_ID")
+          if [ "$INPUT_DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+          python tools/b1_checkpoint_repair.py "${args[@]}"
