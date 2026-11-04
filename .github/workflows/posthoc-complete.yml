@@ -1,4 +1,4 @@
-name: posthoc-archive-complete
+name: posthoc-complete
 
 # 对「仅在归档回读自证步骤失败」的 run 做事后补完（验证→Registry→B1 COMPLETE）。
 # 适用场景：finalize 传播竞态类失败（如 daycarry20m-20261102 的 404 早到 ~0.7s），
