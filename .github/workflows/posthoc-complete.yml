@@ -44,9 +44,13 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install runtime deps
+        # ubuntu-latest 镜像已无 ffmpeg；apt 镜像实测可卡 20+ 分钟无超时。
+        # 改用 BtbN 静态构建直取 ffprobe（GitHub CDN，~80MB）。
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
           pip install httpx
+          curl -sL --max-time 300 https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-linux64-gpl.tar.xz \
+            | tar -xJ --strip-components=2 -C /usr/local/bin ffmpeg-master-latest-linux64-gpl/bin/ffprobe
+          ffprobe -version | head -1
       - name: Post-hoc archive completion
         env:
           B1_ARCHIVE_TOKEN: ${{ secrets.B1_ARCHIVE_TOKEN }}
