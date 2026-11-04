@@ -45,7 +45,7 @@ def main() -> int:
     if not token:
         raise SystemExit('missing B1_ARCHIVE_TOKEN')
 
-    index = task_index(token, nonce)
+    index = task_index(token, nonce, 'full-project-production.json')
     current = index.read()
     if current is None:
         raise SystemExit(f'no checkpoint found for {nonce}')
