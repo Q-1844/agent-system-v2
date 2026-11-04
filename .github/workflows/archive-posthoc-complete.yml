@@ -28,6 +28,8 @@ on:
         required: false
         default: false
         type: boolean
+  repository_dispatch:
+    types: [posthoc-archive-complete]
 
 permissions:
   contents: read
@@ -46,10 +48,10 @@ jobs:
       - name: Post-hoc archive completion
         env:
           B1_ARCHIVE_TOKEN: ${{ secrets.B1_ARCHIVE_TOKEN }}
-          INPUT_NONCE: ${{ inputs.nonce }}
-          INPUT_PKG_SHA: ${{ inputs.expected_package_sha256 }}
-          INPUT_MEDIA_SHA: ${{ inputs.expected_media_sha256 }}
-          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+          INPUT_NONCE: ${{ inputs.nonce || github.event.client_payload.nonce }}
+          INPUT_PKG_SHA: ${{ inputs.expected_package_sha256 || github.event.client_payload.expected_package_sha256 }}
+          INPUT_MEDIA_SHA: ${{ inputs.expected_media_sha256 || github.event.client_payload.expected_media_sha256 }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run || github.event.client_payload.dry_run }}
         run: |
           set -euo pipefail
           args=(--nonce "$INPUT_NONCE")
