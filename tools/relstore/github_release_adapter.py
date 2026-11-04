@@ -12,6 +12,7 @@ from __future__ import annotations
 import base64
 import json
 import re
+import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
@@ -365,10 +366,28 @@ class GitHubReleaseAdapter(ReleaseAdapter):
                 f"重下载失败 HTTP {r2.status} @ {redact(url, token=self._token)}")
         return r2.content
 
-    def download_asset_authenticated(self, asset_id: str) -> bytes:
+    def download_asset_authenticated(self, asset_id: str, *,
+                                     not_found_grace_seconds: float = 0.0,
+                                     not_found_poll_seconds: float = 5.0) -> bytes:
         """G3-B：Draft（或私有）资产的带权限二进制下载。
         API 资产端点 + Accept: application/octet-stream + 凭据 → 302 到对象存储，
-        重定向后的非 GitHub API 域【不带 Authorization】（短期 SAS，绝不入日志）。"""
+        重定向后的非 GitHub API 域【不带 Authorization】（短期 SAS，绝不入日志）。
+
+        not_found_grace_seconds > 0 仅供上传方回读自证场景：大资产上传 200 后
+        API 侧 finalize 存在传播窗口（daycarry20m-20261102 实测 1.4GB 资产
+        差 ~0.7s 可见），期间 GET 404；按 not_found_poll_seconds 退避重试至
+        窗口超时后才抛 NotFound404。默认 0：404 快速失败，
+        resolve/唤醒/巡检等调用方语义保持不变。"""
+        deadline = time.monotonic() + max(0.0, not_found_grace_seconds)
+        while True:
+            try:
+                return self._download_asset_authenticated_once(asset_id)
+            except NotFound404:
+                if not not_found_grace_seconds or time.monotonic() >= deadline:
+                    raise
+                time.sleep(not_found_poll_seconds)
+
+    def _download_asset_authenticated_once(self, asset_id: str) -> bytes:
         url = (f"{self.api_base}/repos/{self.owner}/{self.repo}/"
                f"releases/assets/{asset_id}")
         r = self.transport.request("GET", url, headers=self._headers(octet=True),

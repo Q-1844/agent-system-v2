@@ -674,7 +674,8 @@ def archive_completed_project(token, nonce, project_dir, final_path, evidence_di
     if output_kind != 'asset_set':
         media_sha = sha256_file(final_path)
         media = adapter.upload_asset_with_recovery(release_id, "final.mp4", final_path.read_bytes(), media_sha)
-        if hashlib.sha256(adapter.download_asset_authenticated(media.id)).hexdigest() != media_sha:
+        if hashlib.sha256(adapter.download_asset_authenticated(
+                media.id, not_found_grace_seconds=240)).hexdigest() != media_sha:
             raise RuntimeError("final MP4 re-download SHA mismatch")
     opdir = evidence_dir / "archive"
     ensure_archive_input(project_dir, nonce)
@@ -686,7 +687,10 @@ def archive_completed_project(token, nonce, project_dir, final_path, evidence_di
     package_sha = packaged["package"]["sha256"]
     package_name = f"project-{os.environ.get('GITHUB_RUN_ID') or package_sha[:12]}.tar" if existing_id else "project.tar"
     package = adapter.upload_asset_with_recovery(release_id, package_name, package_path.read_bytes(), package_sha)
-    redownload = adapter.download_asset_authenticated(package.id)
+    # 大资产上传 200 后 API finalize 有传播窗口（daycarry20m-20261102 实测 ~0.7s），
+    # 回读自证必须给 404 宽限重试，否则亚秒竞态会把成功归档误判为 archive_failed。
+    redownload = adapter.download_asset_authenticated(package.id,
+                                                      not_found_grace_seconds=240)
     downloaded = evidence_dir / "redownload-project.tar"
     downloaded.write_bytes(redownload)
     restored = restore_campaign.restore_package(downloaded, evidence_dir / "restore-check",
@@ -1948,9 +1952,13 @@ async def run_acceptance(nonce, out, summary):
         summary["saved"] = await asyncio.to_thread(archive_completed_project, token, nonce, project_dir,
                                                    final, out, os.environ.get("GITHUB_SHA", "unknown"),
                                                    output_kind=summary.get('output_kind', 'final_video'))
-    except Exception:
+    except Exception as e:
+        # 异常类型+信息入检查点：daycarry20m-20261102 的 archive_failed 只有
+        # 一句泛化提示，排障被迫全靠翻 job 日志；NotFound404 的报文本身已 redact。
+        detail = f'{type(e).__name__}: {e}'[:300]
         await wrapper.persist(phase='FAILED', terminal_status='archive_failed',
-                              error='project archival failed; inspect restore-report.json and summary')
+                              error=f'project archival failed ({detail}); '
+                                    'inspect restore-report.json and summary')
         raise
     await wrapper.persist(phase="COMPLETE", duration_s=summary["media"].get("duration_s"),
                           saved=summary["saved"])

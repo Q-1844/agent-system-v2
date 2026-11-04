@@ -236,6 +236,51 @@ def test_download_200_bytes():
     assert a.download_asset("7001") == blob
 
 
+# ---------- 上传方回读 404 宽限（daycarry20m-20261102 归档竞态回填） ----------
+
+def test_download_authenticated_404_grace_retries_then_succeeds():
+    # 大资产上传 200 后 API finalize 传播窗口内 404×2 → 200：
+    # 宽限重试应拿到字节，而不是亚秒竞态误判 NotFound。
+    blob = b"package-bytes"
+    calls = {"n": 0}
+
+    def h(req):
+        if req["url"].endswith("/releases/assets/707165903"):
+            calls["n"] += 1
+            if calls["n"] <= 2:
+                return resp(404, {"message": "Not Found"})
+            return resp(200, raw=blob,
+                        headers={"content-type": "application/octet-stream"})
+        return resp(404)
+
+    a, t = make_adapter(h, armed=True)
+    out = a.download_asset_authenticated(
+        "707165903", not_found_grace_seconds=30, not_found_poll_seconds=0)
+    assert out == blob and calls["n"] == 3
+
+
+def test_download_authenticated_404_default_stays_fast_fail():
+    # 默认 0 宽限：404 必须一次即抛——resolve/唤醒/巡检的快速失败语义不变。
+    from tools.relstore.github_release_adapter import NotFound404
+    a, t = make_adapter(lambda req: resp(404, {"message": "Not Found"}),
+                        armed=True)
+    with pytest.raises(NotFound404):
+        a.download_asset_authenticated("707165903")
+    assert len(t.requests) == 1
+
+
+def test_download_authenticated_404_grace_expires_and_raises():
+    # 宽限耗尽仍 404：最终仍要 fail-loud 抛 NotFound404，不无限轮询。
+    from tools.relstore.github_release_adapter import NotFound404
+    a, t = make_adapter(lambda req: resp(404, {"message": "Not Found"}),
+                        armed=True)
+    with pytest.raises(NotFound404):
+        a.download_asset_authenticated(
+            "707165903", not_found_grace_seconds=0.02,
+            not_found_poll_seconds=0.01)
+    assert len(t.requests) >= 2
+
+
 @pytest.mark.parametrize("status,exc", [(401, AuthError), (403, AuthError),
                                          (409, AssetConflict), (429, RateLimited),
                                          (502, ServerError)])

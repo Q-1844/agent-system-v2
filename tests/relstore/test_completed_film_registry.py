@@ -166,7 +166,9 @@ def test_archive_driver_returns_completed_registry_after_real_package_and_restor
         def create_release(self, *args, **kwargs):return SimpleNamespace(id='release')
         def upload_asset_with_recovery(self, release_id, name, data, sha):
             assets[name] = data;return SimpleNamespace(id=name)
-        def download_asset_authenticated(self, asset_id):return assets[asset_id]
+        def download_asset_authenticated(self, asset_id, **kwargs):
+            # kwargs：生产回读路径会传 not_found_grace_seconds（404 宽限重试）
+            return assets[asset_id]
     authority = FakeCAS()
     monkeypatch.setattr(GitHubReleaseAdapter, 'armed', lambda *a:Archive())
     monkeypatch.setattr(e2e, 'B1GitHubCas', lambda index:authority)
