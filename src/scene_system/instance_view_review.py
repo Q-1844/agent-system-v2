@@ -40,6 +40,7 @@ from .store import SceneSystemStore
 from .state_projection import project_scene_state_for_view, visible_anchor_snapshots
 from .view_review import VISION_MODEL, _c
 
+from src.api.model_budget import DEFAULT_TEXT_MAX_TOKENS
 SIV_DIMENSIONS = ("location_identity", "view_consistency", "anchor_consistency",
                   "scene_state_consistency", "lighting_weather_consistency",
                   "prop_placement_consistency", "visual_defects")
@@ -444,7 +445,7 @@ async def review_scene_instance_view_candidates(project_dir, scene_instance_view
         msgs = [{"role": "user", "content": content}]
         try:
             res = await vision_json_call(agnes_client, msgs, model=VISION_MODEL,
-                                         max_tokens=6000)
+                                         max_tokens=DEFAULT_TEXT_MAX_TOKENS)
         except Exception as e:
             return {"candidate_index": candidate_index, "candidate_file": candidate_file,
                     "status": "provider_error", "overall": "uncertain",

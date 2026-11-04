@@ -17,6 +17,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from src.api.model_budget import DEFAULT_TEXT_MAX_TOKENS
 log_name = "tail_assessment"
 
 VISION_MODEL = "agnes-2.5-flash"
@@ -98,7 +99,7 @@ async def assess_tail(agnes_client, *, expected_tail: str,
                 {"role": "user", "content": content}]
     t0 = time.time()
     res = await agnes_client.chat_completion_vision(
-        messages, model=VISION_MODEL, temperature=0.2, max_tokens=1600)
+        messages, model=VISION_MODEL, temperature=0.2, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
     raw = res.get("content") if isinstance(res, dict) else str(res)
     obj = _parse_json(raw or "")
     repaired = False
@@ -109,7 +110,7 @@ async def assess_tail(agnes_client, *, expected_tail: str,
                          "Your previous reply was not valid JSON. "
                          "Return ONLY the JSON object now."})
         res2 = await agnes_client.chat_completion_vision(
-            messages, model=VISION_MODEL, temperature=0.0, max_tokens=1600)
+            messages, model=VISION_MODEL, temperature=0.0, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
         raw2 = res2.get("content") if isinstance(res2, dict) else str(res2)
         obj = _parse_json(raw2 or "")
         repaired = True

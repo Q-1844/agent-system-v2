@@ -23,7 +23,7 @@ from src.agents.director import SHOT_UPDATABLE_FIELDS, _clean_shot_fields
 from src.agents.pregen_checks import (classify_video_input_role,
                                       detect_pose_reference_conflict,
                                       shot_input_semantics)
-from src.core.models import Asset, ShotStatus
+from src.core.models import Asset, ShotStatus, VideoVersion
 from src.core.store import ProjectStore
 from src.core.write_lock import _clear_for_test
 from src.resources.models import ReferenceAsset
@@ -265,15 +265,32 @@ def test_caseB_i2v_standing_ref_as_first_frame_blocks(tmp_path):
 
 # ============ Case C：relay 边界 ============
 def test_caseC_relay_boundary_no_pose_gate(tmp_path):
-    pdir, _ids = _env_bound(tmp_path)
+    pdir, ids = _env_bound(tmp_path)
     ProjectStore(pdir).update_shot(
         "s01_c02",
         lambda s: (setattr(s, "link_mode", "multi"),
                    setattr(s, "video_reference_asset_id", "prev_tail"),
+                   setattr(s, "characters", ["Alice"]),
                    setattr(s, "description", "丹顶鹤俯瞰森林，继续滑翔")))
+    # The production video entry now requires a visual binding for this shot,
+    # independently of the relay's pose-gate semantics.
+    bound = run(ShotBindingService(pdir).create_binding_async({
+        "shot_id": "s01_c02", "scene_id": "s01",
+        "character_bindings": [{"character_name": "Alice", "look_id": LOOK}],
+        "scene_binding": {"scene_instance_id": ids["inst"],
+                          "location_view_id": ids["view_a"],
+                          "pinned_scene_instance_view_id": ids["sciv_a"]},
+        "prop_bindings": []}))
+    assert bound["ok"], bound
     ProjectStore(pdir).update_shot(
         "s01_c01",
         lambda s: s.video_end_frame.mark_done("end.jpg", "http://example/end.jpg"))
+    # A production relay requires an identified, selected source video receipt.
+    ProjectStore(pdir).update_shot("s01_c01", lambda s: (
+        s.video_versions.append(VideoVersion(version_id="vv_relay_ready", status="done",
+                                             url="http://example/source.mp4")),
+        setattr(s, "final_video", "vv_relay_ready"),
+        setattr(s, "video_end_source_version", "vv_relay_ready")))
     proj = ProjectStore(pdir).load()
     sem = shot_input_semantics(pdir, pdir.name, proj, proj.get_shot("s01_c02"))
     assert sem["semantic_role"] == "relay_start_boundary"

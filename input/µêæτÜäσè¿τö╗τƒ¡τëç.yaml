@@ -1,0 +1,69 @@
+project: "我的动画短片"
+style: "anime, soft lighting, cinematic composition"
+size: "1152x768"
+
+characters:
+  - name: "小星"
+    description: "a young girl with silver hair, blue eyes, wearing a white cloak, gentle expression"
+  - name: "暗影"
+    description: "a tall figure in black armor, glowing red eyes, menacing presence"
+
+scenes:
+  - id: 1
+    description: "小星站在山顶，俯瞰云海，晨光洒落"
+    characters: ["小星"]
+    camera: "wide shot, from behind"
+    lighting: "golden sunrise"
+    motion: "hair and cloak flowing in the wind"
+    dialogue: "新的一天开始了。"
+
+  - id: 2
+    description: "暗影从云层中浮现，红眼闪烁"
+    characters: ["暗影"]
+    camera: "low angle, dramatic"
+    lighting: "dark clouds, red glow"
+    motion: "slowly emerging from mist"
+    dialogue: "你逃不掉的。"
+
+  - id: 3
+    description: "两人对峙，风暴骤起"
+    characters: ["小星", "暗影"]
+    camera: "medium shot, side view"
+    lighting: "lightning flashes"
+    motion: "wind intensifying, hair and clothes blowing"
+    dialogue: "我不会屈服！"
+
+  - id: 4
+    description: "小星举起法杖，光芒四射"
+    characters: ["小星"]
+    camera: "close-up, dramatic"
+    lighting: "bright white light"
+    motion: "magic energy gathering"
+
+  - id: 5
+    description: "暗影被光芒击中，开始消散"
+    characters: ["暗影"]
+    camera: "medium shot"
+    lighting: "light vs darkness"
+    motion: "shadow dissolving"
+
+  - id: 6
+    description: "云海恢复平静，阳光普照"
+    characters: []
+    camera: "wide shot, aerial"
+    lighting: "warm golden light"
+    motion: "clouds parting"
+
+  - id: 7
+    description: "小星微笑，转身离开"
+    characters: ["小星"]
+    camera: "medium shot, from front"
+    lighting: "soft backlight"
+    motion: "gentle turn and walk"
+
+  - id: 8
+    description: "远景，小星走向远方的光芒"
+    characters: ["小星"]
+    camera: "wide shot, from behind"
+    lighting: "ethereal glow"
+    motion: "walking into distance"

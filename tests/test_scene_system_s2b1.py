@@ -320,7 +320,7 @@ def test_refresh_cycle_stale_peer_excluded_and_regenerated(tmp_path):
             ensure_ascii=False)
 
         class FakeV:
-            async def chat_completion_vision(self, msgs, *, model):
+            async def chat_completion_vision(self, msgs, *, model, max_tokens=1600):
                 return {"content": reply, "usage": {}}
         rr = await ivr.review_scene_instance_view_candidates(pdir, sciv_a, agnes_client=FakeV())
         assert rr["ok"] and rr["candidate_reviews"][0]["overall"] == "pass", rr

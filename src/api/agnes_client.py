@@ -20,6 +20,7 @@ import httpx
 from ..utils.logger import setup_logger
 from ..core.rate_limiter import RateLimiter
 from ..core.quota import QuotaLedger
+from .model_budget import resolve_text_max_tokens
 
 log = setup_logger("agnes_client")
 
@@ -27,15 +28,8 @@ RETRYABLE = {408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524}
 
 
 def _parse_retry_after(r) -> Optional[float]:
-    """429 响应的 Retry-After 解析（秒；HTTP-date 形态不支持——Agnes 未实证使用，
-    不可解析=回落指数退避，不猜）。"""
-    try:
-        v = r.headers.get("Retry-After") or r.headers.get("retry-after")
-        if not v:
-            return None
-        return float(str(v).strip())
-    except Exception:   # noqa: BLE001
-        return None
+    from ..core.provider_errors import retry_after_seconds
+    return retry_after_seconds(r.headers.get("Retry-After"))
 
 # 唯一视频模型（2026-09-28：v2.0 官方下线+用户指令删除；config 缺失/测试 fake
 # 无 models 时的确定兜底——dispatch 与 freshness 重算投影必须同源）。
@@ -190,8 +184,35 @@ class AgnesError(Exception):
         super().__init__(msg); self.status, self.body = status, body
 
 
+class DailyQuotaExhausted(AgnesError):
+    """Explicit daily rejection: wait for reset; never retry inside this request."""
+    def __init__(self, msg, status=None, body=None, retry_after=None):
+        super().__init__(msg, status, body)
+        from ..core.provider_errors import quota_resume_after
+        self.retry_after = retry_after
+        self.resume_after = quota_resume_after(self)
+        self.not_sent = status is None
+
+
+class VideoGenerationFailed(AgnesError):
+    """The provider explicitly reports a terminal failed task, not a poll outage."""
+
+
 class VideoSubmissionUncertain(AgnesError):
     """The provider may have accepted a non-idempotent video submission."""
+
+
+class VideoSubmissionNotSent(RuntimeError):
+    """本次调用【未向 provider 发出任何请求】：确定没有远端任务、没有扣费。
+
+    与 VideoSubmissionUncertain 的边界（两者绝不可混用）：
+      - NotSent：请求根本没离开本进程（预算/闸门/参数校验/本地预检拒绝）。
+        调用方【不得】留下「提交结果不明」痕迹——没有钱要花、没有任务要查，
+        重试是安全的。若把它当成 Uncertain，镜头会被永久误判为
+        「早前一次付费提交结局不明」，整片卡死且凭空背上人工对账负担。
+      - Uncertain：请求可能已经到达 provider，存在远端任务与扣费的可能，
+        必须走人工对账，绝不自动重发。
+    """
 
 
 class PollTransientError(AgnesError):
@@ -229,6 +250,7 @@ class AgnesClient:
         # 共享进程级配额单例：api_server 启动时会先用 config 初始化它，此处复用
         self.quota    = quota or QuotaLedger.get_default()
         self._client: Optional[httpx.AsyncClient] = None
+        self._video_quota_resume_after: Optional[str] = None
         self._img_pos: Optional[str] = None      # "extra" | "top"，双位置探测结果缓存
         # 测试注入用（阶段5③-c）：传 httpx.MockTransport 拦截所有请求；默认 None 走真实网络。
         # 生产路径（api_server.startup 构造 AgnesClient）不传 transport，初始化行为不变。
@@ -297,6 +319,17 @@ class AgnesClient:
         if self._text_client and not self._text_client.is_closed:
             await self._text_client.aclose()
 
+    def _check_video_quota_gate(self):
+        until = self._video_quota_resume_after
+        if until:
+            from ..core.provider_errors import retry_gate_status
+            open_, reason = retry_gate_status(until)
+            if not open_:
+                error = DailyQuotaExhausted(reason)
+                error.resume_after = until
+                raise error
+            self._video_quota_resume_after = None
+
     # ---------- 带退避的请求 ----------
     async def _request(self, method: str, url: str, bucket: str,
                        max_attempts: int = 5, *, text_ep: bool = False,
@@ -306,7 +339,13 @@ class AgnesClient:
         last = None
         for attempt in range(max_attempts):
             retry_after_s = None
+            if bucket == "video" and method.upper() == "POST":
+                self._check_video_quota_gate()
             async with self.limiter.slot(bucket):
+                if bucket == "video" and method.upper() == "POST":
+                    # Another worker may have learned the daily quota while
+                    # this request was waiting for its rate-limiter slot.
+                    self._check_video_quota_gate()
                 try:
                     c = await (self._text_http() if text_ep else self.client())
                     if text_ep:
@@ -324,6 +363,14 @@ class AgnesClient:
                 else:
                     if r.status_code < 400:
                         return r
+                    from ..core.provider_errors import daily_quota_rejection
+                    failure = AgnesError(f"{label} API 错误 {r.status_code}: {r.text[:400]}",
+                                         r.status_code, r.text)
+                    if not text_ep and bucket == "video" and daily_quota_rejection(failure):
+                        failure = DailyQuotaExhausted(str(failure), r.status_code, r.text,
+                                                      _parse_retry_after(r))
+                        self._video_quota_resume_after = failure.resume_after
+                        raise failure
                     if r.status_code not in RETRYABLE:
                         raise AgnesError(
                             f"{label} API 错误 {r.status_code}: {r.text[:400]}",
@@ -354,7 +401,15 @@ class AgnesClient:
 
     # ---------- 文本 ----------
     async def chat(self, messages: List[dict], *, temperature=0.7,
-                   max_tokens=2048, thinking=False, json_mode=False) -> str:
+                   max_tokens=None, thinking=False, json_mode=False) -> str:
+        """文本生成。
+
+        ``max_tokens`` 不传 = 用全局预算策略（实测端点上限 65536，见
+        ``src/api/model_budget.py``）。传了也会被夹到安全区：小于下限会被抬高
+        （thinking 模式下过小的预算会把答案截断在 JSON 中间，解析失败后静默
+        降级），大于上限会被压回（端点会 400）。业务层不再需要记住任何数字。
+        """
+        max_tokens = resolve_text_max_tokens(max_tokens)
         if self.quota:
             ok, why = self.quota.can("text_calls", 1)
             if not ok: raise AgnesError(why)
@@ -376,7 +431,7 @@ class AgnesClient:
         return text
 
     async def chat_completion(self, messages: List[dict], *, temperature=0.7,
-                              max_tokens=2048, thinking=False,
+                              max_tokens=None, thinking=False,
                               tools: Optional[List[dict]] = None,
                               tool_choice: Optional[Any] = None) -> dict:
         """OpenAI 兼容的 chat completion（支持原生 function-calling）。
@@ -384,7 +439,9 @@ class AgnesClient:
         返回 message dict：{"content": str|None, "tool_calls": list|None, "role": "assistant"}。
         tool_calls 元素为 {"id","type":"function","function":{"name","arguments"(str)}}，
         与 OpenAI Chat Completions 格式一致。tools 为标准 OpenAI tools 数组。
-        不做 response_format/json_mode 处理（agent 工具调用走结构化 tool_calls，不需要）。"""
+        不做 response_format/json_mode 处理（agent 工具调用走结构化 tool_calls，不需要）。
+        ``max_tokens`` 走全局预算策略（同 ``chat``）。"""
+        max_tokens = resolve_text_max_tokens(max_tokens)
         if self.quota:
             ok, why = self.quota.can("text_calls", 1)
             if not ok: raise AgnesError(why)
@@ -413,7 +470,7 @@ class AgnesClient:
         }
 
     async def chat_completion_vision(self, messages: List[dict], *, model: str,
-                                     temperature=0.2, max_tokens=1600,
+                                     temperature=0.2, max_tokens=None,
                                      thinking: bool = True) -> dict:
         """Vision 请求（Visual Review Tool V1，2026-09-06 probe 定案）。
 
@@ -429,7 +486,9 @@ class AgnesClient:
         复用 _request（限流/重试/退避/配额），不新造 retry。
         Phase49：视觉审查调用也开 thinking（真机探针 2026-10-07 实证：视觉端点
         接受 chat_template_kwargs.enable_thinking 且回包含 reasoning_content）；
-        thinking=False 不传字段（回归旧行为）。"""
+        thinking=False 不传字段（回归旧行为）。
+        ``max_tokens`` 走全局预算策略；视觉端点实测上限同为 65536。"""
+        max_tokens = resolve_text_max_tokens(max_tokens)
         if self.quota:
             ok, why = self.quota.can("text_calls", 1)
             if not ok: raise AgnesError(why)
@@ -448,7 +507,7 @@ class AgnesClient:
         }
 
     async def chat_completion_stream(self, messages: List[dict], *, temperature=0.7,
-                                      max_tokens=2048, thinking=False,
+                                      max_tokens=None, thinking=False,
                                       tools: Optional[List[dict]] = None,
                                       tool_choice: Optional[Any] = None):
         """OpenAI 兼容 streaming chat completion（原生 function-calling + reasoning）。
@@ -460,7 +519,9 @@ class AgnesClient:
            "tool_calls":list|None,"usage":dict|None}
         tool_calls 内部按 index 聚合（id/name 只首片，arguments 顺序拼接），finish 时给
         完整 list——与非流式 chat_completion 返回形状一致，供 tool-loop 执行；不暴露原始
-        argument delta（§六）。不影响非流式 chat_completion。"""
+        argument delta（§六）。不影响非流式 chat_completion。
+        ``max_tokens`` 走全局预算策略（同 ``chat``）。"""
+        max_tokens = resolve_text_max_tokens(max_tokens)
         if self.quota:
             ok, why = self.quota.can("text_calls", 1)
             if not ok: raise AgnesError(why)
@@ -713,13 +774,13 @@ class AgnesClient:
             body["seed"] = int(seed)     # 官方参数（2026-09-28 文档核读）：seed integer
         if self.quota:
             ok, why = self.quota.can("video_seconds", seconds_25)
-            if not ok: raise AgnesError(why)
+            if not ok: raise DailyQuotaExhausted(why)
         try:
             r = await self._request("POST", "/v1/videos", "video", json=body,
                                     retry_ambiguous=False)
         except (httpx.TransportError, AgnesError) as exc:
             status = getattr(exc, "status", None)
-            if status is not None and 400 <= status < 500 and status != 408:
+            if isinstance(exc, DailyQuotaExhausted) or (status is not None and 400 <= status < 500 and status != 408):
                 raise
             raise VideoSubmissionUncertain(
                 "video submission outcome unknown; reconcile before any new POST",
@@ -759,18 +820,19 @@ class AgnesClient:
                                                 "model_name": self._video_model_id(model_name)},
                                         max_attempts=3)
             except AgnesError as e:
-                if e.status is None:
+                if e.status is None or e.status in RETRYABLE:
                     # HTTP 层错误（网络/5xx/429 耗尽重试）-> 计数重试，不立刻放弃
                     consecutive += 1
                     log.warning("poll_video %s 网络错误（连续 %d/%d）: %s",
                                 video_id[:16], consecutive, max_consecutive_failures, e)
                     if consecutive >= max_consecutive_failures:
                         raise PollTransientError(
-                            f"轮询连续 {max_consecutive_failures} 次网络失败: {e}")
+                            f"轮询连续 {max_consecutive_failures} 次网络失败: {e}",
+                            status=e.status, body=e.body)
                     continue
                 # 有 status（4xx 等，_request 已判定不可重试）-> 永久失败，立刻抛
                 if e.status == 404:
-                    raise AgnesError(f"video_id 不存在: {video_id}", 404)
+                    raise VideoGenerationFailed(f"video_id 不存在: {video_id}", 404)
                 raise
             consecutive = 0   # 成功，重置
             d = r.json()
@@ -789,24 +851,45 @@ class AgnesClient:
                         "seconds": float(d.get("seconds") or 0),   # 🔴 回读
                         "size": d.get("size"), "raw": d}
             if st == "failed":
-                raise AgnesError(f"视频生成失败: {d.get('error')}")
+                raise VideoGenerationFailed(f"视频生成失败: {d.get('error')}", body=json.dumps(d, ensure_ascii=False))
         raise PollTransientError(f"视频生成超时（{max_wait}s），video_id={video_id}")
 
     async def download(self, url: str, dest) -> str:
         from pathlib import Path
-        dest = Path(dest); dest.parent.mkdir(parents=True, exist_ok=True)
-        # 资产 URL（platform-outputs.agnes-ai.space）是预签名 URL，
-        # 带 Authorization 头反而 401（实测），用无认证 client 下载。
-        async with httpx.AsyncClient(
-                timeout=httpx.Timeout(connect=30, read=600, write=60, pool=30),
-                follow_redirects=True, proxy=self.proxy,
-                transport=self.transport) as cli:
-            async with cli.stream("GET", url) as r:
-                r.raise_for_status()
-                with open(dest, "wb") as f:
-                    async for chunk in r.aiter_bytes(1 << 16):
-                        f.write(chunk)
-        return str(dest)
+        import os
+        import tempfile
+        dest = Path(dest)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        # Signed asset URLs use an unauthenticated client. Retrying these GETs
+        # never repeats generation; publish only a fully downloaded file.
+        for attempt in range(4):
+            fd, temporary = tempfile.mkstemp(prefix=f".{dest.name}.", suffix=".part", dir=dest.parent)
+            os.close(fd)
+            try:
+                async with httpx.AsyncClient(
+                        timeout=httpx.Timeout(connect=30, read=600, write=60, pool=30),
+                        follow_redirects=True, proxy=self.proxy,
+                        transport=self.transport) as cli:
+                    async with cli.stream("GET", url) as response:
+                        response.raise_for_status()
+                        count = 0
+                        with open(temporary, "wb") as output:
+                            async for chunk in response.aiter_bytes(1 << 16):
+                                output.write(chunk)
+                                count += len(chunk)
+                        if not count:
+                            raise httpx.RemoteProtocolError("empty generated asset")
+                os.replace(temporary, dest)
+                return str(dest)
+            except (httpx.TransportError, httpx.HTTPStatusError) as exc:
+                retryable = (not isinstance(exc, httpx.HTTPStatusError)
+                             or exc.response.status_code in (429, 500, 502, 503, 504))
+                if not retryable or attempt == 3:
+                    raise
+                log.warning("Asset GET failed (%s); retry %s/3 without regenerating", type(exc).__name__, attempt + 1)
+                await asyncio.sleep(2 ** attempt)
+            finally:
+                Path(temporary).unlink(missing_ok=True)
 
     # 阶段5 垫片已全部清理（③-e 清垫片1/2、③-b 清垫片3、更早清垫片4/5）。
     # generate_image 现只接受 size_tier/ratio，返回 {url, b64}（无 data 字段）。

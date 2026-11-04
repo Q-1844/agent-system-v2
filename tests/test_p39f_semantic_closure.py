@@ -582,6 +582,10 @@ def test_sync_slot_does_not_touch_semantics_config(venv, tmp_path):
                                       "source_type": "prev_tail_relay",
                                       "source_shot_id": "s01_c02",
                                       "end_source_version": "vv_a1"}])
+    # Production sync runs only after this version has been attached/selected;
+    # the selection guard must continue rejecting unattached late receipts.
+    ProjectStore(pdir).update_shot("s02_c01", lambda s: (
+        s.video_versions.append(vv), setattr(s, "final_video", vv.version_id)))
     asyncio.run(_sync_first_frame_slot(ProjectStore(pdir), "s02_c01", vv,
                                        "vv_x", None))
     slot = _slot_state(pdir, "s02_c01")

@@ -235,8 +235,13 @@ class GithubPagesHost(ImageHost):
                  "image/gif": ".gif"}
 
     def __init__(self, owner: str, repo: str, branch: str, token: str,
-                 poll_timeout: float = 180.0, poll_interval: float = 5.0,
+                 poll_timeout: float = 600.0, poll_interval: float = 5.0,
                  client_factory=None):
+        # 🔴 C2 本地 60 秒验证修复（2026-10-27）：poll_timeout 180 -> 600。
+        # 实测：agnes-frame-host 仓已累计 256MB / 800+ objects，单次 Pages 构建
+        # 实测 232s（PUT 15:19:57Z -> built 15:23:49Z），旧默认 180s 低于真实
+        # 构建下限 -> 每次托管必抛 PagesNotReadyError，末帧接力链路断链。
+        # 保留 fail-loud 语义（URL 已建，仅延长等待上限，不静默回落）。
         self.owner, self.repo, self.branch, self.token = owner, repo, branch, token
         self.poll_timeout = poll_timeout
         self.poll_interval = poll_interval

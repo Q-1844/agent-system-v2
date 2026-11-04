@@ -248,6 +248,10 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
         asset_noun = "分镜图"
     else:
         targets = _parse_video_targets(args)
+        media_parallel_preference = str(args.get("parallel_preference") or "allow")
+        from src.agents.producer_orchestration import PARALLEL_PREFERENCES
+        if media_parallel_preference not in PARALLEL_PREFERENCES:
+            raise AgentError("bad_arguments", "parallel_preference must be allow/prefer_serial/required_serial")
         total_timeout = VIDEOS_TOTAL_TIMEOUT_S
         asset_noun = "视频"
         # Phase51 B：视频层人数纪律（与首帧层同参数对称；E2 实证 + P50 用户观察
@@ -306,6 +310,15 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
                                 "detail": error["detail"], "ok": False, "verified": False,
                                 "fix_hint": "一次修正本批次全部对白编译错误后重试；未调用Provider"})
         submittable = valid
+
+    # Phase3: native selected-tail dependency guard before ANY video enqueue.
+    # No synthetic completed Job or stale previous video qualifies as a tail.
+    video_deps = {}
+    if not is_image and submittable:
+        from src.agents.producer_orchestration import video_submission_dependencies
+        submittable, dep_blocked, video_deps = video_submission_dependencies(
+            proj, submittable, preference=media_parallel_preference)
+        blocked.extend(dep_blocked)
 
     # ---- Phase51 C：修复范围服务端硬闸（run_36919eb5a073 实证：提示词范围约束
     #      对导演无效，授权 4 镜实际提交 20 镜）——清单外镜头在预检直接拒绝，
@@ -484,7 +497,48 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
     # 提交：origin_run_id = 每目标唯一 marker（ImageBatch/VideoVersion 记录同值，
     # 写后验证按它精确匹配；JobQueue.find_by_origin 也可据此查询）。
     jobs: list = []   # (target, job, marker)
-    for t in submittable:
+    started_submit = time.time()
+    for index, t in enumerate(submittable):
+        if not is_image:
+            # Producer can request serialization of this batch even when other
+            # independent JobQueue workers remain available to other runs.
+            # Do not wait forever or enqueue a successor after a failed/unknown
+            # prior job. This is NOT a provider retry or a media-selection act.
+            if media_parallel_preference != "allow" and jobs:
+                previous_job = jobs[-1][1]
+                cutoff = time.monotonic() + max(0, total_timeout - (time.time() - started_submit))
+                while previous_job.state in ("queued", "running") and time.monotonic() < cutoff:
+                    if cancel_event is not None and cancel_event.is_set():
+                        break
+                    await asyncio.sleep(min(POLL_INTERVAL_S, 0.5))
+                if previous_job.state != "done":
+                    blocked.extend({**rest, "status": "serial_predecessor_unsettled",
+                                    "error": "serial_predecessor_unsettled", "ok": False,
+                                    "verified": False, "dependency": previous_job.job_id,
+                                    "fix_hint": "Reconcile predecessor; rerun only these not-submitted shots."}
+                                   for rest in submittable[index:])
+                    break
+            # Recheck canonical identity after any await (and immediately
+            # before POST queue intent). A changed source selection fails shut.
+            from src.agents.producer_orchestration import video_submission_dependencies
+            current = ProjectStore(pdir).load()
+            ready_now, blocked_now, deps_now = video_submission_dependencies(
+                current, [t], preference=media_parallel_preference)
+            if blocked_now or deps_now.get(t["shot_id"]) != video_deps.get(t["shot_id"]):
+                blocked.extend(blocked_now or [{**t, "status": "continuity_dependency_changed",
+                                               "error": "continuity_dependency_changed",
+                                               "ok": False, "verified": False}])
+                continue
+        if not is_image:
+            from src.agents.producer_orchestration import existing_active_video_job
+            other_job = existing_active_video_job(q, project, t["shot_id"])
+            if other_job:
+                blocked.append({**t, "ok": False, "verified": False,
+                                "status": "shot_video_already_in_flight",
+                                "error": "shot_video_already_in_flight",
+                                "dependency": other_job,
+                                "fix_hint": "Reconcile the existing job rather than submitting the same shot again."})
+                continue
         marker = f"dgv_{uuid.uuid4().hex[:8]}"
         kind = {"first": "first_frame", "last": "last_frame", "video": "video"}[t["frame"]]
         extra = {"origin_run_id": marker}
@@ -500,6 +554,8 @@ async def _execute_generation(op: str, rt: AgentRuntime, project: str, arguments
         extra["population_constraint"] = population_constraint
         if not is_image and t["shot_id"] in video_contract_state:
             extra["input_manifest"] = video_contract_state[t["shot_id"]]["manifest"]
+            extra["producer_parallel_preference"] = media_parallel_preference
+            extra["continuity_dependency_snapshot"] = video_deps.get(t["shot_id"])
         job = q.submit(project, kind, t["shot_id"], **extra)
         jobs.append((t, job, marker))
 
@@ -765,7 +821,7 @@ SHOT_GENERATE_VIDEOS_TOOL = {
     "function": {
         "name": "shot.generate_videos",
         "description": (
-            "批量为镜头生成视频（复用项目既有视频管线：串行 worker、1 RPM，每个约 1~3 分钟）。"
+            "批量为镜头生成视频（复用 JobQueue 与独立限流器；无真实媒体依赖的镜头可按有效 worker 数并行）。"
             "前置条件（不满足的项会被结构化拒绝、不消耗额度）：该镜头的有效开场画面就绪——"
             "普通镜头用本镜已生成并选择的首帧；inherit 接力镜头用来源镜头的末帧"
             "（不要破坏接力关系，也不要替接力镜头生成本镜首帧）。视频内容不返回给你，"
@@ -780,6 +836,14 @@ SHOT_GENERATE_VIDEOS_TOOL = {
                     "maxItems": MAX_VIDEO_BATCH,
                     "items": {"type": "string"},
                     "description": f"要生成视频的镜头 id 数组（1~{MAX_VIDEO_BATCH} 个）。",
+                },
+                "parallel_preference": {
+                    "type": "string",
+                    "enum": ["allow", "prefer_serial", "required_serial"],
+                    "description": ("Producer 的本批次执行意图：allow=真实无依赖镜头可并行；"
+                                    "prefer_serial/required_serial=逐笔结算后再排下一镜。"
+                                    "任何模式都不能越过上游已选视频的真实末帧/版本依赖；"
+                                    "默认 allow，JobQueue 的实际在途容量仍单独控制。"),
                 },
                 "video_model": {
                     "type": "string",

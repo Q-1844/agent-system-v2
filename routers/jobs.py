@@ -109,7 +109,7 @@ async def cancel_job(job_id: str, force: bool = False):
 async def retry_job(job_id: str):
     j = get_job_queue().retry(job_id)
     if j is None:
-        raise HTTPException(400, "任务无法重试（仅 failed/cancelled 可重试）")
+        raise HTTPException(400, "任务无法重试：仅 failed/cancelled 可重试；视频如有提交意图或回执，须先对账")
     return {"job_id": job_id, "state": "queued"}
 
 

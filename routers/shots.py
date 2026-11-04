@@ -23,6 +23,7 @@ from deps import (
     get_agnes_client, get_project_manager, get_job_queue, get_rehost_host,
 )
 
+from src.api.model_budget import DEFAULT_TEXT_MAX_TOKENS
 router = APIRouter()
 
 
@@ -488,9 +489,15 @@ def continuity_status(project, shot):
     return ("ready", "")
 
 
-async def _extract_video_end_frame(project_dir, shot_id, video_local, version_id, emit=None):
+async def _extract_video_end_frame(project_dir, shot_id, video_local, version_id, emit=None,
+                                   *, host: bool = True):
     """从最终视频文件提取实际末帧 -> output/frames/{shot_id}_video_end_{version_id}.jpg，
     上传图床取公网 URL（视频接力进 Agnes 视频接口必需；保真不用 agnes_rehost）。
+    🔴 C2 本地 60 秒验证修复（2026-10-27）：新增 host 开关——host=False 时只提取本地末帧、
+    不做公网托管（仍然产出 local + status=DONE，reference_previous 走 base64 参考即可）。
+    动机：github_pages 图床 1 PUT = 1 次 Pages 构建（实测 232s，soft limit 10 次/小时），
+    无下游依赖的镜头也托管会把构建数从 3 推到 12，既逼近限额又让 9 个镜头白等一个构建周期。
+    依赖是否真的需要公网 URL 由调用方（下游镜头的 requires_previous_video_end）判定。
     提取/托管失败不抛（视频本身仍成功），返回带 error 的 Asset；允许 retry。
     🔴 Phase 3 守卫：文件名带来源版本 id——同一镜头重提取不再覆盖旧版本字节
     （旧 ffsync/接力候选的 local 记录因此保持与其登记 URL 对应，不产生
@@ -526,6 +533,9 @@ async def _extract_video_end_frame(project_dir, shot_id, video_local, version_id
         jpg_path = end_path.with_suffix(".jpg")
         from PIL import Image as _PILImage
         _PILImage.open(end_path).convert("RGB").save(jpg_path, "JPEG", quality=88)
+        if not host:
+            # 无下游依赖 -> 不占图床托管配额（Pages 构建昂贵）。local 仍可用于 base64 参考。
+            return Asset(local=str(jpg_path), status=ShotStatus.DONE.value), True
         url = await get_rehost_host().upload(str(jpg_path))
         return Asset(local=str(jpg_path), url=url, status=ShotStatus.DONE.value), True
     except Exception as e:
@@ -818,16 +828,43 @@ async def _handler_last_frame(job, emit):
     provider = (job.params.get("image_provider") or "agnes").lower()
     client = deps.get_sensenova_image_client() \
         if provider == "sensenova" else get_agnes_client()
-    res = await client.generate_image(
-        prompt=prompt, image_refs=refs,
-        size_tier=project.style.size_tier or "1K", ratio=project.style.aspect_ratio or "16:9")
-    url = res.get("url")
-    b64 = res.get("b64")
-    if not url and not b64:
-        raise RuntimeError("尾帧生成未返回 URL/b64（sensenova 恒 b64）")
-    dest = project_dir / "output" / "frames" / f"{shot.shot_id}_last.png"
+    receipt_digest = hashlib.sha256(json.dumps({
+        "prompt": prompt, "refs": refs, "provider": provider,
+        "size_tier": project.style.size_tier or "1K", "ratio": project.style.aspect_ratio or "16:9",
+        "based_on_first_frame": shot.selected_first_frame,
+        "bound_basis": dict(bound_last.basis) if bound_last else None,
+        "model": (getattr(client, "models", {}) or {}).get("image") or getattr(client, "model", None),
+    }, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    origin = job.params.get("origin_run_id")
+    intent = origin or job.params.setdefault("last_frame_receipt_intent", uuid.uuid4().hex)
+    receipt_key = hashlib.sha256(json.dumps([shot.shot_id, intent, receipt_digest]).encode()).hexdigest()
+    receipt_path = project_dir / "output" / "image_receipts" / f"{receipt_key}.json"
+    receipt = json.loads(receipt_path.read_text()) if receipt_path.exists() else None
+    if receipt is not None and (receipt.get("input_sha256") != receipt_digest or not receipt.get("url")):
+        raise RuntimeError("invalid image receipt; reconcile before regenerating")
+    batch_id = receipt["batch_id"] if receipt else f"lf_{uuid.uuid4().hex[:8]}"
+    if receipt:
+        url, b64 = receipt["url"], None
+    else:
+        res = await client.generate_image(
+            prompt=prompt, image_refs=refs,
+            size_tier=project.style.size_tier or "1K", ratio=project.style.aspect_ratio or "16:9",
+            **({"want_b64": True} if provider == "agnes" else {}))
+        url, b64 = res.get("url"), res.get("b64")
+        if not url and not b64:
+            raise RuntimeError("尾帧生成未返回 URL/b64（sensenova 恒 b64）")
+        if url:
+            # This is derived recovery evidence, never an accepted project batch.
+            # The original dependency guard still precedes every canonical commit.
+            from src.core.store import _atomic_write_json
+            receipt = {"batch_id": batch_id, "url": url, "input_sha256": receipt_digest,
+                       "origin_run_id": origin, "shot_id": shot.shot_id, "created_at": _time.time()}
+            _atomic_write_json(receipt_path, receipt)
+    await emit("download", f"{shot.shot_id} 下载已有尾帧回执", 30)
+    dest = project_dir / "output" / "frames" / f"{shot.shot_id}_last_{batch_id}.png"
+    dest.parent.mkdir(parents=True, exist_ok=True)
     if b64:
-        dest.write_bytes(_base64.b64decode(b64))   # sensenova：b64 直存
+        dest.write_bytes(_base64.b64decode(b64))
     else:
         await client.download(url, dest)
     # 写尾帧批次（基于当前 selected_first_frame）+ 设 selected_last_frame + 同步旧 last_frame
@@ -837,7 +874,6 @@ async def _handler_last_frame(job, emit):
         post_generation_basis_guard(
             ShotBindingService(project_dir, project_dir.name),
             shot.shot_id, bound_last.basis)
-    batch_id = f"lf_{uuid.uuid4().hex[:8]}"
     now = _time.time()
     cand = Candidate(candidate_id=f"{batch_id}_1", local=str(dest), url=url,
                      status=ShotStatus.DONE.value, created_at=now)
@@ -864,7 +900,11 @@ async def _handler_last_frame(job, emit):
                                                  "diagnostics": [dict(d) for d in bound_last.diagnostics]}
                                                 if bound_last else {})})
     def mut(s, b=new_batch, cid=cand.candidate_id, d=str(dest), u=url):
-        s.last_frame_batches.append(b)
+        existing = next((i for i, old in enumerate(s.last_frame_batches) if old.batch_id == b.batch_id), None)
+        if existing is None:
+            s.last_frame_batches.append(b)
+        else:
+            s.last_frame_batches[existing] = b
         s.selected_last_frame = cid
         s.last_frame.mark_done(d, u)   # 同步旧字段（管线 preflight 读旧）
     store.update_shot(job.shot_id, mut)
@@ -1251,21 +1291,21 @@ async def shot_prompt_generate(project_name: str, shot_id: str, req: PromptAIReq
                 en = await client.chat(
                     [{"role": "system", "content": _FIRST_FRAME_SYSTEM_HAS_INTENT},
                      {"role": "user", "content": user}],
-                    temperature=0.7, max_tokens=512)
+                    temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
                 return {"prompt": en.strip()}
             if has_intent:
                 user = f"Stage: first frame\n\nContext:\n{ctx_text}"
                 en = await client.chat(
                     [{"role": "system", "content": _FIRST_FRAME_SYSTEM_HAS_INTENT},
                      {"role": "user", "content": user}],
-                    temperature=0.7, max_tokens=512)
+                    temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
                 return {"prompt": en.strip()}
             # 无意图且多镜 -> 推断本镜意图，返回 inferred_shot_intent 供前端确认
             user = f"Stage: first frame (infer shot intent)\n\nContext:\n{ctx_text}"
             raw = await client.chat(
                 [{"role": "system", "content": _FIRST_FRAME_SYSTEM_INFER},
                  {"role": "user", "content": user}],
-                temperature=0.7, max_tokens=700, json_mode=True)
+                temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS, json_mode=True)
             import json as _json, re as _re
             m = _re.search(r'\{.*\}', raw, _re.DOTALL)
             if m:
@@ -1282,7 +1322,7 @@ async def shot_prompt_generate(project_name: str, shot_id: str, req: PromptAIReq
         en = await client.chat(
             [{"role": "system", "content": system},
              {"role": "user", "content": f"Stage: {stage_desc}\n\nContext:\n{ctx_text}"}],
-            temperature=0.7, max_tokens=512)
+            temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
         return {"prompt": en.strip()}
     except FileNotFoundError:
         raise HTTPException(404, "项目不存在")
@@ -1311,7 +1351,7 @@ async def shot_prompt_optimize(project_name: str, shot_id: str, req: PromptAIReq
         en = await get_agnes_client().chat(
             [{"role": "system", "content": _PROMPT_OPT_SYSTEM},
              {"role": "user", "content": f"Current prompt:\n{text}\n\nContext:\n{ctx}"}],
-            temperature=0.5, max_tokens=512)
+            temperature=0.5, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
         return {"prompt": en.strip()}
     except FileNotFoundError:
         raise HTTPException(404, "项目不存在")
@@ -1367,6 +1407,81 @@ async def shot_prompt_rebuild(project_name: str, shot_id: str,
 # ==================== 阶段 3：镜头视频生成（shot 级，走 JobQueue 串行视频 worker）====================
 from src.api.agnes_client import resolve_size as _resolve_size, PollTransientError, AgnesError
 
+# 素材 URL 拉取失败（供应商 400 source_unavailable）时的安全重试预算。
+# 该错误是【明确拒绝】：远端没有创建任务、没有扣费（不是 408，也不是结局不明），
+# 所以重发安全——真正绝不可重发的是「结局不明」（VideoSubmissionUncertain）。
+MATERIAL_FETCH_RETRY_LIMIT = 2
+MATERIAL_FETCH_RETRY_SECONDS = 20.0
+_MATERIAL_FETCH_ERROR_CODE = "source_unavailable"
+
+
+def _is_material_fetch_rejection(error) -> bool:
+    """供应商【明确拒绝】：拉不到我们提供的素材 URL（400 source_unavailable）。
+
+    典型触发：图床（GitHub Pages）构建抖动 / 边缘缓存未同步，provider 抓图超时。
+    远端没有创建任务、没有扣费 —— 因此允许安全重试（绝不重发的是「结局不明」）。
+    """
+    status = getattr(error, "status", None)
+    if status is None or not 400 <= status < 500:
+        return False
+    body = getattr(error, "body", None)
+    return _MATERIAL_FETCH_ERROR_CODE in str(body or "") or \
+        _MATERIAL_FETCH_ERROR_CODE in str(error)
+
+
+async def _record_video_quota_wait(job, error, emit):
+    from src.api.agnes_client import DailyQuotaExhausted
+    from src.core.provider_errors import quota_resume_after
+    job.params.update(failure_category="daily_quota",
+                      quota_resume_after=getattr(error, "resume_after", None) or quota_resume_after(error))
+    client = get_agnes_client()
+    if hasattr(client, "pause_for_quota"):
+        await client.pause_for_quota(error)
+    await emit("quota_wait", f"{job.shot_id} 等待每日额度刷新，进度已保存", None)
+
+
+def _reset_not_sent_submit(current, compiled_final_video):
+    """未发出提交 ⇒ 抹掉镜头的 GENERATING 痕迹（没有远端任务、没有扣费）。
+
+    没有这一步，「未发出」会被下一轮派发误读成「早前一次付费提交结局不明」
+    （shots.py 的 previous_submit_uncertain 闸门）——镜头被永久卡死，还凭空
+    背上一次人工对账（run #41 的 s01_c02 即此）。
+    """
+    from src.core.models import ShotStatus
+    if (current.final_video == compiled_final_video and
+            current.video.status == ShotStatus.GENERATING.value and
+            not current.video.video_id):
+        current.video.status = ShotStatus.PENDING.value
+        current.video.video_id = None
+        current.video.task_id = None
+
+
+async def _submit_with_material_retry(client, prompt, *, mode, shot_id=None,
+                                      emit=None, **kwargs):
+    """提交视频；素材 URL 拉取失败（远端明确拒绝、无扣费）时安全重试。
+
+    供应商 400 source_unavailable = 它抓不到我们提供的素材 URL（图床 GitHub
+    Pages 构建窗口 / 边缘缓存未同步）。远端【没有】创建任务、【没有】扣费
+    （是明确拒绝，不是 408，也不是结局不明），所以重发安全——真正绝不可重发
+    的是「结局不明」（VideoSubmissionUncertain）。
+    """
+    last_err = None
+    for attempt in range(MATERIAL_FETCH_RETRY_LIMIT):
+        try:
+            return await client.create_video(prompt, mode=mode, **kwargs)
+        except Exception as err:
+            if not _is_material_fetch_rejection(err):
+                raise
+            last_err = err
+            if attempt + 1 >= MATERIAL_FETCH_RETRY_LIMIT:
+                raise
+            if emit is not None:
+                await emit("submit_retry",
+                           f"{shot_id} 素材 URL 拉取失败（远端明确拒绝、无扣费），"
+                           f"退避 {MATERIAL_FETCH_RETRY_SECONDS:.0f}s 后重试", 5)
+            await asyncio.sleep(MATERIAL_FETCH_RETRY_SECONDS)
+    raise last_err
+
 
 def _video_preflight(shot, quota, seconds, eff_ff_ready):
     """视频前置硬校验（缺一不可，不通过就不提交，省 60s）。
@@ -1413,21 +1528,139 @@ def _video_preflight(shot, quota, seconds, eff_ff_ready):
                        f"（当前 {round(seconds, 1)} 秒）——请把镜头 target_duration_s "
                        f"调到 {min_s}-{12} 秒后重试（成片保留时长另行决定）")
     if quota:
-        ok, why = quota.can("video_seconds", seconds)
+        ok, why = quota.can("video_seconds", max(4, min(12, round(seconds))))
         if not ok:
-            return False, f"配额不足: {why}"
+            return False, why
     return True, ""
 
 
 async def _await_last_frame_url(store, shot_id, emit, timeout=180, interval=5):
-    """有界等待 last_frame.url_ready（keyframes 尾帧可能还在生成）。超时返回 None。"""
+    """Wait for a selected tail, publishing an already completed local image once."""
     deadline = _time.time() + timeout
     while _time.time() < deadline:
-        sh = store.load().get_shot(shot_id)
+        project = store.load()
+        sh = project.get_shot(shot_id)
         if sh and sh.last_frame.url_ready:
             return sh.last_frame.selected.url
+        selected = sh.last_frame.selected if sh else None
+        if (sh and sh.last_frame.status == "done" and selected
+                and selected.status == "done" and selected.local
+                and Path(selected.local).is_file()):
+            # Snapshot only this tail identity.  Other video workers may safely
+            # change unrelated shots while a Pages publish is in flight; the
+            # project-wide signature from the earlier load is NOT a valid guard.
+            expected_selected_id = sh.selected_last_frame
+            expected_selected_index = sh.last_frame.selected_index
+            expected_local = selected.local
+            expected_lock = sh.locked
+            expected_digest = hashlib.sha256(Path(expected_local).read_bytes()).digest()
+            await emit("rehost", f"{shot_id} 尾帧托管中（补公网 URL）", 5)
+            # 🔴 尾帧业务层 PNG→JPEG q88（35.md 同款纪律，run #41/#42 根因）：
+            # _extract_video_end_frame（末帧接力）一直做 PNG→JPEG q88——168KB≈PNG 1/6，
+            # 避开 Agnes 30s 抓图超时（PNG 1MB 实测 30.5s）。本入口（keyframes 尾帧
+            # b64 落地后的补托管）此前直传原始 PNG（run #42 实测 1.27MB，github.io
+            # 对 Agnes 侧吞吐 ~25KB/s ⇒ 50s+ 必超时）——同一纪律必须覆盖所有
+            # 「进 Agnes 视频接口」的托管入口。转换产物独立落盘（原 PNG 证据不动，
+            # 守卫 digest 仍锁原 PNG 选择身份）；PNG 之外直传（无谓二次压缩）。
+            upload_src = expected_local
+            if expected_local.lower().endswith(".png"):
+                try:
+                    from PIL import Image as _PILImage
+                    jpg_path = Path(expected_local).with_suffix(
+                        ".hosted.jpg")
+                    _PILImage.open(expected_local).convert("RGB").save(
+                        jpg_path, "JPEG", quality=88)
+                    upload_src = str(jpg_path)
+                except Exception as _jpg_err:  # fail-loud：不静默回落 PNG
+                    raise RuntimeError(
+                        f"尾帧托管前 PNG→JPEG 转换失败: {_jpg_err}") from _jpg_err
+            url = await get_rehost_host().upload(upload_src)
+            if not url:
+                raise RuntimeError("尾帧托管未返回公网 URL")
+
+            from src.core.store import ProjectConflictError
+
+            def still_same_tail(_project, current):
+                """Fail closed if the selected image was superseded during upload."""
+                current_selected = current.last_frame.selected
+                if (current.locked != expected_lock or
+                        current.selected_last_frame != expected_selected_id or
+                        current.last_frame.selected_index != expected_selected_index or
+                        current.last_frame.status != "done" or
+                        current_selected is None or
+                        current_selected.local != expected_local or
+                        current_selected.status != "done"):
+                    raise ProjectConflictError("selected tail changed during hosting")
+                try:
+                    current_digest = hashlib.sha256(
+                        Path(current_selected.local).read_bytes()).digest()
+                except OSError as exc:
+                    raise ProjectConflictError(
+                        "selected tail disappeared during hosting") from exc
+                if current_digest != expected_digest:
+                    raise ProjectConflictError("selected tail bytes changed during hosting")
+
+            def publish(current):
+                # Another worker may have published the SAME selected image
+                # while we uploaded.  Preserve its public URL instead of
+                # replacing it with an older redundant hosting result.
+                active_url = current.last_frame.selected.url or url
+                current.last_frame.selected.url = active_url
+                for batch in current.last_frame_batches:
+                    for candidate in batch.candidates:
+                        if (candidate.candidate_id == expected_selected_id and
+                                candidate.local == expected_local):
+                            candidate.url = active_url
+            # update_shot obtains the store lock and reloads the latest project.
+            # No stale project-wide expected_signature: concurrent unrelated
+            # shot writes must survive, without losing selection safety.
+            latest = store.update_shot(shot_id, publish, guard=still_same_tail)
+            return latest.last_frame.selected.url
         await asyncio.sleep(interval)
     return None
+
+
+def _commit_hosted_first_frame_url(store, shot_id, *, selected_id,
+                                   selected_index, source_local, source_digest,
+                                   locked, url):
+    """Rebase an uploaded first-frame URL without changing another selection.
+
+    Upload may take minutes.  A project-wide signature would reject harmless
+    concurrent work, but updating a stale candidate index could instead host
+    the WRONG image.  Verify the selected media identity under the store lock.
+    """
+    from src.core.store import ProjectConflictError
+
+    def guard(_project, current):
+        chosen = current.first_frame.selected
+        if (current.locked != locked or
+                current.selected_first_frame != selected_id or
+                current.first_frame.selected_index != selected_index or
+                current.first_frame.status != "done" or
+                chosen is None or chosen.local != source_local or
+                chosen.status != "done"):
+            raise ProjectConflictError("selected first frame changed during hosting")
+        try:
+            current_digest = hashlib.sha256(Path(chosen.local).read_bytes()).digest()
+        except OSError as exc:
+            raise ProjectConflictError(
+                "selected first frame disappeared during hosting") from exc
+        if current_digest != source_digest:
+            raise ProjectConflictError("selected first frame bytes changed during hosting")
+
+    def publish(current):
+        active_url = current.first_frame.selected.url or url
+        current.first_frame.selected.url = active_url
+        current.first_frame.selected.status = "done"
+        for batch in current.first_frame_batches:
+            for candidate in batch.candidates:
+                if (candidate.candidate_id == selected_id and
+                        candidate.local == source_local):
+                    candidate.url = active_url
+        current.first_frame.status = "done"
+        current.first_frame.updated_at = _time.time()
+
+    return store.update_shot(shot_id, publish, guard=guard)
 
 
 async def _ensure_multi_video_prompt(project_name: str, shot_id: str, emit) -> dict:
@@ -1577,6 +1810,26 @@ async def _handler_video(job, emit):
     if shot is None:
         raise RuntimeError(f"镜头 {job.shot_id} 不存在")
 
+    until = job.params.get("quota_resume_after")
+    if until:
+        from src.core.provider_errors import retry_gate_status
+        open_, reason = retry_gate_status(until)
+        if not open_:
+            from src.api.agnes_client import DailyQuotaExhausted
+            error = DailyQuotaExhausted(reason)
+            error.resume_after = until
+            await _record_video_quota_wait(job, error, emit)
+            raise error
+    pinned_task = job.params.get("provider_task_id")
+    if pinned_task and (shot.video.video_id != pinned_task or shot.video.status == "failed"):
+        raise RuntimeError("recorded provider task differs from active shot; reconcile before any POST")
+    if pinned_task and shot.video.status == "done":
+        selected = next((v for v in shot.video_versions if v.version_id == shot.final_video), None)
+        if (selected and selected.video_id == pinned_task and selected.local
+                and Path(selected.local).is_file() and Path(selected.local).stat().st_size):
+            await emit("done", f"{shot.shot_id} 原任务已收货，保留现有选版", 100)
+            return
+        raise RuntimeError("recorded task already completed but its selected artifact is missing; reconcile before POST")
     recovering_video = bool(shot.video.video_id and shot.video.status not in ("done", "failed"))
     # 🔴 自动重新托管：首帧 local 有 / url 空（v1 迁移数据）-> imgbb 补公网 URL（100% 保真，不丢画面）。
     #  inherit_previous 不使用本镜 first_frame（开场来自来源镜头末帧），跳过。
@@ -1584,15 +1837,22 @@ async def _handler_video(job, emit):
     if (not recovering_video and shot.opening_source != OpeningSource.INHERIT_PREVIOUS.value
             and shot.first_frame.status == "done" and sel_ff and sel_ff.local
             and not sel_ff.url):
+        # An unrelated shot may complete while hosting; that is safe.  A new
+        # first-frame selection or changed local bytes are NOT safe and must
+        # never inherit the obsolete hosted URL.
+        source_local = sel_ff.local
+        source_digest = hashlib.sha256(Path(source_local).read_bytes()).digest()
+        selected_id = shot.selected_first_frame
+        selected_index = shot.first_frame.selected_index
+        locked = shot.locked
         await emit("rehost", f"{shot.shot_id} 首帧重新托管中（补公网 URL）", 3)
-        url = await get_rehost_host().upload(sel_ff.local)
-        def _mut_rehost(s, u=url, idx=shot.first_frame.selected_index):
-            if 0 <= idx < len(s.first_frame.candidates):
-                s.first_frame.candidates[idx].url = u
-                s.first_frame.candidates[idx].status = "done"
-            s.first_frame.status = "done"
-            s.first_frame.updated_at = _time.time()
-        store.update_shot(job.shot_id, _mut_rehost)
+        url = await get_rehost_host().upload(source_local)
+        if not url:
+            raise RuntimeError("首帧托管未返回公网 URL")
+        _commit_hosted_first_frame_url(
+            store, job.shot_id, selected_id=selected_id,
+            selected_index=selected_index, source_local=source_local,
+            source_digest=source_digest, locked=locked, url=url)
         shot = store.load().get_shot(job.shot_id)   # 取最新
 
     # 🔴 视频提交尺寸：16:9 直接按服务端实测输出 1280x704 提交（FACTS §3.4.1：1312x736 会被
@@ -1627,16 +1887,25 @@ async def _handler_video(job, emit):
     ok, why = ((True, "recover existing task") if recovering_video else
                _video_preflight(shot, get_agnes_client().quota, seconds, bool(eff_ff_url)))
     if not ok and not recovering_video:
+        from src.core.provider_errors import daily_quota_rejection
+        if daily_quota_rejection(RuntimeError(why)):
+            from src.api.agnes_client import DailyQuotaExhausted
+            error = DailyQuotaExhausted(why)
+            job.params["provider_submit_state"] = "not_sent"
+            await _record_video_quota_wait(job, error, emit)
+            raise error
         raise RuntimeError(why)   # 不发起 API 请求
 
     mode = ("keyframes" if shot.link_mode == "keyframes"
             else "multi" if shot.link_mode == "multi" else "i2v")
     # keyframes 尾帧 in-progress 有界等待
     if not recovering_video and mode == "keyframes" and not shot.last_frame.url_ready:
+        job.params["video_pre_submit_failure"] = "last_frame_url"
         await emit("wait", f"{shot.shot_id} 等待尾帧就绪", 5)
         if not await _await_last_frame_url(store, job.shot_id, emit):
             raise RuntimeError("等待尾帧超时（尾帧尚未生成完成），请重试")
         shot = store.load().get_shot(job.shot_id)   # 取最新
+    job.params.pop("video_pre_submit_failure", None)
 
     if not recovering_video:
         # Finish asynchronous input preparation before taking the single snapshot
@@ -1670,6 +1939,13 @@ async def _handler_video(job, emit):
         seconds = shot.video.num_frames / max(shot.video.frame_rate, 1)
         ok, why = _video_preflight(shot, get_agnes_client().quota, seconds, bool(eff_ff_url))
         if not ok:
+            from src.core.provider_errors import daily_quota_rejection
+            if daily_quota_rejection(RuntimeError(why)):
+                from src.api.agnes_client import DailyQuotaExhausted
+                error = DailyQuotaExhausted(why)
+                job.params["provider_submit_state"] = "not_sent"
+                await _record_video_quota_wait(job, error, emit)
+                raise error
             raise RuntimeError(why)
 
     prompt = build_video_prompt(shot, mode)
@@ -1741,13 +2017,14 @@ async def _handler_video(job, emit):
     bound_video = None   # BOUND fresh-submit 时为 Adapter 产物（39D input_visuals 来源）
     # 42.md §二缺陷④：fresh-submit 前发现「上次提交结果不明」时置 True，
     # 如实随 VideoVersion 落库（续轮询路径恒 False）。
-    previous_submit_uncertain = False
+    previous_submit_uncertain = bool(job.params.get("resubmit_authorization"))
     if shot.video.video_id and shot.video.status not in (
             ShotStatus.DONE.value, ShotStatus.FAILED.value):
         vid = shot.video.video_id
         # Phase55 C：provider task ID 随 job 落档——watchdog 据此识别「本地失联≠
         # provider 失败」（休眠/断网不作废不补交，M5 事故路径修复）。
         job.params["provider_task_id"] = vid
+        job.params["provider_submit_state"] = "accepted"
         native_generation_basis = dict(job.params.get("dispatch_native_basis") or {})
         provider_options = dict(job.params.get("dispatch_provider_options") or provider_options)
         prompt = job.params.get("dispatch_prompt") or "[recovered: original prompt not recorded]"
@@ -1855,6 +2132,7 @@ async def _handler_video(job, emit):
                                          native_generation_basis,
                                          language_override=ndc_lang,
                                          provider_options=dict(provider_options))
+        job.params["video_model"] = video_model
         job.params["dispatch_input_signature"] = compiled_signature
         job.params["dispatch_final_video"] = compiled_final_video
         job.params["dispatch_native_basis"] = dict(native_generation_basis)
@@ -1870,6 +2148,13 @@ async def _handler_video(job, emit):
             current.video.video_id = None
             current.video.task_id = None
         def _guard_submit(current_project, current):
+            # The provider has NOT been called yet: a queued relay must use
+            # the exact selected upstream version/real tail frozen at enqueue.
+            # This guards changes occurring while JobQueue waits for a worker.
+            if "continuity_dependency_snapshot" in job.params:
+                from src.agents.producer_orchestration import assert_pinned_video_dependencies
+                assert_pinned_video_dependencies(current_project, job.shot_id,
+                    job.params["continuity_dependency_snapshot"])
             if (video_input_signature(current_project, current) != compiled_signature or
                     current.final_video != compiled_final_video):
                 raise RuntimeError("video inputs/selection changed before submit; recompile before retry")
@@ -1879,15 +2164,51 @@ async def _handler_video(job, emit):
                     provider_options=dict(provider_options))
         store.update_shot(job.shot_id, _claim_submit, guard=_guard_submit)
         await emit("submit_intent", f"{shot.shot_id} 提交意图已持久化", 10)
+        from src.core.media_submission_context import active_video_submission
+        submission_token = active_video_submission.set({
+            'project': job.project, 'logical_shot_id': job.shot_id,
+            'attempt_id': job.params['submission_intent_id'],
+            'input_signature': compiled_signature,
+            'previous_final_video': compiled_final_video,
+            'resubmit_authorization': job.params.get('resubmit_authorization'),
+        })
         try:
-            created = await get_agnes_client().create_video(prompt, mode=mode, **kwargs)
+            try:
+                created = await _submit_with_material_retry(
+                    get_agnes_client(), prompt, mode=mode, shot_id=shot.shot_id,
+                    emit=emit, **kwargs)
+            finally:
+                active_video_submission.reset(submission_token)
         except Exception as _sub_err:
-            from src.api.agnes_client import VideoSubmissionUncertain
+            from src.api.agnes_client import VideoSubmissionUncertain, VideoSubmissionNotSent
             status = getattr(_sub_err, "status", None)
             known_rejection = (isinstance(_sub_err, AgnesError)
                                and not isinstance(_sub_err, VideoSubmissionUncertain)
                                and status is not None and 400 <= status < 500 and status != 408)
-            job.params["provider_submit_state"] = "rejected" if known_rejection else "unknown"
+            if isinstance(_sub_err, VideoSubmissionNotSent):
+                # 本次【未向 provider 发出请求】：没有远端任务、没有扣费。
+                # 绝不能留下「提交结果不明」痕迹——否则下一次派发会把它误判为
+                # 「早前一次付费提交结局不明」，该镜头被永久卡死并凭空背上人工
+                # 对账负担（run #41 的 s01_c02 即如此背上一笔不存在的对账债）。
+                job.params["provider_submit_state"] = "not_sent"
+                job.params["failure_category"] = "not_sent"
+                store.update_shot(
+                    job.shot_id,
+                    lambda current: _reset_not_sent_submit(current, compiled_final_video))
+                await emit("submit_not_sent",
+                           f"{shot.shot_id} 未发出提交（无远端任务、无扣费），已复位待重试", 5)
+                _dns_classify(str(_sub_err))
+                raise
+            from src.core.provider_errors import daily_quota_rejection
+            quota_wait = daily_quota_rejection(_sub_err)
+            known_rejection = known_rejection or quota_wait
+            job.params["provider_submit_state"] = ("not_sent" if getattr(_sub_err, "not_sent", False)
+                                                   else "rejected" if known_rejection else "unknown")
+            job.params["failure_category"] = ("rate_limit" if known_rejection and status == 429 and not quota_wait
+                                               else "provider_rejection" if known_rejection else "submission_unknown")
+            if not known_rejection:
+                job.params.pop('confirm_uncertain_resubmit', None)
+                job.params.pop('resubmit_authorization', None)
             if known_rejection:
                 def _reject_if_current(current):
                     if (current.final_video == compiled_final_video and
@@ -1897,8 +2218,12 @@ async def _handler_video(job, emit):
                 store.update_shot(job.shot_id, _reject_if_current)
             await emit("submit_rejected" if known_rejection else "submit_unknown",
                        f"{shot.shot_id} 提交失败；" + ("远端明确拒绝" if known_rejection else "结果待核验，禁止自动补交"), None)
+            if quota_wait:
+                await _record_video_quota_wait(job, _sub_err, emit)
             _dns_classify(str(_sub_err))
             raise
+        job.params.pop('confirm_uncertain_resubmit', None)
+        job.params.pop('resubmit_authorization', None)
         _dns_classify("")   # 提交成功 → 清零连续失败计数
         vid = created.get("video_id") or created.get("task_id") or created.get("id")
         if not vid:
@@ -1942,6 +2267,7 @@ async def _handler_video(job, emit):
         res = await get_agnes_client().poll_video(vid, interval=5, on_progress=on_prog,
                                                   model_name=poll_model)
     except PollTransientError as e:
+        job.params["failure_category"] = "poll_transient"
         # 网络/超时（连续 5 次）：不标 failed，保留 video_id+generating，
         # retry/recover 续轮询（不重提交、不丢已生成视频）
         _dns_classify(str(e))
@@ -1993,6 +2319,12 @@ async def _handler_video(job, emit):
     retained = {}
     def guard(current_project, current_shot):
         # Validate at the actual commit point, after every asynchronous download.
+        # If an upstream selected tail changed during provider execution, keep
+        # the video artifact but never attach it as the valid current version.
+        if "continuity_dependency_snapshot" in job.params and not recovering_video:
+            from src.agents.producer_orchestration import assert_pinned_video_dependencies
+            assert_pinned_video_dependencies(current_project, job.shot_id,
+                job.params["continuity_dependency_snapshot"])
         if ("dispatch_final_video" in job.params and
                 current_shot.final_video != job.params["dispatch_final_video"]):
             raise RuntimeError("video selection changed during generation/download; result retained unattached")
@@ -2048,8 +2380,12 @@ async def _handler_video(job, emit):
         logger.warning(f"{shot.shot_id} 首帧槽同步异常（不影响视频完成）: {e}")
 
     # Phase 6A：提取实际视频末帧（供下游镜头接力）。失败不影响视频成功状态，独立 error + 可 retry。
+    # 🔴 C2 本地 60 秒验证修复（2026-10-27）：tail_host_required=False 时只本地提取、不托管。
+    # 默认 True（手工流程维持原行为）；C2 Executor 按下游依赖自行决定托管时机。
     try:
-        end_asset, _ok = await _extract_video_end_frame(project_dir, job.shot_id, str(dest), vvid, emit)
+        tail_host_required = bool(job.params.get("tail_host_required", True))
+        end_asset, _ok = await _extract_video_end_frame(project_dir, job.shot_id, str(dest), vvid, emit,
+                                                        host=tail_host_required)
         def _mut_end(s, ea=end_asset, sv=vvid):
             if s.final_video == sv:
                 s.video_end_frame = ea
@@ -2154,7 +2490,21 @@ async def shot_video(project_name: str, shot_id: str,
             scene_ref=_scene_ref_consumed(_proj, _shot, project_dir,
                                           validity=_validity),
             compiled_negative_prompt=bool((_shot.negative_prompt or "").strip()))
+        # Phase3: REST shares the native real-tail dependency guard. No
+        # bypass around the Producer's video submission invariants.
+        from src.agents.producer_orchestration import video_submission_dependencies
+        _ready, _blocked, _deps = video_submission_dependencies(
+            _proj, [{"shot_id": shot_id, "frame": "video"}])
+        if _blocked:
+            raise HTTPException(422, detail={"error": "continuity_dependency_unready",
+                                             "violations": _blocked})
+        extra["continuity_dependency_snapshot"] = _deps.get(shot_id)
         q = get_job_queue()
+        from src.agents.producer_orchestration import existing_active_video_job
+        duplicate = existing_active_video_job(q, project_name, shot_id)
+        if duplicate:
+            raise HTTPException(409, detail={"error": "shot_video_already_in_flight",
+                                             "existing_job_id": duplicate})
         job = q.submit(project_name, "video", shot_id, **extra)
         return {"job_id": job.job_id, "shot_id": shot_id}
     except FileNotFoundError:
@@ -2724,7 +3074,7 @@ async def translate_text(req: TranslateRequest):
         prompt = (f"将以下中文画面描述翻译成英文图片生成提示词，"
                   f"只返回英文提示词，不要其他文字：\n{req.text}")
         en = await agnes.chat([{"role": "user", "content": prompt}],
-                              temperature=0.5, max_tokens=1024)
+                              temperature=0.5, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
         return {"english": (en or "").strip()}
     except Exception as e:
         raise HTTPException(500, str(e))
@@ -2759,19 +3109,19 @@ async def generate_prompt_for_stage(project_name: str, shot_id: str, stage: str,
             user = f"本镜意图(取自故事段): {ctx['scene_summary']}\n\nContext:\n{ctx_text}"
             en = await client.chat(
                 [{"role": "system", "content": _FIRST_FRAME_SYSTEM_HAS_INTENT},
-                 {"role": "user", "content": user}], temperature=0.7, max_tokens=512)
+                 {"role": "user", "content": user}], temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
             prompt = en.strip()
         elif has_intent:
             user = f"Stage: first frame\n\nContext:\n{ctx_text}"
             en = await client.chat(
                 [{"role": "system", "content": _FIRST_FRAME_SYSTEM_HAS_INTENT},
-                 {"role": "user", "content": user}], temperature=0.7, max_tokens=512)
+                 {"role": "user", "content": user}], temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
             prompt = en.strip()
         else:
             user = f"Stage: first frame (infer shot intent)\n\nContext:\n{ctx_text}"
             raw = await client.chat(
                 [{"role": "system", "content": _FIRST_FRAME_SYSTEM_INFER},
-                 {"role": "user", "content": user}], temperature=0.7, max_tokens=700, json_mode=True)
+                 {"role": "user", "content": user}], temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS, json_mode=True)
             import json as _json, re as _re
             m = _re.search(r'\{.*\}', raw, _re.DOTALL)
             if m:
@@ -2789,7 +3139,7 @@ async def generate_prompt_for_stage(project_name: str, shot_id: str, stage: str,
         en = await client.chat(
             [{"role": "system", "content": system},
              {"role": "user", "content": f"Stage: {stage_desc}\n\nContext:\n{ctx_text}"}],
-            temperature=0.7, max_tokens=512)
+            temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
         prompt = en.strip()
 
     if persist:

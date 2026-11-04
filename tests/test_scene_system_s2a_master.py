@@ -55,7 +55,7 @@ class FakeVision:
     def __init__(self, anchor_id: str):
         self.anchor_id = anchor_id
 
-    async def chat_completion_vision(self, msgs, *, model):
+    async def chat_completion_vision(self, msgs, *, model, max_tokens=1600):
         return {"content": json.dumps({
             "location_identity": "pass",
             "anchors": [{"anchor_id": self.anchor_id, "visibility": "clearly_visible",

@@ -1,0 +1,93 @@
+name: video-quota-wakeup
+run-name: Quota wakeup ${{ inputs.task_nonce || github.event.workflow_run.id }}
+
+on:
+  workflow_run:
+    workflows: [video-autoproduction-e2e]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      task_nonce:
+        type: string
+        default: ''
+      source_run_id:
+        type: string
+        required: true
+      timer_hops:
+        type: number
+        default: 0
+      smoke_test:
+        description: '1-minute timer smoke test; quota and reconciliation gates remain enforced'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: quota-wakeup-${{ inputs.source_run_id || github.event.workflow_run.id }}
+  queue: max
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      enabled: ${{ steps.select.outputs.enabled }}
+      nonce: ${{ steps.select.outputs.nonce }}
+      source: ${{ steps.select.outputs.source }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            tools
+            src
+            config
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install 'httpx>=0.27,<1'
+      - id: select
+        name: Resolve authoritative stopped production
+        env:
+          B1_ARCHIVE_TOKEN: ${{ secrets.B1_ARCHIVE_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+          TASK_NONCE: ${{ inputs.task_nonce }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id || github.event.workflow_run.id }}
+        run: python -m tools.quota_wakeup resolve
+
+  wake:
+    needs: resolve
+    if: needs.resolve.outputs.enabled == 'true'
+    environment: ${{ inputs.smoke_test && 'producer-quota-wakeup-smoke' || 'producer-quota-wakeup' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            tools
+            src
+            config
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install 'httpx>=0.27,<1'
+      - name: Recheck gate and dispatch recovery or next timer
+        env:
+          B1_ARCHIVE_TOKEN: ${{ secrets.B1_ARCHIVE_TOKEN }}
+          # 🔴 必须用 PAT 派发（daycarry20m-20261102 实测回填）：缺此 secret 时
+          # dispatch_token() 回退 GITHUB_TOKEN，GitHub 反递归规则会静默吞掉
+          # 所派发 run 完成时的 workflow_run 触发——wakeup 链在第一跳后即死，
+          # 次日闸门空转、片子停在原地（run 41498341720 完成后零 wakeup run）。
+          RESUME_DISPATCH_TOKEN: ${{ secrets.RESUME_DISPATCH_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+          TASK_NONCE: ${{ needs.resolve.outputs.nonce }}
+          SOURCE_RUN_ID: ${{ needs.resolve.outputs.source }}
+          TIMER_HOPS: ${{ inputs.timer_hops || 0 }}
+          SMOKE_TEST: ${{ inputs.smoke_test && 'true' || 'false' }}
+        run: python -m tools.quota_wakeup run

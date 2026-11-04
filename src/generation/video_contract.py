@@ -68,6 +68,9 @@ VIDEO_JOB_PARAM_KEYS = {
     "native_dialogue_language",
     "input_manifest",          # Phase55 A：统一输入依据清单（随 job 落盘）
     "input_manifest_error",    # Phase55 A：清单构建失败原因（诚实缺失，不阻断提交）
+    # Phase3: worker validates the pinned tail-source snapshot at execution
+    # time. These are metadata/guards, not instructions to bypass JobQueue.
+    "producer_parallel_preference", "continuity_dependency_snapshot",
     # Phase56 A3：提交结果不明（generating 无 video_id）待核验后的显式人工
     # 确认重发标记——handler 拒绝无此标记的新提交；有标记仍标注
     # previous_submit_uncertain（重复风险如实落库）。

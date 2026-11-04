@@ -1,0 +1,1044 @@
+# AI-6E.0 — Agent Role Contracts & Collaboration Protocol
+
+AGNES has completed:
+
+* AI-6A revision safety foundation;
+* AI-6B Multi-Agent Foundation;
+* AI-6C contextual Agent UX;
+* AI-6D Director Proposal Runtime;
+* AI-6D.1 Agent UX Visual Polish & Proposal State Cohesion.
+
+The next real capability phase will be:
+
+**AI-6E — Production Planner Runtime**
+
+Before implementing that capability, perform one small contract-hardening phase:
+
+> **AI-6E.0 — Agent Role Contracts & Collaboration Protocol**
+
+This is primarily a documentation and architecture-alignment phase.
+
+It must NOT become another Agent runtime rewrite.
+
+The purpose is to establish durable, explicit operating contracts for all eight existing AGNES Agents before more Specialists receive real execution capabilities.
+
+---
+
+# 1. Preserve the current checkpoint first
+
+Before changing anything:
+
+```bash
+git status
+git diff --stat
+git log --oneline -15
+```
+
+Confirm that the completed AI-6D.1 changes are understood and isolated.
+
+Do not reset, clean, checkout, discard, or overwrite unrelated user work.
+
+Do not mix unrelated backend changes into this phase.
+
+---
+
+# 2. Inspect the real current Agent implementation
+
+Read the actual current implementation before writing documentation.
+
+At minimum inspect:
+
+```text
+src/agents/models.py
+src/agents/registry.py
+src/agents/capabilities.py
+src/agents/context.py
+src/agents/runtime.py
+src/agents/sessions.py
+src/agents/tasks.py
+src/agents/director_proposal.py
+src/agents/proposal_store.py
+routers/agents.py
+```
+
+Also inspect the existing AI-6B documentation/progress records and the current frontend Agent surfaces where useful.
+
+Confirm the actual fixed Agent IDs:
+
+```text
+producer
+script_writer
+character_designer
+director
+production_planner
+shot_producer
+continuity_reviewer
+editor
+```
+
+Confirm the real Capability Registry and distinguish carefully between:
+
+```text
+implemented
+reserved / not_implemented
+```
+
+Do not describe a reserved capability as working.
+
+---
+
+# 3. Core invariant
+
+The existing architecture remains:
+
+```text
+Agent
+= reasoning / decision layer
+
+Capability
+= controlled semantic action surface
+
+Workflow / Service
+= deterministic execution
+
+Project / Workspace
+= shared structured state
+
+AgentTask
+= inter-agent coordination record
+
+JobQueue / Dependency / Checkpoint
+= execution rules
+```
+
+Do not replace deterministic workflow behavior with LLM judgment.
+
+Do not introduce a new Agent framework.
+
+---
+
+# 4. Create a durable Agent documentation structure
+
+Create:
+
+```text
+docs/agents/
+    README.md
+    COLLABORATION_PROTOCOL.md
+    roles/
+        producer.md
+        script_writer.md
+        character_designer.md
+        director.md
+        production_planner.md
+        shot_producer.md
+        continuity_reviewer.md
+        editor.md
+```
+
+If the repository has an established documentation directory convention, follow it instead, but preserve the same conceptual structure.
+
+Do not scatter Agent role definitions across unrelated files.
+
+---
+
+# 5. `docs/agents/README.md`
+
+This file is the entry point for the AGNES Agent system.
+
+Document:
+
+## Architecture
+
+```text
+Producer Supervisor
+        │
+        ├── Script Writer
+        ├── Character Designer
+        ├── Director
+        ├── Production Planner
+        ├── Shot Producer
+        ├── Continuity Reviewer
+        └── Editor
+```
+
+Explain that these are exactly eight fixed role types.
+
+Do not add more roles in this phase.
+
+## Core operating model
+
+Explain clearly:
+
+```text
+Agent decides.
+Capability authorizes.
+Service / Workflow executes.
+Artifact carries durable results.
+```
+
+## Conversation vs task
+
+Distinguish:
+
+```text
+Direct Conversation
+```
+
+from:
+
+```text
+Delegated AgentTask
+```
+
+A direct conversation is user ↔ specialist interaction.
+
+A delegated task is Producer → Specialist structured work.
+
+They may use the same role and domain knowledge, but delegation must remain traceable through AgentTask.
+
+## Runtime truth vs role documentation
+
+Be explicit:
+
+* `AgentRegistry` / `CapabilityRegistry` are the executable authorization truth.
+* Role documents describe the intended operating contract.
+* Documentation must never claim permissions that the runtime does not grant.
+* If documentation and executable permissions diverge, report and fix the mismatch deliberately rather than silently inventing behavior.
+
+---
+
+# 6. Use one exact Role Contract template for all eight Agents
+
+Every role file must use the same headings.
+
+Use this structure:
+
+```text
+# <Agent Name>
+
+## 1. Stable identity
+## 2. Mission
+## 3. Owns
+## 4. Explicitly does NOT own
+## 5. Accepted task types
+## 6. Tasks it must reject or redirect
+## 7. Scope
+## 8. Required context
+## 9. Read permissions
+## 10. Write / execution permissions
+## 11. Current implemented capabilities
+## 12. Reserved future capabilities
+## 13. Inputs
+## 14. Structured outputs / artifacts
+## 15. Definition of done
+## 16. Failure / blocker behavior
+## 17. Direct Conversation mode
+## 18. Delegated AgentTask mode
+## 19. Upstream dependencies
+## 20. Downstream consumers
+## 21. Delegation / escalation rules
+## 22. Human-control boundary
+## 23. Canonical / Workspace boundary
+## 24. Model / tool policy
+## 25. UI context
+## 26. Examples
+## 27. Anti-examples
+## 28. Current implementation status
+```
+
+Do not turn these into personality biographies.
+
+These are operating contracts.
+
+---
+
+# 7. Producer Supervisor contract
+
+The Producer is the global coordinator.
+
+Mission:
+
+> Understand project-level user intent, inspect overall project/workflow state, decompose work, choose the correct Specialist, create traceable AgentTasks, and synthesize results.
+
+Owns:
+
+```text
+coordination
+task decomposition
+specialist selection
+AgentTask creation
+project-level progress understanding
+result synthesis
+```
+
+Does NOT own:
+
+```text
+screenplay writing
+character design
+storyboard editing
+production-plan authoring
+shot generation
+quality review
+composition details
+```
+
+The Producer must not become a universal domain editor.
+
+Direct business mutation should remain extremely limited.
+
+The Producer should normally reach Specialist-domain capabilities through delegation.
+
+Document the current real Producer permissions exactly.
+
+Current delegation remains:
+
+```text
+Producer → Specialist
+```
+
+Do not document Specialist → Specialist as currently available.
+
+---
+
+# 8. Script Writer contract
+
+Mission:
+
+> Own narrative/story structure and screenplay-level creative intent.
+
+Owns conceptually:
+
+```text
+story
+scene narrative
+story structure
+dialogue / narrative intent where supported
+character participation relationships
+```
+
+Does NOT own:
+
+```text
+shot composition
+camera strategy
+production planning
+image/video generation
+quality review
+final composition
+```
+
+Very important:
+
+Do not describe screenplay editing capabilities as implemented unless they actually are.
+
+If current capability is inspect-only, say so explicitly.
+
+Future screenplay structural writes must still use a controlled business/revision path rather than raw project.json writes.
+
+---
+
+# 9. Character Designer contract
+
+Mission:
+
+> Own character identity, visual definition, references, and character-specific consistency decisions.
+
+Owns conceptually:
+
+```text
+character description
+appearance intent
+character reference assets
+character visual consistency
+```
+
+Does NOT own:
+
+```text
+story structure
+shot structure
+production-plan decisions
+video production
+composition
+```
+
+Clearly distinguish:
+
+```text
+Character Designer decides/designs the character
+```
+
+from:
+
+```text
+Shot Producer uses character references while producing a shot
+```
+
+Do not allow both roles to independently redefine character identity.
+
+---
+
+# 10. Director contract
+
+The Director is now the first fully proven Specialist.
+
+Use the real AI-6D behavior as the reference implementation for what a strong role contract looks like.
+
+Mission:
+
+> Translate scene/shot creative intent into reviewable Storyboard decisions.
+
+Owns:
+
+```text
+shot structure
+shot description
+storyboard pacing
+insert / update / delete / reorder intent
+```
+
+The Director does NOT own:
+
+```text
+production strategy
+asset generation
+final quality acceptance
+final composition
+```
+
+The canonical protection rule must be explicit:
+
+```text
+Director
+→ semantic proposal
+→ existing ChangeOperation / ChangeSet
+→ Preview / Impact
+→ Creative Workspace
+```
+
+Never:
+
+```text
+Director
+→ directly overwrite canonical shots
+```
+
+Document the currently implemented `storyboard.propose_change` capability accurately.
+
+Use Director as the gold-standard example for future Specialist integration.
+
+---
+
+# 11. Production Planner contract
+
+This contract is especially important because AI-6E will implement it next.
+
+Mission:
+
+> Convert an already-decided Shot into a concrete, valid, executable Production Plan.
+
+The Planner answers:
+
+> **How should this Shot be produced?**
+
+The Planner does NOT answer:
+
+> **What should the Shot creatively be?**
+
+Owns:
+
+```text
+production strategy
+continuity strategy
+opening-source strategy
+ending strategy
+reference-source decisions
+prompt / generation strategy
+production-plan fields
+```
+
+Does NOT own:
+
+```text
+Storyboard creative redesign
+Character identity
+actual asset generation
+video acceptance/rejection
+final composition
+```
+
+This boundary must be extremely explicit:
+
+```text
+Director decides the shot.
+Planner decides how to produce that shot.
+Shot Producer executes the plan.
+```
+
+If the Planner discovers that the Shot itself is creatively invalid or underspecified, it must return a structured blocker/escalation rather than silently redesigning the Shot.
+
+The appropriate conceptual upstream owner is Director.
+
+However:
+
+**Specialist → Specialist delegation is still not implemented.**
+
+Therefore document this as an escalation relationship, not as an executable delegation chain.
+
+For current AI-6E.0, do NOT implement `production_plan.create`.
+
+Document it for the next phase.
+
+---
+
+# 12. Shot Producer contract
+
+Mission:
+
+> Execute an approved Production Plan using the existing deterministic generation pipeline.
+
+Owns execution of production capabilities such as, when actually implemented:
+
+```text
+first frame
+last frame
+image generation
+video generation
+candidate generation
+retry execution
+production jobs
+```
+
+Does NOT own:
+
+```text
+rewriting Storyboard intent
+inventing a different Production Plan
+changing Character identity
+deciding final quality acceptance
+```
+
+The key boundary is:
+
+```text
+Planner = decides how
+Shot Producer = executes how
+```
+
+If a Production Plan is invalid/stale/missing, Shot Producer must not improvise a new creative strategy.
+
+It should return a structured blocker.
+
+Do not implement these execution capabilities during AI-6E.0.
+
+---
+
+# 13. Continuity Reviewer contract
+
+Mission:
+
+> Evaluate generated results against creative intent, production plan, and continuity expectations.
+
+Owns:
+
+```text
+quality findings
+continuity findings
+accept/reject recommendation
+retry recommendation
+structured review
+```
+
+Does NOT own:
+
+```text
+silent Storyboard rewrites
+silent Production Plan rewrites
+silent asset regeneration
+final project mutation
+```
+
+The Reviewer should produce structured findings rather than secretly fixing everything itself.
+
+Clearly distinguish future concepts:
+
+```text
+Review finding
+Retry proposal
+```
+
+from:
+
+```text
+actual retry execution
+```
+
+Actual retry execution belongs to Shot Producer unless a later explicit capability contract changes this.
+
+---
+
+# 14. Editor contract
+
+Mission:
+
+> Assemble already-produced creative material into the final deliverable.
+
+Owns:
+
+```text
+composition
+selected versions
+audio/subtitle/composition state
+export
+```
+
+Does NOT own:
+
+```text
+story rewriting
+character redesign
+storyboard creative redesign
+production-plan authoring
+asset regeneration
+```
+
+If the Editor discovers an upstream creative problem, it should report a blocker rather than silently acting as Director.
+
+Document existing composition/export capabilities accurately.
+
+---
+
+# 15. Collaboration protocol
+
+Create `COLLABORATION_PROTOCOL.md`.
+
+This is not a generic multi-agent essay.
+
+It must describe AGNES specifically.
+
+Define the canonical conceptual chain:
+
+```text
+User / Producer
+        ↓
+Script Writer / Character Designer
+        ↓ structured project state
+
+Director
+        ↓
+Storyboard / Director Proposal
+
+Production Planner
+        ↓
+Production Plan
+
+Shot Producer
+        ↓
+Assets / Production Run
+
+Continuity Reviewer
+        ↓
+Review Report / Retry Proposal
+
+Editor
+        ↓
+Composition / Final Export
+```
+
+Not every project must invoke every role.
+
+Do not imply a rigid mandatory waterfall.
+
+---
+
+# 16. Artifact-first handoff
+
+Make this a core rule.
+
+Agents should share durable structured state such as:
+
+```text
+Project
+Workspace
+ChangeSet
+AgentTask
+Storyboard
+ProductionPlan
+ProductionRun
+Asset
+ReviewResult
+Composition state
+```
+
+They should NOT primarily hand work to each other by copying long chat transcripts.
+
+A Specialist should return:
+
+```text
+summary
+structured_result
+artifact_refs
+warnings
+suggested_next_actions
+```
+
+where appropriate.
+
+Do not invent new persistence formats merely for this documentation phase.
+
+Use existing structures where they already exist.
+
+---
+
+# 17. Task acceptance contract
+
+Every role must define what happens when it receives a task outside its domain.
+
+The Agent must not opportunistically perform another Specialist's job.
+
+Use one of:
+
+```text
+complete
+blocked
+needs_upstream_change
+needs_specialist
+not_supported
+```
+
+conceptually.
+
+Do NOT necessarily add these as new runtime enums in AI-6E.0.
+
+Document the semantics first.
+
+If the current runtime already has appropriate structured status values, reuse their terminology.
+
+Do not expand runtime models merely to make the documentation prettier.
+
+---
+
+# 18. Delegation boundary
+
+Current executable rule remains:
+
+```text
+Producer → Specialist
+```
+
+Current executable rule remains:
+
+```text
+Specialist → Specialist = forbidden
+```
+
+Document future collaboration such as:
+
+```text
+Director → Planner
+Planner → Shot Producer
+Reviewer → Shot Producer
+```
+
+only as conceptual upstream/downstream relationships.
+
+Do not implement recursive delegation.
+
+Do not implement automatic task chaining.
+
+That belongs to a later explicit phase.
+
+---
+
+# 19. Direct conversation mode
+
+Every Specialist can be accessed directly by the user.
+
+Document that direct conversation does not magically expand its permissions.
+
+For example:
+
+If the user directly tells Production Planner:
+
+> "Delete Shot 04."
+
+Planner should explain that Storyboard structure belongs to Director rather than pretending to own the operation.
+
+Likewise:
+
+If the user tells Shot Producer:
+
+> "Make this scene slower and add a close-up."
+
+Shot Producer should not silently redesign the Storyboard.
+
+Role boundaries apply equally in:
+
+```text
+direct user conversation
+```
+
+and:
+
+```text
+Producer-delegated task
+```
+
+---
+
+# 20. Canonical / Creative Workspace rules
+
+Every role document must explicitly state its mutation boundary.
+
+At minimum distinguish:
+
+```text
+read-only inspection
+
+domain business state
+
+Creative Workspace revision
+
+canonical project
+```
+
+No Agent gains raw canonical write authority from documentation.
+
+Director's existing Workspace / ChangeSet path remains the reference pattern.
+
+Do not implement canonical merge.
+
+Do not implement "make official."
+
+Do not invent a new revision model.
+
+---
+
+# 21. Current vs future capability status
+
+Every role document must include a table such as:
+
+```text
+Capability | Role relationship | Current status | Notes
+```
+
+Use only real Capability IDs from the current registry.
+
+Clearly mark:
+
+```text
+implemented
+reserved
+not_implemented
+```
+
+Do not invent capability IDs without strong reason.
+
+If a capability is conceptually desirable but does not exist, place it under a separate "future consideration" section rather than pretending it is already registered.
+
+---
+
+# 22. Model policy is secondary to role policy
+
+Document that ModelProfile does not define role authority.
+
+Changing a reasoning model must not change:
+
+```text
+Agent permissions
+domain ownership
+write boundaries
+delegation permissions
+completion contract
+```
+
+A stronger model is still the same role.
+
+Image/video models are tools, not Agents.
+
+Account selection is infrastructure policy, not role identity.
+
+Do not redesign ModelProfile in this phase.
+
+---
+
+# 23. Keep runtime prompts concise
+
+Inspect the existing short Agent system prompts.
+
+Do NOT paste the entire role documents into runtime system prompts.
+
+The runtime prompt should remain concise and high-signal.
+
+Only correct an existing system prompt if it materially contradicts the new documented role contract.
+
+If changes are necessary, keep them minimal:
+
+```text
+identity
+mission
+owns
+does-not-own
+scope
+tool/write boundary
+output expectation
+```
+
+Do not convert the runtime prompts into multi-thousand-token manuals.
+
+If no runtime prompt change is necessary, leave the code unchanged.
+
+---
+
+# 24. Do not change real capabilities during this phase
+
+AI-6E.0 must NOT implement:
+
+```text
+production_plan.create
+shot production execution
+review execution
+automatic retry
+Specialist → Specialist delegation
+automatic chaining
+autonomous Producer
+recursive planning
+debate
+reflection loops
+memory/RAG/vector DB
+MCP
+LangGraph
+CrewAI
+AutoGen
+canonical merge
+make-official
+new revision semantics
+```
+
+Do not add backend endpoints solely for the role documentation.
+
+Do not change the AI-6D Director Proposal schema.
+
+Do not change Workspace / ChangeSet semantics.
+
+Do not redesign the Agent UX.
+
+---
+
+# 25. Consistency audit
+
+After writing the contracts, perform a consistency audit against current code.
+
+Verify at minimum:
+
+```text
+8 fixed Agent IDs
+AgentRegistry roles
+allowed_capabilities
+CapabilityRegistry owners
+CapabilityRegistry allowed_agents
+read/write scopes
+can_delegate_to
+implemented flags
+current system prompts
+frontend displayed role names/descriptions
+```
+
+Report any mismatch.
+
+For harmless wording drift, correct it if safe.
+
+For behavior/permission mismatches:
+
+**do not silently redesign runtime behavior.**
+
+Document the mismatch and recommend the appropriate future phase.
+
+---
+
+# 26. Production Planner readiness section
+
+At the end of `production_planner.md`, add:
+
+```text
+## AI-6E implementation readiness
+```
+
+Document precisely:
+
+1. existing Planner implementation/service/workflow that should be reused;
+2. existing `production_plan.inspect`;
+3. current reserved `production_plan.create`;
+4. expected scope;
+5. expected structured input;
+6. expected structured ProductionPlan output;
+7. canonical write boundary;
+8. stale-plan behavior;
+9. interaction with existing Production Planner UI/workflow;
+10. relationship to Shot Producer;
+11. what must remain deterministic;
+12. what needs human review, if any;
+13. what AI-6E must not implement.
+
+This section will become the contract for the next coding phase.
+
+Do not implement AI-6E yet.
+
+---
+
+# 27. Validation
+
+This is primarily a documentation phase, but the repository must remain healthy.
+
+Run the relevant existing tests/build checks if any code is touched.
+
+If only documentation changes, do not manufacture unnecessary tests.
+
+If system-prompt or registry wording is changed, run the existing Agent tests plus the normal regression checks appropriate to the repository.
+
+No backend behavior should change.
+
+---
+
+# 28. Final report
+
+Report:
+
+```text
+AI-6E.0 — Agent Role Contracts & Collaboration Protocol
+
+1. Git baseline
+2. Files created
+3. Files modified
+4. Eight role contracts
+5. Producer boundaries
+6. Director boundaries
+7. Production Planner boundaries
+8. Planner vs Shot Producer boundary
+9. Reviewer vs Shot Producer boundary
+10. Editor boundary
+11. Direct Conversation vs Delegated Task
+12. Artifact-first handoff protocol
+13. Current Specialist→Specialist restriction
+14. Capability status audit
+15. Registry/documentation mismatches found
+16. Runtime prompt changes, if any
+17. Production Planner AI-6E readiness
+18. Tests/build performed
+19. Explicitly unchanged runtime behavior
+20. Recommended AI-6E starting point
+```
+
+The success condition is NOT:
+
+> "There are eight nice descriptions of AI personalities."
+
+The success condition is:
+
+> **Every AGNES Agent now has a precise operating contract defining what it owns, what it must not do, what context it receives, what capabilities it may use, what structured result it produces, when its work is complete, and how its output becomes safe input for the next stage without blurring responsibility between Specialists.**
+
+Stop after the contracts and consistency audit are complete.
+
+Do not begin Production Planner Runtime in this phase.

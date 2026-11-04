@@ -39,6 +39,13 @@ from src.ai.project_autopilot import (
 PROJECT_NAME = "_test_project_autopilot"
 
 
+@pytest.fixture(autouse=True)
+def _unique_project_namespace(monkeypatch):
+    # TestClient controllers outlive individual HTTP responses. A fresh project
+    # name prevents an old fixture's late callback touching the next fixture.
+    monkeypatch.setitem(globals(), "PROJECT_NAME", f"_test_project_autopilot_{uuid.uuid4().hex[:8]}")
+
+
 # ============ FakeAgnes（真小 mp4）/ FakeRehost ============
 _FAKE_MP4_BYTES = None
 
@@ -442,10 +449,14 @@ def test_case4_recover_rebinds_child(project_2scenes, fake_agnes_swap, client):
     assert final["status"] == "completed", f"status={final['status']}, error={final.get('error')}"
     # scene 1 重新绑定到原 child（不新建）
     assert final["scenes"][0]["child_run_id"] == child_id_s1
-    # 每个 Scene 只有 1 个 child（无重复）
+    # The invariant is one child per parent and scene. Other tests can leave
+    # a late cancelled run in this shared project directory; it is not a child
+    # of the recovered parent and must not be counted as duplicate execution.
     for sid in ("s01", "s02"):
-        children = scene_mgr.list_runs_for_scene(PROJECT_NAME, sid)
+        children = [child for child in scene_mgr.list_runs_for_scene(PROJECT_NAME, sid)
+                    if child.parent_project_run_id == run_id]
         assert len(children) == 1, f"{sid} 有 {len(children)} 个 child（应只有 1）"
+    assert fake_agnes_swap.calls.count("create_video") == 2
 
 
 # ============ Case 5：compose failure -> retry only compose ============
@@ -456,6 +467,10 @@ def test_case5_compose_failure_retry(project_2scenes, fake_agnes_swap, client):
     orig = ProjectProductionManager._compose_sync
 
     def failing(self, project_name, run, manifest):
+        # Other fixture controllers can finish on the shared TestClient loop.
+        # Inject this failure only into this test's project.
+        if project_name != PROJECT_NAME:
+            return orig(self, project_name, run, manifest)
         calls["n"] += 1
         if calls["n"] == 1:
             raise RuntimeError("simulated compose failure")
@@ -538,6 +553,14 @@ def test_case7_source_changed_blocked(project_2scenes, fake_agnes_swap, client,
     业务判断完全由生产代码做出。"""
     import threading
     from src.ai.project_autopilot import ProjectProductionManager
+    # This legacy test explicitly asserts the second scene has not started at
+    # the first-scene boundary. Under C2 auto-parallelism, that is only a valid
+    # contract when Producer chose serial continuity for scene two.
+    from routers.production_planner import _read_plans, _write_plans
+    pdir = get_project_manager().get_project_dir(PROJECT_NAME)
+    frozen_plans = _read_plans(pdir)
+    frozen_plans["s02"].shots[0].parallel_preference = "required_serial"
+    _write_plans(pdir, frozen_plans)
 
     entered = threading.Event()
     proceed = threading.Event()

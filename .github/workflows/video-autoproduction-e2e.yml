@@ -1,0 +1,178 @@
+name: video-autoproduction-e2e
+
+# Real acceptance is explicit dispatch. The existing single-clip queue has its
+# own patrol; it must not be confused with this full-project >=180s test.
+# Bounded auto-resume: when the driver deadline drains cleanly, this workflow
+# dispatches the next hop via an explicit workflow_dispatch, using a scoped
+# PAT or the native GITHUB_TOKEN (an allowed event exception). Hop cap lives in
+# tools/resume_dispatch.py; the video-patrol sweep is the dead-link fallback.
+on:
+  workflow_dispatch:
+    inputs:
+      acceptance_scope:
+        description: '真实验收范围（长片至少180秒）'
+        type: choice
+        options:
+          - full-project-3min
+          - existing-single-clip
+        default: full-project-3min
+      media_inflight:
+        description: '视频实际在途档位（1=严格串行；2=无依赖镜头允许两路。接力依赖始终串行）'
+        type: choice
+        options:
+          - '1'
+          - '2'
+        default: '2'
+      resume_run_id:
+        description: '恢复已失败运行的 Actions run ID（复用原 nonce、项目与已完成视频）'
+        required: false
+        default: ''
+      confirm_uncertain_submissions:
+        description: '新任务预授权/续跑确认：接受此 nonce 当前及后续 hop 的 UNKNOWN 重提可能重复计费（默认禁止）'
+        type: boolean
+        default: false
+      finalize_only:
+        description: '仅对账已完成素材并合成归档，禁止 Agnes 新生成'
+        type: boolean
+        default: false
+      driver_timeout_minutes:
+        description: '制作保险丝分钟数（30–330；为360分钟job保留至少30分钟）'
+        type: number
+        default: 330
+      target_duration_seconds:
+        description: '片长档位（200/320=固定档预写剧本；auto=Producer 自主规划，需提供任务描述）'
+        type: choice
+        options:
+          - '200'
+          - '320'
+          - 'auto'
+        default: '200'
+      production_request:
+        description: 'auto 模式的任务自然语言（如"拍一个热气球穿越云海的故事，大概两分钟"）；时长可有可无'
+        type: string
+        required: false
+        default: ''
+      source_project:
+        description: '续作类意图（继续项目/补素材）的源项目名；create 模式留空'
+        type: string
+        required: false
+        default: ''
+      asset_source_projects:
+        description: 'C2 可选：额外参考素材来源项目名（逗号分隔；仅按需加载最多4个）'
+        type: string
+        required: false
+        default: ''
+      archive_release_id:
+        description: '仅归档接续时复用已有B Release ID（保留旧资产）'
+        type: string
+        default: ''
+      task_nonce:
+        description: '合成任务 nonce（留空=自动时间戳）'
+        required: false
+        default: ''
+
+permissions:
+  actions: write  # explicit workflow_dispatch and exact source artifact reads
+  contents: read   # 仅 checkout；B1 跨仓写用 B1_ARCHIVE_TOKEN secret，不用 GITHUB_TOKEN
+
+concurrency:
+  group: video-production
+  queue: max  # Avoid scheduled patrol replacing a pending full-film resume
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            tools
+            src
+            config
+            routers
+            services
+            saved_characters
+            saved_scenes
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install CI dependencies
+        run: pip install -r requirements-ci.txt
+
+      - name: Inspect existing task before media setup
+        if: inputs.acceptance_scope == 'existing-single-clip'
+        id: work
+        env:
+          B1_ARCHIVE_TOKEN: ${{ secrets.B1_ARCHIVE_TOKEN }}
+          TASK_NONCE: ${{ inputs.task_nonce }}
+          PYTHONPATH: .
+        run: python tools/video_runtime_preflight.py e2e
+
+      - name: Install ffmpeg
+        if: inputs.acceptance_scope != 'existing-single-clip' || steps.work.outputs.needs_media == 'true'
+        timeout-minutes: 7
+        run: bash tools/install_ci_ffmpeg.sh
+
+      - name: Verify ffmpeg/ffprobe on PATH
+        if: inputs.acceptance_scope != 'existing-single-clip' || steps.work.outputs.needs_media == 'true'
+        run: |
+          ffmpeg -version | head -1
+          ffprobe -version | head -1
+
+      - name: Run autonomous E2E (real Agnes gen → MP4 → ffprobe → save B1 → registry)
+        if: inputs.acceptance_scope == 'existing-single-clip'
+        env:
+          AGNES_API_KEY: ${{ secrets.AGNES_API_KEY }}
+          B1_ARCHIVE_TOKEN: ${{ secrets.B1_ARCHIVE_TOKEN }}
+          PYTHONPATH: .
+          TASK_NONCE: ${{ inputs.task_nonce }}
+        run: python tools/e2e_autonomous_run.py
+
+      - name: Real FullProject → Director/Planner → SceneRuns → >=180s final film → restore verification
+        id: full_project
+        if: inputs.acceptance_scope != 'existing-single-clip'
+        env:
+          AGNES_API_KEY: ${{ secrets.AGNES_API_KEY }}
+          B1_ARCHIVE_TOKEN: ${{ secrets.B1_ARCHIVE_TOKEN }}
+          FRAME_HOST_TOKEN: ${{ secrets.FRAME_HOST_TOKEN }}
+          PYTHONPATH: .
+          TASK_NONCE: ${{ inputs.task_nonce }}
+          AGNES_VIDEO_INFLIGHT: ${{ inputs.media_inflight }}
+          RESUME_RUN_ID: ${{ inputs.resume_run_id }}
+          CONFIRM_UNCERTAIN_SUBMISSIONS: ${{ inputs.confirm_uncertain_submissions }}
+          FINALIZE_ONLY: ${{ inputs.finalize_only }}
+          DRIVER_TIMEOUT_MINUTES: ${{ inputs.driver_timeout_minutes }}
+          FILM_TARGET_SECONDS: ${{ inputs.target_duration_seconds }}
+          PRODUCTION_REQUEST: ${{ inputs.production_request }}
+          SOURCE_PROJECT: ${{ inputs.source_project }}
+          ASSET_SOURCE_PROJECTS: ${{ inputs.asset_source_projects }}
+          WORKFLOW_TIMEOUT_MINUTES: '360'
+          ARCHIVE_RELEASE_ID: ${{ inputs.archive_release_id }}
+          GITHUB_TOKEN: ${{ github.token }}
+          RESUME_DISPATCH_TOKEN: ${{ secrets.RESUME_DISPATCH_TOKEN }}
+        run: python tools/full_project_cloud_acceptance.py
+
+      - name: Upload E2E evidence (MP4 + summary)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-evidence
+          path: |
+            e2e_run/
+            projects/cloud3min_*/
+            ${{ steps.full_project.outputs.project_path }}
+            cache/jobs.json
+            cache/quota.json
+            !e2e_run/**/archive/*.tar
+            !e2e_run/**/redownload-project.tar
+            !e2e_run/**/restore-check/**
+          retention-days: 30
+          if-no-files-found: warn

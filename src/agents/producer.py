@@ -56,6 +56,7 @@ from .skill_system.tools import (
 )
 from .skill_system.runtime import get_skill_runtime as _get_skill_runtime
 
+from src.api.model_budget import DEFAULT_TEXT_MAX_TOKENS
 log = logging.getLogger("producer")
 
 # ============ Phase 46：工作流派发守卫（服务端限制，非提示词约束）============
@@ -1133,7 +1134,7 @@ async def _producer_tool_loop(rt, client, project: str, messages: list,
                 step_reasoning_buf: list[str] = []
                 step_content_buf: list[str] = []
                 async for ev in client.chat_completion_stream(
-                        messages, temperature=0.7, max_tokens=65536,
+                        messages, temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS,
                         thinking=thinking, tools=offered, tool_choice="auto"):
                     k = ev["kind"]
                     if k == "content_delta":
@@ -1169,7 +1170,7 @@ async def _producer_tool_loop(rt, client, project: str, messages: list,
                         event_cb({"type": "assistant.delta", "delta": d})
             else:
                 resp = await client.chat_completion(
-                    messages, temperature=0.7, max_tokens=65536,
+                    messages, temperature=0.7, max_tokens=DEFAULT_TEXT_MAX_TOKENS,
                     tools=offered, tool_choice="auto")
                 tool_calls = resp.get("tool_calls")
                 content = resp.get("content")

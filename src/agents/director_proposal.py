@@ -31,6 +31,7 @@ from ..revision.changeset import ChangeSetError
 
 
 # ============ 枚举 ============
+from src.api.model_budget import DEFAULT_TEXT_MAX_TOKENS
 class ProposalAction(str, Enum):
     UPDATE_SHOT = "update_shot"
     INSERT_SHOT = "insert_shot"
@@ -596,7 +597,7 @@ async def generate_semantic_proposal(client, project_loader: Callable[[], Projec
 
     # 1. 调 LLM
     try:
-        raw = await client.chat(messages, json_mode=True, temperature=0.3, max_tokens=2048)
+        raw = await client.chat(messages, json_mode=True, temperature=0.3, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
     except Exception as e:
         raise ProposalGenerationError("agnes_failed", f"Agnes 调用失败：{str(e)[:200]}")
 
@@ -607,7 +608,7 @@ async def generate_semantic_proposal(client, project_loader: Callable[[], Projec
         repair = messages + [{"role": "system",
                               "content": f"上次返回无法使用：{e.message}。请严格遵循 schema，只返回一个合法 JSON 对象。"}]
         try:
-            raw2 = await client.chat(repair, json_mode=True, temperature=0.2, max_tokens=2048)
+            raw2 = await client.chat(repair, json_mode=True, temperature=0.2, max_tokens=DEFAULT_TEXT_MAX_TOKENS)
             return parse_and_validate(raw2, project, scope_type, scope_id)
         except ProposalValidationError as e2:
             raise ProposalGenerationError("invalid_output",

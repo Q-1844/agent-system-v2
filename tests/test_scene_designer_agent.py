@@ -558,7 +558,7 @@ class _FakeSceneClient:
         self.sizes_seen.append(size_tier)
         return {"url": None, "b64": _PNG_B64}
 
-    async def chat_completion_vision(self, msgs, *, model):
+    async def chat_completion_vision(self, msgs, *, model, max_tokens=1600):
         self.vision_calls += 1
         return {"content": self.vision_content,
                 "usage": {"prompt_tokens": 10, "completion_tokens": 5}}

@@ -1,0 +1,59 @@
+name: posthoc-archive-complete
+
+# 对「仅在归档回读自证步骤失败」的 run 做事后补完（验证→Registry→B1 COMPLETE）。
+# 适用场景：finalize 传播竞态类失败（如 daycarry20m-20261102 的 404 早到 ~0.7s），
+# 资产实际完好时零生成、零派发地补完账面。配套修复：fix/archive-readback-404-grace。
+# 反递归 checklist（PR#49 教训）：本 workflow 不用 GITHUB_TOKEN 派发任何后续 run，
+# 全部写操作走 B1_ARCHIVE_TOKEN，无 workflow_run 事件依赖。
+
+on:
+  workflow_dispatch:
+    inputs:
+      nonce:
+        description: '要补完的项目 nonce（如 daycarry20m-20261102）'
+        required: true
+        type: string
+      expected_package_sha256:
+        description: '可选：project.tar 期望 sha256（空=只对 GitHub 服务端 digest）'
+        required: false
+        default: ''
+        type: string
+      expected_media_sha256:
+        description: '可选：final.mp4 期望 sha256'
+        required: false
+        default: ''
+        type: string
+      dry_run:
+        description: '只验证不写入'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  posthoc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install runtime deps
+        run: pip install httpx
+      - name: Post-hoc archive completion
+        env:
+          B1_ARCHIVE_TOKEN: ${{ secrets.B1_ARCHIVE_TOKEN }}
+          INPUT_NONCE: ${{ inputs.nonce }}
+          INPUT_PKG_SHA: ${{ inputs.expected_package_sha256 }}
+          INPUT_MEDIA_SHA: ${{ inputs.expected_media_sha256 }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          args=(--nonce "$INPUT_NONCE")
+          if [ -n "$INPUT_PKG_SHA" ]; then args+=(--expected-package-sha256 "$INPUT_PKG_SHA"); fi
+          if [ -n "$INPUT_MEDIA_SHA" ]; then args+=(--expected-media-sha256 "$INPUT_MEDIA_SHA"); fi
+          if [ "$INPUT_DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+          python tools/posthoc_complete.py "${args[@]}"

@@ -27,6 +27,7 @@ from .generation_records import review_records_path
 from .look_prompt import _clean
 from .models import CharacterLook, Clothing
 
+from src.api.model_budget import DEFAULT_TEXT_MAX_TOKENS
 VISION_MODEL = "agnes-2.5-flash"   # 与 Director 视觉审查同源（本域自含常量，不 import agents）
 
 _DIMENSIONS = ("identity_consistency", "costume_consistency", "visual_defects")
@@ -134,7 +135,7 @@ def _normalize_dim(v: Any) -> Optional[str]:
 
 
 async def vision_json_call(agnes_client, msgs: list, *, model: str,
-                           max_attempts: int = 2, max_tokens: int = 1600) -> dict:
+                           max_attempts: int = 2, max_tokens: int = DEFAULT_TEXT_MAX_TOKENS) -> dict:
     """Vision 调用 + 宽容 JSON 解析稳定性 wrapper（P1 修复，2026-09-18）。
     首次回复无法解析为 JSON 时，追加『只输出 JSON』硬提醒重试一次；
     两次都失败返回首次结果（调用方按 uncertain 诚实记录，不伪造）。

@@ -41,7 +41,7 @@ class FakeVision:
     def __init__(self, content: str):
         self.content = content
 
-    async def chat_completion_vision(self, msgs, *, model):
+    async def chat_completion_vision(self, msgs, *, model, max_tokens=1600):
         return {"content": self.content, "usage": {}}
 
 
@@ -255,7 +255,7 @@ def test_http_s2b_full_chain(client):
     # review（fake vision——deps fake 无 vision 方法，直接 monkeypatch get_agnes_client 路径：
     # review 惰性 import deps.get_agnes_client → 返回 deps.agnes_client）
     class FakeV:
-        async def chat_completion_vision(self, msgs, *, model):
+        async def chat_completion_vision(self, msgs, *, model, max_tokens=1600):
             return {"content": _pass_reply(a1, "prop_sword01"), "usage": {}}
     saved2 = deps_mod.agnes_client
     try:
