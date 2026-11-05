@@ -1027,9 +1027,13 @@ class SceneAutopilotManager:
         """视频：入队 video job -> 等待 -> 找本 Run version -> 确认 final（§二十三/二十四/二十五）。
         video handler 已自动 set final + 提取末帧；本处确认 final 指向本 Run 版本。"""
         from routers.shots import set_final_video_business
-        # 1 次 Executor-level retry（§二十四：尊重 video_id 恢复，handler 内部续轮询不重提交）
+        # 首提 + 重试（§二十四：尊重 video_id 恢复，handler 内部续轮询不重提交）。
+        # 重试上限按失败类别（2026-11-05 方案 A，hilbert s03_c01 实锤）：
+        #  - provider_transient（供应商 CDN 瞬态完成失败，恢复跳一次重提即过）：
+        #    宽限 3 次重试，重试前退避 2 分钟给供应商缓冲窗口；
+        #  - 其余失败：维持原 1 次重试上限，快速 fail-loud 不空烧。
         job = None
-        for attempt in range(1, 3):
+        for attempt in range(1, 5):
             stage_key = f"autopilot:{run.run_id}:{state.shot_id}:video:{attempt}"
             # 🔴 C2 本地 60 秒验证修复（2026-10-27）：tail_host_required=False
             # -> video handler 只在本地提取末帧、不做图床托管。托管改由本镜的
@@ -1061,6 +1065,14 @@ class SceneAutopilotManager:
                 state.attempts["video_technical"] = state.attempts.get("video_technical", 0) + 1
                 await self._save_shot_state(run, state)
                 raise RuntimeError(f"视频技术性暂歇，保留原任务继续: {job.error}")
+            if job.params.get("failure_category") == "provider_transient":
+                # 方案 A：供应商瞬态完成失败——任务已终态死亡（重提=新任务），
+                # 退避 2 分钟再重试，给供应商 CDN 缓冲窗口；上限 3 次重试。
+                if attempt < 4:
+                    await asyncio.sleep(120)
+            elif attempt >= 2:
+                # 非瞬态：维持原 §二十四 上限（首提+1 次重试），快速 fail-loud
+                raise RuntimeError(f"视频生成失败: {job.error}")
             state.attempts["video"] = attempt
         else:
             raise RuntimeError(f"视频生成失败: {(job.error if job else '未知')}")

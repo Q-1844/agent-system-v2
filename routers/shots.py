@@ -2274,6 +2274,15 @@ async def _handler_video(job, emit):
         await emit("warn", f"{shot.shot_id} 轮询暂歇（网络/超时，video_id 保留，重试续轮询）: {str(e)[:150]}", None)
         raise
     except AgnesError as e:
+        # 供应商侧瞬态完成失败（2026-11-04 hilbert s03_c01 实锤）：
+        # task_failed + media URL 下载失败/派发失败——远端任务已终态死亡，
+        # 但根因是供应商拉参考帧的 CDN 瞬态，同类镜头恢复跳一次重提即过。
+        # 分类为 provider_transient：镜头标 failed（允许新提交，不双扣原任务），
+        # 下游（autopilot 循环/e2e technical_wait）按瞬态处理自动重试。
+        _etr = str(e).lower()
+        if ('task_failed' in _etr and ('media url could not be downloaded' in _etr
+                                       or 'queue group dispatch failed' in _etr)):
+            job.params["failure_category"] = "provider_transient"
         # 服务端明确失败 / video_id 不存在：标 failed，retry 时走 else 重新提交
         _dns_classify(str(e))
         def _fail_if_current(current):

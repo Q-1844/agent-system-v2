@@ -1841,7 +1841,10 @@ async def run_acceptance(nonce, out, summary):
             raise RuntimeError('FullProject paused; in-flight submissions drained' if drained
                                else 'FullProject paused; drain incomplete, receipts retained')
         wait_reason = production_wait_reason(wrapper, deps.job_queue, project_name)
-        if wait_reason in ('poll_transient', 'rate_limit'):
+        # provider_transient（方案 B 保底，2026-11-05）：供应商 CDN 瞬态完成失败
+        # 在镜头级 3 次重试（方案 A）后仍耗尽时，run 不落 FAILED 死链，而是
+        # technical_wait + 自动派下一跳（MAX_AUTO_HOPS 封顶防循环）。
+        if wait_reason in ('poll_transient', 'rate_limit', 'provider_transient'):
             await wrapper.persist(phase="INTERRUPTED", terminal_status="technical_wait", error=full.error,
                                   drain_complete=False)
             summary["auto_resume"] = await auto_resume_next_hop(wrapper, nonce, driver_minutes)
@@ -1979,7 +1982,8 @@ def production_wait_reason(wrapper, queue, project_name):
                 and (newer.finished_at or newer.created_at) > (job.finished_at or job.created_at)
                 for newer in jobs):
             continue
-        if reason in ('poll_transient', 'rate_limit', 'submission_unknown', 'not_sent'):
+        if reason in ('poll_transient', 'rate_limit', 'submission_unknown', 'not_sent',
+                     'provider_transient'):
             return reason
     return None
 

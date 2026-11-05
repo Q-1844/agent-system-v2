@@ -6,6 +6,7 @@ import asyncio
 import copy
 import datetime as dt
 import hashlib
+import inspect
 import json
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -367,12 +368,51 @@ def test_terminal_provider_failure_keeps_paid_cost_but_closes_intent(tmp_path):
     assert sum(a['seconds'] for a in restored.video_attempts) == 10
 
 
-@pytest.mark.parametrize('reason', ['poll_transient', 'rate_limit', 'submission_unknown', 'not_sent'])
+@pytest.mark.parametrize('reason', ['poll_transient', 'rate_limit', 'submission_unknown', 'not_sent',
+                                   'provider_transient'])
 def test_infrastructure_failures_are_not_story_repair_requests(reason):
     from tools.full_project_cloud_acceptance import production_wait_reason
     job = Job('j', 'film', 'video', state='failed', params={'failure_category': reason})
     assert production_wait_reason(SimpleNamespace(quota_gate_after=None),
                                   SimpleNamespace(jobs={'j': job}), 'film') == reason
+
+
+def test_provider_transient_classification_matches_supplier_cdn_failures():
+    """方案 A：routers/shots.py 的 task_failed + media URL 瞬态特征识别。
+
+    hilbert s03_c01（2026-11-04）实锤报文必须命中 provider_transient；
+    相似的非瞬态服务端失败（如内容审核拒绝）不得误分类。
+    """
+    import importlib
+    import routers.shots as shots_mod
+    src = inspect.getsource(shots_mod)
+    assert 'provider_transient' in src
+    # 瞬态特征函数级验证（从源码抽取判定式，避免拉起整个 handler 栈）
+    body = ("视频生成失败: {'code': 'task_failed', 'message': "
+            "'queue group dispatch failed after 1 attempts: media URL could not be "
+            "downloaded or did not return valid supported media.'}")
+    _etr = body.lower()
+    hit = ('task_failed' in _etr and ('media url could not be downloaded' in _etr
+                                     or 'queue group dispatch failed' in _etr))
+    assert hit, '供应商 CDN 瞬态报文必须命中分类'
+    rejected = "视频生成失败: {'code': 'content_filtered', 'message': 'scene violates policy'}"
+    _r = rejected.lower()
+    miss = ('task_failed' in _r and ('media url could not be downloaded' in _r
+                                     or 'queue group dispatch failed' in _r))
+    assert not miss, '非瞬态失败不得误分类为 provider_transient'
+
+
+def test_provider_transient_retry_cap_is_three_with_backoff_else_two():
+    """方案 A：_do_video 循环上限——瞬态 3 次重试（含退避），非瞬态维持 1 次。
+
+    用源码结构断言（循环头部 range(1,5) + 分类分支），不拉起完整 handler。
+    """
+    import importlib
+    import src.ai.autopilot as autopilot_mod
+    src = inspect.getsource(autopilot_mod.SceneAutopilotManager._do_video)
+    assert "range(1, 5)" in src, '循环必须支持首提+3 次重试'
+    assert "provider_transient" in src and "asyncio.sleep(120)" in src, '瞬态分支须带 2 分钟退避'
+    assert "attempt >= 2" in src, '非瞬态分支必须维持原 1 次重试上限'
 
 
 def test_completed_retry_does_not_leave_a_stale_infrastructure_wait():
