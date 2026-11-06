@@ -1,0 +1,26 @@
+{
+  "nonce": "ink-diffusion-20m-20261105",
+  "source_run": "42252251047",
+  "complete": false,
+  "phase": "FAILED",
+  "completed_videos": 114,
+  "accepted_seconds": 953,
+  "prior_preserved_videos": 106,
+  "planned_shots": 145,
+  "planned_seconds": 1192.0,
+  "failed_shots": [
+    "s04_c26",
+    "s05_c05"
+  ],
+  "artifact_sha256": "1a99fc2831cce24ad1a04e0c18c6a53b277364cf7648e39359582a1ab7ed693f",
+  "real_generation_requests_during_audit": 0,
+  "tests": {
+    "full_total": 3894,
+    "full_passed": 3884,
+    "full_skipped_missing_P55": 10,
+    "full_failures": 0,
+    "P55_followup_passed": 15,
+    "P55_followup_skipped": 0
+  },
+  "pages_republication_verified": true
+}

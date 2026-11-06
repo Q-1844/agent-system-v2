@@ -902,7 +902,7 @@ class SceneAutopilotManager:
                 tail_not_ready = (
                     getattr(existing, "error", None) == "等待尾帧超时（尾帧尚未生成完成），请重试"
                     and getattr(existing, "error_stage", None) == "wait")
-                if (receipt.get("video_pre_submit_failure") == "last_frame_url"
+                if (receipt.get("video_pre_submit_failure") in ("last_frame_url", "image_publication")
                         or tail_not_ready) and not paid:
                     return q.retry(existing.job_id) or existing
                 if (receipt.get("provider_task_id") and
