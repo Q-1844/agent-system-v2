@@ -37,3 +37,10 @@
 继续原 nonce，`resume_run_id` 必须引用 `42252251047`，`target_duration_seconds=auto`、`media_inflight=2`。不得重开 nonce 或重拍已完成视频。先确认 D 仓失效部署已恢复、两张既有 JPEG URL 可访问，再使用修复后的代码续跳。
 
 完成判据仍是：145 镜完整选版、FullRun / ProjectRun / SceneRuns 全部完成、最终 MP4 全量解码正常、归档回读 hash 及 restore 检查通过、B1 COMPLETE 和注册表 COMPLETE 一致。恢复成功或新增回执均不能替代上述完成验收。
+
+## 本轮验证结果
+
+- 本地全量：3894 项中 3884 passed、10 skipped、0 failed / errors，476.987 秒。10 项跳过仅因 P55 真实外部样本尚未下载。
+- 随后从 B 仓取回 36116480 字节 P55 样本，SHA256 `f18a80b3a2b60b4ed762ef9aec70edb85f9124147dd8cdc1f7f38779dd2b75ff` 核验一致；两个样本测试文件补跑 15 passed、0 skipped / failed，覆盖全量跳过的 10 项。不能把第一次全量描述成零跳过。
+- D 仓 failed-job retry 获受理但长期 queued、无新 job；随后显式请求 Pages build，最终 built。两个原失效 URL 已独立 GET=200、image/jpeg，下载字节与 artifact 中的两张 JPEG 逐字节一致。
+- 修复 PR：[A #51](https://github.com/Q-1844/agent-system-v2/pull/51)。后续合并、真实续跳和接棒证据见 C 仓 `docs/HANDOFF_ink_publication_recovery_20261107.md`。
