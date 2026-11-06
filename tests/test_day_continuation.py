@@ -415,6 +415,28 @@ def test_provider_transient_retry_cap_is_three_with_backoff_else_two():
     assert "attempt >= 2" in src, '非瞬态分支必须维持原 1 次重试上限'
 
 
+def test_video_end_hosting_transient_gets_three_retries_when_downstream_needs_it():
+    """方案 C：末帧提取/托管瞬态（Pages 构建 600s 超时）下游依赖时重试 3 次。
+
+    ink-diffusion s03_c18（2026-11-06 01:54 实锤）：Pages 构建慢于 poll_timeout，
+    单次失败即 _fail_shot 杀死整个 run（第二跳 68 镜全 ACCEPTED 后暴毙）。
+    修复后对齐方案 A 的瞬态策略：3 次尝试 + 120s 退避；重试利用 upload 的
+    内容寻址幂等（字节已 PUT，重试即命中返回 URL）。
+    """
+    import src.ai.autopilot as autopilot_mod
+    src = inspect.getsource(autopilot_mod.SceneAutopilotManager._do_video_end)
+    assert "3 if downstream_needs else 1" in src, '下游依赖时末帧提取必须宽限 3 次尝试'
+    assert "asyncio.sleep(120)" in src, '重试间须退避 2 分钟给 Pages 构建窗口'
+    assert "last_detail" in src, '硬失败必须携带末次失败细节（不再黑盒）'
+
+
+def test_video_end_failure_detail_reaches_the_hard_fail_message():
+    """方案 C：_fail_shot 收到的 RuntimeError 必须包含真实根因（可排障）。"""
+    import src.ai.autopilot as autopilot_mod
+    src = inspect.getsource(autopilot_mod.SceneAutopilotManager._do_video_end)
+    assert '下游镜头依赖它: {last_detail' in src, '硬失败消息必须内嵌 last_detail'
+
+
 def test_completed_retry_does_not_leave_a_stale_infrastructure_wait():
     from tools.full_project_cloud_acceptance import production_wait_reason
     failed = Job('old', 'film', 'video', 's', state='failed', finished_at=10,

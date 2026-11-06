@@ -1113,22 +1113,38 @@ class SceneAutopilotManager:
         # refresh 一次（§二十六）
         vv = next((v for v in shot.video_versions if v.version_id == state.video_version_id), None)
         if vv and vv.local and Path(vv.local).exists():
-            try:
-                end_asset, _ok = await _extract_video_end_frame(
-                    project_dir, state.shot_id, vv.local, vv.version_id,
-                    host=downstream_needs)
-                store.update_shot(state.shot_id, lambda s, ea=end_asset, sv=vv.version_id: (
-                    setattr(s, "video_end_frame", ea), setattr(s, "video_end_source_version", sv)))
-                if end_asset.url_ready:
-                    return
-                if not downstream_needs and not end_asset.error:
-                    # 托管按需跳过（host=False）——提取本身成功，非失败，无需告警。
-                    return
-            except Exception as e:
-                state.warnings.append(f"末帧提取异常: {str(e)[:120]}")
-        # 仍未就绪：看下游是否依赖（§二十六）
+            # 方案 C（2026-11-06 ink s03_c18 实锤）：末帧提取/托管是基础设施依赖
+            # （本地 ffmpeg + github Pages 构建 600s 轮询）。Pages 构建慢于
+            # poll_timeout 时 _wait_ready 抛 PagesNotReadyError——此时字节已 PUT
+            # 成功（内容寻址），重试 upload 即幂等命中直接返回 URL，稍后重试
+            # 大概率自愈。下游依赖时对齐方案 A 的瞬态策略：3 次尝试 + 120s
+            # 退避；无下游依赖维持单次（仅本地参考，失败仅记 warning）。
+            end_retry_max = 3 if downstream_needs else 1
+            end_asset = None
+            last_detail = ""
+            for attempt in range(1, end_retry_max + 1):
+                try:
+                    end_asset, _ok = await _extract_video_end_frame(
+                        project_dir, state.shot_id, vv.local, vv.version_id,
+                        host=downstream_needs)
+                    store.update_shot(state.shot_id, lambda s, ea=end_asset, sv=vv.version_id: (
+                        setattr(s, "video_end_frame", ea), setattr(s, "video_end_source_version", sv)))
+                    if end_asset.url_ready:
+                        return
+                    if not downstream_needs and not end_asset.error:
+                        # 托管按需跳过（host=False）——提取本身成功，非失败，无需告警。
+                        return
+                    last_detail = str(getattr(end_asset, "error", "") or "")
+                except Exception as e:
+                    last_detail = str(e)[:160]
+                    state.warnings.append(f"末帧提取异常(第{attempt}次): {last_detail[:120]}")
+                if attempt < end_retry_max:
+                    await asyncio.sleep(120)
+        else:
+            last_detail = "本地视频文件缺失（vv.local 不存在）"
+        # 仍未就绪：看下游是否依赖（§二十六）；带上末次失败细节，不再黑盒
         if downstream_needs:
-            raise RuntimeError("视频末帧提取失败，下游镜头依赖它")
+            raise RuntimeError(f"视频末帧提取失败，下游镜头依赖它: {last_detail[:160]}")
         state.warnings.append("视频已完成，但实际末帧提取失败。后续镜头不依赖它，因此继续。")
         await self._save_shot_state(run, state)
 
