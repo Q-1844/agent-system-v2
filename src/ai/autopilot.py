@@ -1140,6 +1140,28 @@ class SceneAutopilotManager:
                     state.warnings.append(f"末帧提取异常(第{attempt}次): {last_detail[:120]}")
                 if attempt < end_retry_max:
                     await asyncio.sleep(120)
+            # 🔴 终极保底（2026-11-06 用户拍板）：3 次敲不开（共约 4 分钟）仍失败，
+            # 再给 Pages 构建 20 分钟长尾窗口，敲最后一扇门。覆盖构建队列排满/
+            # 服务降级等极端长尾；仍不开才硬失败。仅下游依赖时启用——无下游
+            # 依赖的镜头维持单次提取（本地参考够用，不为长尾白等 20 分钟）。
+            # 注意：sleep 不占额度（末帧属 video 完成后的后处理，不提交供应商）。
+            if downstream_needs and not (end_asset and end_asset.url_ready):
+                state.warnings.append(
+                    f"末帧 3 次未就绪，20 分钟后终试: {last_detail[:120]}")
+                await self._save_shot_state(run, state)
+                await asyncio.sleep(1200)
+                try:
+                    end_asset, _ok = await _extract_video_end_frame(
+                        project_dir, state.shot_id, vv.local, vv.version_id,
+                        host=True)
+                    store.update_shot(state.shot_id, lambda s, ea=end_asset, sv=vv.version_id: (
+                        setattr(s, "video_end_frame", ea), setattr(s, "video_end_source_version", sv)))
+                    if end_asset.url_ready:
+                        return
+                    last_detail = str(getattr(end_asset, "error", "") or "")
+                except Exception as e:
+                    last_detail = str(e)[:160]
+                    state.warnings.append(f"末帧终试异常: {last_detail[:120]}")
         else:
             last_detail = "本地视频文件缺失（vv.local 不存在）"
         # 仍未就绪：看下游是否依赖（§二十六）；带上末次失败细节，不再黑盒

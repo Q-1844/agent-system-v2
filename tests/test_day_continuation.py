@@ -437,6 +437,20 @@ def test_video_end_failure_detail_reaches_the_hard_fail_message():
     assert '下游镜头依赖它: {last_detail' in src, '硬失败消息必须内嵌 last_detail'
 
 
+def test_video_end_final_backoff_is_twenty_minutes_after_three_failures():
+    """方案 C 终极保底（2026-11-06 用户拍板）：3 次敲不开，再等 20 分钟敲最后一扇门。
+
+    覆盖 Pages 构建队列排满/服务降级等长尾——总窗口约 24 分钟。仍不开才
+    硬失败（带根因）。仅下游依赖时启用（无依赖镜头不为长尾白等）。
+    """
+    import src.ai.autopilot as autopilot_mod
+    src = inspect.getsource(autopilot_mod.SceneAutopilotManager._do_video_end)
+    assert "asyncio.sleep(1200)" in src, '3 次失败后必须等 20 分钟做终试保底'
+    assert "downstream_needs and not (end_asset and end_asset.url_ready)" in src, \
+        '保底只在下游依赖且仍未就绪时触发（不白等）'
+    assert "末帧终试异常" in src, '终试失败细节必须入 warnings（可排障）'
+
+
 def test_completed_retry_does_not_leave_a_stale_infrastructure_wait():
     from tools.full_project_cloud_acceptance import production_wait_reason
     failed = Job('old', 'film', 'video', 's', state='failed', finished_at=10,
