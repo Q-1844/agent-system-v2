@@ -60,10 +60,10 @@ def test_get_first_hit_large_file_via_raw_media_type(tmp_path):
     f = tmp_path / "big.png"
     f.write_bytes(png)
     # GET-first 用 raw media type 直接返回原始字节且一致 → 幂等命中，不 PUT
-    host = make_host([(200, png)])
+    host = make_host([(200, png), pages_ok()])
     url = asyncio.run(host.upload(str(f)))
     assert url.endswith(".png")
-    assert [m for m, _ in host._calls] == ["GET"]          # 仅 GET-first，无 PUT
+    assert [m for m, _ in host._calls] == ["GET", "GET"]  # 查发布，无 PUT
     assert host.seen_headers[0]["Accept"] == "application/vnd.github.raw"
 
 

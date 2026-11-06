@@ -391,6 +391,33 @@ def _shot_char_refs(project, shot):
     return refs
 
 
+def _local_image_generation_refs(project_dir, project, shot, refs):
+    """Use saved bytes for image inputs without changing canonical URL identity.
+
+    Image generation accepts data URIs; video generation still requires public
+    URLs. Match each logical URL to its actual selected asset, keep order and all
+    references, and leave URL-only/bound inputs intact. Receipt keys are computed
+    from the logical refs so an existing image receipt survives this transport fix.
+    """
+    from src.resources.generation import to_data_uri
+    assets = [shot.first_frame.selected]
+    if shot.source_shot_id:
+        source = project.get_shot(shot.source_shot_id)
+        if source:
+            assets.append(source.video_end_frame)
+    for name in shot.characters:
+        character = project.get_character(name)
+        if character:
+            assets.extend(character.views.values())
+    local_by_url = {}
+    for asset in assets:
+        if asset and asset.url and asset.local and asset.url in refs:
+            uri = to_data_uri(project_dir, asset.local)
+            if uri:
+                local_by_url[asset.url] = uri
+    return [local_by_url.get(ref, ref) for ref in refs]
+
+
 # ==================== Phase 6A：镜头接力 / 开场来源 ====================
 # opening_source 与 link_mode 独立：link_mode 控制「镜头内部如何生成视频」，
 # opening_source 控制「开场画面从哪来」。参考图收集按来源类型组织，便于未来加 environment/prop。
@@ -709,7 +736,9 @@ async def _handler_first_frame(job, emit):
         # 🔴 图片接口不支持 seed（AGNES_API_FACTS §2.1 / 提示词.md §4.1）：多候选不靠 seed 区分
         client = _image_client_for(provider)
         res = await client.generate_image(
-            prompt=prompt, image_refs=refs if use_i2i else None,
+            prompt=prompt, image_refs=(
+                _local_image_generation_refs(project_dir, project, shot, refs)
+                if use_i2i else None),
             size_tier=size_tier, ratio=ratio)
         url = res.get("url")
         b64 = res.get("b64")
@@ -847,7 +876,8 @@ async def _handler_last_frame(job, emit):
         url, b64 = receipt["url"], None
     else:
         res = await client.generate_image(
-            prompt=prompt, image_refs=refs,
+            prompt=prompt, image_refs=_local_image_generation_refs(
+                project_dir, project, shot, refs),
             size_tier=project.style.size_tier or "1K", ratio=project.style.aspect_ratio or "16:9",
             **({"want_b64": True} if provider == "agnes" else {}))
         url, b64 = res.get("url"), res.get("b64")
@@ -2108,6 +2138,18 @@ async def _handler_video(job, emit):
         from src.generation.video_commit import video_input_signature
         compiled_signature = video_input_signature(project, shot)
         compiled_final_video = shot.final_video
+        # Saved url_ready is a local flag, not proof of Pages publication. In
+        # particular, pre-fix recovery snapshots may contain an unpublished URL.
+        # Check before claiming a submission intent; the commit guard below still
+        # checks input identity after this potentially slow, read-only wait.
+        from src.core.image_host import GithubPagesHost
+        host = get_rehost_host()
+        if isinstance(host, GithubPagesHost):
+            job.params["video_pre_submit_failure"] = "image_publication"
+            await emit("rehost", f"{shot.shot_id} 检查视频输入图片发布状态", 8)
+            for image_url in dict.fromkeys(u for u in (first_url, last_url) if u):
+                await host.ensure_published(image_url)
+            job.params.pop("video_pre_submit_failure", None)
         await emit("submit", f"{shot.shot_id} 提交中（视频 1 RPM，可能等约 60s）", 10)
         kwargs = dict(num_frames=shot.video.num_frames, frame_rate=shot.video.frame_rate,
                       width=w, height=h, seed=shot.seed,

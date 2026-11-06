@@ -219,7 +219,7 @@ class GithubPagesHost(ImageHost):
     """GitHub Pages 图床（Contents API PUT → Pages 构建 → <owner>.github.io 直链）。
     🔴 纯托管层：MIME 无关，原字节进出（JPEG 转换是末帧业务的事，不在这里）。
     命名 objects/{sha256_hex16}.{ext}（64-bit 内容哈希，唯一命名防 CDN 缓存旧内容）。
-    GET-first：内容寻址命中即直接返回（不 PUT、不烧 Pages build）；
+    GET-first：内容寻址命中只跳过 PUT，仍须确认 Pages 已发布；
     PUT 409/422=冲突或已存在：GET 目标解码字节 sha256 对比，匹配=幂等成功；否则退避重试 ×2 后 fail-loud。
     ⚠️ GET 返回的 sha 字段是 git blob sha（sha1("blob <len>\\0"+内容)），不能与 sha256 直接比。
     同 repo 写入串行锁（实例级 asyncio.Lock；deps 单例保证四调用点共享）。
@@ -278,13 +278,24 @@ class GithubPagesHost(ImageHost):
         path = self._object_path(data, p.name)
         url = self._pages_url(path)
         async with self._lock:                     # 同 repo 写入串行（四调用点共享单例）
-            # GET-first：内容寻址命中=已在线，直接返回（省一次 Pages build）
+            # Contents 存在不等于 Pages 已发布（2026-11-06 实测：deploy 超时，
+            # 对象已入库但公网仍 404）。幂等命中只省 PUT，不能跳过就绪轮询。
             if await self._remote_matches(path, data):
                 log.info("github_pages 幂等命中: %s", path)
-                return url
-            await self._put_with_retry(path, data)
+            else:
+                await self._put_with_retry(path, data)
         await self._wait_ready(url)
         return url
+
+    async def ensure_published(self, url: str) -> None:
+        """Recheck this host's saved URLs before a new paid video submission.
+
+        Older snapshots may contain URLs returned before publication was verified.
+        Foreign URLs keep their own provider's lifecycle; no authenticated headers
+        are sent to Pages by _wait_ready.
+        """
+        if url.startswith(self._pages_url("objects/")):
+            await self._wait_ready(url)
 
     async def _remote_matches(self, path: str, data: bytes) -> bool:
         try:

@@ -86,10 +86,39 @@ def test_put_201_success_returns_pages_url_with_sha256_16(tmp_path):
 def test_get_first_idempotent_hit_skips_put(tmp_path):
     png = b"\x89PNG same" * 10
     f = tmp_path / "a.png"; f.write_bytes(png)
-    host = make_host([(200, png)])                    # GET 命中(raw media type 字节一致) → 不 PUT 不烧 build
+    host = make_host([(200, png), pages_ok()])  # Contents 命中仍须检查公网发布
     url = asyncio.run(host.upload(str(f)))
     assert url.endswith(".png")
-    assert [m for m, _ in host._calls] == ["GET"]          # 只有 GET-first，无 PUT
+    assert [m for m, _ in host._calls] == ["GET", "GET"]  # 无 PUT/新 build
+
+
+def test_existing_object_waits_for_publication_without_reupload(tmp_path):
+    data = b"stored-but-not-yet-published"
+    path = tmp_path / "tail.jpg"; path.write_bytes(data)
+    host = make_host([(200, data), (404, {}), pages_ok()])
+    url = asyncio.run(host.upload(path))
+    assert [m for m, _ in host._calls] == ["GET"] * 3
+    assert host._calls[0][1].startswith("https://api.github.com/")
+    assert all(u == url for _, u in host._calls[1:])
+
+
+def test_retry_after_publication_timeout_cannot_return_an_unpublished_url(tmp_path):
+    path = tmp_path / "tail.jpg"; path.write_bytes(b"same-tail")
+    host = make_host([(404, {}), (201, {})], poll_timeout=0.03)
+    with pytest.raises(GithubPagesHost.PagesNotReadyError):
+        asyncio.run(host.upload(path))
+    host._script = [(200, b"same-tail")]
+    with pytest.raises(GithubPagesHost.PagesNotReadyError):
+        asyncio.run(host.upload(path))
+    assert sum(m == "PUT" for m, _ in host._calls) == 1
+
+
+def test_saved_pages_url_is_rechecked_but_foreign_url_is_untouched():
+    host = make_host([(404, {}), pages_ok()])
+    url = host._pages_url("objects/saved.jpg")
+    asyncio.run(host.ensure_published(url))
+    asyncio.run(host.ensure_published("https://provider.invalid/image.jpg"))
+    assert host._calls == [("GET", url), ("GET", url)]
 
 
 def test_put_409_remote_matches_is_idempotent(tmp_path):
