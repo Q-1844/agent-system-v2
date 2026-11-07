@@ -135,6 +135,20 @@ def make_frame_host_calibration(path):
     return path
 
 
+async def preflight_frame_host(host, out, summary, *, restored=False, finalize_only=False):
+    """Check fresh-task write access without making recovery depend on a canary.
+
+    Restored production validates each actual frame before claiming a video
+    submission. Finalization needs no new hosted inputs at all.
+    """
+    if finalize_only or restored:
+        summary["frame_host_preflight_skipped"] = (
+            "finalize_only" if finalize_only else "restored_actual_inputs_guarded")
+        return
+    calibration = make_frame_host_calibration(Path(out) / "host-calibration.png")
+    summary["frame_host_preflight_url"] = await host.upload(calibration)
+
+
 def write_json(path, value):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -1645,11 +1659,11 @@ async def run_acceptance(nonce, out, summary):
             if cp.current is not None:
                 raise RuntimeError("nonce already has a run; restore/reconcile existing evidence before resuming")
             cp.save(phase="STARTING", github_run_id=os.environ.get("GITHUB_RUN_ID"), source_sha=os.environ.get("GITHUB_SHA"))
-    # Check the existing image-host write path before any Agnes generation.
+    # New tasks prove host write access; recovered tasks guard actual inputs.
     host = GithubPagesHost("Q-1844", "agnes-frame-host", "main", frame_token)
-    calibration = make_frame_host_calibration(out / "host-calibration.png")
     try:
-        summary["frame_host_preflight_url"] = await host.upload(calibration)
+        await preflight_frame_host(host, out, summary, restored=bool(restored),
+                                   finalize_only=finalize_only)
     except Exception as exc:
         summary.update(blocked_stage="frame_host_preflight", no_new_media_submitted=True)
         cp.save(phase="BLOCKED_PREFLIGHT", no_new_media_submitted=True,
