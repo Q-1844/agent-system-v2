@@ -2,11 +2,14 @@
 # G3-A：真实 GitHub REST 适配器的 MockTransport 行为测试（零 socket、零真实 token）。
 import hashlib
 import json
+from pathlib import Path
 
 import pytest
 
+from tools.relstore import github_release_adapter as _gra
 from tools.relstore.errors import (AssetConflict, AuthError, NetworkInterrupt,
-                                  RateLimited, RemoteWriteDisabled, ServerError)
+                                  RateLimited, ReceiptLost, RemoteWriteDisabled,
+                                  ServerError)
 from tools.relstore.github_release_adapter import (
     GitHubContentsIndex, GitHubReleaseAdapter, MockHttpTransport,
     UnprocessableEntity422, bootstrap_default_branch_plan, redact)
@@ -142,6 +145,10 @@ def test_upload_asset_content_type_octet_accept_json():
     seen = {}
 
     def handler(req):
+        if req["method"] == "GET" and "/releases/assets/" in req["url"]:
+            # 🔴 finalize 复核（ink-diffusion-20261107）：GET 必须回 200+uploaded
+            return resp(200, {"id": 7010, "name": "x.tar", "size": len(data),
+                               "state": "uploaded"})
         if req["method"] == "GET" and "/releases/tags/" in req["url"]:
             return resp(404, {"message": "Not Found"})
         seen.update(req["headers"])
@@ -157,6 +164,10 @@ def test_upload_asset_201_endpoint_and_name_param():
     sha = hashlib.sha256(data).hexdigest()
 
     def h(req):
+        if req["method"] == "GET":  # 🔴 finalize 复核（ink-diffusion-20261107）
+            assert "/releases/assets/7001" in req["url"]
+            return resp(200, {"id": 7001, "name": "g3-test-abcd.tar",
+                               "size": len(data), "state": "uploaded"})
         assert req["url"].startswith("https://uploads.github.com/")
         assert req["params"] == {"name": "g3-test-abcd.tar"}
         assert req["headers"]["Content-Type"] == "application/octet-stream"
@@ -324,6 +335,128 @@ def test_receipt_lost_recovery_finds_existing_no_repost():
     meta = a.upload_asset_with_recovery("9001", "g3.tar", data, sha)
     assert meta.id == "7009"
     assert [r["method"] for r in t.requests] == ["POST", "GET"]
+
+
+# ---------- 🔴 finalize 确认（starter 僵尸锁，ink-diffusion-20261107 实锤） ----------
+# 根因：2GB 级资产 POST 201 回执报成功，GitHub 端 finalize 永久卡 starter，
+# 资产 404 不可下载，归档验收环节才炸。教训：回执不可信，GET 复核 state=uploaded
+# 才算数；starter 资产绝不参与任何"幂等复用"。以下测试为防回退锁，红了先怀疑
+# 自己改了不该改的（HANDOFF_ink_endframe_retry_20261106.md 同日补章）。
+
+def test_upload_201_receipt_not_trusted_get_verifies_even_when_post_claims_uploaded():
+    """POST 回执自称 uploaded 也不采信——必须有一次 GET 复核。"""
+    data = b"claimed-uploaded-but-unverified"
+    sha = hashlib.sha256(data).hexdigest()
+    calls = iter([
+        resp(201, {"id": 7031, "name": "g3.tar", "size": len(data),
+                   "state": "uploaded"}),  # 回执撒谎也照传
+        resp(200, {"id": 7031, "name": "g3.tar", "size": len(data),
+                   "state": "uploaded"}),
+    ])
+    a, t = make_adapter(lambda req: next(calls), armed=True)
+    meta = a.upload_asset("9001", "g3.tar", data, sha)
+    assert meta.state == "uploaded"
+    assert [r["method"] for r in t.requests] == ["POST", "GET"]
+
+
+def test_upload_201_polls_until_state_uploaded_after_starter(monkeypatch):
+    monkeypatch.setattr(_gra, "ASSET_FINALIZE_POLL_S", 0.0)
+    data = b"slow-finalize"
+    sha = hashlib.sha256(data).hexdigest()
+    calls = iter([
+        resp(201, {"id": 7032, "name": "g3.tar", "size": len(data),
+                   "state": "starter"}),
+        resp(200, {"id": 7032, "name": "g3.tar", "size": len(data),
+                   "state": "starter"}),
+        resp(200, {"id": 7032, "name": "g3.tar", "size": len(data),
+                   "state": "uploaded"}),
+    ])
+    a, _ = make_adapter(lambda req: next(calls), armed=True)
+    meta = a.upload_asset("9001", "g3.tar", data, sha)
+    assert meta.state == "uploaded"
+
+
+def test_upload_201_fails_loud_when_finalize_never_completes(monkeypatch):
+    monkeypatch.setattr(_gra, "ASSET_FINALIZE_POLL_S", 0.0)
+    monkeypatch.setattr(_gra, "ASSET_FINALIZE_TIMEOUT_S", 0.05)
+    data = b"zombie-forever"
+    sha = hashlib.sha256(data).hexdigest()
+
+    def h(req):
+        if req["method"] == "POST":
+            return resp(201, {"id": 7033, "name": "g3.tar", "size": len(data),
+                               "state": "starter"})
+        return resp(200, {"id": 7033, "name": "g3.tar", "size": len(data),
+                           "state": "starter"})  # 永远 starter
+    a, _ = make_adapter(h, armed=True)
+    with pytest.raises(ReceiptLost, match="starter"):
+        a.upload_asset("9001", "g3.tar", data, sha)
+
+
+def test_upload_422_starter_zombie_never_idempotently_reused():
+    """422 同名 + state=starter：即使 name/size/sha 全吻合也不得当复用成功。"""
+    data = b"zombie-name-match"
+    sha = hashlib.sha256(data).hexdigest()
+    a, _ = make_adapter(lambda req: (
+        resp(422, {"message": "already_exists"}) if req["method"] == "POST"
+        else resp(200, [{"id": 7034, "name": "g3.tar", "size": len(data),
+                          "state": "starter", "digest": f"sha256:{sha}"}])),
+                        armed=True)
+    with pytest.raises(AssetConflict, match="starter"):
+        a.upload_asset("9001", "g3.tar", data, sha)
+
+
+def test_receipt_lost_recovery_rejects_starter_asset():
+    """回执丢失恢复：starter 资产即使 size+sha 全吻也不可恢复为成功。"""
+    data = b"black-window-zombie"
+    sha = hashlib.sha256(data).hexdigest()
+
+    def h(req):
+        if req["method"] == "POST":
+            raise NetworkInterrupt("模拟上传响应丢失（黑窗）")
+        if req["method"] == "GET" and "/assets" in req["url"]:
+            return resp(200, [{"id": 7035, "name": "g3.tar", "size": len(data),
+                                "state": "starter", "digest": f"sha256:{sha}"}])
+        return resp(404)
+    a, _ = make_adapter(h, armed=True)
+    with pytest.raises(ReceiptLost):
+        a.upload_asset_with_recovery("9001", "g3.tar", data, sha)
+
+
+def test_finalize_timeout_recovery_reuses_later_confirmed_upload(monkeypatch):
+    """轮询超时（ReceiptLost）后资产最终完成：GET 复核 uploaded+同 sha → 幂等复用。"""
+    monkeypatch.setattr(_gra, "ASSET_FINALIZE_POLL_S", 0.0)
+    monkeypatch.setattr(_gra, "ASSET_FINALIZE_TIMEOUT_S", 0.05)
+    data = b"slow-but-eventually-fine"
+    sha = hashlib.sha256(data).hexdigest()
+    poll_calls = {"n": 0}
+
+    def h(req):
+        if req["method"] == "POST":
+            return resp(201, {"id": 7036, "name": "g3.tar", "size": len(data),
+                               "state": "starter"})
+        if "/releases/assets/7036" in req["url"]:  # finalize 轮询
+            poll_calls["n"] += 1
+            return resp(200, {"id": 7036, "name": "g3.tar", "size": len(data),
+                               "state": "starter"})
+        # with_recovery 的 get_asset 列表复核：此刻已 uploaded
+        return resp(200, [{"id": 7036, "name": "g3.tar", "size": len(data),
+                            "state": "uploaded", "digest": f"sha256:{sha}"}])
+    a, _ = make_adapter(h, armed=True)
+    meta = a.upload_asset_with_recovery("9001", "g3.tar", data, sha)
+    assert meta.id == "7036" and meta.state == "uploaded"
+    assert poll_calls["n"] >= 1  # 轮询确实发生且超时过
+
+
+def test_upload_finalize_confirmation_structure_locked():
+    """防回退结构锁：删掉 finalize 复核/starter 拒用必红（红了先怀疑自己）。"""
+    src = (Path(__file__).resolve().parents[2]
+           / "tools/relstore/github_release_adapter.py").read_text(encoding="utf-8")
+    assert "def _require_asset_finalized" in src
+    assert "ASSET_FINALIZE_TIMEOUT_S" in src
+    assert src.count('existing.state == "starter"') == 1  # 422 幂等复用的僵尸闸
+    assert 'existing.state == "uploaded"' in src  # 恢复路径必须核 state
+    assert "回执不可信" in src  # 根因注释必须留在源码里
 
 
 # ---------- 遮蔽 ----------

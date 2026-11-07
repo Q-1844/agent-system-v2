@@ -77,8 +77,15 @@ def main() -> int:
                     help="local project.tar (verification reuse; default: download)")
     ap.add_argument("--media", default=None,
                     help="local final.mp4 (verification reuse)")
+    ap.add_argument("--rebuild-from", default=None,
+                    help="项目目录（从 e2e-evidence artifact 解出）：当 release 的 "
+                         "project.tar 为 starter 僵尸/缺失时，从此目录重打包并以 "
+                         "sha 命名上传替代资产（🔴 ink-diffusion-20261107 僵尸场景）")
+    ap.add_argument("--source-code-commit", default="unknown",
+                    help="重打包 plan 的源码提交（填生产 run 的 source SHA）")
     ap.add_argument("--dry-run", action="store_true",
-                    help="verify everything, write nothing")
+                    help="verify everything, write nothing (重打包上传除外——"
+                         "无它则无法自证；资产幂等可复用)")
     args = ap.parse_args()
 
     import os
@@ -105,18 +112,67 @@ def main() -> int:
     release_id = str(release.id) if hasattr(release, "id") else str(release["id"])
     assets = adapter.list_assets(release_id)
     by_name = {a.name: a for a in assets}
-    if "project.tar" not in by_name or "final.mp4" not in by_name:
-        raise SystemExit(f"release {tag} missing expected assets: {sorted(by_name)}")
-    package_meta, media_meta = by_name["project.tar"], by_name["final.mp4"]
+    if "final.mp4" not in by_name:
+        raise SystemExit(f"release {tag} missing final.mp4 (assets: {sorted(by_name)})")
+    media_meta = by_name["final.mp4"]
+    package_meta = by_name.get("project.tar")
+    # 🔴 ink-diffusion-20261107：project.tar 可能为 starter 僵尸（POST 201 假回执，
+    # finalize 永久卡 starter，资产 404 不可下载）。僵尸不可验证也不可复用；
+    # 必须从 e2e-evidence artifact 恢复项目目录重打包。final.mp4 若同为僵尸则无救
+    # （成片本体），只能回到 e2e-evidence artifact 人工重建归档。
+    zombie = package_meta is not None and package_meta.state != "uploaded"
+    if media_meta.state != "uploaded":
+        raise SystemExit(f"final.mp4 state={media_meta.state}（starter 僵尸？）"
+                         f"——成片本体资产异常，posthoc 无法补完")
+    if package_meta is None or zombie:
+        if not args.rebuild_from:
+            raise SystemExit(
+                f"project.tar {'state=' + package_meta.state if zombie else 'missing'}"
+                f"（🔴 starter 僵尸，ink-diffusion-20261107）且未提供 --rebuild-from"
+                f" <项目目录>；僵尸资产不可下载/复用，请从 e2e-evidence artifact 恢复"
+                f"项目目录后重跑")
 
     # ---- 2. download + server-digest comparison ----
     work = Path(tempfile.mkdtemp(prefix=f"posthoc-{nonce}-"))
     package_path = Path(args.package) if args.package else work / "project.tar"
     media_path = Path(args.media) if args.media else work / "final.mp4"
-    if not package_path.is_file():
+    if package_meta is not None and not zombie and not package_path.is_file():
         package_path.write_bytes(adapter.download_asset_authenticated(package_meta.id))
     if not media_path.is_file():
         media_path.write_bytes(adapter.download_asset_authenticated(media_meta.id))
+
+    if zombie or package_meta is None:
+        # 🔴 starter 僵尸重建：e2e-evidence artifact 的项目目录 → 重打包 →
+        # sha 命名上传（避开僵尸名，绝不删除/覆盖原资产——它作为故障证据保留）。
+        from tools.relstore import archive_campaign
+        from tools.full_project_cloud_acceptance import ensure_archive_input
+        project_dir = Path(args.rebuild_from).resolve()
+        if not (project_dir / "output" / "project.json").is_file():
+            raise SystemExit(f"--rebuild-from 缺少 output/project.json: {project_dir}")
+        ensure_archive_input(project_dir, nonce)
+        opdir = work / "archive-rebuild"
+        archive_campaign.plan(
+            project_dir=project_dir, opdir=opdir,
+            operation_id=f"posthoc-rebuild-{nonce}", project_id=nonce, revision=1,
+            lifecycle_status="completed",
+            source_code_commit=args.source_code_commit)
+        packaged = archive_campaign.package(opdir)
+        package_path = Path(packaged["package"]["path"])
+        rebuilt_sha = packaged["package"]["sha256"]
+        package_name = f"project-rebuilt-{rebuilt_sha[:12]}.tar"
+        print(f"[rebuild] repackaged from {project_dir} "
+              f"({package_path.stat().st_size} bytes)")
+        package_meta = adapter.upload_asset_with_recovery(
+            release_id, package_name, package_path.read_bytes(), rebuilt_sha)
+        redownload = work / "redownload-project.tar"
+        redownload.write_bytes(adapter.download_asset_authenticated(
+            package_meta.id, not_found_grace_seconds=240.0))
+        if sha256_file(redownload) != rebuilt_sha:
+            raise SystemExit("rebuilt package redownload sha mismatch")
+        print(f"[rebuild] uploaded + redownload-verified: {package_name} "
+              f"(zombie asset "
+              f"{by_name['project.tar'].id if 'project.tar' in by_name else 'n/a'} "
+              f"kept as evidence)")
     package_sha, media_sha = sha256_file(package_path), sha256_file(media_path)
 
     def digest_hex(meta):
@@ -176,7 +232,7 @@ def main() -> int:
                             operation_id=f"{nonce}-snapshot")
     ref = {"repo": f"{OWNER}/{RUNDATA}", "release_tag": tag,
            "release_id": release_id, "asset_id": package_meta.id,
-           "asset_name": "project.tar", "sha256": package_sha,
+           "asset_name": package_meta.name, "sha256": package_sha,
            "tree_fingerprint": declared, "bytes": package_path.stat().st_size,
            "final_mp4_asset_id": media_meta.id, "final_mp4_sha256": media_sha}
     registry.set_verified_restorable(project_id=nonce, archive_ref=ref,
@@ -203,7 +259,12 @@ def main() -> int:
     # ---- 8. posthoc report ----
     report = {"nonce": nonce, "completed_at": now_iso(),
               "reason": ("run failed only at archive readback verification "
-                         "(finalize-propagation 404 race); assets were intact"),
+                         "(finalize-propagation 404 race); assets were intact"
+                         if not (zombie or package_meta.name != "project.tar") else
+                         "project.tar was a starter zombie (🔴 ink-diffusion-"
+                         "20261107: POST 201 receipt lied, finalize never "
+                         "completed); repackaged from e2e-evidence artifact "
+                         "and uploaded as a sha-named replacement asset"),
               "verification": {
                   "package_sha256": package_sha, "media_sha256": media_sha,
                   "restore_package": restored,
@@ -212,9 +273,9 @@ def main() -> int:
               "release": {"repo": f"{OWNER}/{RUNDATA}", "release_id": release_id,
                           "tag": tag,
                           "assets": {"final.mp4": media_meta.id,
-                                     "project.tar": package_meta.id}},
-              "fix": "archive readback 404 grace retry "
-                     "(fix/archive-readback-404-grace)"}
+                                     package_meta.name: package_meta.id}},
+              "fix": "upload finalize confirmation + starter zombie rejection "
+                     "(fix/ink-archive-starter-zombie-20261107)"}
     rep_index = task_index(token, nonce, "posthoc-archive-verification.json")
     rep_index.write_cas(report, None,
                         message=f"post-hoc archive verification {nonce}")

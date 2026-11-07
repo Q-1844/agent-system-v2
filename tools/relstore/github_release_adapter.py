@@ -25,6 +25,13 @@ UPLOAD_BASE = "https://uploads.github.com"
 API_VERSION = "2022-11-28"
 MAX_ASSET_BYTES = 2 * 1024 ** 3 - 1
 ASSETS_PER_RELEASE_LIMIT = 1000
+# 🔴 ink-diffusion-20261107 实锤（用户拍板 fail-loud）：~2GB release 资产 POST 201
+# 返回成功回执后，GitHub 端 finalize 可【永久】卡在 state=starter（19 小时仍 starter），
+# 该资产永远 404 不可下载。教训：上传回执不可作为成功依据——必须 GET 复核
+# state=uploaded 才算完成；starter 资产绝不参与幂等复用（复用=再次信任假回执）。
+# 配套结构测试：tests/relstore/test_relstore_07_http_adapter.py（starter 锁三件套）。
+ASSET_FINALIZE_POLL_S = 10.0
+ASSET_FINALIZE_TIMEOUT_S = 300.0
 
 # ---------------- 敏感信息遮蔽 ----------------
 
@@ -465,9 +472,37 @@ class GitHubReleaseAdapter(ReleaseAdapter):
         if r.status not in (200, 201):
             self._classify(r, url)
         a = r.json()
+        # POST 回执不可信（见模块头 🔴 注释）：立即 GET 复核 finalize。
+        state = self._require_asset_finalized(str(a["id"]), name)
         return AssetMeta(id=str(a["id"]), name=a["name"], size=a["size"],
-                         sha256=digest, state=a.get("state", "uploaded"),
+                         sha256=digest, state=state,
                          release_id=release_id)
+
+    def _require_asset_finalized(self, asset_id: str, name: str) -> str:
+        """🔴 ink-diffusion-20261107：POST 201 的 state 不足以采信，必须以
+        GET /releases/assets/{id} 的 state=uploaded 为准。starter 超时（默认
+        300s）→ ReceiptLost fail-loud，绝不返回假成功。短暂 404 属 finalize
+        传播窗口（daycarry20m-20261102 实测 ~0.7s），继续轮询不误杀。"""
+        deadline = time.monotonic() + ASSET_FINALIZE_TIMEOUT_S
+        while True:
+            r = self._get(f"releases/assets/{asset_id}")
+            if r.status == 404:
+                pass  # 传播窗口：继续等（见 docstring）
+            elif r.status != 200:
+                self._classify(r, f"releases/assets/{asset_id}")
+            else:
+                state = r.json().get("state", "uploaded")
+                if state == "uploaded":
+                    self._log.append(f"asset finalize confirmed: {name} "
+                                     f"id={asset_id}")
+                    return state
+            if time.monotonic() >= deadline:
+                raise ReceiptLost(
+                    f"资产 POST 201 后 {int(ASSET_FINALIZE_TIMEOUT_S)}s 内 state "
+                    f"仍未达 uploaded（starter 僵尸，🔴 ink-diffusion-20261107 "
+                    f"实锤）：{name} asset_id={asset_id}。回执不可信，不得复用"
+                    f"或删除原资产，请以新资产名重传")
+            time.sleep(ASSET_FINALIZE_POLL_S)
 
     def _reconcile_existing_asset(self, release_id, name, size, sha):
         """422 同名：只列资产比对，不删/不覆盖。"""
@@ -475,6 +510,13 @@ class GitHubReleaseAdapter(ReleaseAdapter):
         if existing is None:
             raise UnprocessableEntity422(
                 f"422 同名冲突但列资产未找到 {name}（停止人工核实）")
+        # 🔴 starter 僵尸（ink-diffusion-20261107）：state=starter 的同名资产
+        # 永远 404，把它当幂等复用成功=再次踩同一个坑。拒绝，要求换名重传。
+        if existing.state == "starter":
+            raise AssetConflict(
+                f"同名资产 state=starter（finalize 僵尸，🔴 ink-diffusion-"
+                f"20261107 实锤）不可幂等复用: {name} asset_id={existing.id}；"
+                f"请以新资产名重传，不得删除/覆盖原资产")
         same = existing.name == name and existing.size == size and \
             (not existing.sha256 or existing.sha256 == sha)
         if not same:
@@ -486,16 +528,34 @@ class GitHubReleaseAdapter(ReleaseAdapter):
 
     def upload_asset_with_recovery(self, release_id, name, data, expected_sha256):
         """上传 + 回执丢失恢复：超时/读错后先 GET 列表按 name+size+sha 收敛，
-        绝不重复 POST。"""
+        绝不重复 POST。🔴 ink-diffusion-20261107：收敛条件必须含 state=uploaded
+        ——starter 资产（finalize 僵尸）永远 404，把它当"恢复成功"等于把假回执
+        又信了一遍。finalize 轮询超时（ReceiptLost）后允许再 GET 一次终核：
+        已 uploaded 且同 sha → 复用（慢 finalize 最终落定）；仍 starter → 维持
+        fail-loud。"""
+        def _confirmed_existing():
+            existing = self.get_asset(release_id, name)
+            if existing is not None and existing.state == "uploaded" \
+                    and existing.size == len(data) and \
+                    (not existing.sha256 or existing.sha256 == expected_sha256):
+                return existing
+            return None
+
         try:
             return self.upload_asset(release_id, name, data, expected_sha256)
         except NetworkInterrupt:
-            existing = self.get_asset(release_id, name)
-            if existing and existing.size == len(data) and \
-                    (not existing.sha256 or existing.sha256 == expected_sha256):
+            existing = _confirmed_existing()
+            if existing is not None:
                 self._log.append("receipt lost -> recovered existing asset")
                 return existing
             raise ReceiptLost("上传后回执丢失且未能确认远端资产，停止等待人工/重入")
+        except ReceiptLost:
+            existing = _confirmed_existing()
+            if existing is not None:
+                self._log.append("finalize timeout -> later confirmed "
+                                 "uploaded, idempotent reuse")
+                return existing
+            raise
 
     def publish_index(self, project_id: str, index_doc: dict) -> dict:
         """委托 B1 ContentsIndex 做 CAS 写入（索引最后发布）。未接线时明确报错。"""

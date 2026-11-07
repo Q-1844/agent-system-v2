@@ -195,9 +195,18 @@ def test_full_synthetic_project_end_to_end_mock(tmp_path):
                 201, {"id": 8100, "name": ASSET, "size": len(tar_bytes),
                        "state": "uploaded"})
         if method == "GET" and url.endswith("/releases/assets/8100"):
-            return MockHttpTransport.bytes_response(
-                302, b"", headers={"location":
-                    "https://release-assets.githubusercontent.com/x?sig=SECRET"})
+            # 真实 GitHub 行为：JSON Accept → 200 元数据（🔴 finalize 复核依赖）；
+            # octet-stream → 302 对象存储跳转（重下载路径）
+            accept = req["headers"].get("Accept", "")
+            if "octet-stream" in accept:
+                return MockHttpTransport.bytes_response(
+                    302, b"", headers={"location":
+                        "https://release-assets.githubusercontent.com/x?sig=SECRET"})
+            return MockHttpTransport.json_response(
+                200, {"id": 8100, "name": ASSET, "size": len(tar_bytes),
+                       "state": "uploaded",
+                       "browser_download_url":
+                           "https://release-assets.githubusercontent.com/x?sig=SECRET"})
         if "release-assets.githubusercontent.com" in url:
             events["order"].append("redownload")
             return MockHttpTransport.bytes_response(200, tar_bytes,

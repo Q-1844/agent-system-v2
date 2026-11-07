@@ -28,11 +28,22 @@ on:
         required: false
         default: false
         type: boolean
+      evidence_artifact_run_id:
+        description: '🔴 starter 僵尸场景：e2e-evidence artifact 所在生产 run 的 ID（下载解包供重打包）'
+        required: false
+        default: ''
+        type: string
+      source_code_commit:
+        description: '重打包 plan 的源码提交（生产 run 的 source SHA）'
+        required: false
+        default: ''
+        type: string
   repository_dispatch:
     types: [posthoc-archive-complete]
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   posthoc:
@@ -51,6 +62,16 @@ jobs:
           curl -sL --max-time 300 https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-linux64-gpl.tar.xz \
             | tar -xJ --strip-components=2 -C /usr/local/bin ffmpeg-master-latest-linux64-gpl/bin/ffprobe
           ffprobe -version | head -1
+      - name: Fetch e2e-evidence artifact (starter-zombie rebuild)
+        # 🔴 ink-diffusion-20261107：project.tar POST 201 假回执后 finalize 永久
+        # 卡 starter，资产不可下载。从生产 run 的 e2e-evidence artifact 恢复
+        # 项目目录供重打包（project-rebuilt-{sha12}.tar 替代资产）。
+        if: ${{ inputs.evidence_artifact_run_id != '' || github.event.client_payload.evidence_artifact_run_id != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: e2e-evidence
+          run-id: ${{ inputs.evidence_artifact_run_id || github.event.client_payload.evidence_artifact_run_id }}
+          path: evidence-artifact
       - name: Post-hoc archive completion
         env:
           B1_ARCHIVE_TOKEN: ${{ secrets.B1_ARCHIVE_TOKEN }}
@@ -58,10 +79,16 @@ jobs:
           INPUT_PKG_SHA: ${{ inputs.expected_package_sha256 || github.event.client_payload.expected_package_sha256 }}
           INPUT_MEDIA_SHA: ${{ inputs.expected_media_sha256 || github.event.client_payload.expected_media_sha256 }}
           INPUT_DRY_RUN: ${{ inputs.dry_run || github.event.client_payload.dry_run }}
+          INPUT_ARTIFACT_RUN_ID: ${{ inputs.evidence_artifact_run_id || github.event.client_payload.evidence_artifact_run_id }}
+          INPUT_SOURCE_COMMIT: ${{ inputs.source_code_commit || github.event.client_payload.source_code_commit }}
         run: |
           set -euo pipefail
           args=(--nonce "$INPUT_NONCE")
           if [ -n "$INPUT_PKG_SHA" ]; then args+=(--expected-package-sha256 "$INPUT_PKG_SHA"); fi
           if [ -n "$INPUT_MEDIA_SHA" ]; then args+=(--expected-media-sha256 "$INPUT_MEDIA_SHA"); fi
           if [ "$INPUT_DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+          if [ -n "$INPUT_ARTIFACT_RUN_ID" ]; then
+            args+=(--rebuild-from "evidence-artifact/projects/cloud3min_${INPUT_NONCE}")
+            if [ -n "$INPUT_SOURCE_COMMIT" ]; then args+=(--source-code-commit "$INPUT_SOURCE_COMMIT"); fi
+          fi
           python tools/posthoc_complete.py "${args[@]}"
