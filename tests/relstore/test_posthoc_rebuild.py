@@ -29,11 +29,14 @@ def test_posthoc_rebuild_uploads_with_self_verification():
 
 
 def test_posthoc_workflow_wires_artifact_download():
-    """workflow 必须有 artifact 下载 + rebuild 传参接线。"""
+    """workflow 必须有 artifact 下载 + rebuild 传参接线。
+    （2026-11-07 实测：download-artifact@v4 的 GITHUB_TOKEN 跨 run 下载拒之，
+    42384281634 实锤；改走 B1_ARCHIVE_TOKEN + REST API，勿改回。）"""
     yml = (REPO / ".github/workflows/posthoc-complete.yml").read_text(
         encoding="utf-8")
     assert "evidence_artifact_run_id" in yml
-    assert "actions/download-artifact@v4" in yml
+    assert "actions/artifacts" in yml  # REST API 直下，非 download-artifact
+    assert "unzip -q evidence-artifact.zip" in yml
     assert "actions: read" in yml
     assert "--rebuild-from" in yml
 

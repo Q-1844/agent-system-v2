@@ -66,12 +66,32 @@ jobs:
         # 🔴 ink-diffusion-20261107：project.tar POST 201 假回执后 finalize 永久
         # 卡 starter，资产不可下载。从生产 run 的 e2e-evidence artifact 恢复
         # 项目目录供重打包（project-rebuilt-{sha12}.tar 替代资产）。
+        # 注：download-artifact@v4 的 GITHUB_TOKEN 跨 run 下载在本仓实测
+        # "Artifact not found"（42384281634，actions:read 已给足仍拒）；
+        # B1_ARCHIVE_TOKEN 走 REST API 实测可达（206 分片验证过）。
         if: ${{ inputs.evidence_artifact_run_id != '' || github.event.client_payload.evidence_artifact_run_id != '' }}
-        uses: actions/download-artifact@v4
-        with:
-          name: e2e-evidence
-          run-id: ${{ inputs.evidence_artifact_run_id || github.event.client_payload.evidence_artifact_run_id }}
-          path: evidence-artifact
+        env:
+          B1_ARCHIVE_TOKEN: ${{ secrets.B1_ARCHIVE_TOKEN }}
+          INPUT_ARTIFACT_RUN_ID: ${{ inputs.evidence_artifact_run_id || github.event.client_payload.evidence_artifact_run_id }}
+        run: |
+          set -euo pipefail
+          ART_ID=$(curl -s --max-time 60 -H "Authorization: Bearer $B1_ARCHIVE_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/Q-1844/agent-system-v2/actions/runs/$INPUT_ARTIFACT_RUN_ID/artifacts?per_page=100" \
+            | jq -r '.artifacts[] | select(.name == "e2e-evidence" and .expired == false) | .id' | head -1)
+          if [ -z "$ART_ID" ]; then
+            echo "::error::e2e-evidence artifact not found in run $INPUT_ARTIFACT_RUN_ID"; exit 1
+          fi
+          echo "downloading artifact id: $ART_ID"
+          curl -sL --max-time 1200 --retry 3 \
+            -H "Authorization: Bearer $B1_ARCHIVE_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/Q-1844/agent-system-v2/actions/artifacts/$ART_ID/zip" \
+            -o evidence-artifact.zip
+          mkdir -p evidence-artifact
+          unzip -q evidence-artifact.zip -d evidence-artifact
+          rm -f evidence-artifact.zip
+          du -sh evidence-artifact
       - name: Post-hoc archive completion
         env:
           B1_ARCHIVE_TOKEN: ${{ secrets.B1_ARCHIVE_TOKEN }}
