@@ -51,8 +51,9 @@ def video_input_signature(project, shot) -> str:
     # existed, in first-frame candidates, character views and inherited tails.
     def without_asset_diagnostics(value):
         if isinstance(value, dict):
+            asset = {'local', 'url', 'status', 'error', 'updated_at'}.issubset(value)
             return {k: without_asset_diagnostics(v) for k, v in value.items()
-                    if k != 'error_code'}
+                    if k != 'error_code' or not asset}
         if isinstance(value, list):
             return [without_asset_diagnostics(v) for v in value]
         return value

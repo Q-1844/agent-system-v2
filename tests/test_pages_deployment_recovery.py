@@ -239,3 +239,7 @@ def test_publication_diagnostics_cannot_invalidate_creative_input_signature(tmp_
     assert video_input_signature(project,shot)==before
     previous.video_end_frame.url='https://frame.invalid/new-actual-image'
     assert video_input_signature(project,shot)!=before
+    shot.performance_intent={'error_code':'creative-cue-one'}
+    changed=video_input_signature(project,shot)
+    shot.performance_intent['error_code']='creative-cue-two'
+    assert video_input_signature(project,shot)!=changed
