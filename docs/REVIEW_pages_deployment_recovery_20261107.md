@@ -31,3 +31,5 @@ PR #51纠正了「Contents命中便宣称Pages可用」的误判，保住了视�
 真实事故快照经`restore_snapshot`恢复，驱动原生Scene执行器补做`s05_c17`的video_end：模拟Pages部署失败→一次自动重建→发布成功→本镜原生checkpoint完成；没有调用任何图片/视频生成API。137个已完成视频的任务号、版本及SHA256全部保持不变。
 
 全量回归、无付费的真实Pages恢复和真实续跳结果，将记入本次PR与C仓后续交接。只有全部镜头完成、MP4全量解码、归档回读/restore full，以及B1和注册表都COMPLETE，才能宣告整条长片接续完全成功。
+
+另提供仅手动派发的`frame-host-recovery-probe.yml`：使用生产同一个`FRAME_HOST_TOKEN`验证D仓Pages配置和重建写权限，固定目标D仓，不调用Agnes。仅在无活动部署时请求一次非付费重建；验证结果记录在C仓交接中，不能用本地PAT测试替代运行密钥权限验证。
