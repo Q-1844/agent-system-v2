@@ -1,0 +1,65 @@
+name: b1-test-ops
+
+# 🔴 测试/维护工具（2026-11-08 用户拍板的额度墙压缩模拟配套）：
+#   1) gate-minutes：压缩额度闸门 quota_resume_after → now+N 分钟。
+#      仅供压缩模拟测试「额度墙暂停→20min 定时器→唤醒接续」全链
+#      （生产闸门=北京次日 00:10，真实生产派发禁用本操作）。
+#   2) close-reason：把卡死检查点置 FAILED/failed（适用：取消于规划期、
+#      快照缺 summary.json、死链恢复必败——阻止巡检无限重派）。
+# 反递归 checklist（PR#49 教训）：不派发任何后续 run，无 workflow_run
+# 事件依赖；写操作仅 B1_ARCHIVE_TOKEN 单文件 CAS。
+
+on:
+  workflow_dispatch:
+    inputs:
+      nonce:
+        description: '检查点 nonce（如 film3m-42394136215）'
+        required: true
+        type: string
+      gate_minutes:
+        description: '压缩额度闸门到 now+N 分钟（0=不操作；🔴 仅压缩模拟测试用）'
+        required: false
+        default: 0
+        type: number
+      close_reason:
+        description: '关闭检查点的原因（空=不操作）'
+        required: false
+        default: ''
+        type: string
+      dry_run:
+        description: '只打印差异不写入'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  ops:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install httpx
+      - name: B1 checkpoint test operations
+        env:
+          B1_ARCHIVE_TOKEN: ${{ secrets.B1_ARCHIVE_TOKEN }}
+          INPUT_NONCE: ${{ inputs.nonce }}
+          INPUT_GATE_MINUTES: ${{ inputs.gate_minutes }}
+          INPUT_CLOSE_REASON: ${{ inputs.close_reason }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          args=(--nonce "$INPUT_NONCE")
+          if [ "${INPUT_GATE_MINUTES:-0}" != "0" ] && [ -n "${INPUT_GATE_MINUTES:-}" ]; then
+            args+=(--gate-minutes "$INPUT_GATE_MINUTES")
+          fi
+          if [ -n "$INPUT_CLOSE_REASON" ]; then
+            args+=(--close-reason "$INPUT_CLOSE_REASON")
+          fi
+          if [ "$INPUT_DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+          python tools/b1_test_ops.py "${args[@]}"
