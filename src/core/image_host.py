@@ -394,18 +394,45 @@ class GithubPagesHost(ImageHost):
                                      ("commit", "created_at", "updated_at"))
                     if not identity[0] or not any(identity[1:]) or identity in self._repair_requested_for:
                         return
-                    settings = await c.get(base, headers=self._headers())
-                    if settings.status_code != 200:
-                        log.warning("Pages 恢复配置查询未成功: HTTP %s", settings.status_code)
-                        return
-                    config = settings.json()
-                    if (config.get("build_type") != "legacy"
-                            or (config.get("source") or {}).get("branch") != self.branch):
-                        log.warning("Pages 恢复拒绝：发布分支或构建类型与图床配置不一致")
-                        return
                     self._repair_requested_for.add(identity)
-                    response = await c.post(base + "/builds", json={}, headers=self._headers())
-                    log.warning("Pages 失败部署重建: commit=%s HTTP %s",
-                                identity[0][:12], response.status_code)
-            except (httpx.HTTPError, ValueError, TypeError, AttributeError):
+                    method = await self.request_rebuild(build)
+                    log.warning("Pages 失败部署重建: commit=%s method=%s", identity[0][:12], method)
+            except (httpx.HTTPError, RuntimeError, ValueError, TypeError, AttributeError):
                 log.warning("Pages 恢复请求暂未确认；保留原字节并继续检查发布状态")
+
+    async def request_rebuild(self, build: dict, *, probe_id=None):
+        """Request publication using the existing frame credential only.
+
+        A Contents writer may lack Pages API write permission. For a verified
+        legacy publishing branch, an immutable recovery commit triggers its normal
+        push build, just like an image upload. The marker is derived from the
+        failed deployment identity; concurrent/uncertain writes are idempotent.
+        """
+        base = f"https://api.github.com/repos/{self.owner}/{self.repo}/pages"
+        async with self._client() as client:
+            settings = await client.get(base, headers=self._headers())
+            settings.raise_for_status()
+            config = settings.json()
+            if (config.get('build_type') != 'legacy'
+                    or (config.get('source') or {}).get('branch') != self.branch
+                    or ((config.get('source') or {}).get('path') or '/') != '/'):
+                raise ValueError('Pages publishing branch/build type differs from frame host configuration')
+            response = await client.post(base + '/builds', json={}, headers=self._headers())
+        if response.status_code == 201:
+            return 'pages_api'
+        if response.status_code != 403:
+            raise RuntimeError(f'Pages rebuild request HTTP {response.status_code}')
+        marker = {key: str(build.get(key) or '') for key in ('commit', 'created_at', 'updated_at')}
+        if not marker['commit'] or not (marker['created_at'] or marker['updated_at']):
+            raise ValueError('Pages recovery requires a confirmed deployment identity')
+        marker['reason'] = 'retry_pages_publication'
+        marker['branch'] = self.branch
+        if probe_id is not None:
+            marker['probe_id'] = str(probe_id)
+        data = json.dumps(marker, sort_keys=True).encode()
+        path = f"recovery/pages-{hashlib.sha256(data).hexdigest()}.json"
+        if await self._remote_matches(path, data):
+            return 'contents_existing'
+        await self._put_with_retry(path, data)
+        log.warning('Pages 重建 API 403；已用原图床写权限提交恢复标记: %s', path)
+        return 'contents_commit'
