@@ -1,0 +1,16 @@
+{
+  "nonce": "ink-diffusion-20m-20261105",
+  "source_run": "42276180756",
+  "phase": "FAILED",
+  "full_run_id": "frun_9b6951965f",
+  "plan_fingerprint": "88ccdffb831b7437a37add75e7c05b95b5757a7e97d5c8303c705a57f199da20",
+  "completed_videos": 137,
+  "accepted_request_seconds": 1128,
+  "planned_shots": 145,
+  "planned_seconds": 1192,
+  "failed_shot": "s05_c17",
+  "failure_kind": "Pages deployment timeout",
+  "artifact_sha256": "e5da8d5831d915a290af0d3debd02b797a38960f57add0d8ac5a0f3803fb8cef",
+  "native_replay_video_hashes_unchanged": 137,
+  "native_replay_paid_calls": 0
+}

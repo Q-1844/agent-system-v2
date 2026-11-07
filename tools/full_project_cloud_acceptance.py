@@ -1753,7 +1753,8 @@ async def run_acceptance(nonce, out, summary):
     summary.update(project_name=project_name, full_run_id=full.run_id,
                    project_dir=str(project_dir), source_sha=os.environ.get("GITHUB_SHA"))
     await wrapper.persist(phase="RUNNING", project_name=project_name, full_run_id=full.run_id,
-                           film_target_seconds=target)
+                           film_target_seconds=target, pause_reason=None,
+                           wait_reason=None, drain_complete=False)
     deadline, last_report = time.monotonic() + driver_minutes * 60, 0.0
     while True:
         full = manager.get_run(project_name, full.run_id)
@@ -1844,9 +1845,9 @@ async def run_acceptance(nonce, out, summary):
         # provider_transient（方案 B 保底，2026-11-05）：供应商 CDN 瞬态完成失败
         # 在镜头级 3 次重试（方案 A）后仍耗尽时，run 不落 FAILED 死链，而是
         # technical_wait + 自动派下一跳（MAX_AUTO_HOPS 封顶防循环）。
-        if wait_reason in ('poll_transient', 'rate_limit', 'provider_transient'):
-            await wrapper.persist(phase="INTERRUPTED", terminal_status="technical_wait", error=full.error,
-                                  drain_complete=False)
+        if wait_reason in ('poll_transient', 'rate_limit', 'provider_transient', 'asset_publication'):
+            await record_technical_wait(manager, project_name, full, wrapper,
+                                        deps.job_queue, wait_reason)
             summary["auto_resume"] = await auto_resume_next_hop(wrapper, nonce, driver_minutes)
             raise RuntimeError("transient video failure; continue the original jobs next hop")
         await wrapper.persist(phase="FAILED", terminal_status=full.status, error=full.error)
@@ -1968,10 +1969,23 @@ async def run_acceptance(nonce, out, summary):
     summary["status"] = "PASS"
 
 
+async def record_technical_wait(manager, project_name, full, wrapper, queue, reason):
+    """Persist infrastructure exhaustion as recoverable work after safe drainage."""
+    drained = False
+    if reason == 'asset_publication':
+        drained = await pause_and_drain(manager, project_name, full.run_id,
+            wrapper, queue, reason='asset_publication')
+    await wrapper.persist(phase='INTERRUPTED', terminal_status='technical_wait',
+                          error=full.error, wait_reason=reason, drain_complete=drained)
+    return drained
+
+
 def production_wait_reason(wrapper, queue, project_name):
     """Infrastructure waits never authorize a story/shot rewrite."""
     if wrapper.quota_gate_after:
         return 'daily_quota'
+    if _current_publication_wait(wrapper, project_name):
+        return 'asset_publication'
     jobs = [j for j in queue.jobs.values() if j.project == project_name and j.kind == 'video']
     for job in jobs:
         if job.state != 'failed':
@@ -1982,10 +1996,64 @@ def production_wait_reason(wrapper, queue, project_name):
                 and (newer.finished_at or newer.created_at) > (job.finished_at or job.created_at)
                 for newer in jobs):
             continue
+        if (getattr(job, 'error_class', None) ==
+                'src.core.image_host.GithubPagesHost.PagesNotReadyError'):
+            return 'asset_publication'
         if reason in ('poll_transient', 'rate_limit', 'submission_unknown', 'not_sent',
                      'provider_transient'):
             return reason
     return None
+
+
+def _current_publication_wait(wrapper, project_name):
+    """Read only failed shots belonging to the active native controller chain.
+
+    Old scene runs and stale asset errors must not classify a later content
+    failure as infrastructure. No error-message matching or receipt rewriting.
+    """
+    try:
+        project_dir = Path(wrapper.project_dir)
+        full_id = wrapper.checkpoint.doc['full_run_id']
+        full = json.loads((project_dir/'output/full_runs'/full_id/'run.json').read_text(encoding='utf-8'))
+        if full.get('status') != 'failed' or full.get('project_name') != project_name:
+            return False
+        production = json.loads((project_dir/'output/production_runs'/
+            full['production_run_id']/'run.json').read_text(encoding='utf-8'))
+        if production.get('parent_full_run_id') != full_id:
+            return False
+        from src.core.store import ProjectStore
+        from src.resources.generation import resolve_local_file
+        project = ProjectStore(project_dir).load()
+        found = False
+        for scene in production.get('scenes') or []:
+            if scene.get('status') != 'failed':
+                continue
+            child = json.loads((project_dir/'output/ai/autopilot_runs'/
+                (scene['child_run_id']+'.json')).read_text(encoding='utf-8'))
+            if child.get('parent_project_run_id') != production.get('run_id'):
+                return False
+            failed = [s for s in child.get('shots') or [] if s.get('status') == 'failed']
+            if not failed:
+                return False
+            for state in failed:
+                shot = project.get_shot(state.get('shot_id'))
+                if (not shot or state.get('stage') != 'video_end'
+                        or not state.get('video_version_id')
+                        or shot.video_end_source_version != state['video_version_id']
+                        or shot.final_video != state['video_version_id']
+                        or shot.video_end_frame.error_code != 'MEDIA_PUBLICATION_PENDING'
+                        or not shot.video_end_frame.ready):
+                    return False
+                tail = resolve_local_file(project_dir, shot.video_end_frame.local)
+                selected = next((v for v in shot.video_versions
+                                 if v.version_id == shot.final_video and v.status == 'done'), None)
+                video = resolve_local_file(project_dir, selected.local) if selected else None
+                if not tail or not tail.stat().st_size or not video or not video.stat().st_size:
+                    return False
+                found = True
+        return found
+    except (AttributeError, KeyError, OSError, TypeError, ValueError):
+        return False
 
 
 def write_evidence_project_output(summary):

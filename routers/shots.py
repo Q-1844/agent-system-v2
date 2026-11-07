@@ -567,8 +567,11 @@ async def _extract_video_end_frame(project_dir, shot_id, video_local, version_id
         return Asset(local=str(jpg_path), url=url, status=ShotStatus.DONE.value), True
     except Exception as e:
         # 提取成功但托管失败：local 有（reference 可 base64）、url 无（inherit 不可用）
+        from src.core.image_host import GithubPagesHost
         return Asset(local=str(end_path), status=ShotStatus.DONE.value,
-                     error=f"末帧托管失败: {e}"), False
+                     error=f"末帧托管失败: {e}",
+                     error_code=("MEDIA_PUBLICATION_PENDING" if isinstance(
+                         e, GithubPagesHost.PagesNotReadyError) else None)), False
 
 
 async def _sync_first_frame_slot(store, shot_id: str, version, version_id: str,

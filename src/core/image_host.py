@@ -236,7 +236,8 @@ class GithubPagesHost(ImageHost):
 
     def __init__(self, owner: str, repo: str, branch: str, token: str,
                  poll_timeout: float = 600.0, poll_interval: float = 5.0,
-                 client_factory=None):
+                 client_factory=None, repair_after: float = 30.0,
+                 repair_interval: float = 60.0):
         # 🔴 C2 本地 60 秒验证修复（2026-10-27）：poll_timeout 180 -> 600。
         # 实测：agnes-frame-host 仓已累计 256MB / 800+ objects，单次 Pages 构建
         # 实测 232s（PUT 15:19:57Z -> built 15:23:49Z），旧默认 180s 低于真实
@@ -248,6 +249,10 @@ class GithubPagesHost(ImageHost):
         self._client_factory = client_factory or (
             lambda timeout=60: httpx.AsyncClient(timeout=timeout, verify=_system_verify()))
         self._lock = asyncio.Lock()
+        self.repair_after, self.repair_interval = repair_after, repair_interval
+        self._repair_lock = asyncio.Lock()
+        self._repair_next_at = 0.0
+        self._repair_requested_for = set()
 
     # ---- helpers ----
     def _api(self, path: str) -> str:
@@ -343,7 +348,8 @@ class GithubPagesHost(ImageHost):
 
     async def _wait_ready(self, url: str):
         import time as _time
-        deadline = _time.monotonic() + self.poll_timeout
+        started = _time.monotonic()
+        deadline = started + self.poll_timeout
         async with self._client() as c:
             while _time.monotonic() < deadline:
                 try:
@@ -352,7 +358,54 @@ class GithubPagesHost(ImageHost):
                         return
                 except httpx.HTTPError:
                     pass                                # 网络抖动继续轮询
+                if _time.monotonic() - started >= self.repair_after:
+                    await self._repair_failed_deployment()
                 await asyncio.sleep(self.poll_interval)
         raise self.PagesNotReadyError(
             f"github_pages 上传成功但 Pages 未在 {self.poll_timeout}s 内就绪: {url}"
             f"（URL 已建，可稍后重试轮询）")
+
+    async def _repair_failed_deployment(self):
+        """Rebuild a confirmed failed legacy deployment, once per failure.
+
+        Public reads never carry credentials. Recovery writes only to this host,
+        after verifying its configured Pages branch; concurrent waiters share the
+        lock/cooldown. A lost POST response is not repeated for the same failure.
+        Permission/transport errors leave publication pending, never falsely ready.
+        """
+        import time as _time
+        if _time.monotonic() < self._repair_next_at:
+            return
+        async with self._repair_lock:
+            if _time.monotonic() < self._repair_next_at:
+                return
+            self._repair_next_at = _time.monotonic() + self.repair_interval
+            base = f"https://api.github.com/repos/{self.owner}/{self.repo}/pages"
+            try:
+                async with self._client() as c:
+                    latest = await c.get(base + "/builds/latest", headers=self._headers())
+                    if latest.status_code != 200:
+                        log.warning("Pages 恢复状态查询未成功: HTTP %s", latest.status_code)
+                        return
+                    build = latest.json()
+                    if build.get("status") != "errored":
+                        return  # Do not cancel or duplicate queued/healthy deployments.
+                    identity = tuple(str(build.get(k) or "") for k in
+                                     ("commit", "created_at", "updated_at"))
+                    if not identity[0] or not any(identity[1:]) or identity in self._repair_requested_for:
+                        return
+                    settings = await c.get(base, headers=self._headers())
+                    if settings.status_code != 200:
+                        log.warning("Pages 恢复配置查询未成功: HTTP %s", settings.status_code)
+                        return
+                    config = settings.json()
+                    if (config.get("build_type") != "legacy"
+                            or (config.get("source") or {}).get("branch") != self.branch):
+                        log.warning("Pages 恢复拒绝：发布分支或构建类型与图床配置不一致")
+                        return
+                    self._repair_requested_for.add(identity)
+                    response = await c.post(base + "/builds", json={}, headers=self._headers())
+                    log.warning("Pages 失败部署重建: commit=%s HTTP %s",
+                                identity[0][:12], response.status_code)
+            except (httpx.HTTPError, ValueError, TypeError, AttributeError):
+                log.warning("Pages 恢复请求暂未确认；保留原字节并继续检查发布状态")
