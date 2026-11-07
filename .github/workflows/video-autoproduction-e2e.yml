@@ -66,6 +66,10 @@ on:
         description: '仅归档接续时复用已有B Release ID（保留旧资产）'
         type: string
         default: ''
+      daily_video_seconds:
+        description: '🔴 测试旋钮：每日视频额度秒数，压缩模拟按天额度墙（默认 500=真实口径，生产派发勿传小值）'
+        type: number
+        default: 500
       task_nonce:
         description: '合成任务 nonce（留空=自动时间戳）'
         required: false
@@ -150,6 +154,7 @@ jobs:
           CONFIRM_UNCERTAIN_SUBMISSIONS: ${{ inputs.confirm_uncertain_submissions }}
           FINALIZE_ONLY: ${{ inputs.finalize_only }}
           DRIVER_TIMEOUT_MINUTES: ${{ inputs.driver_timeout_minutes }}
+          DAILY_VIDEO_SECONDS: ${{ inputs.daily_video_seconds }}
           FILM_TARGET_SECONDS: ${{ inputs.target_duration_seconds }}
           PRODUCTION_REQUEST: ${{ inputs.production_request }}
           SOURCE_PROJECT: ${{ inputs.source_project }}

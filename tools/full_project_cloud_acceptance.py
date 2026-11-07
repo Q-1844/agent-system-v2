@@ -26,7 +26,13 @@ MAX_PLANNED_SECONDS = 220.0
 VIDEO_BUDGET_SECONDS = 1_000_000_000
 IMAGE_BUDGET = 10_000
 TEXT_BUDGET = 50_000
-DAILY_VIDEO_SECONDS = 500
+# 🔴 测试旋钮（2026-11-08 用户拍板）：压缩模拟「按天额度耗尽→20min 定时器→
+# 唤醒接续」链路；默认 500=真实供应商口径（2026-11-03 TA 核实，生产派发
+# 不得传小值）。本地账本预检（QuotaLedger.can 失败→AgnesClient raise
+# DailyQuotaExhausted）→ classify_quota_rejection → pause_for_quota，
+# 闸门=北京次日 00:10（provider_errors.quota_resume_after）。
+# 结构锁：tests/test_daily_video_seconds_knob.py。
+DAILY_VIDEO_SECONDS = int(os.environ.get("DAILY_VIDEO_SECONDS") or 500)
 
 
 def runtime_deadline_minutes(environ):

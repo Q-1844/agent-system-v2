@@ -25,6 +25,7 @@ jobs:
             config
             routers
             services
+            .github/workflows/posthoc-complete.yml
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -73,6 +74,7 @@ jobs:
           sparse-checkout: |
             tools
             .github/workflows/video-autoproduction-e2e.yml
+            .github/workflows/posthoc-complete.yml
             src
             tests
             config
