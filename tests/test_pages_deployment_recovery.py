@@ -12,6 +12,8 @@ import pytest
 from src.core.image_host import GithubPagesHost
 from src.core.models import Asset, Project, Scene, Shot, VideoAsset, VideoVersion
 from src.core.store import ProjectStore
+from src.core.media_publication import (record_publication_wait, pending_publication,
+    publication_wait_path, resolve_publication_wait)
 
 
 class Pages:
@@ -95,8 +97,9 @@ def chain(tmp_path):
         video=VideoAsset(local=str(video),status='done',video_id='paid'),
         video_versions=[VideoVersion(version_id='v1',video_id='paid',local=str(video),status='done')],
         video_end_source_version='v1',video_end_frame=Asset(local=str(tail),status='done',
-            error='deployment timed out',error_code='MEDIA_PUBLICATION_PENDING'))
+            error='deployment timed out'))
     ProjectStore(tmp_path).save(Project(name='film',scenes=[Scene(scene_id='s01',shots=[shot])]))
+    record_publication_wait(tmp_path,shot.shot_id,'v1',str(tail),'deployment timed out')
     docs={
       'output/full_runs/full/run.json':{'run_id':'full','project_name':'film','status':'failed','production_run_id':'production'},
       'output/production_runs/production/run.json':{'run_id':'production','parent_full_run_id':'full','status':'failed',
@@ -115,9 +118,11 @@ def chain(tmp_path):
     return wrapper,docs
 
 
-def test_publication_error_code_survives_native_project_roundtrip(tmp_path):
+def test_publication_wait_survives_native_project_roundtrip_without_changing_assets(tmp_path):
     wrapper,_=chain(tmp_path)
-    assert ProjectStore(tmp_path).load().get_shot('s01_c01').video_end_frame.error_code=='MEDIA_PUBLICATION_PENDING'
+    asset=ProjectStore(tmp_path).load().get_shot('s01_c01').video_end_frame
+    assert pending_publication(tmp_path,'s01_c01','v1',asset.local)
+    assert set(Asset.__dataclass_fields__)=={'local','url','status','error','updated_at'}
     from tools.full_project_cloud_acceptance import production_wait_reason
     assert production_wait_reason(wrapper,SimpleNamespace(jobs={}), 'film')=='asset_publication'
 
@@ -129,7 +134,7 @@ def test_stale_or_content_failures_cannot_be_automatically_reclassified(tmp_path
     elif change=='wrong_parent':docs['output/ai/autopilot_runs/child.json']['parent_project_run_id']='other'
     elif change=='wrong_version':docs['output/ai/autopilot_runs/child.json']['shots'][0]['video_version_id']='other'
     elif change=='content':
-        ProjectStore(tmp_path).update_shot('s01_c01',lambda s:setattr(s.video_end_frame,'error_code',None))
+        path=publication_wait_path(tmp_path,'s01_c01','v1');doc=json.loads(path.read_text());doc['category']='CONTENT_REJECTED';path.write_text(json.dumps(doc))
     elif change=='completed':docs['output/production_runs/production/run.json']['scenes'][0]['status']='completed'
     elif change=='missing_child':docs['output/production_runs/production/run.json']['scenes'][0]['child_run_id']='missing'
     else:docs['output/ai/autopilot_runs/child.json']['shots'].append({'shot_id':'unknown','status':'failed','stage':'video'})
@@ -189,7 +194,7 @@ def test_real_extraction_marks_only_pages_timeout_as_publication_wait(tmp_path,m
     monkeypatch.setattr(routes,'get_rehost_host',Host)
     asset,ok=asyncio.run(routes._extract_video_end_frame(tmp_path,'s01_c01','paid.mp4','v1'))
     assert not ok and Path(asset.local).is_file()
-    assert asset.error_code==('MEDIA_PUBLICATION_PENDING' if transient else None)
+    assert pending_publication(tmp_path,'s01_c01','v1',asset.local) is transient
 
 
 def test_retry_exhaustion_retains_typed_wait_and_existing_video(tmp_path,monkeypatch):
@@ -203,8 +208,8 @@ def test_retry_exhaustion_retains_typed_wait_and_existing_video(tmp_path,monkeyp
     monkeypatch.setattr(manager,'_save_shot_state',AsyncMock())
     async def extract(*a,**kw):
         calls.append(kw)
-        return Asset(local=str(tmp_path/'tail.jpg'),status='done',error='Pages failed',
-                     error_code='MEDIA_PUBLICATION_PENDING'),False
+        record_publication_wait(tmp_path,'s01_c01','v1',str(tmp_path/'tail.jpg'),'Pages failed')
+        return Asset(local=str(tmp_path/'tail.jpg'),status='done',error='Pages failed'),False
     async def sleep(seconds):sleeps.append(seconds)
     monkeypatch.setattr(routes,'_extract_video_end_frame',extract)
     monkeypatch.setattr(ap.asyncio,'sleep',sleep)
@@ -233,9 +238,9 @@ def test_publication_diagnostics_cannot_invalidate_creative_input_signature(tmp_
     project.characters=[Character(name='hero',views={'front':Asset(url='https://frame.invalid/hero',status='done')})]
     project.scenes[0].shots.append(shot)
     before=video_input_signature(project,shot)
-    previous.video_end_frame.error_code='ANOTHER_DIAGNOSTIC'
-    shot.first_frame.selected.error_code='IMAGE_TRANSPORT_PENDING'
-    project.characters[0].views['front'].error_code='TEMPORARY'
+    project_bytes=(tmp_path/'output/project.json').read_bytes()
+    record_publication_wait(tmp_path,'s01_c01','v1',str(tmp_path/'tail.jpg'),'changed diagnostic')
+    assert (tmp_path/'output/project.json').read_bytes()==project_bytes
     assert video_input_signature(project,shot)==before
     previous.video_end_frame.url='https://frame.invalid/new-actual-image'
     assert video_input_signature(project,shot)!=before
@@ -243,3 +248,25 @@ def test_publication_diagnostics_cannot_invalidate_creative_input_signature(tmp_
     changed=video_input_signature(project,shot)
     shot.performance_intent['error_code']='creative-cue-two'
     assert video_input_signature(project,shot)!=changed
+
+
+@pytest.mark.parametrize('change',['hash','version','category','escape','changed_bytes','malformed'])
+def test_publication_ledger_rejects_tampered_or_unrelated_evidence(tmp_path,change):
+    wrapper,_=chain(tmp_path);path=publication_wait_path(tmp_path,'s01_c01','v1')
+    doc=json.loads(path.read_text())
+    if change=='hash':doc['sha256']='wrong'
+    elif change=='version':doc['video_version_id']='other'
+    elif change=='category':doc['category']='CONTENT_REJECTED'
+    elif change=='escape':doc['local']='../../outside.jpg'
+    elif change=='changed_bytes':(tmp_path/'tail.jpg').write_bytes(b'new-frame')
+    elif change=='malformed':doc=[]
+    path.write_text(json.dumps(doc))
+    assert not pending_publication(tmp_path,'s01_c01','v1',str(tmp_path/'tail.jpg'))
+
+
+def test_resolved_publication_wait_does_not_clear_other_video_versions(tmp_path):
+    wrapper,_=chain(tmp_path)
+    record_publication_wait(tmp_path,'s01_c01','v2',str(tmp_path/'tail.jpg'),'new version waiting')
+    resolve_publication_wait(tmp_path,'s01_c01','v1')
+    assert not pending_publication(tmp_path,'s01_c01','v1',str(tmp_path/'tail.jpg'))
+    assert pending_publication(tmp_path,'s01_c01','v2',str(tmp_path/'tail.jpg'))

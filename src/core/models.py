@@ -44,15 +44,14 @@ class Asset:
     status: str = ShotStatus.PENDING.value
     error: Optional[str] = None
     updated_at: float = 0.0
-    error_code: Optional[str] = None
 
     def mark_done(self, local: str, url: Optional[str] = None):
         self.local, self.url = local, url
-        self.status, self.error, self.error_code = ShotStatus.DONE.value, None, None
+        self.status, self.error = ShotStatus.DONE.value, None
         self.updated_at = time.time()
 
     def mark_failed(self, error: str):
-        self.status, self.error, self.error_code = ShotStatus.FAILED.value, str(error)[:500], None
+        self.status, self.error = ShotStatus.FAILED.value, str(error)[:500]
         self.updated_at = time.time()
 
     @property

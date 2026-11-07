@@ -46,16 +46,5 @@ def video_input_signature(project, shot) -> str:
                "native_av": asdict(project.native_av), "upstream": upstream}
     if reference_upstream is not None:
         payload["reference_upstream"] = reference_upstream
-    # Asset.error_code is recovery diagnostics, never a creative input. Omit it
-    # recursively (including None) to preserve signatures saved before the field
-    # existed, in first-frame candidates, character views and inherited tails.
-    def without_asset_diagnostics(value):
-        if isinstance(value, dict):
-            asset = {'local', 'url', 'status', 'error', 'updated_at'}.issubset(value)
-            return {k: without_asset_diagnostics(v) for k, v in value.items()
-                    if k != 'error_code' or not asset}
-        if isinstance(value, list):
-            return [without_asset_diagnostics(v) for v in value]
-        return value
-    return hashlib.sha256(json.dumps(without_asset_diagnostics(payload), sort_keys=True, ensure_ascii=False,
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False,
                                      default=str).encode()).hexdigest()

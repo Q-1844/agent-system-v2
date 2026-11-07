@@ -2023,6 +2023,7 @@ def _current_publication_wait(wrapper, project_name):
             return False
         from src.core.store import ProjectStore
         from src.resources.generation import resolve_local_file
+        from src.core.media_publication import pending_publication
         project = ProjectStore(project_dir).load()
         found = False
         for scene in production.get('scenes') or []:
@@ -2041,7 +2042,8 @@ def _current_publication_wait(wrapper, project_name):
                         or not state.get('video_version_id')
                         or shot.video_end_source_version != state['video_version_id']
                         or shot.final_video != state['video_version_id']
-                        or shot.video_end_frame.error_code != 'MEDIA_PUBLICATION_PENDING'
+                        or not pending_publication(project_dir, shot.shot_id,
+                            state['video_version_id'], shot.video_end_frame.local)
                         or not shot.video_end_frame.ready):
                     return False
                 tail = resolve_local_file(project_dir, shot.video_end_frame.local)
