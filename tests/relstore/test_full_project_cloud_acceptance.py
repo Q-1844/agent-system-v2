@@ -11,7 +11,7 @@ from src.core.models import Project, Scene, Shot
 from src.core.store import ProjectStore
 from tools.full_project_cloud_acceptance import (BoundedRealClient, validate_planned_project,
                                                 validate_final_media, acceptance_credentials,
-                                                make_frame_host_calibration)
+                                                make_frame_host_calibration, preflight_frame_host)
 
 
 def project(duration=10):
@@ -252,6 +252,42 @@ def test_cached_public_calibration_cannot_hide_a_read_only_credential(tmp_path, 
     with pytest.raises(RuntimeError, match="403"):
         asyncio.run(host.upload(fresh))
     assert len(writes) == 1 and writes[0] != cached
+
+
+@pytest.mark.parametrize("restored,finalize_only,reason", [
+    (True, False, "restored_actual_inputs_guarded"),
+    (True, True, "finalize_only"),
+    (False, True, "finalize_only"),
+])
+def test_recovery_and_finalization_do_not_wait_for_an_unrelated_canary(
+        tmp_path, restored, finalize_only, reason):
+    from unittest.mock import AsyncMock
+    host = SimpleNamespace(upload=AsyncMock(side_effect=RuntimeError("Pages unavailable")))
+    summary = {}
+    asyncio.run(preflight_frame_host(host, tmp_path, summary, restored=restored,
+                                    finalize_only=finalize_only))
+    host.upload.assert_not_awaited()
+    assert summary == {"frame_host_preflight_skipped": reason}
+    assert not (tmp_path / "host-calibration.png").exists()
+
+
+def test_new_task_still_requires_a_fresh_public_canary(tmp_path):
+    from unittest.mock import AsyncMock
+    host = SimpleNamespace(upload=AsyncMock(return_value="https://frames/new.png"))
+    summary = {}
+    asyncio.run(preflight_frame_host(host, tmp_path, summary))
+    host.upload.assert_awaited_once_with(tmp_path / "host-calibration.png")
+    assert (tmp_path / "host-calibration.png").is_file()
+    assert summary == {"frame_host_preflight_url": "https://frames/new.png"}
+
+
+def test_new_task_host_failure_remains_a_preflight_failure(tmp_path):
+    from unittest.mock import AsyncMock
+    host = SimpleNamespace(upload=AsyncMock(side_effect=RuntimeError("Pages unavailable")))
+    summary = {}
+    with pytest.raises(RuntimeError, match="Pages unavailable"):
+        asyncio.run(preflight_frame_host(host, tmp_path, summary))
+    assert not summary
 
 
 # ---------- 片长档位（200 旧档零变化 / 320 续集档） ----------
