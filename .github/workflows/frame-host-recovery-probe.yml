@@ -44,9 +44,10 @@ jobs:
                   latest.raise_for_status()
                   if latest.json().get('status') in ('building', 'queued'):
                       raise RuntimeError('Deployment already active; retry probe after it settles')
-                  response = await client.post(base + '/builds', json={}, headers=host._headers())
-                  if response.status_code != 201:
-                      raise RuntimeError(f'Production frame credential cannot request Pages rebuild: HTTP {response.status_code}')
-              print('Production FRAME_HOST_TOKEN requested D-repo rebuild: HTTP 201. Zero Agnes calls.')
+              method = await host.request_rebuild(latest.json(),
+                  probe_id=os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT'])
+              if method == 'contents_existing':
+                  raise RuntimeError('Probe request already exists; rerun to verify a fresh write')
+              print(f'Production FRAME_HOST_TOKEN verified D-repo recovery: {method}. Zero Agnes calls.')
           asyncio.run(main())
           PY

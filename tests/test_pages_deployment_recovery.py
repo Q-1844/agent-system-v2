@@ -1,5 +1,6 @@
 """A failed Pages deployment must heal or retain recoverable paid work."""
 import asyncio
+import base64
 import copy
 import json
 from pathlib import Path
@@ -17,15 +18,28 @@ from src.core.media_publication import (record_publication_wait, pending_publica
 
 
 class Pages:
-    def __init__(self, *, status='errored', branch='main', build_type='legacy', post=201):
+    def __init__(self, *, status='errored', branch='main', build_type='legacy', post=201, marker=403, lose_marker_response=False, source_path='/'):
         self.status,self.branch,self.build_type,self.post=status,branch,build_type,post
+        self.source_path=source_path
         self.requests=[];self.published=False;self.created='2026-11-06T20:26:07Z'
+        self.marker,self.lose_marker_response=marker,lose_marker_response
+        self.markers={};self.marker_commits=0
     async def respond(self,request):
         self.requests.append(request)
         if request.url.host=='u.github.io':
             assert 'authorization' not in request.headers
             return httpx.Response(200 if self.published else 404,content=b'image')
         assert request.headers['authorization']=='Bearer test'
+        if '/contents/recovery/' in request.url.path:
+            if request.method=='GET':
+                return httpx.Response(200,content=self.markers[request.url.path]) if request.url.path in self.markers else httpx.Response(404)
+            if request.url.path in self.markers:return httpx.Response(409)
+            if self.marker==201:
+                self.markers[request.url.path]=base64.b64decode(json.loads(request.content)['content'])
+                self.marker_commits+=1;self.published=True
+                if self.lose_marker_response:
+                    self.lose_marker_response=False;raise httpx.ReadTimeout('commit response lost')
+            return httpx.Response(self.marker)
         if request.url.path.endswith('/builds/latest'):
             return httpx.Response(200,json={'status':self.status,'commit':'source',
                 'created_at':self.created,'updated_at':self.created})
@@ -33,7 +47,7 @@ class Pages:
             if self.post=='timeout':raise httpx.ReadTimeout('response lost')
             if self.post==201:self.published=True
             return httpx.Response(self.post,json={'status':'queued'})
-        return httpx.Response(200,json={'build_type':self.build_type,'source':{'branch':self.branch}})
+        return httpx.Response(200,json={'build_type':self.build_type,'source':{'branch':self.branch,'path':self.source_path}})
     def host(self,**kw):
         return GithubPagesHost('u','repo','main','test',poll_timeout=.03,poll_interval=.001,
             repair_after=0,repair_interval=0,client_factory=lambda **_:httpx.AsyncClient(
@@ -50,7 +64,7 @@ def test_failed_deployment_rebuilds_and_verifies_public_url():
 
 
 @pytest.mark.parametrize('changes',[{'status':'building'},{'status':'queued'},
-    {'status':'built'},{'branch':'another'},{'build_type':'workflow'}])
+    {'status':'built'},{'branch':'another'},{'build_type':'workflow'},{'source_path':'/docs'}])
 def test_repair_cannot_restart_active_or_unrelated_pages(changes):
     pages=Pages(**changes)
     asyncio.run(pages.host()._repair_failed_deployment())
@@ -270,3 +284,40 @@ def test_resolved_publication_wait_does_not_clear_other_video_versions(tmp_path)
     resolve_publication_wait(tmp_path,'s01_c01','v1')
     assert not pending_publication(tmp_path,'s01_c01','v1',str(tmp_path/'tail.jpg'))
     assert pending_publication(tmp_path,'s01_c01','v2',str(tmp_path/'tail.jpg'))
+
+
+def test_contents_permission_recovers_when_pages_rebuild_api_is_forbidden():
+    pages=Pages(post=403,marker=201);host=pages.host()
+    asyncio.run(host.ensure_published(host._pages_url('objects/paid.jpg')))
+    assert len(pages.posts())==1 and pages.marker_commits==1 and pages.published
+    writes=[r for r in pages.requests if r.method=='PUT']
+    assert len(writes)==1 and '/contents/recovery/pages-' in writes[0].url.path
+    body=json.loads(writes[0].content);assert body['branch']=='main' and 'sha' not in body
+    marker=json.loads(base64.b64decode(body['content']))
+    assert marker['commit']=='source' and marker['reason']=='retry_pages_publication'
+
+
+def test_marker_is_remote_idempotent_across_separate_host_instances():
+    pages=Pages(post=403,marker=201)
+    async def repair():await asyncio.gather(pages.host()._repair_failed_deployment(),pages.host()._repair_failed_deployment())
+    asyncio.run(repair())
+    assert pages.marker_commits==1 and len(pages.markers)==1
+
+
+def test_lost_marker_response_does_not_create_a_second_commit(monkeypatch):
+    pages=Pages(post=403,marker=201,lose_marker_response=True)
+    monkeypatch.setattr(asyncio,'sleep',AsyncMock())
+    asyncio.run(pages.host()._repair_failed_deployment())
+    assert pages.marker_commits==1
+    assert len([r for r in pages.requests if r.method=='PUT'])==2
+
+
+def test_probe_identity_requires_a_fresh_permission_write():
+    pages=Pages(post=403,marker=201);host=pages.host()
+    build={'commit':'source','created_at':pages.created,'updated_at':pages.created}
+    async def probe():
+        assert await host.request_rebuild(build,probe_id='12-1')=='contents_commit'
+        assert await host.request_rebuild(build,probe_id='12-1')=='contents_existing'
+        assert await host.request_rebuild(build,probe_id='12-2')=='contents_commit'
+    asyncio.run(probe())
+    assert pages.marker_commits==2
