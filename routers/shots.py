@@ -560,13 +560,25 @@ async def _extract_video_end_frame(project_dir, shot_id, video_local, version_id
         jpg_path = end_path.with_suffix(".jpg")
         from PIL import Image as _PILImage
         _PILImage.open(end_path).convert("RGB").save(jpg_path, "JPEG", quality=88)
+        from src.core.media_publication import resolve_publication_wait
         if not host:
             # 无下游依赖 -> 不占图床托管配额（Pages 构建昂贵）。local 仍可用于 base64 参考。
             return Asset(local=str(jpg_path), status=ShotStatus.DONE.value), True
         url = await get_rehost_host().upload(str(jpg_path))
+        try:
+            resolve_publication_wait(project_dir, shot_id, version_id)
+        except (OSError, ValueError, TypeError):
+            logger.warning("末帧已发布，但基础设施等待记录暂未更新: %s", shot_id)
         return Asset(local=str(jpg_path), url=url, status=ShotStatus.DONE.value), True
     except Exception as e:
         # 提取成功但托管失败：local 有（reference 可 base64）、url 无（inherit 不可用）
+        from src.core.image_host import GithubPagesHost
+        if isinstance(e, GithubPagesHost.PagesNotReadyError):
+            from src.core.media_publication import record_publication_wait
+            try:
+                record_publication_wait(project_dir, shot_id, version_id, str(end_path), e)
+            except (OSError, ValueError):
+                logger.warning("末帧发布等待证据暂未保存: %s", shot_id)
         return Asset(local=str(end_path), status=ShotStatus.DONE.value,
                      error=f"末帧托管失败: {e}"), False
 
