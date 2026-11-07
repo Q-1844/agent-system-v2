@@ -463,9 +463,13 @@ class GitHubReleaseAdapter(ReleaseAdapter):
                f"{release_id}/assets")
         headers = self._headers()  # uploads 端点要求 Accept 为 JSON
         headers["Content-Type"] = "application/octet-stream"  # 资产本体类型
+        # 🔴 2026-11-07 posthoc 42384612977 实锤：2GB 本体的 POST 用默认 30s
+        # 超时必然 ReadTimeout（传输+处理远超 30s），客户端掐断后服务端可能
+        # 留下半成品。按体积放宽：30s 基线 + 每 2MB 加 1s，900s 封顶。
+        post_timeout = min(30.0 + len(data) / (2 * 1024 * 1024), 900.0)
         r = self.transport.request(
             "POST", url, headers=headers, data=data,
-            params={"name": name})
+            params={"name": name}, timeout=post_timeout)
         if r.status == 422:
             return self._reconcile_existing_asset(release_id, name, len(data),
                                                   expected_sha256)

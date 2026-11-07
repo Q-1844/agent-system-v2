@@ -159,7 +159,12 @@ def main() -> int:
         packaged = archive_campaign.package(opdir)
         package_path = Path(packaged["package"]["path"])
         rebuilt_sha = packaged["package"]["sha256"]
-        package_name = f"project-rebuilt-{rebuilt_sha[:12]}.tar"
+        # 资产名带 run 唯一后缀：2GB POST 若再次 ReadTimeout，服务端可能留下
+        # 同名半成品（starter），固定名重跑会 422→僵尸拒用而死锁
+        # （🔴 2026-11-07 42384612977 实锤链条）。
+        run_tag = os.environ.get("GITHUB_RUN_ID") or os.environ.get(
+            "POSTHOC_RUN_TAG", "local")
+        package_name = f"project-rebuilt-{rebuilt_sha[:12]}-{run_tag}.tar"
         print(f"[rebuild] repackaged from {project_dir} "
               f"({package_path.stat().st_size} bytes)")
         package_meta = adapter.upload_asset_with_recovery(
