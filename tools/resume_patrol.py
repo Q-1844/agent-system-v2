@@ -19,7 +19,7 @@ import urllib.error
 import urllib.request
 
 from tools.resume_dispatch import (
-    MAX_AUTO_HOPS, auto_resume_allowed, default_branch, dispatch_next_hop,
+    REPO, MAX_AUTO_HOPS, auto_resume_allowed, default_branch, dispatch_next_hop,
     fetch_run, hop_count, dispatch_token)
 
 B1_REPO = "Q-1844/agent-system-v2-rundata-1"
@@ -124,7 +124,7 @@ def sweep_once(b1_token, dispatch_token):
     return results
 
 
-def sweep_nonce(nonce, b1_token, dispatch_token, ref, *, _read=None):
+def sweep_nonce(nonce, b1_token, dispatch_token, ref, *, _read=None, _completed_test=False):
     payload = _read if _read is not None else read_checkpoint(nonce, b1_token)
     if not isinstance(payload, dict) or not payload:
         return {"nonce": nonce, "action": "skip", "reason": "no checkpoint readable"}
@@ -161,7 +161,15 @@ def sweep_nonce(nonce, b1_token, dispatch_token, ref, *, _read=None):
     if run.get("status") in ACTIVE_RUN_STATES:
         return {"nonce": nonce, "action": "skip", "reason": "run alive"}
     completed = parse_iso(run.get("completed_at") or run.get("updated_at"))
-    if completed is None or utc_now_ts() - completed < DEADLINK_GRACE_MINUTES * 60:
+    from src.core.quota_simulation import short_timer
+    verified_test_completion = (_completed_test and doc.get('drain_complete') is True
+        and short_timer(doc) and run.get('status') == 'completed'
+        and run.get('conclusion') in ('success', 'failure')
+        and bool(doc.get('source_sha')) and run.get('head_sha') == doc['source_sha']
+        and run.get('repository', {}).get('full_name') == REPO
+        and (run.get('path') or '').split('@')[0].endswith('/video-autoproduction-e2e.yml'))
+    if completed is None or (not verified_test_completion
+            and utc_now_ts() - completed < DEADLINK_GRACE_MINUTES * 60):
         return {"nonce": nonce, "action": "skip",
                 "reason": "run recently finished (A may be dispatching)"}
     result = dispatch_next_hop(dispatch_token, ref=ref,

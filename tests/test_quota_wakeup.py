@@ -190,3 +190,36 @@ def test_ticket_cas_preserves_production_identity_and_paid_receipts(monkeypatch,
     ({'GITHUB_TOKEN':'native','RESUME_DISPATCH_TOKEN':' '},'native')])
 def test_native_dispatch_token_fallback(env,expected):
     assert dispatch_token(env)==expected
+
+
+@pytest.mark.parametrize('change,expected', [
+    ('none','dispatch'),('not_drained','rearm'),('real_quota','rearm'),
+    ('alive','rearm'),('unknown','rearm'),('cancelled','rearm'),
+    ('sha_changed','rearm'),('recent_dispatch','skip'),('future_gate','rearm'),
+])
+def test_short_test_completion_skips_only_deadlink_grace(control,monkeypatch,change,expected):
+    doc,tickets,dispatches=control
+    doc.update(quota_wait_source='test_window',quota_test_policy=dict(
+        schema_version=1,nonce='film',video_seconds=24,wait_minutes=2))
+    source=production();source['updated_at']='2026-11-02T17:59:30Z'
+    if change=='not_drained':doc['drain_complete']=False
+    elif change=='real_quota':doc['quota_wait_source']='daily'
+    elif change=='alive':source['status']='in_progress'
+    elif change=='unknown':source=None
+    elif change=='cancelled':source['conclusion']='cancelled'
+    elif change=='sha_changed':source['head_sha']='other'
+    elif change=='future_gate':doc['quota_resume_after']='2099-01-01T00:00:00Z'
+    elif change=='recent_dispatch':doc['auto_resume']=dict(dispatched=True,at=1793642340,
+        inputs=dict(task_nonce='film',resume_run_id='10'))
+    monkeypatch.setattr(wake.patrol,'fetch_run',lambda *a:source)
+    monkeypatch.setattr(wake,'post_workflow_dispatch',lambda *a:dict(dispatched=True,status=204))
+    class Index:
+        def read(self):return {'doc':copy.deepcopy(doc),'blob_sha':'old'}
+        def write_cas(self,new,sha,**kwargs):
+            assert sha=='old';doc.update(copy.deepcopy(new));return dict(ok=True,new_sha='new')
+    import tools.video_task_state as state
+    monkeypatch.setattr(state,'task_index',lambda *a:Index())
+    out=wake.wake_once('archive','native','branch','film','10')
+    assert out['action']==expected
+    assert len(dispatches)==(expected=='dispatch')
+    assert doc['video_attempts']==checkpoint()['video_attempts']

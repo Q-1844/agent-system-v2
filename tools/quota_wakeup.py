@@ -113,7 +113,11 @@ def wake_once(b1_token, token, ref, nonce, source_run_id, *, timer_hops=0):
             or str(doc.get('github_run_id')) != source_run_id or not armable(doc)):
         return dict(action='stop', reason='checkpoint completed, changed owner or is not resumable')
     if gate_status(doc)[0]:
-        result = patrol.sweep_nonce(nonce, b1_token, token, ref, _read=doc)
+        from src.core.quota_simulation import short_timer
+        options = dict(_read=doc)
+        if short_timer(doc):
+            options['_completed_test'] = True
+        result = patrol.sweep_nonce(nonce, b1_token, token, ref, **options)
         if result['action'] in ('dispatch', 'awaiting_human') or result.get('reason') == 'dispatched recently, waiting for child run':
             if result['action'] == 'dispatch':
                 save_ticket(b1_token, nonce, source_run_id,
