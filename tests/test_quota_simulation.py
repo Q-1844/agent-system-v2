@@ -292,3 +292,42 @@ def test_compress_cli_records_original_job_gate_across_repeated_edits(monkeypatc
         assert override['new_gate']==doc['quota_resume_after']
         assert doc['video_attempts']==original
     assert len(writes)==2
+
+
+def test_slow_parallel_posts_cannot_spend_the_same_remaining_test_credit(tmp_path):
+    ledger=QuotaLedger(tmp_path/'quota.json')
+    ledger.configure_video_test({**POLICY,'video_seconds':12})
+    seen=[]
+    async def provider(request):
+        seen.append(request);identity=len(seen)
+        await asyncio.sleep(.01)  # Another worker can enter before the receipt.
+        return httpx.Response(200,json={'video_id':f'paid-{identity}'})
+    client=AgnesClient({'base_url':'https://agnes.invalid','api_key':'test',
+                        'models':{'video':'agnes-video-2.5-flash'}},quota=ledger,
+                       transport=httpx.MockTransport(provider));client.limiter=Slots()
+    async def run():return await asyncio.gather(
+        client.create_video('one',mode='t2v',duration_s=8),
+        client.create_video('two',mode='t2v',duration_s=8),return_exceptions=True)
+    results=asyncio.run(run())
+    assert len(seen)==1
+    assert sum(isinstance(r,dict) for r in results)==1
+    assert sum(isinstance(r,DailyQuotaExhausted) and r.quota_source=='test_window' for r in results)==1
+    assert ledger.snapshot()['video_seconds']['used']==8
+    assert ledger.video_test_snapshot()['used']==8
+
+
+def test_submit_accounting_lock_releases_after_explicit_rejection(tmp_path):
+    ledger=QuotaLedger(tmp_path/'quota.json');ledger.configure_video_test({**POLICY,'video_seconds':12})
+    seen=[]
+    async def provider(request):
+        seen.append(request);n=len(seen);await asyncio.sleep(.01)
+        return httpx.Response(400,text='invalid request') if n==1 else httpx.Response(200,json={'video_id':'second'})
+    client=AgnesClient({'base_url':'https://agnes.invalid','api_key':'test',
+                        'models':{'video':'agnes-video-2.5-flash'}},quota=ledger,
+                       transport=httpx.MockTransport(provider));client.limiter=Slots()
+    async def run():return await asyncio.gather(
+        client.create_video('bad',mode='t2v',duration_s=8),
+        client.create_video('good',mode='t2v',duration_s=8),return_exceptions=True)
+    results=asyncio.run(run())
+    assert len(seen)==2 and isinstance(results[0],Exception) and results[1]=={'video_id':'second'}
+    assert ledger.snapshot()['video_seconds']['used']==8
