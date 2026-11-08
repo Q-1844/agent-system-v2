@@ -32,7 +32,9 @@ def armable(doc):
     """Check eligibility at the recorded gate, without opening it for POSTs."""
     if not isinstance(doc, dict) or not doc.get('full_run_id'):
         return False
-    gate = parse_gate(doc.get('quota_resume_after'))
+    gates = [g for g in (parse_gate(doc.get('quota_resume_after')),
+                         parse_gate(doc.get('resume_not_before'))) if g is not None]
+    gate = max(gates) if gates else None
     return auto_resume_allowed(doc, now=gate)[0]
 
 
@@ -80,7 +82,9 @@ def resolve(b1_token, token, source_run_id, nonce=''):
                       wakeup_run_id=os.environ.get('GITHUB_RUN_ID'),
                       quota_resume_after=doc.get('quota_resume_after'), at=time.time())
         ticket['audit_saved'] = save_ticket(b1_token, candidate, str(source_run_id), ticket)
-        return dict(enabled=True, nonce=candidate, source_run_id=str(source_run_id), ticket=ticket)
+        from src.core.quota_simulation import short_timer
+        return dict(enabled=True, nonce=candidate, source_run_id=str(source_run_id),
+                    short_timer=short_timer(doc), ticket=ticket)
     return dict(enabled=False, reason='no matching resumable checkpoint')
 
 
@@ -144,6 +148,7 @@ def main(argv=None):
         if output:
             with open(output, 'a', encoding='utf-8') as stream:
                 stream.write('enabled='+str(result['enabled']).lower()+'\n')
+                stream.write('short_timer='+str(result.get('short_timer', False)).lower()+'\n')
                 if result['enabled']:
                     stream.write('nonce='+result['nonce']+'\nsource='+result['source_run_id']+'\n')
     else:

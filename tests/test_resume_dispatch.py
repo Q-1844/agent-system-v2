@@ -177,7 +177,9 @@ def test_a_dispatch_records_into_checkpoint(monkeypatch):
     result = _run(auto_resume_next_hop(wrapper, "film3m-x", 330))
     assert result["dispatched"] is True
     assert result["hops"] == 0
-    assert wrapper.persisted == [{"auto_resume": result}]
+    assert wrapper.persisted == [
+        {"resume_progress": {"accepted": 0, "completed": 0, "empty_hops": 0}},
+        {"auto_resume": result}]
 
 
 def test_dispatch_forwards_film_target_seconds(monkeypatch):

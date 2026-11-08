@@ -1475,6 +1475,7 @@ async def _record_video_quota_wait(job, error, emit):
     from src.api.agnes_client import DailyQuotaExhausted
     from src.core.provider_errors import quota_resume_after
     job.params.update(failure_category="daily_quota",
+                      quota_wait_source=getattr(error, 'quota_source', 'daily'),
                       quota_resume_after=getattr(error, "resume_after", None) or quota_resume_after(error))
     client = get_agnes_client()
     if hasattr(client, "pause_for_quota"):
@@ -1525,7 +1526,7 @@ async def _submit_with_material_retry(client, prompt, *, mode, shot_id=None,
     raise last_err
 
 
-def _video_preflight(shot, quota, seconds, eff_ff_ready):
+def _video_preflight(shot, quota, seconds, eff_ff_ready, *, raise_quota=False):
     """视频前置硬校验（缺一不可，不通过就不提交，省 60s）。
     仅检查「硬失败」；keyframes 尾帧 in-progress 的有界等待在 handler 里做。
     eff_ff_ready：effective 首帧是否就绪（inherit_previous 用来源末帧 url，其余用本镜已选首帧 url）。
@@ -1570,10 +1571,29 @@ def _video_preflight(shot, quota, seconds, eff_ff_ready):
                        f"（当前 {round(seconds, 1)} 秒）——请把镜头 target_duration_s "
                        f"调到 {min_s}-{12} 秒后重试（成片保留时长另行决定）")
     if quota:
-        ok, why = quota.can("video_seconds", max(4, min(12, round(seconds))))
+        amount = max(4, min(12, round(seconds)))
+        from src.core.quota import QuotaLedger
+        if isinstance(quota, QuotaLedger):
+            ok, why, until, source = quota.check_video(amount)
+        else:
+            ok, why = quota.can('video_seconds', amount)
+            until, source = None, 'daily'
         if not ok:
+            if raise_quota:
+                from src.api.agnes_client import DailyQuotaExhausted
+                raise DailyQuotaExhausted(why, resume_after=until, quota_source=source)
             return False, why
     return True, ""
+
+
+async def _job_video_preflight(job, shot, seconds, ready, emit):
+    from src.api.agnes_client import DailyQuotaExhausted
+    try:
+        return _video_preflight(shot, get_agnes_client().quota, seconds, ready, raise_quota=True)
+    except DailyQuotaExhausted as error:
+        job.params['provider_submit_state'] = 'not_sent'
+        await _record_video_quota_wait(job, error, emit)
+        raise
 
 
 async def _await_last_frame_url(store, shot_id, emit, timeout=180, interval=5):
@@ -1927,15 +1947,8 @@ async def _handler_video(job, emit):
     eff_ff_url = None if recovering_video else _effective_first_frame_url(project, shot)
     seconds = shot.video.num_frames / max(shot.video.frame_rate, 1)
     ok, why = ((True, "recover existing task") if recovering_video else
-               _video_preflight(shot, get_agnes_client().quota, seconds, bool(eff_ff_url)))
+               await _job_video_preflight(job, shot, seconds, bool(eff_ff_url), emit))
     if not ok and not recovering_video:
-        from src.core.provider_errors import daily_quota_rejection
-        if daily_quota_rejection(RuntimeError(why)):
-            from src.api.agnes_client import DailyQuotaExhausted
-            error = DailyQuotaExhausted(why)
-            job.params["provider_submit_state"] = "not_sent"
-            await _record_video_quota_wait(job, error, emit)
-            raise error
         raise RuntimeError(why)   # 不发起 API 请求
 
     mode = ("keyframes" if shot.link_mode == "keyframes"
@@ -1979,15 +1992,8 @@ async def _handler_video(job, emit):
                 "multi" if shot.link_mode == "multi" else "i2v")
         eff_ff_url = _effective_first_frame_url(project, shot)
         seconds = shot.video.num_frames / max(shot.video.frame_rate, 1)
-        ok, why = _video_preflight(shot, get_agnes_client().quota, seconds, bool(eff_ff_url))
+        ok, why = await _job_video_preflight(job, shot, seconds, bool(eff_ff_url), emit)
         if not ok:
-            from src.core.provider_errors import daily_quota_rejection
-            if daily_quota_rejection(RuntimeError(why)):
-                from src.api.agnes_client import DailyQuotaExhausted
-                error = DailyQuotaExhausted(why)
-                job.params["provider_submit_state"] = "not_sent"
-                await _record_video_quota_wait(job, error, emit)
-                raise error
             raise RuntimeError(why)
 
     prompt = build_video_prompt(shot, mode)

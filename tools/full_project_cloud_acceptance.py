@@ -234,6 +234,7 @@ class BoundedRealClient:
         self.plan = None
         self.submission_blocked = False
         self.quota_gate_after = None  # 每日额度耗尽时的日历闸门（UTC ISO）
+        self.quota_wait_source = None
         self.finalize_only = finalize_only
         self.video_budget, self.image_budget, self.text_budget = video_budget, image_budget, text_budget
         self.film_target_seconds = film_target_seconds  # 档位透传给自动续跑派发
@@ -275,13 +276,17 @@ class BoundedRealClient:
                           text_calls=self.text_calls, updated_at=utc_now(), **extra)
             # Freeze before handing mutable runtime state to the CAS writer thread.
             fields["submission_intents"] = self.submission_intents
+            if (getattr(self.checkpoint, 'doc', None) or {}).get('quota_test_policy'):
+                fields['quota_test_window'] = self.client.quota.video_test_snapshot()
             await asyncio.to_thread(self.checkpoint.save, **json.loads(json.dumps(fields)))
 
     async def pause_for_quota(self, error):
         self.submission_blocked = True
+        self.quota_wait_source = getattr(error, 'quota_source', 'daily')
         self.quota_gate_after = (getattr(error, "resume_after", None)
                                  or quota_gate.next_quota_reset_utc(error=error))
         await self.persist(phase="WAITING_QUOTA", terminal_status=quota_gate.QUOTA_TERMINAL,
+                           quota_wait_source=self.quota_wait_source,
                            quota_resume_after=self.quota_gate_after, drain_complete=False)
 
     async def poll_video(self, video_id, **kwargs):
@@ -353,7 +358,8 @@ class BoundedRealClient:
             pending = [a for a in pending if a.get("logical_shot_id") == logical_shot_id]
         if self.quota_gate_after:
             from src.api.agnes_client import DailyQuotaExhausted
-            error = DailyQuotaExhausted("等待视频每日额度刷新")
+            error = DailyQuotaExhausted("等待视频每日额度刷新",
+                                        quota_source=self.quota_wait_source or 'daily')
             error.resume_after = self.quota_gate_after
             raise error
         if self.submission_blocked or pending:
@@ -758,6 +764,15 @@ async def auto_resume_next_hop(wrapper, nonce, driver_minutes):
         if "cap" in reason:
             await wrapper.persist(phase="AWAITING_HUMAN", error=reason)
         return {"dispatched": False, "reason": reason, "hops": hops}
+    # A high lifetime hop cap must not permit a rapid no-progress retry loop.
+    from tools.resume_dispatch import progress_backoff
+    progress, until = progress_backoff(wrapper.checkpoint.doc)
+    await wrapper.persist(resume_progress=progress)
+    if until:
+        await wrapper.persist(phase='INTERRUPTED', terminal_status='technical_wait',
+                              resume_not_before=until,
+                              error='repeated recovery without media progress; backing off')
+        return dict(dispatched=False, reason='no-progress cooldown', resume_not_before=until)
     result = dispatch_next_hop(token, ref=os.environ.get("GITHUB_REF_NAME", ""),
                                resume_run_id=os.environ.get("GITHUB_RUN_ID", ""),
                                task_nonce=nonce, driver_minutes=driver_minutes,
@@ -1608,6 +1623,9 @@ async def run_acceptance(nonce, out, summary):
     summary.update(driver_timeout_minutes=driver_minutes, finalize_only=finalize_only,
                    film_target_seconds=target)
     token, frame_token = acceptance_credentials(os.environ)
+    from src.core.quota_simulation import select_policy, reconcile_compressed_job_gates
+    # Reject malformed explicit test inputs before any planning/provider work.
+    select_policy(nonce, {}, os.environ, restored=False)
     if target == AUTO_TARGET:
         # 自主规划模式（PR B2）：Stage 0 全链（身份→规划→冻结→物化/恢复→绑定），
         # 返回生产上下文后汇入下方公共生产段（preflight→wrapper→FullRun→归档）。
@@ -1665,6 +1683,10 @@ async def run_acceptance(nonce, out, summary):
             if cp.current is not None:
                 raise RuntimeError("nonce already has a run; restore/reconcile existing evidence before resuming")
             cp.save(phase="STARTING", github_run_id=os.environ.get("GITHUB_RUN_ID"), source_sha=os.environ.get("GITHUB_SHA"))
+    test_policy = select_policy(nonce, previous, os.environ, restored=bool(restored))
+    if test_policy:
+        cp.save(quota_test_policy=test_policy)
+        summary['quota_test_policy'] = test_policy
     # New tasks prove host write access; recovered tasks guard actual inputs.
     host = GithubPagesHost("Q-1844", "agnes-frame-host", "main", frame_token)
     try:
@@ -1683,6 +1705,8 @@ async def run_acceptance(nonce, out, summary):
     # Apply this policy to the existing object too, without clearing usage.
     quota.limits.update(video_seconds=DAILY_VIDEO_SECONDS, images=IMAGE_BUDGET,
                         text_calls=TEXT_BUDGET)
+    if test_policy:
+        quota.limits['video_seconds'] = 500
     import deps
     import api_server
     from src.ai.full_project_autopilot import get_full_project_manager
@@ -1691,6 +1715,9 @@ async def run_acceptance(nonce, out, summary):
         deps.job_queue._load()  # same owner, no workers have started yet
         with quota._lock:
             quota._data = quota._load()  # restore happened after Stage0 dependency initialization
+        summary['reconciled_test_job_gates'] = reconcile_compressed_job_gates(deps.job_queue, previous)
+    if test_policy:
+        quota.configure_video_test(test_policy)
     if deps.agnes_client is None or deps.job_queue is None or deps.project_manager is None:
         raise RuntimeError("application dependencies failed to initialize")
     deps._rehost_host = host
@@ -1774,7 +1801,8 @@ async def run_acceptance(nonce, out, summary):
                    project_dir=str(project_dir), source_sha=os.environ.get("GITHUB_SHA"))
     await wrapper.persist(phase="RUNNING", project_name=project_name, full_run_id=full.run_id,
                            film_target_seconds=target, pause_reason=None,
-                           wait_reason=None, drain_complete=False)
+                           wait_reason=None, drain_complete=False, resume_not_before=None,
+                           quota_wait_source=None)
     deadline, last_report = time.monotonic() + driver_minutes * 60, 0.0
     while True:
         full = manager.get_run(project_name, full.run_id)
@@ -1867,7 +1895,11 @@ async def run_acceptance(nonce, out, summary):
             # 完成事件的 wakeup 链按日历定时接管），无闸门 → 保持原有立即派发行为。
             job_gate = job_level_quota_gate(deps.job_queue, project_name)
             if job_gate:
+                sources = {j.params.get('quota_wait_source', 'daily') for j in deps.job_queue.jobs.values()
+                           if j.project == project_name and j.state == 'failed'
+                           and j.params.get('quota_resume_after') == job_gate}
                 await wrapper.persist(phase="WAITING_QUOTA",
+                                      quota_wait_source='test_window' if sources == {'test_window'} else 'daily',
                                       terminal_status=quota_gate.QUOTA_TERMINAL,
                                       error="daily video quota exhausted (job-level gate); day-gated resume",
                                       quota_resume_after=job_gate,

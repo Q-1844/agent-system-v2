@@ -70,6 +70,10 @@ on:
         description: '🔴 测试旋钮：每日视频额度秒数，压缩模拟按天额度墙（默认 500=真实口径，生产派发勿传小值）'
         type: number
         default: 500
+      quota_test_wait_minutes:
+        description: '显式压缩额度测试：每个小额度窗口耗尽后的等待分钟数（0=关闭；真实500秒日账本仍保留）'
+        type: number
+        default: 0
       task_nonce:
         description: '合成任务 nonce（留空=自动时间戳）'
         required: false
@@ -155,6 +159,7 @@ jobs:
           FINALIZE_ONLY: ${{ inputs.finalize_only }}
           DRIVER_TIMEOUT_MINUTES: ${{ inputs.driver_timeout_minutes }}
           DAILY_VIDEO_SECONDS: ${{ inputs.daily_video_seconds }}
+          QUOTA_TEST_WAIT_MINUTES: ${{ inputs.quota_test_wait_minutes }}
           FILM_TARGET_SECONDS: ${{ inputs.target_duration_seconds }}
           PRODUCTION_REQUEST: ${{ inputs.production_request }}
           SOURCE_PROJECT: ${{ inputs.source_project }}

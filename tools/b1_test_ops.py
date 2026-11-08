@@ -96,9 +96,19 @@ def main() -> int:
         ok, reason = can_compress_gate(doc)
         if not ok:
             raise SystemExit(f'refuse gate compress: {reason}')
+        from tools.quota_gate import parse_gate
+        if parse_gate(doc.get('quota_resume_after')) is None:
+            raise SystemExit('refuse gate compress: original gate is invalid')
         gate = (dt.datetime.now(dt.timezone.utc)
                 + dt.timedelta(minutes=args.gate_minutes)).strftime(GATE_FORMAT)
         new_doc['quota_resume_after'] = gate
+        prior = doc.get('quota_test_gate_override') or {}
+        original = (prior.get('old_gate') if prior.get('new_gate') == doc.get('quota_resume_after')
+                    and str(prior.get('source_run_id')) == str(doc.get('github_run_id'))
+                    else doc.get('quota_resume_after'))
+        new_doc['quota_test_gate_override'] = dict(
+            nonce=nonce, source_run_id=str(doc.get('github_run_id')),
+            old_gate=original, new_gate=gate)
         op = f'gate compress -> {gate} (+{args.gate_minutes}min)'
     else:
         ok, reason = can_close(doc)

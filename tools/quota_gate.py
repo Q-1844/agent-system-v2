@@ -64,6 +64,13 @@ def gate_status(doc, now=None):
     缺失/畸形按「留人工」处理，绝不盲目派发。
     """
     doc = doc or {}
+    cooldown = doc.get('resume_not_before')
+    if cooldown:
+        until = parse_gate(cooldown)
+        if until is None:
+            return False, 'invalid recovery cooldown; reconcile manually'
+        if (now or dt.datetime.now(dt.timezone.utc)) < until:
+            return False, f'recovery cooldown closed until {cooldown}'
     gate = doc.get(GATE_FIELD)
     terminal = doc.get("terminal_status")
     if terminal != QUOTA_TERMINAL and doc.get("phase") != "WAITING_QUOTA" and not gate:
