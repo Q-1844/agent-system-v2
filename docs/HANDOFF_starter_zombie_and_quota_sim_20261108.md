@@ -72,6 +72,31 @@
    网络黑窗回执丢失后服务端可能已完成——恢复路径 GET 确认 state 才是
    唯一真相，既不重 POST 也不轻信失败。
 
+## 三点五、热循环事件与修复（2026-11-08 晨，bb1702a）
+
+用户质疑「接续根本无法实现」触发全面取证，结论：**接续核心无恙，坏的是暂停分类→派发闸门的接线**。
+
+- **现象**：run 85→304（215 跳空烧，18:18→03:20 UTC），每跳 12 秒即暂停、
+  每分钟一跳、每跳上传 108MB artifact。
+- **根因**（artifact jobs.json 取证）：96s 模拟墙在 s05_c04 留下 job 级
+  daily_quota 失败（not_sent + quota_resume_after=16:10Z）。恢复跳回放该
+  失败 → autopilot wait_for_quota → JobQueue.retry 因闸门未开正确拒绝重试
+  → 但驱动 paused 分支【无条件立即派发下一跳】→ 死循环。期间其余镜头
+  14→22 正常产出（绕开毒镜头），只剩毒镜头时纯空转。
+- **修复**（bb1702a）：`job_level_quota_gate()` 扫毒任务签名；paused 分支
+  有闸门 → WAITING_QUOTA 落账（auto_resume_next_hop 见闸门自动拒派，
+  wakeup 链按日历接管）。测试：签名检测×2 + 结构锁×1（闸门检查必须
+  先于派发）。run 307 实证：落账 WAITING_QUOTA+16:10Z ✓ 新错误路径 ✓
+  wakeup 10 秒武装 ✓。
+- **止血手段**（复用）：取消 in-flight run 掐断其退出路径派发；409=已
+  收尾派了后继需连追。checkpoint=FAILED/paused 时 wakeup/patrol 自动停
+  （不在 RESUMABLE_PHASES）——唯 in-driver 派发无视 phase。
+- **今晚 00:10 北京**：wakeup 自然唤醒 → s05_c04 重试 → 收片归档（同时
+  即真实跨天接续测试）。
+- **守候盲区教训**：昨夜守候只盯预期信号（WAITING_QUOTA），没盯频率
+  异常——215 跳空转一夜无人报警。后续长守候必须带频率哨兵（如：同
+  nonce 连续 N 跳零 ACCEPTED 即报警/熔断）。
+
 ## 四、明日待办
 
 - [ ] 晨间确认：run 88 完成收片归档终态（B1 COMPLETE / registry / release）
