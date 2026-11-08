@@ -253,6 +253,7 @@ class AgnesClient:
         self.quota    = quota or QuotaLedger.get_default()
         self._client: Optional[httpx.AsyncClient] = None
         self._video_quota_resume_after: Optional[str] = None
+        self._video_submit_lock = asyncio.Lock()
         self._img_pos: Optional[str] = None      # "extra" | "top"，双位置探测结果缓存
         # 测试注入用（阶段5③-c）：传 httpx.MockTransport 拦截所有请求；默认 None 走真实网络。
         # 生产路径（api_server.startup 构造 AgnesClient）不传 transport，初始化行为不变。
@@ -343,6 +344,18 @@ class AgnesClient:
         if not ok:
             raise DailyQuotaExhausted(why, resume_after=until, quota_source=source)
 
+    async def _video_post_with_accounting(self, client, method, url, kwargs):
+        # The limiter slot is already acquired. Generation and polling remain
+        # concurrent, but an outstanding HTTP receipt cannot spend credit twice.
+        async with self._video_submit_lock:
+            self._check_video_quota_gate()
+            seconds = int(kwargs['json']['seconds'])
+            self._check_local_video_quota(seconds)
+            response = await client.request(method, url, **kwargs)
+            if 200 <= response.status_code < 300 and self.quota:
+                self.quota.consume('video_seconds', seconds)
+            return response
+
     # ---------- 带退避的请求 ----------
     async def _request(self, method: str, url: str, bucket: str,
                        max_attempts: int = 5, *, text_ep: bool = False,
@@ -359,8 +372,6 @@ class AgnesClient:
                     # Another worker may have learned the daily quota while
                     # this request was waiting for its rate-limiter slot.
                     self._check_video_quota_gate()
-                    if url == '/v1/videos' and (kw.get('json') or {}).get('seconds'):
-                        self._check_local_video_quota(int(kw['json']['seconds']))
                 try:
                     c = await (self._text_http() if text_ep else self.client())
                     if text_ep:
@@ -368,7 +379,11 @@ class AgnesClient:
                         _, key, _, _ = self._text_cfg()
                         kw["headers"] = {**(kw.get("headers") or {}),
                                          "Authorization": f"Bearer {key}"}
-                    r = await c.request(method, url, **kw)
+                    if (bucket == 'video' and method.upper() == 'POST' and
+                            url == '/v1/videos' and (kw.get('json') or {}).get('seconds')):
+                        r = await self._video_post_with_accounting(c, method, url, kw)
+                    else:
+                        r = await c.request(method, url, **kw)
                 except (httpx.TimeoutException, httpx.TransportError) as e:
                     if not retry_ambiguous:
                         raise
@@ -798,7 +813,6 @@ class AgnesClient:
             raise VideoSubmissionUncertain(
                 "video submission outcome unknown; reconcile before any new POST",
                 status=status) from exc
-        if self.quota: self.quota.consume("video_seconds", seconds_25)
         try:
             data = r.json()
         except Exception as exc:
