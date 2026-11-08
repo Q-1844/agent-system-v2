@@ -1858,6 +1858,27 @@ async def run_acceptance(nonce, out, summary):
             drained = await pause_and_drain(manager, project_name, full.run_id, wrapper,
                                             deps.job_queue, reason='paused')
             summary['pause_drain_complete'] = drained
+            # 🔴 2026-11-08 run 85→304 热循环实锤（film3m-42394136215，215 跳空烧）：
+            # job 级 daily_quota 失败回放触发 autopilot wait_for_quota（full.status=paused），
+            # 该失败记录携带 quota_resume_after 闸门（JobQueue.retry 在闸门未开时正确
+            # 拒绝重试），但本分支原先写 terminal=paused 后【无条件立即派发下一跳】——
+            # 每跳恢复→秒暂停→再派发。修复：扫 job 队列的 daily_quota 闸门；有闸门 →
+            # 按 WAITING_QUOTA 落账（auto_resume_next_hop 见闸门自动拒派并留理由，
+            # 完成事件的 wakeup 链按日历定时接管），无闸门 → 保持原有立即派发行为。
+            job_gate = job_level_quota_gate(deps.job_queue, project_name)
+            if job_gate:
+                await wrapper.persist(phase="WAITING_QUOTA",
+                                      terminal_status=quota_gate.QUOTA_TERMINAL,
+                                      error="daily video quota exhausted (job-level gate); day-gated resume",
+                                      quota_resume_after=job_gate,
+                                      drain_complete=drained)
+                summary["quota_pause"] = {
+                    "resume_after": job_gate,
+                    "accepted_attempts": sum(a["state"] == "ACCEPTED" for a in wrapper.video_attempts)}
+                summary["auto_resume"] = await auto_resume_next_hop(
+                    wrapper, nonce, driver_minutes)  # 闸门未开时仅记录派发理由
+                raise RuntimeError(
+                    f"FullProject quota-paused until {job_gate} (job-level gate): {full.error}")
             summary['auto_resume'] = await auto_resume_next_hop(wrapper, nonce, driver_minutes)
             raise RuntimeError('FullProject paused; in-flight submissions drained' if drained
                                else 'FullProject paused; drain incomplete, receipts retained')
@@ -1998,6 +2019,23 @@ async def record_technical_wait(manager, project_name, full, wrapper, queue, rea
     await wrapper.persist(phase='INTERRUPTED', terminal_status='technical_wait',
                           error=full.error, wait_reason=reason, drain_complete=drained)
     return drained
+
+
+def job_level_quota_gate(queue, project_name):
+    """🔴 2026-11-08（run 85→304 热循环）：job 级 daily_quota 失败回放是 autopilot
+    wait_for_quota 的触发源之一，其 params 携带 quota_resume_after 闸门
+    （JobQueue.retry 在闸门未开时拒绝重试——正确）。本函数把该闸门交给驱动的
+    paused 分支：有闸门 → WAITING_QUOTA 落账（wakeup 按日历接管），杜绝
+    「恢复→秒暂停→再派发」的热循环。无闸门/无此类失败 → None（原行为）。"""
+    for job in (getattr(queue, 'jobs', None) or {}).values():
+        if (getattr(job, 'project', None) != project_name
+                or getattr(job, 'state', None) != 'failed'):
+            continue
+        jparams = getattr(job, 'params', None) or {}
+        if (jparams.get('failure_category') == 'daily_quota'
+                and jparams.get('quota_resume_after')):
+            return jparams['quota_resume_after']
+    return None
 
 
 def production_wait_reason(wrapper, queue, project_name):

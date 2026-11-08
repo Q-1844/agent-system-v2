@@ -354,3 +354,63 @@ def test_stage0_rebind_pairs_run_id_with_source_sha(monkeypatch):
     assert saved["github_run_id"] == "41100000001"
     assert saved["source_sha"] == "deadbeef90"
     assert saved["phase"] == "STAGE0_BOUND"
+
+
+# ---------- 🔴 job 级额度闸门（2026-11-08 run 85→304 热循环实锤） ----------
+# 根因：96s 模拟墙在 s05_c04 留下 job 级 daily_quota 失败（provider_submit_state
+# =not_sent + quota_resume_after=次日 16:10Z）。恢复跳回放该失败 → autopilot
+# wait_for_quota（full.status=paused），JobQueue.retry 因闸门未开拒绝重试（对），
+# 但驱动的 paused 分支【无条件立即派发下一跳】→ 恢复→秒暂停→再派发 → 215 跳
+# 空烧一夜。修复：paused 分支先扫 job 闸门，有 → WAITING_QUOTA 落账（wakeup
+# 按日历接管）。红了先怀疑自己改了不该改的。
+
+class _QJob:
+    def __init__(self, project, state, **params):
+        self.project, self.state, self.params = project, state, params
+
+
+class _QQueue:
+    def __init__(self, *jobs):
+        self.jobs = {f"j{i}": j for i, j in enumerate(jobs)}
+
+
+def test_job_level_quota_gate_detected_from_failed_daily_quota_job():
+    """毒任务签名：failed + failure_category=daily_quota + quota_resume_after → 闸门。"""
+    from tools.full_project_cloud_acceptance import job_level_quota_gate
+    q = _QQueue(
+        _QJob("p_other", "failed", failure_category="daily_quota",
+              quota_resume_after="2026-11-09T16:10:00Z"),
+        _QJob("p", "done", failure_category="daily_quota",
+              quota_resume_after="2026-11-09T16:10:00Z"),
+        _QJob("p", "failed", failure_category="poll_transient",
+              quota_resume_after="2026-11-09T16:10:00Z"),
+        _QJob("p", "failed", failure_category="daily_quota",
+              quota_resume_after="2026-11-09T16:10:00Z"))
+    assert job_level_quota_gate(q, "p") == "2026-11-09T16:10:00Z"
+
+
+def test_job_level_quota_gate_none_when_no_signature():
+    """无签名（无闸门/非本项目/成功态/其他类别）→ None（保持原立即派发行为）。"""
+    from tools.full_project_cloud_acceptance import job_level_quota_gate
+    assert job_level_quota_gate(_QQueue(), "p") is None
+    q = _QQueue(_QJob("p", "failed", failure_category="daily_quota"))  # 无闸门字段
+    assert job_level_quota_gate(q, "p") is None
+    assert job_level_quota_gate(_QQueue(_QJob("p", "failed",
+                                               failure_category="daily_quota")), "other") is None
+
+
+def test_paused_branch_wires_job_gate_before_dispatch(tmp_path):
+    """结构锁：paused 分支必须先扫闸门再派发——闸门路径写 WAITING_QUOTA，
+    auto_resume_next_hop 只能在闸门落账之后调用（否则热循环回归）。"""
+    from pathlib import Path as _P
+    src = _P("tools/full_project_cloud_acceptance.py").read_text(encoding="utf-8")
+    branch = src.split("if full.status == 'paused':", 1)[1].split(
+        "wait_reason = production_wait_reason", 1)[0]
+    assert "job_level_quota_gate(" in branch
+    gate_pos = branch.index("job_level_quota_gate(")
+    first_dispatch = branch.index("auto_resume_next_hop(")
+    assert gate_pos < first_dispatch  # 闸门检查必须先于任何派发
+    assert 'phase="WAITING_QUOTA"' in branch and "quota_resume_after=job_gate" in branch
+    # 闸门路径不得无条件直派：WAITING_QUOTA 落账先于闸门路径内的派发调用
+    wait_pos = branch.index('phase="WAITING_QUOTA"')
+    assert wait_pos < branch.index("auto_resume_next_hop(", branch.index("if job_gate:"))
