@@ -38,6 +38,7 @@ jobs:
       enabled: ${{ steps.select.outputs.enabled }}
       nonce: ${{ steps.select.outputs.nonce }}
       source: ${{ steps.select.outputs.source }}
+      short_timer: ${{ steps.select.outputs.short_timer }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -62,7 +63,7 @@ jobs:
   wake:
     needs: resolve
     if: needs.resolve.outputs.enabled == 'true'
-    environment: ${{ inputs.smoke_test && 'producer-quota-wakeup-smoke' || 'producer-quota-wakeup' }}
+    environment: ${{ (inputs.smoke_test || needs.resolve.outputs.short_timer == 'true') && 'producer-quota-wakeup-smoke' || 'producer-quota-wakeup' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -89,5 +90,5 @@ jobs:
           TASK_NONCE: ${{ needs.resolve.outputs.nonce }}
           SOURCE_RUN_ID: ${{ needs.resolve.outputs.source }}
           TIMER_HOPS: ${{ inputs.timer_hops || 0 }}
-          SMOKE_TEST: ${{ inputs.smoke_test && 'true' || 'false' }}
+          SMOKE_TEST: ${{ (inputs.smoke_test || needs.resolve.outputs.short_timer == 'true') && 'true' || 'false' }}
         run: python -m tools.quota_wakeup run

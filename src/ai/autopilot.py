@@ -1056,6 +1056,7 @@ class SceneAutopilotManager:
                      or legacy_quota_rejection(job.error))):
                 wait = DailyQuotaExhausted(f"等待视频每日额度刷新: {job.error}")
                 wait.resume_after = job.params.get("quota_resume_after") or wait.resume_after
+                wait.quota_source = job.params.get('quota_wait_source', 'daily')
                 raise wait
             if job.params.get("provider_submit_state") in ("unknown", "submitting"):
                 raise RuntimeError(f"视频提交待核验: {job.error}")

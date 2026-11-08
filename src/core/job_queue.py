@@ -374,7 +374,7 @@ class JobQueue:
             # Retain the old intent and error as history, then compile a new intent.
             keys = ("submission_intent_id", "provider_submit_state", "dispatch_prompt",
                     "dispatch_input_signature", "dispatch_final_video", "dispatch_native_basis",
-                    "dispatch_provider_options", "failure_category", "quota_resume_after", "resubmit_authorization")
+                    "dispatch_provider_options", "failure_category", "quota_resume_after", "quota_wait_source", "resubmit_authorization")
             history = {k: j.params.pop(k) for k in keys if k in j.params}
             if history.get('resubmit_authorization'):
                 j.params['resubmit_authorization'] = history['resubmit_authorization']

@@ -25,9 +25,23 @@ def dispatch_token(environ=None):
     env = os.environ if environ is None else environ
     return (env.get('RESUME_DISPATCH_TOKEN') or '').strip() or (env.get('GITHUB_TOKEN') or '').strip()
 
-# 3.2 分钟片从零约 4.5h：330 分钟保险丝下单跳即可完成；上限 3 跳覆盖
-# 硬死亡重试与跨天接续等极端情况，超出说明链路有病，必须叫人。
+# Lifetime allowance supports long films; progress_backoff independently bounds
+# consecutive empty recoveries so that this allowance cannot fuel a hot loop.
 MAX_AUTO_HOPS = 50_000
+
+
+def progress_backoff(doc, *, now=None):
+    """Bound repeated empty recoveries without limiting a multi-day film's length."""
+    import datetime as dt
+    progress = dict(accepted=sum(a.get('state') == 'ACCEPTED' for a in doc.get('video_attempts', [])),
+                    completed=sum(a.get('state') == 'COMPLETED' for a in doc.get('submission_intents', [])))
+    prior = doc.get('resume_progress') or {}
+    same = all(prior.get(k) == v for k, v in progress.items())
+    progress['empty_hops'] = int(prior.get('empty_hops') or 0) + 1 if same else 0
+    if progress['empty_hops'] < 3:
+        return progress, None
+    now = now or dt.datetime.now(dt.timezone.utc)
+    return progress, (now + dt.timedelta(minutes=20)).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 # 可自动续跑的检查点相位。FAILED+terminal_status=paused 是"到点优雅暂停"
 # 的落账形态（pause_and_drain 写入）；FAILED+quota_exhausted 是"每日额度

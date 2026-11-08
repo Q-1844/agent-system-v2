@@ -186,11 +186,13 @@ class AgnesError(Exception):
 
 class DailyQuotaExhausted(AgnesError):
     """Explicit daily rejection: wait for reset; never retry inside this request."""
-    def __init__(self, msg, status=None, body=None, retry_after=None):
+    def __init__(self, msg, status=None, body=None, retry_after=None,
+                 *, resume_after=None, quota_source='daily'):
         super().__init__(msg, status, body)
         from ..core.provider_errors import quota_resume_after
         self.retry_after = retry_after
-        self.resume_after = quota_resume_after(self)
+        self.resume_after = resume_after or quota_resume_after(self)
+        self.quota_source = quota_source
         self.not_sent = status is None
 
 
@@ -330,6 +332,17 @@ class AgnesClient:
                 raise error
             self._video_quota_resume_after = None
 
+    def _check_local_video_quota(self, seconds):
+        if not self.quota:
+            return
+        if isinstance(self.quota, QuotaLedger):
+            ok, why, until, source = self.quota.check_video(seconds)
+        else:  # Compatibility with injected ledgers implementing the public can API.
+            ok, why = self.quota.can('video_seconds', seconds)
+            until, source = None, 'daily'
+        if not ok:
+            raise DailyQuotaExhausted(why, resume_after=until, quota_source=source)
+
     # ---------- 带退避的请求 ----------
     async def _request(self, method: str, url: str, bucket: str,
                        max_attempts: int = 5, *, text_ep: bool = False,
@@ -346,6 +359,8 @@ class AgnesClient:
                     # Another worker may have learned the daily quota while
                     # this request was waiting for its rate-limiter slot.
                     self._check_video_quota_gate()
+                    if url == '/v1/videos' and (kw.get('json') or {}).get('seconds'):
+                        self._check_local_video_quota(int(kw['json']['seconds']))
                 try:
                     c = await (self._text_http() if text_ep else self.client())
                     if text_ep:
@@ -772,9 +787,7 @@ class AgnesClient:
             body.update(img)
         if seed is not None:
             body["seed"] = int(seed)     # 官方参数（2026-09-28 文档核读）：seed integer
-        if self.quota:
-            ok, why = self.quota.can("video_seconds", seconds_25)
-            if not ok: raise DailyQuotaExhausted(why)
+        self._check_local_video_quota(seconds_25)
         try:
             r = await self._request("POST", "/v1/videos", "video", json=body,
                                     retry_ambiguous=False)
