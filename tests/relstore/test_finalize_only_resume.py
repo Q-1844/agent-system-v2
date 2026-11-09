@@ -163,3 +163,32 @@ def test_source_run_definitively_dead_liveness_matrix(monkeypatch):
     assert recovery._source_run_definitively_dead('42654346678') is False
     monkeypatch.setenv('RESUME_DISPATCH_TOKEN','t')
     assert recovery._source_run_definitively_dead('not-a-run-id') is False
+
+
+def test_dead_source_crash_recovery_branch_wired():
+    """结构锁：producing+实证死亡 → §四十七三级 recover（非 resume_run）。
+    顺序铁律：scene→project→full；复活失败 fail-loud。"""
+    src = Path("tools/full_project_cloud_acceptance.py").read_text(encoding="utf-8")
+    anchor = src.index("_resume_source_run_definitively_dead()")
+    branch = src[anchor - 600:anchor + 1400]
+    assert "elif restored:" in branch
+    assert "existing_full.status == 'producing'" in branch
+    i_scene = branch.index("get_autopilot_manager().recover_runs()")
+    i_proj = branch.index("get_project_autopilot_manager().recover_runs()")
+    i_full = branch.index("manager.recover_runs()")
+    assert i_scene < i_proj < i_full  # §四十七 三级依序
+    assert "did not revive the FullProjectRun" in branch  # fail-loud
+    assert "await manager.resume_run" in branch  # fail-closed 回落原路径
+
+
+def test_resume_source_dead_helper_delegates_fail_closed(monkeypatch):
+    """驱动侧实证助手委托 _source_run_definitively_dead（RESUME_RUN_ID 维度）。"""
+    from tools import full_project_resume as fr
+    from tools.full_project_cloud_acceptance import _resume_source_run_definitively_dead
+    monkeypatch.setenv("RESUME_RUN_ID", "42654346678")
+    monkeypatch.setattr(fr, "_source_run_definitively_dead", lambda rid: rid == "42654346678")
+    assert _resume_source_run_definitively_dead() is True
+    monkeypatch.setattr(fr, "_source_run_definitively_dead", lambda rid: False)
+    assert _resume_source_run_definitively_dead() is False
+    monkeypatch.delenv("RESUME_RUN_ID", raising=False)  # 无源 id → fail-closed
+    assert _resume_source_run_definitively_dead() is False

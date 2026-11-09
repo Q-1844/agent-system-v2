@@ -1794,7 +1794,27 @@ async def run_acceptance(nonce, out, summary):
         else:
             full = await manager.resume_run(project_name, selected_full_run_id)
     elif restored:
-        full = await manager.resume_run(project_name, selected_full_run_id)
+        if (existing_full is not None and existing_full.status == 'producing'
+                and _resume_source_run_definitively_dead()):
+            # 🔴 2026-11-10 real1000s run 315 实锤：GitHub 500 硬死亡于 producing
+            # 中段（账面干净零在途）。resume_run 三层闸均按「控制器可能还活着」
+            # 拒绝 producing——源 Actions run 已终态时控制器必死，此时正确复活
+            # 路径不是 resume 而是 §四十七三级崩溃恢复（scene→project→full
+            # 依序 recover_runs，为 active 状态重新调度 loop；pause_requested→
+            # PAUSED 的既有语义不受影响）。fail-closed：查不到死亡实证走原
+            # resume_run（保持拒绝行为）。
+            from src.ai.autopilot import get_autopilot_manager
+            from src.ai.project_autopilot import get_project_autopilot_manager
+            await get_autopilot_manager().recover_runs()
+            await get_project_autopilot_manager().recover_runs()
+            await manager.recover_runs()
+            full = manager.get_run(project_name, selected_full_run_id)
+            if full is None:
+                raise RuntimeError(
+                    'dead-source crash recovery did not revive the FullProjectRun')
+            summary['dead_source_crash_recovery'] = True
+        else:
+            full = await manager.resume_run(project_name, selected_full_run_id)
     else:
         full = await manager.start_run(project_name)
     summary.update(project_name=project_name, full_run_id=full.run_id,
@@ -2051,6 +2071,15 @@ async def record_technical_wait(manager, project_name, full, wrapper, queue, rea
     await wrapper.persist(phase='INTERRUPTED', terminal_status='technical_wait',
                           error=full.error, wait_reason=reason, drain_complete=drained)
     return drained
+
+
+def _resume_source_run_definitively_dead():
+    """🔴 2026-11-10 real1000s run 315 实锤配套：驱动侧实证恢复源 run
+    （RESUME_RUN_ID）已在 Actions 上终态——producing 快照的控制器必死，
+    可安全按崩溃恢复处理（§四十七三级 recover）。fail-closed 委托
+    tools.full_project_resume._source_run_definitively_dead。"""
+    from tools.full_project_resume import _source_run_definitively_dead
+    return _source_run_definitively_dead(os.environ.get("RESUME_RUN_ID"))
 
 
 def job_level_quota_gate(queue, project_name):
