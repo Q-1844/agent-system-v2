@@ -249,6 +249,26 @@ def reconcile_accepted_work(doc, jobs, attempts):
     return recovered
 
 
+def _source_run_definitively_dead(run_id):
+    """🔴 2026-11-10 real1000s run 315（42654346678）实锤：GitHub 500 硬死亡于
+    producing 中段、账面干净（零在途提交）——恢复闸把 'producing' 当「控制器
+    可能还活着」拒绝，片子死循环在恢复门口（316/317 两跳均在 39 秒被拒）。
+    实证源 run 已在 Actions 上 completed（任何 conclusion）→ 控制器必死 →
+    producing 放行。fail-closed：无 token / 查询失败 / 状态非 completed
+    一律返回 False（维持原拒绝行为，绝不凭猜测放行）。"""
+    import os
+    token = (os.environ.get('RESUME_DISPATCH_TOKEN')
+             or os.environ.get('GITHUB_TOKEN') or '').strip()
+    run_id = str(run_id or '').strip()
+    if not token or not run_id.isdigit():
+        return False
+    try:
+        from tools.resume_dispatch import run_liveness
+        return run_liveness(token, run_id) == 'completed'
+    except Exception:
+        return False
+
+
 def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, finalize_only=False, project_name=None,
                      confirm_uncertain_submissions=False, authorization_actor=None, authorization_run_id=None):
     """Validate identity/paid receipts before copying any state into the runner."""
@@ -340,7 +360,12 @@ def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, final
         allowed_full_states.add('completed')
     if (full.get('run_id') != checkpoint['full_run_id'] or full.get('project_name') != pname
             or full.get('status') not in allowed_full_states):
-        raise ValueError('native FullRun is not safely resumable')
+        # 🔴 2026-11-10 real1000s run 315 实锤：'producing' 拒绝的本意是防「控制器
+        # 可能还活着」（并发保护），但 GitHub 500 硬死亡后源 run 已在 Actions 上
+        # 终态，控制器不可能活着。实证死亡 → 放行（详见 _source_run_definitively_dead）。
+        if not (full.get('status') == 'producing'
+                and _source_run_definitively_dead(provenance['run_id'])):
+            raise ValueError('native FullRun is not safely resumable')
     native_paths = [*project.glob('output/full_runs/*/run.json'),
                     *project.glob('output/production_runs/*/run.json'),
                     *project.glob('output/ai/autopilot_runs/*.json')]
@@ -350,7 +375,11 @@ def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, final
         # 在途工作由 reconcile_accepted_work + 恢复侧 paid-retry 纪律处理，
         # 安全性与 'failed' 同级；'producing' 才是可能的活态。
         if not finalize_only and not (recovered_jobs or submission_jobs) and native.get('status') not in ('failed','paused','pausing','completed','blocked','cancelled'):
-            raise ValueError('active native controller must be reconciled before startup')
+            # 🔴 同 run 315 豁免（2026-11-10）：源 run 已在 Actions 上终态 =
+            # 快照谱系里不可能有活控制器，残留 active 状态是硬死亡的现场快照，
+            # 恢复即接管。fail-closed：查不到实证一律维持拒绝。
+            if not _source_run_definitively_dead(provenance['run_id']):
+                raise ValueError('active native controller must be reconciled before startup')
     versions = [v for sc in doc['scenes'] for shot in sc['shots'] for v in shot.get('video_versions',[])]
     verified = []
     for attempt in attempts:

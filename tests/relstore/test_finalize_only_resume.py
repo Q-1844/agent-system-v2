@@ -111,3 +111,55 @@ def test_clean_pause_drain_is_resumable_without_finalize(tmp_path):
     assert result['previous_video_seconds']==10
     target=tmp_path/'runner/projects/cloud3min_unit/output/full_runs/full/run.json'
     assert json.loads(target.read_text())['status']=='pausing'
+
+
+# ---------- 🔴 硬基础设施死亡豁免（2026-11-10 real1000s run 315 实锤） ----------
+# GitHub 500 硬死亡于 producing 中段、账面干净（零在途提交）——原闸防
+# 「控制器可能还活着」拒绝 producing，片子死循环在恢复门口（316/317 两跳
+# 39 秒被拒）。源 run 已 completed（Actions 终态）= 控制器必死 → 放行。
+# 红了先怀疑自己改了不该改的。
+
+def _producing_hard_death_snapshot(tmp_path):
+    stage,cp,provenance=snapshot(tmp_path)
+    p=stage/'projects/cloud3min_unit'
+    f=p/'output/project.json';d=json.loads(f.read_text())
+    d['scenes'][0]['shots'][0].update(shot_id='s1',final_video='v1',
+        video={'status':'done','video_id':'paid1'})
+    f.write_text(json.dumps(d))
+    full=p/'output/full_runs/full/run.json';d=json.loads(full.read_text())
+    d.update(status='producing')  # 硬死亡：无 pause_and_drain，无 pause_requested
+    full.write_text(json.dumps(d))
+    (stage/'cache/jobs.json').write_text('{}')  # 账面干净：零在途提交
+    return stage,cp,provenance
+
+
+def test_hard_infra_death_producing_resumable_when_source_completed(tmp_path,monkeypatch):
+    stage,cp,provenance=_producing_hard_death_snapshot(tmp_path)
+    monkeypatch.setattr(recovery,'_source_run_definitively_dead',lambda rid: True)
+    result=recovery.restore_snapshot(stage,tmp_path/'runner','unit',cp,provenance)
+    assert result['previous_video_seconds']==10
+
+
+def test_hard_infra_death_refused_when_source_alive_or_unknown(tmp_path,monkeypatch):
+    """fail-closed：源 run 存活（in_progress）或查询失败/无 token 一律拒绝。"""
+    stage,cp,provenance=_producing_hard_death_snapshot(tmp_path)
+    monkeypatch.setattr(recovery,'_source_run_definitively_dead',lambda rid: False)
+    with pytest.raises(ValueError,match='not safely resumable'):
+        recovery.restore_snapshot(stage,tmp_path/'runner','unit',cp,provenance)
+    assert not (tmp_path/'runner/projects/cloud3min_unit').exists()
+
+
+def test_source_run_definitively_dead_liveness_matrix(monkeypatch):
+    from tools import resume_dispatch as rd
+    monkeypatch.setenv('RESUME_DISPATCH_TOKEN','t')
+    monkeypatch.setattr(rd,'run_liveness',lambda t,r:'completed')
+    assert recovery._source_run_definitively_dead('42654346678') is True
+    monkeypatch.setattr(rd,'run_liveness',lambda t,r:'in_progress')
+    assert recovery._source_run_definitively_dead('42654346678') is False
+    monkeypatch.setattr(rd,'run_liveness',lambda t,r:None)  # 查询失败
+    assert recovery._source_run_definitively_dead('42654346678') is False
+    monkeypatch.delenv('RESUME_DISPATCH_TOKEN',raising=False)  # 无 token
+    monkeypatch.delenv('GITHUB_TOKEN',raising=False)
+    assert recovery._source_run_definitively_dead('42654346678') is False
+    monkeypatch.setenv('RESUME_DISPATCH_TOKEN','t')
+    assert recovery._source_run_definitively_dead('not-a-run-id') is False
