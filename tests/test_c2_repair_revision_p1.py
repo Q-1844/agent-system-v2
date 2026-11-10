@@ -469,6 +469,52 @@ def test_real_snapshot_restore_replays_cas_revision_without_losing_paid_videos(t
             assert Path(v.local).read_bytes() == ('ORIGINAL:' + v.video_id).encode('ascii')
 
 
+def test_hard_kill_snapshot_without_summary_restores_from_checkpoint(tmp_path):
+    """取消/SIGKILL 硬终止死亡的源 run 永远不落盘 summary.json（它只在异常
+    退出路径写出）；restore 必须以 checkpoint 为权威恢复而非 FileNotFoundError
+    （killrecovery-20261111a run 321/323 实证，run 84/86 同族）。"""
+    from tools.full_project_resume import restore_snapshot
+    pname = 'cloud3min_unit'
+    stage = tmp_path / 'snapshot'  # 硬终止现场：e2e_run/ 只有 progress.json，无 summary.json
+    original = stage / 'projects' / pname
+    project = fixture_project(original)
+    store = ProjectStore(original)
+    for sh in project.all_shots():
+        for v in sh.video_versions:
+            rel = f'output/videos/{v.video_id}.mp4'
+            path = original / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(('ORIGINAL:' + v.video_id).encode('ascii'))
+            v.local = 'projects/' + pname + '/' + rel  # 真实快照为相对路径（run 321 实证）
+    store.save(project)
+    native_path = original / 'output/full_runs/frun_original/run.json'
+    native_path.parent.mkdir(parents=True, exist_ok=True)
+    native_path.write_text(json.dumps({'run_id': 'frun_original', 'project_name': pname,
+                                       'status': 'failed'}), encoding='utf8')
+    # 硬终止现场：e2e_run/ 只有 progress.json，无 summary.json
+    progress_path = stage / 'e2e_run/unit/progress.json'
+    progress_path.parent.mkdir(parents=True, exist_ok=True)
+    progress_path.write_text('{}', encoding='utf8')
+    cache = stage / 'cache'
+    cache.mkdir()
+    (cache / 'jobs.json').write_text('{}', encoding='utf8')
+    (cache / 'quota.json').write_text('{}', encoding='utf8')
+    other = tmp_path / 'editable_source'
+    fixture_project(other)
+    checkpoint = CAS()
+    commit(checkpoint, other)
+    cp = {**checkpoint.doc, 'github_run_id': '777', 'source_sha': 'original_sha',
+          'phase': 'FAILED', 'full_run_id': 'frun_original',
+          'film_target_seconds': 'auto', 'authorized_video_seconds': 240,
+          'execution_video_authorization': 1_000_000_000,
+          'video_attempts': [
+              {'state': 'ACCEPTED', 'video_id': f'vid_0{i}', 'seconds': 6}
+              for i in range(1, 4)]}
+    runner = tmp_path / 'runner'
+    result = restore_snapshot(stage, runner, 'unit', cp, {'run_id': '777', 'source_sha': 'original_sha'})
+    assert result['reused_completed_videos'] and len(result['reused_completed_videos']) == 3
+
+
 def test_revised_dialogue_invalidates_only_affected_audio(tmp_path):
     from src.core.models import Character, AudioAsset
     p = fixture_project(tmp_path)

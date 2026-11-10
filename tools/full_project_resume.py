@@ -287,13 +287,15 @@ def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, final
     gate_open, reason = gate_status(checkpoint)
     if not gate_open:
         raise ValueError(reason)
-    summary = json.loads((staging/f'e2e_run/{nonce}/summary.json').read_text())
-    # 早期失败的 run（如 BLOCKED_PREFLIGHT）在 finally 写 summary 时可能尚未
-    # 建立生产上下文，source_sha 等字段缺失；此时以 checkpoint 为权威（它已
-    # 通过上一组校验），只拒绝"写了但写错"的情况。
-    if (summary.get('nonce') != nonce or str(summary.get('github_run_id')) != provenance['run_id']
-            or (summary.get('source_sha') is not None
-                and summary.get('source_sha') != provenance['source_sha'])):
+    summary_path = staging/f'e2e_run/{nonce}/summary.json'
+    # 硬终止死亡（Actions 取消/SIGKILL：killrecovery-20261111a run 321 实证）的
+    # 源 run 永远不会落盘 summary.json——它只在驱动的异常退出路径写出，取消信
+    # 号直接终止进程。沿用下方既有原则：身份字段与上方 checkpoint 校验冗余，
+    # 缺失时以 checkpoint 为权威，只拒绝"写了但写错"的情况。
+    summary = json.loads(summary_path.read_text()) if summary_path.exists() else {}
+    if summary and (summary.get('nonce') != nonce or str(summary.get('github_run_id')) != provenance['run_id']
+                    or (summary.get('source_sha') is not None
+                        and summary.get('source_sha') != provenance['source_sha'])):
         raise ValueError('snapshot summary does not match the source run')
     pname = _recovery_project_name(nonce, project_name)
     if project_name and summary.get('project_name') not in (None, project_name):
