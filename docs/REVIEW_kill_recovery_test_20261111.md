@@ -61,9 +61,35 @@ SIGKILL 直接终止进程，异常路径不执行 → 快照永远没有 summar
 - wakeup 对 cancelled 源自动接力（run 322）为**自洽设计**：cancel 只杀进程不关任务，
   任务由检查点状态驱动；要真停任务需用 close 工具关闭
 
+## 发现三：硬终止僵尸 job 撞排队闸（run 324/325/326 三连拒，本修复）
+
+summary 修复（2766a8c）过后，恢复链推进到最终闸「snapshot contains unrelated
+or unresolved queued work」再次死锁。三跳实证：run 324（wakeup 473 自动接力）、
+run 325（patrol 91 死链兜底）、run 326（手动）——**恢复自动化三层全部到场、
+全部撞同一堵墙**。
+
+### 根因
+取消瞬间的 jobs.json 含已认领未提交的僵尸 job（run 321 的 s02_c01：
+state=running，params.video_pre_submit_failure=last_frame_url——预提交阶段就
+失败、卡在重试循环中被取消，从未到达供应商）。restore 的最终闸只放行
+done/failed/对账恢复集，僵尸 running → 拒绝。
+
+### 修复（4dc3320）
+无 provider_task_id/video_id 且不在对账恢复集的 job = **可证实从未发出付费
+请求**（意图先于请求落盘的契约 + C2 纪律「确知未提交 → 允许且仅允许一次提交」
+的快照级应用）→ 标记 failed 弃置：惰性（队列不再执行）、留痕
+（hard_kill_abandoned=true）、不与恢复侧 FullRun 的新 job 双重提交，镜头由
+恢复侧恰好一次重驱动。**带供应商凭证者维持 fail-loud 拒绝不误伤**（C3b
+UNKNOWN 家族继续走对账路径）。
+
+### 设计确认（为什么僵尸不能以 queued 入新账本）
+恢复侧驱动的生产循环会为未完成镜头创建新 job；若僵尸以可执行状态入账本，
+新旧两个 job 并发 = 同镜头双重提交风险——最终闸守的就是这个，修的是「可证
+安全者放行」而非「放松闸门」。
+
 ## 后续
 
-- [ ] CI 绿后派发 run 324（resume_run_id=42858356342）走完整恢复链：过闸 →
+- [ ] CI 绿后派发恢复跳（resume_run_id=42858356342）走完整恢复链：过闸 →
       三级崩溃恢复 → 从第 2 镜续产 → 收片归档
 - [x] 取消者身份已查明：本 agent 误诊取消（见上，教训入档）
 - [ ] Round 2（提交中死亡形态）视 Round 1 结果决定
