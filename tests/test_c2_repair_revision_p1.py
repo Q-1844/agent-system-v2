@@ -497,7 +497,15 @@ def test_hard_kill_snapshot_without_summary_restores_from_checkpoint(tmp_path):
     progress_path.write_text('{}', encoding='utf8')
     cache = stage / 'cache'
     cache.mkdir()
-    (cache / 'jobs.json').write_text('{}', encoding='utf8')
+    jobs_doc = {
+        'job_done_1': {'job_id': 'job_done_1', 'project': pname, 'state': 'done',
+                       'kind': 'video', 'shot_id': 's01_c01', 'params': {}},
+        # 硬取消现场僵尸：已认领、无供应商凭证（可证实从未提交，run 321 s02_c01 同形态）
+        'job_zombie': {'job_id': 'job_zombie', 'project': pname, 'state': 'running',
+                       'kind': 'video', 'shot_id': 's01_c02',
+                       'params': {'video_pre_submit_failure': 'last_frame_url'}},
+    }
+    (cache / 'jobs.json').write_text(json.dumps(jobs_doc), encoding='utf8')
     (cache / 'quota.json').write_text('{}', encoding='utf8')
     other = tmp_path / 'editable_source'
     fixture_project(other)
@@ -513,6 +521,10 @@ def test_hard_kill_snapshot_without_summary_restores_from_checkpoint(tmp_path):
     runner = tmp_path / 'runner'
     result = restore_snapshot(stage, runner, 'unit', cp, {'run_id': '777', 'source_sha': 'original_sha'})
     assert result['reused_completed_videos'] and len(result['reused_completed_videos']) == 3
+    restored_jobs = json.loads((runner / 'cache/jobs.json').read_text(encoding='utf8'))
+    assert restored_jobs['job_zombie']['state'] == 'failed'
+    assert restored_jobs['job_zombie']['params']['hard_kill_abandoned'] is True
+    assert restored_jobs['job_zombie']['error'].startswith('abandoned at hard kill')
 
 
 def test_revised_dialogue_invalidates_only_affected_audio(tmp_path):

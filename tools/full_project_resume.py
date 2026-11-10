@@ -436,6 +436,25 @@ def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, final
         for path, native in rewritten.items():
             if path in native_paths and native.get('status') in ('running', 'producing', 'pending', 'pausing'):
                 native.update(status='paused', pause_requested=False, cancel_requested=False)
+    # 硬终止（Actions 取消/SIGKILL）现场可能留下已认领/进行中的僵尸 job。凡无
+    # 供应商任务凭证（provider_task_id / video_id）且不在对账恢复集者，可证实
+    # 从未发出付费请求（意图先于请求落盘的契约 + C2 纪律：确知未提交）→ 标记
+    # failed 弃置：惰性（队列不再执行）、留痕（审计可查）、不与恢复侧 FullRun
+    # 的新 job 双重提交。由恢复侧 FullRun 恰好一次地重驱动该镜头。
+    # 实证：killrecovery-20261111a run 321 被取消时 s02_c01 的 running 僵尸
+    # （video_pre_submit_failure=last_frame_url，从未到达供应商）导致 run
+    # 324/325/326 恢复三连拒。
+    for job in jobs.values():
+        params = job.get('params') or {}
+        if (job.get('project') == pname
+                and job.get('state') not in ('done', 'failed')
+                and job.get('job_id') not in recovered_jobs
+                and not params.get('provider_task_id')
+                and not params.get('video_id')):
+            job.update(state='failed',
+                       error='abandoned at hard kill: provably never submitted '
+                             '(no provider evidence); re-driven exactly once by recovery',
+                       params={**params, 'hard_kill_abandoned': True})
     # Only proven accepted tasks may survive as queued work in a restored snapshot.
     reconciled_jobs = reconcile_finalization(project, rewritten, jobs, [a['video_id'] for a in attempts if a.get('provider_outcome') != 'FAILED'], provenance) if finalize_only else []
     if any(j['project']!=pname or (j['state'] not in ('done','failed') and j.get('job_id') not in recovered_jobs) for j in jobs.values()):
