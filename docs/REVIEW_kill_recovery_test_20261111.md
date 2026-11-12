@@ -96,5 +96,11 @@ UNKNOWN 家族继续走对账路径）。
       期间 wakeup(324) 与 patrol(325) 自动接力到场（均撞僵尸闸墙，实证恢复
       自动化三层齐备）。一次跳收片，无额外 hop。
 - [x] 取消者身份已查明：本 agent 误诊取消（见上，教训入档）
-- [ ] Round 2（提交中死亡/脏账面形态）视用户决定——UNKNOWN 对账路径已有
-      历史活证（run 315→318 的 s03_c01 族），边际价值低于 Round 1
+- [x] Round 2（提交中死亡/脏账面形态）**决议免做（2026-11-12 用户拍板：
+      有历史证据就不做）**——daycarry12m-20261101 检查点实证全链活体：hop4 死于
+      提交中（SUBMITTING 无收据）→ fail-loud 正确触发 → UNKNOWN 对账修复后
+      以 confirm_uncertain_submissions 授权恢复（1 条 reconciliation + 1 个
+      RESUBMIT_AUTHORIZED 留痕）→ 收片归档。real1000s 125 镜全干净（recon=0）
+      恰好反证该形态的稀缺性，无需再打。
+- [x] 后续稳定性测试：real600s-20261112a（恒星科普 600s+/auto/新类型）已派发
+      （run 328，2026-11-12 22:01 北京）——连续多天全片无问题后进入审片收紧阶段
