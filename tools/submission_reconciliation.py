@@ -5,7 +5,8 @@ import copy
 import datetime as dt
 
 from src.core.submission_recovery import (
-    AUTHORIZED, make_authorization, make_policy, policy_valid, validate_attempts, validate_document_policy,
+    AUTHORIZED, SUPERSEDED, make_authorization, make_policy, policy_valid,
+    validate_attempts, validate_document_policy,
 )
 
 RECOVERY_FIELDS = ('video_attempts', 'submission_intents', 'submission_recovery_policy',
@@ -39,7 +40,7 @@ def reconcile_snapshot_submissions(checkpoint, project, jobs, nonce, provenance,
     kept = []
     for attempt in attempts:
         state = attempt.get('state')
-        if state in ('ACCEPTED', AUTHORIZED):
+        if state in ('ACCEPTED', AUTHORIZED, SUPERSEDED):
             kept.append(attempt)
             continue
         if state not in ('SUBMITTING', 'UNKNOWN') or attempt.get('video_id') or not attempt.get('attempt_id'):
@@ -81,6 +82,28 @@ def reconcile_snapshot_submissions(checkpoint, project, jobs, nonce, provenance,
             event.update(state=terminal, proof='native_explicit_non_acceptance')
             job.update(state='failed', finished_at=job.get('finished_at'))
         else:
+            # 🔴 2026-11-14 anime750s run 329 实锤（s02_c11 ordinal 21）：UNKNOWN
+            # 悬案的同镜已有【带收据的 ACCEPTED 尝试】（ordinal 20 task_hpGEVkjZ）。
+            # 该形态不需要任何重提交决策——镜头的需求可由同镜收据满足（恢复期
+            # reconcile_accepted_work 收养），悬案本身拒绝重发即安全：保留意图
+            # 与可能成本记录并作废。旧版一律要求 confirm_uncertain_submissions，
+            # 导致无人值守 wakeup 链三跳全拦（run 330/331/332），片子卡死 19
+            # 小时等人工。拒绝花钱永远是安全默认，不属于操作员决策面。
+            sibling = next((a for a in attempts if a is not attempt
+                            and a.get('state') == 'ACCEPTED' and a.get('video_id')
+                            and a.get('logical_shot_id') == attempt.get('logical_shot_id')), None)
+            if sibling:
+                attempt.update(state=SUPERSEDED, provider_outcome='UNKNOWN',
+                               possible_charge_seconds=attempt['seconds'],
+                               superseded_by_attempt_id=sibling.get('attempt_id'))
+                intent.update(state=SUPERSEDED, provider_outcome='UNKNOWN',
+                              possible_charge_seconds=attempt['seconds'],
+                              superseded_by_attempt_id=sibling.get('attempt_id'))
+                event.update(state=SUPERSEDED,
+                             proof='sibling_accepted_receipt_no_resubmission')
+                kept.append(attempt)
+                events.append(event)
+                continue
             if policy is None:
                 raise ValueError('unconfirmed/duplicate paid submission requires reconciliation; '
                                  'explicit confirm_uncertain_submissions is required')

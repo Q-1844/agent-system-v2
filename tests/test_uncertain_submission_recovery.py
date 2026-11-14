@@ -384,3 +384,134 @@ def test_monitor_distinguishes_authorized_possible_cost_from_confirmed_receipts(
     cp.pop('submission_recovery_policy')
     with pytest.raises(ValueError, match='policy'):
         observed_state(config, run, cp, NOW)
+
+
+# ==================== 🔴 2026-11-14 anime750s run 329 实锤（s02_c11 双付费悬案）====================
+
+def _same_input_digest(prompt, *, duration_s=8, **kwargs):
+    # 与执行器 create_video 的 digest 构造逐字段一致：raw kwargs 里含 duration_s
+    full_kwargs = {'duration_s': duration_s, **kwargs}
+    return hashlib.sha256(json.dumps({
+        'native_signature': 'native-signature', 'previous_final_video': None,
+        'prompt_sha256': hashlib.sha256(prompt.encode()).hexdigest(),
+        'seconds': duration_s, 'kwargs': full_kwargs},
+        sort_keys=True, ensure_ascii=False, default=str).encode('utf-8')).hexdigest()
+
+
+def _with_sibling_accepted(stopped):
+    """同镜 s01_c02：一笔带收据的 ACCEPTED（轮询死于瞬态、视频未收养）+ 原悬案。
+    真实形态（run 329 s02_c11）：兄弟收据有对应的原生 video job（provider_task_id
+    指向供应商任务），恢复期 reconcile_accepted_work 据此收养。"""
+    from dataclasses import asdict as _asdict
+    stage, cp, provenance, jobs, store = stopped
+    cp['video_attempts'].append(dict(state='ACCEPTED', seconds=8, intent_id='sib-intent',
+        attempt_id='sib-attempt', logical_shot_id='s01_c02', video_id='paid-orphan',
+        immutable_input_digest=_same_input_digest('replacement'), prompt_sha256='f'*64, ordinal=3,
+        started_at='2026-11-13T06:04:16Z'))
+    cp['submission_intents'] = copy.deepcopy(cp['video_attempts'])
+    proj = store.load()
+    sib_job = Job('sib', cp['project_name'], 'video', 's01_c02', state='failed', attempts=1,
+                  params={'submission_intent_id': 'sib-attempt', 'provider_submit_state': 'accepted',
+                          'provider_task_id': 'paid-orphan', 'handler_started': True,
+                          'origin_run_id': 'scene',
+                          'autopilot_stage_key': 'autopilot:scene:s01_c02:video:1',
+                          'dispatch_input_signature': video_input_signature(proj, proj.get_shot('s01_c02')),
+                          'dispatch_final_video': None})
+    jobs['sib'] = _asdict(sib_job)
+    (stage/'cache/jobs.json').write_text(json.dumps(jobs))
+    return stage, cp, provenance, jobs, store
+
+
+def test_unknown_with_sibling_accepted_receipt_auto_supersedes_without_operator(stopped, tmp_path):
+    """UNKNOWN 悬案的同镜已有带收据 ACCEPTED → 恢复自动作废，无需操作员授权
+    （拒绝花钱是安全默认；无人值守 wakeup 链不再整夜等人工——run 330/331/332
+    三跳全拦、卡死 19 小时的形态终结）。"""
+    stage, cp, provenance, jobs, store = _with_sibling_accepted(stopped)
+    cp['video_attempts'][-2]['state'] = 'UNKNOWN'  # 原悬案设为 UNKNOWN 形态
+    cp['submission_intents'] = copy.deepcopy(cp['video_attempts'])
+    result = restore_snapshot(stage, tmp_path/'runner', 'unit', cp, provenance,
+        confirm_uncertain_submissions=False, authorization_actor='operator', authorization_run_id='200')
+    effective = recovered_checkpoint(cp, result)
+    states = [a['state'] for a in effective['video_attempts']]
+    assert states == ['ACCEPTED', 'SUPERSEDED', 'ACCEPTED'], states
+    superseded = effective['video_attempts'][1]
+    assert superseded['superseded_by_attempt_id'] == 'sib-attempt'
+    assert superseded['possible_charge_seconds'] == 8 and not superseded.get('video_id')
+    assert effective['submission_intents'][1]['state'] == 'SUPERSEDED'
+    # 未授权任何重发 → 已授权风险敞口为 0
+    assert result['possible_unconfirmed_seconds'] == 0
+    # 账本可直接过闸，且幂等（再验一次不炸）
+    for _ in range(2):
+        confirmed = validate_attempts(effective['video_attempts'], nonce='unit', request_sha256='d'*64)
+        assert [a['video_id'] for a in confirmed] == ['paid1', 'paid-orphan']
+
+
+def test_superseded_without_confirmed_sibling_is_reconciliation_debt():
+    """SUPERSEDED 指向的兄弟收据不存在/不同镜 → 本身就是对账债，拒绝过闸。"""
+    dangling = dict(state='SUPERSEDED', seconds=8, intent_id='i', attempt_id='a',
+                    logical_shot_id='s01_c02', superseded_by_attempt_id='ghost',
+                    possible_charge_seconds=8, ordinal=2, started_at='2026-11-14T01:00:00Z')
+    with pytest.raises(ValueError, match='lacks a confirmed sibling receipt'):
+        validate_attempts([dangling], nonce='unit', request_sha256='d'*64)
+    wrong_shot = dict(dangling, superseded_by_attempt_id='sib-attempt')
+    sibling_other_shot = dict(state='ACCEPTED', seconds=8, intent_id='i2', attempt_id='sib-attempt',
+                              logical_shot_id='s09_c99', video_id='paid-orphan', ordinal=1,
+                              started_at='2026-11-14T01:00:00Z')
+    with pytest.raises(ValueError, match='lacks a confirmed sibling receipt'):
+        validate_attempts([sibling_other_shot, wrong_shot], nonce='unit', request_sha256='d'*64)
+
+
+def test_accepted_but_unclaimed_same_input_blocks_new_paid_post(stopped, tmp_path):
+    """生产期活闸：同镜同输入指纹、已受理、带收据、视频未判死 → 新 POST fail-loud
+    （run 329 的 job:2 重复付费 POST 终结；收养走恢复期 reconcile_accepted_work）。"""
+    from src.api.agnes_client import VideoSubmissionNotSent
+    from src.core.media_submission_context import active_video_submission
+    stage, cp, *_ = _with_sibling_accepted(stopped)
+    effective = copy.deepcopy(cp)
+    # 只保留两笔 ACCEPTED（去掉原 SUBMITTING 悬案，聚焦新闸）
+    effective['video_attempts'] = [a for a in effective['video_attempts'] if a['state'] == 'ACCEPTED']
+    effective['submission_intents'] = copy.deepcopy(effective['video_attempts'])
+    class Provider:
+        async def create_video(self, *a, **k):
+            raise AssertionError('duplicate paid POST must be blocked before HTTP')
+    pdir = tmp_path/'runner/projects/cloud3min_unit'
+    wrapper = BoundedRealClient(Provider(), Journal(), pdir, tmp_path/'evidence'); wrapper.plan = {}
+    wrapper.restore_usage(effective)
+    async def blocked():
+        token = active_video_submission.set(dict(project=pdir.name, logical_shot_id='s01_c02',
+            attempt_id='retry-attempt', input_signature='native-signature', previous_final_video=None))
+        try:
+            with pytest.raises(VideoSubmissionNotSent, match='accepted-but-unclaimed'):
+                await wrapper.create_video('replacement', duration_s=8)
+        finally:
+            active_video_submission.reset(token)
+    asyncio.run(blocked())
+
+
+def test_live_gate_allows_different_input_and_provably_dead_videos(stopped, tmp_path):
+    """不同输入指纹（修订重拍）与供应商判死（intent FAILED）不受活闸影响。"""
+    from src.core.media_submission_context import active_video_submission
+    stage, cp, *_ = _with_sibling_accepted(stopped)
+    effective = copy.deepcopy(cp)
+    effective['video_attempts'] = [a for a in effective['video_attempts'] if a['state'] == 'ACCEPTED']
+    effective['submission_intents'] = copy.deepcopy(effective['video_attempts'])
+    class Provider:
+        async def create_video(self, *a, **k):
+            return {'video_id': 'legit-new-paid'}
+    pdir = tmp_path/'runner/projects/cloud3min_unit'
+
+    async def submit(input_signature):
+        wrapper = BoundedRealClient(Provider(), Journal(), pdir, tmp_path/'evidence'); wrapper.plan = {}
+        wrapper.restore_usage(effective)
+        token = active_video_submission.set(dict(project=pdir.name, logical_shot_id='s01_c02',
+            attempt_id='retry-attempt', input_signature=input_signature, previous_final_video=None))
+        try:
+            return await wrapper.create_video('replacement', duration_s=8)
+        finally:
+            active_video_submission.reset(token)
+
+    # 输入指纹不同 → 放行
+    assert asyncio.run(submit('revised-signature'))['video_id'] == 'legit-new-paid'
+    # 兄弟视频已被供应商判死（intent FAILED）→ 放行重拍
+    effective['submission_intents'][1]['state'] = 'FAILED'
+    assert asyncio.run(submit('native-signature'))['video_id'] == 'legit-new-paid'

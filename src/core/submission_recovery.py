@@ -84,6 +84,23 @@ def authorized_job_retry(params):
                                     attempt_id=params.get('submission_intent_id')))
 
 
+SUPERSEDED = 'SUPERSEDED'
+
+
+def superseded_attempt(attempt):
+    """A closed UNKNOWN whose shot is already covered by a confirmed receipt.
+
+    2026-11-14 anime750s run 329 实锤（s02_c11）：UNKNOWN 悬案的同镜已有带收据的
+    ACCEPTED 尝试。该形态不需要任何重提交决策——不授权、不重发，只保留意图与
+    可能成本记录（possible_charge_seconds）并作废：拒绝花钱永远是安全默认，
+    不属于需要操作员拍板的双扣费决策面。
+    """
+    return (attempt.get('state') == SUPERSEDED
+            and isinstance(attempt.get('superseded_by_attempt_id'), str)
+            and bool(attempt.get('superseded_by_attempt_id'))
+            and isinstance(attempt.get('possible_charge_seconds'), int))
+
+
 def validate_attempts(attempts, *, nonce=None, request_sha256=None):
     """Return confirmed receipts; possible authorized costs remain in the input."""
     confirmed = []
@@ -92,6 +109,13 @@ def validate_attempts(attempts, *, nonce=None, request_sha256=None):
             raise ValueError('invalid cumulative video duration')
         if attempt.get('state') == 'ACCEPTED' and isinstance(attempt.get('video_id'), str) and attempt['video_id']:
             confirmed.append(attempt)
+        elif superseded_attempt(attempt):
+            # 必须能对上同镜的已确认收据，否则 SUPERSEDED 本身就是对账债
+            if not any(a.get('attempt_id') == attempt.get('superseded_by_attempt_id')
+                       and a.get('state') == 'ACCEPTED' and a.get('video_id')
+                       and a.get('logical_shot_id') == attempt.get('logical_shot_id')
+                       for a in attempts):
+                raise ValueError('superseded attempt lacks a confirmed sibling receipt')
         elif not authorized_attempt(attempt, nonce=nonce, request_sha256=request_sha256):
             raise ValueError('unconfirmed/duplicate paid submission requires reconciliation')
     ids = [a['video_id'] for a in confirmed]

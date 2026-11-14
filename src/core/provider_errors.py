@@ -134,6 +134,18 @@ def validate_intent_history(intents, paid_attempts):
                     for a in paid_attempts)):
                 raise ValueError('uncertain intent has no matching authorized financial record')
             continue
+        if state == 'SUPERSEDED':
+            # 2026-11-14 anime750s run 329：同镜已有带收据 ACCEPTED 的悬案自动作废。
+            # 意图与账本尝试必须成对（同 intent_id 双方都是 SUPERSEDED），且不得
+            # 携带收据（作废 ≠ 已收养）。
+            from .submission_recovery import superseded_attempt
+            if (not superseded_attempt(intent) or not any(
+                    a.get('intent_id') == intent.get('intent_id') and superseded_attempt(a)
+                    for a in paid_attempts)):
+                raise ValueError('superseded intent has no matching financial record')
+            if intent.get('video_id'):
+                raise ValueError('superseded intent contains an accepted receipt')
+            continue
         if state not in ('REJECTED', 'NOT_SENT', 'ACCEPTED', 'COMPLETED', 'FAILED'):
             raise ValueError('unconfirmed submission intent requires reconciliation')
         if state in ('ACCEPTED', 'COMPLETED', 'FAILED'):

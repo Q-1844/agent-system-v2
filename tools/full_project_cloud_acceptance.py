@@ -366,6 +366,36 @@ class BoundedRealClient:
             raise VideoSubmissionNotSent(
                 "unconfirmed prior submission%s; reconciliation required, no automatic POST"
                 % ((" for " + logical_shot_id) if logical_shot_id else ""))
+        # 🔴 2026-11-14 anime750s run 329 实锤（s02_c11 重复付费悬案）：
+        # 视频 job 的 POST 已受理（task_hpGEVkjZ 有收据）但轮询死于供应商 401
+        # 令牌瞬断 → autopilot 阶段重试携带新 stage_key（:N 递增，find_by_origin
+        # 复用失明）→ 走到全新 POST：旧 ACCEPTED 尝试对上方 pending 闸（只查
+        # SUBMITTING/UNKNOWN）同样隐形 → 同镜头同输入被【第二次付费提交】，
+        # 第二笔回执又被同一瞬态打断成 UNKNOWN，无人值守恢复链整夜被拦。
+        # 修法：同镜头存在【同输入指纹、已受理、带收据、视频未判死】的旧尝试
+        # → 拒绝新 POST（fail-loud）。收养走恢复期 reconcile_accepted_work
+        # （run 333 实证收养成功、零重拍）。输入指纹不同（修订重拍）不受此闸；
+        # intent 已 FAILED（供应商判死）放行重拍，避免永久卡死。
+        if native_intent and native_intent.get('project') == self.project_dir.name and logical_shot_id:
+            _new_digest = hashlib.sha256(json.dumps({
+                'native_signature': native_intent['input_signature'],
+                'previous_final_video': native_intent['previous_final_video'],
+                'prompt_sha256': hashlib.sha256(prompt.encode()).hexdigest(),
+                'seconds': seconds, 'kwargs': kwargs},
+                sort_keys=True, ensure_ascii=False, default=str).encode('utf-8')).hexdigest()
+            _dead_intents = {i.get('intent_id') for i in self.submission_intents
+                             if i.get('state') == 'FAILED'}
+            _duplicate_paid = [a for a in self.video_attempts
+                               if a.get('state') == 'ACCEPTED' and a.get('video_id')
+                               and a.get('logical_shot_id') == logical_shot_id
+                               and a.get('immutable_input_digest') == _new_digest
+                               and a.get('intent_id') not in _dead_intents
+                               and a.get('attempt_id') != native_intent.get('attempt_id')]
+            if _duplicate_paid:
+                raise VideoSubmissionNotSent(
+                    'accepted-but-unclaimed prior submission for %s (task %s); '
+                    'adopt/reconcile before any new POST'
+                    % (logical_shot_id, _duplicate_paid[-1]['video_id']))
         if sum(a["seconds"] for a in self.video_attempts) + seconds > self.video_budget:
             raise VideoSubmissionNotSent("acceptance execution video budget exhausted")
         prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()
