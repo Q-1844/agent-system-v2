@@ -275,3 +275,51 @@ def test_b_hop_cap_marks_awaiting_human(monkeypatch):
         _read={"doc": _doc(phase="RUNNING", hops=MAX_AUTO_HOPS)})
     assert out["action"] == "awaiting_human"
     assert wrote["nonce"] == "n"
+
+
+# ---------- CP-Alert gateless FAILED 报警（2026-11-17 anime750s-20261116a 实弹）----------
+# 内容死（terminal_status 不在可自动恢复集）曾静默停摆 4h+：patrol 必须
+# 隔离 AWAITING_HUMAN + main() 非零退出点亮红警。防回退锚点。
+
+def test_patrol_gateless_failed_alarms_and_quarantines(monkeypatch):
+    """phase=FAILED 无 gate → awaiting_human_alarm + 标记写入。"""
+    from tools import resume_patrol
+    persisted = []
+    def fake_mark(nonce, doc, token, reason):
+        persisted.append((nonce, reason))
+        return {"written": True}
+    monkeypatch.setattr(resume_patrol, "mark_awaiting_human", fake_mark)
+    doc = _doc(phase="FAILED", terminal=None)   # 内容死形态：无 terminal_status
+    result = resume_patrol.sweep_nonce("film-x", "b1", "tok", "ref", _read={"doc": doc})
+    assert result["action"] == "awaiting_human_alarm"
+    assert result["alarm"] is True
+    assert persisted and "gateless" in persisted[0][1]
+
+
+def test_patrol_quota_wall_does_not_alarm(monkeypatch):
+    """额度墙（terminal=quota_exhausted）走正常派发/跳过路径，绝不误报红警。"""
+    from tools import resume_patrol
+    doc = _doc(phase="FAILED", terminal="quota_exhausted", run_id="123")
+    monkeypatch.setattr(resume_patrol, "fetch_run",
+                        lambda *a, **k: {"status": "completed",
+                                         "completed_at": "2026-11-16T00:00:00Z"})
+    monkeypatch.setattr(resume_dispatch, "dispatch_next_hop",
+                        lambda *a, **k: {"dispatched": True, "status": 204})
+    result = resume_patrol.sweep_nonce("film-q", "b1", "tok", "ref", _read={"doc": doc})
+    # 锚点只锁报警语义：额度墙绝不进隔离/红警路径（skip/dispatch 由 grace 窗口定）
+    assert "alarm" not in result
+    assert result["action"] != "awaiting_human_alarm"
+
+
+def test_patrol_main_exits_nonzero_on_alarm(monkeypatch):
+    """红警语义：本轮发现隔离对象 → main() 返回 1 点亮 Actions。"""
+    import os
+    from tools import resume_patrol
+    monkeypatch.setenv("B1_ARCHIVE_TOKEN", "b1")
+    monkeypatch.setenv("RESUME_DISPATCH_TOKEN", "tok")
+    monkeypatch.setattr(resume_patrol, "sweep_once",
+                        lambda *a, **k: [{"nonce": "n", "alarm": True}])
+    assert resume_patrol.main() == 1
+    monkeypatch.setattr(resume_patrol, "sweep_once",
+                        lambda *a, **k: [{"nonce": "n", "action": "skip"}])
+    assert resume_patrol.main() == 0

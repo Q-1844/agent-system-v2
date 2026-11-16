@@ -22,6 +22,27 @@ def _join(parts) -> str:
     return ", ".join(p.strip() for p in parts if p and str(p).strip())
 
 
+# ---- 图像 prompt 对白剥离（2026-11-17 anime750s-20261116a 实弹）----
+# run 336/337/338 三跳 12 发首帧候选全部 content_policy_violation 400 拒死：
+# 根因是视觉提示词混入了台词原文（描述字段内嵌（"对不起我不是故意撞你的"）），
+# 脱上下文的引语（自认撞人/道歉）触发供应商内容过滤。台词本属于 NDC 音轨，
+# 图像模型既画不出语音，引语在视觉 prompt 里只有过滤风险没有语义价值。
+# 只在「图像」两 builder 剥离；视频 prompt 保留 description 原文（§13 语义校准）。
+import re as _re
+
+# 引语对（含中英、全半角）：前后紧贴的全角括号随引语一起整体删除
+_QUOTED_SPEECH_RE = _re.compile(
+    "(?:（)?(?:\"[^\"]{1,120}\"|'[^']{1,120}'|“[^”]{1,120}”|‘[^’]{1,120}’"
+    "|「[^」]{1,120}」|『[^』]{1,120}』)(?:）)?")
+
+
+def _strip_quoted_speech(text) -> str:
+    """剥离自由文本中的引语；空文本原样返回。跨度上限 120 字符防病态匹配。"""
+    if not text:
+        return text
+    return _QUOTED_SPEECH_RE.sub(" ", str(text)).strip()
+
+
 def _char_identity(project: Project, shot: Shot) -> str:
     """出场角色的英文身份描述（description_en）。无角色返回空串。
     不机械重复角色名，不生成"保持一致"虚假要求。"""
@@ -62,9 +83,9 @@ def build_first_frame_prompt(project: Project, shot: Shot,
     风格指令替代 StyleAnchor（§19），creative 拼接逻辑零改动。"""
     suffix = project.style.suffix() if style_suffix is None else style_suffix
     if shot.first_frame_prompt_override:
-        return _with_suffix(shot.first_frame_prompt_override.strip(), suffix)
+        return _strip_quoted_speech(_with_suffix(shot.first_frame_prompt_override.strip(), suffix))
     if shot.prompt_en:
-        return _with_suffix(shot.prompt_en.strip(), suffix)
+        return _strip_quoted_speech(_with_suffix(shot.prompt_en.strip(), suffix))
     parts = [
         _size_directive(shot),
         _char_identity(project, shot),
@@ -74,7 +95,7 @@ def build_first_frame_prompt(project: Project, shot: Shot,
         shot.important_details,
         ", ".join(shot.required_elements) if shot.required_elements else "",
     ]
-    return _with_suffix(_join(parts), suffix)
+    return _strip_quoted_speech(_with_suffix(_join(parts), suffix))
 
 
 def build_last_frame_prompt(project: Project, shot: Shot,
@@ -87,9 +108,9 @@ def build_last_frame_prompt(project: Project, shot: Shot,
     风格指令替代 StyleAnchor（同 S3C.1 首帧 seam 模式），creative 拼接逻辑零改动。"""
     suffix = project.style.suffix() if style_suffix is None else style_suffix
     if shot.last_frame_prompt_override:
-        return _with_suffix(shot.last_frame_prompt_override.strip(), suffix)
+        return _strip_quoted_speech(_with_suffix(shot.last_frame_prompt_override.strip(), suffix))
     if shot.last_frame_prompt_en:
-        return _with_suffix(shot.last_frame_prompt_en.strip(), suffix)
+        return _strip_quoted_speech(_with_suffix(shot.last_frame_prompt_en.strip(), suffix))
     parts = ["Based on the first reference image"]
     change = shot.frame_change or shot.motion
     if change:
@@ -106,7 +127,7 @@ def build_last_frame_prompt(project: Project, shot: Shot,
     parts.append(shot.preserve_custom)
     if shot.characters:
         parts.append("keep character identity consistent with the reference images")
-    return _with_suffix(_join(parts), suffix)
+    return _strip_quoted_speech(_with_suffix(_join(parts), suffix))
 
 
 def build_video_prompt(shot: Shot, mode: str, *, style_suffix: str = "") -> str:

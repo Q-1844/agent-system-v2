@@ -21,6 +21,9 @@ set_final_video_business，以及 JobQueue + 现有 first/last/video handler。�
 """
 from __future__ import annotations
 import asyncio
+import logging
+
+log = logging.getLogger(__name__)
 import hashlib
 import time
 import uuid
@@ -955,7 +958,11 @@ class SceneAutopilotManager:
         """首帧：入队 first_frame job -> 等待 -> 找本 Run batch -> seeded 选择（§十四/十八/十九）。"""
         from src.core.models import ShotStatus as SS
         from routers.shots import choose_first_frame_business
-        for attempt in range(1, 3):   # 最多 2 个 batch attempts（§十九）
+        for attempt in range(1, 4):
+            # CP-3（2026-11-17 anime750s-20261116a 三跳 12 拒实弹）：批次上限
+            # 2→3，但第 3 批只给 content_policy_violation——供应商内容过滤实测
+            # 为非确定性/边缘判定（同提示词跨批次反复拒、隔窗重试可过），退避
+            # 30s 给过滤窗口复位。其它失败类别维持两批 fail-loud 语义不变。
             stage_key = f"autopilot:{run.run_id}:{state.shot_id}:first_frame:{attempt}"
             job = await self._enqueue_autopilot_job(project_name, state.shot_id, "first_frame",
                                                     stage_key, run.run_id, variants=2)
@@ -966,16 +973,27 @@ class SceneAutopilotManager:
             state.active_job_id = None
             if job.state != "done":
                 state.attempts["first_frame"] = attempt
+                if attempt == 2 and "content_policy_violation" in str(getattr(job, "error", "") or ""):
+                    log.info("镜头 %s 首帧批次 1/2 全部内容政策拒死，退避 30s 走第 3 批",
+                             state.shot_id)
+                    await asyncio.sleep(30)
+                    continue
+                if attempt >= 2:
+                    break
                 continue   # retry
             shot = store.load().get_shot(state.shot_id)
             batch = self._find_run_batch(shot, run.run_id, "first_frame")
             if not batch:
                 state.attempts["first_frame"] = attempt
+                if attempt >= 2:
+                    break
                 continue
             successful = [c for c in batch.candidates if c.status == SS.DONE.value]
             if not successful:
                 state.warnings.append(f"首帧批次 {batch.batch_id} 0 成功候选")
                 state.attempts["first_frame"] = attempt
+                if attempt >= 2:
+                    break
                 continue
             chosen = choose_candidate(run.run_seed, state.shot_id, batch.batch_id, successful)
             # chosen 是 Candidate 对象（来自 shot batches）或 dict（来自 choose_candidate）
@@ -992,7 +1010,9 @@ class SceneAutopilotManager:
         """尾帧：入队 last_frame job -> 等待 -> 找本 Run batch -> 选择（§二十/二十一）。"""
         from src.core.models import ShotStatus as SS
         from routers.shots import choose_last_frame_business
-        for attempt in range(1, 3):
+        for attempt in range(1, 4):
+            # CP-3（2026-11-17）：同 _do_first_frame——第 3 批只给内容政策拒死，
+            # 其它失败类别维持两批 fail-loud 语义。
             stage_key = f"autopilot:{run.run_id}:{state.shot_id}:last_frame:{attempt}"
             job = await self._enqueue_autopilot_job(project_name, state.shot_id, "last_frame",
                                                     stage_key, run.run_id)
@@ -1003,15 +1023,26 @@ class SceneAutopilotManager:
             state.active_job_id = None
             if job.state != "done":
                 state.attempts["last_frame"] = attempt
+                if attempt == 2 and "content_policy_violation" in str(getattr(job, "error", "") or ""):
+                    log.info("镜头 %s 尾帧批次 1/2 全部内容政策拒死，退避 30s 走第 3 批",
+                             state.shot_id)
+                    await asyncio.sleep(30)
+                    continue
+                if attempt >= 2:
+                    break
                 continue
             shot = store.load().get_shot(state.shot_id)
             batch = self._find_run_batch(shot, run.run_id, "last_frame")
             if not batch:
                 state.attempts["last_frame"] = attempt
+                if attempt >= 2:
+                    break
                 continue
             successful = [c for c in batch.candidates if c.status == SS.DONE.value]
             if not successful:
                 state.attempts["last_frame"] = attempt
+                if attempt >= 2:
+                    break
                 continue
             chosen = choose_candidate(run.run_seed, state.shot_id, batch.batch_id, successful)
             cid = chosen.candidate_id if hasattr(chosen, "candidate_id") else chosen["candidate_id"]

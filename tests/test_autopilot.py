@@ -342,3 +342,115 @@ def test_e2e_case1_three_independent(autopilot_project, fake_agnes_swap, client)
         assert sh.selected_first_frame is not None
     # Run 内 3 个 Shot 都 completed
     assert all(s["status"] == "completed" for s in final["shots"])
+
+
+# ---------- CP-3 内容政策批次三（2026-11-17 anime750s-20261116a 实弹）----------
+# 三跳 12 发首帧候选全被 content_policy_violation 拒死：批次上限 2→3，第 3 批
+# 只给内容政策拒死（退避 30s），其它失败类别维持两批 fail-loud。防回退锚点。
+
+class _Job:
+    def __init__(self, state, error=None):
+        self.job_id = f"job_{uuid.uuid4().hex[:8]}"
+        self.state = state
+        self.error = error
+
+
+class _CPStub:
+    """最小 SceneAutopilotManager 替身：只实现 _do_first_frame 依赖面。"""
+
+    def __init__(self, job_script, batches):
+        self.calls = []
+        self.sleeps = []
+        self.job_script = list(job_script)   # [(state, error), ...] 逐批弹出
+        self.batches = batches
+
+    async def _enqueue_autopilot_job(self, project_name, shot_id, kind,
+                                     stage_key, run_id, **params):
+        self.calls.append(stage_key)
+        return _Job("queued")
+
+    async def _wait_job(self, job_id):
+        state, error = (self.job_script.pop(0)
+                        if self.job_script else ("failed", "script exhausted"))
+        return _Job(state, error)
+
+    async def _save_shot_state(self, run, state):
+        pass
+
+    def _find_run_batch(self, shot, run_id, kind):
+        return self.batches.pop(0) if self.batches else None
+
+
+def _cp_run_state():
+    from src.ai.autopilot import SceneAutopilotRun, ShotExecutionState
+    run = SceneAutopilotRun(run_id="run_cp_test", project_name="p", scene_id="s01",
+                            plan_id="plan", plan_snapshot={}, run_seed=1,
+                            max_parallel_shots=1)
+    state = ShotExecutionState(shot_id="s03_c09", index=9)
+    return run, state
+
+
+@pytest.mark.asyncio
+async def test_first_frame_content_policy_gets_third_batch(monkeypatch):
+    """批 1/2 皆内容政策拒死 → 第 3 批必须发生（stage_key 含 :3）且退避 30s。"""
+    from src.ai import autopilot as ap
+    stub = _CPStub(job_script=[("failed", 'Agnes API 错误 400: {"code":"content_policy_violation"}'),
+                               ("failed", 'Agnes API 错误 400: {"code":"content_policy_violation"}'),
+                               ("failed", 'Agnes API 错误 400: {"code":"content_policy_violation"}')],
+                   batches=[])
+    sleeps = []
+    async def fake_sleep(s):
+        sleeps.append(s)
+    monkeypatch.setattr(ap.asyncio, "sleep", fake_sleep)
+    run, state = _cp_run_state()
+    with pytest.raises(RuntimeError):
+        await ap.SceneAutopilotManager._do_first_frame(stub, "p", run, state, None)
+    assert len(stub.calls) == 3, "内容政策拒死必须打满第 3 批"
+    assert stub.calls[-1].endswith(":3")
+    assert sleeps == [30], "第 3 批前必须退避 30s"
+
+
+@pytest.mark.asyncio
+async def test_first_frame_other_failure_keeps_two_batches(monkeypatch):
+    """非内容政策失败（如 5xx 网关）→ 维持两批语义，绝不偷跑第 3 批。"""
+    from src.ai import autopilot as ap
+    stub = _CPStub(job_script=[("failed", "Agnes API 错误 502: bad gateway"),
+                               ("failed", "Agnes API 错误 502: bad gateway")],
+                   batches=[])
+    run, state = _cp_run_state()
+    with pytest.raises(RuntimeError):
+        await ap.SceneAutopilotManager._do_first_frame(stub, "p", run, state, None)
+    assert len(stub.calls) == 2, "非内容政策失败必须保持两批 fail-loud"
+
+
+@pytest.mark.asyncio
+async def test_first_frame_third_batch_success_recovers(monkeypatch):
+    """批 1/2 拒死、批 3 过审 → 阶段正常返回（不停死、不误报错）。"""
+    from src.ai import autopilot as ap
+    from src.core.models import Shot
+    class _Batch:
+        batch_id = "b3"
+        candidates = [type("C", (), {"candidate_id": "c1", "status": "done"})()]
+    batch = _Batch()
+    chosen_log = {}
+    monkeypatch.setattr(ap, "choose_candidate", lambda *a, **k: {"candidate_id": "c1"})
+    import routers.shots as rs
+    monkeypatch.setattr(rs, "choose_first_frame_business",
+                        lambda store, sid, cid: chosen_log.update(cid=cid))
+    class _Store:
+        def load(self):
+            class _Proj:
+                def get_shot(self, sid):
+                    return Shot(shot_id=sid, scene_id="s03", index=9)
+            return _Proj()
+    stub = _CPStub(job_script=[("failed", '400 content_policy_violation'),
+                               ("failed", '400 content_policy_violation'),
+                               ("done", None)],
+                   batches=[batch])
+    async def fake_sleep(s):
+        pass
+    monkeypatch.setattr(ap.asyncio, "sleep", fake_sleep)
+    run, state = _cp_run_state()
+    await ap.SceneAutopilotManager._do_first_frame(stub, "p", run, state, _Store())
+    assert len(stub.calls) == 3
+    assert chosen_log == {"cid": "c1"}

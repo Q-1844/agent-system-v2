@@ -179,3 +179,50 @@ def test_video_fixed_camera_no_pushin():
     assert "fixed camera" in prompt
     assert "push-in" not in prompt.lower()
     assert "tracking" not in prompt.lower()
+
+
+# ---------- CP-3 图像提示词对白剥离（2026-11-17 anime750s-20261116a 实弹）----------
+# run 336/337/338 三跳 12 发首帧候选全被 content_policy_violation 拒死，根因是
+# 视觉提示词混入台词原文（脱上下文引语触发供应商过滤）。图像两 builder 必须
+# 剥离引语；视频 builder 保留原文（§13 语义校准，NDC 台词不受影响）。
+
+def test_first_frame_strips_quoted_speech_all_paths():
+    p = _proj()
+    # 结构字段拼接路径
+    s = _shot(description='三人逃跑，阿豪边跑边道歉（"对不起我不是故意撞你的"），路人骚动')
+    prompt = build_first_frame_prompt(p, s)
+    assert "对不起我不是故意撞你的" not in prompt
+    assert "三人逃跑" in prompt and "路人骚动" in prompt
+    # prompt_en 兼容路径
+    s2 = _shot(description="x", prompt_en='He yells "I did not mean to hit you" and runs')
+    assert 'I did not mean to hit you' not in build_first_frame_prompt(p, s2)
+    assert "runs" in build_first_frame_prompt(p, s2)
+    # override 路径同样剥离（过滤不区分提示词作者）
+    s3 = _shot(description="x", first_frame_prompt_override='she says 「快跑」 in terror')
+    assert "快跑" not in build_first_frame_prompt(p, s3)
+
+
+def test_last_frame_strips_quoted_speech():
+    p = _proj()
+    s = _shot(description="x", last_frame_description='人群尖叫『他疯了』四散',
+              end_state="street empty")
+    prompt = build_last_frame_prompt(p, s)
+    assert "他疯了" not in prompt
+    assert "street empty" in prompt
+
+
+def test_video_prompt_keeps_dialogue_text():
+    """视频 prompt 保留引语原文——NDC 台词语义在视频侧有校准职责，不能误伤。"""
+    s = _shot(description="x", motion="run", target_duration_s=8,
+              video_prompt_en='阿豪大喊"快跑"并挥手')
+    prompt = build_video_prompt(s, "i2v")
+    assert "快跑" in prompt
+
+
+def test_strip_quoted_speech_edge_cases():
+    from src.core.prompt_builder import _strip_quoted_speech
+    # 括号整体删除（不留空括号）；未配对引号不动；纯文本不动
+    assert _strip_quoted_speech('道歉（"对不起"）之后') == "道歉 之后"
+    assert _strip_quoted_speech("单个\"引号不动") == "单个\"引号不动"
+    assert _strip_quoted_speech("plain text") == "plain text"
+    assert _strip_quoted_speech("") == ""

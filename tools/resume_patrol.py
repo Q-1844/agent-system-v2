@@ -19,8 +19,8 @@ import urllib.error
 import urllib.request
 
 from tools.resume_dispatch import (
-    REPO, MAX_AUTO_HOPS, auto_resume_allowed, default_branch, dispatch_next_hop,
-    fetch_run, hop_count, dispatch_token)
+    REPO, MAX_AUTO_HOPS, RESUMABLE_TERMINAL, auto_resume_allowed, default_branch,
+    dispatch_next_hop, fetch_run, hop_count, dispatch_token)
 
 B1_REPO = "Q-1844/agent-system-v2-rundata-1"
 CHECKPOINT_FILE = "full-project-production.json"
@@ -119,8 +119,16 @@ def sweep_once(b1_token, dispatch_token):
         except Exception as error:  # noqa: BLE001
             item = {"nonce": nonce, "action": "error", "reason": str(error)[:200]}
         results.append(item)
+    # CP-Alert：本轮发现 gateless FAILED（已隔离 AWAITING_HUMAN）→ 汇总进 results
+    # 由 main() 非零退出点亮 Actions 红警；隔离后下轮该 nonce 进入 DEAD_PHASE
+    # 正常跳过，红警只响一次（不打断后续 20min 周期的队列巡检）。
+    alarms = [r for r in results if r.get("alarm")]
     print(json.dumps({"sweep": "done", "ref": ref, "nonces": len(results),
-                      "results": results}, ensure_ascii=False, indent=1))
+                      "results": results, "alarms": len(alarms)},
+                     ensure_ascii=False, indent=1))
+    if alarms:
+        print("::error::gateless FAILED checkpoint(s) awaiting human: "
+              + ", ".join(r["nonce"] for r in alarms), file=sys.stderr)
     return results
 
 
@@ -135,6 +143,19 @@ def sweep_nonce(nonce, b1_token, dispatch_token, ref, *, _read=None, _completed_
         if "cap" in reason and doc.get("phase") != "AWAITING_HUMAN":
             return {"nonce": nonce, "action": "awaiting_human",
                     "mark": mark_awaiting_human(nonce, doc, b1_token, reason)}
+        # CP-Alert（2026-11-17 anime750s-20261116a 实弹）：内容死/其它无 gate 的
+        # FAILED 检查点（terminal_status 不在可自动恢复集）既不派发也不留痕，
+        # 会静默停摆到有人碰巧看 Actions——run 336/338 各静默 4h+。这类检查点
+        # 同样隔离为 AWAITING_HUMAN 并置 ALARM 标记（main() 汇总后以非零退出
+        # 点亮红警），人工处置（提示词手术/授权接续）后恢复。
+        if (doc.get("phase") == "FAILED"
+                and doc.get("terminal_status") not in RESUMABLE_TERMINAL
+                and doc.get("phase") != "AWAITING_HUMAN"):
+            mark = mark_awaiting_human(
+                nonce, doc, b1_token,
+                f"gateless failure awaiting human: {reason}")
+            return {"nonce": nonce, "action": "awaiting_human_alarm",
+                    "mark": mark, "alarm": True}
         return {"nonce": nonce, "action": "skip", "reason": reason}
     run_id = str(doc.get("github_run_id") or "")
     if not run_id.isdigit():
@@ -197,7 +218,10 @@ def main():
         print(json.dumps({"sweep": "skipped", "reason": "B1_ARCHIVE_TOKEN not configured"},
                          ensure_ascii=False))
         return 0
-    sweep_once(b1, dispatch)
+    results = sweep_once(b1, dispatch)
+    # CP-Alert：红警语义——有 gateless FAILED 被隔离时非零退出点亮 Actions。
+    if any(r.get("alarm") for r in results):
+        return 1
     return 0
 
 
