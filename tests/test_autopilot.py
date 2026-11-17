@@ -410,10 +410,10 @@ async def test_first_frame_content_policy_gets_third_batch(monkeypatch):
     assert len(stub.calls) == 3, "内容政策拒死必须打满第 3 批"
     assert stub.calls[-1].endswith(":3")
     assert sleeps == [30], "第 3 批前必须退避 30s"
-    # 批 1/2 原提示词（不带重试标记），批 3 换措辞（content_policy_retry=True）
-    assert stub.params_seen[0].get("content_policy_retry") is not True
-    assert stub.params_seen[1].get("content_policy_retry") is not True
-    assert stub.params_seen[2].get("content_policy_retry") is True
+    # 批 1/2 不带反馈（原文直提），批 3 携带服务端驳回反馈交 agent 改写
+    assert "content_policy_feedback" not in stub.params_seen[0]
+    assert "content_policy_feedback" not in stub.params_seen[1]
+    assert "content_policy_violation" in stub.params_seen[2].get("content_policy_feedback", "")
 
 
 @pytest.mark.asyncio

@@ -958,17 +958,18 @@ class SceneAutopilotManager:
         """首帧：入队 first_frame job -> 等待 -> 找本 Run batch -> seeded 选择（§十四/十八/十九）。"""
         from src.core.models import ShotStatus as SS
         from routers.shots import choose_first_frame_business
+        cp_feedback = ""
         for attempt in range(1, 4):
-            # CP-3（2026-11-17 anime750s-20261116a 三跳 12 拒实弹）：内容驳回按
-            # 「审核意见」处理（与自有审片打回同类）——批 1/2 用原提示词（台词
-            # 完整保留，NDC 要消费对白语义）；全被拒才退避 30s 走第 3 批，且第
-            # 3 批带 content_policy_retry 换措辞（handler 剥离引语重提）。其它
-            # 失败类别维持两批 fail-loud 语义不变。
+            # CP-3（2026-11-17 用户拍板）：服务端内容驳回=审核意见，与自有审片
+            # 打回同类。批 1/2 原提示词（不预审查——服务端已把关）；两批全拒才
+            # 退避 30s 走第 3 批，并把驳回反馈带给 handler 由 agent 按反馈动态
+            # 改写提示词（不同平台限制不同，不写死规则）。其它失败类别维持两
+            # 批 fail-loud 语义不变。
             stage_key = f"autopilot:{run.run_id}:{state.shot_id}:first_frame:{attempt}"
+            extra = {"content_policy_feedback": cp_feedback} if cp_feedback else {}
             job = await self._enqueue_autopilot_job(
                 project_name, state.shot_id, "first_frame",
-                stage_key, run.run_id, variants=2,
-                content_policy_retry=(attempt >= 3))
+                stage_key, run.run_id, variants=2, **extra)
             state.active_job_id = job.job_id
             state.active_stage_key = stage_key
             await self._save_shot_state(run, state)
@@ -977,7 +978,8 @@ class SceneAutopilotManager:
             if job.state != "done":
                 state.attempts["first_frame"] = attempt
                 if attempt == 2 and "content_policy_violation" in str(getattr(job, "error", "") or ""):
-                    log.info("镜头 %s 首帧批次 1/2 全部内容政策拒死，退避 30s 走第 3 批",
+                    cp_feedback = str(getattr(job, "error", "") or "")
+                    log.info("镜头 %s 首帧批次 1/2 全部内容驳回，退避 30s 带反馈走第 3 批",
                              state.shot_id)
                     await asyncio.sleep(30)
                     continue
@@ -1013,14 +1015,14 @@ class SceneAutopilotManager:
         """尾帧：入队 last_frame job -> 等待 -> 找本 Run batch -> 选择（§二十/二十一）。"""
         from src.core.models import ShotStatus as SS
         from routers.shots import choose_last_frame_business
+        cp_feedback = ""
         for attempt in range(1, 4):
-            # CP-3（2026-11-17）：同 _do_first_frame——批 1/2 原提示词，内容驳回
-            # 退避后第 3 批换措辞；其它失败类别维持两批 fail-loud。
+            # CP-3（2026-11-17）：同 _do_first_frame——驳回反馈交 agent 改写。
             stage_key = f"autopilot:{run.run_id}:{state.shot_id}:last_frame:{attempt}"
+            extra = {"content_policy_feedback": cp_feedback} if cp_feedback else {}
             job = await self._enqueue_autopilot_job(
                 project_name, state.shot_id, "last_frame",
-                stage_key, run.run_id,
-                content_policy_retry=(attempt >= 3))
+                stage_key, run.run_id, **extra)
             state.active_job_id = job.job_id
             state.active_stage_key = stage_key
             await self._save_shot_state(run, state)
@@ -1029,7 +1031,8 @@ class SceneAutopilotManager:
             if job.state != "done":
                 state.attempts["last_frame"] = attempt
                 if attempt == 2 and "content_policy_violation" in str(getattr(job, "error", "") or ""):
-                    log.info("镜头 %s 尾帧批次 1/2 全部内容政策拒死，退避 30s 走第 3 批",
+                    cp_feedback = str(getattr(job, "error", "") or "")
+                    log.info("镜头 %s 尾帧批次 1/2 全部内容驳回，退避 30s 带反馈走第 3 批",
                              state.shot_id)
                     await asyncio.sleep(30)
                     continue

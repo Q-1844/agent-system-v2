@@ -181,43 +181,19 @@ def test_video_fixed_camera_no_pushin():
     assert "tracking" not in prompt.lower()
 
 
-# ---------- CP-3 内容驳回重试措辞（2026-11-17 anime750s-20261116a 实弹）----------
-# run 336/337/338 三跳 12 发首帧候选全被 content_policy_violation 拒死（描述内嵌
-# 台词原文触发过滤）。用户拍板设计：驳回=审核意见 → 重试+换措辞；台词是 NDC
-# 合法语义输入，默认批次必须保留原文，仅重试批次（strip_speech=True）剥离引语。
+# ---------- CP-3 无预过滤原则（2026-11-17 用户拍板）----------
+# 台词是 NDC 合法语义输入，服务端已把关，客户端不做任何提示词预限制。
+# 修订由 agent 按服务端反馈动态完成（tests/test_content_policy_revision.py）。
 
-def test_first_frame_keeps_dialogue_by_default():
-    """默认（批 1/2）台词必须原样保留——NDC 消费对白语义，误伤即回退。"""
+def test_first_frame_keeps_dialogue_no_prefilter():
+    """默认批次（含重试前）提示词原文保留——任何预过滤都是回退。"""
     p = _proj()
     s = _shot(description='阿豪边跑边道歉（"对不起我不是故意撞你的"），路人骚动')
     prompt = build_first_frame_prompt(p, s)
     assert "对不起我不是故意撞你的" in prompt
-
-
-def test_first_frame_retry_strips_quoted_speech():
-    """重试批次（strip_speech=True）换措辞：引语剥离、画面语义保留。"""
-    p = _proj()
-    s = _shot(description='三人逃跑，阿豪边跑边道歉（"对不起我不是故意撞你的"），路人骚动')
-    prompt = build_first_frame_prompt(p, s, strip_speech=True)
-    assert "对不起我不是故意撞你的" not in prompt
-    assert "三人逃跑" in prompt and "路人骚动" in prompt
-    # prompt_en 兼容路径 + override 路径同样受门控
-    s2 = _shot(description="x", prompt_en='He yells "I did not mean to hit you" and runs')
-    assert 'I did not mean to hit you' in build_first_frame_prompt(p, s2)
-    assert 'I did not mean to hit you' not in build_first_frame_prompt(p, s2, strip_speech=True)
-    s3 = _shot(description="x", first_frame_prompt_override='she says 「快跑」 in terror')
-    assert "快跑" in build_first_frame_prompt(p, s3)
-    assert "快跑" not in build_first_frame_prompt(p, s3, strip_speech=True)
-
-
-def test_last_frame_retry_strips_quoted_speech():
-    p = _proj()
-    s = _shot(description="x", last_frame_description='人群尖叫『他疯了』四散',
-              end_state="street empty")
-    assert "他疯了" in build_last_frame_prompt(p, s)
-    prompt = build_last_frame_prompt(p, s, strip_speech=True)
-    assert "他疯了" not in prompt
-    assert "street empty" in prompt
+    s2 = _shot(description="x", last_frame_description='人群尖叫『他疯了』四散',
+               end_state="street empty")
+    assert "他疯了" in build_last_frame_prompt(p, s2)
 
 
 def test_video_prompt_keeps_dialogue_text():
@@ -226,12 +202,3 @@ def test_video_prompt_keeps_dialogue_text():
               video_prompt_en='阿豪大喊"快跑"并挥手')
     prompt = build_video_prompt(s, "i2v")
     assert "快跑" in prompt
-
-
-def test_strip_quoted_speech_edge_cases():
-    from src.core.prompt_builder import _strip_quoted_speech
-    # 括号整体删除（不留空括号）；未配对引号不动；纯文本不动
-    assert _strip_quoted_speech('道歉（"对不起"）之后') == "道歉 之后"
-    assert _strip_quoted_speech("单个\"引号不动") == "单个\"引号不动"
-    assert _strip_quoted_speech("plain text") == "plain text"
-    assert _strip_quoted_speech("") == ""

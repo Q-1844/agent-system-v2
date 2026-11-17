@@ -688,8 +688,9 @@ async def _handler_first_frame(job, emit):
             if (provider or "agnes").lower() == "sensenova" else get_agnes_client()
 
     provider = (job.params.get("image_provider") or "agnes").lower()
-    # CP-3（2026-11-17）：内容驳回后的重试批次 → 提示词换措辞（剥离引语对白）
-    cp_retry = bool(job.params.get("content_policy_retry", False))
+    # CP-3（2026-11-17）：服务端内容驳回 = 审核意见。重试批次携带驳回反馈，
+    # 由 agent（文本模型）按反馈动态改写提示词——不同平台限制不同，不写死规则。
+    cp_feedback = job.params.get("content_policy_feedback") or ""
     project_dir = get_project_manager().get_project_dir(job.project)
     store = ProjectStore(project_dir)
     project = store.load()
@@ -715,8 +716,7 @@ async def _handler_first_frame(job, emit):
                                                   "human_reference_mode"),
                                               population_constraint=bool(
                                                   job.params.get(
-                                                      "population_constraint")),
-                                              strip_speech=cp_retry)
+                                                      "population_constraint")))
         # 31.md C1 seam：BOUND 输入经 provider-neutral GenerationRequest →
         # Agnes compiler 到达 client（编译层=能力诚实映射；UNBOUND 保持 legacy
         # 直调，行为逐字节不变）。
@@ -732,13 +732,16 @@ async def _handler_first_frame(job, emit):
         # StyleAnchor 默认 'anime' 曾污染非动漫项目分镜。profile unspecified → None
         # = 原行为（StyleAnchor.suffix），已 specified 项目的存量语义不受影响。
         prompt = build_first_frame_prompt(
-            project, shot, style_suffix=_legacy_vp_style_suffix(project_dir),
-            strip_speech=cp_retry)
+            project, shot, style_suffix=_legacy_vp_style_suffix(project_dir))
         # reference_previous：提示词表达「保持连续但允许换机位」，不要求逐像素复制
         if any(r["type"] == "continuity" for r in typed_refs):
             prompt += (". Maintain continuity with the previous shot's ending frame: keep character identity, "
                        "environment, outfit and lighting direction; change shot size, camera angle, composition "
                        "and subject action as specified; do not pixel-copy the previous frame")
+    # CP-3：驳回反馈交 agent 修订提示词（BOUND/legacy 两路 prompt 均收口在此）
+    if cp_feedback:
+        from src.ai.content_policy_revision import revise_prompt_with_feedback
+        prompt = await revise_prompt_with_feedback(prompt, cp_feedback)
     use_i2i = bool(refs)
     frames_dir = project_dir / "output" / "frames"
     frames_dir.mkdir(parents=True, exist_ok=True)
@@ -829,8 +832,8 @@ async def _handler_last_frame(job, emit):
     生成后若 split_next 非空，桥接拷贝给后继首帧（O2.first_frame = O.last_frame，保证 O->O2 无缝）。"""
     from src.core.store import ProjectStore
     from src.core.models import Asset, ImageAsset, Candidate, ImageBatch, ShotStatus
-    # CP-3（2026-11-17）：同首帧——内容驳回重试批次换措辞
-    cp_retry_lf = bool(job.params.get("content_policy_retry", False))
+    # CP-3（2026-11-17）：同首帧——驳回反馈交 agent 改写
+    cp_feedback_lf = job.params.get("content_policy_feedback") or ""
     project_dir = get_project_manager().get_project_dir(job.project)
     store = ProjectStore(project_dir)
     project = store.load()
@@ -855,8 +858,7 @@ async def _handler_last_frame(job, emit):
         bound_last = build_bound_last_frame_input(
             project_dir, project, shot, first_frame_url=ff_url,
             scene_reference_mode=job.params.get("scene_reference_mode"),
-            human_reference_mode=job.params.get("human_reference_mode"),
-            strip_speech=cp_retry_lf)
+            human_reference_mode=job.params.get("human_reference_mode"))
         # 31.md C1 seam（同首帧）：provider-neutral 编译到 Agnes 形态。
         _gen_req_lf = bound_last.to_generation_request(
             generation_type="last_frame",
@@ -868,12 +870,15 @@ async def _handler_last_frame(job, emit):
     else:
         # P1 根因修复：同首帧——legacy 尾帧消费 ProjectVisualProfile（unspecified → 原行为）
         prompt = build_last_frame_prompt(
-            project, shot, style_suffix=_legacy_vp_style_suffix(project_dir),
-            strip_speech=cp_retry_lf)
+            project, shot, style_suffix=_legacy_vp_style_suffix(project_dir))
         # image_refs 顺序（提示词.md §11）：1.已选首帧（场景/构图基础）2.角色参考图（身份保持）。
         # 无角色时 char_refs 为空，只传首帧。首帧始终第一张，不让角色图取代主构图参考。
         char_refs = _shot_char_refs(project, shot)
         refs = [ff_url] + char_refs
+    # CP-3：驳回反馈交 agent 修订提示词（BOUND/legacy 两路收口）
+    if cp_feedback_lf:
+        from src.ai.content_policy_revision import revise_prompt_with_feedback
+        prompt = await revise_prompt_with_feedback(prompt, cp_feedback_lf)
     provider = (job.params.get("image_provider") or "agnes").lower()
     client = deps.get_sensenova_image_client() \
         if provider == "sensenova" else get_agnes_client()
