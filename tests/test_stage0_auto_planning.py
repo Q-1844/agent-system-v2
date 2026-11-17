@@ -17,6 +17,7 @@
 """
 import asyncio
 import json
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -389,6 +390,64 @@ class FakeProjectManager:
 
 async def _noop_start():
     return None
+
+
+def test_create_mode_replays_committed_producer_revision_without_replanning(monkeypatch, tmp_path):
+    """The ordinary new-film entry point must restore the same repair overlay as C2."""
+    from tools import video_task_state as vts, e2e_autonomous_run as e2e
+    from tools import full_project_cloud_acceptance as acc
+    from src.ai import repair_revision as revisions
+    from src.core.models import Shot
+    from src.core.store import ProjectStore
+    import deps
+    files = {}
+    monkeypatch.setattr(vts, 'task_index', lambda token, nonce, filename='state.json', **kw:
+                        files.setdefault(filename, FakeIndex()))
+    monkeypatch.setattr(e2e, 'ensure_branch', lambda idx: None)
+    monkeypatch.setattr(acc, '_ensure_app_started', _noop_start)
+    chat = FakeChat([_blueprint_reply()])
+    monkeypatch.setattr(deps, 'agnes_client', chat)
+    pm = FakeProjectManager(tmp_path / 'projects')
+    monkeypatch.setattr(deps, 'project_manager', pm)
+    monkeypatch.setattr(acc.os, 'environ', {'FILM_TARGET_SECONDS': 'auto',
+        'PRODUCTION_REQUEST': '拍一个热气球穿越云海的故事，大概两分钟'})
+    out = tmp_path / 'out'; out.mkdir()
+    name, profile, cp, _, _ = asyncio.run(acc._run_auto_acceptance('repair-create', out, {}, 'tok'))
+    root = pm.get_project_dir(name)
+    store = ProjectStore(root); project = store.load()
+    project.scenes[0].shots = [Shot(shot_id='s01_c01', scene_id='s01', index=1,
+                                  description='old staging', prompt_en='old prompt', target_duration_s=6)]
+    store.save(project)
+    stage_name = next(k for k in files if k != 'full-project-production.json')
+    frozen = deepcopy(files[stage_name].blob)
+    stage = Stage0Record(files[stage_name], 'repair-create')
+    proposal = {'new_summary': 'revised balloon staging', 'reason': 'provider review',
+        'narrative_invariants': ['cross the clouds'], 'replace_shots': [{
+            'shot_id': 's01_c01', 'description': 'new staging', 'prompt_en': 'new prompt',
+            'target_duration_s': 6}], 'add_shots': []}
+    finding = {'finding_id': 'provider-test', 'scene_id': 's01', 'shot_id': 's01_c01',
+        'kind': 'provider_content_rejection', 'source': 'provider_rejection', 'review_id': 'job',
+        'evidence': 'content_policy_violation', 'level': 'R3', 'provider_feedback': {
+            'kind': 'first_frame', 'job_id': 'job', 'full_run_id': 'full',
+            'error': 'content_policy_violation'}}
+    original = revisions.reconcile_project_revisions
+    def crash(*a, **kw):
+        raise OSError('after durable revision, before project write')
+    monkeypatch.setattr(revisions, 'reconcile_project_revisions', crash)
+    with pytest.raises(OSError):
+        revisions.append_approved_revision(cp, base_plan_fingerprint=stage.plan_fingerprint,
+            blueprint=stage.blueprint, finding=finding, proposal=proposal,
+            approvals=[{'role': 'producer', 'approved': True}], project_dir=root,
+            jobs_file=tmp_path/'absent.json')
+    monkeypatch.setattr(revisions, 'reconcile_project_revisions', original)
+    summary = {}
+    _, restored_profile, restored_cp, _, _ = asyncio.run(
+        acc._run_auto_acceptance('repair-create', out, summary, 'tok'))
+    assert chat.calls == 1 and files[stage_name].blob == frozen
+    assert ProjectStore(root).load().get_shot('s01_c01').prompt_en == 'new prompt'
+    assert summary['repair_effective_plan']['applied_revision_ids']
+    assert restored_cp.doc['plan_fingerprint'] == stage.plan_fingerprint
+    assert restored_profile['min_final'] == profile['min_final']
 
 
 def test_integration_auto_acceptance_full_chain(monkeypatch, tmp_path):

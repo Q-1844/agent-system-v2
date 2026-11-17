@@ -1,0 +1,12 @@
+{
+  "source_run_id": 44001657223,
+  "finding_shot_id": "s03_c09",
+  "finding_job_id": "676413aa6cee",
+  "revision_id": "repair_4002dfba07a1c737b9e6",
+  "preserved_completed_video_jobs": 81,
+  "preserved_video_files": 81,
+  "provider_receipts_unchanged": true,
+  "stage0_fingerprint_unchanged": true,
+  "actual_generation_calls": 0,
+  "passed": true
+}
