@@ -27,10 +27,17 @@ REPAIR_ROLES = {"director", "script_writer", "character_designer", "scene_design
 REPAIR_LEVELS = {"R3", "R4"}
 REVISION_LIMIT = 50_000  # Record-corruption guard, not a creative or cost budget.
 MAX_SHOTS_PER_EVENT = 24
+PROMPT_OVERRIDE_FIELDS = {'first': 'first_frame_prompt_override',
+                          'last': 'last_frame_prompt_override',
+                          'video': 'video_prompt_override'}
 
 
 class RepairRevisionError(ValueError):
     pass
+
+
+class RepairDecisionPending(RepairRevisionError):
+    """No approved creative revision yet; retain evidence for another decision."""
 
 
 def digest(value: Any) -> str:
@@ -75,12 +82,28 @@ def validate_finding(finding: dict, *, scene_ids: set[str]) -> dict:
     f["review_id"] = _clean_string(f.get("review_id"), "review_id", 160)
     if f.get("level") not in REPAIR_LEVELS:
         raise RepairRevisionError("only an evidenced R3/R4 finding can revise the plan")
-    if f.get("source") not in ("director_failure", "verified_quality_review", "user_feedback"):
+    if f.get("source") not in ("director_failure", "verified_quality_review", "user_feedback", "provider_rejection"):
         raise RepairRevisionError("finding requires a trustworthy named evidence source")
     if f["source"] == "verified_quality_review" and not f.get("media_evidence"):
         raise RepairRevisionError("quality review needs a frame/timecode/media reference")
     if f.get("shot_id") is not None:
         f["shot_id"] = _clean_string(f["shot_id"], "shot_id", 64)
+    if f['source'] == 'provider_rejection':
+        from src.core.provider_errors import content_policy_rejection
+        feedback = f.get('provider_feedback')
+        if (not f.get('shot_id') or not isinstance(feedback, dict) or
+                feedback.get('kind') not in ('first_frame', 'last_frame', 'video') or
+                not feedback.get('job_id') or not feedback.get('full_run_id') or
+                not content_policy_rejection(feedback.get('error'))):
+            raise RepairRevisionError('provider finding requires exact rejected job evidence')
+        if feedback['kind'] == 'video':
+            refused = (feedback.get('provider_submit_state') in ('rejected', 'not_sent')
+                       and not feedback.get('provider_task_id'))
+            dead = (feedback.get('provider_submit_state') == 'accepted'
+                    and feedback.get('provider_task_id')
+                    and str(feedback.get('error_class') or '').endswith('.VideoGenerationFailed'))
+            if not (refused or dead):
+                raise RepairRevisionError('provider review cannot replace an uncertain/live video')
     return f
 
 
@@ -103,7 +126,7 @@ def _normalize_shot_patch(value: dict, *, scene_id: str, fallback_characters=Non
     dialogue = str(value.get('dialogue', fallback_dialogue) or '')
     if len(dialogue) > 2000:
         raise RepairRevisionError('revised dialogue is too long')
-    return {
+    patch = {
         "shot_id": sid,
         "description": _clean_string(value.get("description"), "description", 1800),
         "prompt_en": _clean_string(value.get("prompt_en"), "prompt_en", 2800),
@@ -112,6 +135,13 @@ def _normalize_shot_patch(value: dict, *, scene_id: str, fallback_characters=Non
         "motion": str(value.get("motion") or "")[:650],
         "camera": str(value.get("camera") or "")[:450],
     }
+    if 'prompt_overrides' in value:
+        overrides = value['prompt_overrides']
+        if (not isinstance(overrides, dict) or set(overrides) - set(PROMPT_OVERRIDE_FIELDS)
+                or any(not isinstance(text, str) or len(text) > 12000 for text in overrides.values())):
+            raise RepairRevisionError('prompt_overrides must map first/last/video to bounded text')
+        patch['prompt_overrides'] = {key: text.strip() for key, text in overrides.items()}
+    return patch
 
 
 def validate_proposal(proposal: dict, finding: dict, project) -> dict:
@@ -154,6 +184,22 @@ def validate_proposal(proposal: dict, finding: dict, project) -> dict:
     all_ids = [p["shot_id"] for p in changed + added_out]
     if finding.get('shot_id') and finding['shot_id'] in present and finding['shot_id'] not in all_ids:
         raise RepairRevisionError("revision must address the evidenced failing shot")
+    if finding.get('source') == 'provider_rejection':
+        failed = by_id.get(finding['shot_id'])
+        patch = next((p for p in changed if p['shot_id'] == finding['shot_id']), None)
+        fields = ('description', 'prompt_en', 'characters', 'dialogue', 'motion', 'camera')
+        if failed is None or patch is None:
+            raise RepairRevisionError('provider repair must change the rejected shot input')
+        overrides = patch.get('prompt_overrides') or {}
+        changed_override = any(getattr(failed, PROMPT_OVERRIDE_FIELDS[key]) != text
+                               for key, text in overrides.items())
+        if not changed_override and all(getattr(failed, k) == patch[k] for k in fields):
+            raise RepairRevisionError('provider repair must change the rejected shot input')
+        stage = {'first_frame': 'first', 'last_frame': 'last', 'video': 'video'}[
+            finding['provider_feedback']['kind']]
+        current = getattr(failed, PROMPT_OVERRIDE_FIELDS[stage])
+        if current and overrides.get(stage, current) == current:
+            raise RepairRevisionError('provider repair must revise or explicitly clear the active prompt override')
     if len(set(all_ids)) != len(all_ids) or any(p["shot_id"] in present for p in added_out):
         raise RepairRevisionError("duplicate/reused shot IDs are not allowed")
     invariants = proposal.get("narrative_invariants")
@@ -353,7 +399,7 @@ def append_approved_revision(checkpoint, *, base_plan_fingerprint: str, blueprin
     # No media calls or project mutation before this write is acknowledged.
     checkpoint.save(repair_revisions=new_events, effective_plan_digest=digest_after,
                     repair_phase="COMMITTED_PENDING_REPLAY",
-                    repair_active_full_run_id=None)
+                    repair_active_full_run_id=None, repair_pending_finding=None)
     reconcile_project_revisions(project_dir, blueprint, new_events, base_plan_fingerprint)
     checkpoint.save(repair_phase="APPLIED")
     return event
@@ -372,14 +418,57 @@ def _rewrite_shot(shot: Shot, patch: dict):
     shot.motion = patch["motion"]
     shot.camera = patch["camera"]
     _invalidate_shot_media(shot)
+    for stage, text in (patch.get('prompt_overrides') or {}).items():
+        setattr(shot, PROMPT_OVERRIDE_FIELDS[stage], text)
 
 
-def _matches_patch(shot: Shot, patch: dict) -> bool:
+def _repair_source_signature(shot: Shot) -> str:
+    fields = ('description', 'characters', 'dialogue', 'target_duration_s', 'motion', 'camera',
+              *PROMPT_OVERRIDE_FIELDS.values())
+    values = {key: getattr(shot, key) for key in fields}
+    values['target_duration_s'] = float(values['target_duration_s'] or 0)
+    return digest(values)
+
+
+def record_generated_repair_prompt(project_dir: Path, shot: Shot, stage: str, prompt: str):
+    """Write ahead a derived prompt before the native generator persists it.
+
+    The approved story remains immutable; its generated English rendering may
+    legitimately change. Bind that exact rendering to the applied revision so
+    a later hop can distinguish it from an unrecorded edit.
+    """
+    if stage != 'first':
+        return
+    root = Path(project_dir) / 'output/ai'
+    marker = root / 'repair_effective_plan.json'
+    if not marker.is_file():
+        return
+    overlay = json.loads(marker.read_text(encoding='utf-8'))
+    source = (overlay.get('shot_repair_sources') or {}).get(shot.shot_id)
+    if (not source or source.get('revision_id') not in overlay.get('applied_revision_ids', [])
+            or source.get('source_signature') != _repair_source_signature(shot)):
+        return
+    path = root / 'repair_prompt_receipts.json'
+    receipts = json.loads(path.read_text(encoding='utf-8')) if path.is_file() else {}
+    receipt = {'revision_id': source['revision_id'], 'source_signature': source['source_signature'],
+               'prompt_sha256': hashlib.sha256(prompt.encode('utf-8')).hexdigest()}
+    own = receipts.setdefault(shot.shot_id, [])
+    if receipt not in own:
+        own.append(receipt)
+        from src.core.atomic import atomic_write_json
+        atomic_write_json(path, receipts)
+
+
+def _matches_patch(shot: Shot, patch: dict, *, derived_prompt_sha256=None) -> bool:
     return (shot.description == patch["description"] and
-            shot.prompt_en == patch["prompt_en"] and
+            (shot.prompt_en == patch["prompt_en"] or
+             (derived_prompt_sha256 is not None and
+              hashlib.sha256(shot.prompt_en.encode('utf-8')).hexdigest() == derived_prompt_sha256)) and
             shot.characters == patch['characters'] and shot.dialogue == patch['dialogue'] and
             float(shot.target_duration_s or 0) == patch["target_duration_s"] and
-            shot.motion == patch["motion"] and shot.camera == patch["camera"])
+            shot.motion == patch["motion"] and shot.camera == patch["camera"] and
+            all(getattr(shot, PROMPT_OVERRIDE_FIELDS[key]) == text
+                for key, text in (patch.get('prompt_overrides') or {}).items()))
 
 
 def _effective_scene_budget_overrides(project_dir: Path, project, events: list) -> dict:
@@ -444,9 +533,31 @@ def reconcile_project_revisions(project_dir: Path, blueprint: dict, events: list
     # already be in use by a video job; never rewrite it merely to replay an
     # older revision in the same chain.
     final_shots = {}
+    latest_shot_revisions = {}
     for e in events:
         for patch in (*e["proposal"]["replace_shots"], *e["proposal"]["add_shots"]):
             final_shots[patch["shot_id"]] = patch
+            latest_shot_revisions[patch['shot_id']] = e['revision_id']
+    receipt_path = project_dir / 'output/ai/repair_prompt_receipts.json'
+    receipts = json.loads(receipt_path.read_text(encoding='utf-8')) if receipt_path.is_file() else {}
+    def matches(shot, patch):
+        if shot is None:
+            return False
+        actual = hashlib.sha256(shot.prompt_en.encode('utf-8')).hexdigest()
+        recorded = any(r.get('revision_id') == latest_shot_revisions[shot.shot_id] and
+                       r.get('source_signature') == _repair_source_signature(shot) and
+                       r.get('prompt_sha256') == actual
+                       for r in receipts.get(shot.shot_id, []))
+        return _matches_patch(shot, patch, derived_prompt_sha256=actual if recorded else None)
+    def prompt_sources():
+        latest = {}
+        for event in events:
+            if event['revision_id'] in applied:
+                for patch in (*event['proposal']['replace_shots'], *event['proposal']['add_shots']):
+                    latest[patch['shot_id']] = event['revision_id']
+        return {sid: {'revision_id': latest[sid],
+                       'source_signature': _repair_source_signature(project.get_shot(sid))}
+                for sid in latest if project.get_shot(sid) is not None}
     summaries = {s["scene_id"]: s["summary"] for s in blueprint["scenes"]}
     known_summaries = {sid: {text} for sid, text in summaries.items()}
     for e in events:
@@ -466,7 +577,7 @@ def reconcile_project_revisions(project_dir: Path, blueprint: dict, events: list
                for sid, value in effective_summaries(blueprint, events, base_plan_fingerprint).items()):
             return False
         if not all((project.get_shot(sid) is not None and
-                    _matches_patch(project.get_shot(sid), patch))
+                    matches(project.get_shot(sid), patch))
                    for sid, patch in final_shots.items()):
             return False
         # A crash may leave an overlay marker missing, but must never silently
@@ -516,13 +627,13 @@ def reconcile_project_revisions(project_dir: Path, blueprint: dict, events: list
             sh = next((s for s in scene.shots if s.shot_id == r["shot_id"]), None)
             if sh is None:
                 raise RepairRevisionError("original shot missing during replay")
-            if not _matches_patch(sh, r):
+            if not matches(sh, r):
                 _rewrite_shot(sh, r)
                 changed = True
         for a in patch["add_shots"]:
             if a["shot_id"] in existing:
                 sh = next(s for s in scene.shots if s.shot_id == a["shot_id"])
-                if not _matches_patch(sh, a):
+                if not matches(sh, a):
                     raise RepairRevisionError("existing shot ID conflicts with committed revision")
                 continue
             anchor_index = (-1 if a["after_shot_id"] == "__start__" else
@@ -555,6 +666,7 @@ def reconcile_project_revisions(project_dir: Path, blueprint: dict, events: list
         overlay = {"schema_version": 1, "base_plan_fingerprint": base_plan_fingerprint,
                    "effective_plan_digest": effective_plan_digest(blueprint, events[:len(applied)], base_plan_fingerprint),
                    "applied_revision_ids": list(applied), "scene_summaries": dict(summaries),
+                   "shot_repair_sources": prompt_sources(),
                    "scene_budget_overrides": _effective_scene_budget_overrides(
                        project_dir, project, events[:len(applied)])}
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -563,6 +675,7 @@ def reconcile_project_revisions(project_dir: Path, blueprint: dict, events: list
     overlay = {"schema_version": 1, "base_plan_fingerprint": base_plan_fingerprint,
                "effective_plan_digest": effective_plan_digest(blueprint, events, base_plan_fingerprint),
                "applied_revision_ids": ids,
+               "shot_repair_sources": prompt_sources(),
                "scene_summaries": effective_summaries(blueprint, events, base_plan_fingerprint),
                "scene_budget_overrides": _effective_scene_budget_overrides(project_dir, project, events)}
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -572,7 +685,8 @@ def reconcile_project_revisions(project_dir: Path, blueprint: dict, events: list
 
 
 async def expert_propose(client, finding: dict, project, *, roles: Optional[list] = None,
-                         collaboration_plan: Optional[dict] = None) -> tuple[dict, list]:
+                         collaboration_plan: Optional[dict] = None,
+                         repair_history: Optional[list] = None) -> tuple[dict, list]:
     """Specialists propose; Producer selects. A P3 plan may schedule read-only
     expert opinions concurrently; the submitted *media* remains guarded by
     the existing JobQueue/CAS and no expert can approve its own revision.
@@ -595,7 +709,11 @@ async def expert_propose(client, finding: dict, project, *, roles: Optional[list
     context = {"finding": finding, "current_scene_summary": scene.summary,
                "shots": [{"shot_id": s.shot_id, "description": s.description,
                           "duration": s.target_duration_s, "characters": s.characters,
+                          "prompt_overrides": {key: getattr(s, field)
+                                               for key, field in PROMPT_OVERRIDE_FIELDS.items()},
                           "has_final_video": bool(s.final_video)} for s in scene.shots]}
+    if repair_history:
+        context['previous_repair_decisions'] = repair_history[-12:]
     specialist_outputs = []
     completed = {}
     waiting = {t["role"]: t for t in tasks}
@@ -622,6 +740,16 @@ async def expert_propose(client, finding: dict, project, *, roles: Optional[list
                   "Every video shot 4..11s. Existing untouched shots must not be listed. "
                   "Never invent an observation not in the supplied evidence. "
                   f"Your assigned task: {task['task']}.")
+        if finding.get('source') == 'provider_rejection':
+            prompt += (
+                " The provider rejection is an actual review finding. Use its feedback and "
+                "the rejected prompt to repair wording, dialogue, staging or the local plot "
+                "as necessary. Preserve the user's story goals and accepted adjacent media. "
+                "Do not invent a global forbidden-word list or repeat the unchanged rejected "
+                "input. A shot patch may include prompt_overrides:{first:text,last:text,video:text}; "
+                "omit unchanged stages. Revise any active override on the rejected stage, or "
+                "explicitly clear it with empty text so regenerated prompts can take effect. "
+                "If an earlier repair was rejected again, develop another approach.")
         if skill_guidance:
             prompt += ("\nValidated role-bound method (not a tool authorization):\n"
                        + skill_guidance)
@@ -672,19 +800,28 @@ async def expert_propose(client, finding: dict, project, *, roles: Optional[list
             waiting.pop(item["role"])
     valid = [a for a in specialist_outputs if "proposal" in a]
     if not valid:
-        raise RepairRevisionError("no specialist produced a valid revision")
+        details = '; '.join(a.get('error', '') for a in specialist_outputs)
+        raise RepairDecisionPending("no specialist produced a valid revision: " + details[:1800])
     # Producer gets all alternatives and must explicitly select and approve.
-    result = await client.chat([
-        {"role": "system", "content": "You are Producer. Select the best evidence-based local revision, "
-         "preserving the story goal and accepted unaffected media. "
-         "JSON only: {\"approve\":true/false,\"option_index\":0,\"reason\":\"...\"}. "
-         "Reject if essential causality would be lost or error evidence is insufficient."},
-        {"role": "user", "content": json.dumps({"finding": finding, "options": valid}, ensure_ascii=False)}
-    ], thinking=True, max_tokens=DEFAULT_TEXT_MAX_TOKENS, temperature=0.3)
-    decision = _parse_json(result)
+    try:
+        result = await client.chat([
+            {"role": "system", "content": "You are Producer. Select the best evidence-based local revision, "
+             "preserving the story goal and accepted unaffected media. "
+             "JSON only: {\"approve\":true/false,\"option_index\":0,\"reason\":\"...\"}. "
+             "Reject if essential causality would be lost or error evidence is insufficient."},
+            {"role": "user", "content": json.dumps({"finding": finding, "options": valid}, ensure_ascii=False)}
+        ], thinking=True, max_tokens=DEFAULT_TEXT_MAX_TOKENS, temperature=0.3)
+        decision = _parse_json(result)
+    except Exception as exc:
+        raise RepairDecisionPending(f'Producer repair decision unavailable: {exc}') from exc
     if decision.get("approve") is not True or type(decision.get("option_index")) is not int or not 0 <= decision["option_index"] < len(valid):
-        raise RepairRevisionError("Producer did not approve a specific repair option")
+        raise RepairDecisionPending("Producer did not approve a specific repair option: " +
+                                    str(decision.get('reason') or '')[:1200])
+    try:
+        reason = _clean_string(decision.get("reason"), "approval reason", 1200)
+    except RepairRevisionError as exc:
+        raise RepairDecisionPending(f'Producer approval is incomplete: {exc}') from exc
     approval = {"role": "producer", "approved": True,
-                "reason": _clean_string(decision.get("reason"), "approval reason", 1200),
+                "reason": reason,
                 "selected_specialist": valid[decision["option_index"]]["role"]}
     return valid[decision["option_index"]]["proposal"], [*specialist_outputs, approval]

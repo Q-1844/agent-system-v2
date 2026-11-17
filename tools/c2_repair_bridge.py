@@ -1,4 +1,4 @@
-"""Connect C2's append-only repair revisions to real FullProject execution.
+"""Connect append-only Producer repair revisions to real FullProject execution.
 
 The old Stage0 blueprint remains immutable. Repaired scenes are created as a
 new FullProjectRun in the same project, with previously ACCEPTED clips locked
@@ -54,8 +54,13 @@ def validate_repaired_project(project_dir: Path, blueprint: dict, events: list, 
     return reconciled
 
 
-def build_repair_finding(full, project_dir: Path, *, evidence_dir: Path = None) -> dict | None:
+def build_repair_finding(full, project_dir: Path, *, evidence_dir: Path = None,
+                         jobs_file: Path = None) -> dict | None:
     """Accept existing verified P0 evidence, never invent a quality verdict."""
+    from tools.provider_repair import provider_repair_finding
+    provider = provider_repair_finding(full, project_dir, jobs_file=jobs_file)
+    if provider is not None:
+        return provider
     for root in filter(None, [evidence_dir, project_dir / 'output' / 'ai']):
         path = Path(root) / 'repair_findings.json'
         if not path.is_file():
@@ -109,17 +114,20 @@ def lock_preserved_shots(project_dir: Path, revised_shot_ids: set[str]) -> list:
 
 async def auto_repair_failed_full(*, manager, full, wrapper, checkpoint,
                                   blueprint, base_plan_fingerprint,
-                                  evidence_dir=None):
-    """One P1 repair decision. Return replacement FullRun or None.
+                                  evidence_dir=None, jobs_file=None):
+    """One Producer repair decision. Return replacement FullRun or None.
 
     Before CAS any provider jobs/UNKNOWN receipts must be settled. If no
-    trusted finding or Producer rejects the alternatives, do nothing; leave
-    the original failure available to the operator.
+    trusted finding, do nothing. An unavailable/unapproved creative decision
+    remains pending; the driver saves it for automatic continuation. A new
+    provider rejection in a replacement run starts the next repair decision.
     """
-    if full.status not in ('failed', 'completed') or wrapper.finalize_only:
+    if (full.status not in ('failed', 'completed') or wrapper.finalize_only or
+            getattr(wrapper, 'quota_gate_after', None)):
         return None
     project_dir = Path(wrapper.project_dir)
-    finding = build_repair_finding(full, project_dir, evidence_dir=evidence_dir)
+    finding = build_repair_finding(full, project_dir, evidence_dir=evidence_dir,
+                                   jobs_file=jobs_file)
     if finding is None:
         return None
     # The loose P0 reviewer is unchanged. A technically completed FullRun may
@@ -127,13 +135,18 @@ async def auto_repair_failed_full(*, manager, full, wrapper, checkpoint,
     # evidence; a completion alone must never cause a speculative rewrite.
     if full.status == 'completed' and finding.get('source') != 'verified_quality_review':
         return None
-    assert_quiescent(project_dir, checkpoint.doc)
+    assert_quiescent(project_dir, checkpoint.doc, jobs_file=jobs_file)
     from src.ai.repair_revision import validate_finding, REVISION_LIMIT
     finding = validate_finding(finding, scene_ids={s['scene_id'] for s in blueprint['scenes']})
     prior = checkpoint.doc.get('repair_revisions') or []
     if len(prior) >= REVISION_LIMIT or any(r['finding']['finding_id'] == finding['finding_id'] for r in prior):
         return None
     project = ProjectStore(project_dir).load()
+    if finding.get('source') == 'provider_rejection':
+        shot = project.get_shot(finding['shot_id'])
+        if shot is None or shot.scene_id != finding['scene_id']:
+            raise RepairRevisionError('provider finding shot does not belong to the scene')
+        checkpoint.save(repair_pending_finding=finding)
     from src.agents.producer_orchestration import (
         producer_choose_repair_collaboration, verify_stored_collaboration,
         DEFAULT_MODE, OrchestrationError,
@@ -156,20 +169,27 @@ async def auto_repair_failed_full(*, manager, full, wrapper, checkpoint,
             plan = verify_stored_collaboration(pinned, finding, mode_id=mode_id)
         except OrchestrationError as exc:
             raise RepairRevisionError(f'frozen collaboration plan invalid: {exc}') from exc
+    history = [
+        {'finding': event['finding'], 'proposal': event['proposal']}
+        for event in prior if event['finding'].get('shot_id') == finding.get('shot_id')]
+    history += [entry for entry in checkpoint.doc.get('repair_decision_history') or []
+                if entry.get('finding_id') == finding['finding_id']]
     proposal, approvals = await expert_propose(wrapper, finding, project,
-                                                collaboration_plan=plan)
+                                                collaboration_plan=plan,
+                                                repair_history=history)
     approvals.insert(0, {'role': 'collaboration_plan', 'plan': plan,
                          'plan_digest': plan['plan_digest']})
     # append CAS is synchronous, and must be completed before any new videos.
     event = append_approved_revision(
         checkpoint, base_plan_fingerprint=base_plan_fingerprint,
         blueprint=blueprint, finding=finding, proposal=proposal,
-        approvals=approvals, project_dir=project_dir)
+        approvals=approvals, project_dir=project_dir, jobs_file=jobs_file)
     changed_ids = {s['shot_id'] for s in (*proposal['replace_shots'], *proposal['add_shots'])}
     preserved = lock_preserved_shots(project_dir, changed_ids)
     checkpoint.save(repair_phase='READY_TO_RESTART',
                     repair_preserved_media=[*(checkpoint.doc.get('repair_preserved_media') or []),
                                             {'revision_id': event['revision_id'], 'shots': preserved}])
+    wrapper.submission_blocked = False  # the previous run was drained before revision
     new_full = await manager.start_run(project_dir.name)
     checkpoint.save(repair_phase='RESTARTED', repair_active_full_run_id=new_full.run_id)
     return new_full

@@ -1611,6 +1611,15 @@ async def _run_auto_acceptance(nonce, out, summary, token):
     write_json(out / "stage0-blueprint.json", blueprint)
     # ---- 生产上下文（动态 profile：media gate / wrapper budgets / 验收门槛）----
     dyn_profile = auto_media_profile(blueprint)
+    if cp.doc.get('repair_revisions'):
+        # Create-mode films share the same append-only Producer repair log as
+        # C2 films. Replay a CAS-committed edit before workers can start.
+        from tools.c2_repair_bridge import validate_repaired_project, effective_media_profile
+        events = cp.doc['repair_revisions']
+        summary['repair_effective_plan'] = validate_repaired_project(
+            project_dir, blueprint, events, stage0.plan_fingerprint)
+        dyn_profile = effective_media_profile(
+            dyn_profile, ProjectStore(project_dir).load(), events)
     return project_name, dyn_profile, cp, restored, previous
 
 
@@ -1814,6 +1823,11 @@ async def run_acceptance(nonce, out, summary):
         full = existing_full
     elif restored and existing_full and existing_full.status == 'completed':
         full = existing_full
+    elif (restored and existing_full and existing_full.status == 'failed' and
+          cp.doc.get('repair_pending_finding')):
+        # A model/Producer decision may have been deferred across a hop.
+        # Revisit that finding before starting any old media jobs again.
+        full = existing_full
     elif restored and existing_full and existing_full.status in ('paused', 'failed'):
         # A CAS-committed repair may have landed just before a crash, without
         # binding the new FullRun. Starting the next run is safe only when
@@ -1866,7 +1880,6 @@ async def run_acceptance(nonce, out, summary):
     while True:
         full = manager.get_run(project_name, full.run_id)
         if (full.status in ('failed', 'completed') and target == AUTO_TARGET and not finalize_only
-                and summary.get('c2_source_project')
                 and (full.status == "completed" or
                      production_wait_reason(wrapper, deps.job_queue, project_name) is None)):
             from tools.c2_repair_bridge import auto_repair_failed_full, effective_media_profile
@@ -1875,11 +1888,12 @@ async def run_acceptance(nonce, out, summary):
                 stage0_for_repair = Stage0Record(task_index(token, nonce, STAGE0_FILENAME), nonce)
                 if stage0_for_repair.plan_fingerprint != cp.doc.get('plan_fingerprint'):
                     raise RepairRevisionError('repair base blueprint fingerprint changed')
-                replacement = await auto_repair_failed_full(
+                replacement = await attempt_producer_repair(
                     manager=manager, full=full, wrapper=wrapper, checkpoint=cp,
                     blueprint=stage0_for_repair.blueprint,
                     base_plan_fingerprint=stage0_for_repair.plan_fingerprint,
-                    evidence_dir=out)
+                    evidence_dir=out, queue=deps.job_queue, summary=summary,
+                    nonce=nonce, driver_minutes=driver_minutes)
             except RepairRevisionError as exc:
                 summary['repair_blocked_reason'] = str(exc)
                 replacement = None
@@ -2101,12 +2115,61 @@ async def run_acceptance(nonce, out, summary):
     summary["status"] = "PASS"
 
 
+async def attempt_producer_repair(*, manager, full, wrapper, checkpoint, blueprint,
+                                  base_plan_fingerprint, evidence_dir, queue,
+                                  summary, nonce, driver_minutes):
+    """Use the existing Producer repair loop for actual provider review findings.
+
+    A rejected alternative or unavailable text model is resumable decision
+    work, not a reason to rerun unchanged media or abandon the whole film.
+    """
+    from tools.c2_repair_bridge import build_repair_finding, auto_repair_failed_full
+    from src.ai.repair_revision import RepairDecisionPending
+    finding = build_repair_finding(full, wrapper.project_dir,
+                                   evidence_dir=evidence_dir, jobs_file=queue.state_path)
+    if finding is None:
+        return None
+    provider = finding.get('source') == 'provider_rejection'
+    if provider and not snapshot_settled(wrapper.project_dir, wrapper.video_attempts, queue):
+        drained = await pause_and_drain(manager, Path(wrapper.project_dir).name,
+            full.run_id, wrapper, queue, reason='provider_repair')
+        if not drained:
+            checkpoint.save(repair_pending_finding=finding)
+            await wrapper.persist(phase='INTERRUPTED', terminal_status='technical_wait',
+                wait_reason='provider_repair', drain_complete=False,
+                resume_not_before=time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(time.time() + 120)))
+            summary['repair_pending_reason'] = 'waiting for in-flight settlement before Producer revision'
+            summary['auto_resume'] = await auto_resume_next_hop(wrapper, nonce, driver_minutes)
+            raise RuntimeError('Producer repair waiting for drainage; automatic continuation recorded')
+    try:
+        return await auto_repair_failed_full(
+            manager=manager, full=full, wrapper=wrapper, checkpoint=checkpoint,
+            blueprint=blueprint, base_plan_fingerprint=base_plan_fingerprint,
+            evidence_dir=evidence_dir, jobs_file=queue.state_path)
+    except RepairDecisionPending as exc:
+        if not provider:
+            raise
+        import datetime as dt
+        history = list(checkpoint.doc.get('repair_decision_history') or [])
+        history.append({'finding_id': finding['finding_id'], 'error': str(exc)[:2000],
+                        'at': utc_now()})
+        checkpoint.save(repair_pending_finding=finding, repair_decision_history=history)
+        drained = await record_technical_wait(manager, Path(wrapper.project_dir).name,
+            full, wrapper, queue, 'provider_repair')
+        until = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=2)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        await wrapper.persist(resume_not_before=until)
+        summary['repair_pending_reason'] = str(exc)
+        summary['repair_drain_complete'] = drained
+        summary['auto_resume'] = await auto_resume_next_hop(wrapper, nonce, driver_minutes)
+        raise RuntimeError('Producer repair decision pending; automatic continuation recorded') from exc
+
+
 async def record_technical_wait(manager, project_name, full, wrapper, queue, reason):
     """Persist infrastructure exhaustion as recoverable work after safe drainage."""
     drained = False
-    if reason == 'asset_publication':
+    if reason in ('asset_publication', 'provider_repair'):
         drained = await pause_and_drain(manager, project_name, full.run_id,
-            wrapper, queue, reason='asset_publication')
+            wrapper, queue, reason=reason)
     await wrapper.persist(phase='INTERRUPTED', terminal_status='technical_wait',
                           error=full.error, wait_reason=reason, drain_complete=drained)
     return drained

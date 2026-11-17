@@ -381,6 +381,7 @@ class JobQueue:
             history.update(error=j.error, attempts=j.attempts, finished_at=j.finished_at)
             j.params.setdefault("submission_history", []).append(history)
         j.error_class = j.error_stage = j.error_provider = j.error_model = None
+        j.params.pop('provider_content_feedback', None)
         j.state, j.error, j.progress, j.message = JobState.QUEUED.value, None, 0, ""
         j.finished_at = None
         self._save()
@@ -500,6 +501,7 @@ class JobQueue:
     async def _run_job(self, job: Job, name: str):
         """执行单个 job 的 handler，带看门狗。force cancel / 看门狗通过 task.cancel() 中断。"""
         job.params["handler_started"] = True
+        job.params.pop('provider_content_feedback', None)
         self._save()
         watchdog = asyncio.create_task(self._watchdog(job))
         try:
@@ -545,6 +547,12 @@ class JobQueue:
                     msg = (ectx.__name__ if ectx.__module__ in ("builtins", "exceptions")
                            else f"{ectx.__module__}.{ectx.__name__}")
                 job.error = msg[:800]
+                from .provider_errors import content_policy_rejection
+                if content_policy_rejection(e):
+                    job.params['provider_content_feedback'] = {
+                        'error': str(e)[:2000] + ('\n' + str(getattr(e, 'body', '') or ''))[:2000],
+                        'status': getattr(e, 'status', None),
+                    }
                 job.message = f"失败: {msg[:200]}"
                 job.error_class = f"{type(e).__module__}.{type(e).__qualname__}"
                 params = job.params or {}

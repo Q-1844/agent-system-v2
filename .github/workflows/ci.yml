@@ -33,7 +33,7 @@ jobs:
       - run: pip install -r requirements-ci.txt
       - name: Fetch P55 relstore sample from B archive
         env:
-          P55_TAR_URL: https://api.github.com/repos/Q-1844/agent-system-v2-rundata/contents/films/P55_SMOKE2B.tar
+          P55_TAR_URL: https://raw.githubusercontent.com/Q-1844/agent-system-v2-rundata/main/films/P55_SMOKE2B.tar
           P55_TAR_SHA256: f18a80b3a2b60b4ed762ef9aec70edb85f9124147dd8cdc1f7f38779dd2b75ff
         run: |
           set -euo pipefail
@@ -110,7 +110,7 @@ jobs:
       - name: Fetch P55 relstore sample from B archive
         shell: pwsh
         env:
-          P55_TAR_URL: https://api.github.com/repos/Q-1844/agent-system-v2-rundata/contents/films/P55_SMOKE2B.tar
+          P55_TAR_URL: https://raw.githubusercontent.com/Q-1844/agent-system-v2-rundata/main/films/P55_SMOKE2B.tar
           P55_TAR_SHA256: f18a80b3a2b60b4ed762ef9aec70edb85f9124147dd8cdc1f7f38779dd2b75ff
         run: |
           $ErrorActionPreference = 'Stop'

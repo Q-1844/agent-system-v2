@@ -743,6 +743,7 @@ async def _handler_first_frame(job, emit):
         from src.ai.content_policy_revision import revise_prompt_with_feedback
         prompt = await revise_prompt_with_feedback(prompt, cp_feedback)
     use_i2i = bool(refs)
+    job.params['dispatch_image_prompt'] = prompt
     frames_dir = project_dir / "output" / "frames"
     frames_dir.mkdir(parents=True, exist_ok=True)
 
@@ -879,6 +880,7 @@ async def _handler_last_frame(job, emit):
     if cp_feedback_lf:
         from src.ai.content_policy_revision import revise_prompt_with_feedback
         prompt = await revise_prompt_with_feedback(prompt, cp_feedback_lf)
+    job.params['dispatch_image_prompt'] = prompt
     provider = (job.params.get("image_provider") or "agnes").lower()
     client = deps.get_sensenova_image_client() \
         if provider == "sensenova" else get_agnes_client()
@@ -3233,6 +3235,8 @@ async def generate_prompt_for_stage(project_name: str, shot_id: str, stage: str,
                      "video": "video_prompt_sig"}[stage]
 
         def _persist_prompt(s, f=field, sf=sig_field, p=prompt):
+            from src.ai.repair_revision import record_generated_repair_prompt
+            record_generated_repair_prompt(project_dir, s, stage, p)
             setattr(s, f, p)
             # 37.md §1.1：写入 en 的同时记录当时字段签名（消费端 freshness 可判）
             setattr(s, sf, prompt_semantic_sig(s, stage))

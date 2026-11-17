@@ -28,6 +28,28 @@ def explicit_rejection(error):
             and 400 <= status < 500 and status != 408)
 
 
+def content_policy_rejection(error):
+    """Recognize provider review feedback, never a local prompt restriction.
+
+    Persisted jobs contain error text; live errors also expose HTTP/body facts.
+    An ambiguous submit, rate limit or server failure must keep its own recovery
+    path even if it happens to mention a content filter.
+    """
+    if error is None or is_uncertain(error):
+        return False
+    status = getattr(error, 'status', None)
+    if status is not None and status not in (400, 403, 422):
+        return False
+    text = error_text(error)
+    if status is None and (re.search(r'(?:api 错误 |http[ /]?)(?:408|429|5\d\d)\b', text)
+                           or re.search(r'\b(?:408|429|5\d\d)\s*:', text)):
+        return False
+    return any(code in text for code in (
+        'content_policy_violation', 'content_filter', 'content_policy_rejection',
+        'moderation_blocked', 'safety_violation', 'responsibleaipolicyviolation',
+    ))
+
+
 def daily_quota_rejection(error):
     if error is None or is_uncertain(error):
         return False
