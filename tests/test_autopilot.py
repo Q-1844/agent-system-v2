@@ -405,7 +405,7 @@ async def test_first_frame_content_policy_gets_third_batch(monkeypatch):
         sleeps.append(s)
     monkeypatch.setattr(ap.asyncio, "sleep", fake_sleep)
     run, state = _cp_run_state()
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError, match="3 次 batch"):
         await ap.SceneAutopilotManager._do_first_frame(stub, "p", run, state, None)
     assert len(stub.calls) == 3, "内容政策拒死必须打满第 3 批"
     assert stub.calls[-1].endswith(":3")

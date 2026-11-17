@@ -895,6 +895,11 @@ class SceneAutopilotManager:
             if existing.state == "failed" and kind in ("first_frame", "last_frame"):
                 # Explicit Run resume reuses the failed job and any image receipt.
                 # Cancelled work and ambiguous paid-video submissions stay blocked.
+                # A restored third batch may predate feedback-based revision, or
+                # carry feedback from an older hop. Persist this retry's actual
+                # provider response before retry() queues the existing job.
+                if params.get("content_policy_feedback"):
+                    existing.params["content_policy_feedback"] = params["content_policy_feedback"]
                 return q.retry(existing.job_id) or existing
             if existing.state == "failed" and kind == "video":
                 receipt = getattr(existing, "params", {}) or {}
@@ -1008,7 +1013,7 @@ class SceneAutopilotManager:
             state.selected_first_candidate_id = cid
             await self._save_shot_state(run, state)
             return
-        raise RuntimeError("首帧生成失败（2 次 batch 均无成功候选）")
+        raise RuntimeError(f"首帧生成失败（{attempt} 次 batch 均无成功候选）")
 
     async def _do_last_frame(self, project_name: str, run: SceneAutopilotRun,
                              state: ShotExecutionState, store: ProjectStore):
@@ -1059,7 +1064,7 @@ class SceneAutopilotManager:
             state.selected_last_candidate_id = cid
             await self._save_shot_state(run, state)
             return
-        raise RuntimeError("尾帧生成失败（2 次 batch 均无成功候选）")
+        raise RuntimeError(f"尾帧生成失败（{attempt} 次 batch 均无成功候选）")
 
     async def _do_video(self, project_name: str, run: SceneAutopilotRun,
                         state: ShotExecutionState, store: ProjectStore, project_dir: Path):

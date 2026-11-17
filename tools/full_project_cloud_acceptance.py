@@ -308,7 +308,7 @@ class BoundedRealClient:
         await self.persist()
         return result
 
-    async def chat(self, *args, **kwargs):
+    async def _reserve_text_call(self):
         if self.finalize_only:
             raise RuntimeError('finalize-only forbids new Agnes generation calls')
         if self.text_calls + self.stage0_text_reserved + 1 > self.text_budget:
@@ -318,7 +318,16 @@ class BoundedRealClient:
             # C2/B2: consume a text slot durably before remote submission.
             # A crash after reservation may lose one slot, never grant extra.
             await self.persist()
+
+    async def chat(self, *args, **kwargs):
+        await self._reserve_text_call()
         return await self.client.chat(*args, **kwargs)
+
+    async def chat_completion(self, *args, **kwargs):
+        # Feedback-based image revision uses this endpoint. __getattr__ must
+        # not let it bypass finalize-only, durable usage, or the text budget.
+        await self._reserve_text_call()
+        return await self.client.chat_completion(*args, **kwargs)
 
     async def generate_image(self, *args, **kwargs):
         if self.finalize_only:
