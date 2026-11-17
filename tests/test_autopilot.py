@@ -360,6 +360,7 @@ class _CPStub:
 
     def __init__(self, job_script, batches):
         self.calls = []
+        self.params_seen = []
         self.sleeps = []
         self.job_script = list(job_script)   # [(state, error), ...] 逐批弹出
         self.batches = batches
@@ -367,6 +368,7 @@ class _CPStub:
     async def _enqueue_autopilot_job(self, project_name, shot_id, kind,
                                      stage_key, run_id, **params):
         self.calls.append(stage_key)
+        self.params_seen.append(params)
         return _Job("queued")
 
     async def _wait_job(self, job_id):
@@ -408,6 +410,10 @@ async def test_first_frame_content_policy_gets_third_batch(monkeypatch):
     assert len(stub.calls) == 3, "内容政策拒死必须打满第 3 批"
     assert stub.calls[-1].endswith(":3")
     assert sleeps == [30], "第 3 批前必须退避 30s"
+    # 批 1/2 原提示词（不带重试标记），批 3 换措辞（content_policy_retry=True）
+    assert stub.params_seen[0].get("content_policy_retry") is not True
+    assert stub.params_seen[1].get("content_policy_retry") is not True
+    assert stub.params_seen[2].get("content_policy_retry") is True
 
 
 @pytest.mark.asyncio

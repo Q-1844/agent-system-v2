@@ -803,7 +803,8 @@ def apply_population_clause(prompt: str, shot: Any, *, enabled: bool) -> str:
 def build_bound_first_frame_input(project_dir, project: Any, shot: Any, *,
                                   scene_reference_mode: Optional[str] = None,
                                   human_reference_mode: Optional[str] = None,
-                                  population_constraint: bool = False
+                                  population_constraint: bool = False,
+                                  strip_speech: bool = False
                                   ) -> BoundImageRequest:
     """BOUND shot 的首帧生成输入（§4.A/C；§27：BOUND 永不回落 legacy）。
     顺序：validity gate → compile pack（自带 pre/post 守卫）→ temporal 过滤（先于
@@ -875,12 +876,14 @@ def build_bound_first_frame_input(project_dir, project: Any, shot: Any, *,
 
     # ---- prompt（§20/§21：creative builder 复用 + Pack 生产上下文 + P1 风格指令）----
     from src.core.prompt_builder import build_first_frame_prompt
-    creative = build_first_frame_prompt(project, shot, style_suffix="")
+    creative = build_first_frame_prompt(project, shot, style_suffix="",
+                                         strip_speech=strip_speech)
     ctx = _production_context_text(pack, rdoc, "first")
     style = _style_instruction_from_pack(pack)
     population = _population_constraint_clause(shot) if population_constraint else ""
     tail = " ".join(x for x in (ctx, style, population) if x)
-    prompt = build_first_frame_prompt(project, shot, style_suffix=tail) if tail \
+    prompt = build_first_frame_prompt(project, shot, style_suffix=tail,
+                                       strip_speech=strip_speech) if tail \
         else creative
     prompt = prompt + continuity_clause
 
@@ -902,7 +905,8 @@ def build_bound_first_frame_input(project_dir, project: Any, shot: Any, *,
 def build_bound_last_frame_input(project_dir, project: Any, shot: Any, *,
                                  first_frame_url: str,
                                  scene_reference_mode: Optional[str] = None,
-                                 human_reference_mode: Optional[str] = None
+                                 human_reference_mode: Optional[str] = None,
+                                 strip_speech: bool = False
                                  ) -> BoundImageRequest:
     """BOUND shot 的尾帧生成输入（S3C.2 §3.A）。last-frame temporal rule（§6）：
     end/throughout/static 进、**start 排除且先于 priority**。
@@ -971,11 +975,13 @@ def build_bound_last_frame_input(project_dir, project: Any, shot: Any, *,
 
     # ---- prompt（creative builder 复用 + Pack 生产上下文 last 口径 + P1 风格指令）----
     from src.core.prompt_builder import build_last_frame_prompt
-    creative = build_last_frame_prompt(project, shot, style_suffix="")
+    creative = build_last_frame_prompt(project, shot, style_suffix="",
+                                        strip_speech=strip_speech)
     ctx = _production_context_text(pack, rdoc, "last")
     style = _style_instruction_from_pack(pack)
     tail = " ".join(x for x in (ctx, style) if x)
-    prompt = build_last_frame_prompt(project, shot, style_suffix=tail) if tail \
+    prompt = build_last_frame_prompt(project, shot, style_suffix=tail,
+                                      strip_speech=strip_speech) if tail \
         else creative
 
     # ---- pre-dispatch race guard（§25）----

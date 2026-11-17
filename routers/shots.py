@@ -688,6 +688,8 @@ async def _handler_first_frame(job, emit):
             if (provider or "agnes").lower() == "sensenova" else get_agnes_client()
 
     provider = (job.params.get("image_provider") or "agnes").lower()
+    # CP-3（2026-11-17）：内容驳回后的重试批次 → 提示词换措辞（剥离引语对白）
+    cp_retry = bool(job.params.get("content_policy_retry", False))
     project_dir = get_project_manager().get_project_dir(job.project)
     store = ProjectStore(project_dir)
     project = store.load()
@@ -713,7 +715,8 @@ async def _handler_first_frame(job, emit):
                                                   "human_reference_mode"),
                                               population_constraint=bool(
                                                   job.params.get(
-                                                      "population_constraint")))
+                                                      "population_constraint")),
+                                              strip_speech=cp_retry)
         # 31.md C1 seam：BOUND 输入经 provider-neutral GenerationRequest →
         # Agnes compiler 到达 client（编译层=能力诚实映射；UNBOUND 保持 legacy
         # 直调，行为逐字节不变）。
@@ -729,7 +732,8 @@ async def _handler_first_frame(job, emit):
         # StyleAnchor 默认 'anime' 曾污染非动漫项目分镜。profile unspecified → None
         # = 原行为（StyleAnchor.suffix），已 specified 项目的存量语义不受影响。
         prompt = build_first_frame_prompt(
-            project, shot, style_suffix=_legacy_vp_style_suffix(project_dir))
+            project, shot, style_suffix=_legacy_vp_style_suffix(project_dir),
+            strip_speech=cp_retry)
         # reference_previous：提示词表达「保持连续但允许换机位」，不要求逐像素复制
         if any(r["type"] == "continuity" for r in typed_refs):
             prompt += (". Maintain continuity with the previous shot's ending frame: keep character identity, "
@@ -825,6 +829,8 @@ async def _handler_last_frame(job, emit):
     生成后若 split_next 非空，桥接拷贝给后继首帧（O2.first_frame = O.last_frame，保证 O->O2 无缝）。"""
     from src.core.store import ProjectStore
     from src.core.models import Asset, ImageAsset, Candidate, ImageBatch, ShotStatus
+    # CP-3（2026-11-17）：同首帧——内容驳回重试批次换措辞
+    cp_retry_lf = bool(job.params.get("content_policy_retry", False))
     project_dir = get_project_manager().get_project_dir(job.project)
     store = ProjectStore(project_dir)
     project = store.load()
@@ -849,7 +855,8 @@ async def _handler_last_frame(job, emit):
         bound_last = build_bound_last_frame_input(
             project_dir, project, shot, first_frame_url=ff_url,
             scene_reference_mode=job.params.get("scene_reference_mode"),
-            human_reference_mode=job.params.get("human_reference_mode"))
+            human_reference_mode=job.params.get("human_reference_mode"),
+            strip_speech=cp_retry_lf)
         # 31.md C1 seam（同首帧）：provider-neutral 编译到 Agnes 形态。
         _gen_req_lf = bound_last.to_generation_request(
             generation_type="last_frame",
@@ -861,7 +868,8 @@ async def _handler_last_frame(job, emit):
     else:
         # P1 根因修复：同首帧——legacy 尾帧消费 ProjectVisualProfile（unspecified → 原行为）
         prompt = build_last_frame_prompt(
-            project, shot, style_suffix=_legacy_vp_style_suffix(project_dir))
+            project, shot, style_suffix=_legacy_vp_style_suffix(project_dir),
+            strip_speech=cp_retry_lf)
         # image_refs 顺序（提示词.md §11）：1.已选首帧（场景/构图基础）2.角色参考图（身份保持）。
         # 无角色时 char_refs 为空，只传首帧。首帧始终第一张，不让角色图取代主构图参考。
         char_refs = _shot_char_refs(project, shot)

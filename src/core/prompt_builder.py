@@ -22,12 +22,13 @@ def _join(parts) -> str:
     return ", ".join(p.strip() for p in parts if p and str(p).strip())
 
 
-# ---- 图像 prompt 对白剥离（2026-11-17 anime750s-20261116a 实弹）----
+# ---- 内容政策重试措辞（2026-11-17 anime750s-20261116a 实弹）----
 # run 336/337/338 三跳 12 发首帧候选全部 content_policy_violation 400 拒死：
-# 根因是视觉提示词混入了台词原文（描述字段内嵌（"对不起我不是故意撞你的"）），
-# 脱上下文的引语（自认撞人/道歉）触发供应商内容过滤。台词本属于 NDC 音轨，
-# 图像模型既画不出语音，引语在视觉 prompt 里只有过滤风险没有语义价值。
-# 只在「图像」两 builder 剥离；视频 prompt 保留 description 原文（§13 语义校准）。
+# 描述字段内嵌的台词原文（脱上下文引语，如"对不起我不是故意撞你的"）触发
+# 供应商内容过滤。驳回本质是「审核意见」（与自有审片打回同类）→ 处理方式
+# 是重试 + 换措辞，而不是永久剥除台词：NDC 视频生成要消费对白语义，正常
+# 批次必须保留原文。故仅在内容驳回后的重试批次（strip_speech=True）剥离
+# 引语做换措辞重提；默认 False 语义零变化。
 import re as _re
 
 # 引语对（含中英、全半角）：前后紧贴的全角括号随引语一起整体删除
@@ -71,7 +72,8 @@ def _size_directive(shot: Shot) -> str:
 
 
 def build_first_frame_prompt(project: Project, shot: Shot,
-                             *, style_suffix: Optional[str] = None) -> str:
+                             *, style_suffix: Optional[str] = None,
+                             strip_speech: bool = False) -> str:
     """首帧英文 prompt（提示词.md §9）。
     优先级：first_frame_prompt_override > prompt_en（兼容）> 结构字段拼接。
     顺序（D2 调整）：景别/构图前置指令 -> 角色身份 -> 起始画面 -> 主体起始状态
@@ -82,10 +84,11 @@ def build_first_frame_prompt(project: Project, shot: Shot,
     传 str 则用之（""=不拼后缀）——Binding-aware 生成路径用 Pack 的 VisualProfile
     风格指令替代 StyleAnchor（§19），creative 拼接逻辑零改动。"""
     suffix = project.style.suffix() if style_suffix is None else style_suffix
+    strip = _strip_quoted_speech if strip_speech else (lambda t: t)
     if shot.first_frame_prompt_override:
-        return _strip_quoted_speech(_with_suffix(shot.first_frame_prompt_override.strip(), suffix))
+        return strip(_with_suffix(shot.first_frame_prompt_override.strip(), suffix))
     if shot.prompt_en:
-        return _strip_quoted_speech(_with_suffix(shot.prompt_en.strip(), suffix))
+        return strip(_with_suffix(shot.prompt_en.strip(), suffix))
     parts = [
         _size_directive(shot),
         _char_identity(project, shot),
@@ -95,11 +98,12 @@ def build_first_frame_prompt(project: Project, shot: Shot,
         shot.important_details,
         ", ".join(shot.required_elements) if shot.required_elements else "",
     ]
-    return _strip_quoted_speech(_with_suffix(_join(parts), suffix))
+    return strip(_with_suffix(_join(parts), suffix))
 
 
 def build_last_frame_prompt(project: Project, shot: Shot,
-                            *, style_suffix: Optional[str] = None) -> str:
+                            *, style_suffix: Optional[str] = None,
+                            strip_speech: bool = False) -> str:
     """尾帧英文 prompt（提示词.md §11）。基于已选首帧。
     优先级：last_frame_prompt_override > last_frame_prompt_en > 结构字段拼接。
     无角色时只声明基于首帧，不报错。frame_change 空时回退 motion（§14 兼容规则 7）。
@@ -107,10 +111,11 @@ def build_last_frame_prompt(project: Project, shot: Shot,
     传 str 则用之（""=不拼后缀）——Binding-aware 尾帧路径用 Pack 的 VisualProfile
     风格指令替代 StyleAnchor（同 S3C.1 首帧 seam 模式），creative 拼接逻辑零改动。"""
     suffix = project.style.suffix() if style_suffix is None else style_suffix
+    strip = _strip_quoted_speech if strip_speech else (lambda t: t)
     if shot.last_frame_prompt_override:
-        return _strip_quoted_speech(_with_suffix(shot.last_frame_prompt_override.strip(), suffix))
+        return strip(_with_suffix(shot.last_frame_prompt_override.strip(), suffix))
     if shot.last_frame_prompt_en:
-        return _strip_quoted_speech(_with_suffix(shot.last_frame_prompt_en.strip(), suffix))
+        return strip(_with_suffix(shot.last_frame_prompt_en.strip(), suffix))
     parts = ["Based on the first reference image"]
     change = shot.frame_change or shot.motion
     if change:
@@ -127,7 +132,7 @@ def build_last_frame_prompt(project: Project, shot: Shot,
     parts.append(shot.preserve_custom)
     if shot.characters:
         parts.append("keep character identity consistent with the reference images")
-    return _strip_quoted_speech(_with_suffix(_join(parts), suffix))
+    return strip(_with_suffix(_join(parts), suffix))
 
 
 def build_video_prompt(shot: Shot, mode: str, *, style_suffix: str = "") -> str:

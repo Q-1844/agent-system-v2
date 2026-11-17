@@ -959,13 +959,16 @@ class SceneAutopilotManager:
         from src.core.models import ShotStatus as SS
         from routers.shots import choose_first_frame_business
         for attempt in range(1, 4):
-            # CP-3（2026-11-17 anime750s-20261116a 三跳 12 拒实弹）：批次上限
-            # 2→3，但第 3 批只给 content_policy_violation——供应商内容过滤实测
-            # 为非确定性/边缘判定（同提示词跨批次反复拒、隔窗重试可过），退避
-            # 30s 给过滤窗口复位。其它失败类别维持两批 fail-loud 语义不变。
+            # CP-3（2026-11-17 anime750s-20261116a 三跳 12 拒实弹）：内容驳回按
+            # 「审核意见」处理（与自有审片打回同类）——批 1/2 用原提示词（台词
+            # 完整保留，NDC 要消费对白语义）；全被拒才退避 30s 走第 3 批，且第
+            # 3 批带 content_policy_retry 换措辞（handler 剥离引语重提）。其它
+            # 失败类别维持两批 fail-loud 语义不变。
             stage_key = f"autopilot:{run.run_id}:{state.shot_id}:first_frame:{attempt}"
-            job = await self._enqueue_autopilot_job(project_name, state.shot_id, "first_frame",
-                                                    stage_key, run.run_id, variants=2)
+            job = await self._enqueue_autopilot_job(
+                project_name, state.shot_id, "first_frame",
+                stage_key, run.run_id, variants=2,
+                content_policy_retry=(attempt >= 3))
             state.active_job_id = job.job_id
             state.active_stage_key = stage_key
             await self._save_shot_state(run, state)
@@ -1011,11 +1014,13 @@ class SceneAutopilotManager:
         from src.core.models import ShotStatus as SS
         from routers.shots import choose_last_frame_business
         for attempt in range(1, 4):
-            # CP-3（2026-11-17）：同 _do_first_frame——第 3 批只给内容政策拒死，
-            # 其它失败类别维持两批 fail-loud 语义。
+            # CP-3（2026-11-17）：同 _do_first_frame——批 1/2 原提示词，内容驳回
+            # 退避后第 3 批换措辞；其它失败类别维持两批 fail-loud。
             stage_key = f"autopilot:{run.run_id}:{state.shot_id}:last_frame:{attempt}"
-            job = await self._enqueue_autopilot_job(project_name, state.shot_id, "last_frame",
-                                                    stage_key, run.run_id)
+            job = await self._enqueue_autopilot_job(
+                project_name, state.shot_id, "last_frame",
+                stage_key, run.run_id,
+                content_policy_retry=(attempt >= 3))
             state.active_job_id = job.job_id
             state.active_stage_key = stage_key
             await self._save_shot_state(run, state)
