@@ -41,19 +41,20 @@ async def revise_prompt_with_feedback(prompt: str, feedback: str,
     fb = (feedback or "").strip()
     if not base or not fb:
         return base
-    if client is None:
-        from deps import get_agnes_client
-        client = get_agnes_client()
     messages = [{"role": "user",
                  "content": _REVISION_INSTRUCTION.format(
                      feedback=fb[:2000], prompt=base[:6000])}]
     try:
+        if client is None:
+            from deps import get_agnes_client
+            client = get_agnes_client()
         msg = await client.chat_completion(messages, temperature=0.3)
         revised = ""
         content = msg.get("content") if isinstance(msg, dict) else None
         if isinstance(content, str):
             revised = content.strip()
         if not revised:
+            log.warning("内容驳回修订未返回提示词，降级为原提示词重试")
             return base
         # 硬护栏：改写结果明显异常（过长/空/复述指令）时降级
         if len(revised) > len(base) * 3 + 500:
