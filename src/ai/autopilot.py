@@ -493,6 +493,10 @@ class SceneAutopilotManager:
         if not scene.shots:
             raise _SourceStructureChanged("故事段已无镜头")
         # locked 校验（复用共享规则，§十八）
+        # CP-Heal（2026-11-18）：锁定镜头旧末帧（local-only）遇上新计划的接力需求
+        # 会永久卡死——补挂后再校验（幂等；失败不吞，preflight 继续拦截）。
+        from routers.shots import heal_locked_video_ends
+        await heal_locked_video_ends(project, {scene.scene_id: plan}, project_dir)
         pre = preflight_scene_autopilot(project, scene, plan, respect_locked, has_active_run=False)
         if any(c in pre.issues for c in ("LOCKED_SHOT_NO_FINAL", "LOCKED_SOURCE_NO_VIDEO_END", "SHOT_NOT_IN_PLAN")):
             raise ValueError(_preflight_issue_to_error(scene, plan, pre))

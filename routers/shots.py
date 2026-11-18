@@ -10,7 +10,10 @@ import json
 import os
 import uuid
 import base64 as _base64
+import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 from typing import Optional, Literal
 
 from fastapi import APIRouter, Body, HTTPException, BackgroundTasks, Request
@@ -581,6 +584,71 @@ async def _extract_video_end_frame(project_dir, shot_id, video_local, version_id
                 logger.warning("末帧发布等待证据暂未保存: %s", shot_id)
         return Asset(local=str(end_path), status=ShotStatus.DONE.value,
                      error=f"末帧托管失败: {e}"), False
+
+
+async def heal_locked_video_ends(project, plans, project_dir):
+    """CP-Heal（2026-11-18 anime750s-20261116a 实弹）：锁定镜头末帧补挂自愈。
+
+    死锁形态：Producer 修复重排计划（镜头改 keyframes/接力）后，新计划要求某个
+    【锁定完成】镜头的末帧接力——但该镜头完成于旧计划（当时无下游依赖，按
+    2026-10-27 C2 配额决策末帧只存本地不托管）。锁定镜不重生，preflight 永久卡
+    LOCKED_SOURCE_NO_VIDEO_END（run 345 实证：s03_c10 末帧 local-only 无 URL）。
+
+    自愈：锁定+成片+下游计划要求末帧+末帧无公网 URL → 有本地文件补托管；
+    连本地文件都缺就从成品视频补提取+托管（复用 _extract_video_end_frame，
+    含 Pages 构建等待纪律）。失败如实返回 healed 列表为空（fail-loud，
+    preflight 继续拦截），绝不静默改写锁定语义。幂等：已 url_ready 直接跳过。"""
+    from src.core.models import ShotStatus
+    healed = []
+    for scene in project.scenes:
+        plan = plans.get(scene.scene_id) if plans else None
+        if plan is None:
+            continue
+        planned = {p.shot_id: p for p in plan.shots}
+        shots = list(scene.shots)
+        for i, sh in enumerate(shots):
+            nxt = planned.get(shots[i + 1].shot_id) if i + 1 < len(shots) else None
+            if not (nxt is not None and getattr(nxt, "requires_previous_video_end", False)):
+                continue
+            if not (sh.locked and sh.final_video
+                    and sh.video is not None and sh.video.status == ShotStatus.DONE.value):
+                continue
+            if sh.video_end_frame.url_ready:
+                continue
+            logger.info("CP-Heal: 镜头 %s 锁定成片但末帧无公网 URL（旧计划无下游依赖），补挂",
+                        sh.shot_id)
+            try:
+                end_local = sh.video_end_frame.local
+                if end_local and Path(end_local).exists():
+                    url = await get_rehost_host().upload(end_local)
+                    try:
+                        from src.core.media_publication import resolve_publication_wait
+                        resolve_publication_wait(project_dir, sh.shot_id, sh.final_video)
+                    except (OSError, ValueError, TypeError):
+                        logger.warning("CP-Heal: %s 末帧发布等待记录暂未更新", sh.shot_id)
+                    sh.video_end_frame.mark_done(end_local, url)
+                else:
+                    video_local = sh.video.local
+                    if not (video_local and Path(video_local).exists()):
+                        logger.warning("CP-Heal: %s 无末帧本地文件且视频文件缺失，无法补挂",
+                                       sh.shot_id)
+                        continue
+                    asset, _ok = await _extract_video_end_frame(
+                        project_dir, sh.shot_id, video_local, sh.final_video, host=True)
+                    if asset.url:
+                        sh.video_end_frame = asset
+                    else:
+                        logger.warning("CP-Heal: %s 末帧补提取失败: %s",
+                                       sh.shot_id, asset.error)
+                        continue
+                healed.append(sh.shot_id)
+            except Exception as error:  # noqa: BLE001 单镜失败不拖垮其余补挂
+                logger.warning("CP-Heal: %s 补挂异常: %s", sh.shot_id, str(error)[:200])
+    if healed:
+        from src.core.store import ProjectStore
+        store = ProjectStore(project_dir)
+        store.save(project)
+    return healed
 
 
 async def _sync_first_frame_slot(store, shot_id: str, version, version_id: str,

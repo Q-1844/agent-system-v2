@@ -1456,6 +1456,14 @@ class FullProjectManager:
         project = self._load_project(project_name)
         project_dir = _project_dir_of(project_name)
         plans = _read_plans(project_dir)
+        # CP-Heal（2026-11-18）：修复重排计划后，锁定镜头的旧末帧（local-only 不托管）
+        # 会永久卡死下方 preflight——先补挂再校验。失败不吞（preflight 继续拦截）。
+        from routers.shots import heal_locked_video_ends
+        healed = await heal_locked_video_ends(project, plans, project_dir)
+        if healed:
+            from deps import logger as _lg
+            _lg.info("CP-Heal: 末帧补挂完成 %s", healed)
+            project = self._load_project(project_name)   # 重载补挂后的状态
         scene_mgr = get_autopilot_manager()
         for sc in project.scenes:
             plan = plans.get(sc.scene_id)
