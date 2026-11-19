@@ -355,7 +355,13 @@ def restore_snapshot(staging, workspace, nonce, checkpoint, provenance, *, final
     # 旧条件「finalize_only or recovered_jobs」只覆盖脏 drain（有未 commit
     # 收据），干净 drain 反而被拒，次日续跑死在恢复门口、额度白等。
     # 'producing'（controller 可能活着）仍维持原有条件放行。
-    allowed_full_states = {'failed', 'paused', 'pausing'}
+    # 'blocked'（2026-11-18 anime750s run 345→346 实锤）：Producer 修复重排计划
+    # 后 preflight 拦 EXTERNAL_SOURCE_CHANGED → FullRun 落 blocked；修复续跑链
+    # （technical_wait → 唤醒 → 接续）死在恢复门口自锁。blocked 与 failed 同级
+    # 安全：源 run 已终态（无活控制器）、对账/收据纪律照常执行；阻塞原因
+    # （修复重排/末帧缺口）由恢复后的 CP-Heal 与修复循环消化，恢复验证自身
+    # 会拒绝真正的结构异常。
+    allowed_full_states = {'failed', 'paused', 'pausing', 'blocked'}
     if finalize_only or recovered_jobs or submission_jobs:
         allowed_full_states.update(('producing',))
     if finalize_only:

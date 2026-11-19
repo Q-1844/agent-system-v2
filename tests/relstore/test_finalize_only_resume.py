@@ -192,3 +192,25 @@ def test_resume_source_dead_helper_delegates_fail_closed(monkeypatch):
     assert _resume_source_run_definitively_dead() is False
     monkeypatch.delenv("RESUME_RUN_ID", raising=False)  # 无源 id → fail-closed
     assert _resume_source_run_definitively_dead() is False
+
+
+def test_repair_blocked_fullrun_is_resumable(tmp_path):
+    """🔴 2026-11-18 anime750s run 345→346 实锤：Producer 修复重排计划后
+    FullRun 落 blocked（EXTERNAL_SOURCE_CHANGED 拦于 preflight），接续跳
+    死在恢复门口 native FullRun is not safely resumable——修复续跑链自锁
+    （technical_wait→唤醒→接续断在最后一环）。blocked 与 failed 同级安全
+    （源 run 终态+对账纪律照常），必须放行。红了先怀疑自己改了不该改的。"""
+    stage,cp,provenance=snapshot(tmp_path)
+    p=stage/'projects/cloud3min_unit'
+    f=p/'output/project.json';d=json.loads(f.read_text())
+    d['scenes'][0]['shots'][0].update(shot_id='s1',final_video='v1',
+        video={'status':'done','video_id':'paid1'})
+    f.write_text(json.dumps(d))
+    full=p/'output/full_runs/full/run.json';d=json.loads(full.read_text())
+    d.update(status='blocked',error_code='EXTERNAL_SOURCE_CHANGED')
+    full.write_text(json.dumps(d))
+    (stage/'cache/jobs.json').write_text('{}')
+    result=recovery.restore_snapshot(stage,tmp_path/'runner','unit',cp,provenance)
+    assert result['previous_video_seconds']==10
+    target=tmp_path/'runner/projects/cloud3min_unit/output/full_runs/full/run.json'
+    assert json.loads(target.read_text())['status']=='blocked'
